@@ -2855,7 +2855,8 @@ struct PremiumPicksView: View {
                                     if isPremium {
                                         FlippablePickCard(pick: pick,
                                                                 gameResult: shelf.settled ? gamePickResult(pick) : nil,
-                                                                showSportBadge: false)
+                                                                showSportBadge: false,
+                                                                backHeight: UIScreen.main.bounds.height * 0.62)
                                     } else {
                                         CompactPickRow(pick: pick, showSportBadge: false)
                                             .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
@@ -2880,7 +2881,8 @@ struct PremiumPicksView: View {
                     ForEach(shelf.props) { prop in
                         ZStack {
                             if isPremium {
-                                FlippablePropCard(prop: prop, showSportBadge: false)
+                                FlippablePropCard(prop: prop, showSportBadge: false,
+                                                  backHeight: UIScreen.main.bounds.height * 0.62)
                             } else {
                                 CompactPropRow(prop: prop, showSportBadge: false)
                                     .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
@@ -7795,6 +7797,9 @@ struct CompactPickRow: View {
     var gameResult: String? = nil
     var finalScore: String? = nil   // settled cards: shown in place of GARY'S LEAN
     var showSportBadge: Bool = false
+    /// Game pages carry the score in the page hero (LiveScoreStrip), so their
+    /// cards keep the plain start time in the slot. Everywhere else stays state-aware.
+    var liveInSlot: Bool = true
 
     private var sport: Sport { Sport.from(league: pick.league) }
     private var accentColor: Color { sport.accentColor }
@@ -7906,7 +7911,7 @@ struct CompactPickRow: View {
     /// or unknown). Only consulted when the card has no settled result.
     @ObservedObject private var liveCache = LiveScoreCache.shared
     private var liveStatus: LiveScore? {
-        guard resolvedResult == nil else { return nil }
+        guard liveInSlot, resolvedResult == nil else { return nil }
         return liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
     }
 
@@ -8340,15 +8345,22 @@ struct FlippablePickCard: View {
     var gameResult: String? = nil
     var finalScore: String? = nil
     var showSportBadge: Bool = false
+    var liveInSlot: Bool = true
+    /// When set, the flipped back grows to at least this height — Best Bets
+    /// wants a full-page read; the default keeps the compact expansion elsewhere.
+    var backHeight: CGFloat? = nil
 
     @State private var flipped = false
     @State private var frontH: CGFloat = 130
 
-    private var expandedH: CGFloat { max(frontH + 320, 480) }
+    private var expandedH: CGFloat {
+        let base = max(frontH + 320, 480)
+        return backHeight.map { max($0, base) } ?? base
+    }
 
     var body: some View {
         ZStack {
-            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge)
+            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })
@@ -8517,7 +8529,8 @@ struct PickCardBack: View {
 /// Strip labeled section markers (HYPOTHESIS:, THE EDGE:, CONVERGENCE (x):, RISK:…)
 /// out of a prop analysis blob into clean readable paragraphs.
 func cleanPropAnalysis(_ text: String) -> String {
-    var cleaned = text
+    // Raw markdown bold ("**THE PICK:**") reads as a glitch on-card — drop it.
+    var cleaned = text.replacingOccurrences(of: "**", with: "")
     let labels = ["HYPOTHESIS:", "EVIDENCE:", "CONVERGENCE", "IF WRONG:", "THE EDGE:", "THE VERDICT:", "RISK:"]
     for label in labels {
         if let r = cleaned.range(of: label, options: .caseInsensitive) {
@@ -8542,15 +8555,22 @@ struct FlippablePropCard: View {
     let prop: PropPick
     var gameResult: String? = nil
     var showSportBadge: Bool = false
+    var liveInSlot: Bool = true
+    /// When set, the flipped back grows to at least this height — Best Bets
+    /// wants a full-page read; the default keeps the compact expansion elsewhere.
+    var backHeight: CGFloat? = nil
 
     @State private var flipped = false
     @State private var frontH: CGFloat = 130
 
-    private var expandedH: CGFloat { max(frontH + 170, 330) }
+    private var expandedH: CGFloat {
+        let base = max(frontH + 170, 330)
+        return backHeight.map { max($0, base) } ?? base
+    }
 
     var body: some View {
         ZStack {
-            CompactPropRow(prop: prop, gameResult: gameResult, showSportBadge: showSportBadge)
+            CompactPropRow(prop: prop, gameResult: gameResult, showSportBadge: showSportBadge, liveInSlot: liveInSlot)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })
@@ -11064,6 +11084,11 @@ struct PicksGamePage: View {
         return "\(a) @ \(h)"
     }
 
+    /// The page hero carries this game's state — "FINAL SD 4 · PHI 6" sits
+    /// under the matchup title; the cards below keep their plain start time.
+    @ObservedObject private var liveCache = LiveScoreCache.shared
+    private var heroScore: LiveScore? { liveCache.status(forMatchup: group.matchup) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
@@ -11075,11 +11100,15 @@ struct PicksGamePage: View {
             }
             .padding(.horizontal, 16).padding(.top, 8)
 
+            if let ls = heroScore, ls.isLive || ls.isFinal {
+                LiveScoreStrip(score: ls).padding(.horizontal, 16)
+            }
 
             if let entry {
                 FlippablePickCard(pick: entry.pick,
                                   gameResult: entry.isYesterday ? gamePickResult(entry.pick) : nil,
-                                  showSportBadge: false)
+                                  showSportBadge: false,
+                                  liveInSlot: false)
                     .padding(.horizontal, 10)
             } else {
                 Text("Game pick drops closer to game time.")
@@ -11089,14 +11118,15 @@ struct PicksGamePage: View {
 
             if topProps.count == 1, let only = topProps.first {
                 // A single prop wears the full locked card (Home's design).
-                FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
+                FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true, liveInSlot: false)
                     .padding(.horizontal, 10)
             } else if !topProps.isEmpty {
-                PropSlipCard(props: topProps, resultForProp: resultForProp)
+                PropSlipCard(props: topProps, resultForProp: resultForProp, liveInHeader: false)
                     .padding(.horizontal, 10)
             }
             EdgesSection(title: "GAME INTEL", edges: edges)
         }
+        .onAppear { LiveScoreCache.shared.startIfNeeded() }
     }
 }
 
@@ -11126,14 +11156,21 @@ extension PropPick {
 struct PropSlipCard: View {
     let props: [PropPick]
     let resultForProp: (PropPick) -> String?
+    /// Game pages carry the score in the page hero (LiveScoreStrip), so their
+    /// slip header keeps the plain start time. The Today slip stays state-aware.
+    var liveInHeader: Bool = true
 
     @ObservedObject private var liveCache = LiveScoreCache.shared
     // Flip state — game-pick mechanics: tapping a row flips the whole card
-    // to that prop's take; tapping the back flips home.
+    // to that prop's take; tapping the back flips home. The back carries a
+    // little player toggle so one flip reads the whole slip.
     @State private var flipped = false
     @State private var backProp: PropPick? = nil
-    @State private var frontH: CGFloat = 220
-    private var expandedH: CGFloat { max(frontH + 140, 470) }
+    // 0 = not yet measured — the frame stays natural until the preference
+    // fires, then pins to the front's height so the hidden back face can
+    // never inflate the card (it's in the tree at opacity 0 after a flip).
+    @State private var frontH: CGFloat = 0
+    private var expandedH: CGFloat { max(frontH + 160, 520) }
 
     private var leagueIcon: String {
         switch (props.first?.effectiveLeague ?? "").uppercased() {
@@ -11159,13 +11196,24 @@ struct PropSlipCard: View {
         }
     }
 
+    private var isSharedMatchup: Bool { Set(props.compactMap { $0.matchup }).count == 1 }
+
     /// Slip-level game state — only when every prop shares one matchup.
     private var sharedStatusText: String? {
-        let matchups = Set(props.compactMap { $0.matchup })
-        guard matchups.count == 1, let m = matchups.first,
+        guard liveInHeader, isSharedMatchup, let m = props.first?.matchup,
               let ls = liveCache.status(forMatchup: m) else { return nil }
         if ls.isLive { return liveSlotText(ls, label: "LIVE") }
         if ls.isFinal { return liveSlotText(ls, label: "FINAL") }
+        return nil
+    }
+
+    /// Header fallback when state lives in the page hero (or pre-game): the
+    /// shared start time, same slot the locked card uses.
+    private var sharedTimeText: String? {
+        guard isSharedMatchup, let p = props.first else { return nil }
+        let viaCommence = Formatters.formatCommenceTime(p.commence_time)
+        if !viaCommence.isEmpty { return viaCommence.uppercased() }
+        if let t = p.time, !t.isEmpty, t != "TBD" { return t.uppercased() }
         return nil
     }
 
@@ -11177,15 +11225,15 @@ struct PropSlipCard: View {
                 })
                 .opacity(flipped ? 0 : 1)
 
-            if let p = backProp {
-                PropSlipBack(prop: p) {
+            if backProp != nil {
+                PropSlipBack(props: props, current: $backProp) {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = false }
                 }
                 .opacity(flipped ? 1 : 0)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             }
         }
-        .frame(height: flipped ? expandedH : nil)
+        .frame(height: flipped ? expandedH : (frontH > 0 ? frontH : nil))
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .onPreferenceChange(PickCardHeightKey.self) { h in if h > 1, !flipped { frontH = h } }
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
@@ -11207,12 +11255,19 @@ struct PropSlipCard: View {
                     .font(GaryFonts.mono(11, bold: false))
                     .foregroundStyle(.white.opacity(0.34))
                 Spacer()
-                // One game state for the whole slip (game pages); mixed-game
-                // slips (Today) stay quiet — their chips carry state up top.
+                // One game state for the whole slip (Today); game pages put the
+                // score in the page hero, so their header keeps the start time.
+                // Mixed-game slips stay quiet — their chips carry state up top.
                 if let shared = sharedStatusText {
                     Text(shared)
                         .font(GaryFonts.mono(9.5, bold: false))
                         .tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.34))
+                        .lineLimit(1)
+                } else if !liveInHeader, let t = sharedTimeText {
+                    Text(t)
+                        .font(GaryFonts.mono(11, bold: false))
+                        .tracking(1)
                         .foregroundStyle(.white.opacity(0.34))
                         .lineLimit(1)
                 }
@@ -11235,48 +11290,49 @@ struct PropSlipCard: View {
                     backProp = p
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = true }
                 } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 11) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
                             if let r = resultLetter(p) {
                                 Text(r.0)
-                                    .font(GaryFonts.mono(11, bold: true))
+                                    .font(GaryFonts.mono(12, bold: true))
                                     .foregroundStyle(r.1)
                             }
                             Text(p.player ?? p.team ?? "")
-                                .font(GaryFonts.text(18, .semibold))
-                                .foregroundStyle(.white.opacity(0.94))
+                                .font(GaryFonts.text(25, .medium))
+                                .foregroundStyle(.white)
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.7)
+                                .minimumScaleFactor(0.65)
                             if let team = p.team, !team.isEmpty {
                                 Text(team.uppercased())
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(GaryColors.silver.opacity(0.8))
                                     .lineLimit(1)
                             }
-                            Spacer(minLength: 6)
+                            Spacer(minLength: 8)
                             HStack(spacing: 3) {
                                 Text("Gary's Take")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(size: 10.5, weight: .semibold))
                                     .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 7.5, weight: .bold))
+                                    .font(.system(size: 8, weight: .bold))
                                     .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
                             }
+                            .layoutPriority(1)
                         }
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(p.slipPickText)
-                                .font(GaryFonts.mono(15, bold: true))
+                                .font(GaryFonts.mono(17, bold: true))
                                 .tracking(0.8)
                                 .foregroundStyle(GaryColors.heroAccent)
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.65)
-                            Spacer(minLength: 6)
+                                .minimumScaleFactor(0.6)
+                            Spacer(minLength: 8)
                             Text(Formatters.americanOdds(p.odds))
-                                .font(GaryFonts.mono(13, bold: true))
+                                .font(GaryFonts.mono(15, bold: true))
                                 .foregroundStyle(GaryColors.silver.opacity(0.8))
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -11287,7 +11343,7 @@ struct PropSlipCard: View {
                                 )
                         )
                     }
-                    .padding(.vertical, 11)
+                    .padding(.vertical, 13)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -11310,9 +11366,19 @@ struct PropSlipCard: View {
 
 /// The slip's back face — one prop's take in the game-pick back's language:
 /// gold voice header, the pick, THE NUMBERS, THE READ, tap to flip home.
+/// A little player toggle hops between the slip's reads without flipping —
+/// one flip reads the whole slip instead of packing it all into one view.
 struct PropSlipBack: View {
-    let prop: PropPick
+    let props: [PropPick]
+    @Binding var current: PropPick?
     let onFlipBack: () -> Void
+
+    private var prop: PropPick { current ?? props[0] }
+
+    private func toggleName(_ p: PropPick) -> String {
+        let full = p.player ?? p.team ?? ""
+        return (full.split(separator: " ").last.map(String.init) ?? full).uppercased()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -11325,6 +11391,30 @@ struct PropSlipBack: View {
                     Text(m.uppercased())
                         .font(GaryFonts.mono(9, bold: false))
                         .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
+                }
+            }
+
+            if props.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(props, id: \.id) { p in
+                            let on = p.id == prop.id
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) { current = p }
+                            } label: {
+                                Text(toggleName(p))
+                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
+                                    .foregroundStyle(on ? Color.black.opacity(0.85) : GaryColors.silver.opacity(0.75))
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                                    .background(
+                                        Capsule()
+                                            .fill(on ? GaryColors.silver.opacity(0.92) : Color.white.opacity(0.05))
+                                            .overlay(Capsule().stroke(GaryColors.silver.opacity(on ? 0 : 0.35), lineWidth: 1))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
 
@@ -11389,6 +11479,7 @@ struct PropSlipBack: View {
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(hex: "#1A1C22"))
@@ -12529,6 +12620,9 @@ struct CompactPropRow: View {
     let prop: PropPick
     var gameResult: String? = nil
     var showSportBadge: Bool = false
+    /// Game pages carry the score in the page hero (LiveScoreStrip), so their
+    /// cards keep the plain start time in the slot. Everywhere else stays state-aware.
+    var liveInSlot: Bool = true
 
     private var accentColor: Color { Sport.from(league: prop.effectiveLeague).accentColor }
     private var isMLBProp: Bool {
@@ -12565,7 +12659,7 @@ struct CompactPropRow: View {
     /// or unknown). Only consulted when the card has no settled result.
     @ObservedObject private var liveCache = LiveScoreCache.shared
     private var liveStatus: LiveScore? {
-        guard resolvedResult == nil else { return nil }
+        guard liveInSlot, resolvedResult == nil else { return nil }
         return liveCache.status(forMatchup: prop.matchup ?? "")
     }
 
