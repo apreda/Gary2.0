@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
+import { Nav } from '@/components/Nav';
+import { Footer } from '@/components/Footer';
 import './globals.css';
 
 const barlow = Barlow_Condensed({ weight: '700', subsets: ['latin'], variable: '--font-barlow' });
@@ -19,7 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${barlow.variable} ${inter.variable} ${jbmono.variable}`}>
       <body>
+        <Nav />
         {children}
+        <Footer />
         <Analytics />
       </body>
     </html>
