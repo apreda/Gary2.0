@@ -11,6 +11,8 @@ import { normalizeLeague, SPORTS, sportBySlug } from '@/lib/gary/leagues';
 import { todayEST, estDateStr } from '@/lib/gary/dates';
 
 export const revalidate = 600;
+// Unknown slugs 404 at the router — no SSR pass or data fetch for garbage paths.
+export const dynamicParams = false;
 
 export function generateStaticParams() {
   return SPORTS.map(s => ({ sport: s.slug }));
