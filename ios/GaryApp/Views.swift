@@ -2680,30 +2680,62 @@ struct PremiumPicksView: View {
         ZStack {
             LiquidGlassBackground(grainDensity: 0)
 
-            ScrollView(showsIndicators: false) {
-                // Toggle scrolls WITH the page (unpinned) — pinning forced an
-                // opaque fill that could never match the gradient behind it.
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    header
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    // Toggle scrolls WITH the page (unpinned) — pinning forced an
+                    // opaque fill that could never match the gradient behind it.
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        header
 
-                    if loading {
-                        HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
-                            .padding(.top, 80)
-                    } else if !hasContent {
-                        emptyState
-                    } else {
-                        Section {
-                            modeContent
-                                .padding(.top, 14)
-                                .padding(.bottom, 120)
-                        } header: {
-                            toggleBar
+                        if loading {
+                            HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
+                                .padding(.top, 80)
+                        } else if !hasContent {
+                            emptyState
+                        } else {
+                            Section {
+                                jumpBar(proxy)
+                                    .padding(.top, 12)
+                                modeContent
+                                    .padding(.top, 14)
+                                    .padding(.bottom, 120)
+                            } header: {
+                                toggleBar
+                            }
                         }
                     }
                 }
             }
         }
         .task { await load() }
+    }
+
+    /// Sport chips that jump the page to a league's shelf in the active mode.
+    private func jumpBar(_ proxy: ScrollViewProxy) -> some View {
+        let leagues = mode == .games ? gameShelves.map(\.league) : propShelves.map(\.league)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(leagues, id: \.self) { lg in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo((mode == .games ? "g-" : "p-") + lg, anchor: .top)
+                        }
+                    } label: {
+                        Text(lg)
+                            .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                            .foregroundStyle(Sport.from(league: lg).accentColor)
+                            .padding(.horizontal, 11).padding(.vertical, 6)
+                            .background(
+                                Capsule().fill(Color.white.opacity(0.05))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                            )
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
     }
 
     // MARK: - Header / states
@@ -2781,14 +2813,17 @@ struct PremiumPicksView: View {
             if mode == .games {
                 ForEach(gameShelves) { shelf in
                     gameShelfView(shelf)
+                        .id("g-\(shelf.league)")
                 }
             } else {
-                let shelves = propShelves.filter { !$0.props.isEmpty }
-                if shelves.isEmpty {
+                if propShelves.isEmpty {
                     propsEmptyState
                 } else {
-                    ForEach(shelves) { shelf in
+                    // Placeholder shelves render too — every in-season sport
+                    // holds its horizontal rail until its slate posts.
+                    ForEach(propShelves) { shelf in
                         propShelfView(shelf)
+                            .id("p-\(shelf.league)")
                     }
                 }
             }
@@ -2872,35 +2907,76 @@ struct PremiumPicksView: View {
         return propResultsMap[name]
     }
 
+    /// Props grouped by game, first-appearance order. THE RULE, automatic:
+    /// 2+ props from the SAME game share one slip; a lone prop (or a prop
+    /// whose game has no sibling) stands as its own full card.
+    private func propGameGroups(_ props: [PropPick]) -> [[PropPick]] {
+        var order: [String] = []
+        var byGame: [String: [PropPick]] = [:]
+        for p in props {
+            let key = (p.matchup?.isEmpty == false) ? p.matchup! : "solo-\(p.id)"
+            if byGame[key] == nil { order.append(key) }
+            byGame[key, default: []].append(p)
+        }
+        return order.compactMap { byGame[$0] }
+    }
+
     private func propShelfView(_ shelf: PropShelf) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            shelfHeader(shelf.league, status: shelf.settled
-                            ? "·  LAST RESULT"
+            shelfHeader(shelf.league, status: shelf.props.isEmpty ? "·  —"
+                            : shelf.settled ? "·  LAST RESULT"
                             : "·  \(shelf.props.count) prop\(shelf.props.count == 1 ? "" : "s")")
-            // THE prop-card rule, identical on every page: one prop wears the
-            // full card, two or more share ONE slip — same component, same
-            // flip, same back, regardless of which games they come from.
-            ZStack {
-                if isPremium {
-                    if shelf.props.count == 1, let only = shelf.props.first {
-                        FlippablePropCard(prop: only,
-                                          gameResult: shelf.settled ? propResult(for: only) : nil,
-                                          showSportBadge: false,
-                                          backHeight: UIScreen.main.bounds.height * 0.68)
-                    } else {
-                        PropSlipCard(props: shelf.props,
-                                     resultForProp: { [settled = shelf.settled] p in
-                                         settled ? self.propResult(for: p) : nil
-                                     })
+            if shelf.props.isEmpty {
+                propPlaceholderRow(for: shelf.league)
+            } else {
+                // Horizontal rail of game-groups: same-game props share ONE
+                // slip; a lone game's prop rides as its own card.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(Array(propGameGroups(shelf.props).enumerated()), id: \.offset) { _, group in
+                            ZStack {
+                                if isPremium {
+                                    if group.count == 1, let only = group.first {
+                                        FlippablePropCard(prop: only,
+                                                          gameResult: shelf.settled ? propResult(for: only) : nil,
+                                                          showSportBadge: false,
+                                                          backHeight: UIScreen.main.bounds.height * 0.68)
+                                    } else {
+                                        PropSlipCard(props: group,
+                                                     resultForProp: { [settled = shelf.settled] p in
+                                                         settled ? self.propResult(for: p) : nil
+                                                     })
+                                    }
+                                } else {
+                                    CompactPropRow(prop: group[0], showSportBadge: false)
+                                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                    lockBadge
+                                }
+                            }
+                            .frame(width: group.count > 1 ? 344 : 308)
+                        }
                     }
-                } else {
-                    CompactPropRow(prop: shelf.props[0], showSportBadge: false)
-                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
-                    lockBadge
+                    .padding(.horizontal, 16)
                 }
             }
-            .padding(.horizontal, 16)
         }
+    }
+
+    private func propPlaceholderRow(for league: String) -> some View {
+        Text("No \(league) props yet — next slate posts ~90 min before tip.")
+            .font(GaryFonts.text(13))
+            .foregroundStyle(.white.opacity(0.4))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 18)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                    )
+            )
+            .padding(.horizontal, 16)
     }
 
     private var lockBadge: some View {
@@ -2967,21 +3043,19 @@ struct PremiumPicksView: View {
         (p.effectiveLeague ?? p.sport ?? p.league ?? "OTHER").uppercased()
     }
 
-    /// Premium props: the single highest-confidence prop per game, capped at 4 per sport.
+    /// Premium props: the top games (by their best prop's confidence, capped
+    /// at 4 games per sport) — keeping ALL of each game's props so same-game
+    /// siblings stay together and render as one slip. Never prune a pair.
     private func selectPremiumProps(_ props: [PropPick]) -> [PropPick] {
-        var bestByGame: [String: PropPick] = [:]
+        var byGame: [String: [PropPick]] = [:]
         for p in props {
             let key = p.matchup ?? p.commence_time ?? p.id
-            if let cur = bestByGame[key] {
-                if (p.confidence ?? 0) > (cur.confidence ?? 0) { bestByGame[key] = p }
-            } else {
-                bestByGame[key] = p
-            }
+            byGame[key, default: []].append(p)
         }
-        return bestByGame.values
-            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
+        let topGames = byGame.values
+            .sorted { ($0.map { $0.confidence ?? 0 }.max() ?? 0) > ($1.map { $0.confidence ?? 0 }.max() ?? 0) }
             .prefix(4)
-            .map { $0 }
+        return topGames.flatMap { $0.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) } }
     }
 
     private func load() async {
@@ -3044,6 +3118,10 @@ struct PremiumPicksView: View {
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps), settled: false))
             } else if let yps = yPropsByLeague[lg], !yps.isEmpty {
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(yps), settled: true))
+            } else if ["MLB", "NBA", "NHL"].contains(lg) {
+                // In-season prop sports hold their place with a placeholder
+                // row until their slate posts. (WC is game picks only.)
+                pShelves.append(PropShelf(league: lg, props: [], settled: false))
             }
         }
 
