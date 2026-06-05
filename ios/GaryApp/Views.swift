@@ -2850,8 +2850,15 @@ struct PremiumPicksView: View {
     @ViewBuilder private var modeContent: some View {
         VStack(alignment: .leading, spacing: 22) {
             if mode == .games {
-                // Paid sports lead; locked sports trail as the storefront.
+                // Paid boards lead with full cards. Locked boards with content
+                // follow as blurred previews — the user sees the real board
+                // exactly as members do, just unreadable (tap = checkout).
+                // The storefront menu (records, the honest hook) closes it out.
                 ForEach(gameShelves.filter { sportUnlocked($0.league) }) { shelf in
+                    gameShelfView(shelf)
+                        .id("g-\(shelf.league)")
+                }
+                ForEach(gameShelves.filter { !sportUnlocked($0.league) && !$0.picks.isEmpty }) { shelf in
                     gameShelfView(shelf)
                         .id("g-\(shelf.league)")
                 }
@@ -2866,9 +2873,12 @@ struct PremiumPicksView: View {
                         propShelfView(shelf)
                             .id("p-\(shelf.league)")
                     }
-                    let locked = propShelves.filter { !sportUnlocked($0.league) && !$0.props.isEmpty }
-                    if !locked.isEmpty {
-                        storefrontTail(locked.map { ($0.league, $0.props.count, "prop", !$0.settled) })
+                    ForEach(propShelves.filter { !sportUnlocked($0.league) && !$0.props.isEmpty }) { shelf in
+                        propShelfView(shelf)
+                            .id("p-\(shelf.league)")
+                    }
+                    if !lockedPropBoards.isEmpty {
+                        storefrontTail(lockedPropBoards)
                     }
                 }
             }
@@ -2963,15 +2973,22 @@ struct PremiumPicksView: View {
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(shelf.picks, id: \.id) { pick in
                             ZStack {
-                                if isPremium {
+                                if sportUnlocked(shelf.league) {
                                     FlippablePickCard(pick: pick,
                                                             gameResult: shelf.settled ? gamePickResult(pick) : nil,
                                                             showSportBadge: false,
                                                             backHeight: UIScreen.main.bounds.height * 0.68)
                                 } else {
-                                    CompactPickRow(pick: pick, showSportBadge: false)
-                                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
-                                    lockBadge
+                                    // Blurred preview of the real card — see the
+                                    // board members see, can't read it. Tap buys.
+                                    Button { openCheckout(shelf.league) } label: {
+                                        ZStack {
+                                            CompactPickRow(pick: pick, showSportBadge: false)
+                                                .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                            lockBadge
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             .frame(width: 308)
@@ -3017,7 +3034,7 @@ struct PremiumPicksView: View {
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(Array(propGameGroups(shelf.props).enumerated()), id: \.offset) { _, group in
                             ZStack {
-                                if isPremium {
+                                if sportUnlocked(shelf.league) {
                                     if group.count == 1, let only = group.first {
                                         FlippablePropCard(prop: only,
                                                           gameResult: shelf.settled ? propResult(for: only) : nil,
@@ -3031,9 +3048,24 @@ struct PremiumPicksView: View {
                                                      resultLetterTrailing: true)
                                     }
                                 } else {
-                                    CompactPropRow(prop: group[0], showSportBadge: false)
-                                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
-                                    lockBadge
+                                    // Blurred preview — singles and slips keep
+                                    // their true shapes so the locked board
+                                    // looks exactly like the unlocked one.
+                                    Button { openCheckout(shelf.league) } label: {
+                                        ZStack {
+                                            if group.count == 1 {
+                                                CompactPropRow(prop: group[0], showSportBadge: false)
+                                                    .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                            } else {
+                                                PropSlipCard(props: group,
+                                                             resultForProp: { _ in nil },
+                                                             resultLetterTrailing: true)
+                                                    .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                            }
+                                            lockBadge
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             .frame(width: group.count > 1 ? 344 : 308)
@@ -3045,18 +3077,19 @@ struct PremiumPicksView: View {
         }
     }
 
-    /// Locked game boards for the storefront. WC rides as a pre-order row
-    /// until kickoff (its shelf has no picks yet, so the slate filter would
-    /// otherwise hide it); once WC picks exist it becomes a normal locked board.
+    /// Every locked game board for the storefront — the complete purchase
+    /// menu, slate or no slate (an empty board still sells its season pass).
+    /// WC's empty board reads as the pre-order row until kickoff.
     /// `live` distinguishes tonight's slate from a settled last result — the
     /// row copy must not call a graded pick "tonight."
     private var lockedGameBoards: [(league: String, count: Int, unit: String, live: Bool)] {
-        var boards = gameShelves.filter { !sportUnlocked($0.league) && !$0.picks.isEmpty }
+        gameShelves.filter { !sportUnlocked($0.league) }
             .map { (league: $0.league, count: $0.picks.count, unit: "pick", live: !$0.settled) }
-        if !sportUnlocked("WC"), !boards.contains(where: { $0.league == "WC" }) {
-            boards.append((league: "WC", count: 0, unit: "pick", live: true))
-        }
-        return boards
+    }
+
+    private var lockedPropBoards: [(league: String, count: Int, unit: String, live: Bool)] {
+        propShelves.filter { !sportUnlocked($0.league) }
+            .map { (league: $0.league, count: $0.props.count, unit: "prop", live: !$0.settled) }
     }
 
     /// The locked-sports storefront: a contiguous tail below everything the
@@ -3093,6 +3126,7 @@ struct PremiumPicksView: View {
                                 .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
                                 .foregroundStyle(.white.opacity(0.9))
                             Text(preorder ? "All 104 matches · kicks off June 11"
+                                 : b.count == 0 ? "No \(b.unit) tonight yet"
                                  : b.live ? "\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight"
                                  : "Last result posted")
                                 .font(.system(size: 11))
