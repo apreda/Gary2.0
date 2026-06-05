@@ -3044,19 +3044,23 @@ struct PremiumPicksView: View {
         (p.effectiveLeague ?? p.sport ?? p.league ?? "OTHER").uppercased()
     }
 
-    /// Premium props: the top games (by their best prop's confidence, capped
-    /// at 4 games per sport) — keeping ALL of each game's props so same-game
-    /// siblings stay together and render as one slip. Never prune a pair.
+    /// Premium props: the single highest-confidence prop per game, capped at
+    /// 4 games per sport — Winners is the SELECTIVE board. (If two same-game
+    /// props ever both qualify, the renderer merges them into a slip.)
     private func selectPremiumProps(_ props: [PropPick]) -> [PropPick] {
-        var byGame: [String: [PropPick]] = [:]
+        var bestByGame: [String: PropPick] = [:]
         for p in props {
             let key = p.matchup ?? p.commence_time ?? p.id
-            byGame[key, default: []].append(p)
+            if let cur = bestByGame[key] {
+                if (p.confidence ?? 0) > (cur.confidence ?? 0) { bestByGame[key] = p }
+            } else {
+                bestByGame[key] = p
+            }
         }
-        let topGames = byGame.values
-            .sorted { ($0.map { $0.confidence ?? 0 }.max() ?? 0) > ($1.map { $0.confidence ?? 0 }.max() ?? 0) }
+        return bestByGame.values
+            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
             .prefix(4)
-        return topGames.flatMap { $0.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) } }
+            .map { $0 }
     }
 
     private func load() async {
@@ -11315,12 +11319,12 @@ struct PropSlipCard: View {
 
     private var front: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Slip header — locked card's eyebrow anatomy + prop count.
+            // Slip header — locked card's eyebrow anatomy: LEAGUE + prop count.
             HStack(spacing: 8) {
                 Image(systemName: leagueIcon)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isMLB ? GaryColors.mlbGrass : accent)
-                Text("PROPS")
+                Text((props.first?.effectiveLeague ?? "PROPS").uppercased())
                     .font(GaryFonts.mono(11, bold: true))
                     .tracking(1)
                     .foregroundStyle(isMLB ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accent))
