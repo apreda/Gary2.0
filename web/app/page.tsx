@@ -21,26 +21,31 @@ export const metadata: Metadata = {
 
 export default async function Home() {
   const [gamePicks, propPicks, results] = await Promise.all([
-    fetchTodayGamePicks(), fetchTodayPropPicks(), fetchAllGameResults(),
+    fetchTodayGamePicks().catch(() => null),
+    fetchTodayPropPicks().catch(() => null),
+    fetchAllGameResults().catch(() => null),
   ]);
 
-  const topPick = selectTopPick(gamePicks);
-  const topProp = selectTopProps(propPicks, 1)[0] ?? null;
+  const topPick = gamePicks ? selectTopPick(gamePicks) : null;
+  const topProp = propPicks ? selectTopProps(propPicks, 1)[0] ?? null : null;
 
-  // Recent wins ticker (last 14 days, latest first)
-  const cutoff = estDateStr(new Date(Date.now() - 14 * 86400000));
-  const recentWins = sinceDate(results, cutoff)
-    .filter(r => r.result === 'won' && (r.pick_text || r.matchup))
-    .slice(0, 10)
-    .map(r => ({ league: (r.league ?? '').toUpperCase(), pick: r.pick_text ?? r.matchup ?? '', date: r.game_date ?? '' }));
+  // Recent wins ticker and record — only when results data is available
+  const recentWins = results
+    ? sinceDate(results, estDateStr(new Date(Date.now() - 14 * 86400000)))
+        .filter(r => r.result === 'won' && (r.pick_text || r.matchup))
+        .slice(0, 10)
+        .map(r => ({ league: (r.league ?? '').toUpperCase(), pick: r.pick_text ?? r.matchup ?? '', date: r.game_date ?? '' }))
+    : null;
 
-  // Last-30-day record for the proof strip
-  const l30 = computeRecord(sinceDate(results, estDateStr(new Date(Date.now() - 30 * 86400000))));
-  const allTime = computeRecord(results);
+  // Last-30-day record for the proof strip — only when results data is available
+  const l30 = results
+    ? computeRecord(sinceDate(results, estDateStr(new Date(Date.now() - 30 * 86400000))))
+    : null;
+  const allTime = results ? computeRecord(results) : null;
 
   return (
     <main>
-      <RecordTicker items={recentWins} />
+      {recentWins && <RecordTicker items={recentWins} />}
 
       {/* Hero — the bear hosts */}
       <section className="mx-auto max-w-6xl px-4 pb-12 pt-16 text-center">
@@ -58,9 +63,11 @@ export default async function Home() {
             See today&apos;s picks
           </Link>
         </div>
-        <p className="mt-6 font-mono text-[12px] text-white/45">
-          LAST 30 DAYS {l30.wins}-{l30.losses} · ALL-TIME {allTime.wins}-{allTime.losses} ({allTime.pct}%) ON {allTime.graded.toLocaleString()} GRADED PICKS
-        </p>
+        {l30 && allTime && (
+          <p className="mt-6 font-mono text-[12px] text-white/45">
+            LAST 30 DAYS {l30.wins}-{l30.losses} · ALL-TIME {allTime.wins}-{allTime.losses} ({allTime.pct}%) ON {allTime.graded.toLocaleString()} GRADED PICKS
+          </p>
+        )}
       </section>
 
       {/* Today's free pick + prop — the data closes */}
