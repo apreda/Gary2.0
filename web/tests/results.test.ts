@@ -104,6 +104,14 @@ describe('mergeGameResults (NFL split across two tables)', () => {
     const result = mergeGameResults([nflRow], []);
     expect(result[0].league).toBe('NFL');
   });
+
+  it('sorts merged output by game_date desc (recent first, despite NFL-first concatenation)', () => {
+    const oldNfl = makeNflRow({ pick_text: 'Chiefs -3 -110', game_date: '2026-01-11' });
+    const newMlb = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-06-04' });
+    const midNhl = row({ league: 'NHL', pick_text: 'Panthers ML -135', game_date: '2026-03-15' });
+    const result = mergeGameResults([oldNfl], [newMlb, midNhl]);
+    expect(result.map(r => r.game_date)).toEqual(['2026-06-04', '2026-03-15', '2026-01-11']);
+  });
 });
 
 describe('currentStreak', () => {
