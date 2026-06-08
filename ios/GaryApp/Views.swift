@@ -1604,6 +1604,48 @@ struct HomeView: View {
         liveCache.scores.isEmpty ? initialLive : liveCache.scores
     }
 
+    // MARK: - World Cup front-page module (June 4 – July 19, 2026)
+
+    /// True during the tournament window — the run-up (so anticipation builds and
+    /// the module is visible before kickoff) through the final.
+    private static func worldCupWindowActive() -> Bool {
+        var cal = Calendar(identifier: .gregorian)
+        if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
+        let start = DateComponents(calendar: cal, year: 2026, month: 6, day: 4).date ?? Date()
+        let end = DateComponents(calendar: cal, year: 2026, month: 7, day: 20).date ?? Date()
+        let now = Date()
+        return now >= start && now < end
+    }
+
+    /// Today's WC picks, earliest kickoff first (opener leads).
+    private var worldCupPicksToday: [GaryPick] {
+        todayPicks
+            .filter { ($0.league ?? "").uppercased() == "WC" }
+            .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+    }
+
+    /// The WC module — shown during the window whenever there's WC content
+    /// (storylines from the Wire, or today's matches once the slate posts).
+    @ViewBuilder private var worldCupModule: some View {
+        if Self.worldCupWindowActive() {
+            let wcWire = wireItems.filter { ($0.league ?? "").uppercased() == "WC" }
+            let picks = worldCupPicksToday
+            if !wcWire.isEmpty || !picks.isEmpty {
+                HomeWorldCupModule(
+                    countdownDays: Self.daysUntilWorldCup(),
+                    headline: wcWire.first,
+                    storylines: Array(wcWire.dropFirst().prefix(2)),
+                    opener: picks.first,
+                    board: Array(picks.dropFirst()),
+                    onOpenHub: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 } },
+                    onOpenWinners: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 } }
+                )
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
             // Background
@@ -1617,6 +1659,11 @@ struct HomeView: View {
                     GaryPageHeader(title: "Gary", accent: GaryPageHeader<EmptyView>.dateLabel())
                         .opacity(animateIn ? 1 : 0)
                         .animation(.easeOut(duration: 0.6), value: animateIn)
+
+                    // World Cup leads the page during the tournament window —
+                    // the first thing a bettor sees: today's headline, the
+                    // opener, the day's board. Self-hides outside June 4–Jul 19.
+                    worldCupModule
 
                     // Time-aware front page (June 2026): the same blocks,
                     // three orderings — results lead in the morning, the
@@ -2942,6 +2989,146 @@ struct HomeWireSection: View {
         }
         .padding(.vertical, 12).padding(.horizontal, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The World Cup front-page module — a bettor's first look during the
+/// tournament window. Leads with the day's headline storyline, then today's
+/// OPENER (the first match, where bettors get their action in), then the rest
+/// of the day's board. From the run-up it carries the countdown + storylines;
+/// once matches post it carries the opener + board. WC teal stays a small
+/// accent — gold remains the signature pick colour.
+struct HomeWorldCupModule: View {
+    let countdownDays: Int?
+    let headline: SupabaseAPI.WireItem?
+    let storylines: [SupabaseAPI.WireItem]
+    let opener: GaryPick?
+    let board: [GaryPick]
+    let onOpenHub: () -> Void
+    let onOpenWinners: () -> Void
+
+    private let teal = Color(hex: "#14B8A6")
+    private var hasMatches: Bool { opener != nil || !board.isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(
+                eyebrow: "The World Cup",
+                sub: countdownDays != nil
+                    ? "Kicks off in \(countdownDays!) day\(countdownDays == 1 ? "" : "s") · June 11"
+                    : "Today's matches, a bettor's view")
+            VStack(spacing: 0) {
+                if let h = headline {
+                    Button(action: onOpenHub) { headlineRow(h) }.buttonStyle(.plain)
+                }
+                if let op = opener {
+                    divider
+                    Button(action: onOpenWinners) { matchRow(op, isOpener: true) }.buttonStyle(.plain)
+                }
+                ForEach(board) { p in
+                    divider
+                    Button(action: onOpenWinners) { matchRow(p, isOpener: false) }.buttonStyle(.plain)
+                }
+                // Run-up: no matches yet — carry a couple more storylines so the
+                // module still reads as a living front page before the slate posts.
+                if !hasMatches {
+                    ForEach(storylines) { s in
+                        divider
+                        Button(action: onOpenHub) { headlineRow(s, compact: true) }.buttonStyle(.plain)
+                    }
+                }
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private var divider: some View {
+        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+    }
+
+    // The lead storyline — the sneak-peek headline a bettor opens to.
+    @ViewBuilder private func headlineRow(_ item: SupabaseAPI.WireItem, compact: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                Circle().fill(teal).frame(width: 6, height: 6)
+                Text(compact ? "WORLD CUP · WIRE" : "TODAY'S HEADLINE")
+                    .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            Text(item.headline ?? "")
+                .font(.system(size: compact ? 14.5 : 17, weight: compact ? .semibold : .bold))
+                .foregroundStyle(.white.opacity(compact ? 0.9 : 0.96))
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if !compact, let sub = item.subline, !sub.isEmpty {
+                Text(sub.uppercased())
+                    .font(GaryFonts.mono(9.5)).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.38))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 13).padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    // A match row — the opener gets a teal ⭐ and larger type (the first game,
+    // ready to bet); board games are compact.
+    @ViewBuilder private func matchRow(_ p: GaryPick, isOpener: Bool) -> some View {
+        HStack(spacing: 12) {
+            VStack(spacing: 2) {
+                Text(kickoffTime(p))
+                    .font(GaryFonts.mono(isOpener ? 12 : 11, bold: true))
+                    .foregroundStyle(teal)
+                if isOpener {
+                    Image(systemName: "star.fill").font(.system(size: 8)).foregroundStyle(teal.opacity(0.8))
+                }
+            }
+            .frame(width: 58, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(matchupLabel(p))
+                    .font(.system(size: isOpener ? 17 : 14, weight: isOpener ? .bold : .semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                if isOpener, let ctx = p.soccerContext {
+                    Text(ctx.uppercased())
+                        .font(GaryFonts.mono(9)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                if let pick = p.pick, !pick.isEmpty {
+                    Text(pick)
+                        .font(GaryFonts.mono(isOpener ? 12 : 11, bold: true))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.25))
+        }
+        .padding(.vertical, isOpener ? 13 : 11).padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// "USA vs MEX" — nations read cleanly already; away-at-home order.
+    private func matchupLabel(_ p: GaryPick) -> String {
+        let away = (p.awayTeam ?? "").trimmingCharacters(in: .whitespaces)
+        let home = (p.homeTeam ?? "").trimmingCharacters(in: .whitespaces)
+        if away.isEmpty || home.isEmpty { return away.isEmpty ? home : away }
+        return "\(away) vs \(home)"
+    }
+
+    /// Display kickoff: the pick's `time` if present, else derived from the ISO.
+    private func kickoffTime(_ p: GaryPick) -> String {
+        if let t = p.time, !t.isEmpty { return t }
+        guard let iso = p.commence_time, let d = ISO8601DateFormatter().date(from: iso) else { return "—" }
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "h:mm a"
+        return f.string(from: d)
     }
 }
 
