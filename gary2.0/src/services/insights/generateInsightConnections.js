@@ -64,6 +64,9 @@ import { computeWcGroupValue } from './computers/wcGroupValue.js';
 // Tournament-wide knockout/title context — runs in BOTH modes so the Hub stays
 // dense once the group stage starts and the rich preview lanes drop away.
 import { computeWcKnockoutPath } from './computers/wcKnockoutPath.js';
+// xG / possession recap of the most recent completed match day. Silent ([])
+// pre-tournament; lights up once matches are played.
+import { computeWcXg } from './computers/wcXg.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -99,6 +102,7 @@ const WC_COMPUTERS = [
   computeWcVenueEdge,
   computeWcGroupValue,
   computeWcKnockoutPath,
+  computeWcXg,
 ];
 
 const WC_PREVIEW_COMPUTERS = [
@@ -109,6 +113,7 @@ const WC_PREVIEW_COMPUTERS = [
   computeWcVenueEdge,
   computeWcGroupValue,
   computeWcKnockoutPath,
+  computeWcXg,
 ];
 
 const COMPUTERS_BY_LEAGUE = {
