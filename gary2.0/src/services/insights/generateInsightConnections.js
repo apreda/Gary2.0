@@ -61,6 +61,9 @@ import { computeWcOpeners } from './computers/wcOpeners.js';
 import { computeWcRestEdge } from './computers/wcRestEdge.js';
 import { computeWcVenueEdge } from './computers/wcVenueEdge.js';
 import { computeWcGroupValue } from './computers/wcGroupValue.js';
+// Tournament-wide knockout/title context — runs in BOTH modes so the Hub stays
+// dense once the group stage starts and the rich preview lanes drop away.
+import { computeWcKnockoutPath } from './computers/wcKnockoutPath.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -95,6 +98,7 @@ const WC_COMPUTERS = [
   computeWcRestEdge,
   computeWcVenueEdge,
   computeWcGroupValue,
+  computeWcKnockoutPath,
 ];
 
 const WC_PREVIEW_COMPUTERS = [
@@ -104,6 +108,7 @@ const WC_PREVIEW_COMPUTERS = [
   computeWcRestEdge,
   computeWcVenueEdge,
   computeWcGroupValue,
+  computeWcKnockoutPath,
 ];
 
 const COMPUTERS_BY_LEAGUE = {
