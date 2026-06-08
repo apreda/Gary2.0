@@ -67,6 +67,10 @@ firebase-service-account.json
 ios/GaryApp/build/
 ios/build/
 
+# Xcode per-user UI state (open files, cursor/scroll positions) — never share
+**/xcuserdata/
+*.xcuserstate
+
 # iOS local secrets — real keys live here, only .example template is committed
 ios/GaryApp/SecretsLocal.swift
 
