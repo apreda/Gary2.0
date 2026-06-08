@@ -108,6 +108,7 @@ const SEASON_END: Record<string, string> = {
 - Return the session `url`; frontend does `window.location = url`.
 
 ## 6. Edge Function — `stripe-webhook`
+**Endpoint URL (test):** `https://xuttubsfgdcjfgmskcol.supabase.co/functions/v1/stripe-webhook` — subscribe it to `checkout.session.completed` (add `charge.refunded` for the refund → revoke path). The owner creates this endpoint in the Stripe dashboard and pastes its `whsec_…` signing secret into Supabase secrets.
 - Read the raw body and verify with `STRIPE_WEBHOOK_SECRET` (`stripe.webhooks.constructEventAsync` in Deno).
 - `checkout.session.completed`: expand line items → for each, read product metadata `sport`/`tier` → upsert an `entitlements` row (`user_id` from `client_reference_id`, `expires_at` from `SEASON_END[sport]`, `stripe_session_id` for idempotency).
 - `charge.refunded`: set matching entitlement(s) `status='refunded'` to revoke access.

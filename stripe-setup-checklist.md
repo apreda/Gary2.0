@@ -68,7 +68,7 @@ For the **All-Sport Pass**:
 - **Secret key** (`sk_test_…`): **sensitive.** Do NOT paste it into Slack, email, or any shared doc. Hand it to your dev to put directly into your **Supabase Edge Function secrets** (instructions in the handoff). Treat it like a password.
 
 ## Step 5 — Add the webhook (Developers → Webhooks → Add endpoint)
-- **Endpoint URL:** your backend webhook (a Supabase Edge Function — your dev gives you the exact URL, looks like `https://<project>.functions.supabase.co/stripe-webhook`).
+- **Endpoint URL:** `https://xuttubsfgdcjfgmskcol.supabase.co/functions/v1/stripe-webhook`
 - **Events to send:** `checkout.session.completed` and `charge.refunded` (add `payment_intent.succeeded` too if your dev asks).
 - Save, then **copy the Signing secret** (`whsec_…`) — also sensitive, also goes into Supabase secrets, not a shared doc.
 
