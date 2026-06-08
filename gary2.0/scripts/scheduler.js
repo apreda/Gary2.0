@@ -96,7 +96,7 @@ async function fetchGamesForETDate(sportKey, etDateStr) {
       matches = await wc.getMatches({});
     } catch (e) {
       log(`  ❌ ${sportKey}: FIFA fetch failed: ${e.message}`);
-      return [];
+      return null; // null = fetch FAILED (retryable); [] = genuinely no games
     }
     const out = [];
     const seen = new Set();
@@ -119,7 +119,7 @@ async function fetchGamesForETDate(sportKey, etDateStr) {
     games = await ballDontLieService.getGames(sportKey, { dates, per_page: 100 });
   } catch (e) {
     log(`  ❌ ${sportKey}: BDL fetch failed for ${dates.join(',')}: ${e.message}`);
-    return [];
+    return null; // null = fetch FAILED (retryable); [] = genuinely no games
   }
   if (!Array.isArray(games)) return [];
 
@@ -156,9 +156,15 @@ async function buildPlan(etDateStr) {
   log(`═══════════════════════════════════════════════════════════`);
 
   const schedule = [];
+  let fetchFailed = false; // true if ANY sport's fetch threw (vs. empty slate)
 
   for (const sport of SPORTS) {
     const games = await fetchGamesForETDate(sport.key, etDateStr);
+    if (games === null) {
+      log(`  ${sport.label}: fetch FAILED — will retry`);
+      fetchFailed = true;
+      continue;
+    }
     if (games.length === 0) {
       log(`  ${sport.label}: No games`);
       continue;
@@ -203,7 +209,33 @@ async function buildPlan(etDateStr) {
   // hit the picks-script dedup and exit in ~1 second.
   const uniqueGameIds = new Set(schedule.map(e => e.gameId));
   log(`\n📋 Total: ${schedule.length} trigger entries across ${uniqueGameIds.size} unique games (up to ${RETRY_LEAD_TIMES_MINUTES.length} retries per game)`);
-  return schedule;
+  return { schedule, fetchFailed };
+}
+
+// Build the plan, but ride out transient fetch outages. A wifi/API failure at
+// build time used to return an empty plan that then slept 24h — the bug that
+// silently killed a whole slate (see Friday's "Sleeping 21.22 hours" log).
+// Here, an empty plan caused by fetch FAILURES retries with backoff up to
+// `maxWaitMs`. A clean empty (fetches succeeded, no games) returns at once; a
+// partial result (some sport failed but others have games) proceeds rather
+// than holding a good slate hostage to one flaky sport — the failed sport gets
+// another shot on the next daily build. Returns the schedule array.
+async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) {
+  const start = Date.now();
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    const { schedule, fetchFailed } = await buildPlan(dateStr);
+    if (schedule.length > 0) return schedule;   // got a slate — run it
+    if (!fetchFailed) return schedule;          // genuinely no games today
+    if (Date.now() - start >= maxWaitMs) {
+      log(`⚠️ Plan still empty after ${attempt} attempts / ${Math.round((Date.now() - start) / 60000)}m of fetch failures — proceeding empty.`);
+      return schedule;
+    }
+    const backoff = Math.min(20 * 60 * 1000, 60 * 1000 * 2 ** (attempt - 1)); // 1,2,4,8,16,20,20…m
+    log(`🔁 Empty plan from fetch failures — retry in ${Math.round(backoff / 60000)}m (attempt ${attempt})`);
+    await sleepUntilWallClock(new Date(Date.now() + backoff));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -430,7 +462,7 @@ async function main() {
 
   if (args.includes('--now')) {
     log('🚀 Running all sports NOW');
-    const schedule = await buildPlan(getTodayETDateStr());
+    const { schedule } = await buildPlan(getTodayETDateStr());
     for (const entry of schedule) entry.triggerTime = new Date();
     await executeSchedule(schedule);
     return;
@@ -450,7 +482,7 @@ async function main() {
   log(`Sports: ${SPORTS.map(s => s.label).join(', ')}`);
 
   // Check today first
-  const todaySchedule = await buildPlan(getTodayETDateStr());
+  const todaySchedule = await buildPlanResilient(getTodayETDateStr());
   // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
   // even if the 90-min lead window has already passed (picks just trigger immediately).
   const upcoming = todaySchedule.filter(e => e.startTime > new Date());
@@ -467,7 +499,7 @@ async function main() {
   while (true) {
     const planDateBefore = getTodayETDateStr();
     await sleepUntilPlanTime();
-    const schedule = await buildPlan(getTodayETDateStr());
+    const schedule = await buildPlanResilient(getTodayETDateStr());
     await executeSchedule(schedule);
 
     // If execution ran past midnight into a new ET day, immediately build
@@ -475,7 +507,7 @@ async function main() {
     let currentDate = getTodayETDateStr();
     while (currentDate !== planDateBefore && currentDate !== getTomorrowETDateStr()) {
       log(`\n⚡ Execution spanned into ${currentDate} — building today's plan immediately`);
-      const todaySchedule = await buildPlan(currentDate);
+      const todaySchedule = await buildPlanResilient(currentDate);
       // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
   // even if the 90-min lead window has already passed (picks just trigger immediately).
   const upcoming = todaySchedule.filter(e => e.startTime > new Date());
