@@ -385,6 +385,65 @@ enum SupabaseAPI {
         return rows
     }
 
+    /// One betting-angle wire item for the Home "Wire" feed — a result framed
+    /// against the closing number, a line move, an injury with its market
+    /// consequence, a curated X voice, or league pace. Written 3x daily by
+    /// run-wire-items.js.
+    struct WireItem: Decodable, Identifiable {
+        let id: Int?
+        let date: String?
+        let league: String?
+        let kind: String?          // result | line_move | injury | voice | pace
+        let headline: String?
+        let subline: String?
+        let source_handle: String? // set for kind == voice ("@handle")
+        let game: String?
+        let relevance_score: Int?
+    }
+
+    /// Today's wire items, lead-worthiest first. Returns [] on any failure.
+    static func fetchWireItems(date: String, limit: Int = 12) async -> [WireItem] {
+        let url = buildURL(table: "wire_items", query: [
+            URLQueryItem(name: "select", value: "id,date,league,kind,headline,subline,source_handle,game,relevance_score"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "order", value: "relevance_score.desc.nullslast"),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([WireItem].self, from: data) else { return [] }
+        return rows
+    }
+
+    /// League-wide market results for one settled night (overs record,
+    /// favorites record, dog flat-stake units) — one row per league, written
+    /// nightly by run-market-pulse.js after grading.
+    struct MarketPulseRow: Decodable {
+        let date: String?
+        let league: String?
+        let overs_wins: Int?
+        let overs_losses: Int?
+        let overs_pushes: Int?
+        let fav_wins: Int?
+        let fav_losses: Int?
+        let dog_wins: Int?
+        let dog_losses: Int?
+        let dog_net_units: Double?
+        let games_counted: Int?
+    }
+
+    /// Market pulse rows for a date. Returns [] on any failure.
+    static func fetchMarketPulse(date: String) async -> [MarketPulseRow] {
+        let url = buildURL(table: "market_pulse", query: [
+            URLQueryItem(name: "select", value: "date,league,overs_wins,overs_losses,overs_pushes,fav_wins,fav_losses,dog_wins,dog_losses,dog_net_units,games_counted"),
+            URLQueryItem(name: "date", value: "eq.\(date)")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([MarketPulseRow].self, from: data) else { return [] }
+        return rows
+    }
+
     /// Fetch a player's full insight pack for a date (the Hub breakdown view).
     /// Returns nil when no pack exists or on any failure — the card back
     /// simply hides the breakdown affordance gracefully.

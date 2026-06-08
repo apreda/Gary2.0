@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gary — Pricing Mock (Paywall + All Plans)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#C9A227; --gold-light:#E8D48B;
+    --bg:#090C11; --card:#15171C; --chip:#1C1F26;
+    --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.12);
+    --txt:rgba(255,255,255,.92); --sub:rgba(255,255,255,.45); --meta:rgba(255,255,255,.35);
+    --won:#3FB950; --lost:#E5484D;
+    --nba:#3B82F6; --mlb:#7BC267; --wc:#14B8A6; --nhl:#00A3E0; --nfl:#22C55E; --ncaaf:#DC2626; --ncaab:#F97316;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0;padding:0}
+  body{background:#040405;color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:32px 16px 64px}
+  .mono{font-family:'JetBrains Mono',monospace}
+
+  .mockhead{margin-bottom:24px}
+  .toggle{display:flex;gap:6px;background:#101013;border-radius:999px;padding:4px}
+  .toggle button{font-size:13px;font-weight:600;background:transparent;border:none;color:var(--sub);
+    border-radius:999px;padding:8px 18px;cursor:pointer;font-family:-apple-system,sans-serif}
+  .toggle button.on{color:#0B0B0C;background:var(--gold)}
+
+  .phone{width:390px;height:844px;border-radius:55px;overflow:hidden;position:relative;
+    outline:10px solid #1C1C1E;box-shadow:0 40px 100px rgba(0,0,0,.7);
+    background:radial-gradient(520px 320px at 50% -8%, rgba(201,162,39,.09), transparent 65%) #090C11}
+  .phone.full{height:auto}
+  .phone.full .screen{height:auto;overflow:visible}
+
+  .statusbar{height:56px;display:flex;align-items:center;justify-content:space-between;padding:18px 34px 0}
+  .sb-time{font-size:16px;font-weight:600}
+  .sb-right{display:flex;align-items:center;gap:7px}
+  .sigbars{display:flex;align-items:flex-end;gap:1.5px}
+  .sigbars i{display:block;width:3px;background:#fff;border-radius:1px}
+  .sigbars i:nth-child(1){height:4px}.sigbars i:nth-child(2){height:6.5px}
+  .sigbars i:nth-child(3){height:9px}.sigbars i:nth-child(4){height:11.5px}
+  .wifi{width:17px;height:13px}
+  .batt{width:25px;height:12.5px;border:1px solid rgba(255,255,255,.4);border-radius:4px;position:relative}
+  .batt::after{content:"";position:absolute;inset:2px;right:4px;background:#fff;border-radius:1.5px}
+  .batt::before{content:"";position:absolute;right:-3.5px;top:3.5px;width:2px;height:4.5px;background:rgba(255,255,255,.4);border-radius:0 2px 2px 0}
+
+  .screen{height:calc(844px - 56px);overflow-y:auto;padding:0 20px 40px;scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+
+  .topbar{display:flex;justify-content:flex-end;padding:8px 0 0}
+  .close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.07);
+    display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:14px}
+
+  .stack{display:none;flex-direction:column}
+  .stack.active{display:flex}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .stack.active .s{opacity:0;animation:rise .45s ease forwards}
+  .s.d1{animation-delay:.04s}.s.d2{animation-delay:.10s}.s.d3{animation-delay:.16s}.s.d4{animation-delay:.22s}
+  .s.d5{animation-delay:.28s}.s.d6{animation-delay:.34s}.s.d7{animation-delay:.40s}
+
+  /* ===== hero ===== */
+  .hero{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 0 8px;text-align:center}
+  .gmark{width:74px;height:74px;border-radius:50%;background:#111114;
+    box-shadow:inset 0 0 0 2px var(--gold), 0 14px 40px rgba(201,162,39,.15);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:36px;color:var(--gold)}
+  .hero h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:38px;line-height:1.02;margin:4px 0 0;letter-spacing:.01em}
+  .hero .sub{font-size:14.5px;color:var(--sub);max-width:280px;line-height:1.45}
+
+  /* ===== benefits ===== */
+  .bens{display:flex;flex-direction:column;gap:13px;padding:18px 6px 6px}
+  .ben{display:flex;align-items:flex-start;gap:12px;font-size:15px;font-weight:500;line-height:1.4}
+  .ben svg{width:17px;height:17px;flex:none;margin-top:2px}
+
+  /* ===== plan cards ===== */
+  .plans{display:flex;flex-direction:column;gap:12px;padding-top:18px}
+  .plan{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:16px;display:flex;align-items:center;gap:13px;cursor:pointer;transition:border-color .15s ease}
+  .plan.sel{border-color:rgba(201,162,39,.75);box-shadow:0 0 0 1px rgba(201,162,39,.35)}
+  .radio{width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.25);flex:none;
+    display:flex;align-items:center;justify-content:center}
+  .plan.sel .radio{background:var(--gold);border-color:var(--gold)}
+  .plan.sel .radio::after{content:"✓";font-size:12px;font-weight:700;color:#0B0B0C}
+  .plan .mid{flex:1;min-width:0}
+  .plan .nm{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em}
+  .plan .ds{font-size:12.5px;color:var(--sub);margin-top:4px;line-height:1.4}
+  .plan .pr{text-align:right;flex:none}
+  .plan .amt{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--gold)}
+  .plan .per{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:var(--meta);margin-top:3px;text-transform:uppercase}
+  .ribbon{position:absolute;top:-9px;left:14px;font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    font-weight:700;letter-spacing:.13em;color:#0B0B0C;background:var(--gold);border-radius:5px;padding:3px 8px;text-transform:uppercase}
+  .ribbon.teal{background:var(--wc);color:#06211E}
+
+  .allplanslink{display:flex;align-items:center;justify-content:space-between;padding:15px 4px 0;
+    font-size:14px;font-weight:500;color:var(--sub)}
+  .allplanslink .chev{color:var(--meta)}
+
+  /* ===== CTA ===== */
+  .ctawrap{padding:20px 0 6px;display:flex;flex-direction:column;gap:11px;align-items:center}
+  .cta{width:100%;height:54px;border-radius:17px;background:var(--gold);border:none;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;letter-spacing:.06em;color:#0B0B0C}
+  .ctacap{font-size:12px;color:var(--meta);text-align:center;line-height:1.5}
+  .signed{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:var(--meta);text-transform:uppercase;padding-top:10px;text-align:center}
+
+  /* ===== all plans screen ===== */
+  .plhead{padding:14px 2px 4px}
+  .plhead h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;margin:0;letter-spacing:.01em}
+  .plhead .sub{font-size:13.5px;color:var(--sub);margin-top:4px}
+  .grouplbl{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.16em;
+    color:var(--meta);text-transform:uppercase;padding:20px 2px 10px}
+
+  .sportgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .sport{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;
+    display:flex;flex-direction:column;gap:7px;transition:border-color .15s ease}
+  .sport.sel{border-color:rgba(201,162,39,.75);box-shadow:0 0 0 1px rgba(201,162,39,.35)}
+  .sport .top{display:flex;align-items:center;justify-content:space-between}
+  .sport .nm{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;letter-spacing:.08em}
+  .dot{width:7px;height:7px;border-radius:50%;flex:none}
+  .sport .pr{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;color:var(--gold)}
+  .sport .pr small{font-size:9px;color:var(--meta);font-weight:500}
+  .sport .ds{font-size:11.5px;color:var(--sub);line-height:1.35}
+  .sport .mark{width:17px;height:17px;border-radius:50%;border:1.5px solid rgba(255,255,255,.22);flex:none;
+    display:flex;align-items:center;justify-content:center}
+  .sport.sel .mark{background:var(--gold);border-color:var(--gold)}
+  .sport.sel .mark::after{content:"✓";font-size:9px;font-weight:700;color:#0B0B0C}
+
+  .rowplan{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line)}
+  .rowplan:last-child{border-bottom:none}
+  .rowplan .l .nm{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.1em}
+  .rowplan .l .ds{font-size:12px;color:var(--sub);margin-top:3px}
+  .rowplan .r{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--meta);letter-spacing:.08em}
+  .panel{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:14px;padding:2px 16px}
+  .soon{font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;letter-spacing:.12em;color:var(--meta);
+    border:1px solid var(--line2);border-radius:5px;padding:3px 7px}
+
+  .disclaim{font-size:11.5px;color:var(--meta);line-height:1.5;padding:18px 4px 0;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="mockhead">
+  <div class="toggle">
+    <button data-state="paywall" class="on">Paywall</button>
+    <button data-state="plans">All plans</button>
+  </div>
+</div>
+
+<div class="phone" id="phone">
+  <div class="statusbar">
+    <span class="sb-time">9:41</span>
+    <span class="sb-right">
+      <span class="sigbars"><i></i><i></i><i></i><i></i></span>
+      <svg class="wifi" viewBox="0 0 24 18" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round">
+        <path d="M2 6.5C8 1.5 16 1.5 22 6.5"/><path d="M5.5 10.2c4-3.2 9-3.2 13 0"/><path d="M9 13.7c1.8-1.5 4.2-1.5 6 0"/>
+        <circle cx="12" cy="16.4" r="1.4" fill="#fff" stroke="none"/>
+      </svg>
+      <span class="batt"></span>
+    </span>
+  </div>
+
+  <div class="screen">
+    <div class="topbar"><span class="close">✕</span></div>
+
+    <!-- ================= PAYWALL ================= -->
+    <div class="stack active" id="state-paywall">
+
+      <div class="hero s d1">
+        <div class="gmark">G</div>
+        <h1>Every board.<br>Every night.</h1>
+        <span class="sub">Gary's games &amp; props for every sport, the moment they post.</span>
+      </div>
+
+      <div class="bens s d2">
+        <div class="ben">
+          <svg viewBox="0 0 20 20" fill="none" stroke="#C9A227" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5l4 4 9-9"/></svg>
+          Game picks &amp; props for every sport
+        </div>
+        <div class="ben">
+          <svg viewBox="0 0 20 20" fill="none" stroke="#C9A227" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5l4 4 9-9"/></svg>
+          New boards the moment they post — day one
+        </div>
+        <div class="ben">
+          <svg viewBox="0 0 20 20" fill="none" stroke="#C9A227" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5l4 4 9-9"/></svg>
+          Gary's full case on every pick
+        </div>
+        <div class="ben">
+          <svg viewBox="0 0 20 20" fill="none" stroke="#C9A227" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5l4 4 9-9"/></svg>
+          Every result graded &amp; public — wins and losses
+        </div>
+      </div>
+
+      <div class="plans s d3">
+        <div class="plan sel" data-cta="START 3-DAY FREE TRIAL" data-cap="3 days free, then $34.99/mo through Stripe. Cancel anytime.">
+          <span class="ribbon">3 days free</span>
+          <span class="radio"></span>
+          <span class="mid">
+            <div class="nm">ALL-ACCESS</div>
+            <div class="ds">Games &amp; props, every sport · new boards day one</div>
+          </span>
+          <span class="pr"><div class="amt">$34.99</div><div class="per">per month</div></span>
+        </div>
+        <div class="plan" data-cta="PRE-ORDER WORLD CUP PASS" data-cap="One-time $14.99 through Stripe. No renewal — yours for all 104 matches.">
+          <span class="ribbon teal">Kicks off June 11</span>
+          <span class="radio"></span>
+          <span class="mid">
+            <div class="nm">WORLD CUP PASS</div>
+            <div class="ds">All 104 matches · one-time, no renewal</div>
+          </span>
+          <span class="pr"><div class="amt">$14.99</div><div class="per">one-time</div></span>
+        </div>
+      </div>
+
+      <div class="allplanslink s d4" data-goto="plans">
+        <span>Single sports from $9.99/mo · bundles · free plan</span>
+        <span class="chev">›</span>
+      </div>
+
+      <div class="ctawrap s d5">
+        <button class="cta" id="cta-paywall">START 3-DAY FREE TRIAL</button>
+        <span class="ctacap" id="cap-paywall">3 days free, then $34.99/mo through Stripe. Cancel anytime.</span>
+        <span class="signed">Signed in as test@betwithgary.ai</span>
+      </div>
+    </div>
+
+    <!-- ================= ALL PLANS ================= -->
+    <div class="stack" id="state-plans">
+
+      <div class="plhead s d1">
+        <h1>All plans</h1>
+        <div class="sub">One board or every board — your call.</div>
+      </div>
+
+      <div class="plans s d2" style="padding-top:14px">
+        <div class="plan sel" data-cta="START 3-DAY FREE TRIAL" data-cap="3 days free, then $34.99/mo through Stripe. Cancel anytime.">
+          <span class="ribbon">Best value · 3 days free</span>
+          <span class="radio"></span>
+          <span class="mid">
+            <div class="nm">ALL-ACCESS</div>
+            <div class="ds">Games &amp; props, every sport · new boards day one</div>
+          </span>
+          <span class="pr"><div class="amt">$34.99</div><div class="per">per month</div></span>
+        </div>
+      </div>
+
+      <div class="grouplbl s d3">Single sports — $9.99/mo each</div>
+      <div class="sportgrid s d3">
+        <div class="sport" data-cta="START MLB PASS — $9.99/MO" data-cap="Every MLB pick, games & props. Bills monthly through Stripe.">
+          <span class="top"><span class="nm"><span class="dot" style="background:var(--mlb)"></span>MLB</span><span class="mark"></span></span>
+          <span class="ds">Every MLB pick · games &amp; props</span>
+          <span class="pr">$9.99<small>/mo</small></span>
+        </div>
+        <div class="sport" data-cta="START NBA PASS — $9.99/MO" data-cap="Every NBA pick, games & props. Bills monthly through Stripe.">
+          <span class="top"><span class="nm"><span class="dot" style="background:var(--nba)"></span>NBA</span><span class="mark"></span></span>
+          <span class="ds">Every NBA pick · games &amp; props</span>
+          <span class="pr">$9.99<small>/mo</small></span>
+        </div>
+        <div class="sport" data-cta="START NHL PASS — $9.99/MO" data-cap="Every NHL pick, games & props. Bills monthly through Stripe.">
+          <span class="top"><span class="nm"><span class="dot" style="background:var(--nhl)"></span>NHL</span><span class="mark"></span></span>
+          <span class="ds">Every NHL pick · games &amp; props</span>
+          <span class="pr">$9.99<small>/mo</small></span>
+        </div>
+        <div class="sport" data-cta="START NFL PASS — $9.99/MO" data-cap="Every NFL pick, games & props. Bills monthly through Stripe.">
+          <span class="top"><span class="nm"><span class="dot" style="background:var(--nfl)"></span>NFL</span><span class="mark"></span></span>
+          <span class="ds">Every NFL pick · games &amp; props</span>
+          <span class="pr">$9.99<small>/mo</small></span>
+        </div>
+        <div class="sport" data-cta="START NCAAF PASS — $9.99/MO" data-cap="Every NCAAF pick, games & props. Bills monthly through Stripe.">
+          <span class="top"><span class="nm"><span class="dot" style="background:var(--ncaaf)"></span>NCAAF</span><span class="mark"></span></span>
+          <span class="ds">Every NCAAF pick · games &amp; props</span>
+          <span class="pr">$9.99<small>/mo</small></span>
+        </div>
+        <div class="sport" data-cta="START NCAAB PASS — $9.99/MO" data-cap="Every NCAAB pick, games & props. Bills monthly through Stripe.">
+          <span class="top"><span class="nm"><span class="dot" style="background:var(--ncaab)"></span>NCAAB</span><span class="mark"></span></span>
+          <span class="ds">Every NCAAB pick · games &amp; props</span>
+          <span class="pr">$9.99<small>/mo</small></span>
+        </div>
+      </div>
+
+      <div class="grouplbl s d4">Limited</div>
+      <div class="plans s d4" style="padding-top:0">
+        <div class="plan" data-cta="PRE-ORDER WORLD CUP PASS" data-cap="One-time $14.99 through Stripe. No renewal — yours for all 104 matches.">
+          <span class="ribbon teal">Kicks off June 11</span>
+          <span class="radio"></span>
+          <span class="mid">
+            <div class="nm">WORLD CUP PASS</div>
+            <div class="ds">All 104 matches · one-time, no renewal</div>
+          </span>
+          <span class="pr"><div class="amt">$14.99</div><div class="per">one-time</div></span>
+        </div>
+      </div>
+
+      <div class="grouplbl s d5">Bundles</div>
+      <div class="panel s d5">
+        <div class="rowplan">
+          <span class="l"><div class="nm">TWO SPORTS</div><div class="ds">Any two boards · $17.99/mo</div></span>
+          <span class="soon">SOON</span>
+        </div>
+        <div class="rowplan">
+          <span class="l"><div class="nm">THREE SPORTS</div><div class="ds">Any three boards · $24.99/mo</div></span>
+          <span class="soon">SOON</span>
+        </div>
+      </div>
+
+      <div class="grouplbl s d6">Included free</div>
+      <div class="panel s d6">
+        <div class="rowplan">
+          <span class="l"><div class="nm">THE HUB</div><div class="ds">Edges, trends &amp; receipts — graded daily</div></span>
+          <span class="r">FREE</span>
+        </div>
+        <div class="rowplan">
+          <span class="l"><div class="nm">FREE PICK</div><div class="ds">One game pick on the house, every day</div></span>
+          <span class="r">FREE</span>
+        </div>
+      </div>
+
+      <div class="ctawrap s d7">
+        <button class="cta" id="cta-plans">START 3-DAY FREE TRIAL</button>
+        <span class="ctacap" id="cap-plans">3 days free, then $34.99/mo through Stripe. Cancel anytime.</span>
+        <span class="disclaim">Plans bill monthly through Stripe and cancel anytime.<br>An account keeps your boards across devices.</span>
+        <span class="signed">Signed in as test@betwithgary.ai</span>
+      </div>
+    </div>
+
+  </div><!-- /screen -->
+</div>
+
+<script>
+  const btns = document.querySelectorAll('.toggle button');
+  function setState(state){
+    btns.forEach(x => x.classList.toggle('on', x.dataset.state === state));
+    document.querySelectorAll('.stack').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('state-' + state);
+    if (el) el.classList.add('active');
+    document.querySelector('.screen').scrollTop = 0;
+  }
+  btns.forEach(b => b.addEventListener('click', () => setState(b.dataset.state)));
+
+  // selectable plans: one selection per stack, CTA + caption follow
+  document.querySelectorAll('.stack').forEach(stack => {
+    const cta = stack.querySelector('.cta');
+    const cap = stack.querySelector('.ctacap');
+    stack.querySelectorAll('.plan, .sport').forEach(card => {
+      card.addEventListener('click', () => {
+        stack.querySelectorAll('.plan, .sport').forEach(c => c.classList.remove('sel'));
+        card.classList.add('sel');
+        if (cta && card.dataset.cta) cta.textContent = card.dataset.cta;
+        if (cap && card.dataset.cap) cap.textContent = card.dataset.cap;
+      });
+    });
+  });
+
+  // jump from paywall to all-plans
+  document.querySelectorAll('[data-goto]').forEach(el =>
+    el.addEventListener('click', () => setState(el.dataset.goto)));
+
+  const q = new URLSearchParams(location.search);
+  if (q.has('full')) document.getElementById('phone').classList.add('full');
+  setState(q.get('state') || 'paywall');
+</script>
+</body>
+</html>

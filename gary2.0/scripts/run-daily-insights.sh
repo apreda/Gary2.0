@@ -26,3 +26,9 @@ node scripts/run-mlb-hr-picks.js --store=1 || echo "[$(date)] HR picks run faile
 echo "[$(date)] Starting insight connections run..."
 node run-insight-connections.js "$@"
 echo "[$(date)] Insight connections complete."
+
+# Generate "The Wire" betting-angle news items for the Home page. Idempotent per
+# day+league. Non-fatal: a Wire failure must NOT fail the insights job above.
+echo "[$(date)] Starting The Wire run..."
+node run-wire-items.js "$@" || echo "[$(date)] Wire items run failed (non-fatal)"
+echo "[$(date)] The Wire complete."

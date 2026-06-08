@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gary — Home v3 (current design language + Wire / Prop Box / Live)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* GaryColors — exact app tokens */
+    --gold:#C9A227; --gold-light:#E8D48B;
+    --bg:#090C11; --card:#15171C; --chip:#1C1F26; --elev:#1A1A1E;
+    --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.12);
+    --txt:rgba(255,255,255,.92); --sub:rgba(255,255,255,.45); --meta:rgba(255,255,255,.35);
+    --won:#3FB950; --lost:#E5484D; --silver:#C7CCD6;
+    --nba:#3B82F6; --mlb:#7BC267; --wc:#14B8A6; --nhl:#00A3E0;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0;padding:0}
+  body{
+    background:#040405;color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:32px 16px 64px;
+  }
+  .mono{font-family:'JetBrains Mono',monospace}
+
+  /* ===== mock chrome ===== */
+  .mockhead{margin-bottom:24px}
+  .toggle{display:flex;gap:6px;background:#101013;border-radius:999px;padding:4px}
+  .toggle button{font-family:-apple-system,sans-serif;font-size:13px;font-weight:600;
+    background:transparent;border:none;color:var(--sub);border-radius:999px;padding:8px 18px;cursor:pointer}
+  .toggle button.on{color:#0B0B0C;background:var(--gold)}
+
+  /* ===== phone ===== */
+  .phone{
+    width:390px;height:844px;border-radius:55px;overflow:hidden;position:relative;
+    outline:10px solid #1C1C1E;box-shadow:0 40px 100px rgba(0,0,0,.7);
+    background:radial-gradient(520px 320px at 75% -6%, rgba(201,162,39,.07), transparent 65%) #090C11;
+  }
+  .phone.full{height:auto}
+  .phone.full .screen{height:auto;overflow:visible}
+
+  .statusbar{height:56px;display:flex;align-items:center;justify-content:space-between;padding:18px 34px 0}
+  .sb-time{font-size:16px;font-weight:600}
+  .sb-right{display:flex;align-items:center;gap:7px}
+  .sigbars{display:flex;align-items:flex-end;gap:1.5px}
+  .sigbars i{display:block;width:3px;background:#fff;border-radius:1px}
+  .sigbars i:nth-child(1){height:4px}.sigbars i:nth-child(2){height:6.5px}
+  .sigbars i:nth-child(3){height:9px}.sigbars i:nth-child(4){height:11.5px}
+  .wifi{width:17px;height:13px}
+  .batt{width:25px;height:12.5px;border:1px solid rgba(255,255,255,.4);border-radius:4px;position:relative}
+  .batt::after{content:"";position:absolute;inset:2px;right:4px;background:#fff;border-radius:1.5px}
+  .batt::before{content:"";position:absolute;right:-3.5px;top:3.5px;width:2px;height:4.5px;background:rgba(255,255,255,.4);border-radius:0 2px 2px 0}
+
+  .screen{height:calc(844px - 56px);overflow-y:auto;padding:4px 18px 140px;scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+
+  /* ===== masthead — GaryPageHeader ===== */
+  .masthead{padding:12px 2px 0}
+  .masthead .row{display:flex;align-items:baseline;justify-content:space-between}
+  .wordmark{font-family:'JetBrains Mono',monospace;font-size:23px;font-weight:700;letter-spacing:.06em;color:var(--gold)}
+  .mast-r{display:flex;align-items:baseline;gap:12px}
+  .mast-date{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;color:var(--sub)}
+  .mast-dots{color:var(--sub);font-size:15px;letter-spacing:.08em}
+  .stitch{margin-top:10px;border-top:1.5px dashed rgba(201,162,39,.4)}
+
+  /* ===== HubSectionHeader ===== */
+  .hubhead .t{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--txt)}
+  .hubhead .s{font-size:12px;color:var(--sub);margin-top:2px}
+
+  /* ===== quantPanel / shells ===== */
+  .panel{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:12px}
+  .shell{background:var(--card);border:1px solid var(--line);border-radius:12px}
+  .shell.pick{border-color:rgba(201,162,39,.4)}
+
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex:none}
+  .mlbgrad{background:linear-gradient(90deg,#7BC267,#C9A66B,#EDEDE6);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* matte pick chip */
+  .pickchip{display:inline-flex;align-items:baseline;gap:8px;background:var(--chip);
+    border:1px solid rgba(201,162,39,.7);border-radius:10px;padding:8px 12px;font-family:'JetBrains Mono',monospace}
+  .pickchip b{font-size:14px;font-weight:700;color:var(--gold)}
+  .pickchip span{font-size:11px;color:var(--sub)}
+  .minichip{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--gold);
+    background:var(--chip);border:1px solid rgba(201,162,39,.45);border-radius:8px;padding:6px 9px;flex:none}
+  .minichip .o{color:var(--sub);font-weight:400;margin-left:4px}
+
+  .verdict{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.12em}
+  .verdict.won{color:var(--won)} .verdict.lost{color:var(--lost)}
+
+  /* stagger */
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .stack.active .s{opacity:0;animation:rise .45s ease forwards}
+  .s.d1{animation-delay:.04s}.s.d2{animation-delay:.10s}.s.d3{animation-delay:.16s}.s.d4{animation-delay:.22s}
+  .s.d5{animation-delay:.28s}.s.d6{animation-delay:.34s}.s.d7{animation-delay:.40s}.s.d8{animation-delay:.46s}.s.d9{animation-delay:.52s}
+  .stack{display:none;flex-direction:column;gap:22px;padding-top:18px}
+  .stack.active{display:flex}
+  .sec{display:flex;flex-direction:column;gap:10px}
+
+  /* ===== scorecard (current) ===== */
+  .scorecard{display:flex;padding:16px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+  .scorecard .cell{flex:1;display:flex;flex-direction:column;gap:5px;padding:0 10px;border-right:1px solid var(--line)}
+  .scorecard .cell:last-child{border-right:none}
+  .scorecard .lbl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.14em;color:var(--meta);text-transform:uppercase}
+  .scorecard .val{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:700}
+  .val.up{color:var(--won)} .val.gold{color:var(--gold)}
+
+  /* ===== marquee (current HomeMarqueeHero) ===== */
+  .marquee{padding:16px;display:flex;flex-direction:column;gap:8px}
+  .marquee .top{display:flex;align-items:center;gap:8px}
+  .leaguechip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:999px;
+    padding:4px 10px;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--sub)}
+  .marquee h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:29px;line-height:1.06;margin:2px 0 0}
+  .marquee .sub{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;color:var(--sub);text-transform:uppercase}
+  .receipt{margin-top:10px;border-top:2px solid var(--gold);padding-top:10px;display:flex;align-items:baseline;justify-content:space-between}
+  .receipt .pick{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--gold)}
+
+  /* ===== market pulse ===== */
+  .pulsepanel{padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+  .pulserow{display:flex;align-items:baseline;justify-content:space-between}
+  .pstat{display:flex;flex-direction:column;gap:3px}
+  .pstat .v{font-family:'JetBrains Mono',monospace;font-size:14.5px;font-weight:700}
+  .pstat .k{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.13em;color:var(--meta);text-transform:uppercase}
+
+  /* ===== wire feed ===== */
+  .wire{padding:2px 14px}
+  .wirerow{padding:13px 0;border-bottom:1px solid var(--line)}
+  .wirerow:last-child{border-bottom:none}
+  .wr-top{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;
+    font-size:9px;font-weight:700;letter-spacing:.13em;color:var(--meta);text-transform:uppercase}
+  .wr-h{font-size:14.5px;font-weight:600;line-height:1.38;margin-top:6px;letter-spacing:-.01em}
+  .wr-sub{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--meta);margin-top:6px}
+  .wr-quote{border-left:2px solid rgba(255,255,255,.14);padding-left:11px}
+  .xglyph{font-size:10px;color:var(--sub);font-weight:400}
+  .panelfoot{padding:12px 0;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--meta)}
+
+  /* ===== list rows (cashes / receipts) ===== */
+  .rows{padding:2px 14px}
+  .lrow{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+  .lrow:last-child{border-bottom:none}
+  .lrow .t{font-size:14px;font-weight:600}
+  .lrow .u{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--meta);margin-top:3px}
+  .lrow .odds{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--won)}
+  .lrow .rec{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700}
+  .lane{display:flex;align-items:center;gap:11px}
+  .laneicon{width:28px;height:28px;border-radius:8px;background:var(--chip);border:1px solid var(--line);
+    display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+
+  /* ===== prop box ===== */
+  .pbox{padding:14px}
+  .pb-head{display:flex;align-items:baseline;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--line2)}
+  .pb-score{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.04em}
+  .pb-st{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:var(--meta)}
+  .pb-cols{display:grid;grid-template-columns:1fr 64px 56px 26px;gap:8px;padding:9px 0 5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.13em;color:var(--meta);text-transform:uppercase}
+  .pb-cols span:nth-child(2),.pb-cols span:nth-child(3){text-align:right}
+  .pb-cols span:nth-child(4){text-align:center}
+  .pb-row{display:grid;grid-template-columns:1fr 64px 56px 26px;gap:8px;align-items:baseline;
+    padding:8px 0;border-bottom:1px solid var(--line)}
+  .pb-row:last-child{border-bottom:none}
+  .pb-row .pl{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--silver)}
+  .pb-row .ln,.pb-row .ac{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--sub);text-align:right}
+  .pb-row .ac{color:var(--txt);font-weight:700}
+  .pb-row .gr{text-align:center;font-size:11px;font-weight:700}
+  .gr.w{color:var(--won)} .gr.l{color:var(--lost)}
+
+  /* ===== doors (current HomeDoorRow) ===== */
+  .doors{padding:2px 14px}
+  .door{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line)}
+  .door:last-child{border-bottom:none}
+  .door .l{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:500}
+  .door .r{display:flex;align-items:center;gap:9px}
+  .chev{color:var(--meta);font-size:14px}
+  .badge{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--gold);
+    border:1px solid rgba(201,162,39,.5);border-radius:5px;padding:2.5px 6px}
+  .badge.live{color:var(--won);border-color:rgba(63,185,80,.5)}
+
+  /* compact strip */
+  .strip{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.05em;color:var(--sub)}
+  .strip b{color:var(--txt);font-weight:700}
+  .strip .pos{color:var(--won);font-weight:700}
+
+  /* ===== free pick hero (FlippablePickCard front) ===== */
+  .hero{padding:16px;display:flex;flex-direction:column;gap:8px}
+  .hero .top{display:flex;align-items:center;justify-content:space-between}
+  .hero .lhs{display:flex;align-items:center;gap:8px}
+  .hero h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;line-height:1.05;margin:2px 0 0}
+  .hero .sub{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--sub);text-transform:uppercase}
+  .hero .chiprow{margin-top:8px}
+  .freetag{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--gold);
+    border:1px solid rgba(201,162,39,.5);border-radius:5px;padding:3px 7px}
+  .conf{margin-top:11px}
+  .conf .row{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;
+    font-size:8.5px;letter-spacing:.14em;color:var(--meta);text-transform:uppercase;margin-bottom:7px}
+  .conf .row b{color:var(--txt);font-size:10px}
+  .conf .track{height:4px;border-radius:2px;background:rgba(255,255,255,.08)}
+  .conf .fill{height:4px;border-radius:2px;background:var(--gold);width:72%}
+
+  /* ===== slate ===== */
+  .slaterow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .slaterow:last-child{border-bottom:none}
+  .slaterow .m{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:7px}
+  .slaterow .st{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:var(--meta);margin-top:4px;text-transform:uppercase}
+  .st.good{color:var(--won)} .st.bad{color:var(--lost)}
+
+  /* ===== live tape ===== */
+  .tape{display:flex;gap:8px;overflow-x:auto;margin:0 -18px;padding:2px 18px 4px;scrollbar-width:none}
+  .tape::-webkit-scrollbar{display:none}
+  .tapecell{flex:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:124px}
+  .tapecell.good{border-left:2.5px solid var(--won)}
+  .tapecell.bad{border-left:2.5px solid var(--lost)}
+  .tc-top{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    letter-spacing:.12em;color:var(--meta);text-transform:uppercase}
+  .tc-score{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;margin-top:6px;letter-spacing:.02em}
+  .tc-st{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;color:var(--sub);margin-top:4px;text-transform:uppercase}
+  .pulse{width:6px;height:6px;border-radius:50%;background:var(--won);animation:pulse 1.6s ease-in-out infinite}
+  .pulse.gold{background:var(--gold)} .pulse.red{background:var(--lost)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+  /* ===== live takeover ===== */
+  .livecard{padding:16px;display:flex;flex-direction:column;gap:6px}
+  .livecard .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .lhs{display:flex;align-items:center;gap:8px}
+  .venue{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;color:var(--meta);text-transform:uppercase}
+  .board{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+  .board .teams{display:flex;flex-direction:column;gap:10px}
+  .brow{display:flex;align-items:baseline;gap:12px}
+  .brow .ab{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.05em;width:50px}
+  .brow .sc{font-family:'JetBrains Mono',monospace;font-size:27px;font-weight:700;line-height:1}
+  .brow.trail .ab,.brow.trail .sc{color:var(--sub)}
+  .fieldbox{display:flex;flex-direction:column;align-items:center;gap:9px;padding-right:4px}
+  .diamond{position:relative;width:54px;height:42px}
+  .base{position:absolute;width:14px;height:14px;transform:rotate(45deg);border-radius:2.5px;background:rgba(255,255,255,.12)}
+  .base.on{background:#EDEDE6}
+  .base.b2{left:50%;top:0;margin-left:-7px}
+  .base.b1{right:3px;bottom:2px}
+  .base.b3{left:3px;bottom:2px}
+  .gstate{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    font-weight:700;letter-spacing:.1em;color:var(--sub)}
+  .outdot{width:5.5px;height:5.5px;border-radius:50%;background:rgba(255,255,255,.15)}
+  .outdot.on{background:rgba(255,255,255,.85)}
+
+  .foot{display:flex;justify-content:center;padding-top:2px}
+  .foot span{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.16em;color:var(--meta);text-transform:uppercase}
+
+  /* ===== tab bar ===== */
+  .tabwrap{position:absolute;left:0;right:0;bottom:0;padding:14px 22px 10px;
+    background:linear-gradient(to top, rgba(9,12,17,.97) 60%, rgba(9,12,17,0))}
+  .tabbar{height:62px;border-radius:25px;background:rgba(22,22,24,.92);
+    display:flex;align-items:center;justify-content:space-around;backdrop-filter:blur(20px);
+    box-shadow:inset 0 0 0 0.5px rgba(201,162,39,.25), 0 10px 30px rgba(0,0,0,.5)}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:4px;width:56px;color:rgba(255,255,255,.42)}
+  .tab.active{color:var(--gold)}
+  .tab svg{width:22px;height:22px}
+  .tab .tl{font-size:9px;font-weight:600;letter-spacing:.04em}
+  .tab-g{width:48px;height:48px;border-radius:50%;margin-top:-30px;flex:none;background:#111114;
+    box-shadow:inset 0 0 0 1.5px var(--gold), 0 10px 26px rgba(0,0,0,.55);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:23px;color:var(--gold)}
+  .homebar{width:134px;height:5px;border-radius:3px;background:rgba(255,255,255,.28);margin:9px auto 0}
+</style>
+</head>
+<body>
+
+<div class="mockhead">
+  <div class="toggle">
+    <button data-state="morning" data-time="8:47" class="on">Morning</button>
+    <button data-state="pregame" data-time="4:12">Pre-game</button>
+    <button data-state="live" data-time="9:26">Live</button>
+  </div>
+</div>
+
+<div class="phone" id="phone">
+  <div class="statusbar">
+    <span class="sb-time" id="clock">8:47</span>
+    <span class="sb-right">
+      <span class="sigbars"><i></i><i></i><i></i><i></i></span>
+      <svg class="wifi" viewBox="0 0 24 18" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round">
+        <path d="M2 6.5C8 1.5 16 1.5 22 6.5"/><path d="M5.5 10.2c4-3.2 9-3.2 13 0"/><path d="M9 13.7c1.8-1.5 4.2-1.5 6 0"/>
+        <circle cx="12" cy="16.4" r="1.4" fill="#fff" stroke="none"/>
+      </svg>
+      <span class="batt"></span>
+    </span>
+  </div>
+
+  <div class="screen">
+
+    <div class="masthead">
+      <div class="row">
+        <span class="wordmark">Gary</span>
+        <span class="mast-r"><span class="mast-date">FRI · JUN 5</span><span class="mast-dots">···</span></span>
+      </div>
+      <div class="stitch"></div>
+    </div>
+
+    <!-- ================= MORNING ================= -->
+    <div class="stack active" id="state-morning">
+
+      <div class="scorecard s d1">
+        <div class="cell"><span class="lbl">Record</span><span class="val">5–2</span></div>
+        <div class="cell"><span class="lbl">Net Flat Stakes</span><span class="val up">+4.1u</span></div>
+        <div class="cell"><span class="lbl">Best Cash</span><span class="val gold">+145</span></div>
+      </div>
+
+      <div class="shell marquee s d2">
+        <div class="top">
+          <span class="leaguechip"><span class="dot" style="background:var(--mlb)"></span>MLB</span>
+          <span class="eyebrow" style="color:var(--meta)">Last Night</span>
+        </div>
+        <h2>Dodgers over the Padres, 7–4</h2>
+        <span class="sub">LAD @ SD · Final</span>
+        <div class="receipt">
+          <span class="pick">LAD ML −130</span>
+          <span class="verdict won">CASHED ✓</span>
+        </div>
+      </div>
+
+      <div class="sec s d3">
+        <div class="hubhead"><div class="t">The Wire</div><div class="s">Around the league, bettor's view</div></div>
+        <div class="panel pulsepanel">
+          <div class="pulserow">
+            <span class="pstat"><span class="v">OVERS 9–4</span><span class="k">Last night</span></span>
+            <span class="pstat"><span class="v">FAVES 7–5</span><span class="k">ML</span></span>
+            <span class="pstat"><span class="v up" style="color:var(--won)">DOGS +2.1u</span><span class="k">Flat stakes</span></span>
+          </div>
+        </div>
+        <div class="panel wire">
+          <div class="wirerow">
+            <div class="wr-top"><span class="dot" style="background:var(--nba)"></span>NBA · FINAL · 9H AGO</div>
+            <div class="wr-h">Spurs don't cover the 6.5 — fourth straight ATS loss with Wembanyama on a minutes cap</div>
+            <div class="wr-sub">SA 96 · DAL 100 · CLOSED −6.5</div>
+          </div>
+          <div class="wirerow">
+            <div class="wr-top"><span class="xglyph">𝕏</span>@HARALABOB · 3H</div>
+            <div class="wr-h wr-quote">Books overcorrected off Game 1. The number you want tonight is NYK +3.5 — the Finals margin market is still chasing OKC's blowout.</div>
+          </div>
+          <div class="wirerow">
+            <div class="wr-top"><span class="dot" style="background:var(--nba)"></span>NBA · LINE MOVE · 1H AGO</div>
+            <div class="wr-h">Finals Game 2 total steams 218.5 → 221 on sharp overnight money</div>
+            <div class="wr-sub">OKC @ NYK · 8:30 PM</div>
+          </div>
+          <div class="wirerow">
+            <div class="wr-top"><span class="dot" style="background:var(--mlb)"></span>MLB · INJURY · 40M AGO</div>
+            <div class="wr-h">Acuña scratched (back) — Atlanta's team total already down a full run at most books</div>
+            <div class="wr-sub">ATL @ MIA · 7:10 PM</div>
+          </div>
+          <div class="panelfoot">MORE FROM THE WIRE →</div>
+        </div>
+      </div>
+
+      <div class="sec s d4">
+        <div class="hubhead"><div class="t">Prop Box</div><div class="s">Last night's props, box-score style</div></div>
+        <div class="shell pbox">
+          <div class="pb-head"><span class="pb-score">LAD 7 · SD 4</span><span class="pb-st">FINAL</span></div>
+          <div class="pb-cols"><span>Player</span><span>Line</span><span>Result</span><span>✓</span></div>
+          <div class="pb-row"><span class="pl">BETTS</span><span class="ln">O 1.5 TB</span><span class="ac">3 TB</span><span class="gr w">✓</span></div>
+          <div class="pb-row"><span class="pl">OHTANI</span><span class="ln">O 0.5 HR</span><span class="ac">1 HR</span><span class="gr w">✓</span></div>
+          <div class="pb-row"><span class="pl">SNELL</span><span class="ln">O 5.5 K</span><span class="ac">4 K</span><span class="gr l">✗</span></div>
+          <div class="pb-row"><span class="pl">MACHADO</span><span class="ln">O 1.5 H+R</span><span class="ac">2</span><span class="gr w">✓</span></div>
+        </div>
+      </div>
+
+      <div class="sec s d5">
+        <div class="hubhead"><div class="t">Biggest Cashes</div><div class="s">Flat-stake units, last night</div></div>
+        <div class="panel rows">
+          <div class="lrow"><span><span class="t">Phillies −1.5</span><div class="u">MLB · PHI @ WSH</div></span><span class="odds">+145</span></div>
+          <div class="lrow"><span><span class="t">Soto 2+ total bases</span><div class="u">PROP · NYM</div></span><span class="odds">+120</span></div>
+          <div class="lrow"><span><span class="t">Thunder ML</span><div class="u">NBA · OKC @ NYK</div></span><span class="odds">+105</span></div>
+          <div class="panelfoot">SEE ALL 7 GRADED →</div>
+        </div>
+      </div>
+
+      <div class="sec s d6">
+        <div class="hubhead"><div class="t">The Receipts</div><div class="s">Hub lanes, graded yesterday</div></div>
+        <div class="panel rows">
+          <div class="lrow"><span class="lane"><span class="laneicon">⚾</span><span class="t">HR Threats</span></span><span class="rec">3–1</span></div>
+          <div class="lrow"><span class="lane"><span class="laneicon">🎯</span><span class="t">Pitching edges</span></span><span class="rec">2–0</span></div>
+          <div class="lrow"><span class="lane"><span class="laneicon">🔁</span><span class="t">Lineup swaps</span></span><span class="rec">2–1</span></div>
+        </div>
+      </div>
+
+      <div class="sec s d7">
+        <div class="hubhead"><div class="t">Tonight's Board</div><div class="s">7 plays · first pitch 7:05 PM</div></div>
+        <div class="panel doors">
+          <div class="door"><span class="l">Plays on the board</span><span class="r"><span class="badge">7</span><span class="chev">›</span></span></div>
+          <div class="door"><span class="l">Edges posted for tonight</span><span class="r"><span class="badge">9</span><span class="chev">›</span></span></div>
+          <div class="door"><span class="l"><span class="dot" style="background:var(--wc)"></span>World Cup kicks off in 6 days</span><span class="chev">›</span></div>
+          <div class="door"><span class="l">New here? How Gary works</span><span class="chev">›</span></div>
+        </div>
+      </div>
+
+      <div class="foot s d8"><span>betwithgary.ai</span></div>
+    </div>
+
+    <!-- ================= PRE-GAME ================= -->
+    <div class="stack" id="state-pregame">
+
+      <div class="panel strip s d1">
+        <span>LAST NIGHT <b>5–2</b> · <span class="pos">+4.1U</span></span>
+        <span class="chev">›</span>
+      </div>
+
+      <div class="sec s d2">
+        <div class="hubhead"><div class="t">Tonight's Board</div><div class="s">7 plays · first pitch in 2h 53m</div></div>
+        <div class="shell pick hero">
+          <div class="top">
+            <span class="lhs">
+              <span class="eyebrow mlbgrad">MLB · 7:05 PM</span>
+            </span>
+            <span class="freetag">FREE PICK</span>
+          </div>
+          <h2>Yankees @ Red Sox</h2>
+          <span class="sub">Fenway Park · Boston</span>
+          <div class="chiprow"><span class="pickchip"><b>NYY ML</b><span>−120</span></span></div>
+          <div class="conf">
+            <div class="row"><span>Confidence</span><b>72</b></div>
+            <div class="track"><div class="fill"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec s d3">
+        <div class="hubhead"><div class="t">The Slate</div><div class="s">Tonight, by start time</div></div>
+        <div class="panel rows">
+          <div class="slaterow"><span><span class="m">NYY @ BOS</span><div class="st">7:05 PM · Fenway Park</div></span><span class="minichip">NYY ML<span class="o">−120</span></span></div>
+          <div class="slaterow"><span><span class="m">PHI @ NYM</span><div class="st">7:10 PM · Citi Field</div></span><span class="minichip">PHI −1.5<span class="o">−115</span></span></div>
+          <div class="slaterow"><span><span class="m">CHC @ STL</span><div class="st">7:15 PM · Busch Stadium</div></span><span class="minichip">U 8.5<span class="o">−108</span></span></div>
+          <div class="slaterow"><span><span class="m"><span class="dot" style="background:var(--nba)"></span>OKC @ NYK</span><div class="st">8:30 PM · NBA Finals Gm 2</div></span><span class="minichip">OKC +3.5<span class="o">−110</span></span></div>
+          <div class="slaterow"><span><span class="m">LAD @ SD</span><div class="st">9:40 PM · Petco Park</div></span><span class="minichip">LAD ML<span class="o">−130</span></span></div>
+        </div>
+      </div>
+
+      <div class="sec s d4">
+        <div class="hubhead"><div class="t">The Wire</div><div class="s">Pre-game intel</div></div>
+        <div class="panel wire">
+          <div class="wirerow">
+            <div class="wr-top"><span class="dot" style="background:var(--mlb)"></span>MLB · LINEUPS · 20M AGO</div>
+            <div class="wr-h">Judge sits vs. the lefty — NYY total down half a run since the lineup posted</div>
+            <div class="wr-sub">NYY @ BOS · 7:05 PM</div>
+          </div>
+          <div class="wirerow">
+            <div class="wr-top"><span class="xglyph">𝕏</span>@PROPSTARZ · 1H</div>
+            <div class="wr-h wr-quote">Nola has cleared 5.5 Ks in 8 of 9 vs. NL East lineups. Number hasn't moved. That's the free square tonight.</div>
+          </div>
+          <div class="wirerow">
+            <div class="wr-top"><span class="dot" style="background:var(--nba)"></span>NBA · MARKET · 2H AGO</div>
+            <div class="wr-h">Public money 71% on OKC — the +3.5 on NYK is the contrarian side at tip</div>
+            <div class="wr-sub">OKC @ NYK · 8:30 PM</div>
+          </div>
+          <div class="panelfoot">MORE FROM THE WIRE →</div>
+        </div>
+      </div>
+
+      <div class="sec s d5">
+        <div class="panel doors">
+          <div class="door"><span class="l">Edges posted for tonight</span><span class="r"><span class="badge">9</span><span class="chev">›</span></span></div>
+          <div class="door"><span class="l"><span class="dot" style="background:var(--wc)"></span>World Cup kicks off in 6 days</span><span class="chev">›</span></div>
+        </div>
+      </div>
+
+      <div class="foot s d6"><span>betwithgary.ai</span></div>
+    </div>
+
+    <!-- ================= LIVE ================= -->
+    <div class="stack" id="state-live">
+
+      <div class="tape s d1">
+        <div class="tapecell good">
+          <div class="tc-top"><span class="pulse"></span>MLB · LIVE</div>
+          <div class="tc-score">PHI 4 · NYM 2</div>
+          <div class="tc-st">TOP 7 · COVERING</div>
+        </div>
+        <div class="tapecell bad">
+          <div class="tc-top"><span class="pulse red"></span>MLB · LIVE</div>
+          <div class="tc-score">NYY 1 · BOS 5</div>
+          <div class="tc-st">BOT 5 · TRAILING</div>
+        </div>
+        <div class="tapecell good">
+          <div class="tc-top"><span class="pulse"></span>NBA · LIVE</div>
+          <div class="tc-score">OKC 58 · NYK 61</div>
+          <div class="tc-st">Q3 4:12 · COVERING</div>
+        </div>
+        <div class="tapecell">
+          <div class="tc-top">MLB · 9:40</div>
+          <div class="tc-score">LAD @ SD</div>
+          <div class="tc-st">LAD ML −130</div>
+        </div>
+      </div>
+
+      <div class="shell pick livecard s d2">
+        <div class="top">
+          <span class="lhs"><span class="pulse gold"></span><span class="eyebrow" style="color:var(--gold)">Live · MLB</span></span>
+          <span class="venue">Citi Field</span>
+        </div>
+        <div class="board">
+          <div class="teams">
+            <div class="brow"><span class="ab">PHI</span><span class="sc">4</span></div>
+            <div class="brow trail"><span class="ab">NYM</span><span class="sc">2</span></div>
+          </div>
+          <div class="fieldbox">
+            <div class="diamond">
+              <span class="base b2"></span>
+              <span class="base b1 on"></span>
+              <span class="base b3 on"></span>
+            </div>
+            <span class="gstate">TOP 7
+              <span class="outdot on"></span><span class="outdot on"></span><span class="outdot"></span>
+            </span>
+          </div>
+        </div>
+        <div class="receipt">
+          <span class="pick">PHI −1.5 · −115</span>
+          <span class="verdict won">COVERING</span>
+        </div>
+      </div>
+
+      <div class="sec s d3">
+        <div class="hubhead"><div class="t">Tonight's Board</div><div class="s">1–0 settled · 3 live · 1 upcoming</div></div>
+        <div class="panel rows">
+          <div class="slaterow"><span><span class="m">PHI 4 · NYM 2</span><div class="st good">TOP 7 · COVERING</div></span><span class="minichip">PHI −1.5</span></div>
+          <div class="slaterow"><span><span class="m">NYY 1 · BOS 5</span><div class="st bad">BOT 5 · TRAILING</div></span><span class="minichip">NYY ML</span></div>
+          <div class="slaterow"><span><span class="m"><span class="dot" style="background:var(--nba)"></span>OKC 58 · NYK 61</span><div class="st good">Q3 4:12 · COVERING</div></span><span class="minichip">OKC +3.5</span></div>
+          <div class="slaterow"><span><span class="m">CHC 3 · STL 4</span><div class="st good">FINAL · CASHED ✓</div></span><span class="minichip">U 8.5</span></div>
+          <div class="slaterow"><span><span class="m">LAD @ SD</span><div class="st">9:40 PM · Petco Park</div></span><span class="minichip">LAD ML<span class="o">−130</span></span></div>
+        </div>
+      </div>
+
+      <div class="sec s d4">
+        <div class="hubhead"><div class="t">The Wire</div><div class="s">In-game</div></div>
+        <div class="panel wire">
+          <div class="wirerow">
+            <div class="wr-top"><span class="dot" style="background:var(--mlb)"></span>MLB · PACE · LIVE</div>
+            <div class="wr-h">Overs running 3–1 across the league tonight — Citi Field the lone under pace</div>
+            <div class="wr-sub">LEAGUE-WIDE · 9:26 PM</div>
+          </div>
+          <div class="wirerow">
+            <div class="wr-top"><span class="xglyph">𝕏</span>@UNDERDOGMLB · 12M</div>
+            <div class="wr-h wr-quote">Nola sitting 96 through six. Whoever bet that K prop is getting paid an inning early.</div>
+          </div>
+          <div class="panelfoot">MORE FROM THE WIRE →</div>
+        </div>
+      </div>
+
+      <div class="panel strip s d5">
+        <span>TONIGHT <b>1–0</b> · <span class="pos">+1.0U</span> · 3 LIVE</span>
+        <span class="chev">›</span>
+      </div>
+
+      <div class="foot s d6"><span>betwithgary.ai</span></div>
+    </div>
+
+  </div><!-- /screen -->
+
+  <div class="tabwrap">
+    <div class="tabbar">
+      <span class="tab active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.2 12 4l9 7.2"/><path d="M5.5 9.8V20h13V9.8"/></svg>
+        <span class="tl">Home</span>
+      </span>
+      <span class="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v3a5 5 0 0 1-10 0V4z"/><path d="M12 12v4m-3.5 4h7m-5.5-4h4l1 4h-6l1-4z"/></svg>
+        <span class="tl">Bets</span>
+      </span>
+      <span class="tab-g">G</span>
+      <span class="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="13" height="13" rx="2.5"/><path d="M8 4.5h11.5V16"/></svg>
+        <span class="tl">Picks</span>
+      </span>
+      <span class="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M16 15h2"/></svg>
+        <span class="tl">Billfold</span>
+      </span>
+    </div>
+    <div class="homebar"></div>
+  </div>
+</div>
+
+<script>
+  const btns = document.querySelectorAll('.toggle button');
+  const clock = document.getElementById('clock');
+  function setState(state){
+    btns.forEach(x => x.classList.toggle('on', x.dataset.state === state));
+    const b = [...btns].find(x => x.dataset.state === state);
+    if (b) clock.textContent = b.dataset.time;
+    document.querySelectorAll('.stack').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('state-' + state);
+    if (el) el.classList.add('active');
+    document.querySelector('.screen').scrollTop = 0;
+  }
+  btns.forEach(b => b.addEventListener('click', () => setState(b.dataset.state)));
+  const q = new URLSearchParams(location.search);
+  if (q.has('full')) document.getElementById('phone').classList.add('full');
+  setState(q.get('state') || 'morning');
+</script>
+</body>
+</html>

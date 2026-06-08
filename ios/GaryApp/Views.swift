@@ -1581,6 +1581,28 @@ struct HomeView: View {
     @State private var playsOnBoard = 0
     @State private var gamesLiveNow = 0
     @State private var showHowGaryWorks = false
+    // ESPN-for-bettors layer: the Wire, market pulse, prop box, live tape.
+    @State private var wireItems: [SupabaseAPI.WireItem] = []
+    @State private var pulseRows: [SupabaseAPI.MarketPulseRow] = []
+    @State private var propBox: HomePropBoxSection.Box? = nil
+    @State private var todayPicks: [GaryPick] = []
+    @State private var initialLive: [LiveScore] = []
+    @ObservedObject private var liveCache = LiveScoreCache.shared
+
+    /// Time-aware front page: results lead in the morning, the slate leads
+    /// pre-game, the tape + takeover lead while Gary's games are in progress.
+    private enum HomePhase { case morning, pregame, live }
+    private var phase: HomePhase {
+        if liveScoresNow.contains(where: { $0.isLive }) || gamesLiveNow > 0 { return .live }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        return cal.component(.hour, from: Date()) < 12 ? .morning : .pregame
+    }
+    /// Freshest live snapshot we have — the 90s cache once it has polled,
+    /// the one-shot `.task` fetch before that.
+    private var liveScoresNow: [LiveScore] {
+        liveCache.scores.isEmpty ? initialLive : liveCache.scores
+    }
 
     var body: some View {
         ZStack {
@@ -1596,44 +1618,14 @@ struct HomeView: View {
                         .opacity(animateIn ? 1 : 0)
                         .animation(.easeOut(duration: 0.6), value: animateIn)
 
-                    // ── ② The Scorecard — yesterday in three honest numbers ──
-                    if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
-                        scorecard
-                            .opacity(animateIn ? 1 : 0)
-                            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+                    // Time-aware front page (June 2026): the same blocks,
+                    // three orderings — results lead in the morning, the
+                    // slate pre-game, the tape + takeover when games are live.
+                    switch phase {
+                    case .morning: morningSections
+                    case .pregame: pregameSections
+                    case .live:    liveSections
                     }
-
-                    // ── ③ The Marquee — last night's story, with the receipt ──
-                    if let story = marquee {
-                        HomeMarqueeHero(story: story) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-                        }
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
-                    }
-
-                    // ── ③b Biggest cashes — last night's winners, in units ──
-                    if !cashRows.isEmpty {
-                        HomeCashesSection(rows: cashRows, graded: lastNightGraded) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-                        }
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
-                    }
-
-                    // ── ④ The Receipts — graded lanes route to today's boards ──
-                    if !receiptLanes.isEmpty {
-                        HomeReceiptsSection(lanes: receiptLanes, sub: receiptsSub) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
-                        }
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6).delay(0.15), value: animateIn)
-                    }
-
-                    // ── ⑤ Tonight's Board — the free pick + the doors ──
-                    boardSection
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
 
                     // ── ⑥ Footer — quiet ──
                     footer
@@ -1663,6 +1655,8 @@ struct HomeView: View {
                     async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 30)
                     async let liveFetch = SupabaseAPI.fetchLiveScores(date: date)
                     async let todayLedgerFetch = SupabaseAPI.fetchInsightLedger(date: date)
+                    async let wireFetch = SupabaseAPI.fetchWireItems(date: date)
+                    async let pulseFetch = SupabaseAPI.fetchMarketPulse(date: SupabaseAPI.hubGradedDateEST())
 
                     // Wait for performance record first (needed for hero image)
                     if let record = try? await recordFetch {
@@ -1691,8 +1685,30 @@ struct HomeView: View {
                     lastNightGraded = night.graded
                     bestCashOdds = night.bestOdds
 
+                    // ③c The Wire + market pulse + prop box — the editorial
+                    // layer. The wire walks back a day before the 11am run;
+                    // pulse walks back when the grader hasn't covered the
+                    // night yet. Prop box is template-built from the same
+                    // graded props the cashes use.
+                    var wires = await wireFetch
+                    if wires.isEmpty {
+                        wires = await SupabaseAPI.fetchWireItems(date: SupabaseAPI.yesterdayEST())
+                    }
+                    wireItems = wires
+                    var pulse = await pulseFetch
+                    if pulse.isEmpty, let pulseBack = Self.shiftDate(SupabaseAPI.hubGradedDateEST(), by: -1) {
+                        pulse = await SupabaseAPI.fetchMarketPulse(date: pulseBack)
+                    }
+                    pulseRows = pulse
+                    propBox = Self.buildPropBox(props: recentPropResults, games: recentGameResults)
+
                     // ⑤ Door counts — live games + edges posted tonight.
-                    gamesLiveNow = (await liveFetch).filter { $0.isLive }.count
+                    let liveRows = await liveFetch
+                    gamesLiveNow = liveRows.filter { $0.isLive }.count
+                    initialLive = liveRows
+                    // Keep the snapshot fresh — the tape/takeover re-render
+                    // off the shared 90s poller once it starts.
+                    LiveScoreCache.shared.startIfNeeded()
                     edgesPostedToday = (await todayLedgerFetch).count
 
                     // ④ The Receipts — graded lanes from the hub's graded day,
@@ -1794,6 +1810,7 @@ struct HomeView: View {
                         propCount = allProps.count
                     }
                     playsOnBoard = (todayOnlyPicks?.count ?? 0) + propCount
+                    todayPicks = todayOnlyPicks ?? []
 
                     loading = false
                 }
@@ -1804,12 +1821,321 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - Time-aware section stacks
+
+    /// Morning: yesterday graded leads — scorecard, marquee, the Wire,
+    /// prop box, cashes, receipts, then tonight's board.
+    @ViewBuilder private var morningSections: some View {
+        if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
+            scorecard
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        }
+        if let story = marquee {
+            HomeMarqueeHero(story: story) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+        }
+        if !wireItems.isEmpty || !pulseRows.isEmpty {
+            HomeWireSection(items: wireItems, sub: "Around the league, bettor's view",
+                            pulse: pulseRows, limit: 4)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
+        }
+        if let box = propBox {
+            HomePropBoxSection(box: box) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.14), value: animateIn)
+        }
+        if !cashRows.isEmpty {
+            HomeCashesSection(rows: cashRows, graded: lastNightGraded) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
+        }
+        if !receiptLanes.isEmpty {
+            HomeReceiptsSection(lanes: receiptLanes, sub: receiptsSub) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.18), value: animateIn)
+        }
+        boardSection
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.22), value: animateIn)
+    }
+
+    /// Pre-game: tonight leads — last night collapses to a strip, the free
+    /// pick + doors come up, then the slate by start time and pre-game intel.
+    @ViewBuilder private var pregameSections: some View {
+        if lastNightGraded > 0 {
+            HomeCompactStrip(prefix: "LAST NIGHT",
+                             record: Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
+                             net: lastNightNet) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        }
+        boardSection
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
+        if !pregameSlateRows.isEmpty {
+            HomeSlateSection(header: "The slate", sub: "Tonight, by start time", rows: pregameSlateRows) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
+        }
+        if !wireItems.isEmpty {
+            HomeWireSection(items: wireItems, sub: "Pre-game intel", limit: 3)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
+        }
+        if !receiptLanes.isEmpty {
+            HomeReceiptsSection(lanes: receiptLanes, sub: receiptsSub) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+        }
+    }
+
+    /// Live: the tape pins the top, the marquee becomes the in-progress
+    /// game, the board shows live status, the Wire goes in-game.
+    @ViewBuilder private var liveSections: some View {
+        if !tapeCells.isEmpty {
+            HomeLiveTape(cells: tapeCells) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        }
+        if let take = takeoverModel {
+            HomeLiveTakeover(live: take.live, pickLine: take.pickLine, verdict: take.verdict) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
+        }
+        if !liveSlateRows.isEmpty {
+            HomeSlateSection(header: "Tonight's board", sub: liveBoardSub, rows: liveSlateRows) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
+        }
+        if !wireItems.isEmpty {
+            HomeWireSection(items: wireItems, sub: "In-game", limit: 2)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
+        }
+        HomeCompactStrip(prefix: "TONIGHT",
+                         record: "\(tonightRecord.w)–\(tonightRecord.l)",
+                         suffix: liveCountText) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+        }
+        .opacity(animateIn ? 1 : 0)
+        .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+    }
+
+    // MARK: - Live joins (tape / takeover / slate)
+
+    /// Gary's pick for a live-score row, if tonight's board has one.
+    private func pickFor(_ live: LiveScore) -> GaryPick? {
+        todayPicks.first { p in
+            abbrGameMatches(live.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
+        }
+    }
+
+    private func verdictFor(_ live: LiveScore) -> HomeLiveVerdict {
+        guard let pick = pickFor(live) else { return .neutral }
+        return HomeLiveVerdict.evaluate(pick: pick, live: live)
+    }
+
+    /// Tape cells: every game Gary has a side in plus anything live, live
+    /// games first.
+    private var tapeCells: [HomeLiveTape.Cell] {
+        let interesting = liveScoresNow.filter { $0.isLive || pickFor($0) != nil }
+        let ordered = interesting.sorted { a, b in
+            if a.isLive != b.isLive { return a.isLive }
+            return (a.game_id ?? "") < (b.game_id ?? "")
+        }
+        return ordered.prefix(8).map { ls in
+            let v = verdictFor(ls)
+            let status: String
+            if ls.isLive {
+                let vt = v == .covering ? "COVERING" : v == .trailing ? "TRAILING" : ""
+                status = [ls.detail ?? "", vt].filter { !$0.isEmpty }.joined(separator: " · ")
+            } else if ls.isFinal {
+                status = "FINAL"
+            } else {
+                status = (pickFor(ls)?.pick ?? ls.detail ?? "").uppercased()
+            }
+            return HomeLiveTape.Cell(
+                id: ls.game_id ?? ls.abbrGame,
+                eyebrow: [(ls.league ?? "").uppercased(), ls.isLive ? "LIVE" : ""].filter { !$0.isEmpty }.joined(separator: " · "),
+                line: ls.scoreLine ?? ls.abbrGame,
+                status: status.uppercased(),
+                tone: ls.isLive || ls.isFinal ? v : .neutral,
+                isLive: ls.isLive
+            )
+        }
+    }
+
+    /// The live takeover: the in-progress game Gary has the most conviction
+    /// in (highest-confidence pick among live games).
+    private var takeoverModel: (live: LiveScore, pickLine: String, verdict: HomeLiveVerdict)? {
+        let candidates: [(LiveScore, GaryPick)] = liveScoresNow
+            .filter { $0.isLive }
+            .compactMap { ls in pickFor(ls).map { (ls, $0) } }
+        guard let best = candidates.max(by: { ($0.1.confidence ?? 0) < ($1.1.confidence ?? 0) }) else { return nil }
+        return (best.0, best.1.pick ?? "", HomeLiveVerdict.evaluate(pick: best.1, live: best.0))
+    }
+
+    private var pregameSlateRows: [HomeSlateSection.Row] {
+        let sorted = todayPicks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+        return sorted.prefix(8).map { p in
+            let live = liveScoresNow.first {
+                abbrGameMatches($0.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
+            }
+            let title = live?.abbrGame ?? "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))"
+            let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                .joined(separator: " · ").uppercased()
+            return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: nil, chip: p.pick ?? "")
+        }
+    }
+
+    private var liveSlateRows: [HomeSlateSection.Row] {
+        let sorted = todayPicks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+        return sorted.prefix(8).map { p in
+            let live = liveScoresNow.first {
+                abbrGameMatches($0.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
+            }
+            guard let ls = live else {
+                let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                    .joined(separator: " · ").uppercased()
+                return HomeSlateSection.Row(id: p.id,
+                                            title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
+                                            sub: sub, tone: nil, chip: p.pick ?? "")
+            }
+            let v = HomeLiveVerdict.evaluate(pick: p, live: ls)
+            let title = ls.scoreLine ?? ls.abbrGame
+            var sub: String
+            var tone: HomeLiveVerdict? = nil
+            if ls.isLive {
+                let vt = v == .covering ? "COVERING" : v == .trailing ? "TRAILING" : ""
+                sub = [ls.detail ?? "", vt].filter { !$0.isEmpty }.joined(separator: " · ").uppercased()
+                tone = v
+            } else if ls.isFinal {
+                sub = v == .covering ? "FINAL · CASHED ✓" : v == .trailing ? "FINAL · NO CASH" : "FINAL"
+                tone = v
+            } else {
+                sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                    .joined(separator: " · ").uppercased()
+            }
+            return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: tone, chip: p.pick ?? "")
+        }
+    }
+
+    private var liveBoardSub: String {
+        let lives = liveScoresNow.filter { $0.isLive }.count
+        let finals = liveScoresNow.filter { $0.isFinal && pickFor($0) != nil }.count
+        let upcoming = max(0, todayPicks.count - lives - finals)
+        return "\(finals) settled · \(lives) live · \(upcoming) upcoming"
+    }
+
+    /// Tonight so far, from finals Gary had a side in.
+    private var tonightRecord: (w: Int, l: Int) {
+        var w = 0, l = 0
+        for ls in liveScoresNow where ls.isFinal {
+            guard let p = pickFor(ls) else { continue }
+            switch HomeLiveVerdict.evaluate(pick: p, live: ls) {
+            case .covering: w += 1
+            case .trailing: l += 1
+            case .neutral: break
+            }
+        }
+        return (w, l)
+    }
+
+    private var liveCountText: String? {
+        let n = liveScoresNow.filter { $0.isLive }.count
+        return n > 0 ? "\(n) LIVE" : nil
+    }
+
+    /// Last word of a team name — "Red Sox" → "Sox", good enough for a row
+    /// title when the live poller hasn't given us real abbreviations.
+    static func shortTeam(_ name: String?) -> String {
+        guard let last = name?.split(separator: " ").last else { return "—" }
+        return String(last)
+    }
+
+    /// Box-score-style prop results for the biggest settled game of the
+    /// latest graded night: PLAYER / LINE / RESULT / grade.
+    static func buildPropBox(props: [PropResult], games: [GameResult]) -> HomePropBoxSection.Box? {
+        let graded = props.filter { ["won", "lost", "push"].contains($0.result ?? "") }
+        guard let latest = graded.compactMap({ $0.game_date }).max() else { return nil }
+        let day = graded.filter { $0.game_date == latest && ($0.matchup?.isEmpty == false) }
+        let byGame = Dictionary(grouping: day) { $0.matchup ?? "" }
+        guard let best = byGame.max(by: { $0.value.count < $1.value.count }),
+              best.value.count >= 2 else { return nil }
+
+        // Title carries the final score when the grader knows it.
+        var title = best.key
+        if let g = games.first(where: { $0.game_date == latest && ($0.matchup ?? "") == best.key }),
+           let score = g.final_score?.split(separator: "-"), score.count == 2 {
+            let parts = best.key.components(separatedBy: " @ ")
+            if parts.count == 2 {
+                title = "\(shortTeam(parts[0])) \(score[0]) · \(shortTeam(parts[1])) \(score[1])"
+            }
+        }
+        let rows = best.value.prefix(5).map { p -> HomePropBoxSection.Row in
+            let unit = Self.propUnit(p.prop_type)
+            let dir = (p.bet ?? "").lowercased().hasPrefix("u") ? "U" : "O"
+            return HomePropBoxSection.Row(
+                player: shortTeam(p.player_name).uppercased(),
+                line: "\(dir) \(Self.trimNum(p.line_value?.value ?? "—")) \(unit)",
+                actual: "\(Self.trimNum(p.actual_value?.value ?? "—")) \(unit)",
+                state: p.result
+            )
+        }
+        return HomePropBoxSection.Box(title: title, status: "FINAL", rows: Array(rows))
+    }
+
+    /// Box-score unit for a prop type — "total_bases" → "TB".
+    static func propUnit(_ type: String?) -> String {
+        let t = (type ?? "").lowercased()
+        if t.contains("total_bases") || t.contains("total bases") { return "TB" }
+        if t.contains("strikeout") { return "K" }
+        if t.contains("home_run") || t.contains("home run") { return "HR" }
+        if t.contains("hits_runs_rbis") { return "H+R+RBI" }
+        if t.contains("rbi") { return "RBI" }
+        if t.contains("hit") { return "H" }
+        if t.contains("run") { return "R" }
+        if t.contains("point") { return "PTS" }
+        if t.contains("rebound") { return "REB" }
+        if t.contains("assist") { return "AST" }
+        if t.contains("three") { return "3PT" }
+        if t.contains("shots_on_goal") { return "SOG" }
+        if t.contains("goal") { return "G" }
+        if t.contains("save") { return "SV" }
+        return String(t.prefix(3)).uppercased()
+    }
+
+    static func trimNum(_ s: String) -> String {
+        s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+    }
+
     // MARK: - ② The Scorecard
 
-    /// Yesterday as three big readable numbers + one honest sentence. The
-    /// caption is TRUE BY CONSTRUCTION (a losing record with positive units
-    /// mathematically means the plus-money winners did the work). No icons,
-    /// no emoji — data graphics and plain language only.
+    /// Yesterday as three big readable numbers. No icons, no emoji, no
+    /// caption sentence — data graphics only.
     private func scoreCell(_ value: String, _ label: String, _ color: Color) -> some View {
         VStack(spacing: 3) {
             Text(value)
@@ -1825,39 +2151,24 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var scorecardCaption: String {
-        let net = lastNightNet ?? 0
-        switch (yesterdayRecord.wins >= yesterdayRecord.losses, net >= 0) {
-        case (true, true):   return "A clean night — the card and the money agreed."
-        case (false, true):  return "Losing record, winning night — the dog money did the work."
-        case (true, false):  return "Won the card, lost the math — the juice ate it."
-        case (false, false): return "A rough one. Gary owns it — the full card is in the Billfold."
-        }
-    }
-
+    // June 5: caption sentence removed — the numbers speak for themselves
+    // (user feedback: no editorial one-liners in the UI).
     private var scorecard: some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         } label: {
-            VStack(spacing: 12) {
-                HStack(spacing: 0) {
-                    scoreCell(Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
-                              "RECORD", .white.opacity(0.92))
-                    if let net = lastNightNet {
-                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                        scoreCell(String(format: "%+.1fu", net), "NET, FLAT STAKES",
-                                  net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
-                    }
-                    if let best = bestCashOdds, best > 0 {
-                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                        scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
-                    }
+            HStack(spacing: 0) {
+                scoreCell(Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
+                          "RECORD", .white.opacity(0.92))
+                if let net = lastNightNet {
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                    scoreCell(String(format: "%+.1fu", net), "NET, FLAT STAKES",
+                              net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
                 }
-                Text(scorecardCaption)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
+                if let best = bestCashOdds, best > 0 {
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                    scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
+                }
             }
             .padding(.horizontal, 16)
             .contentShape(Rectangle())
@@ -2392,6 +2703,582 @@ struct HomeDoorRow: View {
     }
 }
 
+// MARK: - Home: ESPN-for-bettors layer (the Wire, market pulse, prop box,
+// live tape + takeover, slate) — the time-aware front page, June 2026.
+
+/// Where Gary's pick stands against a live or final score — drives the
+/// tape/takeover/slate tint. ML and spread picks get a read; totals only
+/// color once an over has clinched (an under can't clinch mid-game and we
+/// don't pretend).
+enum HomeLiveVerdict {
+    case covering, trailing, neutral
+
+    static func evaluate(pick: GaryPick, live: LiveScore) -> HomeLiveVerdict {
+        guard let away = live.away_score, let home = live.home_score else { return .neutral }
+        let text = (pick.pick ?? "").lowercased()
+        guard !text.isEmpty else { return .neutral }
+
+        // Totals — "over/under N".
+        if text.contains("over") || text.contains("under") {
+            guard let line = unsignedNumber(in: text) else { return .neutral }
+            let combined = Double(away + home)
+            if text.contains("over") {
+                if combined > line { return .covering }              // clinched
+                return live.isFinal ? .trailing : .neutral
+            }
+            if combined >= line { return .trailing }                 // under dead or pushing
+            return live.isFinal ? .covering : .neutral
+        }
+
+        // Side picks: which team does the text name?
+        let words = text.split { !$0.isLetter }.map(String.init)
+        func mentions(_ name: String?, _ abbr: String?) -> Bool {
+            if let a = abbr?.lowercased(), a.count >= 2, words.contains(a) { return true }
+            guard let n = name?.lowercased() else { return false }
+            return n.split(separator: " ").contains { $0.count > 3 && text.contains($0) }
+        }
+        let tookAway = mentions(pick.awayTeam, live.away_abbr)
+        let tookHome = mentions(pick.homeTeam, live.home_abbr)
+        guard tookAway != tookHome else { return .neutral }
+        let margin = Double(tookAway ? away - home : home - away)
+
+        if let spread = signedNumber(in: text) {                     // spread
+            let edge = margin + spread
+            if edge > 0 { return .covering }
+            if edge < 0 { return .trailing }
+            return .neutral
+        }
+        if margin > 0 { return .covering }                           // moneyline
+        if margin < 0 { return .trailing }
+        return .neutral
+    }
+
+    /// First +/-prefixed number that reads like a spread (|x| ≤ 30) — skips
+    /// American odds like -120.
+    private static func signedNumber(in text: String) -> Double? {
+        for raw in text.split(separator: " ") {
+            let s = raw.trimmingCharacters(in: CharacterSet(charactersIn: "()[],"))
+            guard s.hasPrefix("+") || s.hasPrefix("-"), let d = Double(s), abs(d) <= 30 else { continue }
+            return d
+        }
+        return nil
+    }
+
+    /// First bare number that reads like a total line.
+    private static func unsignedNumber(in text: String) -> Double? {
+        for raw in text.split(separator: " ") {
+            let s = raw.trimmingCharacters(in: CharacterSet(charactersIn: "()[],"))
+            guard !s.hasPrefix("+"), !s.hasPrefix("-"), let d = Double(s), d > 3, d < 400 else { continue }
+            return d
+        }
+        return nil
+    }
+}
+
+/// Small pulsing status dot for live elements.
+private struct HomePulsingDot: View {
+    var color: Color
+    @State private var dim = false
+    var body: some View {
+        Circle().fill(color).frame(width: 6, height: 6)
+            .opacity(dim ? 0.25 : 1)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { dim = true }
+            }
+    }
+}
+
+/// One-line settled/tonight strip (pre-game + live phases) → Billfold.
+struct HomeCompactStrip: View {
+    let prefix: String
+    let record: String
+    var net: Double? = nil
+    var suffix: String? = nil
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                Text(prefix)
+                    .font(GaryFonts.mono(11)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.45))
+                Text(record)
+                    .font(GaryFonts.mono(11.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.92))
+                if let net {
+                    Text("·").foregroundStyle(.white.opacity(0.3))
+                    Text(String(format: "%+.1fu", net))
+                        .font(GaryFonts.mono(11.5, bold: true))
+                        .foregroundStyle(net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                }
+                if let suffix {
+                    Text("·").foregroundStyle(.white.opacity(0.3))
+                    Text(suffix)
+                        .font(GaryFonts.mono(11)).tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            .padding(.vertical, 12).padding(.horizontal, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .quantPanel()
+        .padding(.horizontal, 16)
+    }
+}
+
+/// League-wide market scoreboard for the settled night — overs, ML
+/// favorites, dog flat-stake units. Data only, no commentary.
+struct HomeMarketPulseStrip: View {
+    let rows: [SupabaseAPI.MarketPulseRow]
+    private var oversW: Int { rows.reduce(0) { $0 + ($1.overs_wins ?? 0) } }
+    private var oversL: Int { rows.reduce(0) { $0 + ($1.overs_losses ?? 0) } }
+    private var favW: Int { rows.reduce(0) { $0 + ($1.fav_wins ?? 0) } }
+    private var favL: Int { rows.reduce(0) { $0 + ($1.fav_losses ?? 0) } }
+    private var dogNet: Double { rows.reduce(0) { $0 + ($1.dog_net_units ?? 0) } }
+
+    private func stat(_ v: String, _ k: String, _ color: Color = .white.opacity(0.92)) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(v).font(GaryFonts.mono(13.5, bold: true)).foregroundStyle(color)
+            Text(k).font(GaryFonts.mono(8.5)).tracking(1.1).foregroundStyle(.white.opacity(0.35))
+        }
+    }
+
+    var body: some View {
+        HStack {
+            stat("OVERS \(oversW)–\(oversL)", "LAST NIGHT")
+            Spacer()
+            stat("FAVES \(favW)–\(favL)", "ML")
+            Spacer()
+            stat(String(format: "DOGS %+.1fU", dogNet), "FLAT STAKES",
+                 dogNet >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+        }
+        .padding(.vertical, 12).padding(.horizontal, 14)
+        .quantPanel()
+    }
+}
+
+/// The Wire — around-the-league items written from the bettor's seat:
+/// results vs the closing number, line moves, injuries with the market
+/// consequence, curated X voices (quoted behind a hairline rule).
+struct HomeWireSection: View {
+    let items: [SupabaseAPI.WireItem]
+    let sub: String
+    var pulse: [SupabaseAPI.MarketPulseRow] = []
+    var limit: Int = 4
+
+    private func kindLabel(_ k: String?) -> String {
+        switch k {
+        case "result": return "FINAL"
+        case "line_move": return "LINE MOVE"
+        case "injury": return "INJURY"
+        case "pace": return "PACE"
+        default: return "WIRE"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "The Wire", sub: sub)
+            if !pulse.isEmpty {
+                HomeMarketPulseStrip(rows: pulse).padding(.horizontal, 16)
+            }
+            let shown = Array(items.prefix(limit))
+            if !shown.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
+                        wireRow(item)
+                        if i < shown.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                        }
+                    }
+                }
+                .quantPanel()
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    @ViewBuilder private func wireRow(_ item: SupabaseAPI.WireItem) -> some View {
+        let isVoice = item.kind == "voice"
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                if isVoice {
+                    Text("𝕏")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text((item.source_handle ?? "").uppercased())
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.35))
+                } else {
+                    Circle()
+                        .fill(Sport.from(league: item.league ?? "").accentColor)
+                        .frame(width: 6, height: 6)
+                    Text("\((item.league ?? "").uppercased()) · \(kindLabel(item.kind))")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
+            Text(item.headline ?? "")
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineSpacing(2.5)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, isVoice ? 11 : 0)
+                .overlay(alignment: .leading) {
+                    if isVoice {
+                        Rectangle().fill(Color.white.opacity(0.14)).frame(width: 2)
+                    }
+                }
+            if let subline = item.subline, !subline.isEmpty {
+                Text(subline.uppercased())
+                    .font(GaryFonts.mono(9.5)).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+        }
+        .padding(.vertical, 12).padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A box score where the columns are props: PLAYER / LINE / RESULT / grade.
+struct HomePropBoxSection: View {
+    struct Row: Identifiable {
+        let id = UUID()
+        let player: String   // "BETTS"
+        let line: String     // "O 1.5 TB"
+        let actual: String   // "3 TB"
+        let state: String?   // won | lost | push
+    }
+    struct Box {
+        let title: String
+        let status: String
+        let rows: [Row]
+    }
+    let box: Box
+    let onOpen: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "Prop box", sub: "Last night's props, box-score style")
+            Button(action: onOpen) {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text(box.title)
+                            .font(GaryFonts.mono(13, bold: true))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        Spacer()
+                        Text(box.status)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.4)
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
+                    .padding(.vertical, 11).padding(.horizontal, 14)
+                    Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                    gridHeader
+                    ForEach(box.rows) { row in
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                        boxRow(row)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Color(hex: "#15171C"))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private var gridHeader: some View {
+        HStack(spacing: 8) {
+            Text("PLAYER").frame(maxWidth: .infinity, alignment: .leading)
+            Text("LINE").frame(width: 70, alignment: .trailing)
+            Text("RESULT").frame(width: 58, alignment: .trailing)
+            Text("✓").frame(width: 22, alignment: .center)
+        }
+        .font(GaryFonts.mono(8)).tracking(1.2)
+        .foregroundStyle(.white.opacity(0.3))
+        .padding(.vertical, 8).padding(.horizontal, 14)
+    }
+
+    private func boxRow(_ row: Row) -> some View {
+        HStack(spacing: 8) {
+            Text(row.player)
+                .font(GaryFonts.mono(12, bold: true))
+                .foregroundStyle(Color(hex: "#C7CCD6"))
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(row.line)
+                .font(GaryFonts.mono(10.5))
+                .foregroundStyle(.white.opacity(0.45))
+                .frame(width: 70, alignment: .trailing)
+            Text(row.actual)
+                .font(GaryFonts.mono(11.5, bold: true))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 58, alignment: .trailing)
+            Group {
+                switch row.state {
+                case "won":  Text("✓").foregroundStyle(Color(hex: "#3FB950"))
+                case "lost": Text("✗").foregroundStyle(Color(hex: "#E5484D"))
+                default:     Text("–").foregroundStyle(.white.opacity(0.35))
+                }
+            }
+            .font(.system(size: 11, weight: .bold))
+            .frame(width: 22, alignment: .center)
+        }
+        .padding(.vertical, 9).padding(.horizontal, 14)
+    }
+}
+
+/// Horizontal live ticker: score + state for every game Gary has a side in,
+/// edged green/red by where the pick stands.
+struct HomeLiveTape: View {
+    struct Cell: Identifiable {
+        let id: String
+        let eyebrow: String
+        let line: String
+        let status: String
+        let tone: HomeLiveVerdict
+        let isLive: Bool
+    }
+    let cells: [Cell]
+    let onTap: () -> Void
+
+    private func toneColor(_ t: HomeLiveVerdict) -> Color? {
+        switch t {
+        case .covering: return Color(hex: "#3FB950")
+        case .trailing: return Color(hex: "#E5484D")
+        case .neutral: return nil
+        }
+    }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(cells) { cell in
+                    Button(action: onTap) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 6) {
+                                if cell.isLive {
+                                    HomePulsingDot(color: toneColor(cell.tone) ?? GaryColors.gold)
+                                }
+                                Text(cell.eyebrow)
+                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(1.1)
+                                    .foregroundStyle(.white.opacity(0.35))
+                            }
+                            Text(cell.line)
+                                .font(GaryFonts.mono(13, bold: true))
+                                .foregroundStyle(.white.opacity(0.92))
+                            Text(cell.status)
+                                .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(1)
+                        }
+                        .padding(.vertical, 10).padding(.horizontal, 12)
+                        .frame(minWidth: 124, alignment: .leading)
+                        .background(Color(hex: "#15171C"))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                        .overlay(alignment: .leading) {
+                            if let c = toneColor(cell.tone) {
+                                RoundedRectangle(cornerRadius: 1.5).fill(c)
+                                    .frame(width: 2.5).padding(.vertical, 1)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+/// The marquee, live: in-progress score, game state (MLB gets the base
+/// diamond + outs from the poller's `bases`/`outs`), and the receipt with
+/// where Gary's pick stands.
+struct HomeLiveTakeover: View {
+    let live: LiveScore
+    let pickLine: String
+    let verdict: HomeLiveVerdict
+    let onTap: () -> Void
+
+    private var verdictText: String? {
+        switch verdict {
+        case .covering: return "COVERING"
+        case .trailing: return "TRAILING"
+        case .neutral: return nil
+        }
+    }
+    private var verdictColor: Color {
+        verdict == .trailing ? Color(hex: "#E5484D") : Color(hex: "#3FB950")
+    }
+    private var awayLeads: Bool { (live.away_score ?? 0) >= (live.home_score ?? 0) }
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    HStack(spacing: 7) {
+                        HomePulsingDot(color: GaryColors.gold)
+                        Text("LIVE · \((live.league ?? "").uppercased())")
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1.6)
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    Spacer()
+                    if let detail = live.detail {
+                        Text(detail.uppercased())
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
+                }
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        scoreRow(live.away_abbr, live.away_score, bright: awayLeads)
+                        scoreRow(live.home_abbr, live.home_score, bright: !awayLeads)
+                    }
+                    Spacer()
+                    if live.hasGameState { mlbState }
+                }
+                HStack {
+                    Text(pickLine.uppercased())
+                        .font(GaryFonts.mono(13.5, bold: true))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer()
+                    if let v = verdictText {
+                        Text(v)
+                            .font(GaryFonts.mono(10, bold: true)).tracking(1.4)
+                            .foregroundStyle(verdictColor)
+                    }
+                }
+                .padding(.top, 10)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(GaryColors.gold).frame(height: 2)
+                }
+            }
+            .padding(16)
+            .background(Color(hex: "#15171C"))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+    }
+
+    private func scoreRow(_ abbr: String?, _ score: Int?, bright: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(abbr ?? "—")
+                .font(GaryFonts.mono(14, bold: true)).tracking(0.8)
+                .foregroundStyle(.white.opacity(bright ? 0.92 : 0.45))
+                .frame(width: 48, alignment: .leading)
+            Text(score.map(String.init) ?? "–")
+                .font(GaryFonts.mono(26, bold: true))
+                .foregroundStyle(bright ? Color(hex: "#E8D48B") : .white.opacity(0.45))
+        }
+    }
+
+    /// MLB base diamond + outs dots, straight off the poller's encoding.
+    private var mlbState: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                diamondBase(on: live.onSecond).offset(y: -11)
+                diamondBase(on: live.onFirst).offset(x: 14, y: 3)
+                diamondBase(on: live.onThird).offset(x: -14, y: 3)
+            }
+            .frame(width: 52, height: 38)
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(i < (live.outs ?? 0) ? Color.white.opacity(0.85) : Color.white.opacity(0.15))
+                        .frame(width: 5.5, height: 5.5)
+                }
+            }
+        }
+        .padding(.trailing, 4)
+    }
+
+    private func diamondBase(on: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 2.5)
+            .fill(on ? Color(hex: "#EDEDE6") : Color.white.opacity(0.12))
+            .frame(width: 13, height: 13)
+            .rotationEffect(.degrees(45))
+    }
+}
+
+/// Tonight's picks — by start time pre-game, by live status in-game.
+struct HomeSlateSection: View {
+    struct Row: Identifiable {
+        let id: String
+        let title: String
+        let sub: String
+        let tone: HomeLiveVerdict?
+        let chip: String
+    }
+    let header: String
+    let sub: String
+    let rows: [Row]
+    let onTap: () -> Void
+
+    private func subColor(_ tone: HomeLiveVerdict?) -> Color {
+        switch tone {
+        case .covering: return Color(hex: "#3FB950")
+        case .trailing: return Color(hex: "#E5484D")
+        default: return .white.opacity(0.35)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: header, sub: sub)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                    Button(action: onTap) {
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(row.title)
+                                    .font(GaryFonts.mono(13, bold: true)).tracking(0.4)
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1).minimumScaleFactor(0.8)
+                                Text(row.sub)
+                                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                                    .foregroundStyle(subColor(row.tone))
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 8)
+                            Text(row.chip.uppercased())
+                                .font(GaryFonts.mono(10.5, bold: true))
+                                .foregroundStyle(GaryColors.gold)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .padding(.vertical, 6).padding(.horizontal, 9)
+                                .background(Color(hex: "#1C1F26"))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(GaryColors.gold.opacity(0.45), lineWidth: 1))
+                                .frame(maxWidth: 150)
+                        }
+                        .padding(.vertical, 11).padding(.horizontal, 14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if i < rows.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                    }
+                }
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
 // MARK: - Sport Filter
 
 enum Sport: String, CaseIterable {
@@ -2671,7 +3558,7 @@ struct PremiumPicksView: View {
         "NCAAF": "https://buy.stripe.com/test_5kQbJ25Z2gWR6X05G4aIM0c",
         "NCAAB": "https://buy.stripe.com/test_5kQ3cw1IM7mheps0lKaIM0d",
         "ALL":   "https://buy.stripe.com/test_00w7sM1IMgWRchk5G4aIM0e",
-        "WC":    "https://buy.stripe.com/test_00w28s4UYfSN2GK4C0aIM07",
+        "WC":    "https://buy.stripe.com/test_5kQeVe9befSN9582tSaIM0f",
     ]
     #else
     private static let checkoutLinks: [String: String] = [
@@ -2682,7 +3569,7 @@ struct PremiumPicksView: View {
         "NCAAF": "https://buy.stripe.com/bJe7sM97qeOleDG9K7ao804",
         "NCAAB": "https://buy.stripe.com/dRmeVebfy6hPfHK7BZao805",
         "ALL":   "https://buy.stripe.com/aFabJ21EY21zgLO8G3ao807",
-        "WC":    "https://buy.stripe.com/14AaEYfvOfSpfHK1dBao806",
+        "WC":    "https://buy.stripe.com/7sYbJ2abubC9dzCe0nao808",
     ]
     #endif
     private func openCheckout(_ league: String) {
@@ -3520,7 +4407,7 @@ struct PlansSheetView: View {
                                 iconColor: Sport.from(league: "WC").accentColor,
                                 title: "WORLD CUP PASS",
                                 sub: "All 104 matches · one-time, no renewal",
-                                price: "$14.99", priceNote: "KICKS OFF JUNE 11",
+                                price: "$9.99", priceNote: "KICKS OFF JUNE 11",
                                 cta: "Pre-order ›") { onSelect("WC") }
                     }
 
@@ -3571,25 +4458,26 @@ struct PlansSheetView: View {
         let price = count == 3 ? "$24.99/MO" : "$17.99/MO"
         let ready = count == 2 || count == 3
         return VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 22) {
-                    ForEach(Self.sports, id: \.self) { lg in
-                        let on = bundlePick.contains(lg)
-                        Button {
-                            if on { bundlePick.remove(lg) }
-                            else if bundlePick.count < 3 { bundlePick.insert(lg) }
-                        } label: {
-                            Text(lg)
-                                .font(GaryFonts.mono(12, bold: on))
-                                .tracking(1)
-                                .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.35))
-                                .frame(minHeight: 44)
-                        }
-                        .buttonStyle(.plain)
+            // Equal-width segments, no nested scroll — a horizontal rail inside
+            // a sheet's vertical scroll made every graze register as a tap.
+            HStack(spacing: 0) {
+                ForEach(Self.sports, id: \.self) { lg in
+                    let on = bundlePick.contains(lg)
+                    Button {
+                        if on { bundlePick.remove(lg) }
+                        else if bundlePick.count < 3 { bundlePick.insert(lg) }
+                    } label: {
+                        Text(lg)
+                            .font(GaryFonts.mono(12, bold: on))
+                            .tracking(0.5)
+                            .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.35))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 14)
             }
+            .padding(.horizontal, 8)
             hairline
             Button { onBundle(Array(bundlePick)) } label: {
                 HStack(spacing: 12) {

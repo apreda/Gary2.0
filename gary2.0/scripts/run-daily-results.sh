@@ -25,3 +25,9 @@ echo "[$(date)] Results grading complete."
 echo "[$(date)] Grading insight connections..."
 node run-grade-insights.js || echo "insight grading failed (non-fatal)"
 echo "[$(date)] Insight grading complete."
+
+# Compute yesterday's league-wide Market Pulse (overs/favorites/dogs records).
+# Non-fatal: a Market Pulse failure must NOT fail the critical results job above.
+echo "[$(date)] Computing market pulse..."
+node run-market-pulse.js || echo "market pulse failed (non-fatal)"
+echo "[$(date)] Market pulse complete."
