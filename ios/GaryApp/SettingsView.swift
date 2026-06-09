@@ -1,253 +1,55 @@
 import SwiftUI
 
 // MARK: - Settings View
+// Speaks the same Quant Terminal language as the page headers: mono gold
+// wordmark + dashed stitch, mono section eyebrows, flat matte cards
+// (DESIGNER_BRIEFING four horsemen: no glow shadows, no gradient borders).
 
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var animateIn = false
     @State private var showSignOutConfirm = false
     @State private var showSignIn = false
-    
+
     var body: some View {
         ZStack {
-            // Background - matches homepage
             LiquidGlassBackground()
 
-            // Content - respects safe area
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
-                        // Header
-                        Text("Settings")
-                            .font(.system(size: 28, weight: .heavy))
-                            .tracking(-0.5)
-                            .foregroundStyle(GaryColors.gold)
-                            .padding(.top, 8) // Extra padding after safe area
-                            .opacity(animateIn ? 1 : 0)
-                            .offset(y: animateIn ? 0 : 20)
-                        
-                        // App Info Card
-                        appInfoCard
-                            .opacity(animateIn ? 1 : 0)
-                            .offset(y: animateIn ? 0 : 20)
-                            .animation(.easeOut(duration: 0.5).delay(0.1), value: animateIn)
-                        
-                        // About Section (What's New / Changelog)
-                        aboutSection
-                            .opacity(animateIn ? 1 : 0)
-                            .offset(y: animateIn ? 0 : 20)
-                            .animation(.easeOut(duration: 0.5).delay(0.15), value: animateIn)
-                        
-                        // Account Section
-                        accountSection
-                            .opacity(animateIn ? 1 : 0)
-                            .offset(y: animateIn ? 0 : 20)
-                            .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+                    header
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 20)
 
-                        // Legal Section
-                        legalSection
-                            .opacity(animateIn ? 1 : 0)
-                            .offset(y: animateIn ? 0 : 20)
-                            .animation(.easeOut(duration: 0.5).delay(0.25), value: animateIn)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 100) // Space for floating tab bar
+                    appInfoCard
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 20)
+                        .animation(.easeOut(duration: 0.5).delay(0.1), value: animateIn)
+
+                    section("ABOUT") { aboutRows }
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 20)
+                        .animation(.easeOut(duration: 0.5).delay(0.15), value: animateIn)
+
+                    section("ACCOUNT") { accountRows }
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 20)
+                        .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+
+                    section("LEGAL") { legalRows }
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 20)
+                        .animation(.easeOut(duration: 0.5).delay(0.25), value: animateIn)
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 100) // Space for floating tab bar
             }
-            .navigationBarHidden(true)
+        }
+        .navigationBarHidden(true)
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {
                 animateIn = true
             }
-        }
-    }
-    
-    // MARK: - App Info Card
-    
-    private var appInfoCard: some View {
-        HStack(spacing: 16) {
-            Image("GaryIconBG")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 94, height: 94)
-                .shadow(color: GaryColors.gold.opacity(0.3), radius: 10, y: 4)
-            
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Gary A.I.")
-                    .font(.title2.bold())
-                    .foregroundStyle(GaryColors.gold)
-                
-                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.9.92")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(hex: "#0D0D0F"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [GaryColors.gold.opacity(0.3), GaryColors.gold.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
-        )
-    }
-    
-    // MARK: - About Section
-    
-    private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "info.circle.fill")
-                    .foregroundStyle(GaryColors.gold)
-                Text("ABOUT")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-            }
-            
-            VStack(spacing: 2) {
-                NavigationLink(destination: ChangelogView()) {
-                    HStack(spacing: 14) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(GaryColors.gold)
-                            .frame(width: 32, height: 32)
-                            .background(Color(hex: "#1A1A1C"))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        
-                        Text("What's New")
-                            .font(.subheadline)
-                            .foregroundStyle(.white)
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(GaryColors.gold.opacity(0.5))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-        }
-    }
-    
-    // MARK: - Account Section
-
-    private var accountSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "person.circle.fill")
-                    .foregroundStyle(GaryColors.gold)
-                Text("ACCOUNT")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 2) {
-                if authManager.isAuthenticated {
-                    // User info
-                    HStack(spacing: 14) {
-                        Image(systemName: "envelope.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(GaryColors.gold)
-                            .frame(width: 32, height: 32)
-                            .background(Color(hex: "#1A1A1C"))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(authManager.currentUser?.displayName ?? "Gary User")
-                                .font(.subheadline)
-                                .foregroundStyle(.white)
-                            if let email = authManager.currentUser?.email {
-                                Text(email)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-
-                    Divider()
-                        .background(GaryColors.gold.opacity(0.1))
-                        .padding(.horizontal, 16)
-
-                    // Sign Out
-                    Button {
-                        showSignOutConfirm = true
-                    } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .frame(width: 32, height: 32)
-                                .background(Color(hex: "#1A1A1C"))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                            Text("Sign Out")
-                                .font(.subheadline)
-                                .foregroundStyle(.red)
-
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                    }
-                } else {
-                    // Not signed in — show sign in button
-                    Button {
-                        showSignIn = true
-                    } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: "person.badge.key.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(GaryColors.gold)
-                                .frame(width: 32, height: 32)
-                                .background(Color(hex: "#1A1A1C"))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                            Text("Sign In")
-                                .font(.subheadline)
-                                .foregroundStyle(.white)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(GaryColors.gold.opacity(0.5))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                    }
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
         }
         .alert("Sign Out", isPresented: $showSignOutConfirm) {
             Button("Cancel", role: .cancel) {}
@@ -262,58 +64,195 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Legal Section
-    
-    private var legalSection: some View {
+    // MARK: - Header (page-header pattern, sans the recursive settings button)
+
+    private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "doc.text.fill")
+            Text("SETTINGS")
+                .font(GaryFonts.mono(23, bold: false))
+                .foregroundStyle(GaryColors.gold)
+            SettingsStitch()
+                .stroke(GaryColors.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                .frame(height: 1)
+        }
+        .padding(.top, 8)
+    }
+
+    // MARK: - App Info Card
+
+    private var appInfoCard: some View {
+        HStack(spacing: 16) {
+            Image("GaryIconBG")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 84, height: 84)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("GARY A.I.")
+                    .font(GaryFonts.mono(19))
                     .foregroundStyle(GaryColors.gold)
-                Text("LEGAL")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
+
+                Text("VERSION \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1")")
+                    .font(GaryFonts.mono(10))
+                    .foregroundStyle(.white.opacity(0.45))
             }
-            
-            VStack(spacing: 2) {
-                SettingsLink(
-                    title: "Privacy Policy",
-                    icon: "lock.shield.fill",
-                    iconColor: GaryColors.gold,
-                    url: "https://www.betwithgary.ai/privacy"
-                )
-                
-                SettingsLink(
-                    title: "Terms of Service",
-                    icon: "doc.plaintext.fill",
-                    iconColor: GaryColors.gold,
-                    url: "https://www.betwithgary.ai/terms"
-                )
-                
-                SettingsLink(
-                    title: "Responsible Gambling",
-                    icon: "heart.fill",
-                    iconColor: GaryColors.gold,
-                    url: "https://www.ncpgambling.org/help-treatment/"
-                )
-                
-                SettingsLink(
-                    title: "Contact Support",
-                    icon: "envelope.fill",
-                    iconColor: GaryColors.gold,
-                    url: "https://www.betwithgary.ai/contact"
-                )
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
+
+            Spacer()
+        }
+        .padding(20)
+        .background(cardBackground)
+    }
+
+    // MARK: - Section scaffold
+
+    private func section<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(GaryFonts.mono(11, bold: true))
+                .foregroundStyle(.white.opacity(0.5))
+            VStack(spacing: 2) { rows() }
+                .background(cardBackground)
         }
     }
-    
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Color(hex: "#0D0D0F"))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+            )
+    }
+
+    // MARK: - About
+
+    private var aboutRows: some View {
+        NavigationLink(destination: ChangelogView()) {
+            SettingsRowLabel(title: "What's New", icon: "sparkles", trailingIcon: "chevron.right")
+        }
+    }
+
+    // MARK: - Account
+
+    @ViewBuilder
+    private var accountRows: some View {
+        if authManager.isAuthenticated {
+            HStack(spacing: 14) {
+                SettingsRowIcon(icon: "envelope.fill")
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(authManager.currentUser?.displayName ?? "Gary User")
+                        .font(GaryFonts.text(15))
+                        .foregroundStyle(.white)
+                    if let email = authManager.currentUser?.email {
+                        Text(email)
+                            .font(GaryFonts.text(12))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            Divider()
+                .background(Color.white.opacity(0.07))
+                .padding(.horizontal, 16)
+
+            Button {
+                showSignOutConfirm = true
+            } label: {
+                SettingsRowLabel(title: "Sign Out", icon: "rectangle.portrait.and.arrow.right", tint: .red)
+            }
+        } else {
+            Button {
+                showSignIn = true
+            } label: {
+                SettingsRowLabel(title: "Sign In", icon: "person.badge.key.fill", trailingIcon: "chevron.right")
+            }
+        }
+    }
+
+    // MARK: - Legal
+
+    @ViewBuilder
+    private var legalRows: some View {
+        SettingsLink(
+            title: "Privacy Policy",
+            icon: "lock.shield.fill",
+            url: "https://www.betwithgary.ai/privacy"
+        )
+        SettingsLink(
+            title: "Terms of Service",
+            icon: "doc.plaintext.fill",
+            url: "https://www.betwithgary.ai/terms"
+        )
+        SettingsLink(
+            title: "Responsible Gambling",
+            icon: "heart.fill",
+            url: "https://www.ncpgambling.org/help-treatment/"
+        )
+        SettingsLink(
+            title: "Contact Support",
+            icon: "envelope.fill",
+            url: "https://www.betwithgary.ai/contact"
+        )
+    }
+}
+
+// MARK: - Row building blocks
+
+/// Icon chip: neutral by default — gold stays reserved for the wordmark.
+struct SettingsRowIcon: View {
+    let icon: String
+    var tint: Color = .white.opacity(0.6)
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 32, height: 32)
+            .background(Color(hex: "#1A1A1C"))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct SettingsRowLabel: View {
+    let title: String
+    let icon: String
+    var tint: Color = .white.opacity(0.6)
+    var trailingIcon: String? = nil
+
+    var body: some View {
+        HStack(spacing: 14) {
+            SettingsRowIcon(icon: icon, tint: tint)
+
+            Text(title)
+                .font(GaryFonts.text(15))
+                .foregroundStyle(tint == .red ? .red : .white)
+
+            Spacer()
+
+            if let trailingIcon {
+                Image(systemName: trailingIcon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.3))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct SettingsStitch: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.width, y: rect.midY))
+        return p
+    }
 }
 
 // MARK: - Settings Link Component
@@ -323,31 +262,11 @@ struct SettingsLink: View {
 
     let title: String
     let icon: String
-    let iconColor: Color
     let url: String
 
     var body: some View {
         Link(destination: URL(string: url) ?? Self.fallbackURL) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(iconColor)
-                    .frame(width: 32, height: 32)
-                    .background(Color(hex: "#1A1A1C"))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundStyle(.white)
-                
-                Spacer()
-                
-                Image(systemName: "arrow.up.right")
-                    .font(.caption)
-                    .foregroundStyle(GaryColors.gold.opacity(0.5))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            SettingsRowLabel(title: title, icon: icon, trailingIcon: "arrow.up.right")
         }
     }
 }

@@ -167,10 +167,14 @@ struct PlayerInsightPack: Decodable {
     let props: [PropLine]?
 }
 
-struct PlayerInsightCardRow: Decodable {
+struct PlayerInsightCardRow: Decodable, Identifiable {
     let player_id: String?
     let player_name: String?
+    let team_abbr: String?
+    let game_id: String?
     let payload: PlayerInsightPack?
+
+    var id: String { player_id ?? player_name ?? "" }
 }
 
 // MARK: - Sportsbook Odds (multi-book comparison)

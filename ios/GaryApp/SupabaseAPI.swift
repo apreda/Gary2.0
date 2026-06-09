@@ -459,6 +459,26 @@ enum SupabaseAPI {
         return rows.first?.payload
     }
 
+    /// All of a date's player insight packs (one fetch, shared across the
+    /// Picks carousel) — each game page filters to its own matchup via the
+    /// pack's `game` label. 30-min in-memory cache, same idiom as DFS lineups.
+    private static var _playerIntelCache: (date: String, rows: [PlayerInsightCardRow], at: Date)?
+    static func fetchPlayerIntelRows(date: String) async -> [PlayerInsightCardRow] {
+        if let c = _playerIntelCache, c.date == date, Date().timeIntervalSince(c.at) < 1800 {
+            return c.rows
+        }
+        let url = buildURL(table: "player_insight_cards", query: [
+            URLQueryItem(name: "select", value: "player_id,player_name,team_abbr,game_id,payload"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "order", value: "player_name.asc")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else { return [] }
+        _playerIntelCache = (date, rows, Date())
+        return rows
+    }
+
     /// Graded-edge tally for a date: how many hub edges hit vs were graded
     /// (hit + miss; pushes excluded). Powers the hub's track-record line.
     /// Returns nil on any failure or when nothing is graded yet.

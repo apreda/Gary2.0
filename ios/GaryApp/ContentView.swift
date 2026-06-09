@@ -118,14 +118,30 @@ struct ContentView: View {
 enum AppFlags {
     /// Talk to Gary is parked until v3 — the Gary tab is Hub-only meanwhile.
     static let talkToGaryEnabled = false
+    /// Gary's Daily Fantasy lineups (dfs_lineups) — revived June 2026.
+    static let fantasyEnabled = true
 }
 
-enum GaryPageMode: String, CaseIterable { case hub = "Hub", talk = "Talk to Gary" }
+enum GaryPageMode: String, CaseIterable {
+    case hub = "Hub", fantasy = "Fantasy", talk = "Talk to Gary"
 
-/// The center Gary tab hosts two capabilities behind a segmented switch:
-/// the information "Hub" (Today's Edges) and the "Talk to Gary" voice/chat orb.
-/// Talk is created lazily (only when selected) so the orb/mic isn't live on Hub.
-/// With `AppFlags.talkToGaryEnabled` off, the switch hides and Hub fills the tab.
+    /// Only flag-enabled modes get a switch entry; Hub is always on.
+    static var enabled: [GaryPageMode] {
+        allCases.filter {
+            switch $0 {
+            case .hub: return true
+            case .fantasy: return AppFlags.fantasyEnabled
+            case .talk: return AppFlags.talkToGaryEnabled
+            }
+        }
+    }
+}
+
+/// The center Gary tab hosts its capabilities behind an underline switch:
+/// the information "Hub" (Today's Edges), Gary's Daily Fantasy lineups, and
+/// the "Talk to Gary" voice/chat orb. Non-hub modes are created lazily (only
+/// when selected) so the orb/mic isn't live on Hub. With a single enabled
+/// mode the switch hides and Hub fills the tab.
 struct GaryPage: View {
     @Binding var selectedTab: Int
     @State private var mode: GaryPageMode = .hub
@@ -135,14 +151,15 @@ struct GaryPage: View {
             LiquidGlassBackground(grainDensity: 0)
 
             VStack(spacing: 0) {
-                if AppFlags.talkToGaryEnabled {
+                if GaryPageMode.enabled.count > 1 {
                     modeSwitch
                         .padding(.top, 8)
                         .padding(.bottom, 6)
                 }
 
                 Group {
-                    if mode == .hub || !AppFlags.talkToGaryEnabled {
+                    switch mode {
+                    case .hub:
                         // Start at the hub; tapping a connection moves the user
                         // over to that game's picks on the Picks tab, focused on
                         // the tapped matchup (via PicksFocusState).
@@ -150,7 +167,9 @@ struct GaryPage: View {
                             PicksFocusState.shared.focusGame = game
                             selectedTab = 3
                         }
-                    } else {
+                    case .fantasy:
+                        GaryFantasyView()
+                    case .talk:
                         GaryChatView()
                     }
                 }
@@ -159,12 +178,12 @@ struct GaryPage: View {
         }
     }
 
-    // Primary nav (Hub ⟷ Talk to Gary) — an underline tab, deliberately distinct
+    // Primary nav (Hub ⟷ Fantasy ⟷ Talk) — an underline tab, deliberately distinct
     // from the gold filter-pills used elsewhere. Role differentiation, not another
     // gold capsule. (DESIGNER_BRIEFING: differentiate button roles.)
     private var modeSwitch: some View {
         HStack(spacing: 28) {
-            ForEach(GaryPageMode.allCases, id: \.self) { m in
+            ForEach(GaryPageMode.enabled, id: \.self) { m in
                 let on = m == mode
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { mode = m }
@@ -234,9 +253,9 @@ struct GaryIntroSheet: View {
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                    .font(GaryFonts.text(16, .semibold)).foregroundStyle(.white)
                 Text(text)
-                    .font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
+                    .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -386,7 +405,7 @@ struct GaryCenteredTabBar: View {
                         }
                     }
                 Text(tab.label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(GaryFonts.text(10, .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -448,122 +467,6 @@ struct GaryCenteredTabBar: View {
 
 // Legacy alias — anything still referencing CompactTabBar gets the new one.
 typealias CompactTabBar = GaryCenteredTabBar
-
-// MARK: - Old tab bar (unused, kept for reference)
-private struct _LegacyCompactTabBar: View {
-    @Binding var selectedTab: Int
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var tabs: [(icon: String, label: String)] {
-        [
-            ("house.fill", "Home"),
-            ("list.bullet.rectangle.fill", "Picks"),
-            ("person.text.rectangle", "Props"),
-            ("trophy.fill", "Fantasy"),
-            ("chart.bar.fill", "Billfold")
-        ]
-    }
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(tabs.indices, id: \.self) { index in
-                Button {
-                    if PerformanceMode.current.useExpensiveEffects && !reduceMotion {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedTab = index
-                        }
-                    } else {
-                        selectedTab = index
-                    }
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: tabs[index].icon)
-                            .font(.system(size: 18, weight: .semibold))
-                        Text(tabs[index].label)
-                            .font(.system(size: 9, weight: .medium))
-                    }
-                    .foregroundStyle(selectedTab == index ? GaryColors.gold : .white.opacity(0.6))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background {
-                        if selectedTab == index {
-                            Capsule()
-                                .fill(GaryColors.gold.opacity(0.15))
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(tabs[index].label) tab")
-                .accessibilityHint(selectedTab == index ? "Currently selected" : "Double tap to switch to \(tabs[index].label)")
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 6)
-        .background {
-            if PerformanceMode.current.useExpensiveEffects {
-                // Full design for iOS 16+
-                ZStack {
-                    // 1. Base glass material
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-
-                    // 2. Gold-tinted overlay
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    GaryColors.gold.opacity(0.12),
-                                    GaryColors.gold.opacity(0.04)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    // 3. Liquid shine (top highlight)
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.4), .white.opacity(0.0)],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-                        .blendMode(.overlay)
-
-                    // 4. Premium gold edge
-                    Capsule()
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    GaryColors.lightGold.opacity(0.5),
-                                    GaryColors.gold.opacity(0.25),
-                                    GaryColors.gold.opacity(0.1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.8
-                        )
-                }
-                .shadow(color: GaryColors.gold.opacity(0.15), radius: 16, y: 8)
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
-            } else {
-                // Lighter version for iOS 15 and below
-                ZStack {
-                    Capsule()
-                        .fill(Color(hex: "#1A1A1E"))
-                    
-                    Capsule()
-                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.8)
-                }
-                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 8)
-    }
-}
 
 // MARK: - Color Extension
 

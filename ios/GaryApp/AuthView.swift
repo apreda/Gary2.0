@@ -42,8 +42,8 @@ struct AuthView: View {
                             .foregroundStyle(GaryColors.gold)
 
                         Text(isSignUp ? "Create Your Account" : "Welcome Back")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(GaryFonts.text(14.5))
+                            .foregroundStyle(.white.opacity(0.55))
                     }
                     .opacity(animateIn ? 1 : 0)
                     .scaleEffect(animateIn ? 1 : 0.8)
@@ -55,7 +55,7 @@ struct AuthView: View {
                             Image(systemName: "envelope.badge.fill")
                                 .foregroundStyle(GaryColors.gold)
                             Text(info)
-                                .font(.caption)
+                                .font(GaryFonts.text(12.5))
                                 .foregroundStyle(.white)
                         }
                         .padding(12)
@@ -78,7 +78,7 @@ struct AuthView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(GaryColors.gold)
                             Text(error)
-                                .font(.caption)
+                                .font(GaryFonts.text(12.5))
                                 .foregroundStyle(.white)
                         }
                         .padding(12)
@@ -139,18 +139,16 @@ struct AuthView: View {
                                 ProgressView()
                                     .tint(.black)
                             } else {
-                                Image(systemName: isSignUp ? "person.badge.plus" : "arrow.right.circle.fill")
-                                Text(isSignUp ? "Create Account" : "Sign In")
-                                    .font(.headline.bold())
+                                Text(isSignUp ? "CREATE ACCOUNT" : "SIGN IN")
+                                    .font(GaryFonts.mono(14, bold: true)).tracking(1)
                             }
                         }
-                        .foregroundStyle(.black)
+                        .foregroundStyle(.black.opacity(0.85))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(GaryColors.goldGradient)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .shadow(color: GaryColors.gold.opacity(0.4), radius: 12, y: 6)
+                        .background(Capsule().fill(GaryColors.gold))
                     }
+                    .buttonStyle(.plain)
                     .disabled(isSubmitting || !isFormValid)
                     .opacity(isFormValid ? 1 : 0.6)
                     .padding(.horizontal, 24)
@@ -167,12 +165,12 @@ struct AuthView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Text(isSignUp ? "Already have an account?" : "Don't have an account?")
-                                .foregroundStyle(.secondary)
+                                .font(GaryFonts.text(14))
+                                .foregroundStyle(.white.opacity(0.55))
                             Text(isSignUp ? "Sign In" : "Sign Up")
+                                .font(GaryFonts.text(14, .semibold))
                                 .foregroundStyle(GaryColors.gold)
-                                .bold()
                         }
-                        .font(.subheadline)
                     }
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
@@ -184,7 +182,7 @@ struct AuthView: View {
                             showForgotPassword = true
                         } label: {
                             Text("Forgot Password?")
-                                .font(.caption)
+                                .font(GaryFonts.text(12.5))
                                 .foregroundStyle(GaryColors.lightGold)
                         }
                     }
@@ -192,14 +190,14 @@ struct AuthView: View {
                     // Divider
                     HStack {
                         Rectangle()
-                            .fill(GaryColors.gold.opacity(0.2))
+                            .fill(Color.white.opacity(0.12))
                             .frame(height: 0.5)
-                        Text("or continue with")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        Text("OR CONTINUE WITH")
+                            .font(GaryFonts.mono(10))
+                            .foregroundStyle(.white.opacity(0.4))
                             .fixedSize()
                         Rectangle()
-                            .fill(GaryColors.gold.opacity(0.2))
+                            .fill(Color.white.opacity(0.12))
                             .frame(height: 0.5)
                     }
                     .padding(.horizontal, 24)
@@ -329,21 +327,24 @@ struct AuthTextField: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(GaryColors.gold)
+                .foregroundStyle(.white.opacity(0.45))
                 .frame(width: 20)
 
-            if isSecure && !showPassword {
-                SecureField(placeholder, text: $text)
-                    .textContentType(textContentType)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-            } else {
-                TextField(placeholder, text: $text)
-                    .keyboardType(keyboardType)
-                    .textContentType(textContentType)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+            Group {
+                if isSecure && !showPassword {
+                    SecureField(placeholder, text: $text)
+                        .textContentType(textContentType)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                } else {
+                    TextField(placeholder, text: $text)
+                        .keyboardType(keyboardType)
+                        .textContentType(textContentType)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                }
             }
+            .font(GaryFonts.text(15))
 
             if isSecure {
                 Button {
@@ -351,7 +352,7 @@ struct AuthTextField: View {
                 } label: {
                     Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.45))
                 }
             }
         }
@@ -362,7 +363,7 @@ struct AuthTextField: View {
                 .fill(Color(hex: "#0D0D0F"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
         )
     }
@@ -407,7 +408,7 @@ struct SocialSignInButton: View {
                 Image(systemName: iconName)
                     .font(.system(size: 18, weight: .semibold))
                 Text(title)
-                    .font(.subheadline.bold())
+                    .font(GaryFonts.text(15, .semibold))
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -417,7 +418,7 @@ struct SocialSignInButton: View {
                     .fill(Color(hex: "#0D0D0F"))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
                     )
             )
         }
@@ -438,14 +439,13 @@ struct ForgotPasswordSheet: View {
             LiquidGlassBackground(accentColor: GaryColors.gold)
 
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Image(systemName: "envelope.badge.fill")
-                        .foregroundStyle(GaryColors.gold)
-                        .font(.title2)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ACCOUNT")
+                        .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
                     Text("Reset Password")
-                        .font(.system(size: 22, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(GaryColors.goldGradient)
+                        .font(GaryFonts.display(28))
+                        .foregroundStyle(.white)
                 }
 
                 if resetSent {
@@ -455,20 +455,20 @@ struct ForgotPasswordSheet: View {
                             .foregroundStyle(GaryColors.gold)
 
                         Text("Check your email")
-                            .font(.headline)
+                            .font(GaryFonts.text(17, .semibold))
                             .foregroundStyle(.white)
 
                         Text("We sent a password reset link to \(email)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(GaryFonts.text(14))
+                            .foregroundStyle(.white.opacity(0.55))
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
                 } else {
                     Text("Enter your email and we'll send you a link to reset your password.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(GaryFonts.text(14))
+                        .foregroundStyle(.white.opacity(0.55))
 
                     AuthTextField(
                         icon: "envelope.fill",
@@ -499,18 +499,16 @@ struct ForgotPasswordSheet: View {
                         if isSending {
                             ProgressView().tint(.black)
                         } else {
-                            Image(systemName: resetSent ? "checkmark.circle.fill" : "paperplane.fill")
-                            Text(resetSent ? "Done" : "Send Reset Link")
-                                .font(.headline.bold())
+                            Text(resetSent ? "DONE" : "SEND RESET LINK")
+                                .font(GaryFonts.mono(14, bold: true)).tracking(1)
                         }
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.black.opacity(0.85))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(GaryColors.goldGradient)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .shadow(color: GaryColors.gold.opacity(0.4), radius: 12, y: 6)
+                    .background(Capsule().fill(GaryColors.gold))
                 }
+                .buttonStyle(.plain)
                 .disabled(isSending || (!resetSent && !email.contains("@")))
             }
             .padding(24)

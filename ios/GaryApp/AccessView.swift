@@ -24,13 +24,12 @@ struct AccessView: View {
                         .frame(width: 260, height: 260)
                     
                     Text("GARY A.I.")
-                        .font(.system(size: 32, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(GaryColors.goldGradient)
-                    
+                        .font(GaryFonts.mono(30))
+                        .foregroundStyle(GaryColors.gold)
+
                     Text("Intelligent Sports Analysis")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(GaryFonts.text(14.5))
+                        .foregroundStyle(.white.opacity(0.55))
                 }
                 .opacity(animateIn ? 1 : 0)
                 .scaleEffect(animateIn ? 1 : 0.8)
@@ -41,15 +40,15 @@ struct AccessView: View {
                     // NEW Badge
                     HStack(spacing: 8) {
                         Text("NEW")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.black)
+                            .font(GaryFonts.mono(10, bold: true))
+                            .foregroundStyle(.black.opacity(0.85))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(GaryColors.gold)
                             .clipShape(Capsule())
-                        
+
                         Text("Introducing Gary AI")
-                            .font(.subheadline.bold())
+                            .font(GaryFonts.text(14, .semibold))
                             .foregroundStyle(GaryColors.lightGold)
                     }
                     .padding(.horizontal, 16)
@@ -70,7 +69,7 @@ struct AccessView: View {
                         ],
                         spacing: 10
                     ) {
-                        TechChip(icon: "brain.head.profile", text: "Gemini Pro")
+                        TechChip(icon: "brain.head.profile", text: "Deep Research")
                         TechChip(icon: "arrow.triangle.2.circlepath", text: "Agentic AI")
                         TechChip(icon: "chart.line.uptrend.xyaxis", text: "Multi-Book Odds")
                         TechChip(icon: "globe", text: "Live Search")
@@ -91,46 +90,34 @@ struct AccessView: View {
                         selectedTab = 0
                         }
                     } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "star.fill")
-                        Text("Access Picks")
-                                .font(.headline.bold())
-                        }
-                        .foregroundStyle(.black)
+                        Text("ACCESS PICKS")
+                            .font(GaryFonts.mono(14, bold: true)).tracking(1)
+                            .foregroundStyle(.black.opacity(0.85))
                             .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(GaryColors.goldGradient)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .shadow(color: GaryColors.gold.opacity(0.4), radius: 12, y: 6)
+                            .padding(.vertical, 16)
+                            .background(Capsule().fill(GaryColors.gold))
                     }
-                    
+                    .buttonStyle(.plain)
+
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         hasEntered = true
                         selectedTab = 1
                         }
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "gift.fill")
-                                .font(.caption)
                         Text("See Today's Picks")
-                                .font(.subheadline.bold())
-                        }
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.vertical, 12)
+                            .font(GaryFonts.text(14, .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                            .padding(.vertical, 12)
                     }
 
                     Button {
                         showSignIn = true
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "person.circle")
-                                .font(.caption)
-                            Text("Sign In")
-                                .font(.caption.bold())
-                        }
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
+                        Text("Sign In")
+                            .font(GaryFonts.text(12.5, .semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.vertical, 4)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -167,8 +154,10 @@ struct TechChip: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(GaryColors.gold)
             Text(text)
-                .font(.caption.bold())
-                .foregroundStyle(.white)
+                .font(GaryFonts.mono(11, bold: true))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -178,7 +167,7 @@ struct TechChip: View {
                 .fill(Color(hex: "#0D0D0F"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
         )
     }
@@ -194,20 +183,19 @@ struct DisclaimerSheet: View {
             LiquidGlassBackground(accentColor: GaryColors.gold)
             
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(GaryColors.gold)
-                        .font(.title2)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("BEFORE YOU START")
+                        .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
                     Text("Important Disclaimer")
-                        .font(.system(size: 22, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(GaryColors.goldGradient)
+                        .font(GaryFonts.display(28))
+                        .foregroundStyle(.white)
                 }
-            
+
                 ScrollView(showsIndicators: false) {
                     Text(disclaimerText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(GaryFonts.text(14))
+                        .foregroundStyle(.white.opacity(0.6))
                         .lineSpacing(4)
                         .padding()
                         .background(
@@ -215,26 +203,22 @@ struct DisclaimerSheet: View {
                                 .fill(Color(hex: "#0D0D0F"))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
                                 )
                         )
                 }
-            
+
                 Button {
                     isPresented = false
                 } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("I Understand")
-                            .font(.headline.bold())
-                    }
-                    .foregroundStyle(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(GaryColors.goldGradient)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .shadow(color: GaryColors.gold.opacity(0.4), radius: 12, y: 6)
+                    Text("I UNDERSTAND")
+                        .font(GaryFonts.mono(14, bold: true)).tracking(1)
+                        .foregroundStyle(.black.opacity(0.85))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Capsule().fill(GaryColors.gold))
                 }
+                .buttonStyle(.plain)
             }
             .padding(24)
         }

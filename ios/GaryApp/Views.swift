@@ -5268,7 +5268,7 @@ struct PlansSheetView: View {
                     }
                     Spacer(minLength: 8)
                     Text("See all ›")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(GaryFonts.text(12, .semibold))
                         .foregroundStyle(.white.opacity(0.5))
                 }
                 .padding(.vertical, 13).padding(.horizontal, 14)
@@ -9664,142 +9664,6 @@ struct GaryLogo: View {
     }
 }
 
-// MARK: - Mock Pick Card (Blurred Placeholder)
-
-struct MockPickCard: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header Row
-            HStack {
-                // Sport icon placeholder
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 32, height: 32)
-                
-                // Sport badge
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(GaryColors.gold.opacity(0.2))
-                    .frame(width: 50, height: 22)
-                
-                Spacer()
-                
-                // Time badge
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(0.1))
-                    .frame(width: 80, height: 26)
-            }
-            .padding(.bottom, 14)
-            
-            // Teams Row
-            HStack {
-                // Away team
-                VStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.white.opacity(0.15))
-                        .frame(width: 80, height: 18)
-                }
-                
-                Spacer()
-                
-                // @ symbol
-                Text("@")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.3))
-                
-                Spacer()
-                
-                // Home team
-                VStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.white.opacity(0.15))
-                        .frame(width: 80, height: 18)
-                }
-            }
-            .padding(.bottom, 8)
-            
-            // Venue
-            HStack {
-                Image(systemName: "mappin.circle.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(GaryColors.gold.opacity(0.4))
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.1))
-                    .frame(width: 120, height: 12)
-            }
-            .padding(.bottom, 16)
-            
-            Divider()
-                .background(GaryColors.gold.opacity(0.2))
-                .padding(.bottom, 14)
-            
-            // Pick Row
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(GaryColors.gold.opacity(0.3))
-                        .frame(width: 140, height: 22)
-                    
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white.opacity(0.1))
-                        .frame(width: 100, height: 14)
-                }
-                
-                Spacer()
-                
-                // Odds badge
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(GaryColors.gold.opacity(0.15))
-                    .frame(width: 60, height: 32)
-            }
-            .padding(.bottom, 14)
-            
-            // Confidence bar
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.3))
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.1))
-                        .frame(width: 70, height: 10)
-                    Spacer()
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.15))
-                        .frame(width: 30, height: 12)
-                }
-                
-                // Progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(GaryColors.gold.opacity(0.1))
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(GaryColors.gold.opacity(0.4))
-                            .frame(width: geo.size.width * 0.75)
-                    }
-                }
-                .frame(height: 6)
-            }
-        }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(hex: "#0D0D0F"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [GaryColors.gold.opacity(0.4), GaryColors.gold.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
-        )
-    }
-}
-
 // MARK: - Pick Cards
 
 struct PickCardMobile: View {
@@ -13752,9 +13616,91 @@ struct PicksGamePage: View {
                 PropSlipCard(props: topProps, resultForProp: resultForProp, liveInHeader: false)
                     .padding(.horizontal, 10)
             }
+            PlayerIntelSection(matchup: group.matchup)
             EdgesSection(title: "GAME INTEL", edges: edges)
         }
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
+    }
+}
+
+/// PLAYER INTEL — the game page's player-level layer, between the props and
+/// GAME INTEL. One row per player with a breakdown pack today (the probable
+/// starters lead, then hitters); tapping a row opens the same full breakdown
+/// sheet the Hub uses. Rows ride player_insight_cards (computed daily by the
+/// insights pipeline) and the section hides itself entirely on days or games
+/// without packs — non-MLB pages render nothing extra.
+struct PlayerIntelSection: View {
+    let matchup: String
+    @State private var rows: [PlayerInsightCardRow] = []
+    @State private var selected: PlayerInsightCardRow? = nil
+
+    /// Keeps the page scannable — the slate page is a stack, not a roster dump.
+    private static let maxRows = 8
+
+    var body: some View {
+        Group {
+            if !rows.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("PLAYER INTEL")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.horizontal, 16).padding(.top, 4)
+                    VStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { idx, row in
+                            Button { selected = row } label: { intelRow(row) }
+                                .buttonStyle(.plain)
+                            if idx < rows.count - 1 {
+                                Divider().background(Color.white.opacity(0.05)).padding(.leading, 14)
+                            }
+                        }
+                    }
+                    .quantPanel()
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+        .task(id: matchup) {
+            let all = await SupabaseAPI.fetchPlayerIntelRows(date: SupabaseAPI.todayEST())
+            let mine = all.filter { r in
+                guard let g = r.payload?.game, !g.isEmpty else { return false }
+                return abbrGameMatches(g, matchup: matchup)
+            }
+            // Pitchers lead (they drive the matchup), then hitters by name.
+            rows = Array(mine.sorted { a, b in
+                let ap = a.payload?.type == "pitcher", bp = b.payload?.type == "pitcher"
+                if ap != bp { return ap }
+                return (a.player_name ?? "") < (b.player_name ?? "")
+            }.prefix(Self.maxRows))
+        }
+        .sheet(item: $selected) { PlayerInsightSheet(signal: nil, prefetched: $0) }
+    }
+
+    private func intelRow(_ row: PlayerInsightCardRow) -> some View {
+        let p = row.payload
+        let meta = [p?.team?.uppercased(), p?.position].compactMap { $0 }.joined(separator: " · ")
+        let signalLine = p?.strengths?.first ?? p?.weaknesses?.first
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(row.player_name ?? p?.name ?? "Player")
+                        .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white)
+                    if !meta.isEmpty {
+                        Text(meta).font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+                if let line = signalLine {
+                    Text(line)
+                        .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.25))
+        }
+        .padding(.horizontal, 14).padding(.vertical, 11)
+        .contentShape(Rectangle())
     }
 }
 
@@ -14902,7 +14848,10 @@ struct EdgeDetailSheet: View {
 // vs tonight's starter, splits, BvP, Statcast truth-check, and tonight's lines.
 
 struct PlayerInsightSheet: View {
-    let signal: Signal
+    /// Hub path: a tapped Signal — the pack is fetched by player id.
+    let signal: Signal?
+    /// Game-page path (PLAYER INTEL): the pack already came down with the row.
+    var prefetched: PlayerInsightCardRow? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var pack: PlayerInsightPack? = nil
     @State private var loading = true
@@ -14927,7 +14876,9 @@ struct PlayerInsightSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .task {
-            if let pid = signal.playerId {
+            if let row = prefetched {
+                pack = row.payload
+            } else if let pid = signal?.playerId {
                 pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid)
             }
             loading = false
@@ -14958,12 +14909,14 @@ struct PlayerInsightSheet: View {
     }
 
     private var fallbackName: String {
-        (signal.headline.components(separatedBy: CharacterSet(charactersIn: "(:'")).first ?? signal.headline)
+        if let n = prefetched?.player_name, !n.isEmpty { return n }
+        guard let signal else { return "Player" }
+        return (signal.headline.components(separatedBy: CharacterSet(charactersIn: "(:'")).first ?? signal.headline)
             .trimmingCharacters(in: .whitespaces)
     }
 
     private var identityLine: String? {
-        guard let p = pack else { return signal.game.uppercased() }
+        guard let p = pack else { return signal?.game.uppercased() }
         var bits: [String] = []
         if let t = p.team { bits.append(t.uppercased()) }
         if let pos = p.position { bits.append(pos) }
@@ -14974,9 +14927,11 @@ struct PlayerInsightSheet: View {
 
     private var fallbackView: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(signal.detail)
-                .font(.system(size: 15)).foregroundStyle(.white.opacity(0.75)).lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
+            if let signal {
+                Text(signal.detail)
+                    .font(.system(size: 15)).foregroundStyle(.white.opacity(0.75)).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text("The full breakdown for this player isn't available yet — it posts with the day's edge refresh.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
         }
@@ -17963,143 +17918,6 @@ enum Formatters {
 }
 
 // MARK: - Gary's Fantasy View (DFS Lineups)
-
-// MARK: - Coming Soon View (For App Store Release)
-struct GaryFantasyViewComingSoon: View {
-    @State private var animateIn = false
-    
-    var body: some View {
-        ZStack {
-            // Background
-            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
-            
-            // Coming Soon Content
-            VStack(spacing: 0) {
-                Spacer()
-                
-                VStack(spacing: 24) {
-                    // Icon with glow
-                    ZStack {
-                        // Glow effect
-                        Circle()
-                            .fill(GaryColors.gold.opacity(0.2))
-                            .frame(width: 140, height: 140)
-                            .blur(radius: 30)
-                        
-                        // Icon background
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "#1A1A1C"), Color(hex: "#0D0D0F")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-                            .overlay(
-                                Circle()
-                                    .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1)
-                            )
-                        
-                        // Trophy icon
-                        Image(systemName: "trophy.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                    .scaleEffect(animateIn ? 1 : 0.8)
-                    .opacity(animateIn ? 1 : 0)
-                    
-                    // Title
-                    VStack(spacing: 8) {
-                        Text("Gary's Daily Fantasy")
-                            .font(.system(size: 28, weight: .heavy))
-                            .tracking(-0.5)
-                            .foregroundStyle(GaryColors.gold)
-                        
-                        Text("AI-Powered Lineup Optimization")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 10)
-                    
-                    // Coming Soon Badge
-                    HStack(spacing: 8) {
-                        Image(systemName: "hammer.fill")
-                            .font(.system(size: 14))
-                        Text("COMING SOON")
-                            .font(.system(size: 14, weight: .bold))
-                            .tracking(1)
-                    }
-                    .foregroundStyle(GaryColors.gold)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule()
-                            .fill(GaryColors.gold.opacity(0.15))
-                            .overlay(
-                                Capsule()
-                                    .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                    .opacity(animateIn ? 1 : 0)
-                    .scaleEffect(animateIn ? 1 : 0.9)
-                    
-                    // Description
-                    VStack(spacing: 16) {
-                        Text("Gary is building optimal DFS lineups for DraftKings & FanDuel")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                        
-                        // Features preview
-                        VStack(alignment: .leading, spacing: 12) {
-                            FeaturePreviewRow(icon: "sportscourt.fill", text: "NBA & NFL Daily Lineups")
-                            FeaturePreviewRow(icon: "dollarsign.circle.fill", text: "Salary-Optimized Rosters")
-                            FeaturePreviewRow(icon: "arrow.triangle.swap", text: "Gary's Swaps & Alternatives")
-                            FeaturePreviewRow(icon: "brain.head.profile", text: "AI-Powered Analysis")
-                        }
-                        .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 32)
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 15)
-                }
-                .padding(.horizontal, 24)
-                
-                Spacer()
-                Spacer()
-            }
-            .padding(.bottom, 80) // Space for tab bar
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                animateIn = true
-            }
-        }
-    }
-}
-
-// Feature preview row for Coming Soon
-struct FeaturePreviewRow: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(GaryColors.gold)
-                .frame(width: 24)
-            
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.7))
-            
-            Spacer()
-        }
-    }
-}
 
 // MARK: - Gary's Fantasy View (Full DFS Lineups)
 struct GaryFantasyView: View {

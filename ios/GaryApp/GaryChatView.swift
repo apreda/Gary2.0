@@ -83,9 +83,8 @@ struct GaryChatView: View {
             Circle()
                 .fill(statusDotColor)
                 .frame(width: 7, height: 7)
-                .shadow(color: statusDotColor.opacity(0.25), radius: 2)
             Text("GARY")
-                .font(.system(size: 11, weight: .heavy))
+                .font(GaryFonts.mono(11, bold: true))
                 .tracking(1)
                 .foregroundStyle(.white.opacity(0.75))
         }
@@ -177,7 +176,7 @@ struct GaryChatView: View {
                 .multilineTextAlignment(.center)
 
             Text(statusHelper)
-                .font(.system(size: 13, weight: .regular))
+                .font(GaryFonts.text(13))
                 .foregroundStyle(.white.opacity(0.42))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -254,19 +253,18 @@ struct GaryChatView: View {
 
     private var emptyHint: some View {
         VStack(spacing: 6) {
-            Text("Try")
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(1.2)
+            Text("TRY")
+                .font(GaryFonts.mono(10, bold: true))
+                .tracking(1)
                 .foregroundStyle(.white.opacity(0.40))
-                .textCase(.uppercase)
             Text("\u{201c}Who you got tonight?\u{201d}")
-                .font(.system(size: 14, weight: .medium))
+                .font(GaryFonts.text(14, .medium))
                 .foregroundStyle(.white.opacity(0.55))
             Text("\u{201c}Why'd you take the Reds?\u{201d}")
-                .font(.system(size: 14, weight: .medium))
+                .font(GaryFonts.text(14, .medium))
                 .foregroundStyle(.white.opacity(0.55))
             Text("\u{201c}How's the Yankees pen looking?\u{201d}")
-                .font(.system(size: 14, weight: .medium))
+                .font(GaryFonts.text(14, .medium))
                 .foregroundStyle(.white.opacity(0.55))
         }
         .padding(.top, 14)
@@ -275,13 +273,13 @@ struct GaryChatView: View {
     private func transcriptLine(_ msg: GaryChatViewModel.ChatMessage) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(msg.isUser ? "YOU" : "GARY")
-                .font(.system(size: 9, weight: .heavy))
-                .tracking(1.2)
+                .font(GaryFonts.mono(9, bold: true))
+                .tracking(1)
                 .foregroundStyle(msg.isUser ? Color.white.opacity(0.40) : GaryColors.gold.opacity(0.85))
                 .frame(width: 42, alignment: .leading)
                 .padding(.top, 2)
             Text(msg.text)
-                .font(.system(size: 14, weight: msg.isUser ? .medium : .regular))
+                .font(GaryFonts.text(14, msg.isUser ? .medium : .regular))
                 .foregroundStyle(msg.isUser ? .white.opacity(0.75) : .white.opacity(0.92))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
