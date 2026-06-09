@@ -32,8 +32,17 @@ const DK_SPORT_MAP = {
   'MLB': 'MLB'
 };
 
-// Classic game type IDs (we only want these, not Showdown/Tiers/Snake)
-const CLASSIC_GAME_TYPE_IDS = [70]; // 70 = Classic
+// Classic game type IDs (we only want these, not Showdown/Tiers/Snake).
+// DK's "Classic" id differs per sport — probed live June 2026:
+//   NBA/NFL: 70 · MLB: 2 (suffix ''/Turbo/Night, ContestType 28; Snake=178,
+//   Tiers=45, Home Runs=346, single-game Showdown=114)
+const CLASSIC_GAME_TYPE_IDS_BY_SPORT = {
+  NBA: [70],
+  NFL: [70],
+  MLB: [2],
+};
+const classicGameTypeIds = (sport) =>
+  CLASSIC_GAME_TYPE_IDS_BY_SPORT[String(sport).toUpperCase()] || [70];
 
 // NBA city → standard abbreviation mapping
 // DK uses city names in Competitions (e.g., "Atlanta", "Charlotte")
@@ -277,9 +286,10 @@ export async function discoverSlatesFromDK(sport) {
 
   // Build DraftGroup lookup: GameSetKey → DraftGroups (filtered to Classic only + today only)
   const classicDraftGroups = {};
+  const classicIds = classicGameTypeIds(sport);
   for (const dg of (data.DraftGroups || [])) {
-    // Only include Classic game type
-    if (!CLASSIC_GAME_TYPE_IDS.includes(dg.GameTypeId)) continue;
+    // Only include Classic game type (per-sport id)
+    if (!classicIds.includes(dg.GameTypeId)) continue;
 
     // Filter to today's slates only — DK API returns future slates (e.g., next Tuesday)
     const dgDate = parseDKDate(dg.StartDate || dg.StartDateEst);
@@ -299,18 +309,21 @@ export async function discoverSlatesFromDK(sport) {
   const slates = [];
 
   for (const gs of data.GameSets) {
-    const suffix = gs.ContestStartTimeSuffix || '';
-    const slateType = classifySlate(suffix);
-
-    // Skip non-classic slates (showdowns, in-game, etc.)
-    if (['showdown', 'in_game_showdown', 'other'].includes(slateType)) continue;
-
     const competitions = gs.Competitions || [];
     if (competitions.length < 2) continue; // Need at least 2 games for a classic slate
 
     // Check if this GameSet has any Classic DraftGroups
     const draftGroups = classicDraftGroups[gs.GameSetKey] || [];
     if (draftGroups.length === 0) continue; // No classic contest for this slate
+
+    // The slate suffix lives on the GameSet for NBA but on the DraftGroup for
+    // MLB (GameSet suffixes come back empty) — fall back so Turbo/Night don't
+    // all collapse into "Main" (which collides on the dfs_lineups unique key).
+    const suffix = gs.ContestStartTimeSuffix || draftGroups[0].ContestStartTimeSuffix || '';
+    const slateType = classifySlate(suffix);
+
+    // Skip non-classic slates (showdowns, in-game, etc.)
+    if (['showdown', 'in_game_showdown', 'other'].includes(slateType)) continue;
 
     // Extract teams from competitions
     const matchups = [];

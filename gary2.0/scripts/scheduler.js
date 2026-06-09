@@ -42,7 +42,7 @@ const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30]; // First → fallback → final
 const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
   { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js', dfs: false },
-  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: false },
+  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: true },
   { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: null, dfs: false }, // 2026 FIFA World Cup — game picks only
 ];
 

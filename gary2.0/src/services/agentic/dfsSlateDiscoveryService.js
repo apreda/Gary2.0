@@ -232,6 +232,9 @@ const TEAM_ABBR_ALIASES = {
   'JAG': 'JAX',   // Jacksonville Jaguars
   'LVR': 'LV',    // Las Vegas Raiders
   'LAR': 'LAR',   // LA Rams (already valid)
+  // MLB — Grounding often returns the pre-2026 abbreviations
+  'OAK': 'ATH',   // Athletics (canonical is ATH across the pipeline)
+  'CHW': 'CWS',   // White Sox (DK/Tank01/BDL all use CWS)
 };
 
 const VALID_NBA_TEAMS = new Set([
@@ -255,8 +258,8 @@ const VALID_NHL_TEAMS = new Set([
 ]);
 
 const VALID_MLB_TEAMS = new Set([
-  'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CHW', 'CIN', 'CLE', 'COL', 'DET',
-  'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK',
+  'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CWS', 'CIN', 'CLE', 'COL', 'DET',
+  'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'ATH',
   'PHI', 'PIT', 'SD', 'SF', 'SEA', 'STL', 'TB', 'TEX', 'TOR', 'WAS'
 ]);
 
