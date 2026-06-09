@@ -32,7 +32,7 @@
 // Defensive: any missing piece -> skip that batter/side silently; never throws.
 
 import {
-  makeRow, TONES, scoreFromEdge, nameKey, pct3, pickVariant,
+  makeRow, TONES, scoreFromEdge, nameKey, pct3, pickVariant, round,
 } from '../shared.js';
 
 // Tunables.
@@ -74,14 +74,14 @@ const PITCHER_VARIANTS = [
 ];
 
 export async function computeOwned(ctx) {
-  const { games, bdl, helpers } = ctx;
+  const { games, season, bdl, helpers } = ctx;
   const rows = [];
   let battersChecked = 0;
   let matchupsFound = 0;
 
   for (const game of games) {
     try {
-      const result = await ownedForGame(game, { bdl, gameLabel: helpers.gameLabel });
+      const result = await ownedForGame(game, { bdl, season, gameLabel: helpers.gameLabel });
       battersChecked += result.checked;
       matchupsFound += result.matched;
       rows.push(...result.rows);
@@ -97,7 +97,7 @@ export async function computeOwned(ctx) {
   return rows;
 }
 
-async function ownedForGame(game, { bdl, gameLabel }) {
+async function ownedForGame(game, { bdl, season, gameLabel }) {
   const empty = { checked: 0, matched: 0, rows: [] };
   const gameId = game?.id;
   if (gameId == null) return empty;
@@ -124,6 +124,7 @@ async function ownedForGame(game, { bdl, gameLabel }) {
     teamId: game?.home_team?.id,
     oppPitcher: away?.pitcher,
     opponentTeamId: game?.visitor_team?.id,
+    season,
     bdl,
   });
   const awaySide = await collectSide({
@@ -131,6 +132,7 @@ async function ownedForGame(game, { bdl, gameLabel }) {
     teamId: game?.visitor_team?.id,
     oppPitcher: home?.pitcher,
     opponentTeamId: game?.home_team?.id,
+    season,
     bdl,
   });
 
@@ -144,10 +146,22 @@ async function ownedForGame(game, { bdl, gameLabel }) {
   const rows = top.map((c) => {
     const variants = c.kind === 'hitter' ? HITTER_VARIANTS : PITCHER_VARIANTS;
     const template = pickVariant(variants, c.playerId);
-    const detail = template(c.batterName, c.pitcherName, c.line, c);
+    let detail = template(c.batterName, c.pitcherName, c.line, c);
+
+    // Current-form gate: tie the career edge to a NOW signal so a 2019 edge
+    // doesn't read like a this-month one. Only on hitter-owns rows.
+    const form = c.kind === 'hitter' ? c.recentForm : null;
+    const formState = form
+      ? (form.ops >= 0.800 ? 'hot' : (form.ops <= 0.650 ? 'cold' : 'steady'))
+      : null;
+    if (form) {
+      detail += ` He enters ${formState} (${pct3(form.ops)} OPS, ${shortWin(form.label)}).`;
+    }
 
     const headline = c.kind === 'hitter'
-      ? `${c.batterName} is ${c.line} (${pct3(c.avg)}) off ${c.pitcherName}`
+      ? (formState === 'hot'
+        ? `${c.batterName} owns ${c.pitcherName} (${pct3(c.avg)}) — and he's hot`
+        : `${c.batterName} is ${c.line} (${pct3(c.avg)}) off ${c.pitcherName}`)
       : `${c.pitcherName} has held ${c.batterName} to ${c.line} with ${c.k} K`;
 
     return makeRow({
@@ -161,13 +175,14 @@ async function ownedForGame(game, { bdl, gameLabel }) {
       player_id: c.playerId,
       team_id: c.teamId,
       game_id: gameId,
+      meta: form ? { kind: 'h2h_form', recent_ops: round(form.ops, 3), recent_label: form.label, state: formState } : undefined,
     });
   });
 
   return { checked, matched: candidates.length, rows };
 }
 
-async function collectSide({ side, teamId, oppPitcher, opponentTeamId, bdl }) {
+async function collectSide({ side, teamId, oppPitcher, opponentTeamId, season, bdl }) {
   const out = { checked: 0, candidates: [] };
 
   const pitcherId = oppPitcher?.playerId;
@@ -209,6 +224,19 @@ async function collectSide({ side, teamId, oppPitcher, opponentTeamId, bdl }) {
     const pitcherOwns = avg <= PITCHER_AVG && k >= PITCHER_MIN_K;
     if (!hitterOwns && !pitcherOwns) continue; // skip the mushy middle
 
+    // Second-order: a career edge is stale on its own. Gate it on CURRENT form
+    // (recent-window OPS from the same splits source the other lanes use) so the
+    // card reads "owns him career AND is hot now" vs "owns him but ice-cold."
+    let recentForm = null;
+    if (hitterOwns) {
+      try {
+        const splits = await bdl.getMlbPlayerSplits({ playerId, season });
+        recentForm = recentOpsFromSplits(splits);
+      } catch (err) {
+        console.error('[owned] splits error:', err?.message || err);
+      }
+    }
+
     const confidence = Math.min(1, ab / AB_CONFIDENCE);
     const kind = hitterOwns ? 'hitter' : 'pitcher';
     const edge = kind === 'hitter' ? ops - OPS_BASELINE : OPS_BASELINE - ops;
@@ -231,6 +259,7 @@ async function collectSide({ side, teamId, oppPitcher, opponentTeamId, bdl }) {
       k,
       bb,
       hr,
+      recentForm,
       score,
     });
   }
@@ -260,6 +289,29 @@ function matchPitcherRow(pvp, pitcherId, pitcherKey) {
     if (byName) return byName;
   }
   return null;
+}
+
+/**
+ * Recent-window OPS from getMlbPlayerSplits().byDayMonth ("Last 7/15/30 Days") —
+ * the same source the cooling/heat lanes use. Returns null when no real window.
+ */
+function recentOpsFromSplits(splits) {
+  const buckets = Array.isArray(splits?.byDayMonth) ? splits.byDayMonth : null;
+  if (!buckets) return null;
+  const byName = (n) => buckets.find((e) => String(e?.split_name || '').trim().toLowerCase() === n);
+  const rec = byName('last 15 days') || byName('last 7 days') || byName('last 30 days');
+  const ops = Number(rec?.ops);
+  if (!Number.isFinite(ops) || ops <= 0) return null;
+  return { ops, label: rec.split_name || 'recent' };
+}
+
+/** "Last 15 Days" -> "L15". */
+function shortWin(label) {
+  const s = String(label || '').toLowerCase();
+  if (s.includes('15')) return 'L15';
+  if (s.includes('7')) return 'L7';
+  if (s.includes('30')) return 'L30';
+  return label;
 }
 
 export default { computeOwned };

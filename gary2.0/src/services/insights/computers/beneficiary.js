@@ -30,7 +30,10 @@
 //
 // Defensive: any missing piece -> skip that role silently; never throws.
 
-import { makeRow, TONES, pickVariant, pct3 } from '../shared.js';
+import {
+  makeRow, TONES, pickVariant, pct3, round,
+  getBreakdownSplit, splitNameForPitcherFacing, parseBatsThrows,
+} from '../shared.js';
 
 // Tunables.
 const RECENT_DAYS = 14;        // an injury this fresh is a live role change
@@ -39,6 +42,7 @@ const BASE_RELEVANCE = 55;
 const TOP_ORDER_BOOST = 10;
 const MAX_RELEVANCE = 80;
 const STRONG_OPS = 0.800;      // a replacement at/above this rates EDGE tone
+const MIN_SPLIT_AB = 40;       // vs-hand split needs a real sample before we name it
 
 // Statuses that read as "out / on the IL" (skip ambiguous day-to-day strings).
 const OUT_STATUS_RE = /out|injured\s*list|\bil\b|\d+\s*-?\s*day/i;
@@ -149,30 +153,51 @@ export async function computeBeneficiary(ctx) {
       BASE_RELEVANCE + (batsTop6 ? TOP_ORDER_BOOST : 0),
     );
 
+    // Second-order: the replacement faces the OTHER side's probable starter
+    // tonight. Pull that pitcher's hand + the replacement's real vs-hand split
+    // so the row reads as a platoon spot, not just a season line. Append-only
+    // behind a sample gate — null -> the original season-line copy.
+    const homeAbbr = game?.home_team?.abbreviation;
+    const awayAbbr = game?.visitor_team?.abbreviation;
+    const oppAbbr = abbr === homeAbbr ? awayAbbr : homeAbbr;
+    const oppPitcher = oppAbbr ? lineups[oppAbbr]?.pitcher : null;
+    const hand = await replacementPlatoon({ replacement, oppPitcher, season, bdl });
+    const handWord = hand ? (hand.pitcherHand === 'L' ? 'LHP' : 'RHP') : null;
+
     const starName = inj?.player?.full_name || 'A regular';
     const repName = replacement.name || 'A reserve';
     const teamLabel = abbr || inj?.player?.team?.display_name || 'his team';
     const recency = injuryRecencyPhrase(inj, ctx.date);
     const injType = String(inj?.type || '').trim();
-    const orderPhrase = batsTop6 ? `bats ${ordinal(order)} tonight` : (Number.isFinite(order) && order > 0 ? `bats ${ordinal(order)} tonight` : 'is in tonight\'s lineup');
+    const orderPhrase = (Number.isFinite(order) && order > 0) ? `bats ${ordinal(order)} tonight` : 'is in tonight\'s lineup';
+    const spotPhrase = (Number.isFinite(order) && order > 0) ? `from the ${ordinal(order)} spot` : 'in tonight\'s lineup';
     const linePhrase = benOps != null
       ? ` and carries a ${pct3(benOps)} OPS${benAvg != null ? ` / ${pct3(benAvg)} AVG` : ''} this season`
       : '';
-
     const recencyClause = recency.replace(/;$/, ''); // bare clause (no trailing ';') for mid-sentence use
-    const detailVariant = pickVariant([
-      `${injType ? `${injType}; ` : ''}${recency} ${repName} ${orderPhrase}${linePhrase}.`,
-      `${repName} slots in at ${position} (${orderPhrase})${linePhrase}. ${capitalize(recencyClause)}${injType ? ` (${injType}).` : '.'}`,
-      `With ${starName} out (${injType || 'injury'}; ${recencyClause.toLowerCase()}), ${repName} draws the start at ${position} and ${orderPhrase}${linePhrase}.`,
-    ], replacement.playerId);
+
+    let headline;
+    let detailVariant;
+    if (hand) {
+      const seasonClause = benOps != null ? ` relative to his ${pct3(benOps)} season line` : '';
+      headline = `${repName} (${pct3(hand.vsHandOps)} vs ${handWord}) replaces ${starName} at ${position} tonight`;
+      detailVariant = `${repName} draws ${handWord} ${hand.pitcherName} ${spotPhrase}. He carries a ${pct3(hand.vsHandOps)} OPS vs ${handWord} (${hand.vsHandAb} AB) — ${hand.sideWord || 'a real platoon spot'}${seasonClause}. ${capitalize(recencyClause)}${injType ? ` (${injType}).` : '.'}`;
+    } else {
+      headline = `${starName} (${position}) is out for ${teamLabel} — ${repName} starts in his place tonight`;
+      detailVariant = pickVariant([
+        `${injType ? `${injType}; ` : ''}${recency} ${repName} ${orderPhrase}${linePhrase}.`,
+        `${repName} slots in at ${position} (${orderPhrase})${linePhrase}. ${capitalize(recencyClause)}${injType ? ` (${injType}).` : '.'}`,
+        `With ${starName} out (${injType || 'injury'}; ${recencyClause.toLowerCase()}), ${repName} draws the start at ${position} and ${orderPhrase}${linePhrase}.`,
+      ], replacement.playerId);
+    }
 
     rows.push(makeRow({
       category: 'beneficiary',
-      headline: `${starName} (${position}) is out for ${teamLabel} — ${repName} starts in his place tonight`,
+      headline,
       detail: detailVariant,
       game: helpers.gameLabel(game),
       value: benOps != null ? pct3(benOps) : 'FILL-IN',
-      tone: benOps != null && benOps >= STRONG_OPS ? TONES.EDGE : TONES.NEUTRAL,
+      tone: (hand && hand.favorable) || (benOps != null && benOps >= STRONG_OPS) ? TONES.EDGE : TONES.NEUTRAL,
       relevance_score: relevance,
       player_id: replacement.playerId,
       team_id: teamId,
@@ -187,16 +212,56 @@ export async function computeBeneficiary(ctx) {
         out_note: [injType || null, recencyClause || null].filter(Boolean).join(' · '),
         in_name: repName,
         in_note: [
-          batsTop6 || (Number.isFinite(order) && order > 0) ? `BATS ${ordinal(order).toUpperCase()}` : null,
-          benOps != null ? `${pct3(benOps)} OPS` : null,
+          (Number.isFinite(order) && order > 0) ? `BATS ${ordinal(order).toUpperCase()}` : null,
+          hand ? `${pct3(hand.vsHandOps)} vs ${handWord}` : (benOps != null ? `${pct3(benOps)} OPS` : null),
           benAvg != null ? `${pct3(benAvg)} AVG` : null,
         ].filter(Boolean).join(' · '),
+        ...(hand ? {
+          in_vs_hand: round(hand.vsHandOps, 3),
+          in_vs_hand_ab: hand.vsHandAb,
+          pitcher_hand: hand.pitcherHand,
+          pitcher_name: hand.pitcherName,
+        } : {}),
       },
     }));
   }
 
   console.log(`[beneficiary] examined ${opened.length}, emitted ${rows.length}`);
   return rows;
+}
+
+/**
+ * Second-order platoon read for the replacement: the opposing probable
+ * starter's hand + the replacement's real vs-hand split. Returns null unless
+ * the pitcher hand is known AND the vs-hand split clears MIN_SPLIT_AB, so the
+ * detail never emits a half-sentence (falls back to the season-line copy).
+ * `favorable` / `sideWord` compare the matchup side to the opposite split.
+ */
+async function replacementPlatoon({ replacement, oppPitcher, season, bdl }) {
+  const throws = parseBatsThrows(oppPitcher?.batsThrows).throws; // 'L' | 'R' | null
+  if (!oppPitcher?.name || !throws) return null;
+  let splits = null;
+  try {
+    splits = await bdl.getMlbPlayerSplits({ playerId: replacement.playerId, season });
+  } catch (err) {
+    console.error('[beneficiary] splits error:', err?.message || err);
+    return null;
+  }
+  const matchSplit = getBreakdownSplit(splits, splitNameForPitcherFacing(throws));
+  const matchAb = Number(matchSplit?.at_bats);
+  const matchOps = Number(matchSplit?.ops);
+  if (!Number.isFinite(matchAb) || matchAb < MIN_SPLIT_AB) return null;
+  if (!Number.isFinite(matchOps) || matchOps <= 0) return null;
+
+  const otherSplit = getBreakdownSplit(splits, splitNameForPitcherFacing(throws === 'L' ? 'R' : 'L'));
+  const otherOps = Number(otherSplit?.ops);
+  let favorable = null;
+  let sideWord = null;
+  if (Number.isFinite(otherOps) && otherOps > 0) {
+    favorable = matchOps >= otherOps;
+    sideWord = favorable ? 'a favorable platoon spot' : 'a tough platoon spot';
+  }
+  return { pitcherName: oppPitcher.name, pitcherHand: throws, vsHandOps: matchOps, vsHandAb: matchAb, favorable, sideWord };
 }
 
 /**

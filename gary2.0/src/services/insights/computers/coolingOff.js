@@ -7,6 +7,17 @@
 // getMlbPlayerSeasonStats. Fully defensive; never throws, returns [] on missing
 // data, and emits a one-line examined/emitted summary at the end.
 //
+// SECOND-ORDER (June 2026): a cold stretch alone is first-order. We tie it to
+// TONIGHT'S specific matchup — the opposing probable starter's hand and how the
+// batter actually hits that hand (his real vs. Left / vs. Right split). The
+// opposing pitcher is already in the lineups object and the split is already in
+// the splits object fetched for the recent-window check, so this is a pure,
+// $0, in-memory join. The matchup clause is APPEND-ONLY behind a data-presence
+// gate: if the pitcher hand is unknown or the split sample is thin, the row
+// falls back to the original first-order copy (never a half-sentence). When the
+// matchup is the batter's WEAKER side the cold signal is reinforced (relevance
+// nudged up); his STRONGER side suggests the slump may not persist (nudged down).
+//
 // Guards FAIL CLOSED: a missing season GP, a missing/short recent sample, or a
 // non-positive OPS (season OR recent) skips the batter. The dip is weighted by
 // recent sample size before scoring so a 25-PA slump can't outrank a 120-PA one.
@@ -14,6 +25,7 @@
 
 import {
   makeRow, TONES, scoreFromEdge, round, pct3, pickVariant,
+  getBreakdownSplit, splitNameForPitcherFacing, parseBatsThrows,
 } from '../shared.js';
 
 const MIN_RECENT_PA = 25;     // require a real recent PA sample
@@ -21,6 +33,7 @@ const MIN_RECENT_AB = 22;     // lower floor when only at_bats is available
 const MIN_SEASON_GP = 15;     // require a real season baseline (fail closed if absent)
 const MIN_OPS_DIP = 0.130;    // recent OPS must trail season by this much
 const PA_FULL_CREDIT = 60;    // recent windows >= this PA get full dip weight
+const MIN_SPLIT_AB = 40;      // vs-hand split needs a real sample before we name it
 const MAX_PER_GAME = 2;
 const RELEVANCE_SCALE = 200;
 
@@ -50,9 +63,17 @@ async function coldForGame(game, { season, bdl, gameLabel, stats }) {
   const lineups = await bdl.getMlbLineups(gameId);
   if (!lineups || typeof lineups !== 'object') return [];
 
+  const homeAbbr = game?.home_team?.abbreviation;
+  const awayAbbr = game?.visitor_team?.abbreviation;
   const sideTeamIds = {
-    [game?.home_team?.abbreviation]: game?.home_team?.id,
-    [game?.visitor_team?.abbreviation]: game?.visitor_team?.id,
+    [homeAbbr]: game?.home_team?.id,
+    [awayAbbr]: game?.visitor_team?.id,
+  };
+  // Each side's hitters face the OTHER side's probable starter tonight.
+  const oppPitcherFor = (abbr) => {
+    if (abbr === homeAbbr) return lineups[awayAbbr]?.pitcher || null;
+    if (abbr === awayAbbr) return lineups[homeAbbr]?.pitcher || null;
+    return null;
   };
 
   const candidates = [];
@@ -60,6 +81,7 @@ async function coldForGame(game, { season, bdl, gameLabel, stats }) {
     const teamId = sideTeamIds[abbr];
     const batters = Array.isArray(lineups[abbr]?.batters) ? lineups[abbr].batters : [];
     if (!batters.length) continue;
+    const oppPitcher = oppPitcherFor(abbr);
 
     let seasonRows = [];
     if (teamId != null) seasonRows = (await bdl.getMlbPlayerSeasonStats({ season, teamId })) || [];
@@ -107,6 +129,10 @@ async function coldForGame(game, { season, bdl, gameLabel, stats }) {
       // Weight the dip by sample size so a 25-PA slump can't score like a 120-PA one.
       const effectiveDip = dip * Math.min(1, recentSample / PA_FULL_CREDIT);
 
+      // Second-order context: tonight's opposing hand + this batter's vs-hand
+      // split. {} when unavailable -> row stays first-order.
+      const matchup = buildMatchupContext({ splits, oppPitcher });
+
       candidates.push({
         playerId,
         teamId,
@@ -117,38 +143,105 @@ async function coldForGame(game, { season, bdl, gameLabel, stats }) {
         effectiveDip,
         recentPa: recentSample,
         recentLabel: recent.split_name || 'recent',
+        ...matchup,
       });
     }
   }
 
   candidates.sort((a, b) => b.effectiveDip - a.effectiveDip);
-  return candidates.slice(0, MAX_PER_GAME).map((c) =>
-    makeRow({
+  return candidates.slice(0, MAX_PER_GAME).map((c) => {
+    // The matchup conditions the cold signal: a weaker-side draw reinforces it,
+    // a stronger-side draw suggests it may not persist. Deterministic, no model.
+    let magnitude = c.effectiveDip;
+    if (c.sideWord === 'his weaker side') magnitude *= 1.15;
+    else if (c.sideWord === 'his stronger side') magnitude *= 0.9;
+
+    const handWord = c.pitcherHand === 'L' ? 'LHP' : 'RHP';
+    const headline = c.pitcherName
+      ? `${c.name} cold (${pct3(c.recentOps)} OPS, ${shortWindow(c.recentLabel)}) — draws ${handWord} ${c.pitcherName}`
+      : `${c.name} has gone cold: ${pct3(c.recentOps)} OPS in ${c.recentLabel}`;
+
+    return makeRow({
       category: 'coolingOff',
-      headline: `${c.name} has gone cold: ${pct3(c.recentOps)} OPS in ${c.recentLabel}`,
+      headline,
       detail: buildDetail(c),
       game: label,
       value: pct3(c.recentOps),
       tone: TONES.COLD,
       spark: [round(c.seasonOps, 3), round(c.recentOps, 3)],
-      relevance_score: scoreFromEdge(c.effectiveDip, { scale: RELEVANCE_SCALE, base: 45 }),
+      relevance_score: scoreFromEdge(magnitude, { scale: RELEVANCE_SCALE, base: 45 }),
       player_id: c.playerId,
       team_id: c.teamId,
       game_id: gameId,
-    }),
-  );
+      meta: c.pitcherName ? {
+        kind: 'cold_context',
+        pitcher_name: c.pitcherName,
+        pitcher_hand: c.pitcherHand,
+        vs_hand_ops: round(c.vsHandOps, 3),
+        vs_hand_ab: c.vsHandAb,
+        side: c.sideWord || null,
+      } : undefined,
+    });
+  });
 }
 
 /**
- * Detail copy. Plain/factual; ADDS what the headline lacks — the PA sample, the
- * season baseline, and the size of the drop. Three deterministic sentence
- * variants keyed off player_id so a slate doesn't read machine-stamped.
+ * Second-order matchup context: who the cold batter faces tonight (opposing
+ * probable starter's hand) and how he hits that hand (his real vs. Left /
+ * vs. Right split). Returns {} unless the pitcher hand is known AND the vs-hand
+ * split clears MIN_SPLIT_AB — so the detail never emits a half-sentence and the
+ * row falls back to first-order copy. `side` calls the matchup his weaker or
+ * stronger side by comparing to the opposite split.
+ */
+function buildMatchupContext({ splits, oppPitcher }) {
+  if (!oppPitcher) return {};
+  const pitcherName = oppPitcher.name || null;
+  const throws = parseBatsThrows(oppPitcher.batsThrows).throws; // 'L' | 'R' | null
+  if (!pitcherName || !throws) return {};
+
+  const matchSplit = getBreakdownSplit(splits, splitNameForPitcherFacing(throws));
+  const matchAb = Number(matchSplit?.at_bats);
+  const matchOps = Number(matchSplit?.ops);
+  if (!Number.isFinite(matchAb) || matchAb < MIN_SPLIT_AB) return {};
+  if (!Number.isFinite(matchOps) || matchOps <= 0) return {};
+
+  const otherSplit = getBreakdownSplit(splits, splitNameForPitcherFacing(throws === 'L' ? 'R' : 'L'));
+  const otherOps = Number(otherSplit?.ops);
+  let sideWord = null;
+  if (Number.isFinite(otherOps) && otherOps > 0) {
+    sideWord = matchOps < otherOps ? 'his weaker side' : 'his stronger side';
+  }
+
+  return { pitcherName, pitcherHand: throws, vsHandOps: matchOps, vsHandAb: matchAb, sideWord };
+}
+
+/** "Last 15 Days" -> "L15"; falls back to the full label. */
+function shortWindow(label) {
+  const s = String(label || '').toLowerCase();
+  if (s.includes('15')) return 'L15';
+  if (s.includes('7')) return 'L7';
+  if (s.includes('30')) return 'L30';
+  return label;
+}
+
+/**
+ * Detail copy. ADDS what the headline lacks. With matchup context it names the
+ * opposing hand + the batter's vs-hand split (the second-order link). Without
+ * it, three deterministic first-order variants keyed off player_id so a slate
+ * doesn't read machine-stamped.
  */
 function buildDetail(c) {
   const recent = pct3(c.recentOps);
   const base = pct3(c.seasonOps);
   const win = c.recentLabel.toLowerCase();
   const drop = round(c.dip, 3);
+
+  if (c.pitcherName && c.pitcherHand) {
+    const handWord = c.pitcherHand === 'L' ? 'LHP' : 'RHP';
+    const sideClause = c.sideWord ? ` — ${c.sideWord}` : '';
+    return `${c.name}'s ${recent} OPS over the ${win} (${c.recentPa} PA) trails his ${base} season mark, down ${drop}. Tonight he draws ${handWord} ${c.pitcherName}${sideClause}: a ${pct3(c.vsHandOps)} OPS vs ${handWord} across ${c.vsHandAb} AB.`;
+  }
+
   const variants = [
     `Over the ${win} (${c.recentPa} PA) he is at a ${recent} OPS, down ${drop} from his ${base} season mark.`,
     `That ${recent} OPS spans the ${win} (${c.recentPa} PA) against a ${base} season baseline, a ${drop} drop.`,
