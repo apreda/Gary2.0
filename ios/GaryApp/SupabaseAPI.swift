@@ -549,6 +549,29 @@ enum SupabaseAPI {
         return URL(string: urlString)
     }
 
+    /// Fire-and-forget conversion-funnel event → the shared `app_events` table
+    /// via the `log_app_event` SECURITY DEFINER RPC (same trust model as
+    /// `register_push_token`: the anon key can write but can't read/enumerate).
+    /// The web pricing page posts to the SAME RPC, so iOS + web land in one
+    /// funnel. Never throws, never blocks UI — detached and best-effort.
+    static func logEvent(_ event: String, _ props: [String: Any] = [:]) {
+        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/log_app_event") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        let payload: [String: Any] = [
+            "p_event": event,
+            "p_identity": identityId,
+            "p_platform": "ios",
+            "p_props": props,
+        ]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        req.httpBody = body
+        Task.detached { _ = try? await URLSession.shared.data(for: req) }
+    }
+
     static func fetchInsightLedger(date: String) async -> [InsightLedgerRow] {
         let url = buildURL(table: "insight_connections", query: [
             URLQueryItem(name: "select", value: "league,category,result"),
