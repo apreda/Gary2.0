@@ -42,7 +42,10 @@ const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30]; // First → fallback → final
 const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
   { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js', dfs: false },
-  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: true },
+  // MLB DFS: Main slate only (--limit 1; slates sort Main-first) — ~$0.54/lineup
+  // at MLB context size, so full coverage (~6/day ≈ $90/mo) stays off until the
+  // free labs feature earns it. Lift the limit to widen coverage.
+  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: true, dfsArgs: ['--limit', '1'] },
   { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: null, dfs: false }, // 2026 FIFA World Cup — game picks only
 ];
 
@@ -287,7 +290,7 @@ async function runDFS(sport) {
   if (!sport.dfs) return;
   log(`\n🎯 Running ${sport.label} DFS lineups`);
   try {
-    await runScript('scripts/run-dfs-lineups.js', [sport.flag]);
+    await runScript('scripts/run-dfs-lineups.js', [sport.flag, ...(sport.dfsArgs || [])]);
     log(`✅ ${sport.label} DFS complete`);
   } catch (e) {
     log(`❌ ${sport.label} DFS error: ${e.message}`);
