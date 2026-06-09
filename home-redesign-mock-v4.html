@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gary — Home v4 (the morning read: recap → board, calm/de-slopped)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* GaryColors — exact app tokens */
+    --gold:#C9A227; --gold-light:#E8D48B;
+    --bg:#090C11; --card:#15171C; --card2:#181B21; --chip:#1C1F26;
+    --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.12);
+    --txt:rgba(255,255,255,.92); --sub:rgba(255,255,255,.46); --meta:rgba(255,255,255,.34);
+    --won:#3FB950; --lost:#E5484D; --silver:#C7CCD6;
+    --nba:#3B82F6; --mlb:#7BC267; --wc:#14B8A6; --nhl:#00A3E0; --nfl:#22C55E;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0;padding:0}
+  body{
+    background:#050608;color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:28px 16px 64px;
+  }
+  .mono{font-family:'JetBrains Mono',monospace}
+
+  /* ===== mock chrome ===== */
+  .mockhead{margin-bottom:22px;text-align:center}
+  .mockhead .cap{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;color:#5b5f66;text-transform:uppercase;margin-bottom:12px}
+  .toggle{display:inline-flex;gap:6px;background:#101013;border-radius:999px;padding:4px}
+  .toggle button{font-family:-apple-system,sans-serif;font-size:13px;font-weight:600;
+    background:transparent;border:none;color:var(--sub);border-radius:999px;padding:8px 18px;cursor:pointer}
+  .toggle button.on{color:#0B0B0C;background:var(--gold)}
+
+  /* ===== phone — FLAT bg, no radial haze (horseman #4) ===== */
+  .phone{
+    width:390px;height:844px;border-radius:55px;overflow:hidden;position:relative;
+    outline:10px solid #1C1C1E;box-shadow:0 40px 100px rgba(0,0,0,.7);
+    background:var(--bg);
+  }
+  .phone.full{height:auto}
+  .phone.full .screen{height:auto;overflow:visible}
+
+  .statusbar{height:54px;display:flex;align-items:center;justify-content:space-between;padding:18px 34px 0}
+  .sb-time{font-size:16px;font-weight:600}
+  .sb-right{display:flex;align-items:center;gap:7px}
+  .sigbars{display:flex;align-items:flex-end;gap:1.5px}
+  .sigbars i{display:block;width:3px;background:#fff;border-radius:1px}
+  .sigbars i:nth-child(1){height:4px}.sigbars i:nth-child(2){height:6.5px}
+  .sigbars i:nth-child(3){height:9px}.sigbars i:nth-child(4){height:11.5px}
+  .wifi{width:17px;height:13px}
+  .batt{width:25px;height:12.5px;border:1px solid rgba(255,255,255,.4);border-radius:4px;position:relative}
+  .batt::after{content:"";position:absolute;inset:2px;right:4px;background:#fff;border-radius:1.5px}
+  .batt::before{content:"";position:absolute;right:-3.5px;top:3.5px;width:2px;height:4.5px;background:rgba(255,255,255,.4);border-radius:0 2px 2px 0}
+
+  .screen{height:calc(844px - 54px);overflow-y:auto;padding:2px 18px 132px;scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+
+  /* ===== masthead — Gary + date + net units (semantic green) ===== */
+  .masthead{padding:12px 2px 0}
+  .masthead .row{display:flex;align-items:baseline;justify-content:space-between}
+  .wordmark{font-family:'JetBrains Mono',monospace;font-size:23px;font-weight:700;letter-spacing:.05em;color:var(--gold)}
+  .mast-r{display:flex;align-items:baseline;gap:10px}
+  .mast-date{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:var(--meta)}
+  .mast-units{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--won)}
+  .stitch{margin-top:11px;border-top:1px solid var(--line)}
+
+  /* ===== section header (HubSectionHeader) ===== */
+  .hubhead .t{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px;letter-spacing:.02em;color:var(--txt)}
+  .hubhead .s{font-size:12px;color:var(--sub);margin-top:1px}
+  .seehead{display:flex;align-items:flex-end;justify-content:space-between}
+  .seehead .see{font-size:12px;color:var(--sub);font-weight:500}
+
+  /* ===== stacks / sections ===== */
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .stack.active .s{opacity:0;animation:rise .4s ease forwards}
+  .s.d1{animation-delay:.03s}.s.d2{animation-delay:.09s}.s.d3{animation-delay:.15s}.s.d4{animation-delay:.21s}
+  .s.d5{animation-delay:.27s}.s.d6{animation-delay:.33s}.s.d7{animation-delay:.39s}.s.d8{animation-delay:.45s}
+  .stack{display:none;flex-direction:column;gap:26px;padding-top:20px}
+  .stack.active{display:flex}
+  .sec{display:flex;flex-direction:column;gap:11px}
+
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--meta)}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex:none}
+  .mlbgrad{background:linear-gradient(90deg,#7BC267,#C9A66B,#EDEDE6);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* flat card base — border + subtle lift, NO glow (horseman #1) */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px}
+
+  /* ===== ① the lead — game is the headline, Gary rides underneath ===== */
+  .lead{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:17px 16px 15px}
+  .lead .top{display:flex;align-items:center;justify-content:space-between}
+  .lead .lg{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--sub);text-transform:uppercase}
+  .lead h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:31px;line-height:1.03;margin:11px 0 3px;letter-spacing:.005em}
+  .lead .sub{font-size:12.5px;color:var(--sub)}
+  /* the receipt — gold left bar is the ONE accent (matches the screenshot) */
+  .receiptbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:15px;
+    background:rgba(255,255,255,.025);border-left:3px solid var(--gold);border-radius:0 8px 8px 0;padding:11px 13px}
+  .receiptbar .lhs{font-size:13.5px;color:var(--txt)}
+  .receiptbar .res{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.02em;flex:none}
+  .res.won{color:var(--won)} .res.lost{color:var(--lost)}
+  .receiptbar.miss{border-left-color:rgba(255,255,255,.22)}
+
+  /* ===== ② hits & heartbreakers — twin cards, distinct format ===== */
+  .twoup{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .beat{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px;display:flex;flex-direction:column;gap:6px;min-height:118px}
+  .beat .tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}
+  .beat.win .tag{color:var(--won)} .beat.loss .tag{color:var(--lost)}
+  .beat .g{font-size:14px;font-weight:600;line-height:1.18}
+  .beat .note{font-size:11px;color:var(--sub);line-height:1.38}
+  .beat .line{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.03em;color:var(--meta);margin-top:auto;padding-top:6px}
+  .beat .line b{font-weight:700}
+  .beat.win .line b{color:var(--won)} .beat.loss .line b{color:var(--lost)}
+
+  /* ===== ③ Betting X — curated real-post cards, link out ===== */
+  .xcard{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px 14px;display:flex;flex-direction:column;gap:10px}
+  .xc-top{display:flex;align-items:center;gap:10px}
+  .xc-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:12px;color:#0B0B0C;flex:none}
+  .xc-id{display:flex;flex-direction:column;gap:1px}
+  .xc-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px}
+  .xc-name .vf{color:var(--nba);font-size:11px}
+  .xc-meta{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--meta);letter-spacing:.03em}
+  .xc-x{margin-left:auto;color:var(--sub);font-size:14px;font-weight:400}
+  .xc-body{font-size:13.5px;line-height:1.45;color:var(--txt)}
+  .xc-body .h{color:var(--nba)}
+  .xc-foot{display:flex;align-items:center;gap:16px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--meta);padding-top:2px}
+  .xc-foot .view{margin-left:auto;color:var(--sub);font-weight:500}
+
+  /* ===== ④ today's board — departures board (time-led rows) ===== */
+  .dep{background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .deprow{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+  .deprow:last-child{border-bottom:none}
+  .dep-time{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--txt);width:52px;flex:none;line-height:1.2}
+  .dep-time small{display:block;font-size:8px;font-weight:500;color:var(--meta);letter-spacing:.08em}
+  .dep-mid{flex:1;min-width:0}
+  .dep-match{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:7px}
+  .dep-tag{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--gold);border:1px solid rgba(201,162,39,.4);border-radius:4px;padding:1.5px 5px;text-transform:uppercase}
+  .dep-tag.po{color:var(--lost);border-color:rgba(229,72,77,.45)}
+  .dep-note{font-size:11.5px;color:var(--sub);margin-top:4px;line-height:1.3}
+  .dep-go{color:var(--meta);font-size:16px;flex:none}
+
+  /* ===== ⑤ biggest line moves — delta table (text color = direction) ===== */
+  .moves{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:3px 14px}
+  .moverow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+  .moverow:last-child{border-bottom:none}
+  .mv-l .team{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .mv-l .ln{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--sub);margin-top:4px;letter-spacing:.02em}
+  .mv-l .ln .arrow{color:var(--meta)}
+  .mv-r{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;text-align:right}
+  .mv-r small{display:block;font-size:8px;font-weight:500;color:var(--meta);letter-spacing:.1em;text-transform:uppercase}
+  .mv-r.up{color:var(--won)} .mv-r.down{color:var(--lost)}
+
+  /* ===== ⑥ free pick — the one card that earns a box ===== */
+  .hero{background:var(--card);border:1px solid rgba(201,162,39,.4);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:7px}
+  .hero .top{display:flex;align-items:center;justify-content:space-between}
+  .hero h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:27px;line-height:1.04;margin:3px 0 0}
+  .hero .sub{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--sub);text-transform:uppercase}
+  .freetag{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.13em;color:var(--gold);
+    border:1px solid rgba(201,162,39,.5);border-radius:5px;padding:3px 7px}
+  .pickchip{display:inline-flex;align-items:baseline;gap:8px;background:var(--chip);
+    border:1px solid rgba(201,162,39,.55);border-radius:10px;padding:8px 12px;font-family:'JetBrains Mono',monospace;margin-top:9px;align-self:flex-start}
+  .pickchip b{font-size:14px;font-weight:700;color:var(--gold)}
+  .pickchip span{font-size:11px;color:var(--sub)}
+  .conf{margin-top:12px}
+  .conf .row{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;
+    font-size:8.5px;letter-spacing:.13em;color:var(--meta);text-transform:uppercase;margin-bottom:7px}
+  .conf .row b{color:var(--txt);font-size:10px}
+  .conf .track{height:4px;border-radius:2px;background:rgba(255,255,255,.08)}
+  .conf .fill{height:4px;border-radius:2px;background:var(--gold);width:72%}
+
+  /* ===== compact strip ===== */
+  .strip{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-radius:12px;
+    background:var(--card);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.04em;color:var(--sub)}
+  .strip b{color:var(--txt);font-weight:700}
+  .strip .pos{color:var(--won);font-weight:700}
+  .chev{color:var(--meta);font-size:14px}
+
+  /* ===== live tape — status via TEXT, no pulsing dots (horseman #3) ===== */
+  .tape{display:flex;gap:9px;overflow-x:auto;margin:0 -18px;padding:2px 18px 4px;scrollbar-width:none}
+  .tape::-webkit-scrollbar{display:none}
+  .tapecell{flex:none;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 13px;min-width:132px}
+  .tc-top{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.11em;color:var(--meta);text-transform:uppercase}
+  .tc-score{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;margin-top:7px;letter-spacing:.02em}
+  .tc-st{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.06em;margin-top:5px;text-transform:uppercase}
+  .tc-st.good{color:var(--won)} .tc-st.bad{color:var(--lost)} .tc-st.up{color:var(--sub)}
+
+  /* ===== live takeover ===== */
+  .livecard{background:var(--card);border:1px solid rgba(201,162,39,.4);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px}
+  .livecard .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+  .live-eye{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--gold);text-transform:uppercase}
+  .venue{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;color:var(--meta);text-transform:uppercase}
+  .board{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+  .board .teams{display:flex;flex-direction:column;gap:9px}
+  .brow{display:flex;align-items:baseline;gap:12px}
+  .brow .ab{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.04em;width:48px}
+  .brow .sc{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;line-height:1}
+  .brow.trail .ab,.brow.trail .sc{color:var(--sub)}
+  .fieldbox{display:flex;flex-direction:column;align-items:center;gap:9px;padding-right:4px}
+  .diamond{position:relative;width:52px;height:40px}
+  .base{position:absolute;width:13px;height:13px;transform:rotate(45deg);border-radius:2.5px;background:rgba(255,255,255,.12)}
+  .base.on{background:#EDEDE6}
+  .base.b2{left:50%;top:0;margin-left:-6.5px}.base.b1{right:3px;bottom:2px}.base.b3{left:3px;bottom:2px}
+  .gstate{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.08em;color:var(--sub)}
+  .outdot{width:5.5px;height:5.5px;border-radius:50%;background:rgba(255,255,255,.15)}
+  .outdot.on{background:rgba(255,255,255,.85)}
+
+  .foot{display:flex;justify-content:center;padding-top:4px}
+  .foot span{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.15em;color:var(--meta);text-transform:uppercase}
+
+  /* ===== tab bar — de-glowed ===== */
+  .tabwrap{position:absolute;left:0;right:0;bottom:0;padding:14px 22px 10px;
+    background:linear-gradient(to top, rgba(9,12,17,.98) 62%, rgba(9,12,17,0))}
+  .tabbar{height:62px;border-radius:25px;background:rgba(22,22,24,.94);
+    display:flex;align-items:center;justify-content:space-around;backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,.06)}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:4px;width:56px;color:rgba(255,255,255,.4)}
+  .tab.active{color:var(--gold)}
+  .tab svg{width:22px;height:22px}
+  .tab .tl{font-size:9px;font-weight:600;letter-spacing:.03em}
+  .tab-g{width:48px;height:48px;border-radius:50%;margin-top:-30px;flex:none;background:#111114;
+    box-shadow:inset 0 0 0 1.5px var(--gold);display:flex;align-items:center;justify-content:center;
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:23px;color:var(--gold)}
+  .homebar{width:134px;height:5px;border-radius:3px;background:rgba(255,255,255,.28);margin:9px auto 0}
+</style>
+</head>
+<body>
+
+<div class="mockhead">
+  <div class="cap">Home v4 · the morning read — recap → board, calm + de-slopped</div>
+  <div class="toggle">
+    <button data-state="morning" data-time="8:47" class="on">Morning</button>
+    <button data-state="pregame" data-time="4:12">Pre-game</button>
+    <button data-state="live" data-time="9:26">Live</button>
+  </div>
+</div>
+
+<div class="phone" id="phone">
+  <div class="statusbar">
+    <span class="sb-time" id="clock">8:47</span>
+    <span class="sb-right">
+      <span class="sigbars"><i></i><i></i><i></i><i></i></span>
+      <svg class="wifi" viewBox="0 0 24 18" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round">
+        <path d="M2 6.5C8 1.5 16 1.5 22 6.5"/><path d="M5.5 10.2c4-3.2 9-3.2 13 0"/><path d="M9 13.7c1.8-1.5 4.2-1.5 6 0"/>
+        <circle cx="12" cy="16.4" r="1.4" fill="#fff" stroke="none"/>
+      </svg>
+      <span class="batt"></span>
+    </span>
+  </div>
+
+  <div class="screen">
+
+    <div class="masthead">
+      <div class="row">
+        <span class="wordmark">Gary</span>
+        <span class="mast-r"><span class="mast-date">SAT · JUN 6</span><span class="mast-units">+4.1u</span></span>
+      </div>
+      <div class="stitch"></div>
+    </div>
+
+    <!-- ================= MORNING — the read ================= -->
+    <div class="stack active" id="state-morning">
+
+      <!-- ① THE LEAD — game is the headline, Gary woven underneath -->
+      <div class="lead s d1">
+        <div class="top">
+          <span class="lg"><span class="dot" style="background:var(--mlb)"></span>MLB</span>
+          <span class="eyebrow">Last night</span>
+        </div>
+        <h2>Dodgers walk it off over the Padres, 5–4</h2>
+        <div class="sub">LAD @ SD · Final · Betts 2-run shot in the 9th</div>
+        <div class="receiptbar">
+          <span class="lhs"><b>Gary had it</b> · Dodgers ML</span>
+          <span class="res won">CASHED +130</span>
+        </div>
+      </div>
+
+      <!-- ② HITS & HEARTBREAKERS — twin cards -->
+      <div class="sec s d2">
+        <div class="hubhead"><div class="t">Hits &amp; heartbreakers</div><div class="s">How last night actually went</div></div>
+        <div class="twoup">
+          <div class="beat win">
+            <span class="tag">Biggest cash</span>
+            <span class="g">Phillies −1.5</span>
+            <span class="note">Wheeler carried a shutout into the 8th — never in doubt.</span>
+            <span class="line">PHI @ WSH · <b>+145</b></span>
+          </div>
+          <div class="beat loss">
+            <span class="tag">Worst beat</span>
+            <span class="g">Mets ML</span>
+            <span class="note">Two outs, two strikes in the 9th — blown save, lost by one.</span>
+            <span class="line">NYM @ ATL · <b>−115</b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ BETTING X — curated real posts, link out -->
+      <div class="sec s d3">
+        <div class="seehead">
+          <div class="hubhead"><div class="t">Betting X</div><div class="s">Reactions from around the timeline</div></div>
+          <span class="see">See all ›</span>
+        </div>
+        <div class="xcard">
+          <div class="xc-top">
+            <span class="xc-av" style="background:var(--gold)">T</span>
+            <span class="xc-id">
+              <span class="xc-name">Trent <span class="vf">✓</span></span>
+              <span class="xc-meta">@bookitwithtrent · 7h</span>
+            </span>
+            <span class="xc-x">𝕏</span>
+          </div>
+          <div class="xc-body">Books overcorrected off Game 1. <span class="h">#NBAFinals</span> total is still chasing the OKC blowout — give me the under 221 all day tonight.</div>
+          <div class="xc-foot"><span>♡ 1.2K</span><span>↻ 184</span><span class="view">View on X ↗</span></div>
+        </div>
+        <div class="xcard">
+          <div class="xc-top">
+            <span class="xc-av" style="background:#0B0B0C;color:var(--nfl);border:1px solid var(--line2)">DK</span>
+            <span class="xc-id">
+              <span class="xc-name">DraftKings <span class="vf">✓</span></span>
+              <span class="xc-meta">@DraftKings · 9h</span>
+            </span>
+            <span class="xc-x">𝕏</span>
+          </div>
+          <div class="xc-body">Mookie Betts walk-off 💣 sends a $25 → $812 same-game parlay to the moon. Wild night in LA.</div>
+          <div class="xc-foot"><span>♡ 4.8K</span><span>↻ 612</span><span class="view">View on X ↗</span></div>
+        </div>
+      </div>
+
+      <!-- ④ TODAY'S BOARD — departures board, time-led, curated marquee -->
+      <div class="sec s d4">
+        <div class="seehead">
+          <div class="hubhead"><div class="t">Today's board</div><div class="s">The games worth your attention, by tip</div></div>
+          <span class="see">Full slate ›</span>
+        </div>
+        <div class="dep">
+          <div class="deprow">
+            <span class="dep-time">1:05<small>PM ET</small></span>
+            <span class="dep-mid">
+              <span class="dep-match"><span class="dot" style="background:var(--mlb)"></span>Yankees @ Red Sox</span>
+              <span class="dep-note">Ace vs. ace at Fenway · total dropped to 7.5</span>
+            </span>
+            <span class="dep-go">›</span>
+          </div>
+          <div class="deprow">
+            <span class="dep-time">4:10<small>PM ET</small></span>
+            <span class="dep-mid">
+              <span class="dep-match"><span class="dot" style="background:var(--mlb)"></span>Dodgers @ Giants</span>
+              <span class="dep-note">Rivalry day game · Ohtani in the box, Webb on the bump</span>
+            </span>
+            <span class="dep-go">›</span>
+          </div>
+          <div class="deprow">
+            <span class="dep-time">7:00<small>PM ET</small></span>
+            <span class="dep-mid">
+              <span class="dep-match"><span class="dot" style="background:var(--wc)"></span>USA vs. Mexico <span class="dep-tag">Friendly</span></span>
+              <span class="dep-note">World Cup tune-up · sharp money on the draw</span>
+            </span>
+            <span class="dep-go">›</span>
+          </div>
+          <div class="deprow">
+            <span class="dep-time">8:30<small>PM ET</small></span>
+            <span class="dep-mid">
+              <span class="dep-match"><span class="dot" style="background:var(--nba)"></span>Thunder @ Knicks <span class="dep-tag po">Finals Gm 2</span></span>
+              <span class="dep-note">NYK +3.5 · public 71% on OKC · total steamed to 221</span>
+            </span>
+            <span class="dep-go">›</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑤ BIGGEST LINE MOVES — delta table (NEEDS odds time-series) -->
+      <div class="sec s d5">
+        <div class="hubhead"><div class="t">Biggest moves</div><div class="s">Since the open · across the board</div></div>
+        <div class="moves">
+          <div class="moverow">
+            <span class="mv-l"><span class="team"><span class="dot" style="background:var(--nba)"></span>Knicks Gm 2 total</span><span class="ln">218.5 <span class="arrow">→</span> 221</span></span>
+            <span class="mv-r up">+2.5<small>steam</small></span>
+          </div>
+          <div class="moverow">
+            <span class="mv-l"><span class="team"><span class="dot" style="background:var(--mlb)"></span>Braves team total</span><span class="ln">4.5 <span class="arrow">→</span> 3.5 · Acuña scratched</span></span>
+            <span class="mv-r down">−1.0<small>injury</small></span>
+          </div>
+          <div class="moverow">
+            <span class="mv-l"><span class="team"><span class="dot" style="background:var(--mlb)"></span>Yankees ML</span><span class="ln">−128 <span class="arrow">→</span> −145</span></span>
+            <span class="mv-r up">+17<small>sharp</small></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑥ FREE PICK — the one card that earns a box -->
+      <div class="sec s d6">
+        <div class="hubhead"><div class="t">On the house</div><div class="s">Gary's free play, every day</div></div>
+        <div class="hero">
+          <div class="top">
+            <span class="eyebrow mlbgrad">MLB · 1:05 PM ET</span>
+            <span class="freetag">FREE PICK</span>
+          </div>
+          <h2>Yankees @ Red Sox</h2>
+          <span class="sub">Fenway Park · Boston</span>
+          <span class="pickchip"><b>NYY ML</b><span>−120</span></span>
+          <div class="conf">
+            <div class="row"><span>Confidence</span><b>72</b></div>
+            <div class="track"><div class="fill"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot s d7"><span>betwithgary.ai</span></div>
+    </div>
+
+    <!-- ================= PRE-GAME — board leads ================= -->
+    <div class="stack" id="state-pregame">
+
+      <div class="strip s d1">
+        <span>LAST NIGHT <b>6–4</b> · <span class="pos">+4.1U</span> · MLB 5–3</span>
+        <span class="chev">›</span>
+      </div>
+
+      <div class="sec s d2">
+        <div class="seehead">
+          <div class="hubhead"><div class="t">Today's board</div><div class="s">Tonight, by first pitch</div></div>
+          <span class="see">Full slate ›</span>
+        </div>
+        <div class="dep">
+          <div class="deprow">
+            <span class="dep-time">7:05<small>PM ET</small></span>
+            <span class="dep-mid"><span class="dep-match"><span class="dot" style="background:var(--mlb)"></span>Yankees @ Red Sox</span><span class="dep-note">Judge sits vs. the lefty · total down half a run</span></span>
+            <span class="dep-go">›</span>
+          </div>
+          <div class="deprow">
+            <span class="dep-time">7:10<small>PM ET</small></span>
+            <span class="dep-mid"><span class="dep-match"><span class="dot" style="background:var(--mlb)"></span>Phillies @ Mets</span><span class="dep-note">Nola vs. NL East · K prop hasn't moved</span></span>
+            <span class="dep-go">›</span>
+          </div>
+          <div class="deprow">
+            <span class="dep-time">8:30<small>PM ET</small></span>
+            <span class="dep-mid"><span class="dep-match"><span class="dot" style="background:var(--nba)"></span>Thunder @ Knicks <span class="dep-tag po">Finals Gm 2</span></span><span class="dep-note">NYK +3.5 the contrarian side · total steamed to 221</span></span>
+            <span class="dep-go">›</span>
+          </div>
+          <div class="deprow">
+            <span class="dep-time">9:40<small>PM ET</small></span>
+            <span class="dep-mid"><span class="dep-match"><span class="dot" style="background:var(--mlb)"></span>Dodgers @ Padres</span><span class="dep-note">Late window · Snell on a pitch count</span></span>
+            <span class="dep-go">›</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec s d3">
+        <div class="hubhead"><div class="t">Biggest moves</div><div class="s">Since the open</div></div>
+        <div class="moves">
+          <div class="moverow"><span class="mv-l"><span class="team"><span class="dot" style="background:var(--nba)"></span>Gm 2 total</span><span class="ln">218.5 <span class="arrow">→</span> 221</span></span><span class="mv-r up">+2.5<small>steam</small></span></div>
+          <div class="moverow"><span class="mv-l"><span class="team"><span class="dot" style="background:var(--mlb)"></span>Braves team total</span><span class="ln">4.5 <span class="arrow">→</span> 3.5 · Acuña out</span></span><span class="mv-r down">−1.0<small>injury</small></span></div>
+        </div>
+      </div>
+
+      <div class="sec s d4">
+        <div class="hubhead"><div class="t">On the house</div><div class="s">Gary's free play</div></div>
+        <div class="hero">
+          <div class="top"><span class="eyebrow mlbgrad">MLB · 7:05 PM ET</span><span class="freetag">FREE PICK</span></div>
+          <h2>Yankees @ Red Sox</h2>
+          <span class="sub">Fenway Park · Boston</span>
+          <span class="pickchip"><b>NYY ML</b><span>−120</span></span>
+        </div>
+      </div>
+
+      <div class="sec s d5">
+        <div class="seehead"><div class="hubhead"><div class="t">Betting X</div><div class="s">Pre-game intel</div></div><span class="see">See all ›</span></div>
+        <div class="xcard">
+          <div class="xc-top"><span class="xc-av" style="background:var(--gold)">T</span><span class="xc-id"><span class="xc-name">Trent <span class="vf">✓</span></span><span class="xc-meta">@bookitwithtrent · 1h</span></span><span class="xc-x">𝕏</span></div>
+          <div class="xc-body">Nola has cleared 5.5 Ks in 8 of 9 vs. NL East lineups and the number still hasn't moved. That's the free square tonight.</div>
+          <div class="xc-foot"><span>♡ 940</span><span>↻ 96</span><span class="view">View on X ↗</span></div>
+        </div>
+      </div>
+
+      <div class="foot s d6"><span>betwithgary.ai</span></div>
+    </div>
+
+    <!-- ================= LIVE — the rail ================= -->
+    <div class="stack" id="state-live">
+
+      <div class="tape s d1">
+        <div class="tapecell"><div class="tc-top">MLB · TOP 7</div><div class="tc-score">PHI 4 · NYM 2</div><div class="tc-st good">Covering −1.5</div></div>
+        <div class="tapecell"><div class="tc-top">MLB · BOT 5</div><div class="tc-score">NYY 1 · BOS 5</div><div class="tc-st bad">Trailing</div></div>
+        <div class="tapecell"><div class="tc-top">NBA · Q3 4:12</div><div class="tc-score">OKC 58 · NYK 61</div><div class="tc-st good">Covering +3.5</div></div>
+        <div class="tapecell"><div class="tc-top">MLB · 9:40 PM</div><div class="tc-score">LAD @ SD</div><div class="tc-st up">LAD ML −130</div></div>
+      </div>
+
+      <div class="livecard s d2">
+        <div class="top"><span class="live-eye">Live · MLB</span><span class="venue">Citi Field</span></div>
+        <div class="board">
+          <div class="teams">
+            <div class="brow"><span class="ab">PHI</span><span class="sc">4</span></div>
+            <div class="brow trail"><span class="ab">NYM</span><span class="sc">2</span></div>
+          </div>
+          <div class="fieldbox">
+            <div class="diamond"><span class="base b2"></span><span class="base b1 on"></span><span class="base b3 on"></span></div>
+            <span class="gstate">TOP 7 <span class="outdot on"></span><span class="outdot on"></span><span class="outdot"></span></span>
+          </div>
+        </div>
+        <div class="receiptbar">
+          <span class="lhs"><b>Gary's on it</b> · PHI −1.5 −115</span>
+          <span class="res won">COVERING</span>
+        </div>
+      </div>
+
+      <div class="sec s d3">
+        <div class="hubhead"><div class="t">Tonight's board</div><div class="s">1 settled · 3 live · 1 upcoming</div></div>
+        <div class="dep">
+          <div class="deprow"><span class="dep-time" style="color:var(--won)">LIVE</span><span class="dep-mid"><span class="dep-match">PHI 4 · NYM 2</span><span class="dep-note">Top 7 · covering −1.5</span></span><span class="dep-go">›</span></div>
+          <div class="deprow"><span class="dep-time" style="color:var(--lost)">LIVE</span><span class="dep-mid"><span class="dep-match">NYY 1 · BOS 5</span><span class="dep-note">Bot 5 · trailing on the ML</span></span><span class="dep-go">›</span></div>
+          <div class="deprow"><span class="dep-time">FINAL</span><span class="dep-mid"><span class="dep-match">CHC 3 · STL 4</span><span class="dep-note">Under 8.5 cashed ✓</span></span><span class="dep-go">›</span></div>
+        </div>
+      </div>
+
+      <div class="foot s d4"><span>betwithgary.ai</span></div>
+    </div>
+
+  </div><!-- /screen -->
+
+  <div class="tabwrap">
+    <div class="tabbar">
+      <span class="tab active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.2 12 4l9 7.2"/><path d="M5.5 9.8V20h13V9.8"/></svg>
+        <span class="tl">Home</span>
+      </span>
+      <span class="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v3a5 5 0 0 1-10 0V4z"/><path d="M12 12v4m-3.5 4h7m-5.5-4h4l1 4h-6l1-4z"/></svg>
+        <span class="tl">Bets</span>
+      </span>
+      <span class="tab-g">G</span>
+      <span class="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="13" height="13" rx="2.5"/><path d="M8 4.5h11.5V16"/></svg>
+        <span class="tl">Picks</span>
+      </span>
+      <span class="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M16 15h2"/></svg>
+        <span class="tl">Billfold</span>
+      </span>
+    </div>
+    <div class="homebar"></div>
+  </div>
+</div>
+
+<script>
+  const btns = document.querySelectorAll('.toggle button');
+  const clock = document.getElementById('clock');
+  function setState(state){
+    btns.forEach(x => x.classList.toggle('on', x.dataset.state === state));
+    const b = [...btns].find(x => x.dataset.state === state);
+    if (b) clock.textContent = b.dataset.time;
+    document.querySelectorAll('.stack').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('state-' + state);
+    if (el) el.classList.add('active');
+    document.querySelector('.screen').scrollTop = 0;
+  }
+  btns.forEach(b => b.addEventListener('click', () => setState(b.dataset.state)));
+  const q = new URLSearchParams(location.search);
+  if (q.has('full')) document.getElementById('phone').classList.add('full');
+  setState(q.get('state') || 'morning');
+</script>
+</body>
+</html>

@@ -29,6 +29,8 @@ Run this checklist on every screen before it ships:
 
 **Prop pick card** — silver twin: eyebrow (league + time) → player → team · market → call (OVER/UNDER + line, silver, in the chip) → Gary's Lean. Green/red OVER/UNDER coding only in the detail popup.
 
+**Home front page** (`HomeView`) — masthead (Gary wordmark + date, gold dashed stitch) → state switcher (**Morning · Pre-game · Live** pills, gold active, opens on Morning) → the selected state's stack. Morning: scorecard (record / net flat stakes / best cash) → **Gary's form** (last-10 W/L/P pips + streak chip + net·L10 + win rate, reuses `BillfoldCompute`) → last-night marquee → The Wire (market-pulse strip + betting-angle rows + 𝕏-voice quotes) → Prop Box → Biggest cashes → The Receipts. Pre-game: last-night strip → Tonight's Board + free pick → the slate → the Wire. Live: live tape → takeover (score + base diamond + outs) → live board (per-game verdicts) → in-game Wire → tonight strip. Pre-game/Live ride `#if DEBUG` sample data until real picks/live games exist; World Cup module currently parked.
+
 **DFS card** (product, not a tab): lineup table · total salary · ceiling projection · Gary's Notes · pivots.
 
 ## Current screens (tabs)

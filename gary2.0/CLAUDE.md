@@ -39,6 +39,17 @@ including while doing adjacent work. Tune-ups by request only.
   (resultLetterTrailing). Team labels are mascot-short (Formatters.shortTeamName).
   One shared back app-wide (PropSlipBack: GARY'S TAKE · The Numbers · The Read). The
   Picks TODAY page's combined top-props slip is a user-approved exception (locked page).
+- **The Home front page** (HomeView, June 8 2026): opens on **Morning** (results-first — the
+  view users land on), with a three-pill state switcher **Morning · Pre-game · Live** (matte
+  capsule, gold active pill — NO "Auto"). Each state re-orders the same blocks. Morning:
+  scorecard (record / net flat stakes / best cash) → **Gary's form** (last-10 W/L pips +
+  streak chip + net·L10 + win rate) → last-night marquee → The Wire (market-pulse strip +
+  betting-angle rows + 𝕏-voice quotes) → Prop Box → Biggest cashes → The Receipts. Pre-game:
+  last-night strip → board + free pick → the slate → the Wire. Live: live tape → takeover
+  (score + base diamond + outs) → live board → in-game Wire → tonight strip. Pre-game/Live
+  ride `#if DEBUG` sample data until real picks/live games exist (never ships in release).
+  World Cup module is parked (it used to lead the page) — restore on request. User-approved:
+  "the Morning page is perfect, that is what I want users to see first."
 
 ## LOCKED: Injury Handling
 
