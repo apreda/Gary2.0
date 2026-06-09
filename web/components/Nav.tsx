@@ -8,6 +8,7 @@ const LINKS = [
   { href: '/hub', label: 'Hub' },
   { href: '/results', label: 'Results' },
   { href: '/how-it-works', label: 'How It Works' },
+  { href: '/pricing', label: 'Pricing' },
 ];
 
 export function Nav() {

@@ -9,7 +9,7 @@ export type LaneKey =
 export interface LaneMeta {
   chip: string;                       // terminal eyebrow label (app SignalKind.chip)
   title: string;                      // section heading on web
-  tint: 'green' | 'red' | 'neutral';  // gold diet: lane identity is neutral
+  tint: 'green' | 'red' | 'neutral';  // lane identity is neutral; tint carries hot/cold meaning
 }
 
 export const LANES: Record<LaneKey, LaneMeta> = {

@@ -15,6 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     daily('/results', 0.9),
     ...SPORTS.map(s => daily(`/results/${s.slug}`, 0.7)),
     daily('/hub', 0.8),
+    { url: `${base}/pricing`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${base}/how-it-works`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${base}/app`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${base}/press`, lastModified: now, changeFrequency: 'weekly', priority: 0.4 },

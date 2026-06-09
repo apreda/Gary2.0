@@ -21,6 +21,12 @@ export function todayEST(now: Date = new Date()): string {
   return estDateStr(now);
 }
 
+/** yyyy-MM-dd in EST for N days before `now`. Kept here (not inline in a
+ *  component) so the Date read stays out of render — React 19 purity rule. */
+export function daysAgoEST(days: number, now: Date = new Date()): string {
+  return estDateStr(new Date(now.getTime() - days * 86400000));
+}
+
 /** Port of iOS hubGradedDateEST: the day before todayEST (graded record day). */
 export function hubGradedDateEST(now: Date = new Date()): string {
   const today = todayEST(now);
