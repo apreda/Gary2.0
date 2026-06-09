@@ -118,8 +118,10 @@ struct ContentView: View {
 enum AppFlags {
     /// Talk to Gary is parked until v3 — the Gary tab is Hub-only meanwhile.
     static let talkToGaryEnabled = false
-    /// Gary's Daily Fantasy lineups (dfs_lineups) — revived June 2026.
-    static let fantasyEnabled = true
+    /// Gary's Daily Fantasy lineups (dfs_lineups) — fully wired (Hub | Fantasy
+    /// mode + GaryFantasyView + MLB pipeline validated Jun 2026) but parked on
+    /// the roadmap until DFS returns; flip with the scheduler's MLB dfs flag.
+    static let fantasyEnabled = false
 }
 
 enum GaryPageMode: String, CaseIterable {

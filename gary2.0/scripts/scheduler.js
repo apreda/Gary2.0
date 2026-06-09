@@ -42,10 +42,12 @@ const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30]; // First → fallback → final
 const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
   { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js', dfs: false },
-  // MLB DFS: Main slate only (--limit 1; slates sort Main-first) — ~$0.54/lineup
-  // at MLB context size, so full coverage (~6/day ≈ $90/mo) stays off until the
-  // free labs feature earns it. Lift the limit to widen coverage.
-  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: true, dfsArgs: ['--limit', '1'] },
+  // MLB DFS: deferred to the roadmap (user call, Jun 9 2026). The pipeline is
+  // validated end-to-end — dry run built 3/3 DK slates with real salaries — so
+  // re-enabling is dfs:true here (+ AppFlags.fantasyEnabled in iOS). Keep
+  // dfsArgs ['--limit','1'] when it returns: ~$0.54/lineup at MLB context size,
+  // so Main-only (~$33/mo) until the free labs feature earns full coverage.
+  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: false, dfsArgs: ['--limit', '1'] },
   { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: null, dfs: false }, // 2026 FIFA World Cup — game picks only
 ];
 
