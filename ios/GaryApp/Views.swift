@@ -11413,6 +11413,10 @@ struct CompactPickRow: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(hex: "#181616"))
                 .overlay(
+                    SportWatermark(league: pick.league)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                )
+                .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1.0)
                 )
@@ -11438,6 +11442,115 @@ private struct PickCardHeightKey: PreferenceKey {
 // Two team rows like a live scoreboard — the picked side is lit, with the
 // call chip anchored to it; the other side is dimmed. Sans-serif throughout.
 // Chosen by the user (June 3 2026) over the serif CompactPickRow for Best Bets.
+// MARK: - Sport watermarks (card texture, Fixtured-style — in Gary's ink)
+
+/// Baseball seam sweeping the card's right side: one stitched arc, one faint
+/// echo. Monochrome at whisper opacity — texture, never a tint wash.
+struct BaseballSeamShape: Shape {
+    var stitched: Bool = true
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width, h = rect.height
+        let start = CGPoint(x: w * 0.60, y: h * 1.28)
+        let ctrl  = CGPoint(x: w * 0.64, y: h * 0.30)
+        let end   = CGPoint(x: w * 1.16, y: h * -0.22)
+        p.move(to: start)
+        p.addQuadCurve(to: end, control: ctrl)
+        guard stitched else { return p }
+        // Chevron stitches along the curve, pointing with the seam.
+        let n = 11
+        for i in 1..<n {
+            let t = CGFloat(i) / CGFloat(n)
+            let mt = 1 - t
+            let x = mt * mt * start.x + 2 * mt * t * ctrl.x + t * t * end.x
+            let y = mt * mt * start.y + 2 * mt * t * ctrl.y + t * t * end.y
+            var dx = 2 * mt * (ctrl.x - start.x) + 2 * t * (end.x - ctrl.x)
+            var dy = 2 * mt * (ctrl.y - start.y) + 2 * t * (end.y - ctrl.y)
+            let len = max(sqrt(dx * dx + dy * dy), 0.001)
+            dx /= len; dy /= len
+            let nx = -dy, ny = dx
+            let tip  = CGPoint(x: x + dx * 5, y: y + dy * 5)
+            let left = CGPoint(x: x - dx * 4 + nx * 8, y: y - dy * 4 + ny * 8)
+            let right = CGPoint(x: x - dx * 4 - nx * 8, y: y - dy * 4 - ny * 8)
+            p.move(to: left); p.addLine(to: tip)
+            p.move(to: right); p.addLine(to: tip)
+        }
+        return p
+    }
+}
+
+/// Basketball seams bleeding in from the top-right corner.
+struct BasketballSeamShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let c = CGPoint(x: rect.width * 0.98, y: rect.height * 0.06)
+        let r = rect.height * 1.1
+        p.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
+        p.move(to: CGPoint(x: c.x, y: c.y - r)); p.addLine(to: CGPoint(x: c.x, y: c.y + r))
+        p.move(to: CGPoint(x: c.x - r, y: c.y)); p.addLine(to: CGPoint(x: c.x + r, y: c.y))
+        // The two curved channels.
+        p.move(to: CGPoint(x: c.x - r * 0.92, y: c.y + r * 0.45))
+        p.addQuadCurve(to: CGPoint(x: c.x - r * 0.1, y: c.y + r * 0.95),
+                       control: CGPoint(x: c.x - r * 0.42, y: c.y + r * 0.88))
+        p.move(to: CGPoint(x: c.x + r * 0.92, y: c.y + r * 0.45))
+        p.addQuadCurve(to: CGPoint(x: c.x + r * 0.1, y: c.y + r * 0.95),
+                       control: CGPoint(x: c.x + r * 0.42, y: c.y + r * 0.88))
+        return p
+    }
+}
+
+/// Soccer ball panel — circle off the bottom-right corner, center pentagon,
+/// spokes to the surrounding panels.
+struct SoccerPanelShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let c = CGPoint(x: rect.width * 1.0, y: rect.height * 1.0)
+        let r = rect.height * 1.05
+        p.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
+        let pent = r * 0.34
+        var verts: [CGPoint] = []
+        for i in 0..<5 {
+            let a = (CGFloat(i) * 72 - 90) * .pi / 180
+            verts.append(CGPoint(x: c.x + cos(a) * pent, y: c.y + sin(a) * pent))
+        }
+        p.move(to: verts[0])
+        for v in verts.dropFirst() { p.addLine(to: v) }
+        p.closeSubpath()
+        for v in verts {
+            let a = atan2(v.y - c.y, v.x - c.x)
+            p.move(to: v)
+            p.addLine(to: CGPoint(x: c.x + cos(a) * r * 0.78, y: c.y + sin(a) * r * 0.78))
+        }
+        return p
+    }
+}
+
+/// The sport texture layer for pick cards — Fixtured's idea in the brand's
+/// monochrome: faint line art, clipped by the card, no color wash.
+struct SportWatermark: View {
+    let league: String?
+    var body: some View {
+        switch Sport.from(league: league ?? "") {
+        case .mlb, .mlbHR:
+            ZStack {
+                BaseballSeamShape(stitched: false)
+                    .stroke(Color.white.opacity(0.045), style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
+                    .offset(x: -34)
+                BaseballSeamShape()
+                    .stroke(Color.white.opacity(0.085), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+            }
+        case .nba, .wnba:
+            BasketballSeamShape()
+                .stroke(Color.white.opacity(0.075), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+        case .worldCup, .epl:
+            SoccerPanelShape()
+                .stroke(Color.white.opacity(0.075), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+        default:
+            EmptyView()
+        }
+    }
+}
+
 struct ScoreboardPickCard: View {
     let pick: GaryPick
     var gameResult: String? = nil
