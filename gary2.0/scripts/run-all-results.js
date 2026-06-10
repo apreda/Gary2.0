@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { gradeSoccerGame } from '../src/services/soccerGrading.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
+import { generateRecap } from '../src/services/gameRecap.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 // FIFA service reads the API key at import — must load AFTER loadEnv.
@@ -533,6 +534,73 @@ async function factCheckGradedPick({ pick, league, gameDate, result, hs, vs, mat
 }
 
 /**
+ * Betting Recap
+ * After a game pick is graded, write a 2-4 sentence ESPN-style recap of the
+ * game from the betting perspective (rows land in game_recaps; the app reads
+ * them to tell last night's story). Same evidence pack as the fact check —
+ * fetchMLBStats is cached, so the second build is free. Game picks only —
+ * props never reach this path. Non-fatal by design: callers wrap it in
+ * try/catch so a recap failure can never break results grading.
+ */
+async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matchedGame }) {
+  const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
+
+  // Idempotency: skip matchups already recapped for this date (mirrors the
+  // pick_fact_checks dedup check above).
+  const { data: exist, error: dedupErr } = await supabase
+    .from('game_recaps')
+    .select('id')
+    .eq('game_date', gameDate)
+    .eq('league', league)
+    .eq('matchup', matchup)
+    .maybeSingle();
+  if (dedupErr) {
+    console.warn(`  ⚠️ Recap dedup failed for ${matchup}: ${dedupErr.message}`);
+    return;
+  }
+  if (exist) {
+    console.log(`  ⏩ Recap exists: ${league} ${matchup} (${gameDate})`);
+    return;
+  }
+
+  // Evidence: final score + (MLB) the per-game BDL player stats we already
+  // fetch for prop grading — pitcher lines, HRs, team hit totals.
+  let mlbStats = null;
+  if (league === 'MLB' && matchedGame?.id != null) {
+    mlbStats = await fetchMLBStats([matchedGame.id]);
+  }
+  const evidence = buildGameEvidence({
+    league,
+    homeTeam: pick.homeTeam,
+    awayTeam: pick.awayTeam,
+    homeScore: hs,
+    awayScore: vs,
+    mlbStats,
+  });
+
+  const recap = await generateRecap({ pick, result, evidence });
+  if (!recap) {
+    console.warn(`  ⚠️ Recap produced nothing for ${league} ${matchup}`);
+    return;
+  }
+
+  const { error: insertErr } = await supabase.from('game_recaps').insert({
+    game_date: gameDate,
+    league,
+    matchup,
+    pick_text: pick.pick,
+    result,
+    headline: recap.headline,
+    recap: recap.recap,
+  });
+  if (insertErr) {
+    console.error(`  ❌ RECAP INSERT FAILED [game_recaps] ${league} ${matchup} (${gameDate}): ${insertErr.message}`);
+  } else {
+    console.log(`  📰 Recapped ${league} ${matchup}: "${recap.headline}"`);
+  }
+}
+
+/**
  * Main Logic
  */
 async function processGenericGames(table, date, leagueFilter = null) {
@@ -717,6 +785,14 @@ async function processGenericGames(table, date, leagueFilter = null) {
             await factCheckGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
           } catch (e) {
             console.warn(`  ⚠️ Fact-check failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
+          }
+
+          // Betting recap of the game itself (game_recaps). Same re-grade /
+          // dedup semantics as the fact check. Never fatal to grading.
+          try {
+            await recapGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
+          } catch (e) {
+            console.warn(`  ⚠️ Recap failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
           }
         }
       }
