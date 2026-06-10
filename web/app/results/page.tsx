@@ -19,6 +19,26 @@ export const metadata: Metadata = {
 
 const fmtUnits = (u: number) => `${u >= 0 ? '+' : '-'}${Math.abs(u).toFixed(1)}u`;
 
+/* Gary's form — last-10 W/L pip strip, oldest-first so it reads toward today. */
+const PIP_COLOR: Record<string, string> = { won: '#3FB950', lost: '#E5484D', push: '#C9A227' };
+const PIP_LETTER: Record<string, string> = { won: 'W', lost: 'L', push: 'P' };
+
+function FormPips({ results }: { results: string[] }) {
+  return (
+    <div
+      className="mt-4 flex items-center gap-3"
+      aria-label={`Last 10: ${results.map(r => PIP_LETTER[r] ?? '?').join(' ')}`}
+    >
+      <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">Last 10</span>
+      <div className="flex gap-1.5" aria-hidden="true">
+        {results.map((r, i) => (
+          <span key={i} className="h-3 w-3 rounded-[3px]" style={{ background: PIP_COLOR[r] ?? '#555' }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default async function ResultsPage() {
   const [games, props] = await Promise.all([
     fetchAllGameResults().catch(() => null),
@@ -61,6 +81,14 @@ export default async function ResultsPage() {
           <p className="tnum mt-3 font-mono text-[12px] text-low">
             {allTime.pct}% · {fmtUnits(allTime.netUnits)} · {allTime.graded.toLocaleString()} graded
           </p>
+          {recent.length > 0 && (
+            <FormPips
+              results={recent
+                .slice(0, 10)
+                .map(r => (r.result ?? '').trim().toLowerCase())
+                .reverse()}
+            />
+          )}
         </div>
         <div className="grid grid-cols-3 gap-3 lg:col-span-6">
           <StatTile

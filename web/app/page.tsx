@@ -8,7 +8,7 @@ import { RecordTicker } from '@/components/RecordTicker';
 import { Eyebrow } from '@/components/Eyebrow';
 import { StitchRule, StatTile, GhostLink } from '@/components/Terminal';
 import { fetchTodayGamePicks, fetchTodayPropPicks, selectTopPick, selectTopProps } from '@/lib/gary/picks';
-import { fetchAllGameResults, computeRecord, currentStreak, sinceDate } from '@/lib/gary/results';
+import { fetchAllGameResults, computeRecord, currentStreak, sinceDate, effectiveOdds } from '@/lib/gary/results';
 import { todayEST, daysAgoEST } from '@/lib/gary/dates';
 
 export const revalidate = 600;
@@ -43,56 +43,102 @@ export default async function Home() {
 
   return (
     <main>
-      {/* ── 01 · Hero — the bear hosts ─────────────────────────────── */}
-      <section className="mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-14 md:pt-20 lg:grid-cols-12 lg:gap-6">
-        <div className="lg:col-span-7">
-          {allTime && (
-            <p className="rise font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">
-              <span className="tnum">{allTime.graded.toLocaleString()}</span> graded picks · public record
-            </p>
-          )}
-          <h1 className="rise rise-2 mt-5 font-display text-[clamp(3.4rem,9vw,6.5rem)] uppercase leading-[0.92] text-hi">
-            Every game.
-            <br />
-            Every day.
-            <br />
-            <span className="text-gold">On the record.</span>
-          </h1>
-          <p className="rise rise-3 mt-6 max-w-xl text-lg leading-relaxed text-mid">
-            Gary covers the full slate free — every pick with the reasoning behind it,
-            every result graded in public. Winners, his conviction board, lives in the app.
+      {/* ── 01 · Hero — the bear hosts, the data hangs on his wall ── */}
+      <section className="relative overflow-hidden">
+        {/* Ghost record numeral — the product as backdrop texture, flat */}
+        {allTime && (
+          <p
+            aria-hidden
+            className="tnum pointer-events-none absolute -right-12 top-6 hidden select-none font-mono text-[15rem] font-bold leading-none text-white/[0.04] lg:block"
+          >
+            {allTime.wins.toLocaleString()}–{allTime.losses.toLocaleString()}
           </p>
-          <div className="rise rise-4 mt-8 flex flex-wrap items-center gap-4">
-            <AppStoreButton surface="home_hero" />
-            <GhostLink href="/picks">See today&apos;s picks</GhostLink>
-          </div>
-          {l30 && allTime && (
-            <p className="rise rise-5 tnum mt-7 font-mono text-[12px] text-low">
-              LAST 30 DAYS {l30.wins}–{l30.losses} · ALL-TIME {allTime.wins}–{allTime.losses} ({allTime.pct}%)
-            </p>
-          )}
-        </div>
+        )}
 
-        <div className="relative hidden lg:col-span-5 lg:block">
-          <div className="rise rise-3 relative mx-auto w-[400px]">
-            <Image
-              src="/brand/gary-head.png"
-              alt="Gary the bear — gold coin mark"
-              width={400}
-              height={400}
-              preload
-            />
-            <Image
-              src="/coin2.png"
-              alt=""
-              aria-hidden
-              width={150}
-              height={150}
-              className="absolute -bottom-8 -left-10 -rotate-12"
-            />
+        <div className="relative mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-14 md:pt-20 lg:grid-cols-12 lg:gap-6">
+          <div className="lg:col-span-7">
+            <p className="rise font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">
+              {gamePicks && gamePicks.length > 0 ? (
+                <><span className="tnum">{gamePicks.length}</span> picks on today&apos;s board · {todayEST()}</>
+              ) : allTime ? (
+                <><span className="tnum">{allTime.graded.toLocaleString()}</span> graded picks · public record</>
+              ) : (
+                <>The free sports desk</>
+              )}
+            </p>
+            <h1 className="rise rise-2 mt-5 font-display text-[clamp(3.4rem,9.5vw,7.5rem)] uppercase leading-[0.9] text-hi">
+              Every game.
+              <br />
+              Every day.
+              <br />
+              <span className="text-gold">On the record.</span>
+            </h1>
+            <p className="rise rise-3 mt-6 max-w-xl text-lg leading-relaxed text-mid">
+              Gary covers the full slate free — every pick with the reasoning behind it,
+              every result graded in public. Winners, his conviction board, lives in the app.
+            </p>
+            <div className="rise rise-4 mt-8 flex flex-wrap items-center gap-4">
+              <AppStoreButton surface="home_hero" />
+              <GhostLink href="/picks">See today&apos;s picks</GhostLink>
+            </div>
+            {l30 && allTime && (
+              <p className="rise rise-5 tnum mt-7 font-mono text-[12px] text-low">
+                LAST 30 DAYS {l30.wins}–{l30.losses} · ALL-TIME {allTime.wins}–{allTime.losses} ({allTime.pct}%)
+              </p>
+            )}
           </div>
-          <div className="mx-auto mt-10 w-[400px]">
-            <StitchRule />
+
+          {/* The desk composition: bear, coin, and real artifacts pinned around him */}
+          <div className="relative hidden lg:col-span-5 lg:block">
+            <div className="rise rise-3 relative mx-auto w-[400px]">
+              <Image
+                src="/brand/gary-head.png"
+                alt="Gary the bear — gold coin mark"
+                width={400}
+                height={400}
+                preload
+              />
+              <Image
+                src="/coin2.png"
+                alt=""
+                aria-hidden
+                width={140}
+                height={140}
+                className="absolute -bottom-7 -left-9 -rotate-12"
+              />
+
+              {/* Today's actual top pick, pinned to the frame */}
+              {topPick && (
+                <div className="rise rise-4 absolute -left-16 top-3 w-[220px] rounded-chip border border-gold/60 bg-chip px-3.5 py-2.5 shadow-card">
+                  <p className="font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-low">
+                    Today&apos;s free pick · {(topPick.league ?? '').toUpperCase()}
+                  </p>
+                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                    <span className="truncate font-mono text-[13px] font-bold text-gold">
+                      {(topPick.pick ?? '').replace(/[+-]\d{3,}\s*$/, '').trim()}
+                    </span>
+                    {(topPick.odds ?? effectiveOdds(topPick.pick)) != null && (
+                      <span className="tnum shrink-0 font-mono text-[12px] font-bold text-low">
+                        {String(topPick.odds ?? effectiveOdds(topPick.pick))}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* The current streak, owned either way */}
+              {streak && (
+                <div className="rise rise-5 absolute -right-10 bottom-10 rounded-chip border border-line bg-card px-3.5 py-2.5 shadow-card">
+                  <p className="font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-low">Streak</p>
+                  <p className={`tnum mt-0.5 font-mono text-[20px] font-bold leading-none ${streak.kind === 'won' ? 'text-win' : 'text-loss'}`}>
+                    {streak.kind === 'won' ? 'W' : 'L'}{streak.count}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="mx-auto mt-10 w-[400px]">
+              <StitchRule />
+            </div>
           </div>
         </div>
       </section>
