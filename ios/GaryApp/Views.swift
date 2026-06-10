@@ -1936,23 +1936,32 @@ struct HomeView: View {
 
     /// Morning: yesterday graded leads — scorecard, marquee, the Wire,
     /// prop box, cashes, receipts, then tonight's board.
+    /// The rotating front-page banner: the real marquee story leads, the
+    /// rest of the night's headlines follow (sample rows until game_recaps).
+    private var headlineStories: [HomeMarqueeHero.Story] {
+        var out: [HomeMarqueeHero.Story] = []
+        if let m = marquee { out.append(m) }
+        out.append(contentsOf: HomeHeadlinesFeed.sampleRows.compactMap { r in
+            HomeMarqueeHero.Story(league: r.league, headline: r.headline, sub: "",
+                                  receiptLead: "", receiptPick: "",
+                                  verdict: r.tag ?? "", cashed: r.tagWin)
+        })
+        return out
+    }
+
     @ViewBuilder private var morningSections: some View {
+        // The headlines lead the page — rotating marquee cards, front-page style.
+        if !headlineStories.isEmpty {
+            HomeHeadlinesCarousel(stories: headlineStories) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        }
         if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
             scorecard
                 .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
-        }
-        // The headlines feed — Gary's form is retired (user verdict, Jun 10);
-        // sample rows until game_recaps powers it for real.
-        HomeHeadlinesFeed(rows: HomeHeadlinesFeed.sampleRows)
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
-        if let story = marquee {
-            HomeMarqueeHero(story: story) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+                .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         }
         if !wireItems.isEmpty || !pulseRows.isEmpty {
             HomeWireSection(items: wireItems, sub: "Around the league, bettor's view",
@@ -1999,7 +2008,7 @@ struct HomeView: View {
         Group {
             // Three reads on tonight — ALWAYS rendered; each tab carries its
             // own honest empty note until picks post. (Wire = Morning only.)
-            HomeSlateSection(header: "Slate", sub: "By start time", tabs: [
+            HomeSlateSection(header: "Slate", sub: "", tabs: [
                 .init(label: "BOARD", rows: pregameSlateRows,
                       empty: "Tonight's board fills in as picks post."),
                 .init(label: "SPREADS", rows: spreadSlateRows,
@@ -2951,13 +2960,16 @@ struct HomeMarqueeHero: View {
         var claims: [FactClaim] = []
     }
     let story: Story
+    /// Carousel cards disable the flip (fixed-height pages); tap falls
+    /// through to onTap instead.
+    var flipEnabled: Bool = true
     let onTap: () -> Void
 
     @State private var flipped = false
     @State private var frontH: CGFloat = 0
 
     private var tint: Color { Sport.from(league: story.league).accentColor }
-    private var canFlip: Bool { story.take != nil }
+    private var canFlip: Bool { flipEnabled && story.take != nil }
     private var verdictColor: Color { story.cashed ? Color(hex: "#3FB950") : Color(hex: "#E5484D") }
 
     var body: some View {
@@ -3016,8 +3028,10 @@ struct HomeMarqueeHero: View {
             }
             .padding(14)
 
-            receiptStub(lead: story.receiptLead, pick: story.receiptPick,
-                        trailing: story.verdict, hint: nil)
+            if !story.receiptPick.isEmpty || !story.verdict.isEmpty {
+                receiptStub(lead: story.receiptLead, pick: story.receiptPick,
+                            trailing: story.verdict, hint: nil)
+            }
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#161618")))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -3509,6 +3523,33 @@ struct HomeCompactStrip: View {
 /// editorial headlines recapping the night (Gary's cashes, the market story,
 /// the league's drama). Rows: colored league word + headline + one optional
 /// verdict tag. No sublines — words earn their pixels.
+/// The Morning hero: headline CARDS in the marquee's own language, rotating
+/// like a front-page banner (auto-advance every 6s; swipe anytime).
+struct HomeHeadlinesCarousel: View {
+    let stories: [HomeMarqueeHero.Story]
+    let onTap: () -> Void
+    @State private var page = 0
+    private let ticker = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        TabView(selection: $page) {
+            ForEach(Array(stories.enumerated()), id: \.offset) { i, s in
+                VStack(spacing: 0) {
+                    HomeMarqueeHero(story: s, flipEnabled: false, onTap: onTap)
+                    Spacer(minLength: 0)
+                }
+                .tag(i)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .frame(height: 230)
+        .onReceive(ticker) { _ in
+            guard stories.count > 1 else { return }
+            withAnimation(.easeInOut(duration: 0.45)) { page = (page + 1) % stories.count }
+        }
+    }
+}
+
 struct HomeHeadlinesFeed: View {
     struct Row: Identifiable {
         let id: Int
@@ -3790,11 +3831,7 @@ struct HomeWorldCupModule: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(
-                eyebrow: "The World Cup",
-                sub: countdownDays != nil
-                    ? "Kicks off in \(countdownDays!) day\(countdownDays == 1 ? "" : "s") · June 11"
-                    : "Today's matches, a bettor's view")
+            HubSectionHeader(eyebrow: "The World Cup", sub: "")
             VStack(spacing: 0) {
                 if let h = headline {
                     Button(action: onOpenHub) { headlineRow(h) }.buttonStyle(.plain)
@@ -3840,9 +3877,10 @@ struct HomeWorldCupModule: View {
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
             if !compact, let sub = item.subline, !sub.isEmpty {
-                Text(sub.uppercased())
-                    .font(GaryFonts.mono(9.5)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.38))
+                Text(sub)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
