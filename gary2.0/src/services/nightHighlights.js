@@ -7,6 +7,10 @@
  *   - 'hr'        every player who homered            → "2 HR · 5 RBI"
  *   - 'multi_hit' players with 2+ hits (top ~10)      → "3-for-4"
  *   - 'k_show'    pitchers with 7+ strikeouts         → "9 K over 6 IP"
+ *   - 'gem'       dominant starts: 7+ IP with <=1 ER,
+ *                 or 10+ K of any length              → "8 IP, 0 ER, 9 K"
+ *   - 'rbi_night' batters with 3+ RBI                 → "4 RBI · 2-for-4"
+ *   - 'sb_night'  batters with 2+ stolen bases        → "3 SB · 2-for-5"
  *
  * gary_result ('won'/'lost') is set ONLY when Gary had a graded prop on that
  * player that night — joined from prop_results by fuzzy player name + date,
@@ -23,6 +27,11 @@
 const BDL_BASE = 'https://api.balldontlie.io';
 const MULTI_HIT_CAP = 10;
 const K_SHOW_MIN = 7;
+const GEM_MIN_OUTS = 21;   // 7+ IP ...
+const GEM_MAX_ER = 1;      // ... with <=1 ER, OR
+const GEM_MIN_K = 10;      // ... 10+ K at any length
+const RBI_NIGHT_MIN = 3;
+const SB_NIGHT_MIN = 2;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -150,7 +159,7 @@ function aggregateByPlayer(statRows) {
     if (!key) continue;
     let agg = byPlayer.get(key);
     if (!agg) {
-      agg = { name: fullName, team: s.team_name || null, hits: 0, atBats: 0, hr: 0, rbi: 0, pK: 0, outs: 0, batted: false, pitched: false };
+      agg = { name: fullName, team: s.team_name || null, hits: 0, atBats: 0, hr: 0, rbi: 0, sb: 0, pK: 0, outs: 0, er: 0, batted: false, pitched: false, started: false };
       byPlayer.set(key, agg);
     }
     if (s.at_bats != null) {
@@ -159,11 +168,14 @@ function aggregateByPlayer(statRows) {
       agg.atBats += s.at_bats || 0;
       agg.hr += s.hr || 0;
       agg.rbi += s.rbi || 0;
+      agg.sb += s.stolen_bases || 0;
     }
     if (s.ip != null) {
       agg.pitched = true;
       agg.pK += s.p_k || 0;
       agg.outs += ipToOuts(s.ip);
+      agg.er += s.er || 0;
+      if (s.games_started >= 1) agg.started = true;
     }
   }
   return byPlayer;
@@ -196,6 +208,9 @@ const CATEGORY_PROP_TYPES = {
   hr: ['home_run', 'homer'],
   multi_hit: ['hits', 'total_bases', 'hits_runs_rbis'],
   k_show: ['strikeout', 'pitcher'],
+  gem: ['strikeout', 'pitcher', 'earned_run', 'outs'],
+  rbi_night: ['rbi', 'hits_runs_rbis'],
+  sb_night: ['stolen_base', 'steal'],
 };
 
 /**
@@ -260,6 +275,28 @@ export function buildHighlightRows({ date, statRows, propRows }) {
     }
   }
 
+  // 'gem' — dominant starts: 7+ IP with <=1 ER, or a 10+ K night of any length
+  for (const [normName, agg] of byPlayer) {
+    if (!agg.pitched || !agg.started) continue;
+    if ((agg.outs >= GEM_MIN_OUTS && agg.er <= GEM_MAX_ER) || agg.pK >= GEM_MIN_K) {
+      push('gem', agg, normName, `${outsToIpString(agg.outs)} IP, ${agg.er} ER, ${agg.pK} K`);
+    }
+  }
+
+  // 'rbi_night' — batters with 3+ RBI
+  for (const [normName, agg] of byPlayer) {
+    if (agg.batted && agg.rbi >= RBI_NIGHT_MIN) {
+      push('rbi_night', agg, normName, `${agg.rbi} RBI · ${agg.hits}-for-${agg.atBats}`);
+    }
+  }
+
+  // 'sb_night' — batters with 2+ stolen bases
+  for (const [normName, agg] of byPlayer) {
+    if (agg.batted && agg.sb >= SB_NIGHT_MIN) {
+      push('sb_night', agg, normName, `${agg.sb} SB · ${agg.hits}-for-${agg.atBats}`);
+    }
+  }
+
   return rows;
 }
 
@@ -288,7 +325,7 @@ export async function runNightHighlights({ supabase, bdlApiKey, date, dryRun = f
   const usable = finals.length ? finals : games;
   if (!usable.length) {
     console.log('  No MLB games — nothing to highlight.');
-    return { rows: [], counts: { hr: 0, multi_hit: 0, k_show: 0, with_gary_result: 0 } };
+    return { rows: [], counts: { hr: 0, multi_hit: 0, k_show: 0, gem: 0, rbi_night: 0, sb_night: 0, with_gary_result: 0 } };
   }
 
   const statRows = await fetchMlbStatsForGames(usable.map((g) => g.id), bdlApiKey);
@@ -309,6 +346,9 @@ export async function runNightHighlights({ supabase, bdlApiKey, date, dryRun = f
     hr: rows.filter((r) => r.category === 'hr').length,
     multi_hit: rows.filter((r) => r.category === 'multi_hit').length,
     k_show: rows.filter((r) => r.category === 'k_show').length,
+    gem: rows.filter((r) => r.category === 'gem').length,
+    rbi_night: rows.filter((r) => r.category === 'rbi_night').length,
+    sb_night: rows.filter((r) => r.category === 'sb_night').length,
     with_gary_result: rows.filter((r) => r.gary_result != null).length,
   };
 
@@ -319,6 +359,6 @@ export async function runNightHighlights({ supabase, bdlApiKey, date, dryRun = f
     if (error) throw new Error(`night_highlights upsert failed: ${error.message}`);
   }
 
-  console.log(`  🌙 ${rows.length} highlights — hr=${counts.hr} multi_hit=${counts.multi_hit} k_show=${counts.k_show} (gary_result set on ${counts.with_gary_result})${dryRun ? ' [not written]' : ''}`);
+  console.log(`  🌙 ${rows.length} highlights — hr=${counts.hr} multi_hit=${counts.multi_hit} k_show=${counts.k_show} gem=${counts.gem} rbi_night=${counts.rbi_night} sb_night=${counts.sb_night} (gary_result set on ${counts.with_gary_result})${dryRun ? ' [not written]' : ''}`);
   return { rows, counts };
 }

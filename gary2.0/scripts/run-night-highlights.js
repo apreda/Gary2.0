@@ -3,7 +3,8 @@
  * Night Highlights — manual / backfill runner
  *
  * League-wide "what cashed last night" from BDL box scores: every HR, the top
- * multi-hit games, and 7+ K pitching shows — NOT limited to Gary's picks.
+ * multi-hit games, 7+ K pitching shows, dominant starts (gems), 3+ RBI nights,
+ * and 2+ SB nights — NOT limited to Gary's picks.
  * gary_result is set only when Gary had a graded prop on that player that
  * night (prop_results join). $0 — data fetches only, no LLM.
  *
@@ -72,7 +73,7 @@ async function main() {
 
   console.log(`\n════════════════════════════════════════`);
   console.log(`NIGHT HIGHLIGHTS FOR ${targetDate}${dryRun ? ' (DRY RUN)' : ''}`);
-  console.log(`hr=${counts.hr}  multi_hit=${counts.multi_hit}  k_show=${counts.k_show}  gary_result set=${counts.with_gary_result}`);
+  console.log(`hr=${counts.hr}  multi_hit=${counts.multi_hit}  k_show=${counts.k_show}  gem=${counts.gem}  rbi_night=${counts.rbi_night}  sb_night=${counts.sb_night}  gary_result set=${counts.with_gary_result}`);
   console.log(`════════════════════════════════════════`);
   for (const r of rows) {
     console.log(`  [${r.category}] ${r.player_name} (${r.team || '?'}) — ${r.detail}${r.gary_result ? ` [Gary ${r.gary_result.toUpperCase()}]` : ''}`);
