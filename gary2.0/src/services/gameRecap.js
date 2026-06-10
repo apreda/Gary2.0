@@ -29,6 +29,9 @@ const MAX_HEADLINE_CHARS = 90;
 const MAX_RECAP_CHARS = 700;
 const MAX_BULLET_CHARS = 45;
 const MAX_BULLETS = 4;
+// A stalled connection to the Gemini API otherwise hangs the whole nightly
+// run — observed during the June 10 backfill (calls hung 8+ minutes).
+const REQUEST_TIMEOUT_MS = 90_000;
 
 let genAI = null;
 function getClient() {
@@ -168,9 +171,17 @@ export async function generateRecap({ pick, result, evidence }) {
       temperature: 0.3,
       responseMimeType: 'application/json',
     },
-  });
+  }, { timeout: REQUEST_TIMEOUT_MS });
 
-  const response = await model.generateContent(buildPrompt({ pick, result, evidence }));
+  const prompt = buildPrompt({ pick, result, evidence });
+  let response;
+  try {
+    response = await model.generateContent(prompt);
+  } catch (e) {
+    // One retry — covers the stalled-connection timeout above and transient 5xx.
+    console.warn(`    [GameRecap] Flash call failed (${e.message}) — retrying once`);
+    response = await model.generateContent(prompt);
+  }
   const parsed = parseRecapResponse(response.response.text());
   if (!parsed) return null;
 

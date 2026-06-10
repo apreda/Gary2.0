@@ -82,7 +82,8 @@ async function fetchMlbStatsForGame(gameId) {
   try {
     const res = await fetch(
       `https://api.balldontlie.io/mlb/v1/stats?game_ids[]=${gameId}&per_page=100`,
-      { headers: { 'Authorization': BDL_API_KEY } }
+      // The abort signal stops a stalled connection from hanging the backfill.
+      { headers: { 'Authorization': BDL_API_KEY }, signal: AbortSignal.timeout(20_000) }
     );
     if (!res.ok) return null;
     const data = await res.json();
