@@ -48,6 +48,30 @@ function toNum(v) {
 }
 
 /**
+ * Line sanity guards — odds feeds occasionally emit junk snapshots (seen
+ * 2026-06-10: Red Sox @ Rays ml_home -20000 / ml_away +2000 / spread -4.5 on
+ * a 6.5 total). Null the junk instead of publishing it:
+ *   - |moneyline| > 2000 is junk; moneylines arrive as a pair from the same
+ *     snapshot, so one junk side nulls its partner too (a lone +2000 leg of a
+ *     -20000 pair is just as fake).
+ *   - MLB run lines live at ±1.5 — |spread| > 3.5 is junk. Other leagues'
+ *     spreads pass through untouched.
+ *   - Totals <= 0 are junk in every league.
+ */
+function sanitizeLines(league, { spread, ml_home, ml_away, total }) {
+  const mlJunk =
+    (ml_home !== null && Math.abs(ml_home) > 2000) ||
+    (ml_away !== null && Math.abs(ml_away) > 2000);
+  return {
+    spread:
+      league === 'MLB' && spread !== null && Math.abs(spread) > 3.5 ? null : spread,
+    ml_home: mlJunk ? null : ml_home,
+    ml_away: mlJunk ? null : ml_away,
+    total: total !== null && total <= 0 ? null : total,
+  };
+}
+
+/**
  * Fetch one league's games for the ET date and map them to daily_slate rows.
  * Returns [] when the league has no games (or matches haven't started — WC).
  */
@@ -81,10 +105,12 @@ async function buildLeagueRows(sport, etDateStr) {
         home_team: m.home_team.name,
         commence_time: m.datetime,
         venue: m.stadium?.name ?? null,
-        spread: toNum(consensus?.spread?.homeValue),
-        ml_home: toNum(consensus?.moneyline?.home),
-        ml_away: toNum(consensus?.moneyline?.away),
-        total: toNum(consensus?.total?.line),
+        ...sanitizeLines(sport.league, {
+          spread: toNum(consensus?.spread?.homeValue),
+          ml_home: toNum(consensus?.moneyline?.home),
+          ml_away: toNum(consensus?.moneyline?.away),
+          total: toNum(consensus?.total?.line),
+        }),
       };
     });
   }
@@ -116,10 +142,12 @@ async function buildLeagueRows(sport, etDateStr) {
       home_team: g.home_team,
       commence_time: g.commence_time,
       venue: null, // BDL games+odds shape carries no venue
-      spread: toNum(g.spread_home),
-      ml_home: toNum(g.moneyline_home),
-      ml_away: toNum(g.moneyline_away),
-      total: toNum(g.total),
+      ...sanitizeLines(sport.league, {
+        spread: toNum(g.spread_home),
+        ml_home: toNum(g.moneyline_home),
+        ml_away: toNum(g.moneyline_away),
+        total: toNum(g.total),
+      }),
     });
   }
   return rows;
