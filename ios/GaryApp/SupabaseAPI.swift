@@ -479,6 +479,20 @@ enum SupabaseAPI {
         return rows
     }
 
+    /// The full day's slate — every game + opening lines (daily_slate,
+    /// written at the 5am plan step). The board exists before picks do.
+    static func fetchDailySlate(date: String) async -> [DailySlateRow] {
+        let url = buildURL(table: "daily_slate", query: [
+            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,venue,spread,ml_home,ml_away,total"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "order", value: "commence_time.asc")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([DailySlateRow].self, from: data) else { return [] }
+        return rows
+    }
+
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence
     /// story per settled game Gary picked — the story player's slides.
     static func fetchGameRecaps(date: String) async -> [GameRecapRow] {

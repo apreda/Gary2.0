@@ -168,6 +168,19 @@ struct PlayerInsightPack: Decodable {
     let props: [PropLine]?
 }
 
+// MARK: - Daily Slate (every game + opening lines, from the 5am snapshot)
+struct DailySlateRow: Decodable {
+    let league: String?
+    let away_team: String?
+    let home_team: String?
+    let commence_time: String?
+    let venue: String?
+    let spread: Double?
+    let ml_home: Double?
+    let ml_away: Double?
+    let total: Double?
+}
+
 // MARK: - Game Recap (the night's stories, betting perspective — game_recaps)
 struct GameRecapRow: Decodable {
     let game_date: String?

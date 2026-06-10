@@ -1575,6 +1575,9 @@ struct HomeView: View {
     /// The settled night's combined record (games + props) — the scorecard's
     /// ledger, same set as net + best cash.
     @State private var lastNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
+    /// The full day's games + opening lines (daily_slate) — the slate works
+    /// from the morning; Gary's picks overlay as they post.
+    @State private var slateGames: [DailySlateRow] = []
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
@@ -1838,6 +1841,7 @@ struct HomeView: View {
                     // The night's stories for the player (graded date = the
                     // same night the marquee covers).
                     nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
+                    slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
@@ -2388,16 +2392,46 @@ struct HomeView: View {
         return (best.0, best.1.pick ?? "", HomeLiveVerdict.evaluate(pick: best.1, live: best.0))
     }
 
+    /// Gary's pick for a slate game, once posted — matched by team names.
+    private func pickFor(slate g: DailySlateRow) -> GaryPick? {
+        let away = Self.shortTeam(g.away_team).lowercased()
+        let home = Self.shortTeam(g.home_team).lowercased()
+        guard !away.isEmpty, !home.isEmpty else { return nil }
+        return todayPicks.first {
+            ($0.awayTeam ?? "").lowercased().contains(away) && ($0.homeTeam ?? "").lowercased().contains(home)
+        }
+    }
+
+    private func slateRow(_ g: DailySlateRow, id: String, chip: String) -> HomeSlateSection.Row {
+        let sub = [Formatters.formatCommenceTime(g.commence_time), g.venue].compactMap { $0 }
+            .filter { !$0.isEmpty }.joined(separator: " · ").uppercased()
+        return HomeSlateSection.Row(
+            id: id,
+            title: "\(Self.shortTeam(g.away_team)) @ \(Self.shortTeam(g.home_team))",
+            sub: sub, tone: nil, chip: chip)
+    }
+
     private var pregameSlateRows: [HomeSlateSection.Row] {
-        let sorted = todayPicks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
-        return sorted.prefix(8).map { p in
-            let live = liveScoresNow.first {
-                abbrGameMatches($0.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
+        // The REAL board: every game from daily_slate, Gary's call overlaid
+        // when posted, the ML price until then.
+        guard !slateGames.isEmpty else {
+            let sorted = todayPicks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+            return sorted.prefix(8).map { p in
+                let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                    .joined(separator: " · ").uppercased()
+                return HomeSlateSection.Row(id: p.id, title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))", sub: sub, tone: nil, chip: p.pick ?? "")
             }
-            let title = live?.abbrGame ?? "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))"
-            let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
-                .joined(separator: " · ").uppercased()
-            return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: nil, chip: p.pick ?? "")
+        }
+        return slateGames.enumerated().map { i, g in
+            let chip: String
+            if let pick = pickFor(slate: g)?.pick, !pick.isEmpty {
+                chip = pick
+            } else if let mlh = g.ml_home {
+                chip = String(format: "%@ %+.0f", Self.shortTeam(g.home_team).uppercased(), mlh)
+            } else {
+                chip = "—"
+            }
+            return slateRow(g, id: "ds-\(i)", chip: chip)
         }
     }
 
@@ -2405,34 +2439,23 @@ struct HomeView: View {
     /// list shows both extremes (the monsters up top, the coin-flips at the
     /// bottom); the chip names the favorite at its number.
     private var spreadSlateRows: [HomeSlateSection.Row] {
-        let withSpread = todayPicks.filter { ($0.spread ?? 0) != 0 }
+        let withSpread = slateGames.filter { ($0.spread ?? 0) != 0 }
         let sorted = withSpread.sorted { abs($0.spread ?? 0) > abs($1.spread ?? 0) }
-        return sorted.prefix(8).map { p in
-            let s = p.spread ?? 0
-            // Pipeline convention: spread is the HOME line (home favored = negative).
-            let favored = s < 0 ? Self.shortTeam(p.homeTeam) : Self.shortTeam(p.awayTeam)
-            let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
-                .joined(separator: " · ").uppercased()
-            return HomeSlateSection.Row(
-                id: "sp-\(p.id)",
-                title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
-                sub: sub, tone: nil,
-                chip: String(format: "%@ %+.1f", favored.uppercased(), -abs(s)))
+        return sorted.enumerated().map { i, g in
+            let s = g.spread ?? 0   // HOME line: home favored = negative
+            let favored = s < 0 ? Self.shortTeam(g.home_team) : Self.shortTeam(g.away_team)
+            return slateRow(g, id: "sp-\(i)",
+                            chip: String(format: "%@ %+.1f", favored.uppercased(), -abs(s)))
         }
     }
 
     /// HOME DOGS — hosts at plus money tonight, biggest price first.
     private var homeDogSlateRows: [HomeSlateSection.Row] {
-        let dogs = todayPicks.filter { ($0.moneylineHome ?? 0) > 0 }
-        let sorted = dogs.sorted { ($0.moneylineHome ?? 0) > ($1.moneylineHome ?? 0) }
-        return sorted.prefix(8).map { p in
-            let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
-                .joined(separator: " · ").uppercased()
-            return HomeSlateSection.Row(
-                id: "hd-\(p.id)",
-                title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
-                sub: sub, tone: nil,
-                chip: "\(Self.shortTeam(p.homeTeam).uppercased()) +\(Int(p.moneylineHome ?? 0))")
+        let dogs = slateGames.filter { ($0.ml_home ?? 0) > 0 }
+        let sorted = dogs.sorted { ($0.ml_home ?? 0) > ($1.ml_home ?? 0) }
+        return sorted.enumerated().map { i, g in
+            slateRow(g, id: "hd-\(i)",
+                     chip: "\(Self.shortTeam(g.home_team).uppercased()) +\(Int(g.ml_home ?? 0))")
         }
     }
 
