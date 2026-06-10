@@ -1994,11 +1994,10 @@ struct HomeView: View {
         boardSection
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
-        if !pregameSlateRows.isEmpty {
-            // Three reads on tonight: the board, the spread extremes, and the
-            // home dogs — the "what can I bet today" half of the page's job.
-            // (The Wire lives on Morning only — once per Home, not per state.)
-            HomeSlateSection(header: "The slate", sub: "Tonight, by start time", tabs: [
+        Group {
+            // Three reads on tonight — ALWAYS rendered; each tab carries its
+            // own honest empty note until picks post. (Wire = Morning only.)
+            HomeSlateSection(header: "The slate", sub: "By start time", tabs: [
                 .init(label: "BOARD", rows: pregameSlateRows,
                       empty: "Tonight's board fills in as picks post."),
                 .init(label: "SPREADS", rows: spreadSlateRows,
@@ -2098,12 +2097,15 @@ struct HomeView: View {
     /// one tap away.
     private var tonightEdgesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Tonight's edges", sub: "From the Hub · graded tomorrow morning")
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
-            } label: {
-                VStack(spacing: 0) {
-                    ForEach(Array(tonightSignals.enumerated()), id: \.element.id) { i, s in
+            HubSectionHeader(eyebrow: "Edges", sub: "From the Hub · graded tomorrow morning")
+            VStack(spacing: 0) {
+                ForEach(Array(tonightSignals.enumerated()), id: \.element.id) { i, s in
+                    Button {
+                        // Land on this row's LANE in the Hub — there's more
+                        // than one heat check; the Hub breaks it down.
+                        HubFocusState.shared.focusLane = s.kind
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+                    } label: {
                         HStack(spacing: 10) {
                             Text(s.kind.chip)
                                 .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
@@ -2119,14 +2121,14 @@ struct HomeView: View {
                                 .foregroundStyle(.white.opacity(0.25))
                         }
                         .padding(.horizontal, 14).padding(.vertical, 10)
-                        if i < tonightSignals.count - 1 {
-                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
-                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if i < tonightSignals.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                     }
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .quantPanel()
             .padding(.horizontal, 16)
         }
@@ -2573,7 +2575,7 @@ struct HomeView: View {
 
     private var boardSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HubSectionHeader(eyebrow: "Tonight's Board", sub: "")
+            HubSectionHeader(eyebrow: "The board", sub: "")
 
             // The FREE PICK — the page's one true card.
             VStack(alignment: .leading, spacing: 6) {
@@ -3030,10 +3032,16 @@ struct HomeMarqueeHero: View {
                     .font(GaryFonts.display(26))
                     .foregroundStyle(.white.opacity(0.96))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(story.sub)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .padding(.top, 3)
+                // The sub earns its line: the fact-check tally (the flip
+                // tease) when graded claims exist — never a re-statement of
+                // the headline's own score.
+                if !story.claims.isEmpty {
+                    let right = story.claims.filter { $0.verdict == "right" }.count
+                    Text("Gary's read: \(right) of \(story.claims.count) claims held up")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.top, 3)
+                }
             }
             .padding(14)
 
@@ -14949,6 +14957,14 @@ extension Connection {
 }
 
 
+/// Deep-link target from Home's Edges rows into the Hub: the tapped lane
+/// lands here; PropsHubView consumes it on appear (same idiom as
+/// PicksFocusState for the Picks tab).
+final class HubFocusState: ObservableObject {
+    static let shared = HubFocusState()
+    var focusLane: SignalKind? = nil
+}
+
 struct PropsHubView: View {
     let league: String
     var onSelectGame: (String) -> Void = { _ in }
@@ -14987,6 +15003,11 @@ struct PropsHubView: View {
     /// rows. If the selected league came back empty but the other didn't,
     /// switch to the one with content.
     private func load() async {
+        // A Home Edges row may have aimed us at a lane.
+        if let lane = HubFocusState.shared.focusLane {
+            HubFocusState.shared.focusLane = nil
+            await MainActor.run { laneTab = lane }
+        }
         let date = SupabaseAPI.todayEST()
         var collected: [Signal] = []
         for lg in ["MLB", "NBA", "WC"] {
