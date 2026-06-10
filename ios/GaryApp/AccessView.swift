@@ -35,33 +35,9 @@ struct AccessView: View {
                 .scaleEffect(animateIn ? 1 : 0.8)
                 .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
                 
-                // Tech Chips
+                // Tech Chips ("NEW · Introducing" badge retired — stale for a
+                // shipped app)
                 VStack(spacing: 12) {
-                    // NEW Badge
-                    HStack(spacing: 8) {
-                        Text("NEW")
-                            .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(.black.opacity(0.85))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(GaryColors.gold)
-                            .clipShape(Capsule())
-
-                        Text("Introducing Gary AI")
-                            .font(GaryFonts.text(14, .semibold))
-                            .foregroundStyle(GaryColors.lightGold)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color(hex: "#0D0D0F"))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.5)
-                            )
-                    )
-                    
                     LazyVGrid(
                         columns: [
                             GridItem(.flexible(), spacing: 10),

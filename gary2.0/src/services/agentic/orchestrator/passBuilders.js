@@ -462,10 +462,13 @@ Final Decision: [your side at this ${lineLabel}]
 
 Gary's Take
 
-[3 paragraphs, plain text, ~250-400 words]
+[THE TAKE — the FIRST paragraph stands alone: 2-3 sentences in Gary's spoken voice, the way you'd text a sharp friend who asked "who you got?". Name your side, carry it with at most ONE stat, and let a little attitude through. This paragraph leads the card by itself, so it has to land on its own.]
+
+[Then the full case — 2-3 paragraphs, plain text, ~200-350 words.]
 
 This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support. Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.
-Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
+
+VOICE (HARD RULE): spoken, not written. NO scene-setting or announcer openers — never "the battle lines are drawn," "the stage is set," "X represents a compelling opportunity," "glaring mismatch," or any phrase you'd hear from a broadcast booth or read in a term sheet. If a sentence wouldn't survive being read out loud to a buddy at a bar, rewrite it. Short sentences beat long ones.
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season

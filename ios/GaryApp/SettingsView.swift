@@ -10,6 +10,9 @@ struct SettingsView: View {
     @State private var animateIn = false
     @State private var showSignOutConfirm = false
     @State private var showSignIn = false
+    /// Billfold/Home results format — units by default (no profit-claim
+    /// framing); on = the hypothetical $100/bet dollar view.
+    @AppStorage("showDollarResults") private var showDollarResults = false
 
     var body: some View {
         ZStack {
@@ -30,6 +33,11 @@ struct SettingsView: View {
                         .opacity(animateIn ? 1 : 0)
                         .offset(y: animateIn ? 0 : 20)
                         .animation(.easeOut(duration: 0.5).delay(0.15), value: animateIn)
+
+                    section("DISPLAY") { displayRows }
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 20)
+                        .animation(.easeOut(duration: 0.5).delay(0.18), value: animateIn)
 
                     section("ACCOUNT") { accountRows }
                         .opacity(animateIn ? 1 : 0)
@@ -130,6 +138,28 @@ struct SettingsView: View {
         NavigationLink(destination: ChangelogView()) {
             SettingsRowLabel(title: "What's New", icon: "sparkles", trailingIcon: "chevron.right")
         }
+    }
+
+    // MARK: - Display
+
+    private var displayRows: some View {
+        HStack(spacing: 14) {
+            SettingsRowIcon(icon: "dollarsign.circle.fill")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Results in dollars")
+                    .font(GaryFonts.text(15))
+                    .foregroundStyle(.white)
+                Text("Hypothetical $100/bet view. Off shows units.")
+                    .font(GaryFonts.text(12))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            Spacer()
+            Toggle("", isOn: $showDollarResults)
+                .labelsHidden()
+                .tint(GaryColors.gold)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     // MARK: - Account

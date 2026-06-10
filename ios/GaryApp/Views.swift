@@ -2381,11 +2381,14 @@ struct HomeView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         } label: {
             HStack(spacing: 0) {
+                // Window named once, leftmost — every cell in this row is
+                // last night's slate (feedback: unlabeled windows next to the
+                // form lane's L10 numbers read contradictory).
                 scoreCell(Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
-                          "RECORD", .white.opacity(0.92))
+                          "LAST NIGHT", .white.opacity(0.92))
                 if let net = lastNightNet {
                     Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                    scoreCell(String(format: "%+.1fu", net), "NET, FLAT STAKES",
+                    scoreCell(String(format: "%+.1fu", net), "NET · FLAT STAKES",
                               net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
                 }
                 if let best = bestCashOdds, best > 0 {
@@ -4421,7 +4424,7 @@ struct PremiumPicksView: View {
     // AWAITING SLATE, and league chips all retired: the body owns its states
     // and the shelves announce their own leagues.
     private var header: some View {
-        GaryPageHeader(title: "Bets", accent: GaryPageHeader<EmptyView>.dateLabel())
+        GaryPageHeader(title: "Winners", accent: GaryPageHeader<EmptyView>.dateLabel())
             .padding(.bottom, 8)
     }
 
@@ -7801,7 +7804,14 @@ struct BillfoldView: View {
     private var netUnits: Double { cachedNetUnits }
     private var netDollars: Double { cachedNetUnits * 100 }
 
+    /// Stake display: UNITS by default — dollar figures read as profit
+    /// claims in screenshots (App Store 5.3 / tout optics). The dollar view
+    /// is a user-opted hypothetical at $100/bet (Settings → Display).
+    @AppStorage("showDollarResults") private var showDollarResults = false
     private func signedDollars(_ value: Double) -> String {
+        guard showDollarResults else {
+            return String(format: "%+.1fu", value / 100)
+        }
         let rounded = Int(abs(value).rounded())
         return value >= 0 ? "+$\(rounded)" : "-$\(rounded)"
     }
@@ -8209,7 +8219,7 @@ struct BillfoldView: View {
 
     private var balanceBlock: some View {
         VStack(spacing: 7) {
-            Text(selectedTab == 0 ? "NET BALANCE \u{00B7} PICKS" : "NET BALANCE \u{00B7} PROPS")
+            Text((showDollarResults ? "NET BALANCE" : "NET UNITS") + (selectedTab == 0 ? " \u{00B7} PICKS" : " \u{00B7} PROPS"))
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(1)
                 .foregroundStyle(brass.opacity(0.85))
@@ -8406,6 +8416,11 @@ struct BillfoldView: View {
             }
 
             chartTimeframeRow
+            Text("Flat-stake tracking \u{00B7} hypothetical, not investment results")
+                .font(GaryFonts.mono(8.5))
+                .foregroundStyle(.white.opacity(0.3))
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 2)
         }
         .padding(.horizontal, 16)
     }
@@ -8419,7 +8434,7 @@ struct BillfoldView: View {
                     .font(.system(size: 9, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(ink.opacity(0.55))
-                Text("$100/BET")
+                Text(showDollarResults ? "$100/BET \u{00B7} HYPOTHETICAL" : "FLAT STAKES \u{00B7} 1U/BET")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(ink.opacity(0.38))
@@ -10897,9 +10912,10 @@ struct ScoreboardPickCard: View {
                 teamRow(name: awayName, isPicked: !pickedHome)
                 teamRow(name: homeName, isPicked: pickedHome)
 
-                // Lean rail
+                // Conviction rail — tier word, not a percentage (uncles don't
+                // say 82%); the bar stays as the analog read.
                 HStack(spacing: 8) {
-                    Text("GARY'S LEAN")
+                    Text("CONVICTION")
                         .font(GaryFonts.mono(8.5, bold: true))
                         .tracking(1.2)
                         .foregroundStyle(.white.opacity(0.35))
@@ -10910,7 +10926,7 @@ struct ScoreboardPickCard: View {
                         }
                     }
                     .frame(height: 3)
-                    Text("\(Int(confidence * 100))%")
+                    Text(convictionTier(Double(confidence)))
                         .font(GaryFonts.mono(11, bold: true))
                         .foregroundStyle(accent)
                 }
@@ -11105,7 +11121,7 @@ struct PickCardBack: View {
                     .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if pick.confidence != nil {
-                    Text("GARY'S LEAN  \(Int(confidence * 100))%")
+                    Text(convictionTier(Double(confidence)))
                         .font(GaryFonts.mono(12, bold: true))
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -11131,11 +11147,24 @@ struct PickCardBack: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(pick.rationale ?? "No rationale available.")
-                        .font(.system(size: 14.5))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .lineSpacing(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // THE TAKE leads — the rationale's first paragraph is
+                    // Gary's short spoken read (pipeline voice contract,
+                    // June 2026); the full case follows as the receipts.
+                    let parts = splitTake(pick.rationale)
+                    if let take = parts.take {
+                        Text(take)
+                            .font(GaryFonts.text(16.5, .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineSpacing(3.5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if let rest = parts.rest {
+                        Text(rest)
+                            .font(.system(size: 14.5))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                     if let odds = pick.sportsbook_odds, !odds.isEmpty {
                         Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
@@ -13256,6 +13285,33 @@ func liveSlotText(_ ls: LiveScore, label: String) -> String {
     if let a = ls.away_score, let h = ls.home_score { bits.append("\(a)–\(h)") }
     if label == "LIVE", let det = ls.detail, !det.isEmpty, det != "LIVE" { bits.append(det) }
     return bits.joined(separator: " · ")
+}
+
+/// Conviction tiers — Gary's vocabulary, not calculator language ("82%" is
+/// fake precision and self-inflicted accountability). Bands set from the real
+/// Apr–Jun 2026 confidence distribution so the tiers actually spread:
+/// 27% SPRINKLE · 48% LEAN · 25% HAMMER.
+func convictionTier(_ confidence: Double) -> String {
+    confidence >= 0.80 ? "HAMMER" : confidence >= 0.70 ? "LEAN" : "SPRINKLE"
+}
+
+/// Splits a rationale into (take, rest). The pipeline's June 2026 voice
+/// contract makes the first paragraph THE TAKE — Gary's short spoken read —
+/// so it can lead the card back at quote weight. Stored rationales open with
+/// a literal "Gary's Take" heading (the JSON template pastes it) — strip it.
+/// Anything that doesn't split cleanly renders whole as `rest`.
+func splitTake(_ rationale: String?) -> (take: String?, rest: String?) {
+    guard var r = rationale?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty else {
+        return (nil, "No rationale available.")
+    }
+    if r.lowercased().hasPrefix("gary's take") {
+        r = String(r.dropFirst("gary's take".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard let cut = r.range(of: "\n\n") else { return (nil, r) }
+    let first = String(r[..<cut.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+    let rest = String(r[cut.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !first.isEmpty, first.count <= 340, !rest.isEmpty else { return (nil, r) }
+    return (first, rest)
 }
 
 func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
