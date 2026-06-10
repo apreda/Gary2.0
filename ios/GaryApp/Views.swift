@@ -2158,7 +2158,9 @@ struct HomeView: View {
     private var streaksHeadline: String? {
         guard !homeStreaks.isEmpty else { return nil }
         var bits: [String] = []
-        if let t = homeStreaks.filter({ $0.subject_type == "team" })
+        // W/L kinds only — team rows also carry over/under runs, and an
+        // 8-game UNDER must never print as "W8" (StreakBoard's TEAMS split).
+        if let t = homeStreaks.filter({ $0.subject_type == "team" && ["win", "loss"].contains($0.kind ?? "") })
             .max(by: { ($0.length ?? 0) < ($1.length ?? 0) }) {
             bits.append("\(Self.shortTeam(t.subject)) \(t.kind == "loss" ? "L" : "W")\(t.length ?? 0)")
         }
@@ -2628,7 +2630,7 @@ struct HomeView: View {
             }
             let rows = sorted.prefix(10).map { h in
                 HomePropBoxSection.Row(
-                    player: Self.shortTeam(h.player_name).uppercased(),
+                    player: NightBoard.shortPlayer(h.player_name).uppercased(),
                     line: Self.shortTeam(h.team).uppercased(),
                     actual: h.detail ?? "",
                     state: h.gary_result,
@@ -2662,7 +2664,7 @@ struct HomeView: View {
             let unit = Self.propUnit(p.prop_type)
             let dir = (p.bet ?? "").lowercased().hasPrefix("u") ? "U" : "O"
             return HomePropBoxSection.Row(
-                player: shortTeam(p.player_name).uppercased(),
+                player: NightBoard.shortPlayer(p.player_name).uppercased(),
                 line: "\(dir) \(Self.trimNum(p.line_value?.value ?? "—")) \(unit)",
                 actual: "\(Self.trimNum(p.actual_value?.value ?? "—")) \(unit)",
                 state: p.result
@@ -15440,7 +15442,6 @@ extension Connection {
 struct NightBoard: View {
     let rows: [NightHighlightRow]
     @State private var tab = 0
-    @State private var query = ""
 
     static let cats: [(key: String, label: String, noun: String)] = [
         ("hr", "HR", "homered"),
@@ -15467,14 +15468,21 @@ struct NightBoard: View {
         }
     }
 
-    private var visible: [NightHighlightRow] {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        if !q.isEmpty {
-            return ordered(rows.filter {
-                ($0.player_name ?? "").lowercased().contains(q) ||
-                ($0.team ?? "").lowercased().contains(q)
-            })
+    /// Player names get their own shortener — the team one takes the last
+    /// word, which turns "Bobby Witt Jr." into "JR.".
+    static func shortPlayer(_ name: String?) -> String {
+        let suffixes: Set<String> = ["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"]
+        let parts = (name ?? "").split(separator: " ").map(String.init)
+        guard let last = parts.last else { return "" }
+        if suffixes.contains(last.lowercased()), parts.count >= 2 {
+            return parts.suffix(2).joined(separator: " ")
         }
+        return last
+    }
+
+    private var visible: [NightHighlightRow] {
+        // Page-level search covers the board now (one search per page);
+        // the board itself just tabs its categories.
         guard !present.isEmpty else { return [] }
         let key = present[min(tab, present.count - 1)].key
         return ordered(rows.filter { $0.category == key })
@@ -15482,18 +15490,17 @@ struct NightBoard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            searchField
-            if query.isEmpty && present.count > 1 { tabStrip }
+            if present.count > 1 { tabStrip }
             VStack(spacing: 0) {
                 if visible.isEmpty {
-                    Text("No bats match \"\(query)\" from last night.")
+                    Text("Nothing on the board from last night.")
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.4))
                         .padding(.horizontal, 14).padding(.vertical, 16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 ForEach(Array(visible.enumerated()), id: \.offset) { i, r in
-                    boardRow(r, showCategory: !query.isEmpty)
+                    boardRow(r, showCategory: false)
                     if i < visible.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                     }
@@ -15501,34 +15508,6 @@ struct NightBoard: View {
             }
             .quantPanel()
         }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.35))
-            TextField("Search a player or team", text: $query)
-                .font(GaryFonts.mono(11.5))
-                .foregroundStyle(.white.opacity(0.9))
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-            if !query.isEmpty {
-                Button { query = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.35))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(hex: "#131110"))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.07), lineWidth: 1))
-        )
     }
 
     private var tabStrip: some View {
@@ -15554,7 +15533,7 @@ struct NightBoard: View {
     private func boardRow(_ r: NightHighlightRow, showCategory: Bool) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(HomeView.shortTeam(r.player_name).uppercased())
+                Text(Self.shortPlayer(r.player_name).uppercased())
                     .font(GaryFonts.mono(12, bold: true))
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1).minimumScaleFactor(0.7)
@@ -15577,8 +15556,8 @@ struct NightBoard: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
             Group {
                 switch r.gary_result {
-                case "won":  Text("✓").foregroundStyle(Color(hex: "#3FB950"))
-                case "lost": Text("✗").foregroundStyle(Color(hex: "#E5484D"))
+                case "won":  Text("✓").foregroundStyle(GaryColors.win)
+                case "lost": Text("✗").foregroundStyle(GaryColors.loss)
                 default:     Text("–").foregroundStyle(.white.opacity(0.35))
                 }
             }
@@ -15625,20 +15604,26 @@ struct StreakBoard: View {
         return out
     }
 
-    private var current: Group { groups[min(tab, groups.count - 1)] }
+    /// nil when no row matches any group (e.g. a future pipeline kind) —
+    /// indexing groups[-1] here used to be a latent crash.
+    private var current: Group? {
+        groups.isEmpty ? nil : groups[min(tab, groups.count - 1)]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if groups.count > 1 { tabStrip }
-            VStack(spacing: 0) {
-                ForEach(Array(current.rows.prefix(10).enumerated()), id: \.offset) { i, r in
-                    streakRow(r)
-                    if i < min(current.rows.count, 10) - 1 {
-                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+            if let current {
+                if groups.count > 1 { tabStrip }
+                VStack(spacing: 0) {
+                    ForEach(Array(current.rows.prefix(10).enumerated()), id: \.offset) { i, r in
+                        streakRow(r)
+                        if i < min(current.rows.count, 10) - 1 {
+                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                        }
                     }
                 }
+                .quantPanel()
             }
-            .quantPanel()
         }
     }
 
@@ -15665,13 +15650,13 @@ struct StreakBoard: View {
     private func badge(_ r: StreakRow) -> (text: String, color: Color) {
         let n = r.length ?? 0
         switch r.kind {
-        case "win":     return ("W\(n)", Color(hex: "#3FB950"))
-        case "loss":    return ("L\(n)", Color(hex: "#E5484D"))
+        case "win":     return ("W\(n)", GaryColors.win)
+        case "loss":    return ("L\(n)", GaryColors.loss)
         case "hit":     return ("\(n) GM", GaryColors.gold)
         case "hr":      return ("HR ×\(n)", GaryColors.gold)
-        case "hitless": return ("0-\(n)", Color(hex: "#E5484D"))
-        case "over":    return ("O ×\(n)", Color(hex: "#3FB950"))
-        case "under":   return ("U ×\(n)", Color(hex: "#E5484D"))
+        case "hitless": return ("0-\(n)", GaryColors.loss)
+        case "over":    return ("O ×\(n)", GaryColors.win)
+        case "under":   return ("U ×\(n)", GaryColors.loss)
         default:        return ("\(n)", .white.opacity(0.6))
         }
     }
@@ -15845,7 +15830,10 @@ struct PropsHubView: View {
             streakRows = liveStreaks
             nightRows = night
             ydaySignals = yday
-            if !collected.isEmpty { fetched = collected }
+            // Keep last-good data only when the fetch ERRORED. A successful
+            // zero-row day (post-3am rollover, edges not posted yet) must
+            // clear the board, or yesterday's edges render as tonight's.
+            if !collected.isEmpty || !anyError { fetched = collected }
             // Land on the highest-priority league with edges tonight (a
             // Finals night opens on NBA even with a full MLB slate posted) —
             // but never stomp a league the user picked that still has rows.
@@ -15853,6 +15841,9 @@ struct PropsHubView: View {
                let top = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
                 sel = top
             }
+            // A deep link that arrived while we couldn't render is still
+            // pending — consume it now that the board exists.
+            consumeFocus()
         }
     }
 
@@ -15869,9 +15860,16 @@ struct PropsHubView: View {
     /// Route a deep-linked lane to its on-page home: player lanes select the
     /// Player Edges tab, condition lanes the Conditions tab, everything else
     /// scrolls to its section anchor (missing anchors no-op harmlessly).
+    /// Leaves the request pending while the page can't render anchors yet
+    /// (first load in flight / errored) — load() re-consumes on completion,
+    /// the same contract PicksCarouselView.consumeFocus keeps.
     private func consumeFocus() {
+        guard focus.focusLane != nil, didLoad, !fetchErrored else { return }
         guard let lane = focus.focusLane else { return }
         focus.focusLane = nil
+        // A stale search hides every anchor — the deep link wins over it.
+        searchText = ""
+        searchFocused = false
         switch lane {
         case .platoon, .hot, .ballpark, .cold, .starterForm:
             laneTab = lane
@@ -16053,12 +16051,7 @@ struct PropsHubView: View {
             }
             .padding(.top, 8)
             .padding(.bottom, 120)
-            .task {
-                if !didLoad {
-                    await load()
-                    await MainActor.run { consumeFocus() }
-                }
-            }
+            .task { if !didLoad { await load() } }   // load() consumes any pending deep link
         }
         // Let the search keyboard collapse: drag the list, return key, or clear.
         .scrollDismissesKeyboard(.immediately)
@@ -16681,6 +16674,12 @@ struct EdgeDetailSheet: View {
     let signal: Signal
     let onSelectGame: (String) -> Void
     @Environment(\.dismiss) private var dismiss
+    /// Board-level rows (WC title odds: "TO LIFT THE CUP") aren't a matchup —
+    /// VIEW GAME would land nowhere, so it only shows for real games.
+    private var isMatchup: Bool {
+        let g = signal.game.lowercased()
+        return g.contains("@") || g.contains(" vs ") || g.contains(" v ")
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -16690,6 +16689,13 @@ struct EdgeDetailSheet: View {
                         Text(signal.kind.chip).font(GaryFonts.mono(10, bold: true)).tracking(1.2).foregroundStyle(signal.kind.tint)
                     }
                     Spacer()
+                    // Graded edge (receipts path): the verdict, stamped.
+                    if let r = signal.result {
+                        Text(r.uppercased())
+                            .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                            .foregroundStyle(r == "hit" ? GaryColors.win : r == "push" ? GaryColors.gold : GaryColors.loss)
+                            .padding(.trailing, 6)
+                    }
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.3))
                     }.buttonStyle(.plain)
@@ -16699,7 +16705,7 @@ struct EdgeDetailSheet: View {
                 if !signal.value.isEmpty || !signal.spark.isEmpty {
                     HStack(alignment: .bottom, spacing: 16) {
                         if !signal.value.isEmpty {
-                            Text(signal.value).font(.system(size: 40, weight: .bold)).foregroundStyle(signal.tone.color)
+                            Text(signal.value).font(GaryFonts.mono(34, bold: true)).foregroundStyle(signal.tone.color)
                         }
                         if !signal.spark.isEmpty { MiniBarChart(values: signal.spark, line: signal.lineVal, tint: signal.kind.tint, height: 40) }
                     }
@@ -16707,13 +16713,20 @@ struct EdgeDetailSheet: View {
                 if !signal.detail.isEmpty {
                     Text(signal.detail).font(.system(size: 15)).foregroundStyle(.white.opacity(0.75)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
                 }
-                Button { dismiss(); onSelectGame(signal.game) } label: {
-                    HStack(spacing: 6) { Text("VIEW GAME"); Image(systemName: "arrow.right") }
-                        .font(GaryFonts.mono(12, bold: true))
-                        .foregroundStyle(.black.opacity(0.85))
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(Capsule().fill(GaryColors.gold))
-                }.buttonStyle(.plain).padding(.top, 6)
+                if let note = signal.resultNote, !note.isEmpty {
+                    Text(note)
+                        .font(GaryFonts.mono(11, bold: false))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                if isMatchup {
+                    Button { dismiss(); onSelectGame(signal.game) } label: {
+                        HStack(spacing: 6) { Text("VIEW GAME"); Image(systemName: "arrow.right") }
+                            .font(GaryFonts.mono(12, bold: true))
+                            .foregroundStyle(.black.opacity(0.85))
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(Capsule().fill(GaryColors.gold))
+                    }.buttonStyle(.plain).padding(.top, 6)
+                }
                 Spacer()
             }
             .padding(20)
@@ -17064,10 +17077,12 @@ struct BeneficiarySwapRow: View {
 
 struct SignalRow: View {
     let s: Signal
-    var onTap: (String) -> Void = { _ in }
+    /// nil = a read-only row (Picks tab's edge lists) — no chevron, no
+    /// navigation promise. The Hub passes a handler and gets both.
+    var onTap: ((String) -> Void)? = nil
 
     var body: some View {
-        Button { onTap(s.game) } label: {
+        Button { onTap?(s.game) } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
@@ -17088,12 +17103,18 @@ struct SignalRow: View {
                     Spacer(minLength: 6)
                     if !s.value.isEmpty {
                         if s.value.contains(where: { $0.isNumber }) {
-                            Text(s.value).font(.system(size: 22, weight: .bold)).foregroundStyle(s.tone.color)
+                            Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
                         } else {
                             Text(s.value).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(s.tone.color)
                                 .padding(.horizontal, 7).padding(.vertical, 3)
                                 .overlay(Capsule().stroke(s.tone.color.opacity(0.28), lineWidth: 1))
                         }
+                    }
+                    if onTap != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.25))
+                            .padding(.top, 5)
                     }
                 }
             }
