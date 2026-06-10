@@ -22,7 +22,10 @@ export function Nav() {
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-ink/90 backdrop-blur">
+    <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur">
+      {/* No hairline under the nav — the bar fades into the page the way the
+          app's header does. The scrim only reads when scrolled over content. */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-ink/80 to-transparent" />
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <Link href="/" className={`flex items-center gap-2.5 ${focusRing}`}>
           <Image src="/brand/gary-icon.png" alt="" aria-hidden width={30} height={30} />
