@@ -1572,6 +1572,9 @@ struct HomeView: View {
     @State private var tonightSignals: [Signal] = []
     /// Last night's betting recaps (game_recaps) — the story player's slides.
     @State private var nightRecaps: [GameRecapRow] = []
+    /// The settled night's combined record (games + props) — the scorecard's
+    /// ledger, same set as net + best cash.
+    @State private var lastNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
@@ -1777,6 +1780,7 @@ struct HomeView: View {
                     cashRows = night.cashes
                     worstBeat = night.beat
                     lastNightNet = night.graded > 0 ? night.net : nil
+                    lastNightRecord = night.record
                     lastNightGraded = night.graded
                     bestCashOdds = night.bestOdds
 
@@ -1982,7 +1986,7 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         }
         if !wireItems.isEmpty || !pulseRows.isEmpty {
-            HomeWireSection(items: wireItems, sub: "Around the league, bettor's view",
+            HomeWireSection(items: wireItems, sub: "",
                             pulse: pulseRows, limit: 4)
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
@@ -2582,7 +2586,7 @@ struct HomeView: View {
                 // Window named once, leftmost — every cell in this row is
                 // last night's slate (feedback: unlabeled windows next to the
                 // form lane's L10 numbers read contradictory).
-                scoreCell(Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
+                scoreCell(Self.recordLine(lastNightRecord.w, lastNightRecord.l, lastNightRecord.p),
                           "LAST NIGHT", .white.opacity(0.92))
                 if let net = lastNightNet {
                     Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
@@ -2798,12 +2802,12 @@ struct HomeView: View {
     /// cash, or the owned miss), the Biggest Cashes rows, and net units.
     /// All template — honesty is the brand, so the net includes the losses.
     private static func buildLastNight(games: [GameResult], props: [PropResult])
-        -> (story: HomeMarqueeHero.Story?, marqueeGame: GameResult?, cashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?) {
+        -> (story: HomeMarqueeHero.Story?, marqueeGame: GameResult?, cashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?, record: (w: Int, l: Int, p: Int)) {
 
         let settledGames = games.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let settledProps = props.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let days = settledGames.compactMap { $0.game_date } + settledProps.compactMap { $0.game_date }
-        guard let night = days.max() else { return (nil, nil, [], nil, 0, 0, nil) }
+        guard let night = days.max() else { return (nil, nil, [], nil, 0, 0, nil, (0, 0, 0)) }
         let nightGames = settledGames.filter { $0.game_date == night }
         let nightProps = settledProps.filter { $0.game_date == night }
 
@@ -2837,6 +2841,13 @@ struct HomeView: View {
         }
         cashes.sort { $0.units > $1.units }
         let graded = nightGames.count + nightProps.count
+        // ONE ledger for the scorecard: record, net, and best cash all count
+        // the same set (games + props) — three cells, one truth.
+        var recW = 0, recL = 0, recP = 0
+        for r in (nightGames.map { $0.result } + nightProps.map { $0.result }) {
+            switch r { case "won": recW += 1; case "lost": recL += 1; case "push": recP += 1; default: break }
+        }
+        let record = (w: recW, l: recL, p: recP)
 
         // The worst beat — the loss that stung most: the biggest favorite that
         // didn't hold (most-negative odds among the night's graded game losses).
@@ -2858,7 +2869,7 @@ struct HomeView: View {
         let star = wins.max { resultOdds($0.odds, pickText: $0.pick_text) < resultOdds($1.odds, pickText: $1.pick_text) }
         let subject = star ?? nightGames.filter { $0.result == "lost" }
             .max { abs(resultOdds($0.odds, pickText: $0.pick_text)) < abs(resultOdds($1.odds, pickText: $1.pick_text)) }
-        guard let r = subject else { return (nil, nil, Array(cashes.prefix(3)), beat, net, graded, bestOdds) }
+        guard let r = subject else { return (nil, nil, Array(cashes.prefix(3)), beat, net, graded, bestOdds, record) }
 
         let cashed = r.result == "won"
         let o = resultOdds(r.odds, pickText: r.pick_text)
@@ -2871,7 +2882,7 @@ struct HomeView: View {
             receiptPick: pickLine.uppercased(),
             verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "NO CASH",
             cashed: cashed)
-        return (story, r, Array(cashes.prefix(3)), beat, net, graded, bestOdds)
+        return (story, r, Array(cashes.prefix(3)), beat, net, graded, bestOdds, record)
     }
 
     /// "Knicks over the Spurs, 105–95" — a real game headline from facts.
@@ -3274,11 +3285,15 @@ struct HomeHitsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Hits & heartbreakers", sub: "How last night actually went")
-            HStack(spacing: 10) {
-                if let cash { tile(tag: "Biggest cash", row: cash, accent: won) }
-                if let beat { tile(tag: "Worst beat", row: beat, accent: lost) }
+            HubSectionHeader(eyebrow: "Hits & heartbreakers", sub: "")
+            VStack(spacing: 0) {
+                if let cash { rowView(tag: "BIGGEST CASH", row: cash, accent: won) }
+                if cash != nil && beat != nil {
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                }
+                if let beat { rowView(tag: "WORST BEAT", row: beat, accent: lost) }
             }
+            .quantPanel()
             .padding(.horizontal, 16)
             if graded > 0 {
                 Button(action: onOpenBillfold) {
@@ -3300,35 +3315,32 @@ struct HomeHitsSection: View {
         }
     }
 
-    /// One tile: neutral tag + the result line + the pick; the odds value is the
-    /// lone accent (green cash / red beat). Flat card, single accent moment.
-    private func tile(tag: String, row: HomeCashesSection.Row, accent: Color) -> some View {
+    /// One full-width row: tag + the full pick line on the left, the odds
+    /// BIG on the right — the lone accent (green cash / red beat). No squat
+    /// tiles, no truncated names.
+    private func rowView(tag: String, row: HomeCashesSection.Row, accent: Color) -> some View {
         Button(action: onOpenBillfold) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(tag.uppercased())
-                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.4))
-                Text(row.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                Text(row.sub)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.42))
-                    .lineLimit(2)
-                Spacer(minLength: 6)
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(tag)
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.4))
+                    Text(row.title)
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(row.sub)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 10)
                 Text(row.odds)
-                    .font(GaryFonts.mono(13, bold: true))
+                    .font(GaryFonts.mono(17, bold: true))
                     .foregroundStyle(accent)
             }
-            .padding(13)
-            .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(Color(hex: "#161618"))
-                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .stroke(Color.white.opacity(0.07), lineWidth: 1))
-            )
+            .padding(.horizontal, 14).padding(.vertical, 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -4063,7 +4075,7 @@ struct HomePropBoxSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Prop box", sub: "Last night's props, box-score style")
+            HubSectionHeader(eyebrow: "Prop box", sub: "")
             Button(action: onOpen) {
                 VStack(spacing: 0) {
                     HStack {
