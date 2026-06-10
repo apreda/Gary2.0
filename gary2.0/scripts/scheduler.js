@@ -217,6 +217,21 @@ async function buildPlan(etDateStr) {
   return { schedule, fetchFailed };
 }
 
+// Publish the day's full slate (all games + opening lines) to the daily_slate
+// table so the app shows the whole schedule from the morning, with Gary's
+// picks overlaying later. NON-FATAL by design — a slate-write failure must
+// never block pick generation.
+async function writeDailySlateNonFatal(dateStr) {
+  try {
+    const { writeDailySlate } = await import('../src/services/dailySlateService.js');
+    const res = await writeDailySlate(dateStr);
+    const summary = Object.entries(res.byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
+    log(`📋 Daily slate published: ${res.total} game(s)${summary ? ` (${summary})` : ''}`);
+  } catch (e) {
+    log(`⚠️ Daily slate write failed (non-fatal, picks unaffected): ${e.message}`);
+  }
+}
+
 // Build the plan, but ride out transient fetch outages. A wifi/API failure at
 // build time used to return an empty plan that then slept 24h — the bug that
 // silently killed a whole slate (see Friday's "Sleeping 21.22 hours" log).
@@ -231,8 +246,11 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
   while (true) {
     attempt++;
     const { schedule, fetchFailed } = await buildPlan(dateStr);
-    if (schedule.length > 0) return schedule;   // got a slate — run it
-    if (!fetchFailed) return schedule;          // genuinely no games today
+    if (schedule.length > 0 || !fetchFailed) {
+      // Plan built (or genuinely no games) — snapshot the public slate for the app.
+      await writeDailySlateNonFatal(dateStr);
+      return schedule;
+    }
     if (Date.now() - start >= maxWaitMs) {
       log(`⚠️ Plan still empty after ${attempt} attempts / ${Math.round((Date.now() - start) / 60000)}m of fetch failures — proceeding empty.`);
       return schedule;
