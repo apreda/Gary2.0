@@ -7,6 +7,7 @@ import {
 } from '@/lib/gary/results';
 import { daysAgoEST } from '@/lib/gary/dates';
 import { SPORTS, sportBySlug } from '@/lib/gary/leagues';
+import { JsonLd } from '@/components/JsonLd';
 
 export const revalidate = 3600;
 // Unknown slugs 404 at the router — no SSR pass or data fetch for garbage paths.
@@ -20,6 +21,14 @@ export async function generateMetadata({ params }: { params: Promise<{ sport: st
   const { sport } = await params;
   const cfg = sportBySlug(sport);
   if (!cfg) return {};
+  if (cfg.code === 'WC') {
+    return {
+      title: 'World Cup 2026 Predictions Record — Every Pick Graded | Gary AI',
+      description:
+        "Gary AI's graded 2026 World Cup predictions record — every match pick scored against the final result, win-loss, and net units. Public through the final.",
+      alternates: { canonical: '/results/world-cup' },
+    };
+  }
   return {
     title: `${cfg.longName} Picks Track Record | Gary AI`,
     description: `Gary AI's complete graded ${cfg.longName} picks record — win-loss, net units at flat stakes, current streak, and every graded result. Public and updated daily.`,
@@ -53,6 +62,14 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
+      <JsonLd data={{
+        '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Gary AI', item: 'https://www.betwithgary.ai/' },
+          { '@type': 'ListItem', position: 2, name: 'Track Record', item: 'https://www.betwithgary.ai/results' },
+          { '@type': 'ListItem', position: 3, name: cfg.longName, item: `https://www.betwithgary.ai/results/${cfg.slug}` },
+        ],
+      }} />
       <PageMasthead
         title={`${cfg.longName} track record`}
         meta={`${cfg.code} · RESULTS`}

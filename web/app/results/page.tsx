@@ -11,7 +11,7 @@ import { SPORTS, LEAGUE_DISPLAY, sportByCode } from '@/lib/gary/leagues';
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: 'Gary AI Track Record — Every Pick Graded | betwithgary.ai',
+  title: 'Track Record — Every Pick Graded, Public | Gary AI',
   description:
     'The complete public record of Gary AI sports picks: win-loss by sport, net units at flat stakes, streaks, and every graded result. No cherry-picking.',
   alternates: { canonical: '/results' },

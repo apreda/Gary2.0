@@ -23,6 +23,16 @@ export async function generateMetadata({ params }: { params: Promise<{ sport: st
   const { sport } = await params;
   const cfg = sportBySlug(sport);
   if (!cfg) return {};
+  // The tournament query cluster is "world cup 2026 predictions" — the WC page
+  // carries both words; the season sports stay on the "free picks" intent.
+  if (cfg.code === 'WC') {
+    return {
+      title: 'World Cup 2026 Picks & Predictions Today — Free | Gary AI',
+      description:
+        'Free 2026 FIFA World Cup predictions and picks for every match — written reasoning, confidence ratings, and a public graded record. Updated daily through the final.',
+      alternates: { canonical: '/picks/world-cup' },
+    };
+  }
   return {
     title: `Free ${cfg.longName} Picks Today — With Reasoning | Gary AI`,
     description: `Gary's free ${cfg.longName} picks for today with written rationale, confidence ratings, and a public graded track record. Updated daily.`,
@@ -57,15 +67,28 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
 
   return (
     <main className="mx-auto max-w-6xl px-5 py-16">
+      {picks && picks.length > 0 && (
+        <JsonLd data={{
+          '@context': 'https://schema.org', '@type': 'ItemList',
+          name: `Gary AI free ${cfg.longName} picks`,
+          numberOfItems: picks.length,
+          itemListElement: picks.slice(0, 25).map((p, i) => ({
+            '@type': 'ListItem', position: i + 1, name: `${p.awayTeam} @ ${p.homeTeam}: ${p.pick}`,
+          })),
+        }} />
+      )}
       <JsonLd data={{
-        '@context': 'https://schema.org', '@type': 'ItemList',
-        name: `Gary AI free ${cfg.longName} picks`,
-        numberOfItems: picks?.length ?? 0,
-        itemListElement: (picks ?? []).slice(0, 25).map((p, i) => ({
-          '@type': 'ListItem', position: i + 1, name: `${p.awayTeam} @ ${p.homeTeam}: ${p.pick}`,
-        })),
+        '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Gary AI', item: 'https://www.betwithgary.ai/' },
+          { '@type': 'ListItem', position: 2, name: "Today's Picks", item: 'https://www.betwithgary.ai/picks' },
+          { '@type': 'ListItem', position: 3, name: cfg.longName, item: `https://www.betwithgary.ai/picks/${cfg.slug}` },
+        ],
       }} />
-      <PageMasthead title={`Free ${cfg.longName} picks`} meta={`${cfg.code} · ${todayEST()}`}>
+      <PageMasthead
+        title={cfg.code === 'WC' ? 'World Cup 2026 picks & predictions' : `Free ${cfg.longName} picks`}
+        meta={`${cfg.code} · ${todayEST()}`}
+      >
         {allTime && l30 && (
           <p className="tnum mt-3 font-mono text-[12px] text-low">
             {cfg.code} RECORD · L30 {l30.wins}-{l30.losses} · ALL-TIME {allTime.wins}-{allTime.losses}

@@ -7,6 +7,7 @@ const COLUMNS: { heading: string; links: { href: string; label: string; external
     heading: 'The Desk',
     links: [
       { href: '/picks', label: "Today's Picks" },
+      { href: '/picks/world-cup', label: 'World Cup 2026' },
       { href: '/props', label: 'Player Props' },
       { href: '/hub', label: 'The Hub' },
       { href: '/results', label: 'Track Record' },

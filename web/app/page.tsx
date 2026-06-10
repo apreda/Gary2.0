@@ -175,6 +175,10 @@ export default async function Home() {
           <Link href="/picks" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
             All of today&apos;s picks →
           </Link>
+          {' '}· The World Cup kicks off June 11 —{' '}
+          <Link href="/picks/world-cup" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
+            World Cup 2026 picks &amp; predictions →
+          </Link>
         </p>
       </section>
 

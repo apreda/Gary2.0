@@ -87,7 +87,7 @@ export default async function PicksPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-5 py-16">
-      <JsonLd data={itemList} />
+      {picks && picks.length > 0 && <JsonLd data={itemList} />}
       <PageMasthead
         title="Today's picks"
         meta={date}

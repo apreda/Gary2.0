@@ -8,7 +8,7 @@ import { PageMasthead, StitchRule, GhostLink } from '@/components/Terminal';
 export const metadata: Metadata = {
   title: 'How Gary Works — Methodology | Gary AI',
   description:
-    'How Gary AI produces free daily sports picks: a research agent investigates every matchup with live data, Gary evaluates the evidence and makes the call, numeric claims are audited, and every pick is graded the next morning.',
+    'How Gary AI makes free daily sports picks: live-data research, written reasoning for every call, audited stats, and every pick graded the next morning.',
   alternates: { canonical: '/how-it-works' },
 };
 

@@ -12,9 +12,9 @@ import { daysAgoEST } from '@/lib/gary/dates';
 export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: 'Pricing — Gary AI | Unlock Winners, the Plays Gary Would Actually Bet',
+  title: 'Gary AI Pricing — Unlock Winners, the Picks Gary Would Bet',
   description:
-    "The full slate is free. Winners — the handful per sport Gary would actually bet, with each board's public record — is $9.99/mo per sport, or All-Access for every board. Cancel anytime.",
+    'The full slate is free. Winners — the picks Gary would actually bet, each board with its public record — is $9.99/mo per sport or All-Access. Cancel anytime.',
   alternates: { canonical: '/pricing' },
 };
 

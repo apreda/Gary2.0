@@ -6,9 +6,9 @@ import { AppStoreButton } from '@/components/AppStoreButton';
 import { StitchRule, GhostLink } from '@/components/Terminal';
 
 export const metadata: Metadata = {
-  title: 'Gary AI for iOS — Every Game, Every Day | betwithgary.ai',
+  title: 'Gary AI for iOS — Daily Picks, Winners & the Billfold',
   description:
-    'The Gary AI iOS app: daily picks with written reasoning, Winners (Gary\'s highest-conviction board), the insight Hub, a live Picks carousel, and the Billfold performance ledger. Free on the App Store.',
+    "The Gary AI iOS app: daily picks with written reasoning, Winners — Gary's conviction board — the insight Hub, and the Billfold ledger. Free on the App Store.",
   alternates: { canonical: '/app' },
 };
 
