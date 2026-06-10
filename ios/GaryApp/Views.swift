@@ -1942,19 +1942,11 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
-        // MOCK (Jun 10, for review): the headlines feed — candidate
-        // replacement for Gary's form. Sample rows; real sources = results +
-        // market pulse + fact checks + hub grades.
+        // The headlines feed — Gary's form is retired (user verdict, Jun 10);
+        // sample rows until game_recaps powers it for real.
         HomeHeadlinesFeed(rows: HomeHeadlinesFeed.sampleRows)
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
-        if let form {
-            HomeGarysForm(model: form) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.075), value: animateIn)
-        }
         if let story = marquee {
             HomeMarqueeHero(story: story) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
@@ -3019,11 +3011,8 @@ struct HomeMarqueeHero: View {
                     .font(GaryFonts.display(26))
                     .foregroundStyle(.white.opacity(0.96))
                     .fixedSize(horizontal: false, vertical: true)
-                // Headline zone is GAME-only; Gary's tally lives on the back.
-                Text(story.sub)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .padding(.top, 3)
+                // No grey echo of the headline — the betting recap
+                // (game_recaps) takes this slot when it lands.
             }
             .padding(14)
 
