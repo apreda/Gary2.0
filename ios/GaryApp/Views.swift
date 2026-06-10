@@ -11147,24 +11147,11 @@ struct PickCardBack: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    // THE TAKE leads — the rationale's first paragraph is
-                    // Gary's short spoken read (pipeline voice contract,
-                    // June 2026); the full case follows as the receipts.
-                    let parts = splitTake(pick.rationale)
-                    if let take = parts.take {
-                        Text(take)
-                            .font(GaryFonts.text(16.5, .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .lineSpacing(3.5)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if let rest = parts.rest {
-                        Text(rest)
-                            .font(.system(size: 14.5))
-                            .foregroundStyle(.white.opacity(0.72))
-                            .lineSpacing(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    Text(pick.rationale ?? "No rationale available.")
+                        .font(.system(size: 14.5))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let odds = pick.sportsbook_odds, !odds.isEmpty {
                         Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
@@ -13293,25 +13280,6 @@ func liveSlotText(_ ls: LiveScore, label: String) -> String {
 /// 27% SPRINKLE · 48% LEAN · 25% HAMMER.
 func convictionTier(_ confidence: Double) -> String {
     confidence >= 0.80 ? "HAMMER" : confidence >= 0.70 ? "LEAN" : "SPRINKLE"
-}
-
-/// Splits a rationale into (take, rest). The pipeline's June 2026 voice
-/// contract makes the first paragraph THE TAKE — Gary's short spoken read —
-/// so it can lead the card back at quote weight. Stored rationales open with
-/// a literal "Gary's Take" heading (the JSON template pastes it) — strip it.
-/// Anything that doesn't split cleanly renders whole as `rest`.
-func splitTake(_ rationale: String?) -> (take: String?, rest: String?) {
-    guard var r = rationale?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty else {
-        return (nil, "No rationale available.")
-    }
-    if r.lowercased().hasPrefix("gary's take") {
-        r = String(r.dropFirst("gary's take".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    guard let cut = r.range(of: "\n\n") else { return (nil, r) }
-    let first = String(r[..<cut.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-    let rest = String(r[cut.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !first.isEmpty, first.count <= 340, !rest.isEmpty else { return (nil, r) }
-    return (first, rest)
 }
 
 func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
