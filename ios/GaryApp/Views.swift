@@ -1760,6 +1760,23 @@ struct HomeView: View {
                     // pass over the latest settled night. Template-built, no AI.
                     let night = Self.buildLastNight(games: recentGameResults, props: recentPropResults)
                     marquee = night.story
+                    // The flip side: pull the marquee game's pick from that
+                    // night's slate so the back can show what Gary CALLED
+                    // (rationale + conviction) against what actually played.
+                    if var story = night.story, let mg = night.marqueeGame,
+                       let nightDate = mg.game_date,
+                       let nightPicks = try? await SupabaseAPI.fetchDailyPicks(date: nightDate) {
+                        let hay = (mg.matchup ?? "").lowercased()
+                        if let match = nightPicks.first(where: { p in
+                            let h = Formatters.shortTeamName(p.homeTeam, league: p.league).lowercased()
+                            let a = Formatters.shortTeamName(p.awayTeam, league: p.league).lowercased()
+                            return !h.isEmpty && !a.isEmpty && hay.contains(h) && hay.contains(a)
+                        }) {
+                            story.take = splitTake(match.rationale).take
+                            story.tier = match.confidence.map { convictionTier(min(max($0, 0), 1)) }
+                            marquee = story
+                        }
+                    }
                     cashRows = night.cashes
                     worstBeat = night.beat
                     lastNightNet = night.graded > 0 ? night.net : nil
@@ -2586,12 +2603,12 @@ struct HomeView: View {
     /// cash, or the owned miss), the Biggest Cashes rows, and net units.
     /// All template — honesty is the brand, so the net includes the losses.
     private static func buildLastNight(games: [GameResult], props: [PropResult])
-        -> (story: HomeMarqueeHero.Story?, cashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?) {
+        -> (story: HomeMarqueeHero.Story?, marqueeGame: GameResult?, cashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?) {
 
         let settledGames = games.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let settledProps = props.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let days = settledGames.compactMap { $0.game_date } + settledProps.compactMap { $0.game_date }
-        guard let night = days.max() else { return (nil, [], nil, 0, 0, nil) }
+        guard let night = days.max() else { return (nil, nil, [], nil, 0, 0, nil) }
         let nightGames = settledGames.filter { $0.game_date == night }
         let nightProps = settledProps.filter { $0.game_date == night }
 
@@ -2646,7 +2663,7 @@ struct HomeView: View {
         let star = wins.max { resultOdds($0.odds, pickText: $0.pick_text) < resultOdds($1.odds, pickText: $1.pick_text) }
         let subject = star ?? nightGames.filter { $0.result == "lost" }
             .max { abs(resultOdds($0.odds, pickText: $0.pick_text)) < abs(resultOdds($1.odds, pickText: $1.pick_text)) }
-        guard let r = subject else { return (nil, Array(cashes.prefix(3)), beat, net, graded, bestOdds) }
+        guard let r = subject else { return (nil, nil, Array(cashes.prefix(3)), beat, net, graded, bestOdds) }
 
         let cashed = r.result == "won"
         let o = resultOdds(r.odds, pickText: r.pick_text)
@@ -2659,7 +2676,7 @@ struct HomeView: View {
             receiptPick: pickLine.uppercased(),
             verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "NO CASH",
             cashed: cashed)
-        return (story, Array(cashes.prefix(3)), beat, net, graded, bestOdds)
+        return (story, r, Array(cashes.prefix(3)), beat, net, graded, bestOdds)
     }
 
     /// "Knicks over the Spurs, 105–95" — a real game headline from facts.
@@ -2756,13 +2773,54 @@ struct HomeMarqueeHero: View {
         let receiptPick: String   // "ANGELS ML" — data voice, rendered mono
         let verdict: String
         let cashed: Bool
+        // The flip side — what Gary CALLED before the game played. Enriched
+        // from that night's daily picks after the story is built; nil = the
+        // card doesn't flip (no matching pick found).
+        var take: String? = nil
+        var tier: String? = nil
     }
     let story: Story
     let onTap: () -> Void
 
+    @State private var flipped = false
+    @State private var frontH: CGFloat = 0
+
     private var tint: Color { Sport.from(league: story.league).accentColor }
+    private var canFlip: Bool { story.take != nil }
+    private var verdictColor: Color { story.cashed ? Color(hex: "#3FB950") : Color(hex: "#E5484D") }
 
     var body: some View {
+        ZStack {
+            front
+                .fixedSize(horizontal: false, vertical: true)
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
+                })
+                .opacity(flipped ? 0 : 1)
+
+            if canFlip {
+                back
+                    .opacity(flipped ? 1 : 0)
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            }
+        }
+        .frame(height: flipped ? max(frontH + 150, 320) : (frontH > 0 ? frontH : nil))
+        .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+        .onPreferenceChange(PickCardHeightKey.self) { frontH = $0 }
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if canFlip {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped.toggle() }
+            } else {
+                onTap()
+            }
+        }
+    }
+
+    // MARK: Front — the news + the receipt stub
+
+    private var front: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 // League chip — the marquee names its sport quietly.
@@ -2789,48 +2847,118 @@ struct HomeMarqueeHero: View {
             }
             .padding(14)
 
-            // The stub — a ticket footer, structurally part of the card:
-            // dashed perforation, full-bleed darker band, pick in the data
-            // voice (mono). The verdict is the row's ONLY color moment
-            // (four horsemen: one accent per card region — no gold rule here;
-            // gold rules mark Gary's voice, this is his receipt).
-            StitchLine()
-                .stroke(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
-                .frame(height: 1)
+            receiptStub(lead: story.receiptLead, pick: story.receiptPick,
+                        trailing: story.verdict, hint: canFlip ? "THE CALL ›" : nil)
+        }
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#161618")))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+    }
 
-            HStack(spacing: 6) {
-                Text(story.receiptLead)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.55))
-                Text(story.receiptPick)
-                    .font(GaryFonts.mono(11.5, bold: true))
-                    .foregroundStyle(.white.opacity(0.88))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+    // MARK: Back — what Gary called vs what the game did
+
+    private var back: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("THE CALL")
+                        .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.gold)
+                    Spacer()
+                    Text("BEFORE THE GAME")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                .padding(.bottom, 14)
+
+                // Gary's voice — gold rule (the app-wide quote marker).
+                if let take = story.take {
+                    HStack(alignment: .top, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(GaryColors.gold.opacity(0.7))
+                            .frame(width: 2)
+                        Text(take)
+                            .font(GaryFonts.text(13.5))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineSpacing(3)
+                            .lineLimit(8)
+                            .minimumScaleFactor(0.85)
+                    }
+                }
+
+                HStack(spacing: 14) {
+                    if let tier = story.tier {
+                        HStack(spacing: 6) {
+                            Text("CONVICTION")
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
+                                .foregroundStyle(.white.opacity(0.35))
+                            Text(tier)
+                                .font(GaryFonts.mono(11, bold: true))
+                                .foregroundStyle(.white.opacity(0.85))
+                        }
+                    }
+                    Spacer()
+                    Button(action: onTap) {
+                        Text("FULL CARD ›")
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 12)
+
                 Spacer(minLength: 8)
-                Text(story.verdict)
+
+                Text("tap to flip back  ↺")
+                    .font(GaryFonts.mono(9, bold: false))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.bottom, 8)
+            }
+            .padding(14)
+
+            receiptStub(lead: "How it played ·", pick: story.sub.uppercased(),
+                        trailing: story.verdict, hint: nil)
+        }
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#161618")))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+    }
+
+    // MARK: Shared pieces
+
+    /// The ticket stub: dashed stitch perforation + full-bleed darker band.
+    /// Prose lead, mono data, and the verdict as the row's ONLY color moment.
+    private func receiptStub(lead: String, pick: String, trailing: String, hint: String?) -> some View {
+        VStack(spacing: 0) {
+            StitchLine()
+                .stroke(Color.white.opacity(0.14), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                .frame(height: 1)
+            HStack(spacing: 6) {
+                Text(lead)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.62))
+                Text(pick)
+                    .font(GaryFonts.mono(11.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 8)
+                if let hint {
+                    Text(hint)
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                Text(trailing)
                     .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
-                    .foregroundStyle(story.cashed ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                    .foregroundStyle(verdictColor)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
-            .background(Color.black.opacity(0.25))
+            .background(Color.black.opacity(0.32))
         }
-        .background(
-            // House charcoal, matte — the sport accent lives ONLY in the
-            // chip dot. No tinted gradients (the AI dark-SaaS wash is banned).
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "#161618"))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-        .padding(.horizontal, 16)
-        .contentShape(Rectangle())
-        .onTapGesture { onTap() }
     }
+
 }
 
 /// ③b Biggest cashes — last night's winners in units, with the honest net
@@ -13475,11 +13603,12 @@ func convictionTier(_ confidence: Double) -> String {
     confidence >= 0.80 ? "HAMMER" : confidence >= 0.70 ? "LEAN" : "SPRINKLE"
 }
 
-/// Splits a rationale into (take, rest): the first paragraph leads the card
-/// back at quote weight and seeds the front quote + share card. Stored
-/// rationales open with a literal "Gary's Take" heading (the JSON template
-/// pastes it) — strip it. Anything that doesn't split cleanly renders whole
-/// as `rest`.
+/// Splits a rationale into (take, rest): the opening 1–2 SENTENCES lead the
+/// card back at quote weight and seed the front quote + share card. Sentence-
+/// walked (not paragraph-split) because stored rationales open with a single
+/// ~850-char paragraph; works for the current announcer voice and any future
+/// shorter one. Strips the literal "Gary's Take" heading the JSON template
+/// pastes in. Anything that doesn't split cleanly renders whole as `rest`.
 func splitTake(_ rationale: String?) -> (take: String?, rest: String?) {
     guard var r = rationale?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty else {
         return (nil, "No rationale available.")
@@ -13487,11 +13616,38 @@ func splitTake(_ rationale: String?) -> (take: String?, rest: String?) {
     if r.lowercased().hasPrefix("gary's take") {
         r = String(r.dropFirst("gary's take".count)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    guard let cut = r.range(of: "\n\n") else { return (nil, r) }
-    let first = String(r[..<cut.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-    let rest = String(r[cut.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !first.isEmpty, first.count <= 340, !rest.isEmpty else { return (nil, r) }
-    return (first, rest)
+
+    // Sentence boundaries: ./!/? followed by whitespace, where the word
+    // before the period isn't an abbreviation ("St. Louis", "Jr.", "vs.").
+    let abbreviations: Set<String> = ["st", "jr", "sr", "dr", "vs", "mr", "mrs", "no"]
+    var boundaries: [String.Index] = []
+    var i = r.startIndex
+    while i < r.endIndex, boundaries.count < 3 {
+        let ch = r[i]
+        if ch == "." || ch == "!" || ch == "?" {
+            let next = r.index(after: i)
+            if next == r.endIndex || r[next] == " " || r[next] == "\n" {
+                let wordStart = r[..<i].lastIndex(where: { $0 == " " || $0 == "\n" })
+                    .map { r.index(after: $0) } ?? r.startIndex
+                if !abbreviations.contains(r[wordStart..<i].lowercased()) {
+                    boundaries.append(next)
+                }
+            }
+        }
+        i = r.index(after: i)
+    }
+
+    // The take = the longest 1–2 sentence opening that stays under ~300
+    // chars — enough to be a real quote, short enough to BE a quote.
+    var cut: String.Index? = nil
+    for end in boundaries.prefix(2) {
+        if r.distance(from: r.startIndex, to: end) <= 300 { cut = end } else { break }
+    }
+    guard let cutIdx = cut else { return (nil, r) }
+    let take = String(r[..<cutIdx]).trimmingCharacters(in: .whitespacesAndNewlines)
+    let rest = String(r[cutIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard take.count >= 40, !rest.isEmpty else { return (nil, r) }
+    return (take, rest)
 }
 
 func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
