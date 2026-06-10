@@ -2092,7 +2092,7 @@ struct HomeView: View {
     #if DEBUG
     /// Pre-game preview: last-night strip → board + free pick → slate → wire.
     @ViewBuilder private var previewPregameSections: some View {
-        HomeCompactStrip(prefix: "LAST NIGHT", record: "6–4", net: 2.3) {}
+        // Mirrors the REAL Tonight stack: board leads, no last-night anything.
         VStack(alignment: .leading, spacing: 12) {
             HubSectionHeader(eyebrow: "Tonight's Board", sub: "5 plays · first pitch 7:05 PM")
             if let p = Self.sampleFreePick {
