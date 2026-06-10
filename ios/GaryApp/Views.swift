@@ -1570,6 +1570,8 @@ struct HomeView: View {
     @State private var yesterdayTopPickScore: String? = nil
     /// Tonight's top Hub edges (relevance-ordered) — the pre-bet checklist.
     @State private var tonightSignals: [Signal] = []
+    /// Last night's betting recaps (game_recaps) — the story player's slides.
+    @State private var nightRecaps: [GameRecapRow] = []
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
@@ -1828,6 +1830,10 @@ struct HomeView: View {
                         }
                     }
                     tonightSignals = Array(tonightEdges.prefix(3))
+
+                    // The night's stories for the player (graded date = the
+                    // same night the marquee covers).
+                    nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
@@ -1940,12 +1946,24 @@ struct HomeView: View {
     /// rest of the night's headlines follow (sample rows until game_recaps).
     private var headlineStories: [HomeMarqueeHero.Story] {
         var out: [HomeMarqueeHero.Story] = []
-        if let m = marquee { out.append(m) }
-        out.append(contentsOf: HomeHeadlinesFeed.sampleRows.compactMap { r in
-            HomeMarqueeHero.Story(league: r.league, headline: r.headline, sub: "",
-                                  receiptLead: "", receiptPick: "",
-                                  verdict: r.tag ?? "", cashed: r.tagWin)
-        })
+        if var m = marquee {
+            // The marquee leads, wearing its recap body.
+            m.recap = nightRecaps.first { abbrGameMatches($0.matchup ?? "", matchup: m.headline) }?.recap
+            out.append(m)
+        }
+        // The rest of the night, one slide per settled game (wins first —
+        // the fetch orders result desc).
+        for r in nightRecaps.prefix(7) {
+            if let first = out.first, abbrGameMatches(r.matchup ?? "", matchup: first.headline) { continue }
+            let cashed = r.result == "won"
+            let pickLine = Formatters.splitPickAndOdds(r.pick_text ?? "").0
+            out.append(HomeMarqueeHero.Story(
+                league: r.league ?? "", headline: r.headline ?? "", sub: "",
+                receiptLead: cashed ? "Gary had it ·" : "Gary was on ·",
+                receiptPick: pickLine.uppercased(),
+                verdict: cashed ? "CASHED" : (r.result == "push" ? "PUSH" : "NO CASH"),
+                cashed: cashed, recap: r.recap))
+        }
         return out
     }
 
@@ -2955,6 +2973,9 @@ struct HomeMarqueeHero: View {
         // card doesn't flip (no matching pick found).
         var take: String? = nil
         var tier: String? = nil
+        /// The betting recap body (game_recaps) — the ESPN-style story of
+        /// how the bet lived and died, under the headline.
+        var recap: String? = nil
         /// Graded claims from the rationale (right/wrong only — "unclear"
         /// stays off the card). Empty = no fact check yet.
         var claims: [FactClaim] = []
@@ -3023,8 +3044,15 @@ struct HomeMarqueeHero: View {
                     .font(GaryFonts.display(26))
                     .foregroundStyle(.white.opacity(0.96))
                     .fixedSize(horizontal: false, vertical: true)
-                // No grey echo of the headline — the betting recap
-                // (game_recaps) takes this slot when it lands.
+                if let recap = story.recap, !recap.isEmpty {
+                    Text(recap)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineSpacing(2.5)
+                        .lineLimit(4)
+                        .padding(.top, 6)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(14)
 
@@ -3589,7 +3617,7 @@ struct HomeHeadlinesCarousel: View {
                 }
                 .padding(.horizontal, 20)
             }
-            .frame(height: 218)
+            .frame(height: 282)
         }
         .onReceive(tick) { _ in
             guard !paused, stories.count > 1 else { return }

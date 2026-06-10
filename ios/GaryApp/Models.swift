@@ -168,6 +168,17 @@ struct PlayerInsightPack: Decodable {
     let props: [PropLine]?
 }
 
+// MARK: - Game Recap (the night's stories, betting perspective — game_recaps)
+struct GameRecapRow: Decodable {
+    let game_date: String?
+    let league: String?
+    let matchup: String?
+    let pick_text: String?
+    let result: String?
+    let headline: String?
+    let recap: String?
+}
+
 // MARK: - Pick Fact Check (claims from the rationale, graded vs reality)
 struct FactClaim: Decodable {
     let claim: String?

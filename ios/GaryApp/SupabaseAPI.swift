@@ -479,6 +479,20 @@ enum SupabaseAPI {
         return rows
     }
 
+    /// The night's betting recaps (game_recaps): headline + 2-4 sentence
+    /// story per settled game Gary picked — the story player's slides.
+    static func fetchGameRecaps(date: String) async -> [GameRecapRow] {
+        let url = buildURL(table: "game_recaps", query: [
+            URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,headline,recap"),
+            URLQueryItem(name: "game_date", value: "eq.\(date)"),
+            URLQueryItem(name: "order", value: "result.desc")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([GameRecapRow].self, from: data) else { return [] }
+        return rows
+    }
+
     /// The fact check for one graded pick — claims from the rationale graded
     /// right/wrong/unclear against what actually happened (pick_fact_checks,
     /// written by the nightly grader). Keyed exactly like game_results.
