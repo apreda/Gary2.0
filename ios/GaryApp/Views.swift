@@ -2003,17 +2003,7 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
         }
-        // Last night collapses to one strip at the bottom — graded detail
-        // (receipts, marquee, hits) all lives on Morning.
-        if lastNightGraded > 0 {
-            HomeCompactStrip(prefix: "LAST NIGHT",
-                             record: Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
-                             net: lastNightNet) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
-        }
+        // No last-night anything here — Morning owns the recap entirely.
     }
 
     /// Live: the tape pins the top, the marquee becomes the in-progress
