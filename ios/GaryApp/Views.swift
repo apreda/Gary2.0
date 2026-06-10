@@ -2655,7 +2655,8 @@ struct HomeView: View {
             league: r.effectiveLeague ?? "",
             headline: Self.gameHeadline(r, cashed: cashed),
             sub: Self.gameSubLine(r),
-            receipt: cashed ? "Gary had it · \(pickLine)" : "Gary was on \(pickLine)",
+            receiptLead: cashed ? "Gary had it ·" : "Gary was on ·",
+            receiptPick: pickLine.uppercased(),
             verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "NO CASH",
             cashed: cashed)
         return (story, Array(cashes.prefix(3)), beat, net, graded, bestOdds)
@@ -2751,7 +2752,8 @@ struct HomeMarqueeHero: View {
         let league: String
         let headline: String
         let sub: String
-        let receipt: String
+        let receiptLead: String   // "Gary had it" / "Gary was on" — prose voice
+        let receiptPick: String   // "ANGELS ML" — data voice, rendered mono
         let verdict: String
         let cashed: Bool
     }
@@ -2762,35 +2764,47 @@ struct HomeMarqueeHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // League chip — the marquee names its sport quietly.
-            HStack(spacing: 6) {
-                Circle().fill(tint.opacity(0.9)).frame(width: 5, height: 5)
-                Text(story.league)
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.75))
-                Spacer()
-                Text("LAST NIGHT")
-                    .font(GaryFonts.mono(9, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.35))
+            VStack(alignment: .leading, spacing: 0) {
+                // League chip — the marquee names its sport quietly.
+                HStack(spacing: 6) {
+                    Circle().fill(tint.opacity(0.9)).frame(width: 5, height: 5)
+                    Text(story.league)
+                        .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.75))
+                    Spacer()
+                    Text("LAST NIGHT")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                .padding(.bottom, 26)
+
+                Text(story.headline)
+                    .font(GaryFonts.display(26))
+                    .foregroundStyle(.white.opacity(0.96))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(story.sub)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.top, 3)
             }
-            .padding(.bottom, 26)
+            .padding(14)
 
-            Text(story.headline)
-                .font(GaryFonts.display(26))
-                .foregroundStyle(.white.opacity(0.96))
-                .fixedSize(horizontal: false, vertical: true)
-            Text(story.sub)
-                .font(.system(size: 12.5))
-                .foregroundStyle(.white.opacity(0.55))
-                .padding(.top, 3)
-                .padding(.bottom, 14)
+            // The stub — a ticket footer, structurally part of the card:
+            // dashed perforation, full-bleed darker band, pick in the data
+            // voice (mono). The verdict is the row's ONLY color moment
+            // (four horsemen: one accent per card region — no gold rule here;
+            // gold rules mark Gary's voice, this is his receipt).
+            StitchLine()
+                .stroke(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                .frame(height: 1)
 
-            // The receipt — gold rule, the pick, the verdict.
-            HStack(spacing: 10) {
-                Rectangle().fill(GaryColors.gold.opacity(0.85)).frame(width: 2)
-                Text(story.receipt)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
+            HStack(spacing: 6) {
+                Text(story.receiptLead)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(story.receiptPick)
+                    .font(GaryFonts.mono(11.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.88))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Spacer(minLength: 8)
@@ -2798,23 +2812,20 @@ struct HomeMarqueeHero: View {
                     .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
                     .foregroundStyle(story.cashed ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Color.black.opacity(0.35))
-            )
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(Color.black.opacity(0.25))
         }
-        .padding(14)
         .background(
             // House charcoal, matte — the sport accent lives ONLY in the
             // chip dot. No tinted gradients (the AI dark-SaaS wash is banned).
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(hex: "#161618"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .padding(.horizontal, 16)
         .contentShape(Rectangle())
