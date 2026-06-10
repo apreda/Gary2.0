@@ -41,7 +41,7 @@ export function Nav() {
                 href={l.href}
                 aria-current={active ? 'page' : undefined}
                 className={`relative py-1 text-[13.5px] transition-colors ${focusRing} ${
-                  active ? 'text-hi' : 'text-mid hover:text-hi'
+                  active ? 'text-hi' : 'text-mid hover:text-gold-light'
                 }`}
               >
                 {l.label}
@@ -77,7 +77,7 @@ export function Nav() {
                   className={`block border-b border-line px-5 py-3.5 text-sm last:border-b-0 ${focusRing} ${
                     isActive(l.href)
                       ? 'text-gold underline decoration-gold underline-offset-4'
-                      : 'text-mid hover:text-hi'
+                      : 'text-mid hover:text-gold-light'
                   }`}
                 >
                   {l.label}

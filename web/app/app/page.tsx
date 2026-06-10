@@ -140,7 +140,7 @@ export default function AppPage() {
                   {f.premium && (
                     <Link
                       href="/pricing"
-                      className="mt-3 inline-block text-sm text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+                      className="mt-3 inline-block text-sm text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
                     >
                       Plans and the free-vs-Winners breakdown →
                     </Link>

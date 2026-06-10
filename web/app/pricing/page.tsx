@@ -127,7 +127,7 @@ export default async function PricingPage() {
           each sport&apos;s rules, makes the call, and a fact-check audits the numbers before anything posts.
           Then every pick is graded the next morning — winners and losers, on the record.
         </p>
-        <Link href="/how-it-works" className="mt-4 inline-block text-sm text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">
+        <Link href="/how-it-works" className="mt-4 inline-block text-sm text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
           The full methodology →
         </Link>
       </section>

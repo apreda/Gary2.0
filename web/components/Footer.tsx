@@ -33,7 +33,7 @@ const COLUMNS: { heading: string; links: { href: string; label: string; external
 ];
 
 const linkClass =
-  'text-[13px] text-low transition-colors hover:text-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink';
+  'text-[13px] text-low transition-colors hover:text-gold-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink';
 
 export function Footer() {
   return (
@@ -54,7 +54,7 @@ export function Footer() {
 
           {COLUMNS.map(col => (
             <nav key={col.heading} aria-label={col.heading}>
-              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-faint">{col.heading}</p>
+              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">{col.heading}</p>
               <ul className="mt-3 space-y-2">
                 {col.links.map(l => (
                   <li key={l.href}>

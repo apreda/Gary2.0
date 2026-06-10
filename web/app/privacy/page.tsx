@@ -106,7 +106,7 @@ export default function PrivacyPage() {
             deletion of your account and associated personal data at any time by emailing{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
-              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+              className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
             >
               privacy@betwithgary.ai
             </a>
@@ -142,7 +142,7 @@ export default function PrivacyPage() {
             these rights, contact us at{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
-              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+              className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
             >
               privacy@betwithgary.ai
             </a>
@@ -165,7 +165,7 @@ export default function PrivacyPage() {
             For privacy-related questions, contact us at{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
-              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+              className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
             >
               privacy@betwithgary.ai
             </a>

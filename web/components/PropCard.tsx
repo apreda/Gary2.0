@@ -17,7 +17,7 @@ export function PropCard({ prop, expanded = false }: { prop: PropPick; expanded?
   return (
     <article className="rounded-card border border-silver/40 bg-card p-5 shadow-card">
       <div className="flex items-center justify-between">
-        <Eyebrow>{league}{prop.matchup ? ` · ${prop.matchup}` : ''}</Eyebrow>
+        <Eyebrow dim>{league}{prop.matchup ? ` · ${prop.matchup}` : ''}</Eyebrow>
       </div>
       <h3 className="mt-2.5 font-display text-xl leading-tight text-hi">{prop.player}</h3>
       {rationale && (

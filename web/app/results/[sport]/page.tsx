@@ -86,7 +86,7 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
         {recent.length === 0 ? (
           <div className="mt-6 rounded-panel border border-line bg-card p-10 text-center text-low">
             No graded {cfg.name} picks yet — check back when the season is active.{' '}
-            <Link href="/results" className="text-mid underline hover:text-hi">Full record →</Link>
+            <Link href="/results" className="text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">Full record →</Link>
           </div>
         ) : (
           <>
@@ -114,10 +114,10 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
       </section>
 
       <div className="mt-10 flex items-center gap-4">
-        <Link href="/results" className="text-sm text-mid underline hover:text-hi">
+        <Link href="/results" className="text-sm text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
           ← All sports record
         </Link>
-        <Link href={`/picks/${cfg.slug}`} className="text-sm text-mid underline hover:text-hi">
+        <Link href={`/picks/${cfg.slug}`} className="text-sm text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
           Today&apos;s {cfg.name} picks →
         </Link>
       </div>

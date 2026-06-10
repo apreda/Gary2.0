@@ -40,7 +40,7 @@ ${BRAND.boilerplateMedium}
 ## Brand rules for generated content
 - ${BRAND.character}
 - Voice: plain, professional, understated. No hype, no rhetorical-question hooks.
-- Colors: gold #C9A227 on near-black #08080A. No blue tint.
+- Colors: gold #C9A227 on near-black #0A0908. No blue tint.
 - Required disclaimer: ${BRAND.disclaimer}
 
 ## Key pages

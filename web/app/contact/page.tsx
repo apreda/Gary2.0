@@ -28,7 +28,7 @@ export default function ContactPage() {
               <p className="font-mono text-[11px] uppercase tracking-[0.04em] text-low">Email</p>
               <a
                 href="mailto:support@betwithgary.ai"
-                className="mt-1 block text-[15px] text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+                className="mt-1 block text-[15px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
               >
                 support@betwithgary.ai
               </a>
@@ -48,7 +48,7 @@ export default function ContactPage() {
                   href="https://x.com/BetwithGary"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 block text-[15px] text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+                  className="mt-1 block text-[15px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
                 >
                   @BetwithGary
                 </a>

@@ -25,7 +25,9 @@ export function PickCard({ pick, expanded = false }: { pick: GaryPick; expanded?
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2">
           {accent && <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />}
-          <Eyebrow accent={accent}>{league}</Eyebrow>
+          {/* dim guards the fallback: league-on-card is a data label, so an
+              unknown league code must fall back to grey, not the gold default */}
+          <Eyebrow accent={accent} dim>{league}</Eyebrow>
         </span>
         {pick.time && <span className="font-mono text-[11px] text-low">{pick.time}</span>}
       </div>
@@ -47,7 +49,7 @@ export function PickCard({ pick, expanded = false }: { pick: GaryPick; expanded?
       </div>
       {conf !== null && (
         <div className="mt-3 flex items-center gap-2">
-          <Eyebrow>CONF</Eyebrow>
+          <Eyebrow dim>CONF</Eyebrow>
           <div className="h-1 flex-1 rounded bg-white/10">
             <div className="h-1 rounded bg-gold" style={{ width: `${conf}%` }} />
           </div>

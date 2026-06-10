@@ -45,7 +45,11 @@ function FeaturedProp({ prop }: { prop: PropPick }) {
   return (
     <article className="quant-panel grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-start">
       <div className="min-w-0">
-        <Eyebrow>Gary&apos;s Top Prop{league ? ` · ${league}` : ''}</Eyebrow>
+        {/* Brand voice wears gold; the league code is a data label and stays grey —
+            and the silver props system gets no other gold (an UNDER slip below
+            a gold wall would break the only-gold-is-the-OVER-call rule). */}
+        <Eyebrow>Gary&apos;s Top Prop</Eyebrow>
+        {league && <Eyebrow dim> · {league}</Eyebrow>}
         <h2 className="mt-2.5 font-display text-3xl uppercase leading-tight text-hi">{prop.player}</h2>
         {rationale && <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-mid">{rationale}</p>}
       </div>
@@ -70,7 +74,7 @@ function CompactProp({ prop }: { prop: PropPick }) {
   return (
     <li className="w-[280px] shrink-0 snap-start rounded-card border border-silver/40 bg-card p-4 shadow-card">
       <p className="truncate">
-        <Eyebrow>{league}{prop.matchup ? ` · ${prop.matchup}` : ''}</Eyebrow>
+        <Eyebrow dim>{league}{prop.matchup ? ` · ${prop.matchup}` : ''}</Eyebrow>
       </p>
       <p className="mt-1.5 truncate text-[15px] font-medium text-hi">{prop.player}</p>
       <div className="mt-3"><CallChip prop={prop} compact /></div>

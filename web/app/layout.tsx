@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jbmono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jbmono' });
 
 export const viewport: Viewport = {
-  themeColor: '#08080A',
+  themeColor: '#0A0908',
   colorScheme: 'dark',
 };
 

@@ -23,7 +23,7 @@ export default async function Image() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: '#08080A',
+          background: '#0A0908',
           padding: '64px 80px',
         }}
       >

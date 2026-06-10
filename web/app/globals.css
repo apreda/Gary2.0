@@ -10,11 +10,13 @@
   --color-silver-light: #D7DCE4;
   --color-silver-dim: #AEB8C4;
 
-  /* ── Surfaces (mirrors iOS GaryColors) ─────────────────── */
-  --color-ink: #08080A;
-  --color-card: #15171C;
-  --color-chip: #1C1F26;
-  --color-elev: #1A1A1E;
+  /* ── Surfaces (mirrors iOS GaryColors) — warm blacks, R ≥ B on every
+     surface. A blue-leaning dark palette is the generic-AI tell; the app's
+     black is leather-warm, so the web's must be too. ─────── */
+  --color-ink: #0A0908;
+  --color-card: #16140E;
+  --color-chip: #211D12;
+  --color-elev: #1B1812;
   --color-panel: rgba(255, 255, 255, 0.02);
 
   /* ── Text roles — four grays, not fourteen.
@@ -59,16 +61,16 @@
 }
 
 html {
-  background: #08080A;
+  background: #0A0908;
 }
 
 body {
-  background-color: #08080A;
+  background-color: #0A0908;
   /* Near-flat atmosphere, ported from the app's background: a faint warm lift
      at the top and one ultra-quiet gold breath. No haze, no glow. */
   background-image:
-    radial-gradient(1100px 520px at 50% -120px, rgba(201, 162, 39, 0.07), transparent 70%),
-    linear-gradient(180deg, #0B0B0E 0%, #08080A 480px);
+    radial-gradient(1100px 520px at 50% -120px, rgba(201, 162, 39, 0.09), transparent 70%),
+    linear-gradient(180deg, #0D0C08 0%, #0A0908 480px);
   background-repeat: no-repeat;
   color: var(--color-hi);
   font-family: var(--font-body);
@@ -87,7 +89,8 @@ body {
 }
 .stitch-faint {
   height: 1px;
-  background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 4px, transparent 4px 9px);
+  /* Quiet seams stay in the gold family too — the app has no grey stitches. */
+  background-image: repeating-linear-gradient(90deg, rgba(201, 162, 39, 0.16) 0 4px, transparent 4px 9px);
 }
 
 /* ── Quant panel chrome (iOS quantPanel: white 2% fill, 7% hairline) ── */

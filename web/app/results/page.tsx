@@ -72,7 +72,7 @@ export default async function ResultsPage() {
       {/* Headline — the all-time figure carries the page */}
       <section className="mt-7 grid items-end gap-8 lg:grid-cols-12">
         <div className="lg:col-span-6">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">All-time</p>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">All-time</p>
           <p className="tnum mt-2 font-mono text-[clamp(3rem,7vw,5rem)] font-bold leading-none text-hi">
             {allTime.wins.toLocaleString()}
             <span className="text-faint">–</span>
@@ -141,7 +141,7 @@ export default async function ResultsPage() {
                       <td className={`tnum px-4 py-3 font-mono text-sm ${rec.netUnits >= 0 ? 'text-chart-win' : 'text-chart-loss'}`}>{fmtUnits(rec.netUnits)}</td>
                       <td className="px-4 py-3 text-right">
                         {cfg && (
-                          <Link href={`/results/${cfg.slug}`} className="text-sm text-mid underline hover:text-hi">
+                          <Link href={`/results/${cfg.slug}`} className="text-sm text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
                             details
                           </Link>
                         )}
@@ -192,7 +192,7 @@ export default async function ResultsPage() {
           {SPORTS.map((s, i) => (
             <span key={s.slug}>
               {i > 0 && ' · '}
-              <Link href={`/results/${s.slug}`} className="text-mid underline hover:text-hi">
+              <Link href={`/results/${s.slug}`} className="text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
                 {s.name}
               </Link>
             </span>

@@ -152,14 +152,14 @@ export default function TermsPage() {
             For legal inquiries, email{' '}
             <a
               href="mailto:legal@betwithgary.ai"
-              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+              className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
             >
               legal@betwithgary.ai
             </a>
             . For general support, email{' '}
             <a
               href="mailto:support@betwithgary.ai"
-              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+              className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
             >
               support@betwithgary.ai
             </a>

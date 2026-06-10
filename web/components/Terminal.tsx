@@ -5,8 +5,9 @@ import Link from 'next/link';
  * - StitchRule    = StitchLine — the dashed betting-slip seam (dash 4, gap 5)
  * - PageMasthead  = GaryPageHeader — mono gold ALL-CAPS title, quiet meta, gold stitch
  * - StatTile      = quantPanel KPI tile — micro label / big mono value / mono sub
- * - GhostLink     = the one secondary button style (hairline, never gold)
- * Gold marks what Gary says; everything else stays quiet.
+ * - GhostLink     = the one secondary button style (gold hairline affordance)
+ * Gold marks what Gary says AND every tappable affordance — the app's
+ * "Gary's Take ›" / "Unlock ›" rule. Data stays quiet; actions wear gold.
  */
 
 export function StitchRule({ tone = 'gold', className = '' }: { tone?: 'gold' | 'faint'; className?: string }) {
@@ -73,7 +74,7 @@ export function GhostLink({
   return (
     <Link
       href={href}
-      className={`inline-flex items-center gap-1.5 rounded-card border border-line-strong px-5 py-3 text-sm text-mid transition-colors hover:border-white/30 hover:text-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-card border border-gold/40 px-5 py-3 text-sm text-gold transition-colors hover:border-gold/70 hover:text-gold-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink ${className}`}
     >
       {children}
     </Link>

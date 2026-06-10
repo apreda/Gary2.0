@@ -70,7 +70,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           <p className="tnum mt-3 font-mono text-[12px] text-low">
             {cfg.code} RECORD · L30 {l30.wins}-{l30.losses} · ALL-TIME {allTime.wins}-{allTime.losses}
             {allTime.graded > 0 ? ` (${allTime.pct}%)` : ''} ·{' '}
-            <Link href={`/results/${cfg.slug}`} className="text-mid underline decoration-gold/60 underline-offset-4 transition-colors hover:text-hi hover:decoration-gold">FULL RECORD</Link>
+            <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">FULL RECORD</Link>
           </p>
         )}
       </PageMasthead>
@@ -82,7 +82,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
           <p className="mt-3 text-[15px] text-mid">
             No {cfg.name} picks on today&apos;s board{allTime && allTime.graded > 0 ? (
-              <> — see the <Link href={`/results/${cfg.slug}`} className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">graded {cfg.name} record</Link> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>) while the season&apos;s quiet.</>
+              <> — see the <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">graded {cfg.name} record</Link> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>) while the season&apos;s quiet.</>
             ) : '.'}
           </p>
         </div>

@@ -54,7 +54,7 @@ function FeaturedPick({ pick }: { pick: GaryPick }) {
           </div>
           {conf !== null && (
             <div className="mt-3 flex items-center gap-2">
-              <Eyebrow>CONF</Eyebrow>
+              <Eyebrow dim>CONF</Eyebrow>
               <div className="h-1 flex-1 rounded bg-white/10">
                 <div className="h-1 rounded bg-gold" style={{ width: `${conf}%` }} />
               </div>
@@ -99,7 +99,7 @@ export default async function PicksPage() {
           <Link
             key={s.slug}
             href={`/picks/${s.slug}`}
-            className="rounded-chip border border-line px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-low transition-colors hover:border-line-strong hover:text-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            className="rounded-chip border border-line px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-low transition-colors hover:border-gold/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
           >
             {s.name}
           </Link>
@@ -115,7 +115,7 @@ export default async function PicksPage() {
           <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
           <p className="mt-3 text-[15px] text-mid">
             Today&apos;s slate hasn&apos;t dropped yet. Picks land every morning —
-            check the <Link href="/results" className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">track record</Link> meanwhile.
+            check the <Link href="/results" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">track record</Link> meanwhile.
           </p>
         </div>
       )}

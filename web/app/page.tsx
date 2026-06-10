@@ -57,7 +57,7 @@ export default async function Home() {
 
         <div className="relative mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-14 md:pt-20 lg:grid-cols-12 lg:gap-6">
           <div className="lg:col-span-7">
-            <p className="rise font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">
+            <p className="rise font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">
               {gamePicks && gamePicks.length > 0 ? (
                 <><span className="tnum">{gamePicks.length}</span> picks on today&apos;s board · {todayEST()}</>
               ) : allTime ? (
@@ -164,7 +164,7 @@ export default async function Home() {
               <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
               <p className="mt-3 text-[15px] text-mid">
                 The slate&apos;s cooking. Picks drop every morning — last night&apos;s results
-                are on the <Link href="/results" className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">record</Link>.
+                are on the <Link href="/results" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">record</Link>.
               </p>
             </div>
           )}
@@ -172,7 +172,7 @@ export default async function Home() {
         </div>
         <p className="mt-5 text-sm text-mid">
           Every game covered, completely free.{' '}
-          <Link href="/picks" className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">
+          <Link href="/picks" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
             All of today&apos;s picks →
           </Link>
         </p>
@@ -182,7 +182,7 @@ export default async function Home() {
       {allTime && l30 && (
         <section className="border-y border-line bg-elev/40">
           <div className="mx-auto max-w-6xl px-5 py-16">
-            <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">The record</h2>
+            <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">The record</h2>
             <div className="mt-4 grid items-end gap-10 lg:grid-cols-12">
               <div className="lg:col-span-7">
                 <p className="tnum font-mono text-[clamp(3.2rem,8vw,5.8rem)] font-bold leading-none text-hi">
@@ -232,7 +232,7 @@ export default async function Home() {
 
       {/* ── 04 · How the desk works ───────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-5 py-16">
-        <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-low">How Gary works</h2>
+        <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">How Gary works</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {[
             ['Research', 'A research agent investigates every game with live data — odds, stats, injuries, splits, weather.'],
@@ -240,7 +240,7 @@ export default async function Home() {
             ['On the record', 'Every pick is written up, fact-checked, graded the next morning, and added to the public ledger.'],
           ].map(([title, body], i) => (
             <div key={title} className="quant-panel p-6">
-              <span className="tnum font-mono text-[11px] font-bold text-faint">0{i + 1}</span>
+              <span className="tnum font-mono text-[11px] font-bold text-gold">0{i + 1}</span>
               <h3 className="mt-3 font-display text-2xl uppercase text-hi">{title}</h3>
               <p className="mt-2 text-[15px] leading-relaxed text-mid">{body}</p>
             </div>
@@ -248,7 +248,7 @@ export default async function Home() {
         </div>
         <Link
           href="/how-it-works"
-          className="mt-6 inline-block text-sm text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+          className="mt-6 inline-block text-sm text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
         >
           The full methodology →
         </Link>

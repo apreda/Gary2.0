@@ -88,7 +88,7 @@ export default function HowItWorksPage() {
           <div key={step.num}>
             {i > 0 && <StitchRule tone="faint" />}
             <div className="grid gap-4 py-10 md:grid-cols-[88px_1fr]">
-              <span className="tnum font-mono text-[28px] font-bold leading-none text-faint">{step.num}</span>
+              <span className="tnum font-mono text-[28px] font-bold leading-none text-gold">{step.num}</span>
               <div>
                 <h2 className="font-display text-3xl uppercase leading-none text-hi">{step.title}</h2>
                 <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-mid">{step.body}</p>
@@ -118,7 +118,7 @@ export default function HowItWorksPage() {
         <h2 className="mt-2 font-display text-2xl uppercase text-hi">The full record is public</h2>
         <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
           Every graded pick — including losses — is on the record at{' '}
-          <Link href="/results" className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">
+          <Link href="/results" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
             betwithgary.ai/results
           </Link>
           . Win-loss by sport, net units at flat stakes, and a full recent-results tape.

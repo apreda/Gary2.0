@@ -30,7 +30,7 @@ const ASSETS = [
     file: '/brand/GaryIconBG.png',
     label: 'Gary Bear Mark',
     dims: '1024 × 1024 px · transparent PNG',
-    hint: 'Primary mark. Use on warm black (#08080A) only.',
+    hint: 'Primary mark. Use on warm black (#0A0908) only.',
   },
   {
     file: '/brand/gary-head.png',
@@ -73,7 +73,7 @@ export default async function PressPage() {
           Approved copy, live record stats, and downloadable assets. Questions:{' '}
           <a
             href={`mailto:${BRAND.supportEmail}`}
-            className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+            className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
           >
             {BRAND.supportEmail}
           </a>
@@ -161,9 +161,9 @@ export default async function PressPage() {
               }
             />
           </div>
-          <p className="mt-2 text-[12px] text-faint">
+          <p className="mt-2 text-[12px] text-low">
             Full graded record (including losses):{' '}
-            <a href={`${BRAND.domain}/results`} className="text-mid underline hover:text-hi">
+            <a href={`${BRAND.domain}/results`} className="text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
               betwithgary.ai/results
             </a>
           </p>
@@ -174,7 +174,7 @@ export default async function PressPage() {
       <section className="mt-10">
         <Eyebrow>BRAND ASSETS</Eyebrow>
         <p className="mt-2 text-[13px] text-low">
-          Usage rules: warm black backgrounds only (#08080A), no blue tint, never recreate or
+          Usage rules: warm black backgrounds only (#0A0908), no blue tint, never recreate or
           AI-generate the bear — always use the real assets below.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -200,7 +200,7 @@ export default async function PressPage() {
                   <a
                     href={a.file}
                     download
-                    className="mt-2 inline-block font-mono text-[11px] text-mid underline hover:text-hi"
+                    className="mt-2 inline-block font-mono text-[11px] text-gold underline decoration-gold/40 transition-colors hover:text-gold-light"
                   >
                     Download
                   </a>
