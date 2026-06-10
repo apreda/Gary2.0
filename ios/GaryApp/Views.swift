@@ -10912,6 +10912,25 @@ struct ScoreboardPickCard: View {
                 teamRow(name: awayName, isPicked: !pickedHome)
                 teamRow(name: homeName, isPicked: pickedHome)
 
+                // The take — the rationale's opening paragraph as a front-of-
+                // card quote (mock, June 2026): clamped to three lines; the
+                // flip carries the full case.
+                if let take = splitTake(pick.rationale).take {
+                    HStack(alignment: .top, spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(GaryColors.gold.opacity(0.55))
+                            .frame(width: 2)
+                        Text(take)
+                            .font(GaryFonts.text(12.5))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineSpacing(2.5)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 9)
+                }
+
                 // Conviction rail — tier word, not a percentage (uncles don't
                 // say 82%); the bar stays as the analog read.
                 HStack(spacing: 8) {
@@ -10985,7 +11004,7 @@ struct FlippableScoreboardCard: View {
                 })
                 .opacity(flipped ? 0 : 1)
 
-            PickCardBack(pick: pick)
+            PickCardBack(pick: pick, gameResult: gameResult)
                 .opacity(flipped ? 1 : 0)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         }
@@ -11030,7 +11049,7 @@ struct FlippablePickCard: View {
                 })
                 .opacity(flipped ? 0 : 1)
 
-            PickCardBack(pick: pick)
+            PickCardBack(pick: pick, gameResult: gameResult)
                 .opacity(flipped ? 1 : 0)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         }
@@ -11095,8 +11114,146 @@ struct SportsbookLinesDropdown: View {
 
 /// The back of the pick card — Gary's reasoning. Uses the pick card's own
 /// rounded/mono styling (NOT the Props serif) and matches the front's chrome.
+// MARK: - Share Cards (pick → branded story/square image)
+
+/// The shareable pick card — Quant Terminal on black, rendered at 2x from a
+/// 540×960 story canvas or 540×540 square. Three states ride `gameResult`:
+/// pregame (no stamp), CASHED (gold) on wins, LOST on losses.
+/// HOUSE RULE: share assets carry UNITS/records only — never dollars.
+struct ShareCardView: View {
+    let pick: GaryPick
+    var gameResult: String? = nil
+    var square: Bool = false
+
+    private var take: String? { splitTake(pick.rationale).take }
+    private var tier: String? { pick.confidence.map { convictionTier(min(max($0, 0), 1)) } }
+    private var stamp: (text: String, color: Color)? {
+        switch gameResult?.lowercased() {
+        case "won":  return ("CASHED", GaryColors.gold)
+        case "lost": return ("LOST", Color(hex: "#E5484D"))
+        default:     return nil
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Color(hex: "#0B0B0C")
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 10) {
+                    Image("GaryIconBG")
+                        .resizable().scaledToFit()
+                        .frame(width: square ? 44 : 54, height: square ? 44 : 54)
+                    Text("GARY A.I.")
+                        .font(GaryFonts.mono(square ? 16 : 19))
+                        .foregroundStyle(GaryColors.gold)
+                    Spacer()
+                }
+
+                Spacer(minLength: 0)
+
+                Text("GARY'S CASE")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
+                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+                    .padding(.bottom, 10)
+
+                Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")".uppercased())
+                    .font(GaryFonts.mono(square ? 11 : 12.5))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.bottom, 6)
+
+                Text((pick.pick ?? "").uppercased())
+                    .font(GaryFonts.display(square ? 34 : 42))
+                    .foregroundStyle(GaryColors.gold)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+                    .padding(.bottom, square ? 12 : 18)
+
+                if let take {
+                    HStack(alignment: .top, spacing: 12) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(GaryColors.gold.opacity(0.7))
+                            .frame(width: 3)
+                        Text(take)
+                            .font(GaryFonts.text(square ? 14.5 : 17, .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineSpacing(4)
+                            .lineLimit(square ? 5 : 8)
+                    }
+                    .padding(.bottom, square ? 12 : 18)
+                }
+
+                if let tier {
+                    HStack(spacing: 8) {
+                        Text("CONVICTION")
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.4))
+                        Text(tier)
+                            .font(GaryFonts.mono(12, bold: true))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Rectangle()
+                    .fill(GaryColors.gold.opacity(0.3))
+                    .frame(height: 1)
+                    .padding(.bottom, 9)
+                HStack {
+                    Text("betwithgary.ai")
+                        .font(GaryFonts.mono(11))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Spacer()
+                    Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
+            .padding(square ? 30 : 38)
+
+            if let stamp {
+                Text(stamp.text)
+                    .font(GaryFonts.mono(square ? 38 : 46, bold: true)).tracking(4)
+                    .foregroundStyle(stamp.color.opacity(0.92))
+                    .padding(.horizontal, 22).padding(.vertical, 10)
+                    .overlay(Rectangle().stroke(stamp.color.opacity(0.85), lineWidth: 3))
+                    .rotationEffect(.degrees(-12))
+            }
+        }
+        .frame(width: 540, height: square ? 540 : 960)
+    }
+}
+
+/// Renders both share formats (9:16 story + square) at 2x. Main-thread only
+/// (ImageRenderer); called from button actions.
+@MainActor
+func renderPickShareImages(pick: GaryPick, gameResult: String?) -> [UIImage] {
+    [false, true].compactMap { square in
+        let renderer = ImageRenderer(content: ShareCardView(pick: pick, gameResult: gameResult, square: square))
+        renderer.scale = 2
+        return renderer.uiImage
+    }
+}
+
+/// Identifiable wrapper so the share sheet rides .sheet(item:).
+struct PickShareItem: Identifiable {
+    let id = UUID()
+    let images: [UIImage]
+}
+
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
 struct PickCardBack: View {
     let pick: GaryPick
+    var gameResult: String? = nil
+    @State private var shareItem: PickShareItem? = nil
     private var confidence: CGFloat { CGFloat(max(0.1, min(1.0, pick.confidence ?? 0.7))) }
     private var pickedHome: Bool {
         guard let h = pick.homeTeam, !h.isEmpty else { return false }
@@ -11113,6 +11270,18 @@ struct PickCardBack: View {
                 Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
                     .font(GaryFonts.mono(10, bold: false))
                     .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
+                Button {
+                    let images = renderPickShareImages(pick: pick, gameResult: gameResult)
+                    if !images.isEmpty { shareItem = PickShareItem(images: images) }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Share this pick")
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -11147,11 +11316,23 @@ struct PickCardBack: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(pick.rationale ?? "No rationale available.")
-                        .font(.system(size: 14.5))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .lineSpacing(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // The rationale's first paragraph leads at quote weight;
+                    // the rest of the case follows as the receipts.
+                    let parts = splitTake(pick.rationale)
+                    if let take = parts.take {
+                        Text(take)
+                            .font(GaryFonts.text(16.5, .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineSpacing(3.5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if let rest = parts.rest {
+                        Text(rest)
+                            .font(.system(size: 14.5))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                     if let odds = pick.sportsbook_odds, !odds.isEmpty {
                         Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
@@ -11183,6 +11364,7 @@ struct PickCardBack: View {
                 .fill(Color(hex: "#1A1A1C"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
+        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
 }
 
@@ -13280,6 +13462,25 @@ func liveSlotText(_ ls: LiveScore, label: String) -> String {
 /// 27% SPRINKLE · 48% LEAN · 25% HAMMER.
 func convictionTier(_ confidence: Double) -> String {
     confidence >= 0.80 ? "HAMMER" : confidence >= 0.70 ? "LEAN" : "SPRINKLE"
+}
+
+/// Splits a rationale into (take, rest): the first paragraph leads the card
+/// back at quote weight and seeds the front quote + share card. Stored
+/// rationales open with a literal "Gary's Take" heading (the JSON template
+/// pastes it) — strip it. Anything that doesn't split cleanly renders whole
+/// as `rest`.
+func splitTake(_ rationale: String?) -> (take: String?, rest: String?) {
+    guard var r = rationale?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty else {
+        return (nil, "No rationale available.")
+    }
+    if r.lowercased().hasPrefix("gary's take") {
+        r = String(r.dropFirst("gary's take".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard let cut = r.range(of: "\n\n") else { return (nil, r) }
+    let first = String(r[..<cut.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+    let rest = String(r[cut.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !first.isEmpty, first.count <= 340, !rest.isEmpty else { return (nil, r) }
+    return (first, rest)
 }
 
 func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
