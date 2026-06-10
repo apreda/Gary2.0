@@ -217,6 +217,42 @@ export async function getPitcherPlatoonSplits(playerId, season) {
   return final;
 }
 
+/**
+ * Player season FIELDING splits (one entry per position played). For catchers
+ * the stat block carries the run-game numbers: stolenBases (allowed),
+ * caughtStealing, stolenBasePercentage, caughtStealingPercentage, innings,
+ * passedBall, catcherERA. Returns the raw splits array ([{ stat, position }])
+ * or [] when none.
+ */
+export async function getPlayerFieldingStats(playerId, season) {
+  const year = season || new Date().getFullYear();
+  const key = `player_fielding_${playerId}_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  const data = await apiFetch(`/people/${playerId}/stats?stats=season&season=${year}&group=fielding`);
+  const splits = data.stats?.[0]?.splits || [];
+  setCache(key, splits);
+  return splits;
+}
+
+/**
+ * Team season HITTING stats (one stat block for the whole team) — includes
+ * stolenBases, caughtStealing, gamesPlayed, runs, homeRuns, avg, ops.
+ * Returns the stat object or null.
+ */
+export async function getTeamHittingStats(teamId, season) {
+  const year = season || new Date().getFullYear();
+  const key = `team_hitting_${teamId}_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  const data = await apiFetch(`/teams/${teamId}/stats?stats=season&season=${year}&group=hitting`);
+  const stat = data.stats?.[0]?.splits?.[0]?.stat || null;
+  setCache(key, stat);
+  return stat;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // BOX SCORES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -429,6 +465,8 @@ export default {
   formatMlbGameForPipeline,
   getTeamRoster,
   getPlayerSeasonStats,
+  getPlayerFieldingStats,
+  getTeamHittingStats,
   getPlayerInfo,
   searchPlayer,
   getPitcherPlatoonSplits,

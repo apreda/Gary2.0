@@ -37,6 +37,11 @@ import { computeBeneficiary } from './computers/beneficiary.js';
 import { computeRestFatigue } from './computers/restFatigue.js';
 import { computeOwned } from './computers/owned.js';
 import { computeCoolingOff } from './computers/coolingOff.js';
+import { computeStarterForm } from './computers/starterForm.js';
+import { computeStreaking } from './computers/streaking.js';
+import { computeFirstInning } from './computers/firstInning.js';
+import { computeRunningGame } from './computers/runningGame.js';
+import { computeParkWeather } from './computers/parkWeather.js';
 
 // NBA connection computers.
 import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
@@ -85,6 +90,11 @@ const MLB_COMPUTERS = [
   computeRestFatigue,
   computeOwned,
   computeCoolingOff,
+  computeStarterForm,
+  computeStreaking,
+  computeFirstInning,
+  computeRunningGame,
+  computeParkWeather,
 ];
 
 const NBA_COMPUTERS = [

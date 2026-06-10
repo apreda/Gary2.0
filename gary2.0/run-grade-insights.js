@@ -43,9 +43,33 @@
  *   regression_watch  bad    pitcher er>=4 / hitter hits==0      mirrored push/miss
  *   regression_watch  good   pitcher er<=2 / hitter hits>=2      mirrored push/miss
  *
+ *   starter_form      good   er <= 2             er == 3         er >= 4   (pitcher; needs ip>0)
+ *   starter_form      bad    er >= 4             er == 3         er <= 2   (pitcher; needs ip>0)
+ *
  *   regression_watch picks its pitcher-vs-hitter branch off the box row itself:
  *   ip > 0 -> pitching grade (er bands), else -> hitter grade (hits bands).
- *   ballpark_shift requires ip > 0 in the box row, else the row is skipped.
+ *   ballpark_shift / starter_form require ip > 0 in the box row, else skipped.
+ *
+ * MLB game/team-level rows (graded off the final score / linescore / opponent
+ * box rows rather than the row subject's own box row):
+ *   streaking   value W…, L…  tone-side team won/lost extends the run (hit) or
+ *                             breaks it (miss); no push.
+ *   streaking   value O…, U…  final total vs line_val (tonight's posted total,
+ *                             stamped at generation): continues = hit,
+ *                             lands ON the number = push, breaks = miss.
+ *                             No line_val -> context row (NULL + note).
+ *   park_weather              tone good = over lean / bad = under lean; final
+ *                             total vs line_val (hit/push/miss as streaking O/U).
+ *                             No line_val -> context row.
+ *   first_inning value NRFI   1st-inning total 0 -> hit, else miss (binary).
+ *   first_inning value YRFI   1st-inning total >= 1 -> hit, else miss.
+ *   first_inning (team row)   tone good ("strikes first"): team scored in the
+ *                             1st -> hit; tone bad: team blanked -> hit. Binary.
+ *                             1st-inning runs come from the MLB Stats API
+ *                             schedule linescore (fetched once, lazily).
+ *   running_game              opponent's box stolen_bases summed. tone bad
+ *                             (green light): 2+ SB hit / 1 push / 0 miss;
+ *                             tone good (shutdown): 0 hit / 1 push / 2+ miss.
  *
  * MLB team rows (player_id null, team_id set):
  *   rest_fatigue      bad    flagged team LOST   —               flagged team WON
@@ -68,11 +92,12 @@ import './src/loadEnv.js';
 
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
-import { nameKey } from './src/services/insights/shared.js';
+import { nameKey, etDateStr } from './src/services/insights/shared.js';
 
 // Import after env is loaded (services read env at module init time)
 const { ballDontLieService: bdl } = await import('./src/services/ballDontLieService.js');
 const fifaWorldCup = await import('./src/services/fifaWorldCupService.js');
+const mlbStatsApi = (await import('./src/services/mlbStatsApiService.js')).default;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -286,7 +311,7 @@ async function fetchRows(date, league) {
     params: {
       date: `eq.${date}`,
       league: `eq.${league}`,
-      select: 'id,league,category,tone,player_id,team_id,game_id,headline,value,result,result_note,graded_at',
+      select: 'id,league,category,tone,player_id,team_id,game_id,headline,value,line_val,result,result_note,graded_at',
     },
   });
   return Array.isArray(res.data) ? res.data : [];
@@ -437,6 +462,118 @@ function gradeRegressionWatch(row, box) {
   return { result, note: hitterNote(box) };
 }
 
+function gradeStarterForm(row, box) {
+  const ip = parseIp(box.ip);
+  if (!(ip > 0)) return skip('no pitching work (ip<=0)');
+  const er = num(box.er);
+  if (er == null) return skip('no er');
+  let result;
+  if (isGood(row.tone)) {
+    // Claim: he is DEALING — a clean outing keeps the heater alive.
+    result = er <= 2 ? HIT : er === 3 ? PUSH : MISS;
+  } else {
+    // Claim: he is GETTING HIT — another rough one confirms the skid.
+    result = er >= 4 ? HIT : er === 3 ? PUSH : MISS;
+  }
+  return { result, note: pitcherNote(box) };
+}
+
+/**
+ * streaking rows: value's first letter picks the branch. W/L grade on the
+ * team's result (no push); O/U grade the final total against line_val
+ * (tonight's posted total stamped at generation; absent -> context row).
+ */
+function gradeStreaking(row, winner) {
+  const kind = String(row.value || '').trim().toUpperCase()[0];
+  if (kind === 'W' || kind === 'L') {
+    const won = teamWon(winner, row.team_id);
+    if (won == null) return skip('team not resolvable in game');
+    const note = `team ${won ? 'won' : 'lost'} ${winner.awayRuns}-${winner.homeRuns}`;
+    // A win extends a W run / breaks an L run, and vice versa.
+    if (kind === 'W') return { result: won ? HIT : MISS, note };
+    return { result: won ? MISS : HIT, note };
+  }
+  if (kind === 'O' || kind === 'U') {
+    const line = num(row.line_val);
+    if (line == null) return { result: null, note: 'no posted total at generation — not graded' };
+    const total = winner.homeRuns + winner.awayRuns;
+    const note = `final total ${total} vs ${line}`;
+    if (total === line) return { result: PUSH, note };
+    const wentOver = total > line;
+    return { result: wentOver === (kind === 'O') ? HIT : MISS, note };
+  }
+  return { result: null, note: 'context row — not graded' };
+}
+
+/**
+ * park_weather rows: tone good = over lean, bad = under lean; the final total
+ * settles against line_val. No posted total at generation -> context row.
+ */
+function gradeParkWeather(row, winner) {
+  const line = num(row.line_val);
+  if (line == null) return { result: null, note: 'no posted total at generation — not graded' };
+  const total = winner.homeRuns + winner.awayRuns;
+  const lean = isGood(row.tone) ? 'over' : 'under';
+  const note = `final total ${total} vs ${line} (${lean} lean)`;
+  if (total === line) return { result: PUSH, note };
+  const wentOver = total > line;
+  return { result: (lean === 'over') === wentOver ? HIT : MISS, note };
+}
+
+/**
+ * first_inning rows grade off the game's 1st-inning linescore.
+ *   value NRFI/YRFI -> matchup claim on the combined 1st-inning total (binary).
+ *   team row (team_id set) -> tone good = "they strike first" (their 1st-inning
+ *   runs confirm), tone bad = "flat in the 1st" (a blank confirms). Binary.
+ */
+function gradeFirstInning(row, game, inn1) {
+  const v = String(row.value || '').trim().toUpperCase();
+  const total1 = inn1.homeR1 + inn1.awayR1;
+  const note = `1st inning: ${inn1.awayR1}-${inn1.homeR1} (${total1} run${total1 === 1 ? '' : 's'})`;
+  if (v.startsWith('NRFI')) return { result: total1 === 0 ? HIT : MISS, note };
+  if (v.startsWith('YRFI')) return { result: total1 >= 1 ? HIT : MISS, note };
+
+  // Team-side row.
+  const id = row.team_id != null ? String(row.team_id) : null;
+  if (!id) return { result: null, note: 'context row — not graded' };
+  let teamR1 = null;
+  if (id === String(game?.home_team?.id)) teamR1 = inn1.homeR1;
+  else if (id === String(game?.away_team?.id ?? game?.visitor_team?.id)) teamR1 = inn1.awayR1;
+  if (teamR1 == null) return skip('team not resolvable in game');
+  const scored = teamR1 >= 1;
+  // good = "they strike first"; bad = "flat in the 1st".
+  const result = isGood(row.tone) ? (scored ? HIT : MISS) : (scored ? MISS : HIT);
+  return { result, note: `flagged team scored ${teamR1} in the 1st` };
+}
+
+/**
+ * running_game rows: the claim settles on the OPPONENT's stolen bases tonight
+ * (summed over their box rows). tone bad = green-light (they run on this
+ * catcher): 2+ SB hit / 1 push / 0 miss. tone good = shutdown: mirrored.
+ */
+function gradeRunningGame(row, game, boxRowsByGame) {
+  const id = row.team_id != null ? String(row.team_id) : null;
+  if (!id) return skip('no team_id on running_game row');
+  const homeName = game?.home_team?.display_name || game?.home_team_name;
+  const awayName = game?.away_team?.display_name || game?.away_team_name;
+  let oppName = null;
+  if (id === String(game?.home_team?.id)) oppName = awayName;
+  else if (id === String(game?.away_team?.id ?? game?.visitor_team?.id)) oppName = homeName;
+  if (!oppName) return skip('team not resolvable in game');
+
+  const oppRows = (boxRowsByGame.get(String(row.game_id)) || [])
+    .filter((r) => r?.team_name === oppName);
+  if (oppRows.length < 5) return skip('no opponent box rows');
+  const sb = oppRows.reduce((sum, r) => sum + (num(r.stolen_bases) || 0), 0);
+  const note = `${oppName} stole ${sb} base${sb === 1 ? '' : 's'}`;
+  if (isBad(row.tone)) {
+    // Green light claim — steals confirm it.
+    return { result: sb >= 2 ? HIT : sb === 1 ? PUSH : MISS, note };
+  }
+  // Shutdown claim — a clean sheet confirms it.
+  return { result: sb === 0 ? HIT : sb === 1 ? PUSH : MISS, note };
+}
+
 /** MLB team-context rows. rest_fatigue grades on the flagged team's result. */
 function gradeMlbTeamRow(row, winner) {
   if (row.category === 'rest_fatigue') {
@@ -490,6 +627,7 @@ const MLB_PLAYER_GRADERS = {
   ballpark_shift: gradeBallparkShift,
   regression_watch: gradeRegressionWatch,
   gary_hr_threats: gradeGaryHrThreat,
+  starter_form: gradeStarterForm,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -552,6 +690,9 @@ async function gradeMlb(rows) {
     }
   }
 
+  // 1st-inning linescores, fetched lazily ONLY when first_inning rows exist.
+  const inn1ByGameId = await buildFirstInningIndex(rows, gameById);
+
   const verdicts = [];
   for (const row of rows) {
     const game = row.game_id != null ? gameById.get(String(row.game_id)) : null;
@@ -559,6 +700,28 @@ async function gradeMlb(rows) {
     // Not-final / postponed / missing-from-slate -> leave fully untouched.
     if (!game) { verdicts.push({ row, verdict: skip('game not on slate') }); continue; }
     if (!isFinal(game.status)) { verdicts.push({ row, verdict: skip('game not final') }); continue; }
+
+    // ── Game-level lanes: these grade off the final score / linescore /
+    //    opponent box rows, NOT the row subject's own box row ──
+    if (row.category === 'streaking' || row.category === 'park_weather') {
+      const winner = mlbWinner(game, boxRowsByGame);
+      if (!winner) { verdicts.push({ row, verdict: skip('winner unresolvable') }); continue; }
+      verdicts.push({
+        row,
+        verdict: row.category === 'streaking' ? gradeStreaking(row, winner) : gradeParkWeather(row, winner),
+      });
+      continue;
+    }
+    if (row.category === 'first_inning') {
+      const inn1 = inn1ByGameId.get(String(row.game_id));
+      if (!inn1) { verdicts.push({ row, verdict: skip('no 1st-inning linescore') }); continue; }
+      verdicts.push({ row, verdict: gradeFirstInning(row, game, inn1) });
+      continue;
+    }
+    if (row.category === 'running_game') {
+      verdicts.push({ row, verdict: gradeRunningGame(row, game, boxRowsByGame) });
+      continue;
+    }
 
     if (row.player_id != null) {
       // Primary join: BDL box player.id === row.player_id (the spec's join).
@@ -591,6 +754,47 @@ async function gradeMlb(rows) {
   }
 
   return verdicts;
+}
+
+/**
+ * 1st-inning linescores for the slate games that have first_inning rows.
+ * The MLB Stats API schedule (hydrate=linescore) for the game's ET calendar
+ * date carries innings[0] on finals; the BDL game joins by full-name match
+ * (the scout report's gamePk-resolution pattern). Returns
+ * Map(String(bdl game id) -> { homeR1, awayR1 }); games it cannot resolve are
+ * simply absent (the row skips and grades on a later run if it ever resolves).
+ */
+async function buildFirstInningIndex(rows, gameById) {
+  const need = rows.filter((r) => r.category === 'first_inning' && r.game_id != null);
+  const out = new Map();
+  if (!need.length) return out;
+
+  const schedByDate = new Map();
+  for (const r of need) {
+    const game = gameById.get(String(r.game_id));
+    if (!game) continue;
+    const d = etDateStr(game.date);
+    if (!d) continue;
+    if (!schedByDate.has(d)) {
+      try {
+        schedByDate.set(d, (await mlbStatsApi.getMlbSchedule(d)) || []);
+      } catch (err) {
+        console.error(`[grade-insights][MLB] schedule fetch failed: ${err?.message || err}`);
+        schedByDate.set(d, []);
+      }
+    }
+    const match = schedByDate.get(d).find((sg) => (
+      nameKey(sg?.teams?.home?.team?.name) === nameKey(game?.home_team?.display_name || game?.home_team_name)
+      && nameKey(sg?.teams?.away?.team?.name) === nameKey(game?.away_team?.display_name || game?.away_team_name)
+    ));
+    const inn1 = match?.linescore?.innings?.[0];
+    const homeR1 = Number(inn1?.home?.runs);
+    const awayR1 = Number(inn1?.away?.runs);
+    if (Number.isFinite(homeR1) && Number.isFinite(awayR1)) {
+      out.set(String(r.game_id), { homeR1, awayR1 });
+    }
+  }
+  return out;
 }
 
 async function gradeNba(rows) {

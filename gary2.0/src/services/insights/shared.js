@@ -145,6 +145,46 @@ export function todayStr(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Calendar date (YYYY-MM-DD) in US Eastern for an ISO datetime. BDL MLB game
+ * dates are UTC instants — a 9:40pm ET first pitch carries TOMORROW'S UTC date —
+ * while the MLB Stats API schedule keys on the ET calendar date. Any join
+ * between the two goes through this. Returns null on garbage input.
+ */
+export function etDateStr(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  // en-CA locale formats as YYYY-MM-DD.
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+/** YYYY-MM-DD shifted by `delta` days via UTC math (no tz drift). */
+export function shiftDateStr(dateStr, delta) {
+  const parsed = Date.parse(`${dateStr}T00:00:00Z`);
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed + delta * 86400000).toISOString().slice(0, 10);
+}
+
+/** Median of an array of finite numbers; null when the array has none. */
+export function median(nums) {
+  const xs = (nums || []).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!xs.length) return null;
+  const mid = Math.floor(xs.length / 2);
+  return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+}
+
+/**
+ * Parse an MLB "ip" thirds-decimal value (5.2 = 5 2/3 innings) into true
+ * innings. Returns 0 on garbage/negative input.
+ */
+export function parseIpThirds(ip) {
+  const n = Number(ip);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  const whole = Math.floor(n);
+  const thirds = Math.round((n - whole) * 10); // 0, 1, 2
+  return whole + thirds / 3;
+}
+
 /** "AWAY @ HOME" display string from a normalized BDL game. */
 export function gameLabel(game) {
   const away = game?.visitor_team?.abbreviation || game?.visitor_team?.name || 'AWY';
