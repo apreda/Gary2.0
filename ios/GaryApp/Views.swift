@@ -16150,7 +16150,7 @@ struct PropsHubView: View {
     /// the capsule selection grammar — the Billfold sport-chip pattern, not
     /// SF text (the terminal's selectors speak mono).
     private func hubLaneStrip(lanes: [SignalKind], active: SignalKind,
-                              title: (SignalKind) -> String,
+                              title: @escaping (SignalKind) -> String,
                               onSelect: @escaping (SignalKind) -> Void) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -16530,13 +16530,20 @@ struct EdgeCardBack: View {
                     .background(Capsule().fill(GaryColors.gold))
                 }
                 .buttonStyle(.plain)
+            } else {
+                // No CTA on this back — carry the shared flip-home affordance
+                // every other card back in the app wears.
+                Text("tap to flip back  ↺")
+                    .font(GaryFonts.mono(9, bold: false)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.3))
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(GaryColors.warmWhite.opacity(0.06))
                 .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(s.kind.tint.opacity(0.35), lineWidth: 1))
         )
     }
@@ -16560,7 +16567,7 @@ struct FeatureEdgeCard: View {
                 if !s.spark.isEmpty { MiniBarChart(values: s.spark, line: s.lineVal, tint: s.kind.tint, height: 24) }
                 Spacer()
                 if !s.value.isEmpty {
-                    Text(s.value).font(.system(size: 24, weight: .bold)).foregroundStyle(s.tone.color)
+                    Text(s.value).font(GaryFonts.mono(22, bold: true)).foregroundStyle(s.tone.color)
                 }
             }
         }
@@ -16568,7 +16575,7 @@ struct FeatureEdgeCard: View {
         .frame(width: 232, height: 162, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+                .fill(GaryColors.warmWhite.opacity(0.04))
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(s.kind.tint.opacity(0.28), lineWidth: 1))
         )
     }
@@ -16586,7 +16593,7 @@ struct RegressionBoard: View {
                 Button { onTap(s) } label: {
                     HStack(spacing: 12) {
                         Text("\(i + 1)")
-                            .font(.system(size: 13, weight: .heavy))
+                            .font(GaryFonts.mono(12, bold: true))
                             .foregroundStyle(.white.opacity(0.3)).frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(boardName(s)).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
@@ -16594,8 +16601,11 @@ struct RegressionBoard: View {
                         }
                         Spacer(minLength: 6)
                         if s.spark.count >= 2 { gapBar(s.spark[0], s.spark[1], tint: s.tone.color) }
-                        Text(s.value).font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(s.tone.color).frame(width: 50, alignment: .trailing)
+                        Text(s.value).font(GaryFonts.mono(16, bold: true))
+                            .foregroundStyle(s.tone.color).frame(width: 52, alignment: .trailing)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.25))
                     }
                     .padding(.vertical, 9).padding(.horizontal, 14).contentShape(Rectangle())
                 }
@@ -16649,7 +16659,7 @@ struct MiniEdgeCard: View {
             Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
             Text(name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
             if !s.value.isEmpty {
-                Text(s.value).font(.system(size: 22, weight: .bold)).foregroundStyle(s.tone.color)
+                Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
             }
             if !s.spark.isEmpty { MiniBarChart(values: s.spark, line: s.lineVal, tint: s.kind.tint, height: 16) }
             Spacer(minLength: 0)
@@ -16660,8 +16670,8 @@ struct MiniEdgeCard: View {
         .frame(width: 170, height: 152, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                .fill(GaryColors.warmWhite.opacity(0.04))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
         )
     }
 }
