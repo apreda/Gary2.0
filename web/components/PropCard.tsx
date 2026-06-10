@@ -10,7 +10,7 @@ export function PropCard({ prop, expanded = false }: { prop: PropPick; expanded?
   const rationale = (prop.rationale ?? prop.analysis ?? '').trim();
 
   return (
-    <article className="rounded-[20px] border border-silver/30 bg-card p-5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+    <article className="rounded-[20px] border border-silver/35 bg-card p-5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
       <div className="flex items-center justify-between">
         <Eyebrow>{league}{prop.matchup ? ` · ${prop.matchup}` : ''}</Eyebrow>
       </div>
@@ -18,7 +18,7 @@ export function PropCard({ prop, expanded = false }: { prop: PropPick; expanded?
       {rationale && (
         <p className={`mt-2 text-[15px] leading-relaxed text-white/60 ${expanded ? '' : 'line-clamp-3'}`}>{rationale}</p>
       )}
-      <div className="mt-4 flex items-center justify-between rounded-[10px] border border-silver/50 bg-chip px-4 py-2.5">
+      <div className="mt-4 flex items-center justify-between rounded-[10px] border border-silver/60 bg-chip px-4 py-2.5">
         <span className={`font-mono text-sm font-bold uppercase ${callColor}`}>
           {prop.bet} {prop.line} {prop.prop?.replace(/\s[\d.]+$/, '')}
         </span>
