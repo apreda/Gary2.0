@@ -1,5 +1,36 @@
 # Gary — Stripe Integration Handoff (web + iOS)
 
+> ## ⚠️ June 9 2026 addendum — SUBSCRIPTIONS era (supersedes the one-time-pass plan below)
+>
+> The product moved to **recurring subscriptions** in June 2026: single sport $9.99/mo,
+> bundles $17.99/$24.99/mo, All-Access monthly + annual, WC Pass $14.99 one-time.
+> Checkout = **Stripe Payment Links** opened from the iOS paywall
+> (`PremiumPicksView.checkoutLinks` in `ios/GaryApp/Views.swift`) with
+> `client_reference_id` = the app identity; entitlements land in
+> `user_entitlements` via the live `stripe-webhook` Edge Function.
+>
+> **June 9 price flip — STAGED in TEST mode** (account `acct_1TcXw4LJVzRZvO5H`):
+> - All-Access **$29.99/mo**, price `price_1TgbDjLJVzRZvO5HMwgDFOxQ`,
+>   link `https://buy.stripe.com/test_00w9AU2MQ8ql5SW0lKaIM0h` (7-day trial, card required)
+> - All-Access **$179/yr**, price `price_1TgbDkLJVzRZvO5HyEHdsn6I`,
+>   link `https://buy.stripe.com/test_fZu14o0EI9up3KOgkIaIM0i` (7-day trial, card required)
+> - Both on product `prod_UeKymtDX7E8fsw` (All-Access — Monthly); same product ⇒ the
+>   webhook's product-metadata entitlement mapping is unchanged.
+> - Code constants already flipped on the `under` branch (iOS `GaryPricing`,
+>   web `lib/gary/pricing.ts`); DEBUG builds use the new test links.
+>
+> **PRE-SHIP (owner, live mode — the only remaining manual step):**
+> 1. In LIVE mode, on the live All-Access product: create a **$29.99/mo** price and a
+>    **$179/yr** price; create a payment link for each with **7-day trial** +
+>    **"Require customers to provide a payment method"** ON.
+> 2. Swap the RELEASE `"ALL"` link and add `"ALL_ANNUAL"` in
+>    `PremiumPicksView.checkoutLinks` (`ios/GaryApp/Views.swift`).
+> 3. Deactivate the old live $34.99 link the moment the new build is live.
+>    Existing $34.99 subscribers keep their price (grandfathered) unless migrated.
+>
+> The document below describes the RETIRED one-time-pass model — kept for the
+> webhook/entitlement architecture references only.
+
 This is everything the developer needs to wire Stripe into the Gary website (Vite + React) and iOS app, on top of the existing Supabase backend. The model is **one-time purchases that grant time-limited, per-sport access** — not recurring subscriptions.
 
 ## 1. Architecture at a glance

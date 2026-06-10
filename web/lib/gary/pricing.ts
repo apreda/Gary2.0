@@ -6,18 +6,22 @@
  * together (Stripe link/trial → iOS GaryPricing → here), never one alone —
  * the site must never quote a number Stripe won't honor.
  *
- * Planned next change (pending the Stripe reconfig): All-Access → $29.99/mo
- * with a 7-day trial, plus a new $179/yr annual price+link. Flip the constants
- * here + in GaryPricing the moment the Stripe side is live.
+ * June 9 2026 flip — STAGED: $29.99/mo + 7-day trial + $179/yr annual. The
+ * Stripe TEST catalog matches (prices on prod_UeKymtDX7E8fsw, 7-day
+ * card-required trials on both links). ⚠️ PRE-SHIP (owner, live mode):
+ * recreate the $29.99/7-day and $179/yr prices + payment links in LIVE mode
+ * and swap the RELEASE links in iOS GaryPricing's checkoutLinks — this page
+ * deploys together with that swap, never before.
  */
 export const PRICING = {
-  allAccessMonthly: '$34.99',
-  allAccessAnnual: '$179',   // surfaces only once the Stripe annual link exists
+  allAccessMonthly: '$29.99',
+  allAccessAnnual: '$179',
+  allAccessAnnualMonthly: '$14.92',  // 179 / 12 — the annual card's effective rate
   single: '$9.99',
   worldCup: '$14.99',
   twoSport: '$17.99',
   threeSport: '$24.99',
-  trialDays: 3,
+  trialDays: 7,
 } as const;
 
 /** Free vs. paid — the honest gating story. Free = the brain (the resource);

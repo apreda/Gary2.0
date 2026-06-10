@@ -6,7 +6,7 @@ import { PRICING } from '@/lib/gary/pricing';
 import { APP_STORE_URL } from '@/components/AppStoreButton';
 import { logEvent } from '@/lib/gary/analytics';
 
-type Sel = { plan: 'all_access' | 'single' | 'world_cup'; sport?: string };
+type Sel = { plan: 'all_access' | 'all_access_annual' | 'single' | 'world_cup'; sport?: string };
 
 export function PricingPlans({
   recordsByLeague = {},
@@ -21,7 +21,9 @@ export function PricingPlans({
 
   function pick(next: Sel) {
     setSel(next);
-    logEvent('plan_selected', { ...next, surface: 'web', billing: next.plan === 'world_cup' ? 'one_time' : 'monthly' });
+    const billing =
+      next.plan === 'world_cup' ? 'one_time' : next.plan === 'all_access_annual' ? 'annual' : 'monthly';
+    logEvent('plan_selected', { ...next, surface: 'web', billing });
   }
 
   function unlock() {
@@ -54,6 +56,29 @@ export function PricingPlans({
         <div className="text-right">
           <div className="font-mono text-lg font-bold text-gold">{PRICING.allAccessMonthly}</div>
           <div className="font-mono text-[9px] uppercase tracking-wider text-white/35">per month</div>
+        </div>
+      </button>
+
+      {/* All-Access annual — the committed-bettor rate, half the monthly run-rate */}
+      <button
+        onClick={() => pick({ plan: 'all_access_annual' })}
+        className={`relative mt-4 flex w-full items-center gap-4 rounded-[18px] border bg-card p-5 text-left transition-colors ${
+          isSel('all_access_annual') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-white/10 hover:border-white/25'
+        }`}
+      >
+        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-ink">
+          Save 50% vs monthly
+        </span>
+        <Radio on={isSel('all_access_annual')} />
+        <div className="min-w-0 flex-1">
+          <div className="font-mono text-sm font-bold tracking-wide text-white/95">ALL-ACCESS — ANNUAL</div>
+          <div className="mt-1 text-[13px] text-white/55">
+            Every board, all year · works out to {PRICING.allAccessAnnualMonthly}/mo
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-mono text-lg font-bold text-gold">{PRICING.allAccessAnnual}</div>
+          <div className="font-mono text-[9px] uppercase tracking-wider text-white/35">per year</div>
         </div>
       </button>
 
@@ -142,12 +167,15 @@ export function PricingPlans({
 
 function ctaLabel(sel: Sel): string {
   if (sel.plan === 'all_access') return `START ${PRICING.trialDays}-DAY FREE TRIAL IN THE APP`;
+  if (sel.plan === 'all_access_annual') return `START FREE TRIAL — ${PRICING.allAccessAnnual}/YR IN THE APP`;
   if (sel.plan === 'world_cup') return 'GET THE WORLD CUP PASS IN THE APP';
   return `UNLOCK ${sel.sport} WINNERS — ${PRICING.single}/MO`;
 }
 
 function ctaCaption(sel: Sel): string {
   if (sel.plan === 'all_access') return `${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Manage anytime in the app.`;
+  if (sel.plan === 'all_access_annual')
+    return `${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Manage anytime in the app.`;
   if (sel.plan === 'world_cup') return `${PRICING.worldCup} once. No renewal — yours for all 104 matches.`;
   return `Every ${sel.sport} play Gary backs — the Winners board. ${PRICING.single}/mo, cancel anytime.`;
 }

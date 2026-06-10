@@ -4143,21 +4143,27 @@ struct SportFilterBar: View {
 //      trial, which is a Stripe-dashboard setting — not an API field).
 //   2. Update the constant here.
 //
-// Planned next change (pending the Stripe step): All-Access → $29.99/mo with a
-// 7-day trial, plus a new $179/yr annual price+link. When the Stripe side is
-// live, flip `allAccessMonthly`/`trialDays` and set `allAccessAnnualLink` in
-// PremiumPicksView.checkoutLinks — the annual card unhides itself.
+// June 9 2026 flip — STAGED: $29.99/mo + 7-day trial + $179/yr annual. The
+// TEST catalog is live (prices price_1TgbDjLJVzRZvO5HMwgDFOxQ /mo and
+// price_1TgbDkLJVzRZvO5HyEHdsn6I /yr on prod_UeKymtDX7E8fsw, links below in
+// DEBUG checkoutLinks, both 7-day card-required trials).
+// ⚠️ PRE-SHIP (live mode, owner): recreate the $29.99/7-day and $179/yr
+// prices + payment links in LIVE mode and replace the RELEASE "ALL" and
+// "ALL_ANNUAL" links below — the live links still charge $34.99/3-day until
+// then, so NO release build ships before that swap.
 enum GaryPricing {
-    static let allAccessMonthly = "$34.99"   // ⚠️ Stripe ALL link must match
-    static let allAccessAnnual  = "$179"     // surfaces only once an annual link exists
+    static let allAccessMonthly = "$29.99"   // ⚠️ Stripe ALL link must match
+    static let allAccessAnnual  = "$179"     // ⚠️ Stripe ALL_ANNUAL link must match
+    /// "$14.92/mo" — the annual card's effective-rate line (179 / 12).
+    static let allAccessAnnualMonthly = "$14.92"
     static let single           = "$9.99"
     static let worldCup         = "$14.99"
     static let twoSport         = "$17.99"
     static let threeSport       = "$24.99"
-    static let trialDays        = 3          // ⚠️ Stripe trial setting must match
-    /// "3 days free" — ribbon/marketing voice.
+    static let trialDays        = 7          // ⚠️ Stripe trial setting must match
+    /// "7 days free" — ribbon/marketing voice.
     static var trialDaysFree: String { "\(trialDays) days free" }
-    /// "3-day free trial" — CTA/legal voice.
+    /// "7-day free trial" — CTA/legal voice.
     static var trialPhrase: String { "\(trialDays)-day free trial" }
 }
 
@@ -4208,24 +4214,31 @@ struct PremiumPicksView: View {
     /// Release sells LIVE — real money. Same sports, same prices. The
     /// signed-in identity rides along as client_reference_id.
     #if DEBUG
-    private static let checkoutLinks: [String: String] = [
+    // fileprivate (not private): PlansSheetView gates its annual card on the
+    // ALL_ANNUAL key existing — the card unhides itself per build flavor.
+    fileprivate static let checkoutLinks: [String: String] = [
         "MLB":   "https://buy.stripe.com/test_9B600kcnqgWRa9c3xWaIM08",
         "NBA":   "https://buy.stripe.com/test_6oUdRa87a0XT6X05G4aIM09",
         "NHL":   "https://buy.stripe.com/test_8x24gA87a8qldlo9WkaIM0a",
         "NFL":   "https://buy.stripe.com/test_bJe5kEevyeOJ1CG1pOaIM0b",
         "NCAAF": "https://buy.stripe.com/test_5kQbJ25Z2gWR6X05G4aIM0c",
         "NCAAB": "https://buy.stripe.com/test_5kQ3cw1IM7mheps0lKaIM0d",
-        "ALL":   "https://buy.stripe.com/test_00w7sM1IMgWRchk5G4aIM0e",
+        // June 9 flip: $29.99/mo + $179/yr, both 7-day card-required trials.
+        "ALL":        "https://buy.stripe.com/test_00w9AU2MQ8ql5SW0lKaIM0h",
+        "ALL_ANNUAL": "https://buy.stripe.com/test_fZu14o0EI9up3KOgkIaIM0i",
         "WC":    "https://buy.stripe.com/test_5kQeVe9befSN9582tSaIM0f",
     ]
     #else
-    private static let checkoutLinks: [String: String] = [
+    fileprivate static let checkoutLinks: [String: String] = [
         "MLB":   "https://buy.stripe.com/4gM4gA3N69u1anqaObao800",
         "NBA":   "https://buy.stripe.com/8x2aEYcjCfSpdzC3lJao801",
         "NHL":   "https://buy.stripe.com/dRmcN697qfSp9jmf4rao802",
         "NFL":   "https://buy.stripe.com/8x25kEgzS6hPgLO1dBao803",
         "NCAAF": "https://buy.stripe.com/bJe7sM97qeOleDG9K7ao804",
         "NCAAB": "https://buy.stripe.com/dRmeVebfy6hPfHK7BZao805",
+        // ⚠️ PRE-SHIP: this live link still charges $34.99/3-day — recreate
+        // the $29.99/7-day live price+link and swap it (plus a live
+        // "ALL_ANNUAL" $179/yr link) before ANY release build ships.
         "ALL":   "https://buy.stripe.com/aFabJ21EY21zgLO8G3ao807",
         "WC":    "https://buy.stripe.com/7sYbJ2abubC9dzCe0nao808",
     ]
@@ -4240,7 +4253,9 @@ struct PremiumPicksView: View {
         guard let base = Self.checkoutLinks[league],
               let url = URL(string: "\(base)?client_reference_id=\(SupabaseAPI.identityId)") else { return }
         SupabaseAPI.logEvent("checkout_started", [
-            "plan": league == "ALL" ? "all_access" : (league == "WC" ? "world_cup" : "single"),
+            "plan": league == "ALL" ? "all_access"
+                  : (league == "ALL_ANNUAL" ? "all_access_annual"
+                  : (league == "WC" ? "world_cup" : "single")),
             "sport": league, "surface": surface,
         ])
         UIApplication.shared.open(url)
@@ -5035,7 +5050,11 @@ struct PlansSheetView: View {
     /// The focused conversion paywall, or the full menu behind the "all plans" link.
     private enum Screen { case paywall, allPlans }
     /// What the single dominant CTA acts on.
-    private enum PlanSelection: Equatable { case allAccess, single(String), worldCup, bundle }
+    private enum PlanSelection: Equatable { case allAccess, allAccessAnnual, single(String), worldCup, bundle }
+
+    /// The annual card unhides itself once a build flavor carries an
+    /// ALL_ANNUAL checkout link (DEBUG today; RELEASE after the live swap).
+    private var annualAvailable: Bool { PremiumPicksView.checkoutLinks["ALL_ANNUAL"] != nil }
 
     @State private var screen: Screen
     @State private var selection: PlanSelection
@@ -5292,6 +5311,16 @@ struct PlansSheetView: View {
                      a11y: "All-Access. \(GaryPricing.allAccessMonthly) a month. \(GaryPricing.trialDaysFree)." + (selection == .allAccess ? " Selected." : "")) {
                 select(.allAccess)
             }
+            if annualAvailable {
+                planCard(selected: selection == .allAccessAnnual,
+                         ribbon: "Save 50% vs monthly", ribbonTeal: false,
+                         title: "ALL-ACCESS — ANNUAL",
+                         sub: "Every board, all year · works out to \(GaryPricing.allAccessAnnualMonthly)/mo",
+                         price: GaryPricing.allAccessAnnual, per: "PER YEAR",
+                         a11y: "All-Access annual. \(GaryPricing.allAccessAnnual) a year — about \(GaryPricing.allAccessAnnualMonthly) a month. \(GaryPricing.trialDaysFree)." + (selection == .allAccessAnnual ? " Selected." : "")) {
+                    select(.allAccessAnnual)
+                }
+            }
             if wcActive {
                 planCard(selected: selection == .worldCup,
                          ribbon: "Kicks off June 11", ribbonTeal: true,
@@ -5343,12 +5372,23 @@ struct PlansSheetView: View {
                 planCard(selected: selection == .allAccess,
                          ribbon: "Best value · " + GaryPricing.trialDaysFree, ribbonTeal: false,
                          title: "ALL-ACCESS",
-                         sub: "All 7 Winners boards · ~$5 a board",
+                         sub: "All 7 Winners boards · ~$4 a board",
                          price: GaryPricing.allAccessMonthly, per: "PER MONTH",
                          a11y: "All-Access. \(GaryPricing.allAccessMonthly) a month. All seven boards. \(GaryPricing.trialDaysFree)." + (selection == .allAccess ? " Selected." : "")) {
                     select(.allAccess)
                 }
                 .padding(.horizontal, 16)
+                if annualAvailable {
+                    planCard(selected: selection == .allAccessAnnual,
+                             ribbon: "Save 50% vs monthly", ribbonTeal: false,
+                             title: "ALL-ACCESS — ANNUAL",
+                             sub: "Every board, all year · works out to \(GaryPricing.allAccessAnnualMonthly)/mo",
+                             price: GaryPricing.allAccessAnnual, per: "PER YEAR",
+                             a11y: "All-Access annual. \(GaryPricing.allAccessAnnual) a year — about \(GaryPricing.allAccessAnnualMonthly) a month. \(GaryPricing.trialDaysFree)." + (selection == .allAccessAnnual ? " Selected." : "")) {
+                        select(.allAccessAnnual)
+                    }
+                    .padding(.horizontal, 16)
+                }
             }
 
             sportGridSection
@@ -5555,14 +5595,15 @@ struct PlansSheetView: View {
     private var ctaLabel: String {
         if !signedIn {
             switch selection {
-            case .allAccess:      return "SIGN IN TO START YOUR TRIAL"
+            case .allAccess, .allAccessAnnual: return "SIGN IN TO START YOUR TRIAL"
             case .worldCup:       return "SIGN IN TO PRE-ORDER"
             case .single(let lg): return "SIGN IN TO START \(lg) PASS"
             case .bundle:         return bundlePick.count >= 2 ? "SIGN IN TO START BUNDLE" : "PICK TWO OR THREE SPORTS"
             }
         }
         switch selection {
-        case .allAccess:      return "START \(GaryPricing.trialDays)-DAY FREE TRIAL"
+        case .allAccess:       return "START \(GaryPricing.trialDays)-DAY FREE TRIAL"
+        case .allAccessAnnual: return "START FREE TRIAL — \(GaryPricing.allAccessAnnual)/YR"
         case .worldCup:       return "PRE-ORDER WORLD CUP PASS"
         case .single(let lg): return "START \(lg) PASS — \(GaryPricing.single)/MO"
         case .bundle:
@@ -5578,6 +5619,8 @@ struct PlansSheetView: View {
         switch selection {
         case .allAccess:
             return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessMonthly)/mo. Cancel anytime. \(tail)"
+        case .allAccessAnnual:
+            return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessAnnual)/yr — \(GaryPricing.allAccessAnnualMonthly)/mo. Cancel anytime. \(tail)"
         case .worldCup:
             return "\(GaryPricing.worldCup) once. No renewal — yours for all 104 matches. \(tail)"
         case .single(let lg):
@@ -5593,7 +5636,8 @@ struct PlansSheetView: View {
 
     private func primaryAction() {
         switch selection {
-        case .allAccess:      onSelect("ALL")
+        case .allAccess:       onSelect("ALL")
+        case .allAccessAnnual: onSelect("ALL_ANNUAL")
         case .worldCup:       onSelect("WC")
         case .single(let lg): onSelect(lg)
         case .bundle:
@@ -5610,7 +5654,8 @@ struct PlansSheetView: View {
             if !keepBundle { bundlePick.removeAll() }   // one thing selected at a time
         }
         switch s {
-        case .allAccess:      SupabaseAPI.logEvent("plan_selected", ["plan": "all_access", "billing": "monthly"])
+        case .allAccess:       SupabaseAPI.logEvent("plan_selected", ["plan": "all_access", "billing": "monthly"])
+        case .allAccessAnnual: SupabaseAPI.logEvent("plan_selected", ["plan": "all_access", "billing": "annual"])
         case .single(let lg): SupabaseAPI.logEvent("plan_selected", ["plan": "single", "sport": lg, "billing": "monthly"])
         case .worldCup:       SupabaseAPI.logEvent("plan_selected", ["plan": "world_cup", "billing": "one_time"])
         case .bundle:         break   // bundle fires on its own actionable tap
@@ -5627,7 +5672,7 @@ struct PlansSheetView: View {
 
     private func clampSelectionForPaywall() {
         switch selection {
-        case .allAccess, .worldCup: break
+        case .allAccess, .allAccessAnnual, .worldCup: break
         default:
             selection = .allAccess
             bundlePick.removeAll()   // don't leave bundle chips highlighted behind the paywall
