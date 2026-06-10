@@ -495,6 +495,21 @@ enum SupabaseAPI {
 
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence
     /// story per settled game Gary picked — the story player's slides.
+    /// Live streaks as of the last completed night — newest snapshot wins
+    /// (no date math at the call site; the latest written date is the truth).
+    static func fetchStreaks() async -> [StreakRow] {
+        let url = buildURL(table: "streaks", query: [
+            URLQueryItem(name: "select", value: "game_date,league,subject_type,subject,team,kind,length,detail,next_game"),
+            URLQueryItem(name: "order", value: "game_date.desc,length.desc"),
+            URLQueryItem(name: "limit", value: "80")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([StreakRow].self, from: data) else { return [] }
+        guard let latest = rows.first?.game_date else { return [] }
+        return rows.filter { $0.game_date == latest }
+    }
+
     /// Last night across the whole league — every homer, multi-hit night and
     /// strikeout show, Gary's result attached where he had a position.
     static func fetchNightHighlights(date: String) async -> [NightHighlightRow] {

@@ -1570,6 +1570,8 @@ struct HomeView: View {
     @State private var yesterdayTopPickScore: String? = nil
     /// Tonight's top Hub edges (relevance-ordered) — the pre-bet checklist.
     @State private var tonightSignals: [Signal] = []
+    /// Live streaks — feeds the Edges row that points at the Hub's board.
+    @State private var homeStreaks: [StreakRow] = []
     /// Last night's betting recaps (game_recaps) — the story player's slides.
     @State private var nightRecaps: [GameRecapRow] = []
     /// The settled night's combined record (games + props) — the scorecard's
@@ -1846,6 +1848,7 @@ struct HomeView: View {
                     nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
                     slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
                     nightHighlights = await SupabaseAPI.fetchNightHighlights(date: SupabaseAPI.hubGradedDateEST())
+                    homeStreaks = await SupabaseAPI.fetchStreaks()
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
@@ -1980,9 +1983,14 @@ struct HomeView: View {
             }
             out.append(m)
         }
-        // The rest of the night, one slide per settled game (wins first —
-        // the fetch orders result desc).
-        for r in nightRecaps.prefix(7) {
+        // The rest of the night, one slide per settled game — priority
+        // league first, wins before losses within it (explicit sort keys;
+        // Swift's sort isn't stable).
+        func key(_ r: GameRecapRow) -> (Int, Int) {
+            (LeaguePriority.rank(r.league), r.result == "won" ? 0 : (r.result == "push" ? 1 : 2))
+        }
+        let orderedRecaps = nightRecaps.sorted { key($0) < key($1) }
+        for r in orderedRecaps.prefix(7) {
             if let first = out.first, recapMatches(r.matchup, headline: first.headline) { continue }
             let cashed = r.result == "won"
             let pickLine = Formatters.splitPickAndOdds(r.pick_text ?? "").0
@@ -2078,7 +2086,7 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
         }
-        if !tonightSignals.isEmpty {
+        if !tonightSignals.isEmpty || streaksHeadline != nil {
             tonightEdgesSection
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.18), value: animateIn)
@@ -2153,10 +2161,56 @@ struct HomeView: View {
 
     /// The Hub's top reads for tonight — the pre-bet checklist, full board
     /// one tap away.
+    /// "Cubs W7 · Judge 16-game hit streak · 9 more live" — the Edges row's
+    /// one-line read on the league's open runs.
+    private var streaksHeadline: String? {
+        guard !homeStreaks.isEmpty else { return nil }
+        var bits: [String] = []
+        if let t = homeStreaks.filter({ $0.subject_type == "team" })
+            .max(by: { ($0.length ?? 0) < ($1.length ?? 0) }) {
+            bits.append("\(Self.shortTeam(t.subject)) \(t.kind == "loss" ? "L" : "W")\(t.length ?? 0)")
+        }
+        if let h = homeStreaks.filter({ $0.kind == "hit" })
+            .max(by: { ($0.length ?? 0) < ($1.length ?? 0) }) {
+            bits.append("\(Self.shortTeam(h.subject)) \(h.length ?? 0)-game hit streak")
+        }
+        guard !bits.isEmpty else { return nil }
+        let more = homeStreaks.count - bits.count
+        if more > 0 { bits.append("\(more) more live") }
+        return bits.joined(separator: " · ")
+    }
+
     private var tonightEdgesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "Edges", sub: "From the Hub · graded tomorrow morning")
             VStack(spacing: 0) {
+                if let sh = streaksHeadline {
+                    Button {
+                        HubFocusState.shared.focusLane = .streak
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text("STREAKS")
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                                .foregroundStyle(GaryColors.gold.opacity(0.75))
+                                .frame(width: 86, alignment: .leading)
+                            Text(sh)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .lineLimit(2)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.25))
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if !tonightSignals.isEmpty {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                    }
+                }
                 ForEach(Array(tonightSignals.enumerated()), id: \.element.id) { i, s in
                     Button {
                         // Land on this row's LANE in the Hub — there's more
@@ -2443,7 +2497,12 @@ struct HomeView: View {
                 return HomeSlateSection.Row(id: p.id, title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))", sub: sub, tone: nil, chip: p.pick ?? "")
             }
         }
-        return slateGames.enumerated().map { i, g in
+        let orderedSlate = slateGames.sorted {
+            let (a, b) = (LeaguePriority.rank($0.league), LeaguePriority.rank($1.league))
+            if a != b { return a < b }
+            return ($0.commence_time ?? "") < ($1.commence_time ?? "")
+        }
+        return orderedSlate.enumerated().map { i, g in
             let chip: String
             if let pick = pickFor(slate: g)?.pick, !pick.isEmpty {
                 chip = pick
@@ -2948,11 +3007,19 @@ struct HomeView: View {
                     odds: Self.oddsLabel(o))
             }
 
-        // The marquee — biggest-odds game win, or the biggest owned miss.
+        // The marquee — the priority league leads (a Finals game outranks
+        // the MLB slate whatever the odds said), biggest odds break ties.
+        func pri(_ r: GameResult) -> Int { LeaguePriority.rank(r.effectiveLeague) }
         let wins = nightGames.filter { $0.result == "won" }
-        let star = wins.max { resultOdds($0.odds, pickText: $0.pick_text) < resultOdds($1.odds, pickText: $1.pick_text) }
+        let star = wins.min { a, b in
+            if pri(a) != pri(b) { return pri(a) < pri(b) }
+            return resultOdds(a.odds, pickText: a.pick_text) > resultOdds(b.odds, pickText: b.pick_text)
+        }
         let subject = star ?? nightGames.filter { $0.result == "lost" }
-            .max { abs(resultOdds($0.odds, pickText: $0.pick_text)) < abs(resultOdds($1.odds, pickText: $1.pick_text)) }
+            .min { a, b in
+                if pri(a) != pri(b) { return pri(a) < pri(b) }
+                return abs(resultOdds(a.odds, pickText: a.pick_text)) > abs(resultOdds(b.odds, pickText: b.pick_text))
+            }
         guard let r = subject else { return (nil, nil, Array(cashes.prefix(3)), beat, net, graded, bestOdds, record) }
 
         let cashed = r.result == "won"
@@ -14080,6 +14147,22 @@ func splitTake(_ rationale: String?) -> (take: String?, rest: String?) {
     return (take, rest)
 }
 
+/// League priority for defaults, headlines and board order while a
+/// championship round is running: a Finals game outranks the nightly MLB
+/// slate; the World Cup owns its own Home module but ranks above the daily
+/// slate elsewhere. Static for now — revisit in the fall, when the World
+/// Series vs NBA regular season flips this.
+enum LeaguePriority {
+    static func rank(_ league: String?) -> Int {
+        switch (league ?? "").uppercased() {
+        case "NBA": return 0
+        case "WC", "SOCCER_WORLD_CUP", "SOCCER": return 1
+        case "MLB": return 2
+        default: return 3
+        }
+    }
+}
+
 func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
     let hay = matchup.lowercased()
     let abbrevs = abbrGame.uppercased()
@@ -15148,6 +15231,130 @@ extension Connection {
 }
 
 
+// MARK: - Streak Board (the full Streaks experience — streaks table)
+
+/// Live runs around the league: teams on runs, hot bats, cold bats — and
+/// which streaks are on the line tonight. TEAMS / HOT BATS / COLD BATS tabs,
+/// same gold-when-active grammar as every other strip.
+struct StreakBoard: View {
+    let rows: [StreakRow]
+    @State private var tab = 0
+
+    private struct Group {
+        let label: String
+        let rows: [StreakRow]
+    }
+
+    /// Tonight's actionable streaks lead; longest runs break ties.
+    private func ordered(_ r: [StreakRow]) -> [StreakRow] {
+        r.sorted {
+            let (a, b) = ($0.next_game != nil, $1.next_game != nil)
+            if a != b { return a }
+            return ($0.length ?? 0) > ($1.length ?? 0)
+        }
+    }
+
+    private var groups: [Group] {
+        var out: [Group] = []
+        let teams = rows.filter { $0.subject_type == "team" && ["win", "loss"].contains($0.kind ?? "") }
+        if !teams.isEmpty { out.append(Group(label: "TEAMS", rows: ordered(teams))) }
+        let hot = rows.filter { ["hit", "hr"].contains($0.kind ?? "") }
+        if !hot.isEmpty { out.append(Group(label: "HOT BATS", rows: ordered(hot))) }
+        let cold = rows.filter { $0.kind == "hitless" }
+        if !cold.isEmpty { out.append(Group(label: "COLD BATS", rows: ordered(cold))) }
+        let totals = rows.filter { ["over", "under"].contains($0.kind ?? "") }
+        if !totals.isEmpty { out.append(Group(label: "TOTALS", rows: ordered(totals))) }
+        return out
+    }
+
+    private var current: Group { groups[min(tab, groups.count - 1)] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if groups.count > 1 { tabStrip }
+            VStack(spacing: 0) {
+                ForEach(Array(current.rows.prefix(10).enumerated()), id: \.offset) { i, r in
+                    streakRow(r)
+                    if i < min(current.rows.count, 10) - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                    }
+                }
+            }
+            .quantPanel()
+        }
+    }
+
+    private var tabStrip: some View {
+        HStack(spacing: 18) {
+            ForEach(Array(groups.enumerated()), id: \.offset) { i, g in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { tab = i }
+                } label: {
+                    Text(g.label)
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
+                        .foregroundStyle(i == tab ? GaryColors.gold : .white.opacity(0.4))
+                        .frame(minHeight: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+    }
+
+    /// "W7" / "L5" / "16 GM" / "HR ×4" / "0-22" — the streak, data voice.
+    private func badge(_ r: StreakRow) -> (text: String, color: Color) {
+        let n = r.length ?? 0
+        switch r.kind {
+        case "win":     return ("W\(n)", Color(hex: "#3FB950"))
+        case "loss":    return ("L\(n)", Color(hex: "#E5484D"))
+        case "hit":     return ("\(n) GM", GaryColors.gold)
+        case "hr":      return ("HR ×\(n)", GaryColors.gold)
+        case "hitless": return ("0-\(n)", Color(hex: "#E5484D"))
+        case "over":    return ("O ×\(n)", Color(hex: "#3FB950"))
+        case "under":   return ("U ×\(n)", Color(hex: "#E5484D"))
+        default:        return ("\(n)", .white.opacity(0.6))
+        }
+    }
+
+    private func streakRow(_ r: StreakRow) -> some View {
+        let b = badge(r)
+        return HStack(spacing: 12) {
+            Text(b.text)
+                .font(GaryFonts.mono(12, bold: true))
+                .foregroundStyle(b.color)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 56, alignment: .leading)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(r.subject ?? "")
+                    .font(GaryFonts.text(13.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                if let d = r.detail, !d.isEmpty {
+                    Text(d)
+                        .font(GaryFonts.mono(9.5))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            Spacer(minLength: 8)
+            if let next = r.next_game, !next.isEmpty {
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text("ON THE LINE")
+                        .font(GaryFonts.mono(7.5, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                    Text(next.uppercased())
+                        .font(GaryFonts.mono(9))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 11)
+    }
+}
+
 /// Deep-link target from Home's Edges rows into the Hub: the tapped lane
 /// lands here; PropsHubView consumes it on appear (same idiom as
 /// PicksFocusState for the Picks tab).
@@ -15177,6 +15384,10 @@ struct PropsHubView: View {
     @State private var hitRate: (hit: Int, graded: Int)? = nil
     /// Yesterday's graded edges — fills the pre-lineup morning void.
     @State private var ydaySignals: [Signal] = []
+    /// Live streaks (streaks table) — the full Streaks board.
+    @State private var streakRows: [StreakRow] = []
+    /// Home's STREAKS Edges row aimed us at the board — scroll once loaded.
+    @State private var scrollToStreaks = false
 
     private var source: [Signal] { fetched }
 
@@ -15185,7 +15396,8 @@ struct PropsHubView: View {
     /// Leagues that actually have rows today — drives the toggle so we never
     /// show a tab that can only render an empty state.
     private var availableLeagues: [HubLeagueSel] {
-        let present = [HubLeagueSel.mlb, .nba, .wc].filter { lg in source.contains { $0.league == lg } }
+        // Priority order: the Finals, then the Cup, then the daily slate.
+        let present = [HubLeagueSel.nba, .wc, .mlb].filter { lg in source.contains { $0.league == lg } }
         return present.isEmpty ? [.mlb] : present
     }
 
@@ -15194,10 +15406,12 @@ struct PropsHubView: View {
     /// rows. If the selected league came back empty but the other didn't,
     /// switch to the one with content.
     private func load() async {
-        // A Home Edges row may have aimed us at a lane.
+        // A Home Edges row may have aimed us at a lane — or at the board.
+        var pendingStreaksScroll = false
         if let lane = HubFocusState.shared.focusLane {
             HubFocusState.shared.focusLane = nil
-            await MainActor.run { laneTab = lane }
+            if lane == .streak { pendingStreaksScroll = true }
+            else { await MainActor.run { laneTab = lane } }
         }
         let date = SupabaseAPI.todayEST()
         var collected: [Signal] = []
@@ -15210,6 +15424,7 @@ struct PropsHubView: View {
             }
         }
         let rate = await SupabaseAPI.fetchInsightHitRate(date: SupabaseAPI.hubGradedDateEST())
+        let liveStreaks = await SupabaseAPI.fetchStreaks()
         // The morning void → yesterday's GRADED board. Today's edges post with
         // lineups (~afternoon); until then the Hub shows its receipts, not an
         // empty room.
@@ -15224,11 +15439,15 @@ struct PropsHubView: View {
         await MainActor.run {
             didLoad = true
             hitRate = rate
+            streakRows = liveStreaks
+            if pendingStreaksScroll, !liveStreaks.isEmpty { scrollToStreaks = true }
             ydaySignals = yday
             if !collected.isEmpty { fetched = collected }
-            if !leagueSignals.isEmpty { return }
-            if let withContent = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
-                sel = withContent
+            // First load lands on the highest-priority league with edges
+            // tonight — a Finals night opens on NBA even with a full MLB
+            // slate posted. The toggle still offers everything present.
+            if let top = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
+                sel = top
             }
         }
     }
@@ -15251,6 +15470,7 @@ struct PropsHubView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 header
@@ -15315,8 +15535,15 @@ struct PropsHubView: View {
                         VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
-                    // STREAKS — team runs worth knowing
-                    if !items(.streak).isEmpty {
+                    // STREAKS — the full board: teams on runs, hot and cold
+                    // bats, and which streaks are on the line tonight (streaks
+                    // table). The streaking connection lane backstops it.
+                    if !streakRows.isEmpty {
+                        HubSectionHeader(eyebrow: "Streaks", sub: "Live runs · who has one on the line tonight")
+                        StreakBoard(rows: streakRows)
+                            .padding(.horizontal, 14)
+                            .id("streaks")
+                    } else if !items(.streak).isEmpty {
                         HubSectionHeader(eyebrow: "Streaks", sub: "Runs and slides coming in")
                         VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
@@ -15345,6 +15572,14 @@ struct PropsHubView: View {
         .scrollDismissesKeyboard(.immediately)
         .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+        .onChange(of: scrollToStreaks) { go in
+            guard go else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("streaks", anchor: .top) }
+                scrollToStreaks = false
+            }
+        }
+        }
     }
 
     // ---- Player-edge lane tabs (platoon / heat / ballpark / cooling) ----

@@ -195,6 +195,19 @@ struct GameRecapRow: Decodable {
     let bullets: [String]?
 }
 
+// MARK: - Streaks (live runs around the league — teams + bats, $0 pipeline)
+struct StreakRow: Decodable {
+    let game_date: String?
+    let league: String?
+    let subject_type: String?  // team | player
+    let subject: String?       // "Chicago Cubs" / "Aaron Judge"
+    let team: String?          // player's team (teams: same as subject)
+    let kind: String?          // win | loss | hit | hitless | hr | over | under
+    let length: Int?           // games (hitless: at-bats)
+    let detail: String?        // "16 games — 24-for-61 (.393)"
+    let next_game: String?     // "vs Brewers · 7:10 PM ET" when on the line tonight
+}
+
 // MARK: - Night Highlights (league-wide who-did-what table, $0 pipeline)
 struct NightHighlightRow: Decodable {
     let category: String?     // hr | multi_hit | k_show
