@@ -5,6 +5,7 @@
  * - Daily picks (NBA, NHL, NFL, NCAAB, NCAAF, MLB) + betting recaps & fact checks
  * - Weekly NFL picks
  * - Night highlights (league-wide standout stat lines → night_highlights)
+ * - Streaks (team W/L + O/U runs, player hit/hitless/HR runs → streaks)
  * - Uses BallDontLie (BDL) as primary source
  * - Uses Gemini Grounding (Google Search) as fallback
  * 
@@ -17,6 +18,7 @@ import { gradeSoccerGame } from '../src/services/soccerGrading.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame } from '../src/services/gameRecap.js';
 import { runNightHighlights } from '../src/services/nightHighlights.js';
+import { writeStreaks } from '../src/services/streaksService.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 // FIFA service reads the API key at import — must load AFTER loadEnv.
@@ -969,6 +971,15 @@ async function main() {
     await runNightHighlights({ supabase, bdlApiKey: BDL_API_KEY, date: targetDate });
   } catch (e) {
     console.warn(`  ⚠️ Night highlights failed (non-fatal): ${e.message}`);
+  }
+
+  // Streaks: active team W/L + O/U runs and player hit/hitless/HR-game runs
+  // as of the night just graded ($0 — BDL + statsapi data fetches only).
+  // Idempotent (delete-then-insert per date) and never fatal to grading.
+  try {
+    await writeStreaks({ supabase, bdlApiKey: BDL_API_KEY, date: targetDate });
+  } catch (e) {
+    console.warn(`  ⚠️ Streaks failed (non-fatal): ${e.message}`);
   }
 
   console.log(`\n════════════════════════════════════════`);
