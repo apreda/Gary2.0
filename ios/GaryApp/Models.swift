@@ -190,6 +190,18 @@ struct GameRecapRow: Decodable {
     let result: String?
     let headline: String?
     let recap: String?
+    /// 2-4 stat lines from the night, real prop prices attached when Gary
+    /// had one graded ("Matt Olson 2 HR (+340 to homer)").
+    let bullets: [String]?
+}
+
+// MARK: - Night Highlights (league-wide who-did-what table, $0 pipeline)
+struct NightHighlightRow: Decodable {
+    let category: String?     // hr | multi_hit | k_show
+    let player_name: String?
+    let team: String?
+    let detail: String?       // "2 HR · 3 RBI", "4-for-5", "11 K over 6 IP"
+    let gary_result: String?  // won | lost | nil = Gary had no position
 }
 
 // MARK: - Pick Fact Check (claims from the rationale, graded vs reality)

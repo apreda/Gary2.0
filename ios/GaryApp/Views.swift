@@ -1602,6 +1602,9 @@ struct HomeView: View {
     @State private var wireItems: [SupabaseAPI.WireItem] = []
     @State private var pulseRows: [SupabaseAPI.MarketPulseRow] = []
     @State private var propBox: HomePropBoxSection.Box? = nil
+    /// League-wide who-did-what from last night (night_highlights) — feeds
+    /// the Prop Box HR / 2+ HITS / K SHOW tabs.
+    @State private var nightHighlights: [NightHighlightRow] = []
     @State private var todayPicks: [GaryPick] = []
     @State private var initialLive: [LiveScore] = []
     @ObservedObject private var liveCache = LiveScoreCache.shared
@@ -1842,6 +1845,7 @@ struct HomeView: View {
                     // same night the marquee covers).
                     nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
                     slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
+                    nightHighlights = await SupabaseAPI.fetchNightHighlights(date: SupabaseAPI.hubGradedDateEST())
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
@@ -1952,17 +1956,34 @@ struct HomeView: View {
     /// prop box, cashes, receipts, then tonight's board.
     /// The rotating front-page banner: the real marquee story leads, the
     /// rest of the night's headlines follow (sample rows until game_recaps).
+    /// Recap matchups carry nicknames ("Astros @ Angels"), headlines carry
+    /// prose ("Angels over the Astros, 10-1") — match on both teams appearing,
+    /// full name or last word ("Golden Knights" → "knights").
+    private func recapMatches(_ matchup: String?, headline: String) -> Bool {
+        let hay = headline.lowercased()
+        let teams = (matchup ?? "").components(separatedBy: " @ ")
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
+        guard teams.count == 2 else { return false }
+        return teams.allSatisfy { t in
+            hay.contains(t) || hay.contains(t.components(separatedBy: " ").last ?? t)
+        }
+    }
+
     private var headlineStories: [HomeMarqueeHero.Story] {
         var out: [HomeMarqueeHero.Story] = []
         if var m = marquee {
-            // The marquee leads, wearing its recap body.
-            m.recap = nightRecaps.first { abbrGameMatches($0.matchup ?? "", matchup: m.headline) }?.recap
+            // The marquee leads, wearing its recap body + stat bullets.
+            if let r = nightRecaps.first(where: { recapMatches($0.matchup, headline: m.headline) }) {
+                m.recap = r.recap
+                m.bullets = r.bullets ?? []
+            }
             out.append(m)
         }
         // The rest of the night, one slide per settled game (wins first —
         // the fetch orders result desc).
         for r in nightRecaps.prefix(7) {
-            if let first = out.first, abbrGameMatches(r.matchup ?? "", matchup: first.headline) { continue }
+            if let first = out.first, recapMatches(r.matchup, headline: first.headline) { continue }
             let cashed = r.result == "won"
             let pickLine = Formatters.splitPickAndOdds(r.pick_text ?? "").0
             out.append(HomeMarqueeHero.Story(
@@ -1970,7 +1991,7 @@ struct HomeView: View {
                 receiptLead: cashed ? "Gary had it ·" : "Gary was on ·",
                 receiptPick: pickLine.uppercased(),
                 verdict: cashed ? "CASHED" : (r.result == "push" ? "PUSH" : "NO CASH"),
-                cashed: cashed, recap: r.recap))
+                cashed: cashed, recap: r.recap, bullets: r.bullets ?? []))
         }
         return out
     }
@@ -1995,8 +2016,8 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
         }
-        if let box = propBox {
-            HomePropBoxSection(box: box) {
+        if !propBoxTabs.isEmpty {
+            HomePropBoxSection(tabs: propBoxTabs) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
@@ -2526,6 +2547,46 @@ struct HomeView: View {
 
     /// Box-score-style prop results for the biggest settled game of the
     /// latest graded night: PLAYER / LINE / RESULT / grade.
+    /// The Prop Box tab set: Gary's densest graded game leads, then the
+    /// whole league's night — every homer, multi-hit game and K show, his
+    /// result attached only where he actually had the position.
+    private var propBoxTabs: [HomePropBoxSection.Tab] {
+        var tabs: [HomePropBoxSection.Tab] = []
+        if let box = propBox {
+            tabs.append(HomePropBoxSection.Tab(
+                label: "THE BOX", title: box.title, status: box.status,
+                cols: ("PLAYER", "LINE", "RESULT"), rows: box.rows))
+        }
+        let cats: [(key: String, label: String, noun: String)] = [
+            ("hr", "HR", "homered"),
+            ("multi_hit", "2+ HITS", "had multi-hit nights"),
+            ("k_show", "K SHOW", "struck out 7+")
+        ]
+        for c in cats {
+            let all = nightHighlights.filter { $0.category == c.key }
+            guard !all.isEmpty else { continue }
+            // Biggest stat lines first (every detail leads with its number),
+            // Gary's positions break ties.
+            func lead(_ d: String?) -> Int { Int((d ?? "").prefix(while: { $0.isNumber })) ?? 0 }
+            let sorted = all.sorted {
+                let (a, b) = (lead($0.detail), lead($1.detail))
+                if a != b { return a > b }
+                return ($0.gary_result != nil) && ($1.gary_result == nil)
+            }
+            let rows = sorted.prefix(10).map { h in
+                HomePropBoxSection.Row(
+                    player: Self.shortTeam(h.player_name).uppercased(),
+                    line: Self.shortTeam(h.team).uppercased(),
+                    actual: h.detail ?? "",
+                    state: h.gary_result)
+            }
+            tabs.append(HomePropBoxSection.Tab(
+                label: c.label, title: "\(all.count) \(c.noun)", status: "LAST NIGHT",
+                cols: ("PLAYER", "TEAM", "NIGHT"), rows: Array(rows)))
+        }
+        return tabs
+    }
+
     static func buildPropBox(props: [PropResult], games: [GameResult]) -> HomePropBoxSection.Box? {
         let graded = props.filter { ["won", "lost", "push"].contains($0.result ?? "") }
         guard let latest = graded.compactMap({ $0.game_date }).max() else { return nil }
@@ -3013,6 +3074,9 @@ struct HomeMarqueeHero: View {
         /// Graded claims from the rationale (right/wrong only — "unclear"
         /// stays off the card). Empty = no fact check yet.
         var claims: [FactClaim] = []
+        /// The night's stat lines, real prop prices attached (game_recaps
+        /// bullets). Rendered mono under the recap.
+        var bullets: [String] = []
     }
     let story: Story
     /// Carousel cards disable the flip (fixed-height pages); tap falls
@@ -3083,9 +3147,12 @@ struct HomeMarqueeHero: View {
                         .font(.system(size: 12.5))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineSpacing(2.5)
-                        .lineLimit(4)
+                        .lineLimit(story.bullets.isEmpty ? 4 : 2)
                         .padding(.top, 6)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if !story.bullets.isEmpty {
+                    bulletList.padding(.top, 10)
                 }
             }
             .padding(14)
@@ -3098,6 +3165,24 @@ struct HomeMarqueeHero: View {
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#181616")))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+    }
+
+    /// The night's stat lines — gold tick + mono, the data voice.
+    private var bulletList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(story.bullets.prefix(3)), id: \.self) { (b: String) in
+                HStack(alignment: .center, spacing: 8) {
+                    Rectangle()
+                        .fill(GaryColors.gold.opacity(0.75))
+                        .frame(width: 8, height: 1.5)
+                    Text(b)
+                        .font(GaryFonts.mono(11))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+        }
     }
 
     // MARK: Back — what Gary called vs what the game did
@@ -4093,28 +4178,73 @@ struct HomePropBoxSection: View {
         let status: String
         let rows: [Row]
     }
-    let box: Box
+    /// One read on the night (THE BOX / HR / 2+ HITS / K SHOW).
+    struct Tab {
+        let label: String
+        let title: String
+        let status: String
+        let cols: (String, String, String)
+        let rows: [Row]
+    }
+    let tabs: [Tab]
     let onOpen: () -> Void
+    @State private var selectedTab = 0
+
+    /// Single-box convenience — existing call sites unchanged.
+    init(box: Box, onOpen: @escaping () -> Void) {
+        self.tabs = [Tab(label: "", title: box.title, status: box.status,
+                         cols: ("PLAYER", "LINE", "RESULT"), rows: box.rows)]
+        self.onOpen = onOpen
+    }
+
+    init(tabs: [Tab], onOpen: @escaping () -> Void) {
+        self.tabs = tabs
+        self.onOpen = onOpen
+    }
+
+    private var tab: Tab { tabs[min(selectedTab, tabs.count - 1)] }
+
+    /// Plain mono text tabs — active wears gold, the rest dim (the app-wide
+    /// colored-when-active rule; no capsules).
+    private var tabStrip: some View {
+        HStack(spacing: 18) {
+            ForEach(Array(tabs.enumerated()), id: \.offset) { i, t in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selectedTab = i }
+                } label: {
+                    Text(t.label)
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
+                        .foregroundStyle(i == selectedTab ? GaryColors.gold : .white.opacity(0.4))
+                        .frame(minHeight: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             HubSectionHeader(eyebrow: "Prop box", sub: "")
+            if tabs.count > 1 { tabStrip.padding(.horizontal, 16) }
             Button(action: onOpen) {
                 VStack(spacing: 0) {
                     HStack {
-                        Text(box.title)
+                        Text(tab.title)
                             .font(GaryFonts.mono(13, bold: true))
                             .foregroundStyle(.white.opacity(0.92))
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Spacer()
-                        Text(box.status)
+                        Text(tab.status)
                             .font(GaryFonts.mono(9, bold: true)).tracking(1.4)
                             .foregroundStyle(.white.opacity(0.35))
                     }
                     .padding(.vertical, 11).padding(.horizontal, 14)
                     Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
                     gridHeader
-                    ForEach(box.rows) { row in
+                    ForEach(tab.rows) { row in
                         Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                         boxRow(row)
                     }
@@ -4131,9 +4261,9 @@ struct HomePropBoxSection: View {
 
     private var gridHeader: some View {
         HStack(spacing: 8) {
-            Text("PLAYER").frame(maxWidth: .infinity, alignment: .leading)
-            Text("LINE").frame(width: 70, alignment: .trailing)
-            Text("RESULT").frame(width: 58, alignment: .trailing)
+            Text(tab.cols.0).frame(width: 108, alignment: .leading)
+            Text(tab.cols.1).frame(width: 64, alignment: .leading)
+            Text(tab.cols.2).frame(maxWidth: .infinity, alignment: .trailing)
             Text("✓").frame(width: 22, alignment: .center)
         }
         .font(GaryFonts.mono(8)).tracking(1.2)
@@ -4145,17 +4275,19 @@ struct HomePropBoxSection: View {
         HStack(spacing: 8) {
             Text(row.player)
                 .font(GaryFonts.mono(12, bold: true))
-                .foregroundStyle(Color(hex: "#C7CCD6"))
+                .foregroundStyle(Color(hex: "#CCC7C7"))
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: 108, alignment: .leading)
             Text(row.line)
                 .font(GaryFonts.mono(10.5))
                 .foregroundStyle(.white.opacity(0.45))
-                .frame(width: 70, alignment: .trailing)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 64, alignment: .leading)
             Text(row.actual)
                 .font(GaryFonts.mono(11.5, bold: true))
                 .foregroundStyle(.white.opacity(0.92))
-                .frame(width: 58, alignment: .trailing)
+                .lineLimit(1).minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity, alignment: .trailing)
             Group {
                 switch row.state {
                 case "won":  Text("✓").foregroundStyle(Color(hex: "#3FB950"))

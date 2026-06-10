@@ -495,9 +495,23 @@ enum SupabaseAPI {
 
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence
     /// story per settled game Gary picked — the story player's slides.
+    /// Last night across the whole league — every homer, multi-hit night and
+    /// strikeout show, Gary's result attached where he had a position.
+    static func fetchNightHighlights(date: String) async -> [NightHighlightRow] {
+        let url = buildURL(table: "night_highlights", query: [
+            URLQueryItem(name: "select", value: "category,player_name,team,detail,gary_result"),
+            URLQueryItem(name: "game_date", value: "eq.\(date)"),
+            URLQueryItem(name: "order", value: "category.asc")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([NightHighlightRow].self, from: data) else { return [] }
+        return rows
+    }
+
     static func fetchGameRecaps(date: String) async -> [GameRecapRow] {
         let url = buildURL(table: "game_recaps", query: [
-            URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,headline,recap"),
+            URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,headline,recap,bullets"),
             URLQueryItem(name: "game_date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "result.desc")
         ])
