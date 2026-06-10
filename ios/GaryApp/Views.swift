@@ -1567,6 +1567,9 @@ struct HomeView: View {
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
     @State private var yesterdayTopPick: GaryPick? = nil
+    @State private var yesterdayTopPickScore: String? = nil
+    /// Tonight's top Hub edges (relevance-ordered) — the pre-bet checklist.
+    @State private var tonightSignals: [Signal] = []
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
@@ -1815,6 +1818,16 @@ struct HomeView: View {
                         ledger = await SupabaseAPI.fetchInsightLedger(date: back).filter { $0.result != nil }
                     }
                     receiptLanes = Self.buildReceiptLanes(ledger)
+
+                    // Tonight's edges — the Hub's top reads for today's slate,
+                    // teased on the Tonight page (full board one tap away).
+                    var tonightEdges: [Signal] = []
+                    for lg in ["MLB", "NBA", "WC"] where tonightEdges.count < 3 {
+                        if let conns = try? await SupabaseAPI.fetchInsightConnections(date: SupabaseAPI.todayEST(), league: lg) {
+                            tonightEdges.append(contentsOf: conns.compactMap { $0.toSignal() })
+                        }
+                    }
+                    tonightSignals = Array(tonightEdges.prefix(3))
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
@@ -1832,9 +1845,11 @@ struct HomeView: View {
                             yesterdayTopPick = top
                             if let pick = top {
                                 let matchKey = (pick.homeTeam ?? "").lowercased()
-                                yesterdayTopPickResult = recentGameResults.first(where: {
+                                let row = recentGameResults.first(where: {
                                     ($0.matchup ?? "").lowercased().contains(matchKey)
-                                })?.result
+                                })
+                                yesterdayTopPickResult = row?.result
+                                yesterdayTopPickScore = row?.final_score
                             }
                         }
                         if let yProps = try? await SupabaseAPI.fetchPropPicks(date: yDateStr), !yProps.isEmpty {
@@ -1843,7 +1858,8 @@ struct HomeView: View {
                             if let prop = top {
                                 let matchKey = (prop.player ?? "").lowercased()
                                 yesterdayTopPropResult = recentPropResults.first(where: {
-                                    ($0.player_name ?? "").lowercased() == matchKey
+                                    let n = ($0.player_name ?? "").lowercased()
+                                    return !n.isEmpty && (n == matchKey || n.contains(matchKey) || matchKey.contains(n))
                                 })?.result
                             }
                         }
@@ -1995,7 +2011,125 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
         }
+        if let strip = firstPitchStrip {
+            strip
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.14), value: animateIn)
+        }
+        if let big = bigOneModel {
+            bigOneSection(big)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
+        }
+        if !tonightSignals.isEmpty {
+            tonightEdgesSection
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.18), value: animateIn)
+        }
         // No last-night anything here — Morning owns the recap entirely.
+    }
+
+    // MARK: Tonight extras — the bettor's read on the DAY
+
+    /// When the action starts, and when the last card goes off — the fan's
+    /// real scheduling question. One strip, from tonight's start times.
+    private var firstPitchStrip: (some View)? {
+        let times = todayPicks.compactMap { $0.commence_time }.sorted()
+        guard let first = times.first, todayPicks.count > 1, let last = times.last else { return nil as HomeCompactStrip? }
+        let firstStr = Formatters.formatCommenceTime(first)
+        let lastStr = Formatters.formatCommenceTime(last)
+        guard !firstStr.isEmpty else { return nil as HomeCompactStrip? }
+        return HomeCompactStrip(prefix: "FIRST PITCH",
+                                record: firstStr.uppercased(),
+                                suffix: "\(todayPicks.count) GAMES · LAST \(lastStr.uppercased())") {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
+        }
+    }
+
+    /// The night's marquee game — the pick the pipeline tagged with stakes
+    /// ("NBA FINALS GM 2", "DIVISION LEAD ON THE LINE").
+    private var bigOneModel: GaryPick? {
+        todayPicks
+            .filter { !(($0.shortGameSignificance ?? $0.gameSignificance) ?? "").isEmpty }
+            .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+            .first
+    }
+
+    private func bigOneSection(_ p: GaryPick) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "The big one", sub: "")
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text((( p.shortGameSignificance ?? p.gameSignificance) ?? "").uppercased())
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                            .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        Spacer()
+                        Text(Formatters.formatCommenceTime(p.displayTime).uppercased())
+                            .font(GaryFonts.mono(10))
+                            .foregroundStyle(.white.opacity(0.42))
+                    }
+                    Text("\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))")
+                        .font(GaryFonts.display(24))
+                        .foregroundStyle(.white.opacity(0.95))
+                    if let pick = p.pick, !pick.isEmpty {
+                        Text(pick.uppercased())
+                            .font(GaryFonts.mono(13, bold: true))
+                            .foregroundStyle(GaryColors.gold)
+                    } else {
+                        Text("Gary's call drops closer to game time")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+
+    /// The Hub's top reads for tonight — the pre-bet checklist, full board
+    /// one tap away.
+    private var tonightEdgesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "Tonight's edges", sub: "From the Hub · graded tomorrow morning")
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+            } label: {
+                VStack(spacing: 0) {
+                    ForEach(Array(tonightSignals.enumerated()), id: \.element.id) { i, s in
+                        HStack(spacing: 10) {
+                            Text(s.kind.chip)
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                                .foregroundStyle(GaryColors.gold.opacity(0.75))
+                                .frame(width: 86, alignment: .leading)
+                            Text(s.headline)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .lineLimit(2)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.25))
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        if i < tonightSignals.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
     }
 
     /// Live: the tape pins the top, the marquee becomes the in-progress
@@ -2455,7 +2589,8 @@ struct HomeView: View {
                     Text("LAST NIGHT'S FREE PICK")
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                         .foregroundStyle(.white.opacity(0.4))
-                    FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
+                    FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult,
+                                      finalScore: yesterdayTopPickScore, showSportBadge: true)
                 } else if !loading {
                     Text("Tonight's free pick posts closer to first pitch.")
                         .font(.system(size: 13))
@@ -15983,10 +16118,17 @@ struct CompactPropRow: View {
                     }
                     Spacer(minLength: 6)
                     if resolvedResult != nil {
-                        // Props wear the single letter — colored text, no bubble.
-                        Text(resolvedResult == "won" ? "W" : (resolvedResult == "push" ? "P" : "L"))
+                        // Settled: final score + the verdict word — the exact
+                        // twin of the gold card's settled eyebrow.
+                        if let ls = liveCache.status(forMatchup: prop.matchup ?? ""),
+                           ls.isFinal, let s = ls.scoreLine {
+                            Text("FINAL · \(s)")
+                                .font(GaryFonts.mono(11.5, bold: false))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                        Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
                             .font(GaryFonts.mono(12, bold: true))
-                            .tracking(0.5)
+                            .tracking(0.8)
                             .foregroundStyle(resultStampColor)
                     } else if let live = liveStatus, live.isLive {
                         Text(liveSlotText(live, label: "LIVE"))
