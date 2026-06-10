@@ -2439,7 +2439,7 @@ struct HomeView: View {
 
     private var boardSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HubSectionHeader(eyebrow: "Tonight's Board", sub: "Where everything lives")
+            HubSectionHeader(eyebrow: "Tonight's Board", sub: "")
 
             // The FREE PICK — the page's one true card.
             VStack(alignment: .leading, spacing: 6) {
@@ -15201,7 +15201,9 @@ struct HubSectionHeader: View {
             Text(eyebrow)
                 .font(GaryFonts.display(17))
                 .foregroundStyle(GaryColors.sectionHead)
-            Text(sub).font(.system(size: 12)).foregroundStyle(GaryColors.sectionSub)
+            if !sub.isEmpty {
+                Text(sub).font(.system(size: 12)).foregroundStyle(GaryColors.sectionSub)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
