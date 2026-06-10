@@ -13,6 +13,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { gradeSoccerGame } from '../src/services/soccerGrading.js';
+import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 // FIFA service reads the API key at import — must load AFTER loadEnv.
@@ -463,6 +464,75 @@ function getStatValue(sport, data, name, type) {
 }
 
 /**
+ * Rationale Fact Check
+ * After a game pick is graded, grade Gary's RATIONALE claim-by-claim against
+ * what actually happened (rows land in pick_fact_checks; the app reads them to
+ * show "what Gary got right"). Game picks only — props never reach this path.
+ * Non-fatal by design: callers wrap it in try/catch so a fact-check failure
+ * can never break results grading.
+ */
+async function factCheckGradedPick({ pick, league, gameDate, result, hs, vs, matchedGame }) {
+  if (!pick.rationale || !String(pick.rationale).trim()) return;
+  const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
+
+  // Idempotency: skip matchups already fact-checked for this date (mirrors the
+  // game_results dedup check above).
+  const { data: exist, error: dedupErr } = await supabase
+    .from('pick_fact_checks')
+    .select('id')
+    .eq('game_date', gameDate)
+    .eq('league', league)
+    .eq('matchup', matchup)
+    .maybeSingle();
+  if (dedupErr) {
+    console.warn(`  ⚠️ Fact-check dedup failed for ${matchup}: ${dedupErr.message}`);
+    return;
+  }
+  if (exist) {
+    console.log(`  ⏩ Fact-check exists: ${league} ${matchup} (${gameDate})`);
+    return;
+  }
+
+  // Evidence: final score + (MLB) the per-game BDL player stats we already
+  // fetch for prop grading — pitcher lines, HRs, team hit totals.
+  let mlbStats = null;
+  if (league === 'MLB' && matchedGame?.id != null) {
+    mlbStats = await fetchMLBStats([matchedGame.id]);
+  }
+  const evidence = buildGameEvidence({
+    league,
+    homeTeam: pick.homeTeam,
+    awayTeam: pick.awayTeam,
+    homeScore: hs,
+    awayScore: vs,
+    mlbStats,
+  });
+
+  const fc = await factCheckPick({ pick, result, evidence });
+  if (!fc) {
+    console.warn(`  ⚠️ Fact-check produced no claims for ${league} ${matchup}`);
+    return;
+  }
+
+  const { error: insertErr } = await supabase.from('pick_fact_checks').insert({
+    game_date: gameDate,
+    league,
+    matchup,
+    pick_text: pick.pick,
+    result,
+    claims: fc.claims,
+    right_count: fc.right_count,
+    wrong_count: fc.wrong_count,
+  });
+  if (insertErr) {
+    console.error(`  ❌ FACT-CHECK INSERT FAILED [pick_fact_checks] ${league} ${matchup} (${gameDate}): ${insertErr.message}`);
+  } else {
+    const unclear = fc.claims.length - fc.right_count - fc.wrong_count;
+    console.log(`  🔍 Fact-checked ${league} ${matchup}: ${fc.right_count} right / ${fc.wrong_count} wrong / ${unclear} unclear`);
+  }
+}
+
+/**
  * Main Logic
  */
 async function processGenericGames(table, date, leagueFilter = null) {
@@ -639,6 +709,15 @@ async function processGenericGames(table, date, leagueFilter = null) {
           stats[res[0]]++;
           const tag = alreadyExists ? '⏩ ALREADY' : '✅';
           console.log(`  ${tag} ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs}) on ${gameDate}`);
+
+          // Fact-check the rationale against the actual outcome. Runs on
+          // re-grades too (alreadyExists) — its own dedup makes that a no-op
+          // unless the fact check is missing. Never fatal to grading.
+          try {
+            await factCheckGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
+          } catch (e) {
+            console.warn(`  ⚠️ Fact-check failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
+          }
         }
       }
     }
