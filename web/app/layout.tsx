@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     'Gary AI covers the full slate — NBA, NFL, NHL, MLB, NCAAB, NCAAF, and the 2026 World Cup — with free daily picks, written rationale, and a public track record. Free on iOS.',
   itunes: { appId: '6751238914' },
   openGraph: { siteName: 'Gary AI', type: 'website' },
+  alternates: { types: { 'application/rss+xml': '/feed.xml' } },
 };
 
 const softwareApp = {
