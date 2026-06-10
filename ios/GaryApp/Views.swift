@@ -2003,16 +2003,21 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
         if !pregameSlateRows.isEmpty {
-            HomeSlateSection(header: "The slate", sub: "Tonight, by start time", rows: pregameSlateRows) {
+            // Three reads on tonight: the board, the spread extremes, and the
+            // home dogs — the "what can I bet today" half of the page's job.
+            // (The Wire lives on Morning only — once per Home, not per state.)
+            HomeSlateSection(header: "The slate", sub: "Tonight, by start time", tabs: [
+                .init(label: "BOARD", rows: pregameSlateRows,
+                      empty: "Tonight's board fills in as picks post."),
+                .init(label: "SPREADS", rows: spreadSlateRows,
+                      empty: "No spread lines on tonight's board yet."),
+                .init(label: "HOME DOGS", rows: homeDogSlateRows,
+                      empty: "No home underdogs on the slate tonight."),
+            ]) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
             }
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
-        }
-        if !wireItems.isEmpty {
-            HomeWireSection(items: wireItems, sub: "Pre-game intel", limit: 3)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
         }
         if !receiptLanes.isEmpty {
             HomeReceiptsSection(lanes: receiptLanes, sub: receiptsSub) {
@@ -2052,11 +2057,6 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
         }
-        if !wireItems.isEmpty {
-            HomeWireSection(items: wireItems, sub: "In-game", limit: 2)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
-        }
         HomeCompactStrip(prefix: "TONIGHT",
                          record: "\(tonightRecord.w)–\(tonightRecord.l)",
                          suffix: liveCountText) {
@@ -2076,7 +2076,7 @@ struct HomeView: View {
         HStack(spacing: 0) {
             phaseTab("Morning", .morning)
             Spacer().frame(width: 28)
-            phaseTab("Pre-game", .pregame)
+            phaseTab("Tonight", .pregame)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
@@ -2127,10 +2127,11 @@ struct HomeView: View {
                 .padding(.horizontal, 16)
             }
         }
-        HomeSlateSection(header: "The slate", sub: "Tonight, by start time", rows: Self.sampleSlateRows) {}
-        if !wireItems.isEmpty {
-            HomeWireSection(items: wireItems, sub: "Pre-game intel", limit: 3)
-        }
+        HomeSlateSection(header: "The slate", sub: "Tonight, by start time", tabs: [
+            .init(label: "BOARD", rows: Self.sampleSlateRows, empty: ""),
+            .init(label: "SPREADS", rows: Self.sampleSpreadRows, empty: "No spread lines on tonight's board yet."),
+            .init(label: "HOME DOGS", rows: Self.sampleHomeDogRows, empty: "No home underdogs on the slate tonight."),
+        ]) {}
     }
 
     /// Live preview: tape → takeover (diamond + outs) → live board → in-game wire → tonight strip.
@@ -2140,9 +2141,6 @@ struct HomeView: View {
             HomeLiveTakeover(live: live, pickLine: "PHI -1.5 · -115", verdict: .covering) {}
         }
         HomeSlateSection(header: "Tonight's board", sub: "1 settled · 3 live · 1 upcoming", rows: Self.sampleLiveSlateRows) {}
-        if !wireItems.isEmpty {
-            HomeWireSection(items: wireItems, sub: "In-game", limit: 2)
-        }
         HomeCompactStrip(prefix: "TONIGHT", record: "1–0", suffix: "3 LIVE") {}
     }
 
@@ -2163,6 +2161,19 @@ struct HomeView: View {
             .init(id: "s3", title: "CHC @ STL", sub: "7:15 PM · BUSCH STADIUM", tone: nil, chip: "U 8.5"),
             .init(id: "s4", title: "OKC @ NYK", sub: "8:30 PM · NBA FINALS GM 2", tone: nil, chip: "OKC +3.5"),
             .init(id: "s5", title: "LAD @ SD", sub: "9:40 PM · PETCO PARK", tone: nil, chip: "LAD ML"),
+        ]
+    }
+    private static var sampleSpreadRows: [HomeSlateSection.Row] {
+        [
+            .init(id: "sp1", title: "OKC @ NYK", sub: "8:30 PM · NBA FINALS GM 2", tone: nil, chip: "NYK -3.5"),
+            .init(id: "sp2", title: "PHI @ NYM", sub: "7:10 PM · CITI FIELD", tone: nil, chip: "PHI -1.5"),
+            .init(id: "sp3", title: "LAD @ SD", sub: "9:40 PM · PETCO PARK", tone: nil, chip: "LAD -1.5"),
+        ]
+    }
+    private static var sampleHomeDogRows: [HomeSlateSection.Row] {
+        [
+            .init(id: "hd1", title: "CHC @ STL", sub: "7:15 PM · BUSCH STADIUM", tone: nil, chip: "STL +136"),
+            .init(id: "hd2", title: "NYY @ BOS", sub: "7:05 PM · FENWAY PARK", tone: nil, chip: "BOS +118"),
         ]
     }
     private static var sampleTapeCells: [HomeLiveTape.Cell] {
@@ -2248,6 +2259,41 @@ struct HomeView: View {
             let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
                 .joined(separator: " · ").uppercased()
             return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: nil, chip: p.pick ?? "")
+        }
+    }
+
+    /// SPREADS — tonight's board sorted by spread size, biggest first. One
+    /// list shows both extremes (the monsters up top, the coin-flips at the
+    /// bottom); the chip names the favorite at its number.
+    private var spreadSlateRows: [HomeSlateSection.Row] {
+        let withSpread = todayPicks.filter { ($0.spread ?? 0) != 0 }
+        let sorted = withSpread.sorted { abs($0.spread ?? 0) > abs($1.spread ?? 0) }
+        return sorted.prefix(8).map { p in
+            let s = p.spread ?? 0
+            // Pipeline convention: spread is the HOME line (home favored = negative).
+            let favored = s < 0 ? Self.shortTeam(p.homeTeam) : Self.shortTeam(p.awayTeam)
+            let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                .joined(separator: " · ").uppercased()
+            return HomeSlateSection.Row(
+                id: "sp-\(p.id)",
+                title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
+                sub: sub, tone: nil,
+                chip: String(format: "%@ %+.1f", favored.uppercased(), -abs(s)))
+        }
+    }
+
+    /// HOME DOGS — hosts at plus money tonight, biggest price first.
+    private var homeDogSlateRows: [HomeSlateSection.Row] {
+        let dogs = todayPicks.filter { ($0.moneylineHome ?? 0) > 0 }
+        let sorted = dogs.sorted { ($0.moneylineHome ?? 0) > ($1.moneylineHome ?? 0) }
+        return sorted.prefix(8).map { p in
+            let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                .joined(separator: " · ").uppercased()
+            return HomeSlateSection.Row(
+                id: "hd-\(p.id)",
+                title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
+                sub: sub, tone: nil,
+                chip: "\(Self.shortTeam(p.homeTeam).uppercased()) +\(Int(p.moneylineHome ?? 0))")
         }
     }
 
@@ -3998,10 +4044,35 @@ struct HomeSlateSection: View {
         let tone: HomeLiveVerdict?
         let chip: String
     }
+    /// One read on the slate (BOARD / SPREADS / HOME DOGS). A single tab
+    /// renders with no tab strip — the live board stays as it was.
+    struct Tab {
+        let label: String
+        let rows: [Row]
+        let empty: String
+    }
     let header: String
     let sub: String
-    let rows: [Row]
+    let tabs: [Tab]
     let onTap: () -> Void
+    @State private var selectedTab = 0
+
+    /// Single-read convenience — existing call sites unchanged.
+    init(header: String, sub: String, rows: [Row], onTap: @escaping () -> Void) {
+        self.header = header
+        self.sub = sub
+        self.tabs = [Tab(label: "", rows: rows, empty: "")]
+        self.onTap = onTap
+    }
+
+    init(header: String, sub: String, tabs: [Tab], onTap: @escaping () -> Void) {
+        self.header = header
+        self.sub = sub
+        self.tabs = tabs
+        self.onTap = onTap
+    }
+
+    private var rows: [Row] { tabs[min(selectedTab, tabs.count - 1)].rows }
 
     private func subColor(_ tone: HomeLiveVerdict?) -> Color {
         switch tone {
@@ -4011,10 +4082,43 @@ struct HomeSlateSection: View {
         }
     }
 
+    /// Plain mono text tabs — active wears gold, the rest dim (the app-wide
+    /// colored-when-active rule; no capsules).
+    private var tabStrip: some View {
+        HStack(spacing: 18) {
+            ForEach(Array(tabs.enumerated()), id: \.offset) { i, tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selectedTab = i }
+                } label: {
+                    Text(tab.label)
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
+                        .foregroundStyle(i == selectedTab ? GaryColors.gold : .white.opacity(0.4))
+                        .frame(minHeight: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: header, sub: sub)
             VStack(spacing: 0) {
+                if tabs.count > 1 {
+                    tabStrip
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                }
+                if rows.isEmpty {
+                    Text(tabs[min(selectedTab, tabs.count - 1)].empty)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     Button(action: onTap) {
                         HStack(spacing: 10) {
@@ -5393,15 +5497,17 @@ struct PlansSheetView: View {
 
     private var hero: some View {
         VStack(spacing: 14) {
-            Text("G")
-                .font(GaryFonts.display(38))
-                .foregroundStyle(GaryColors.gold)
+            Image("GaryHead")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 58, height: 58)
                 .frame(width: 74, height: 74)
                 .background(
                     Circle()
                         .fill(Color(hex: "#111114"))
                         .overlay(Circle().stroke(GaryColors.gold.opacity(0.9), lineWidth: 2))
                 )
+                .clipShape(Circle())
             Text(heroTitle)
                 .font(GaryFonts.display(40))
                 .foregroundStyle(.white)
@@ -7821,11 +7927,14 @@ struct QuantKpiTile: View {
 /// Faint card chrome shared by the dashboard's panels.
 private struct QuantPanel: ViewModifier {
     var radius: CGFloat = 12
+    // Warm-white overlay, not pure white: white at 2% over the warm black
+    // page reads as the cool blue-grey AI-slop cast. Same lightness, warm hue.
+    private static let warm = Color(hex: "#F6F1E7")
     func body(content: Content) -> some View {
         content.background(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(Color.white.opacity(0.02))
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                .fill(Self.warm.opacity(0.022))
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Self.warm.opacity(0.07), lineWidth: 1))
         )
     }
 }
@@ -13480,6 +13589,8 @@ struct Signal: Identifiable {
     /// BDL player id when the edge is player-backed — unlocks the full
     /// Player Insights breakdown from the card back.
     var playerId: String? = nil
+    /// "hit" / "miss" once graded (the Hub's morning receipts view).
+    var result: String? = nil
     /// Structured player-swap payload (beneficiary lane) for the
     /// transaction-style OUT → IN row.
     var swap: SwapMeta? = nil
@@ -14706,6 +14817,7 @@ extension Connection {
             spark: spark ?? [],
             lineVal: line_val,
             playerId: player_id,
+            result: result,
             swap: (meta?.kind == "swap") ? meta : nil
         )
     }
@@ -14731,6 +14843,8 @@ struct PropsHubView: View {
     @State private var didLoad = false
     /// Yesterday's graded-edge tally (hit, graded) for the track-record line.
     @State private var hitRate: (hit: Int, graded: Int)? = nil
+    /// Yesterday's graded edges — fills the pre-lineup morning void.
+    @State private var ydaySignals: [Signal] = []
 
     private var source: [Signal] { fetched }
 
@@ -14759,9 +14873,21 @@ struct PropsHubView: View {
             }
         }
         let rate = await SupabaseAPI.fetchInsightHitRate(date: SupabaseAPI.hubGradedDateEST())
+        // The morning void → yesterday's GRADED board. Today's edges post with
+        // lineups (~afternoon); until then the Hub shows its receipts, not an
+        // empty room.
+        var yday: [Signal] = []
+        if collected.isEmpty {
+            for lg in ["MLB", "NBA", "WC"] {
+                if let conns = try? await SupabaseAPI.fetchInsightConnections(date: SupabaseAPI.hubGradedDateEST(), league: lg) {
+                    yday.append(contentsOf: conns.compactMap { $0.toSignal() }.filter { $0.result != nil })
+                }
+            }
+        }
         await MainActor.run {
             didLoad = true
             hitRate = rate
+            ydaySignals = yday
             if !collected.isEmpty { fetched = collected }
             if !leagueSignals.isEmpty { return }
             if let withContent = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
@@ -14995,15 +15121,49 @@ struct PropsHubView: View {
     }
 
     private var hubEmptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "sparkles").font(.system(size: 26)).foregroundStyle(GaryColors.gold.opacity(0.5))
-            Text("No \(sel.label.capitalized) edges yet")
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.55))
-            Text("Tonight's connections post as lineups and matchups firm up.")
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
-                .multilineTextAlignment(.center).padding(.horizontal, 40)
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(spacing: 8) {
+                Text("No \(sel.label) edges yet")
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.55))
+                Text("Tonight's connections post as lineups and matchups firm up.")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
+                    .multilineTextAlignment(.center).padding(.horizontal, 40)
+            }
+            .frame(maxWidth: .infinity).padding(.top, 28).padding(.bottom, 18)
+
+            // Meanwhile: yesterday's board, graded — the Hub's receipts fill
+            // the morning instead of a blank room.
+            if !ydaySignals.isEmpty {
+                HubSectionHeader(
+                    eyebrow: "Yesterday · graded",
+                    sub: hitRate.map { "\($0.hit) of \($0.graded) edges hit" } ?? "Every edge, graded the morning after")
+                VStack(spacing: 0) {
+                    ForEach(Array(ydaySignals.prefix(12).enumerated()), id: \.element.id) { i, s in
+                        HStack(spacing: 10) {
+                            Text(s.kind.chip)
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.4))
+                                .frame(width: 86, alignment: .leading)
+                            Text(s.headline)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .lineLimit(2)
+                            Spacer(minLength: 8)
+                            Text(s.result == "hit" ? "HIT" : "MISS")
+                                .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
+                                .foregroundStyle(s.result == "hit" ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        if i < min(ydaySignals.count, 12) - 1 {
+                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                        }
+                    }
+                }
+                .quantPanel()
+                .padding(.horizontal, 14)
+            }
         }
-        .frame(maxWidth: .infinity).padding(.top, 50)
+        .frame(maxWidth: .infinity)
     }
 
     private var header: some View {

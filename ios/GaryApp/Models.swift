@@ -78,6 +78,7 @@ struct Connection: Decodable {
     let player_id: String?
     let game_id: String?
     let meta: SwapMeta?          // structured lane payload (beneficiary swap rows)
+    let result: String?          // "hit" / "miss" / nil — graded the next morning
 }
 
 /// Structured player-swap payload on beneficiary rows (kind == "swap"):
@@ -234,6 +235,12 @@ struct GaryPick: Identifiable, Codable {
     let is_top_pick: Bool?
     // Multi-sportsbook odds comparison (ML + Spread)
     let sportsbook_odds: [SportsbookOdds]?
+    // Market lines captured at pick time (numbers in the pick JSON since the
+    // pipeline's odds snapshot) — power the Home slate's SPREADS / HOME DOGS
+    // tabs. Defaulted so older rows and preview constructors stay valid.
+    var spread: Double? = nil
+    var moneylineHome: Double? = nil
+    var moneylineAway: Double? = nil
     // Soccer / World Cup context
     let soccerStage: String?
     let soccerGroup: String?
