@@ -2001,7 +2001,7 @@ struct HomeView: View {
         Group {
             // Three reads on tonight — ALWAYS rendered; each tab carries its
             // own honest empty note until picks post. (Wire = Morning only.)
-            HomeSlateSection(header: "The slate", sub: "By start time", tabs: [
+            HomeSlateSection(header: "Slate", sub: "By start time", tabs: [
                 .init(label: "BOARD", rows: pregameSlateRows,
                       empty: "Tonight's board fills in as picks post."),
                 .init(label: "SPREADS", rows: spreadSlateRows,
@@ -2579,7 +2579,7 @@ struct HomeView: View {
 
     private var boardSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HubSectionHeader(eyebrow: "The board", sub: "")
+            HubSectionHeader(eyebrow: "Board", sub: "")
 
             // The FREE PICK — the page's one true card.
             VStack(alignment: .leading, spacing: 6) {
@@ -3013,21 +3013,16 @@ struct HomeMarqueeHero: View {
                     .font(GaryFonts.display(26))
                     .foregroundStyle(.white.opacity(0.96))
                     .fixedSize(horizontal: false, vertical: true)
-                // The sub earns its line: the fact-check tally (the flip
-                // tease) when graded claims exist — never a re-statement of
-                // the headline's own score.
-                if !story.claims.isEmpty {
-                    let right = story.claims.filter { $0.verdict == "right" }.count
-                    Text("Gary's read: \(right) of \(story.claims.count) claims held up")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .padding(.top, 3)
-                }
+                // Headline zone is GAME-only; Gary's tally lives on the back.
+                Text(story.sub)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.top, 3)
             }
             .padding(14)
 
             receiptStub(lead: story.receiptLead, pick: story.receiptPick,
-                        trailing: story.verdict, hint: canFlip ? "THE CALL ›" : nil)
+                        trailing: story.verdict, hint: nil)
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#161618")))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
