@@ -1683,17 +1683,9 @@ struct HomeView: View {
                     case .morning:
                         morningSections
                     case .pregame:
-                        #if DEBUG
-                        previewPregameSections
-                        #else
                         pregameSections
-                        #endif
                     case .live:
-                        #if DEBUG
-                        previewLiveSections
-                        #else
                         liveSections
-                        #endif
                     }
 
                     // ── ⑥ Footer — quiet ──
@@ -2456,9 +2448,15 @@ struct HomeView: View {
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                     FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
+                } else if !loading, let yPick = yesterdayTopPick {
+                    // Until today's pick posts, yesterday's free pick holds
+                    // the slot — wearing its W/L stamp, so it reads as the
+                    // last result, never as tonight's play.
+                    Text("LAST NIGHT'S FREE PICK")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.4))
+                    FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
                 } else if !loading {
-                    // No graded leftovers on TONIGHT's board — yesterday's
-                    // cards live on Morning. An honest empty note instead.
                     Text("Tonight's free pick posts closer to first pitch.")
                         .font(.system(size: 13))
                         .foregroundStyle(.white.opacity(0.45))
@@ -2479,6 +2477,8 @@ struct HomeView: View {
                 }
                 if let prop = freeProp {
                     FlippablePropCard(prop: prop, showSportBadge: true)
+                } else if !loading, freePick == nil, let yProp = yesterdayTopProp {
+                    FlippablePropCard(prop: yProp, gameResult: yesterdayTopPropResult, showSportBadge: true)
                 }
             }
             .padding(.horizontal, 16)
