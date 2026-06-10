@@ -78,7 +78,8 @@ struct Connection: Decodable {
     let player_id: String?
     let game_id: String?
     let meta: SwapMeta?          // structured lane payload (beneficiary swap rows)
-    let result: String?          // "hit" / "miss" / nil — graded the next morning
+    let result: String?          // "hit" / "miss" / "push" / nil — graded the next morning
+    let result_note: String?     // grader's one-liner ("2-for-4, double") — receipts subline
 }
 
 /// Structured player-swap payload on beneficiary rows (kind == "swap"):
@@ -210,7 +211,8 @@ struct StreakRow: Decodable {
 
 // MARK: - Night Highlights (league-wide who-did-what table, $0 pipeline)
 struct NightHighlightRow: Decodable {
-    let category: String?     // hr | multi_hit | k_show
+    let league: String?       // "MLB" today; scopes the board to the league toggle
+    let category: String?     // hr | multi_hit | k_show | gem | rbi_night | sb_night
     let player_name: String?
     let team: String?
     let detail: String?       // "2 HR · 3 RBI", "4-for-5", "11 K over 6 IP"

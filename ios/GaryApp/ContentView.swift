@@ -171,8 +171,10 @@ struct GaryPage: View {
                     case .hub:
                         // Start at the hub; tapping a connection moves the user
                         // over to that game's picks on the Picks tab, focused on
-                        // the tapped matchup (via PicksFocusState).
-                        PropsHubView(league: "MLB") { game in
+                        // the tapped matchup (via PicksFocusState). isVisible
+                        // drives the Hub's staleness refetch + deep-link consume
+                        // (tabs are kept alive, so onAppear never re-fires).
+                        PropsHubView(isVisible: selectedTab == 2) { game in
                             PicksFocusState.shared.focusGame = game
                             selectedTab = 3
                         }

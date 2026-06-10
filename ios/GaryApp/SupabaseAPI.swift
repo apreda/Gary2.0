@@ -501,20 +501,30 @@ enum SupabaseAPI {
         let url = buildURL(table: "streaks", query: [
             URLQueryItem(name: "select", value: "game_date,league,subject_type,subject,team,kind,length,detail,next_game"),
             URLQueryItem(name: "order", value: "game_date.desc,length.desc"),
-            URLQueryItem(name: "limit", value: "80")
+            URLQueryItem(name: "limit", value: "200")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([StreakRow].self, from: data) else { return [] }
-        guard let latest = rows.first?.game_date else { return [] }
-        return rows.filter { $0.game_date == latest }
+        // Latest snapshot PER LEAGUE — a global latest date would evict any
+        // league whose pipeline wrote a day earlier than its siblings.
+        var latestByLeague: [String: String] = [:]
+        for r in rows {
+            guard let lg = r.league, let d = r.game_date else { continue }
+            if let cur = latestByLeague[lg] { if d > cur { latestByLeague[lg] = d } }
+            else { latestByLeague[lg] = d }
+        }
+        return rows.filter { r in
+            guard let lg = r.league, let d = r.game_date else { return false }
+            return latestByLeague[lg] == d
+        }
     }
 
     /// Last night across the whole league — every homer, multi-hit night and
     /// strikeout show, Gary's result attached where he had a position.
     static func fetchNightHighlights(date: String) async -> [NightHighlightRow] {
         let url = buildURL(table: "night_highlights", query: [
-            URLQueryItem(name: "select", value: "category,player_name,team,detail,gary_result"),
+            URLQueryItem(name: "select", value: "league,category,player_name,team,detail,gary_result"),
             URLQueryItem(name: "game_date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "category.asc")
         ])
@@ -681,7 +691,7 @@ enum SupabaseAPI {
     /// nothing exists; the hub renders an honest empty state.
     static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
         let url = buildURL(table: "insight_connections", query: [
-            URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,game_id,meta,result"),
+            URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,game_id,meta,result,result_note"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "league", value: "eq.\(league)"),
             URLQueryItem(name: "order", value: "relevance_score.desc")
@@ -693,8 +703,18 @@ enum SupabaseAPI {
             return []
         }
         do {
-            // Flat table — one row per connection.
-            return try JSONDecoder().decode([Connection].self, from: data)
+            // Flat table, decoded row-by-row: one malformed row (e.g. a future
+            // meta shape) drops one card, never the league's whole day.
+            struct Lossy: Decodable {
+                let value: Connection?
+                init(from decoder: Decoder) throws { value = try? Connection(from: decoder) }
+            }
+            let rows = try JSONDecoder().decode([Lossy].self, from: data)
+            let conns = rows.compactMap { $0.value }
+            if conns.count != rows.count {
+                print("[SupabaseAPI] fetchInsightConnections(\(league)): dropped \(rows.count - conns.count) undecodable row(s)")
+            }
+            return conns
         } catch {
             print("[SupabaseAPI] fetchInsightConnections decode error: \(error.localizedDescription)")
             return []

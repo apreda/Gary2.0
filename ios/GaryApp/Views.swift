@@ -1458,6 +1458,16 @@ enum GaryColors {
     static let selectedText = Color.white.opacity(0.95)
     static let selectedFill = Color.white.opacity(0.12)
 
+    /// Graded-result marks (HIT/MISS, W/L, ✓/✗) — the saturated pair, distinct
+    /// from HubPalette's muted editorial tones. One token, no more inline hexes.
+    static let win = Color(hex: "#3FB950")
+    static let loss = Color(hex: "#E5484D")
+    /// Opaque warm field fill for text inputs (search bars).
+    static let fieldBg = Color(hex: "#131110")
+    /// Warm-white overlay base for panel/card chrome (QuantPanel's tint) —
+    /// pure Color.white over the warm black page reads as a cool blue-grey cast.
+    static let warmWhite = Color(hex: "#F6F1E7")
+
     // NFL Green (same as prop picks)
     static let nflAccent = Color(hex: "#22C55E")
 
@@ -4644,7 +4654,9 @@ struct HomeSlateSection: View {
                                     .foregroundStyle(.white.opacity(0.92))
                                     .lineLimit(1).minimumScaleFactor(0.8)
                                 HStack(spacing: 6) {
-                                    if let lg = row.league, !lg.isEmpty, lg.uppercased() != "MLB" {
+                                    // Every row wears its league in the sport
+                                    // accent — MLB included (founder's call).
+                                    if let lg = row.league, !lg.isEmpty {
                                         Text(lg.uppercased())
                                             .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
                                             .foregroundStyle(Sport.from(league: lg).accentColor.opacity(0.95))
@@ -8352,7 +8364,7 @@ private struct QuantPanel: ViewModifier {
     var radius: CGFloat = 12
     // Warm-white overlay, not pure white: white at 2% over the warm black
     // page reads as the cool blue-grey AI-slop cast. Same lightness, warm hue.
-    private static let warm = Color(hex: "#F6F1E7")
+    private static let warm = GaryColors.warmWhite
     func body(content: Content) -> some View {
         content.background(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -14057,23 +14069,15 @@ struct MiniBarChart: View {
     }
 }
 
-// ============================ HUB VIEW ============================
-
-// ============================ BETTING SIGNALS HUB ============================
-// The Props tab's default view. NOT the game breakdown (that moves to the back
-// of the pick cards) and NOT raw stats found elsewhere in the app. This is the
-// signals layer — the non-obvious connections Gary makes in his rationale,
-// organized by type: streaks, head-to-head dominance, hot/cold players (varied
-// stats), injuries + who replaces them, debut/call-up pitchers, and situational
-// records (after a loss, road night games, 2nd of a B2B…).
-//
-// Grounded in real fetchability (BDL audit): streaks/L10 (getMlbStandings),
-// hot/cold (player game logs), injuries (getInjuriesGeneric + grounding for the
-// replacement), H2H + situational (derivable from getGames), probable/debut
-// (getMlbLineups). Mock data here; wiring is a follow-up.
+// ============================ THE HUB ============================
+// The signals layer — the non-obvious connections Gary makes in his rationale,
+// organized by lane: streaks, head-to-head dominance, hot/cold players,
+// injuries + who replaces them, platoon/ballpark/regression reads, and
+// situational records. Every lane is live data from insight_connections
+// (written by the insights pipeline, graded the next morning) — no mocks.
 
 enum SignalKind {
-    case streak, h2h, hot, cold, injury, debut, situational, platoon, ballpark, regression, tournament, hrThreat
+    case streak, h2h, hot, cold, injury, situational, platoon, ballpark, regression, tournament, hrThreat
     // June 10 lanes: starter form, first inning, the running game, park weather
     case starterForm, firstInning, runningGame, parkWeather
     var icon: String {
@@ -14083,7 +14087,6 @@ enum SignalKind {
         case .hot: return "flame.fill"
         case .cold: return "snowflake"
         case .injury: return "cross.case.fill"
-        case .debut: return "star.fill"
         case .situational: return "calendar"
         case .platoon: return "arrow.left.arrow.right"
         case .ballpark: return "mappin.and.ellipse"
@@ -14114,7 +14117,6 @@ enum SignalKind {
         case .hot: return "HEAT CHECK"
         case .cold: return "COOLING OFF"
         case .injury: return "REPLACEMENT"
-        case .debut: return "DEBUT"
         case .situational: return "SITUATIONAL"
         case .platoon: return "PLATOON EDGE"
         case .ballpark: return "BALLPARK"
@@ -14143,8 +14145,10 @@ struct Signal: Identifiable {
     /// BDL player id when the edge is player-backed — unlocks the full
     /// Player Insights breakdown from the card back.
     var playerId: String? = nil
-    /// "hit" / "miss" once graded (the Hub's morning receipts view).
+    /// "hit" / "miss" / "push" once graded (the Hub's morning receipts view).
     var result: String? = nil
+    /// Grader's one-liner ("2-for-4, double") — the receipts row subline.
+    var resultNote: String? = nil
     /// Structured player-swap payload (beneficiary lane) for the
     /// transaction-style OUT → IN row.
     var swap: SwapMeta? = nil
@@ -15362,7 +15366,6 @@ extension SignalKind {
         case "hot", "heat", "heat check", "heat_check": return .hot
         case "cold", "cooling", "cooling off", "cooling_off": return .cold
         case "injury", "replacement", "beneficiary": return .injury
-        case "debut": return .debut
         case "situational", "rest", "fatigue", "rest & fatigue", "rest_fatigue": return .situational
         case "platoon", "platoon edge", "platoon_edge": return .platoon
         case "ballpark", "ballpark shift", "ballpark_shift": return .ballpark
@@ -15422,6 +15425,7 @@ extension Connection {
             lineVal: line_val,
             playerId: player_id,
             result: result,
+            resultNote: result_note,
             swap: (meta?.kind == "swap") ? meta : nil
         )
     }
@@ -15710,16 +15714,25 @@ struct StreakBoard: View {
 }
 
 /// Deep-link target from Home's Edges rows into the Hub: the tapped lane
-/// lands here; PropsHubView consumes it on appear (same idiom as
-/// PicksFocusState for the Picks tab).
+/// lands here; PropsHubView consumes it whenever the tab becomes visible
+/// (same idiom as PicksFocusState for the Picks tab). @Published so a tap
+/// AFTER the Hub's first load still lands — tabs are kept alive, so a
+/// load-time-only consume would go dead for the rest of the session.
 final class HubFocusState: ObservableObject {
     static let shared = HubFocusState()
-    var focusLane: SignalKind? = nil
+    @Published var focusLane: SignalKind? = nil
 }
 
 struct PropsHubView: View {
-    let league: String
+    /// Whether the Hub tab is frontmost. ContentView keeps tab pages alive
+    /// (opacity-switched, never recreated), so onAppear/.task fire once per
+    /// process — visibility flips drive the staleness refetch and deep-link
+    /// consumption instead.
+    var isVisible: Bool = true
     var onSelectGame: (String) -> Void = { _ in }
+
+    @StateObject private var focus = HubFocusState.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var sel: HubLeagueSel = .mlb
     @State private var selectedSignal: Signal? = nil
@@ -15729,11 +15742,20 @@ struct PropsHubView: View {
     @FocusState private var searchFocused: Bool
     /// Selected lane in the PLAYER EDGES tab strip; nil = first non-empty lane.
     @State private var laneTab: SignalKind? = nil
+    /// Selected lane in THE CONDITIONS tab strip; nil = first non-empty lane.
+    @State private var condTab: SignalKind? = nil
 
     // Real connections fetched from Supabase (insight_connections), mapped to
     // Signals. Real data only — no mock fallback; empty -> honest empty state.
     @State private var fetched: [Signal] = []
     @State private var didLoad = false
+    /// When the page last loaded (30-min staleness gate) and for which EST
+    /// date (3am-rollover gate) — checked on tab visibility and foreground.
+    @State private var loadedAt: Date? = nil
+    @State private var loadedDate: String = ""
+    /// A fetch errored AND no edges rendered — show the retry surface, not
+    /// the misleading "posts with lineups" copy.
+    @State private var fetchErrored = false
     /// Yesterday's graded-edge tally (hit, graded) for the track-record line.
     @State private var hitRate: (hit: Int, graded: Int)? = nil
     /// Yesterday's graded edges — fills the pre-lineup morning void.
@@ -15742,12 +15764,22 @@ struct PropsHubView: View {
     @State private var streakRows: [StreakRow] = []
     /// Last night league-wide (night_highlights) — the Night Board.
     @State private var nightRows: [NightHighlightRow] = []
-    /// Home's STREAKS Edges row aimed us at the board — scroll once loaded.
-    @State private var scrollToStreaks = false
+    /// Section anchor a deep link wants on screen — consumed by the
+    /// ScrollViewReader once layout settles.
+    @State private var pendingScrollAnchor: String? = nil
 
     private var source: [Signal] { fetched }
 
     private func items(_ k: SignalKind) -> [Signal] { source.filter { $0.league == sel && $0.kind == k } }
+
+    /// Streaks/Last Night are per-league feeds (MLB-only pipelines today) —
+    /// scope them to the toggle so MLB bats never show under NBA/WC.
+    private var selStreakRows: [StreakRow] {
+        streakRows.filter { ($0.league ?? "MLB").uppercased() == sel.label }
+    }
+    private var selNightRows: [NightHighlightRow] {
+        nightRows.filter { ($0.league ?? "MLB").uppercased() == sel.label }
+    }
 
     /// Leagues that actually have rows today — drives the toggle so we never
     /// show a tab that can only render an empty state.
@@ -15757,57 +15789,113 @@ struct PropsHubView: View {
         return present.isEmpty ? [.mlb] : present
     }
 
-    /// Fetch today's connections for both leagues so the in-app league toggle
+    /// Fetch today's connections for all leagues so the in-app league toggle
     /// works without a refetch. Maps Connection -> Signal, drops unmappable
-    /// rows. If the selected league came back empty but the other didn't,
-    /// switch to the one with content.
+    /// rows. Safe to re-run (pull-to-refresh / staleness gate) — the user's
+    /// league choice is kept unless it has no rows in the new data.
     private func load() async {
-        // A Home Edges row may have aimed us at a lane — or at the board.
-        var pendingStreaksScroll = false
-        if let lane = HubFocusState.shared.focusLane {
-            HubFocusState.shared.focusLane = nil
-            if lane == .streak { pendingStreaksScroll = true }
-            else { await MainActor.run { laneTab = lane } }
-        }
         let date = SupabaseAPI.todayEST()
         var collected: [Signal] = []
+        var dropped = 0
+        var anyError = false
         for lg in ["MLB", "NBA", "WC"] {
             do {
                 let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
-                collected.append(contentsOf: conns.compactMap { $0.toSignal() })
+                let signals = conns.compactMap { $0.toSignal() }
+                dropped += conns.count - signals.count
+                collected.append(contentsOf: signals)
             } catch {
+                anyError = true
                 print("[PropsHubView] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
             }
         }
-        let rate = await SupabaseAPI.fetchInsightHitRate(date: SupabaseAPI.hubGradedDateEST())
+        if dropped > 0 {
+            // A backend lane rename would otherwise vanish silently.
+            print("[PropsHubView] dropped \(dropped) row(s) with unmappable league/category — check SignalKind.from against the pipeline")
+        }
+        // Graded surfaces (track record, receipts, night board): the graded
+        // date flips at 3am ET but grading lands ~6:45am — walk back one day
+        // when the morning void has nothing yet (Home's idiom).
+        var gradedDate = SupabaseAPI.hubGradedDateEST()
+        var rate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
+        var night = await SupabaseAPI.fetchNightHighlights(date: gradedDate)
+        if rate == nil, night.isEmpty, let back = Self.shiftDate(gradedDate, by: -1) {
+            gradedDate = back
+            rate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
+            night = await SupabaseAPI.fetchNightHighlights(date: gradedDate)
+        }
         let liveStreaks = await SupabaseAPI.fetchStreaks()
-        let night = await SupabaseAPI.fetchNightHighlights(date: SupabaseAPI.hubGradedDateEST())
         // The morning void → yesterday's GRADED board. Today's edges post with
         // lineups (~afternoon); until then the Hub shows its receipts, not an
         // empty room.
         var yday: [Signal] = []
         if collected.isEmpty {
             for lg in ["MLB", "NBA", "WC"] {
-                if let conns = try? await SupabaseAPI.fetchInsightConnections(date: SupabaseAPI.hubGradedDateEST(), league: lg) {
+                if let conns = try? await SupabaseAPI.fetchInsightConnections(date: gradedDate, league: lg) {
                     yday.append(contentsOf: conns.compactMap { $0.toSignal() }.filter { $0.result != nil })
                 }
             }
         }
         await MainActor.run {
             didLoad = true
+            loadedAt = Date()
+            loadedDate = date
+            fetchErrored = anyError && collected.isEmpty
             hitRate = rate
             streakRows = liveStreaks
             nightRows = night
-            if pendingStreaksScroll, !liveStreaks.isEmpty { scrollToStreaks = true }
             ydaySignals = yday
             if !collected.isEmpty { fetched = collected }
-            // First load lands on the highest-priority league with edges
-            // tonight — a Finals night opens on NBA even with a full MLB
-            // slate posted. The toggle still offers everything present.
-            if let top = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
+            // Land on the highest-priority league with edges tonight (a
+            // Finals night opens on NBA even with a full MLB slate posted) —
+            // but never stomp a league the user picked that still has rows.
+            if !collected.contains(where: { $0.league == sel }),
+               let top = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
                 sel = top
             }
         }
+    }
+
+    /// Re-fetch when the data is from a previous EST date (3am rollover),
+    /// older than 30 minutes, or the last attempt failed.
+    private func reloadIfStale() async {
+        guard didLoad else { return }
+        let expired = loadedAt.map { Date().timeIntervalSince($0) > 1800 } ?? true
+        if loadedDate != SupabaseAPI.todayEST() || expired || fetchErrored {
+            await load()
+        }
+    }
+
+    /// Route a deep-linked lane to its on-page home: player lanes select the
+    /// Player Edges tab, condition lanes the Conditions tab, everything else
+    /// scrolls to its section anchor (missing anchors no-op harmlessly).
+    private func consumeFocus() {
+        guard let lane = focus.focusLane else { return }
+        focus.focusLane = nil
+        switch lane {
+        case .platoon, .hot, .ballpark, .cold, .starterForm:
+            laneTab = lane
+            pendingScrollAnchor = "playerEdges"
+        case .firstInning, .runningGame, .parkWeather:
+            condTab = lane
+            pendingScrollAnchor = "conditions"
+        case .streak: pendingScrollAnchor = "streaks"
+        case .regression: pendingScrollAnchor = "regression"
+        case .hrThreat: pendingScrollAnchor = "hrThreats"
+        case .h2h: pendingScrollAnchor = "owned"
+        case .injury: pendingScrollAnchor = "beneficiary"
+        case .situational: pendingScrollAnchor = "restFatigue"
+        case .tournament: pendingScrollAnchor = "tournament"
+        }
+    }
+
+    private static func shiftDate(_ s: String, by days: Int) -> String? {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: s),
+              let shifted = Calendar.current.date(byAdding: .day, value: days, to: d) else { return nil }
+        return f.string(from: shifted)
     }
 
     private var leagueSignals: [Signal] { source.filter { $0.league == sel } }
@@ -15832,23 +15920,28 @@ struct PropsHubView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 header
-                searchBar.padding(.horizontal, 14)
+                searchBar.padding(.horizontal, 16)
 
-                if !searchText.isEmpty {
+                if !didLoad {
+                    hubLoadingState
+                } else if !searchText.isEmpty {
                     searchResults
+                } else if fetchErrored && leagueSignals.isEmpty && ydaySignals.isEmpty
+                            && nightRows.isEmpty && streakRows.isEmpty {
+                    hubErrorState
                 } else if leagueSignals.isEmpty {
                     hubEmptyState
                     // Last night's board + streaks don't wait for lineups —
                     // the morning Hub is never an empty room.
-                    if !nightRows.isEmpty {
-                        HubSectionHeader(eyebrow: "Last Night", sub: "\(nightRows.count) stat lines · Gary's mark where he had it")
-                        NightBoard(rows: nightRows).padding(.horizontal, 14)
+                    if !selNightRows.isEmpty {
+                        HubSectionHeader(eyebrow: "Last Night", sub: "\(selNightRows.count) stat lines · Gary's mark where he had it")
+                        NightBoard(rows: selNightRows).padding(.horizontal, 16)
                     }
-                    if !streakRows.isEmpty {
+                    if !selStreakRows.isEmpty {
                         HubSectionHeader(eyebrow: "Streaks", sub: "Live runs · who has one on the line tonight")
-                        StreakBoard(rows: streakRows)
-                            .padding(.horizontal, 14)
                             .id("streaks")
+                        StreakBoard(rows: selStreakRows)
+                            .padding(.horizontal, 16)
                     }
                 } else {
                     // FEATURED — highest relevance, max 2 per lane so the strip mixes kinds
@@ -15858,6 +15951,7 @@ struct PropsHubView: View {
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
                     if !items(.regression).isEmpty {
                         HubSectionHeader(eyebrow: "Regression Board", sub: "Biggest ERA vs xERA gaps tonight")
+                            .id("regression")
                         RegressionBoard(signals: items(.regression)) { s in
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
@@ -15866,26 +15960,31 @@ struct PropsHubView: View {
                     // today, with his two-sentence reason. Fed by gary_hr_threats.
                     if !items(.hrThreat).isEmpty {
                         HubSectionHeader(eyebrow: "Gary Home Run Threats", sub: "Who Gary has going deep today")
+                            .id("hrThreats")
                         VStack(spacing: 0) { ForEach(items(.hrThreat)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                            .quantPanel().padding(.horizontal, 14)
+                            .quantPanel().padding(.horizontal, 16)
                     }
-                    // PLAYER EDGES — one section, lane tabs instead of four
-                    // stacked scrollers (platoon / heat / ballpark / cooling).
+                    // PLAYER EDGES — one section, lane tabs instead of five
+                    // stacked scrollers (platoon / heat / ballpark / cooling /
+                    // starters).
                     if !playerEdgeLanes.isEmpty {
                         HubSectionHeader(eyebrow: "Player Edges", sub: laneSub(activeLane))
-                        laneTabBar
+                            .id("playerEdges")
+                        hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
                         EdgeScroller(signals: items(activeLane)) { breakdownSignal = $0 }
                     }
                     // OWNED — career batter-vs-pitcher history (NBA: season series)
                     if !items(.h2h).isEmpty {
                         HubSectionHeader(eyebrow: "Owned", sub: "Head-to-head history that pops")
+                            .id("owned")
                         VStack(spacing: 0) { ForEach(items(.h2h)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                            .quantPanel().padding(.horizontal, 14)
+                            .quantPanel().padding(.horizontal, 16)
                     }
                     // THE BENEFICIARY — transaction-style OUT → IN swap rows;
                     // tapping a row opens the replacement's full player insights.
                     if !items(.injury).isEmpty {
                         HubSectionHeader(eyebrow: "The Beneficiary", sub: "Who absorbs the missing volume")
+                            .id("beneficiary")
                         VStack(spacing: 0) {
                             ForEach(items(.injury)) { s in
                                 if s.swap != nil {
@@ -15897,71 +15996,101 @@ struct PropsHubView: View {
                                 }
                             }
                         }
-                        .quantPanel().padding(.horizontal, 14)
+                        .quantPanel().padding(.horizontal, 16)
                     }
                     // REST & FATIGUE — schedule spots and bullpen workload
                     if !items(.situational).isEmpty {
                         HubSectionHeader(eyebrow: "Rest & Fatigue", sub: "Schedule spots & workload")
+                            .id("restFatigue")
                         VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                            .quantPanel().padding(.horizontal, 14)
+                            .quantPanel().padding(.horizontal, 16)
+                    }
+                    // THE CONDITIONS — game-state reads, one tabbed section
+                    // (first inning / the running game / park & weather)
+                    // mirroring the Player Edges idiom.
+                    if !conditionLanes.isEmpty {
+                        HubSectionHeader(eyebrow: "The Conditions", sub: condSub(activeCondLane))
+                            .id("conditions")
+                        hubLaneStrip(lanes: conditionLanes, active: activeCondLane, title: condTitle) { condTab = $0 }
+                        VStack(spacing: 0) { ForEach(items(activeCondLane)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            .quantPanel().padding(.horizontal, 16)
                     }
                     // STREAKS — the full board: teams on runs, hot and cold
                     // bats, and which streaks are on the line tonight (streaks
-                    // table). The streaking connection lane backstops it.
-                    if !streakRows.isEmpty {
+                    // table, league-scoped). The league's streak-category
+                    // connections backstop it (NBA/WC nights).
+                    if !selStreakRows.isEmpty {
                         HubSectionHeader(eyebrow: "Streaks", sub: "Live runs · who has one on the line tonight")
-                        StreakBoard(rows: streakRows)
-                            .padding(.horizontal, 14)
                             .id("streaks")
+                        StreakBoard(rows: selStreakRows)
+                            .padding(.horizontal, 16)
                     } else if !items(.streak).isEmpty {
                         HubSectionHeader(eyebrow: "Streaks", sub: "Runs and slides coming in")
+                            .id("streaks")
                         VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                            .quantPanel().padding(.horizontal, 14)
+                            .quantPanel().padding(.horizontal, 16)
                     }
-                    // LAST NIGHT — the league-wide board, searchable.
-                    if !nightRows.isEmpty {
-                        HubSectionHeader(eyebrow: "Last Night", sub: "\(nightRows.count) stat lines · Gary's mark where he had it")
-                        NightBoard(rows: nightRows).padding(.horizontal, 14)
+                    // LAST NIGHT — the league-wide board.
+                    if !selNightRows.isEmpty {
+                        HubSectionHeader(eyebrow: "Last Night", sub: "\(selNightRows.count) stat lines · Gary's mark where he had it")
+                        NightBoard(rows: selNightRows).padding(.horizontal, 16)
                     }
                     // TOURNAMENT STAKES — group standings, title odds, market context (World Cup)
                     if !items(.tournament).isEmpty {
                         HubSectionHeader(eyebrow: "Tournament Stakes", sub: "What this match decides")
+                            .id("tournament")
                         VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                            .quantPanel().padding(.horizontal, 14)
+                            .quantPanel().padding(.horizontal, 16)
                     }
                     // Anything else → a compact list
-                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat].contains($0.kind) }
+                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather].contains($0.kind) }
                     if !extras.isEmpty {
                         HubSectionHeader(eyebrow: "More Edges", sub: "Other angles tonight")
                         VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                            .quantPanel().padding(.horizontal, 14)
+                            .quantPanel().padding(.horizontal, 16)
                     }
                 }
             }
             .padding(.top, 8)
             .padding(.bottom, 120)
-            .onAppear { if league == "NBA" { sel = .nba } }
-            .task { if !didLoad { await load() } }
+            .task {
+                if !didLoad {
+                    await load()
+                    await MainActor.run { consumeFocus() }
+                }
+            }
         }
         // Let the search keyboard collapse: drag the list, return key, or clear.
         .scrollDismissesKeyboard(.immediately)
+        .refreshable { await load() }
+        // Kept-alive tabs never re-run .task — visibility flips and app
+        // foregrounding drive deep-link consumption + the staleness refetch.
+        .onChange(of: isVisible) { vis in
+            guard vis else { return }
+            consumeFocus()
+            Task { await reloadIfStale() }
+        }
+        .onChange(of: scenePhase) { phase in
+            guard phase == .active, isVisible else { return }
+            Task { await reloadIfStale() }
+        }
         .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
-        .onChange(of: scrollToStreaks) { go in
-            guard go else { return }
+        .onChange(of: pendingScrollAnchor) { anchor in
+            guard let anchor else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("streaks", anchor: .top) }
-                scrollToStreaks = false
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
+                pendingScrollAnchor = nil
             }
         }
         }
     }
 
-    // ---- Player-edge lane tabs (platoon / heat / ballpark / cooling) ----
+    // ---- Player-edge lane tabs (platoon / heat / ballpark / cooling / starters) ----
 
-    /// The four player-stat lanes, filtered to lanes that have rows tonight.
+    /// The five player-stat lanes, filtered to lanes that have rows tonight.
     private var playerEdgeLanes: [SignalKind] {
-        [SignalKind.platoon, .hot, .ballpark, .cold].filter { !items($0).isEmpty }
+        [SignalKind.platoon, .hot, .ballpark, .cold, .starterForm].filter { !items($0).isEmpty }
     }
     /// The lane the tab strip is showing: the user's choice when still valid,
     /// else the first lane with content.
@@ -15975,6 +16104,7 @@ struct PropsHubView: View {
         case .hot: return "HEAT CHECK"
         case .ballpark: return "BALLPARK"
         case .cold: return "COOLING"
+        case .starterForm: return "STARTERS"
         default: return k.chip
         }
     }
@@ -15984,17 +16114,51 @@ struct PropsHubView: View {
         case .hot: return "Hot bats the line hasn't caught"
         case .ballpark: return "A different pitcher in this park"
         case .cold: return "Slumps the line may not reflect"
+        case .starterForm: return "Last three starts vs the season"
         default: return ""
         }
     }
-    private var laneTabBar: some View {
+
+    // ---- Conditions lane tabs (first inning / running game / park & weather) ----
+
+    /// The game-condition lanes, filtered to lanes that have rows tonight.
+    private var conditionLanes: [SignalKind] {
+        [SignalKind.firstInning, .runningGame, .parkWeather].filter { !items($0).isEmpty }
+    }
+    private var activeCondLane: SignalKind {
+        if let t = condTab, conditionLanes.contains(t) { return t }
+        return conditionLanes.first ?? .firstInning
+    }
+    private func condTitle(_ k: SignalKind) -> String {
+        switch k {
+        case .firstInning: return "FIRST INNING"
+        case .runningGame: return "RUN GAME"
+        case .parkWeather: return "PARK & WEATHER"
+        default: return k.chip
+        }
+    }
+    private func condSub(_ k: SignalKind) -> String {
+        switch k {
+        case .firstInning: return "NRFI & YRFI reads on tonight's slate"
+        case .runningGame: return "Catcher arms vs teams that run"
+        case .parkWeather: return "Wind, heat, and the total"
+        default: return ""
+        }
+    }
+
+    /// Shared lane-tab strip (Player Edges + The Conditions): mono labels in
+    /// the capsule selection grammar — the Billfold sport-chip pattern, not
+    /// SF text (the terminal's selectors speak mono).
+    private func hubLaneStrip(lanes: [SignalKind], active: SignalKind,
+                              title: (SignalKind) -> String,
+                              onSelect: @escaping (SignalKind) -> Void) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(playerEdgeLanes, id: \.self) { lane in
-                    let on = lane == activeLane
-                    Button { withAnimation(.easeInOut(duration: 0.2)) { laneTab = lane } } label: {
-                        Text(laneTitle(lane))
-                            .font(.system(size: 11, weight: on ? .heavy : .semibold))
+                ForEach(lanes, id: \.self) { lane in
+                    let on = lane == active
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { onSelect(lane) } } label: {
+                        Text(title(lane))
+                            .font(GaryFonts.mono(10.5, bold: on)).tracking(0.8)
                             .foregroundStyle(on ? GaryColors.selectedText : .white.opacity(0.45))
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(
@@ -16016,7 +16180,7 @@ struct PropsHubView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.35))
             TextField("Search players, teams, edges", text: $searchText)
-                .font(.system(size: 14))
+                .font(GaryFonts.mono(12.5))
                 .foregroundStyle(.white)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -16033,24 +16197,36 @@ struct PropsHubView: View {
         .padding(.horizontal, 12).padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                .fill(GaryColors.fieldBg)
+                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
         )
     }
 
-    /// Flat ranked list of edges matching the search text — searches the
-    /// SELECTED league's signals across headline, detail, game, and value.
+    /// One search for everything the page shows: tonight's edges (every
+    /// league), the graded receipts, live streaks, and last night's board.
     private var searchResults: some View {
         let q = searchText.lowercased()
-        let matches = leagueSignals.filter {
-            $0.headline.lowercased().contains(q)
-                || $0.detail.lowercased().contains(q)
-                || $0.game.lowercased().contains(q)
-                || $0.value.lowercased().contains(q)
-                || $0.kind.chip.lowercased().contains(q)
+        func hits(_ s: Signal) -> Bool {
+            s.headline.lowercased().contains(q)
+                || s.detail.lowercased().contains(q)
+                || s.game.lowercased().contains(q)
+                || s.value.lowercased().contains(q)
+                || s.kind.chip.lowercased().contains(q)
         }
+        let edgeMatches = source.filter(hits)
+        let receiptMatches = ydaySignals.filter(hits)
+        let streakMatches = streakRows.filter {
+            ($0.subject ?? "").lowercased().contains(q)
+                || ($0.team ?? "").lowercased().contains(q)
+                || ($0.detail ?? "").lowercased().contains(q)
+        }
+        let nightMatches = nightRows.filter {
+            ($0.player_name ?? "").lowercased().contains(q)
+                || ($0.team ?? "").lowercased().contains(q)
+        }
+        let total = edgeMatches.count + receiptMatches.count + streakMatches.count + nightMatches.count
         return Group {
-            if matches.isEmpty {
+            if total == 0 {
                 VStack(spacing: 8) {
                     Text("NO MATCHES")
                         .font(GaryFonts.mono(11, bold: true)).tracking(1)
@@ -16060,18 +16236,108 @@ struct PropsHubView: View {
                 }
                 .frame(maxWidth: .infinity).padding(.top, 36)
             } else {
-                HubSectionHeader(eyebrow: "Results", sub: "\(matches.count) edge\(matches.count == 1 ? "" : "s") match")
-                VStack(spacing: 0) { ForEach(matches) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                    .quantPanel().padding(.horizontal, 14)
+                if !edgeMatches.isEmpty {
+                    HubSectionHeader(eyebrow: "Edges", sub: "\(edgeMatches.count) match\(edgeMatches.count == 1 ? "" : "es") tonight")
+                    VStack(spacing: 0) { ForEach(edgeMatches) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                        .quantPanel().padding(.horizontal, 16)
+                }
+                if !receiptMatches.isEmpty {
+                    HubSectionHeader(eyebrow: "Receipts", sub: "Graded yesterday")
+                    VStack(spacing: 0) { ForEach(receiptMatches) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                        .quantPanel().padding(.horizontal, 16)
+                }
+                if !streakMatches.isEmpty {
+                    HubSectionHeader(eyebrow: "Streaks", sub: "Live runs")
+                    VStack(spacing: 0) {
+                        ForEach(Array(streakMatches.enumerated()), id: \.offset) { i, r in
+                            searchAuxRow(title: r.subject ?? "", sub: r.detail ?? "", trail: r.next_game ?? "",
+                                         divider: i < streakMatches.count - 1)
+                        }
+                    }
+                    .quantPanel().padding(.horizontal, 16)
+                }
+                if !nightMatches.isEmpty {
+                    HubSectionHeader(eyebrow: "Last Night", sub: "League-wide board")
+                    VStack(spacing: 0) {
+                        ForEach(Array(nightMatches.enumerated()), id: \.offset) { i, r in
+                            searchAuxRow(title: r.player_name ?? "", sub: r.detail ?? "", trail: r.team ?? "",
+                                         divider: i < nightMatches.count - 1)
+                        }
+                    }
+                    .quantPanel().padding(.horizontal, 16)
+                }
             }
         }
+    }
+
+    /// Compact read-only row for streak/night-board search matches.
+    private func searchAuxRow(title: String, sub: String, trail: String, divider: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                    if !sub.isEmpty {
+                        Text(sub).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                if !trail.isEmpty {
+                    Text(trail.uppercased())
+                        .font(GaryFonts.mono(8.5, bold: false)).tracking(0.4)
+                        .foregroundStyle(.white.opacity(0.35)).lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            if divider {
+                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+            }
+        }
+    }
+
+    /// First-load spinner — without it the page flashes a false "no edges
+    /// yet" while the fetch is still in flight.
+    private var hubLoadingState: some View {
+        VStack(spacing: 12) {
+            ProgressView().tint(GaryColors.gold)
+            Text("PULLING TONIGHT'S BOARD")
+                .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
+                .foregroundStyle(.white.opacity(0.35))
+        }
+        .frame(maxWidth: .infinity).padding(.top, 110)
+    }
+
+    /// Fetch failed AND nothing rendered — honest copy, distinct from the
+    /// pre-lineup quiet morning, with a retry path.
+    private var hubErrorState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(GaryColors.gold.opacity(0.6))
+            Text("COULDN'T LOAD THE HUB")
+                .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                .foregroundStyle(.white.opacity(0.55))
+            Text("Check your connection, then pull down to retry.")
+                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
+                .multilineTextAlignment(.center).padding(.horizontal, 40)
+            Button { Task { await load() } } label: {
+                Text("RETRY")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    .foregroundStyle(.black.opacity(0.85))
+                    .padding(.horizontal, 22).padding(.vertical, 9)
+                    .background(Capsule().fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity).padding(.top, 90)
     }
 
     private var hubEmptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(spacing: 8) {
-                Text("No \(sel.label) edges yet")
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.55))
+                Text("NO \(sel.label.uppercased()) EDGES YET")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.55))
                 Text("Tonight's connections post as lineups and matchups firm up.")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
                     .multilineTextAlignment(.center).padding(.horizontal, 40)
@@ -16079,7 +16345,7 @@ struct PropsHubView: View {
             .frame(maxWidth: .infinity).padding(.top, 28).padding(.bottom, 18)
 
             // Meanwhile: yesterday's board, graded — the Hub's receipts fill
-            // the morning instead of a blank room.
+            // the morning instead of a blank room. Rows open the full edge.
             if !ydaySignals.isEmpty {
                 HubSectionHeader(
                     eyebrow: "Yesterday · graded",
@@ -16089,28 +16355,46 @@ struct PropsHubView: View {
                     } ?? "Every edge, graded the morning after")
                 VStack(spacing: 0) {
                     ForEach(Array(ydaySignals.prefix(12).enumerated()), id: \.element.id) { i, s in
-                        HStack(spacing: 10) {
-                            Text(s.kind.chip)
-                                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                                .foregroundStyle(GaryColors.gold.opacity(0.75))
-                                .frame(width: 86, alignment: .leading)
-                            Text(s.headline)
-                                .font(.system(size: 12.5))
-                                .foregroundStyle(.white.opacity(0.8))
-                                .lineLimit(2)
-                            Spacer(minLength: 8)
-                            Text(s.result == "hit" ? "HIT" : "MISS")
-                                .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
-                                .foregroundStyle(s.result == "hit" ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                        Button { selectedSignal = s } label: {
+                            HStack(spacing: 10) {
+                                Text(s.kind.chip)
+                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                                    .foregroundStyle(GaryColors.gold.opacity(0.75))
+                                    .frame(width: 86, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(s.headline)
+                                        .font(.system(size: 12.5))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                    if let note = s.resultNote, !note.isEmpty {
+                                        Text(note)
+                                            .font(GaryFonts.mono(9, bold: false))
+                                            .foregroundStyle(.white.opacity(0.4))
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                Text(s.result == "hit" ? "HIT" : s.result == "push" ? "PUSH" : "MISS")
+                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
+                                    .foregroundStyle(s.result == "hit" ? GaryColors.win
+                                                     : s.result == "push" ? GaryColors.gold
+                                                     : GaryColors.loss)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.25))
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .buttonStyle(.plain)
                         if i < min(ydaySignals.count, 12) - 1 {
                             Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                         }
                     }
                 }
                 .quantPanel()
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 16)
             }
         }
         .frame(maxWidth: .infinity)
@@ -16132,7 +16416,7 @@ struct PropsHubView: View {
                         let on = l == sel
                         Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l } } label: {
                             Text(l.label)
-                                .font(.system(size: 11, weight: on ? .heavy : .semibold))
+                                .font(GaryFonts.mono(10.5, bold: on)).tracking(0.8)
                                 .foregroundStyle(on ? GaryColors.selectedText : Color.white.opacity(0.5))
                                 .padding(.horizontal, 11).padding(.vertical, 5)
                                 .background(
