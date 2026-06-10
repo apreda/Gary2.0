@@ -10,7 +10,7 @@ export default async function Image() {
   const [jbMono, barlow, bear] = await Promise.all([
     readFile(join(process.cwd(), 'assets/og/JetBrainsMono-Bold.ttf')),
     readFile(join(process.cwd(), 'assets/og/BarlowCondensed-Bold.ttf')),
-    readFile(join(process.cwd(), 'public/brand/gary-head.png'), 'base64'),
+    readFile(join(process.cwd(), 'public/brand/gary-icon-og.png'), 'base64'),
   ]);
   const bearSrc = `data:image/png;base64,${bear}`;
 

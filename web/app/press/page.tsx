@@ -33,10 +33,10 @@ const ASSETS = [
     hint: 'Primary mark. Use on warm black (#0A0908) only.',
   },
   {
-    file: '/brand/gary-head.png',
-    label: 'Gary Head',
-    dims: '512 × 512 px · transparent PNG',
-    hint: 'Compact in-app avatar. No blue tint.',
+    file: '/brand/gary-icon.png',
+    label: 'Gary Icon',
+    dims: '800 × 800 px · transparent PNG',
+    hint: 'The site and app-icon mark. No blue tint.',
   },
   {
     file: '/coin2.png',

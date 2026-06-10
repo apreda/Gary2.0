@@ -92,7 +92,7 @@ export default async function Home() {
           <div className="relative hidden lg:col-span-5 lg:block">
             <div className="rise rise-3 relative mx-auto w-[400px]">
               <Image
-                src="/brand/gary-head.png"
+                src="/brand/gary-icon.png"
                 alt="Gary the bear — gold coin mark"
                 width={400}
                 height={400}

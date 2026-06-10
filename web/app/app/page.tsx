@@ -111,7 +111,7 @@ export default function AppPage() {
           </div>
         </div>
         <div className="hidden justify-center lg:col-span-5 lg:flex">
-          <Image src="/brand/gary-head.png" alt="Gary the bear" width={300} height={300} preload />
+          <Image src="/brand/gary-icon.png" alt="Gary the bear" width={300} height={300} preload />
         </div>
       </section>
 

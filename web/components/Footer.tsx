@@ -43,7 +43,7 @@ export function Footer() {
           {/* Colophon */}
           <div>
             <div className="flex items-center gap-2.5">
-              <Image src="/brand/GaryIconBG.png" alt="" width={34} height={34} />
+              <Image src="/brand/gary-icon.png" alt="" width={34} height={34} />
               <span className="font-mono text-[15px] uppercase tracking-[0.04em] text-gold">Gary A.I.</span>
             </div>
             <p className="mt-3 max-w-xs text-[13px] leading-relaxed text-low">

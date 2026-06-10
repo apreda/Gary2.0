@@ -25,7 +25,7 @@ export function Nav() {
     <header className="sticky top-0 z-40 border-b border-line bg-ink/90 backdrop-blur">
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <Link href="/" className={`flex items-center gap-2.5 ${focusRing}`}>
-          <Image src="/brand/gary-head.png" alt="" aria-hidden width={30} height={30} />
+          <Image src="/brand/gary-icon.png" alt="" aria-hidden width={30} height={30} />
           {/* The app's wordmark rule: mono, regular weight, gold, all caps —
               quiet weight + signature color beats bold + white. */}
           <span className="font-mono text-[15px] uppercase tracking-[0.04em] text-gold">Gary A.I.</span>
