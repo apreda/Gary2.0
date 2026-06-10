@@ -1994,6 +1994,10 @@ struct HomeView: View {
         boardSection
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        // The World Cup module (restored from its parked state): countdown +
+        // the Wire's WC storylines now, tomorrow's opener + board once the
+        // tournament slate posts.
+        worldCupModule
         Group {
             // Three reads on tonight — ALWAYS rendered; each tab carries its
             // own honest empty note until picks post. (Wire = Morning only.)
@@ -2620,29 +2624,6 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16)
 
-            // The doors panel is gone — four uniform icon rows was menu
-            // furniture the tab bar already provides. The one timely line
-            // (WC countdown) keeps a single quiet row while it matters.
-            if let days = Self.daysUntilWorldCup(), days > 0 {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
-                } label: {
-                    HStack {
-                        Text("WORLD CUP KICKS OFF IN \(days) DAY\(days == 1 ? "" : "S")")
-                            .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                            .foregroundStyle(GaryColors.gold.opacity(0.9))
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.3))
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 11)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .quantPanel()
-                .padding(.horizontal, 16)
-            }
         }
     }
 
