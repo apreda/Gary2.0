@@ -9,9 +9,11 @@
  *
  * Joins daily_picks (the pick + odds) to game_results (the graded outcome) by
  * pick_text, builds the evidence pack (final score + BDL MLB per-game stats
- * when available), makes ONE Flash call per pick via src/services/gameRecap.js,
- * and writes game_recaps rows. Idempotent: matchups already recapped for the
- * date are skipped (use --force to redo them).
+ * when available + the game's graded props with their real prices, so the
+ * slide bullets can carry the betting lens), makes ONE Flash call per pick via
+ * src/services/gameRecap.js, and writes game_recaps rows (headline + recap +
+ * bullets). Idempotent: matchups already recapped for the date are skipped
+ * (use --force to redo them).
  *
  * NOTE: covers game_results only — weekly NFL picks (nfl_results) are handled
  * by the nightly path. Props are never recapped.
@@ -24,7 +26,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { generateRecap } from '../src/services/gameRecap.js';
+import { generateRecap, filterPropsForGame } from '../src/services/gameRecap.js';
 import { buildGameEvidence } from '../src/services/factCheck.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
@@ -124,6 +126,16 @@ async function main() {
   }
   const resultByPickText = new Map((results || []).map((r) => [r.pick_text, r]));
 
+  // The night's graded props (real betting prices) — same 2-day window. Each
+  // game's subset goes into the evidence pack so bullets can carry the lens.
+  const { data: propRows, error: propErr } = await supabase
+    .from('prop_results')
+    .select('player_name, prop_type, line_value, actual_value, result, bet, odds, matchup')
+    .in('game_date', [targetDate, nextStr]);
+  if (propErr) {
+    console.warn(`⚠️ prop_results fetch failed (bullets will omit prop prices): ${propErr.message}`);
+  }
+
   let done = 0, skipped = 0, failed = 0;
 
   for (const pick of picks) {
@@ -164,6 +176,7 @@ async function main() {
     const [awayScore, homeScore] = String(graded.final_score || '').split('-').map(Number);
 
     const mlbStats = league === 'MLB' ? await fetchMlbStatsForGame(pick.game_id) : null;
+    const gradedProps = filterPropsForGame(propRows || [], pick.homeTeam, pick.awayTeam);
     const evidence = buildGameEvidence({
       league,
       homeTeam: pick.homeTeam,
@@ -171,6 +184,7 @@ async function main() {
       homeScore,
       awayScore,
       mlbStats,
+      gradedProps,
     });
 
     try {
@@ -189,6 +203,7 @@ async function main() {
         result: graded.result,
         headline: recap.headline,
         recap: recap.recap,
+        bullets: recap.bullets || [],
       };
 
       if (dryRun) {
@@ -207,6 +222,7 @@ async function main() {
       console.log(`  📰 ${league} ${matchup} [${graded.result.toUpperCase()} ${graded.final_score}]`);
       console.log(`      ${recap.headline}`);
       console.log(`      ${recap.recap}`);
+      for (const b of recap.bullets || []) console.log(`      • ${b}`);
       done++;
     } catch (e) {
       console.error(`  ❌ ${league} ${matchup}: recap failed: ${e.message}`);

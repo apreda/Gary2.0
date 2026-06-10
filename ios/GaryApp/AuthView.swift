@@ -360,7 +360,7 @@ struct AuthTextField: View {
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#0D0D0F"))
+                .fill(Color(hex: "#0F0D0D"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
@@ -415,7 +415,7 @@ struct SocialSignInButton: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
+                    .fill(Color(hex: "#0F0D0D"))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(Color.white.opacity(0.1), lineWidth: 1)

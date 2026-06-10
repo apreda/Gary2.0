@@ -52,6 +52,11 @@ function formatIp(ip) {
  * totals). Other leagues get the final score only — claims the score can't
  * answer come back "unclear", which is correct behavior.
  *
+ * Optional: gradedProps (prop_results rows for this game) appends Gary's graded
+ * props WITH their real betting prices — the recap pipeline uses this so slide
+ * bullets can carry the betting lens ("+340 to homer") without inventing odds.
+ * Fact-check callers don't pass it; their evidence is unchanged.
+ *
  * @param {object} args
  * @param {string} args.league        e.g. 'MLB'
  * @param {string} args.homeTeam      pick's home team
@@ -59,8 +64,10 @@ function formatIp(ip) {
  * @param {number} args.homeScore     final score aligned to pick's home team
  * @param {number} args.awayScore     final score aligned to pick's away team
  * @param {Array|null} [args.mlbStats] BDL /mlb/v1/stats rows for this game (optional)
+ * @param {Array|null} [args.gradedProps] prop_results rows for this game (optional):
+ *   { player_name, bet, line_value, prop_type, odds, result, actual_value }
  */
-export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayScore, mlbStats }) {
+export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayScore, mlbStats, gradedProps }) {
   const lines = [
     `FINAL SCORE: ${awayTeam} (away) ${awayScore} — ${homeTeam} (home) ${homeScore}`,
   ];
@@ -111,6 +118,20 @@ export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayS
     if (notableLines.length) lines.push('', 'NOTABLE BATTING LINES:', ...notableLines);
     if (teamHits.size) {
       lines.push('', `TEAM HITS: ${[...teamHits.entries()].map(([t, h]) => `${t} ${h}`).join(', ')}`);
+    }
+  }
+
+  if (Array.isArray(gradedProps) && gradedProps.length > 0) {
+    lines.push('', "GARY'S GRADED PROPS FOR THIS GAME — these prices are real:");
+    for (const p of gradedProps) {
+      const raw = p.odds != null ? String(p.odds).trim() : '';
+      const odds = raw ? (raw.startsWith('-') || raw.startsWith('+') ? raw : `+${raw}`) : null;
+      lines.push(
+        `- ${p.player_name} ${p.bet} ${p.line_value} ${p.prop_type}` +
+        (odds ? ` (${odds})` : '') +
+        ` — ${String(p.result || '').toUpperCase()}` +
+        (p.actual_value != null ? ` (actual: ${p.actual_value})` : '')
+      );
     }
   }
 

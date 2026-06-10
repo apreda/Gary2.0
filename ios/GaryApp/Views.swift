@@ -1154,7 +1154,7 @@ extension View {
             ZStack {
                 // Solid dark background
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
+                    .fill(Color(hex: "#0F0D0D"))
                 
                 // Subtle top edge highlight
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -1414,7 +1414,7 @@ enum GaryColors {
     // Deep backgrounds
     static let darkBg = Color(hex: "#08080A")
     static let cardBg = Color(hex: "#121214")
-    static let elevatedBg = Color(hex: "#1A1A1E")
+    static let elevatedBg = Color(hex: "#1E1A1A")
     
     // Glass tints
     static let glassTint = Color.white.opacity(0.08)
@@ -1449,7 +1449,7 @@ enum GaryColors {
     /// The signature gold accent — for emphasis (pick chips, prices, CTAs, Gary's voice).
     static let heroAccent = gold
     /// Section sub-heads (replaces the gold mono eyebrows).
-    static let sectionHead = Color.white.opacity(0.92)
+    static let sectionHead = GaryColors.gold.opacity(0.92)   // sections speak gold, like the web
     /// Section descriptions and quiet supporting labels.
     static let sectionSub = Color.white.opacity(0.45)
     /// Metadata: times, game tags, fine print.
@@ -3072,7 +3072,7 @@ struct HomeMarqueeHero: View {
                             trailing: story.verdict, hint: nil)
             }
         }
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#161618")))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#181616")))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
@@ -3164,7 +3164,7 @@ struct HomeMarqueeHero: View {
             receiptStub(lead: "How it played ·", pick: story.sub.uppercased(),
                         trailing: story.verdict, hint: nil)
         }
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#161618")))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: "#181616")))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
@@ -4099,7 +4099,7 @@ struct HomePropBoxSection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(Color(hex: "#161618"))
+            .background(Color(hex: "#181616"))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
             .padding(.horizontal, 16)
@@ -4193,7 +4193,7 @@ struct HomeLiveTape: View {
                         }
                         .padding(.vertical, 10).padding(.horizontal, 12)
                         .frame(minWidth: 124, alignment: .leading)
-                        .background(Color(hex: "#161618"))
+                        .background(Color(hex: "#181616"))
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
                         .overlay(alignment: .leading) {
@@ -5610,7 +5610,7 @@ struct SafariView: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let vc = SFSafariViewController(url: url)
-        vc.preferredBarTintColor = UIColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1)   // ink #0B0B0C
+        vc.preferredBarTintColor = UIColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1)   // ink #0C0B0B
         vc.preferredControlTintColor = UIColor(red: 0.788, green: 0.635, blue: 0.153, alpha: 1) // brand gold
         vc.dismissButtonStyle = .close
         return vc
@@ -5661,7 +5661,7 @@ struct PlansSheetView: View {
     private static let sports = ["MLB", "NBA", "NHL", "NFL", "NCAAF", "NCAAB"]
     private static let winColor = Color(hex: "#3FB950")
     private static let lossColor = Color(hex: "#E5484D")
-    private static let ink = Color(hex: "#0B0B0C")   // text on the gold CTA / chips
+    private static let ink = Color(hex: "#0C0B0B")   // text on the gold CTA / chips
 
     /// A focused sport (from a blurred board) respects intent: open the full
     /// menu with that board already picked, All-Access still on top as the
@@ -6012,7 +6012,7 @@ struct PlansSheetView: View {
         .padding(.top, 12)
         .padding(.bottom, 8)
         .background(
-            Color(hex: "#0B0B0C").opacity(0.92)
+            Color(hex: "#0C0B0B").opacity(0.92)
                 .overlay(Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1), alignment: .top)
                 .ignoresSafeArea(edges: .bottom)
         )
@@ -6231,7 +6231,7 @@ struct PlansSheetView: View {
 
     private func cardBackground(selected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(hex: "#161618"))
+            .fill(Color(hex: "#181616"))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(selected ? GaryColors.gold.opacity(0.75) : Color.white.opacity(0.07),
@@ -10017,7 +10017,7 @@ struct BenefitCard: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "#141416"))
+                .fill(Color(hex: "#161414"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(Color.white.opacity(0.06), lineWidth: 1)
@@ -11122,7 +11122,7 @@ struct CompactPickRow: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(hex: "#1C1C1F"))
+                        .fill(Color(hex: "#1F1C1C"))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1)
@@ -11135,7 +11135,7 @@ struct CompactPickRow: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#161618"))
+                .fill(Color(hex: "#181616"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1.0)
@@ -11532,7 +11532,7 @@ struct ShareCardView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0B0B0C")
+            Color(hex: "#0C0B0B")
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 10) {
@@ -11702,7 +11702,7 @@ struct PickCardBack: View {
             if pick.confidence != nil {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1A1A1E"))
+                        RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1E1A1A"))
                         RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: geo.size.width * confidence)
                     }
                 }
@@ -11756,7 +11756,7 @@ struct PickCardBack: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#1A1A1C"))
+                .fill(Color(hex: "#1C1A1A"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
@@ -11992,7 +11992,7 @@ struct PickDetailPopup: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color(hex: "#1A1A1C"))
+                    .fill(Color(hex: "#1C1A1A"))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(Color.white.opacity(0.14), lineWidth: 0.8)
@@ -12401,7 +12401,7 @@ struct SportsbookOddsTable: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: "#1A1A1C"))
+                .fill(Color(hex: "#1C1A1A"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
@@ -12937,7 +12937,7 @@ struct PlayerStackCard: View {
             ZStack {
                 // Base
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(hex: "#1A1A1C"))
+                    .fill(Color(hex: "#1C1A1A"))
 
                 // Subtle accent gradient on left edge
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -14679,7 +14679,7 @@ struct PropSlipCard: View {
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color(hex: "#1C1C1F"))
+                                .fill(Color(hex: "#1F1C1C"))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .stroke(GaryColors.silver.opacity(0.55), lineWidth: 1)
@@ -14697,7 +14697,7 @@ struct PropSlipCard: View {
         .padding(.bottom, 4)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#161618"))
+                .fill(Color(hex: "#181616"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(GaryColors.silver.opacity(0.4), lineWidth: 1.0)
@@ -14825,7 +14825,7 @@ struct PropSlipBack: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#1A1A1C"))
+                .fill(Color(hex: "#1C1A1A"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(GaryColors.silver.opacity(0.32), lineWidth: 1)
@@ -16259,7 +16259,7 @@ struct CompactPropRow: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(hex: "#1C1C1F"))
+                        .fill(Color(hex: "#1F1C1C"))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(GaryColors.silver.opacity(0.55), lineWidth: 1)
@@ -16273,7 +16273,7 @@ struct CompactPropRow: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#161618"))
+                .fill(Color(hex: "#181616"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(GaryColors.silver.opacity(0.4), lineWidth: 1.0)
@@ -16496,7 +16496,7 @@ struct PropDetailPopup: View {
                         .background(
                             ZStack {
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(hex: "#1A1A1C"))
+                                    .fill(Color(hex: "#1C1A1A"))
                                 RoundedRectangle(cornerRadius: 4)
                                     .fill(GaryColors.gold.opacity(0.035))
                                 RoundedRectangle(cornerRadius: 4)
@@ -16569,7 +16569,7 @@ struct PropDetailPopup: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(hex: "#1A1A1C"))
+                        .fill(Color(hex: "#1C1A1A"))
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(GaryColors.gold.opacity(0.035))
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -17330,7 +17330,7 @@ struct TaleOfTapeSection: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "#1A1A1C"))
+                    .fill(Color(hex: "#1C1A1A"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -17531,7 +17531,7 @@ struct GaryTakeSection: View {
             .padding(.horizontal, 14)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "#1A1A1C"))
+                    .fill(Color(hex: "#1C1A1A"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -17886,7 +17886,7 @@ struct TaleOfTapeView: View {
                     .padding(.horizontal, 10)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(hex: "#0D0D0F"))
+                            .fill(Color(hex: "#0F0D0D"))
                     )
                 }
             }
@@ -19208,7 +19208,7 @@ struct DFSPlatformToggle: View {
         .padding(4)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(hex: "#1A1A1C"))
+                .fill(Color(hex: "#1C1A1A"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
@@ -19355,7 +19355,7 @@ struct DFSSlateDropdown: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "#1A1A1C"))
+                    .fill(Color(hex: "#1C1A1A"))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
@@ -19503,7 +19503,7 @@ struct LineupSummaryCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "#0D0D0F"))
+                .fill(Color(hex: "#0F0D0D"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
@@ -19730,7 +19730,7 @@ struct LineupPositionRow: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#0D0D0F"))
+                .fill(Color(hex: "#0F0D0D"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(positionColor(player.position).opacity(0.08), lineWidth: 0.5)
@@ -20107,7 +20107,7 @@ struct GaryNotesCard: View {
                     }
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(hex: "#0D0D0F"))
+                            .fill(Color(hex: "#0F0D0D"))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(GaryColors.gold.opacity(showTake ? 0.2 : 0.08), lineWidth: 0.5)
@@ -20158,7 +20158,7 @@ struct GaryNotesCard: View {
                     }
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(hex: "#0D0D0F"))
+                            .fill(Color(hex: "#0F0D0D"))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(Color(hex: "#22C55E").opacity(showCeiling ? 0.2 : 0.08), lineWidth: 0.5)

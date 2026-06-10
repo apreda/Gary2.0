@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * Ultimate Results Script (Gary 2.0)
- * - Daily picks (NBA, NHL, NFL, NCAAB, NCAAF, MLB)
+ * - Prop bets (NBA, NHL, NFL, MLB) — graded FIRST so recaps can cite real prop prices
+ * - Daily picks (NBA, NHL, NFL, NCAAB, NCAAF, MLB) + betting recaps & fact checks
  * - Weekly NFL picks
- * - Prop bets (NBA, NHL, NFL, MLB)
+ * - Night highlights (league-wide standout stat lines → night_highlights)
  * - Uses BallDontLie (BDL) as primary source
  * - Uses Gemini Grounding (Google Search) as fallback
  * 
@@ -14,7 +15,8 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { gradeSoccerGame } from '../src/services/soccerGrading.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
-import { generateRecap } from '../src/services/gameRecap.js';
+import { generateRecap, filterPropsForGame } from '../src/services/gameRecap.js';
+import { runNightHighlights } from '../src/services/nightHighlights.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 // FIFA service reads the API key at import — must load AFTER loadEnv.
@@ -51,7 +53,7 @@ if (GEMINI_API_KEY) {
 }
 
 // Caching
-const cache = { games: new Map(), stats: new Map(), box: new Map() };
+const cache = { games: new Map(), stats: new Map(), box: new Map(), propRows: new Map() };
 
 const getTargetDate = () => {
   const args = process.argv.slice(2);
@@ -221,6 +223,34 @@ async function fetchNFLStats(gameIds) {
   const stats = data?.data || [];
   cache.stats.set(key, stats);
   return stats;
+}
+
+/**
+ * Gary's graded props around a date (±1 day to absorb pick-date vs ET-game-date
+ * drift). Used to enrich the recap evidence pack with REAL betting prices so
+ * slide bullets can carry the betting lens. One Supabase query per date, cached.
+ * Nightly ordering note: main() grades props BEFORE game picks so these rows
+ * exist by the time recaps are written.
+ */
+async function fetchGradedPropRowsAround(dateStr) {
+  if (cache.propRows.has(dateStr)) return cache.propRows.get(dateStr);
+  const base = new Date(`${dateStr}T12:00:00Z`);
+  const dates = [-1, 0, 1].map((off) => {
+    const d = new Date(base);
+    d.setUTCDate(d.getUTCDate() + off);
+    return d.toISOString().slice(0, 10);
+  });
+  const { data, error } = await supabase
+    .from('prop_results')
+    .select('player_name, prop_type, line_value, actual_value, result, bet, odds, matchup')
+    .in('game_date', dates);
+  if (error) {
+    console.warn(`  ⚠️ prop_results fetch failed (recap evidence will omit props): ${error.message}`);
+    cache.propRows.set(dateStr, []);
+    return [];
+  }
+  cache.propRows.set(dateStr, data || []);
+  return data || [];
 }
 
 async function fetchMLBStats(gameIds) {
@@ -564,11 +594,15 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   }
 
   // Evidence: final score + (MLB) the per-game BDL player stats we already
-  // fetch for prop grading — pitcher lines, HRs, team hit totals.
+  // fetch for prop grading — pitcher lines, HRs, team hit totals — plus this
+  // game's graded props WITH their real prices, so bullets can carry the
+  // betting lens without inventing odds.
   let mlbStats = null;
   if (league === 'MLB' && matchedGame?.id != null) {
     mlbStats = await fetchMLBStats([matchedGame.id]);
   }
+  const propRows = await fetchGradedPropRowsAround(gameDate);
+  const gradedProps = filterPropsForGame(propRows, pick.homeTeam, pick.awayTeam);
   const evidence = buildGameEvidence({
     league,
     homeTeam: pick.homeTeam,
@@ -576,6 +610,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     homeScore: hs,
     awayScore: vs,
     mlbStats,
+    gradedProps,
   });
 
   const recap = await generateRecap({ pick, result, evidence });
@@ -592,6 +627,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     result,
     headline: recap.headline,
     recap: recap.recap,
+    bullets: recap.bullets || [],
   });
   if (insertErr) {
     console.error(`  ❌ RECAP INSERT FAILED [game_recaps] ${league} ${matchup} (${gameDate}): ${insertErr.message}`);
@@ -908,9 +944,14 @@ async function processPropBets(date) {
 async function main() {
   const targetDate = getTargetDate();
   console.log(`\n📅 TARGET DATE: ${targetDate}`);
-  
+
+  // Props grade FIRST: the betting recaps written during game grading enrich
+  // their evidence pack with the night's graded props (real prices for the
+  // slide bullets), so prop_results rows must exist before recaps run.
+  const props = await processPropBets(targetDate);
+
   const daily = await processGenericGames('daily_picks', targetDate);
-  
+
   // Weekly NFL - find the Monday of the target date's week
   const dateParts = targetDate.split('-').map(Number);
   const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
@@ -918,10 +959,17 @@ async function main() {
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   const weekDay = new Date(d.setDate(diff));
   const weekStart = weekDay.toISOString().split('T')[0];
-  
+
   const weeklyNFL = await processGenericGames('weekly_nfl_picks', weekStart, 'NFL');
-  
-  const props = await processPropBets(targetDate);
+
+  // Night highlights: league-wide standout stat lines (HRs, multi-hit games,
+  // big K shows) from BDL box scores — NOT limited to Gary's picks. Idempotent
+  // (upsert) and never fatal to grading.
+  try {
+    await runNightHighlights({ supabase, bdlApiKey: BDL_API_KEY, date: targetDate });
+  } catch (e) {
+    console.warn(`  ⚠️ Night highlights failed (non-fatal): ${e.message}`);
+  }
 
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);

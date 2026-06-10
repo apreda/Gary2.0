@@ -125,7 +125,7 @@ struct SettingsView: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(hex: "#0D0D0F"))
+            .fill(Color(hex: "#0F0D0D"))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.white.opacity(0.07), lineWidth: 1)
@@ -257,7 +257,7 @@ struct SettingsRowIcon: View {
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(tint)
             .frame(width: 32, height: 32)
-            .background(Color(hex: "#1A1A1C"))
+            .background(Color(hex: "#1C1A1A"))
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

@@ -370,7 +370,7 @@ struct GaryCenteredTabBar: View {
                     barShape.fill(.ultraThinMaterial)
                     barShape.fill(GaryColors.darkBg.opacity(0.5))
                 } else {
-                    barShape.fill(Color(hex: "#161618"))
+                    barShape.fill(Color(hex: "#181616"))
                 }
                 barShape.stroke(borderGradient, lineWidth: 0.8)
             }
