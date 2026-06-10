@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { PickCard } from '@/components/PickCard';
-import { Eyebrow } from '@/components/Eyebrow';
+import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { JsonLd } from '@/components/JsonLd';
 import { fetchTodayGamePicks, groupPicksByLeague } from '@/lib/gary/picks';
@@ -35,36 +36,47 @@ export default async function PicksPage() {
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10">
+    <main className="mx-auto max-w-6xl px-5 py-16">
       <JsonLd data={itemList} />
-      <Eyebrow>FREE PICKS · {date}</Eyebrow>
-      <h1 className="mt-2 font-display text-4xl text-white/95">Today&apos;s Picks</h1>
-      <p className="mt-2 max-w-2xl text-white/60">
-        The full slate, graded every morning. Sport pages:{' '}
-        {SPORTS.map((s, i) => (
-          <span key={s.slug}>
-            {i > 0 && ' · '}
-            <Link href={`/picks/${s.slug}`} className="text-white/80 underline">{s.name}</Link>
-          </span>
+      <PageMasthead
+        title="Today's picks"
+        meta={date}
+        sub="The full slate, graded every morning."
+      />
+
+      <div className="mt-7 flex flex-wrap gap-2">
+        {SPORTS.map(s => (
+          <Link
+            key={s.slug}
+            href={`/picks/${s.slug}`}
+            className="rounded-chip border border-line px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-low transition-colors hover:border-line-strong hover:text-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+          >
+            {s.name}
+          </Link>
         ))}
-      </p>
-      <div className="mt-4"><LiveScoreStrip date={date} /></div>
+      </div>
+
+      <div className="mt-5"><LiveScoreStrip date={date} /></div>
 
       {(!picks || picks.length === 0) && (
-        <div className="mt-10 rounded-[20px] border border-white/10 bg-card p-10 text-center text-white/50">
-          Today&apos;s slate hasn&apos;t dropped yet. Picks land every morning —
-          check the <Link href="/results" className="text-white/80 underline">track record</Link> meanwhile.
+        <div className="mt-10 flex flex-col items-center justify-center rounded-card border border-line bg-card p-10 text-center">
+          <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
+          <p className="mt-3 text-[15px] text-mid">
+            Today&apos;s slate hasn&apos;t dropped yet. Picks land every morning —
+            check the <Link href="/results" className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">track record</Link> meanwhile.
+          </p>
         </div>
       )}
 
       {leaguesInPlay.map(code => (
-        <section key={code} className="mt-10">
+        <section key={code} className="mt-16">
           <div className="flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: sportByCode(code)?.accent ?? '#666' }} />
-            <h2 className="font-display text-2xl text-white/95">{sportByCode(code)?.longName ?? code}</h2>
-            <span className="font-mono text-[11px] text-white/45">{byLeague.get(code)!.length} PICKS</span>
+            <h2 className="font-display text-2xl uppercase text-hi">{sportByCode(code)?.longName ?? code}</h2>
+            <span className="tnum font-mono text-[11px] uppercase tracking-[0.04em] text-low">{byLeague.get(code)!.length} PICKS</span>
           </div>
-          <div className="mt-4 grid gap-5 md:grid-cols-2">
+          <StitchRule tone="faint" className="mt-3" />
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
             {byLeague.get(code)!.map((p, i) => <PickCard key={p.pick_id ?? i} pick={p} />)}
           </div>
         </section>

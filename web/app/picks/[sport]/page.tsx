@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PickCard } from '@/components/PickCard';
-import { Eyebrow } from '@/components/Eyebrow';
+import { PageMasthead } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { JsonLd } from '@/components/JsonLd';
 import { fetchTodayGamePicks } from '@/lib/gary/picks';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { normalizeLeague, SPORTS, sportBySlug } from '@/lib/gary/leagues';
-import { todayEST, estDateStr } from '@/lib/gary/dates';
+import { todayEST, daysAgoEST } from '@/lib/gary/dates';
 
 export const revalidate = 600;
 // Unknown slugs 404 at the router — no SSR pass or data fetch for garbage paths.
@@ -50,12 +51,12 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
   const l30 = results
     ? computeRecord(sinceDate(
         results.filter(r => (r.league ?? '').toUpperCase() === cfg.code),
-        estDateStr(new Date(Date.now() - 30 * 86400000)),
+        daysAgoEST(30),
       ))
     : null;
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10">
+    <main className="mx-auto max-w-6xl px-5 py-16">
       <JsonLd data={{
         '@context': 'https://schema.org', '@type': 'ItemList',
         name: `Gary AI free ${cfg.longName} picks`,
@@ -64,22 +65,26 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           '@type': 'ListItem', position: i + 1, name: `${p.awayTeam} @ ${p.homeTeam}: ${p.pick}`,
         })),
       }} />
-      <Eyebrow accent={cfg.accent}>{cfg.code} · {todayEST()}</Eyebrow>
-      <h1 className="mt-2 font-display text-4xl text-white/95">Free {cfg.longName} Picks</h1>
-      {allTime && l30 && (
-        <p className="mt-3 font-mono text-[12px] text-white/45">
-          {cfg.code} RECORD · L30 {l30.wins}-{l30.losses} · ALL-TIME {allTime.wins}-{allTime.losses}
-          {allTime.graded > 0 ? ` (${allTime.pct}%)` : ''} ·{' '}
-          <Link href={`/results/${cfg.slug}`} className="text-white/70 underline">FULL RECORD</Link>
-        </p>
-      )}
-      <div className="mt-4"><LiveScoreStrip date={todayEST()} leagues={[cfg.code]} /></div>
+      <PageMasthead title={`Free ${cfg.longName} picks`} meta={`${cfg.code} · ${todayEST()}`}>
+        {allTime && l30 && (
+          <p className="tnum mt-3 font-mono text-[12px] text-low">
+            {cfg.code} RECORD · L30 {l30.wins}-{l30.losses} · ALL-TIME {allTime.wins}-{allTime.losses}
+            {allTime.graded > 0 ? ` (${allTime.pct}%)` : ''} ·{' '}
+            <Link href={`/results/${cfg.slug}`} className="text-mid underline decoration-gold/60 underline-offset-4 transition-colors hover:text-hi hover:decoration-gold">FULL RECORD</Link>
+          </p>
+        )}
+      </PageMasthead>
+
+      <div className="mt-7"><LiveScoreStrip date={todayEST()} leagues={[cfg.code]} /></div>
 
       {(!picks || picks.length === 0) ? (
-        <div className="mt-10 rounded-[20px] border border-white/10 bg-card p-10 text-center text-white/50">
-          No {cfg.name} picks on today&apos;s board{allTime && allTime.graded > 0 ? (
-            <> — see the <Link href={`/results/${cfg.slug}`} className="text-white/80 underline">graded {cfg.name} record</Link> ({allTime.wins}-{allTime.losses}) while the season&apos;s quiet.</>
-          ) : '.'}
+        <div className="mt-10 flex flex-col items-center justify-center rounded-card border border-line bg-card p-10 text-center">
+          <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
+          <p className="mt-3 text-[15px] text-mid">
+            No {cfg.name} picks on today&apos;s board{allTime && allTime.graded > 0 ? (
+              <> — see the <Link href={`/results/${cfg.slug}`} className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold">graded {cfg.name} record</Link> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>) while the season&apos;s quiet.</>
+            ) : '.'}
+          </p>
         </div>
       ) : (
         <div className="mt-8 grid gap-5 md:grid-cols-2">

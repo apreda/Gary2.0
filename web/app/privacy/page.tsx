@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Eyebrow } from '@/components/Eyebrow';
+import { PageMasthead } from '@/components/Terminal';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy | Gary AI',
@@ -9,31 +9,30 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
-      <Eyebrow>LEGAL</Eyebrow>
-      <h1 className="mt-2 font-display text-4xl text-white/95">Privacy Policy</h1>
-      <p className="mt-2 font-mono text-[11px] text-white/40">Last updated: June 4, 2026</p>
-      <p className="mt-1 font-mono text-[11px] text-white/40">Operated by Gary A.I. LLC</p>
+    <main className="mx-auto max-w-3xl px-5 py-12">
+      <PageMasthead title="Privacy policy" meta="Last updated: June 4, 2026">
+        <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
+      </PageMasthead>
 
-      <div className="mt-8 space-y-8 text-[15px] leading-relaxed text-white/65">
+      <div className="mt-7 space-y-10 text-[15px] leading-relaxed text-mid">
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">1. Information We Collect</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">1. Information We Collect</h2>
 
-          <p className="mb-3 font-semibold text-white/80">Website (betwithgary.ai)</p>
+          <p className="mb-3 font-semibold text-hi">Website (betwithgary.ai)</p>
           <ul className="mb-4 list-disc space-y-2 pl-5">
             <li>
               No account or registration is required. We do not collect your name, email address,
               or any other personally identifiable information through the Website.
             </li>
             <li>
-              We use <strong className="text-white/75">Vercel Analytics</strong> to collect
+              We use <strong className="text-hi">Vercel Analytics</strong> to collect
               anonymous usage statistics (pages visited, referrer, country, device type). This
               data is aggregated and not linked to any individual.
             </li>
           </ul>
 
-          <p className="mb-3 font-semibold text-white/80">iOS App</p>
+          <p className="mb-3 font-semibold text-hi">iOS App</p>
           <ul className="list-disc space-y-2 pl-5">
             <li>
               The App is free to use without an account. Optional features — personalized
@@ -54,7 +53,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">2. How We Use Information</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">2. How We Use Information</h2>
           <ul className="list-disc space-y-2 pl-5">
             <li>Provide, maintain, and improve the Service.</li>
             <li>Send push notifications you have opted into.</li>
@@ -67,7 +66,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">3. Cookies &amp; Analytics</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">3. Cookies &amp; Analytics</h2>
           <p>
             The Website uses Vercel Analytics, which collects anonymous page-view data without
             setting persistent tracking cookies. No cross-site advertising cookies are placed.
@@ -77,23 +76,23 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">4. Data Sharing</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">4. Data Sharing</h2>
           <p className="mb-3">
             We do not sell your personal data. We may share data with:
           </p>
           <ul className="list-disc space-y-2 pl-5">
             <li>
-              <strong className="text-white/75">Service providers</strong> (e.g., Supabase for
+              <strong className="text-hi">Service providers</strong> (e.g., Supabase for
               database hosting, Vercel for infrastructure) who process data on our behalf under
               appropriate data-processing agreements.
             </li>
             <li>
-              <strong className="text-white/75">Authentication providers</strong> (Apple, Google)
+              <strong className="text-hi">Authentication providers</strong> (Apple, Google)
               when you choose to sign in with those services, subject to their own privacy
               policies.
             </li>
             <li>
-              <strong className="text-white/75">Legal obligations</strong> — when required by
+              <strong className="text-hi">Legal obligations</strong> — when required by
               law, subpoena, or to protect the rights, property, or safety of Gary A.I. LLC or
               others.
             </li>
@@ -101,13 +100,13 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">5. Data Retention</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">5. Data Retention</h2>
           <p>
             Account data is retained for as long as your account remains active. You may request
             deletion of your account and associated personal data at any time by emailing{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
-              className="text-white/80 underline hover:text-white/95"
+              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
             >
               privacy@betwithgary.ai
             </a>
@@ -116,7 +115,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">6. Data Security</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">6. Data Security</h2>
           <p>
             We implement TLS encryption and industry-standard security practices for data in
             transit and at rest. We maintain access controls to limit who can access personal
@@ -126,7 +125,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">7. Children&rsquo;s Privacy</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">7. Children&rsquo;s Privacy</h2>
           <p>
             The Service is not directed to anyone under 18 years of age. We do not knowingly
             collect personal information from minors. If we become aware that we have
@@ -136,14 +135,14 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">8. Your Rights</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">8. Your Rights</h2>
           <p>
             Depending on your jurisdiction, you may have rights to access, correct, or delete
             personal data we hold about you, or to object to certain processing. To exercise
             these rights, contact us at{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
-              className="text-white/80 underline hover:text-white/95"
+              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
             >
               privacy@betwithgary.ai
             </a>
@@ -152,7 +151,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">9. Changes to This Policy</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">9. Changes to This Policy</h2>
           <p>
             We will post revisions to this page with a new &ldquo;Last updated&rdquo; date.
             Continued use of the Service after changes constitutes your acceptance of the
@@ -161,12 +160,12 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-xl text-white/90">10. Contact</h2>
+          <h2 className="mb-3 font-display text-xl text-hi">10. Contact</h2>
           <p>
             For privacy-related questions, contact us at{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
-              className="text-white/80 underline hover:text-white/95"
+              className="text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
             >
               privacy@betwithgary.ai
             </a>

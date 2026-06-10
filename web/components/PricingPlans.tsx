@@ -41,50 +41,50 @@ export function PricingPlans({
       {/* All-Access — the anchor */}
       <button
         onClick={() => pick({ plan: 'all_access' })}
-        className={`relative flex w-full items-center gap-4 rounded-[18px] border bg-card p-5 text-left transition-colors ${
-          isSel('all_access') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-white/10 hover:border-white/25'
+        className={`relative flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
+          isSel('all_access') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-line hover:border-white/25'
         }`}
       >
-        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-ink">
+        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
           Best value · {PRICING.trialDays} days free
         </span>
         <Radio on={isSel('all_access')} />
         <div className="min-w-0 flex-1">
-          <div className="font-mono text-sm font-bold tracking-wide text-white/95">ALL-ACCESS</div>
-          <div className="mt-1 text-[13px] text-white/55">Every sport&apos;s Winners board — the plays Gary backs</div>
+          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS</div>
+          <div className="mt-1 text-[13px] text-mid">Every sport&apos;s Winners board — the plays Gary backs</div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-lg font-bold text-gold">{PRICING.allAccessMonthly}</div>
-          <div className="font-mono text-[9px] uppercase tracking-wider text-white/35">per month</div>
+          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.allAccessMonthly}</div>
+          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">per month</div>
         </div>
       </button>
 
       {/* All-Access annual — the committed-bettor rate, half the monthly run-rate */}
       <button
         onClick={() => pick({ plan: 'all_access_annual' })}
-        className={`relative mt-4 flex w-full items-center gap-4 rounded-[18px] border bg-card p-5 text-left transition-colors ${
-          isSel('all_access_annual') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-white/10 hover:border-white/25'
+        className={`relative mt-4 flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
+          isSel('all_access_annual') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-line hover:border-white/25'
         }`}
       >
-        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-ink">
+        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
           Save 50% vs monthly
         </span>
         <Radio on={isSel('all_access_annual')} />
         <div className="min-w-0 flex-1">
-          <div className="font-mono text-sm font-bold tracking-wide text-white/95">ALL-ACCESS — ANNUAL</div>
-          <div className="mt-1 text-[13px] text-white/55">
+          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS — ANNUAL</div>
+          <div className="mt-1 text-[13px] text-mid">
             Every board, all year · works out to {PRICING.allAccessAnnualMonthly}/mo
           </div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-lg font-bold text-gold">{PRICING.allAccessAnnual}</div>
-          <div className="font-mono text-[9px] uppercase tracking-wider text-white/35">per year</div>
+          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.allAccessAnnual}</div>
+          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">per year</div>
         </div>
       </button>
 
       {/* Single sports — sold per board, the natural yes for a one-sport bettor */}
       <div className="mt-7">
-        <div className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
+        <div className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">
           Single sports — {PRICING.single}/mo each
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -95,24 +95,24 @@ export function PricingPlans({
               <button
                 key={s.code}
                 onClick={() => pick({ plan: 'single', sport: s.code })}
-                className={`flex flex-col gap-1.5 rounded-[14px] border bg-card p-3.5 text-left transition-colors ${
-                  on ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-white/10 hover:border-white/25'
+                className={`flex flex-col gap-1.5 rounded-card border bg-card p-3.5 text-left transition-colors ${
+                  on ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-line hover:border-white/25'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.accent }} />
-                    <span className="font-mono text-[11.5px] font-bold tracking-wide text-white/90">{s.code}</span>
+                    <span className="font-mono text-[11.5px] font-bold tracking-[0.04em] text-hi">{s.code}</span>
                   </span>
                   <Mark on={on} />
                 </div>
-                <span className="text-[11.5px] text-white/45">Winners board</span>
+                <span className="text-[11.5px] text-low">Winners board</span>
                 <span className="flex items-baseline gap-0.5">
                   <span className="font-mono text-[13px] font-bold text-gold">{PRICING.single}</span>
                   <span className="font-mono text-[9px] text-white/35">/mo</span>
                 </span>
                 {rec && rec.wins + rec.losses > 0 && (
-                  <span className="font-mono text-[10px] text-white/40">
+                  <span className="tnum font-mono text-[10px] text-low">
                     <span className={rec.wins >= rec.losses ? 'text-win' : 'text-loss'}>
                       {rec.wins}–{rec.losses}
                     </span>{' '}
@@ -128,21 +128,21 @@ export function PricingPlans({
       {/* World Cup — one-time on-ramp */}
       <button
         onClick={() => pick({ plan: 'world_cup' })}
-        className={`relative mt-6 flex w-full items-center gap-4 rounded-[18px] border bg-card p-5 text-left transition-colors ${
-          isSel('world_cup') ? 'border-wc shadow-[0_0_0_1px_rgba(20,184,166,0.4)]' : 'border-white/10 hover:border-white/25'
+        className={`relative mt-6 flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
+          isSel('world_cup') ? 'border-wc shadow-[0_0_0_1px_rgba(20,184,166,0.4)]' : 'border-line hover:border-white/25'
         }`}
       >
-        <span className="absolute -top-2.5 left-4 rounded-md bg-wc px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-ink">
+        <span className="absolute -top-2.5 left-4 rounded-md bg-wc px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
           Kicks off June 11
         </span>
         <Radio on={isSel('world_cup')} />
         <div className="min-w-0 flex-1">
-          <div className="font-mono text-sm font-bold tracking-wide text-white/95">WORLD CUP PASS</div>
-          <div className="mt-1 text-[13px] text-white/55">All 104 matches · one-time, no renewal</div>
+          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">WORLD CUP PASS</div>
+          <div className="mt-1 text-[13px] text-mid">All 104 matches · one-time, no renewal</div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-lg font-bold text-gold">{PRICING.worldCup}</div>
-          <div className="font-mono text-[9px] uppercase tracking-wider text-white/35">one-time</div>
+          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.worldCup}</div>
+          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">one-time</div>
         </div>
       </button>
 
@@ -150,14 +150,14 @@ export function PricingPlans({
       <div className="mt-7 flex flex-col items-center gap-2">
         <button
           onClick={unlock}
-          className="w-full rounded-2xl bg-gold py-4 font-mono text-sm font-bold tracking-wide text-ink transition-opacity hover:opacity-90"
+          className="w-full rounded-panel bg-gold py-4 font-mono text-sm font-bold tracking-[0.04em] text-ink transition-opacity hover:opacity-90"
         >
           {ctaLabel(sel)}
         </button>
-        <p className="text-center text-[12px] text-white/45">
+        <p className="text-center text-[12px] text-low">
           {ctaCaption(sel)}
         </p>
-        <p className="text-center text-[11px] text-white/30">
+        <p className="text-center text-[11px] text-low">
           Plans bill through Stripe and cancel anytime. The free slate stays free — always.
         </p>
       </div>

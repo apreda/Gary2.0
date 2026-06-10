@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Eyebrow } from '@/components/Eyebrow';
+import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { AppStoreButton } from '@/components/AppStoreButton';
 
 export const metadata: Metadata = {
@@ -11,26 +11,24 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
-      <Eyebrow>CONTACT</Eyebrow>
-      <h1 className="mt-2 font-display text-4xl text-white/95">Get in Touch</h1>
-      <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-white/60">
-        Questions about a pick, a technical issue with the app, or anything else — reach
-        out via email or X.
-      </p>
+    <main className="mx-auto max-w-4xl px-5 py-12">
+      <PageMasthead
+        title="Contact"
+        sub="Questions about a pick, a technical issue with the app, or anything else — reach out via email or X."
+      />
 
-      <div className="mt-8 max-w-lg rounded-[20px] border border-white/10 bg-card px-7 py-7">
-        <ul className="space-y-6">
+      <div className="mt-7 max-w-lg rounded-panel border border-line bg-card px-7 py-7">
+        <ul>
           {/* Support email */}
           <li className="flex items-start gap-4">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-chip">
-              <span className="font-mono text-[11px] text-white/50">@</span>
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-chip bg-chip">
+              <span className="font-mono text-[11px] text-low">@</span>
             </div>
             <div>
-              <p className="font-mono text-[11px] uppercase text-white/40">Email</p>
+              <p className="font-mono text-[11px] uppercase tracking-[0.04em] text-low">Email</p>
               <a
                 href="mailto:support@betwithgary.ai"
-                className="mt-1 block text-[15px] text-white/85 underline hover:text-white/95"
+                className="mt-1 block text-[15px] text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
               >
                 support@betwithgary.ai
               </a>
@@ -38,32 +36,38 @@ export default function ContactPage() {
           </li>
 
           {/* X / Twitter */}
-          <li className="flex items-start gap-4">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-chip">
-              <span className="font-mono text-[11px] text-white/50">X</span>
-            </div>
-            <div>
-              <p className="font-mono text-[11px] uppercase text-white/40">X (Twitter)</p>
-              <a
-                href="https://x.com/BetwithGary"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 block text-[15px] text-white/85 underline hover:text-white/95"
-              >
-                @BetwithGary
-              </a>
+          <li>
+            <StitchRule tone="faint" className="my-5" />
+            <div className="flex items-start gap-4">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-chip bg-chip">
+                <span className="font-mono text-[11px] text-low">X</span>
+              </div>
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.04em] text-low">X (Twitter)</p>
+                <a
+                  href="https://x.com/BetwithGary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 block text-[15px] text-hi underline decoration-gold/60 underline-offset-4 hover:decoration-gold"
+                >
+                  @BetwithGary
+                </a>
+              </div>
             </div>
           </li>
 
           {/* App Store */}
-          <li className="flex items-start gap-4">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-chip">
-              <span className="font-mono text-[11px] text-white/50">iOS</span>
-            </div>
-            <div>
-              <p className="font-mono text-[11px] uppercase text-white/40">iOS App</p>
-              <div className="mt-2">
-                <AppStoreButton label="Download on the App Store" />
+          <li>
+            <StitchRule tone="faint" className="my-5" />
+            <div className="flex items-start gap-4">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-chip bg-chip">
+                <span className="font-mono text-[11px] text-low">iOS</span>
+              </div>
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.04em] text-low">iOS App</p>
+                <div className="mt-2">
+                  <AppStoreButton label="Download on the App Store" surface="contact" />
+                </div>
               </div>
             </div>
           </li>

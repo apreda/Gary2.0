@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Eyebrow } from '@/components/Eyebrow';
+import { PageMasthead, StitchRule } from '@/components/Terminal';
 import {
   fetchTodayInsights, fetchGradedYesterday, groupInsightsByLane,
   computeHitRate, LANES, LANE_ORDER, type LaneKey,
@@ -31,15 +32,15 @@ function Spark({ values, tint }: { values: number[]; tint: 'green' | 'red' | 'ne
 
 function InsightItem({ row, tint }: { row: InsightRow; tint: 'green' | 'red' | 'neutral' }) {
   return (
-    <li className="rounded-[12px] border border-white/8 bg-card p-4">
+    <li className="quant-panel p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[15px] font-medium text-white/90">{row.headline}</p>
-          {row.detail && <p className="mt-1 text-[13px] leading-relaxed text-white/55">{row.detail}</p>}
-          <p className="mt-2 font-mono text-[11px] text-white/40">{row.game}</p>
+          <p className="text-[15px] font-medium text-hi">{row.headline}</p>
+          {row.detail && <p className="mt-1 text-[13px] leading-relaxed text-mid">{row.detail}</p>}
+          <p className="tnum mt-2 font-mono text-[11px] text-low">{row.game}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {row.value && <span className="font-mono text-sm font-bold text-white/85">{row.value}</span>}
+          {row.value && <span className="tnum font-mono text-sm font-bold text-hi">{row.value}</span>}
           {Array.isArray(row.spark) && <Spark values={row.spark} tint={tint} />}
         </div>
       </div>
@@ -61,40 +62,37 @@ export default async function HubPage() {
   const leagues = ['MLB', 'NBA', 'WC'].filter(lg => safeInsights.some(r => (r.league ?? '').toUpperCase() === lg));
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Eyebrow>THE HUB · {todayEST()}</Eyebrow>
-          <h1 className="mt-2 font-display text-4xl text-white/95">Today&apos;s Edges</h1>
-        </div>
+    <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
+      <PageMasthead
+        title="The hub"
+        meta={todayEST()}
+        sub="The angles Gary's research surfaced today — every board is graded against actual results the next morning."
+      >
         {hitRate && hitRate.graded >= 5 && (
-          <span className="rounded-md bg-chip px-3 py-1.5 font-mono text-[11px] font-bold text-white/70">
+          <span className="tnum mt-3 inline-flex items-center rounded-chip border border-line bg-chip px-2.5 py-1 font-mono text-[11px] font-bold text-mid">
             {hitRate.hit} OF {hitRate.graded} HIT YDAY
           </span>
         )}
-      </div>
-      <p className="mt-2 max-w-2xl text-white/60">
-        The angles Gary&apos;s research surfaced today — every board is graded against
-        actual results the next morning.
-      </p>
+      </PageMasthead>
 
       {safeInsights.length === 0 && (
-        <div className="mt-10 rounded-[20px] border border-white/10 bg-card p-10 text-center text-white/50">
+        <div className="mt-7 rounded-panel border border-line bg-card p-10 text-center text-low">
           Today&apos;s board is still loading — edges land with the morning research run.
         </div>
       )}
 
-      {leagues.map(lg => {
+      {leagues.map((lg, i) => {
         const laneMap = groupInsightsByLane(safeInsights.filter(r => (r.league ?? '').toUpperCase() === lg));
         const lanes = LANE_ORDER.filter(k => laneMap.has(k));
         if (lanes.length === 0) return null;
         return (
-          <section key={lg} className="mt-12">
-            <h2 className="font-display text-2xl text-white/95">{lg === 'WC' ? '2026 World Cup' : lg}</h2>
+          <section key={lg} className={i === 0 ? 'mt-7' : 'mt-16'}>
+            {i > 0 && <StitchRule tone="faint" className="mb-10" />}
+            <h2 className="font-display text-2xl uppercase text-hi">{lg === 'WC' ? '2026 World Cup' : lg}</h2>
             {lanes.map((k: LaneKey) => (
               <div key={k} className="mt-6">
                 <Eyebrow>{LANES[k].chip}</Eyebrow>
-                <h3 className="mt-1 font-display text-xl text-white/90">{LANES[k].title}</h3>
+                <h3 className="mt-1 font-display text-xl uppercase text-hi">{LANES[k].title}</h3>
                 <ul className="mt-3 grid gap-3 md:grid-cols-2">
                   {laneMap.get(k)!.slice(0, 8).map(row => (
                     <InsightItem key={row.id} row={row} tint={LANES[k].tint} />

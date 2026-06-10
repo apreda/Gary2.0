@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  /* ── Brand ─────────────────────────────────────────────── */
   --color-gold: #C9A227;
   --color-gold-light: #E8D48B;
   --color-gold-warm: #F4E4BA;
@@ -8,14 +9,33 @@
   --color-silver: #C7CCD6;
   --color-silver-light: #D7DCE4;
   --color-silver-dim: #AEB8C4;
+
+  /* ── Surfaces (mirrors iOS GaryColors) ─────────────────── */
   --color-ink: #08080A;
   --color-card: #15171C;
   --color-chip: #1C1F26;
   --color-elev: #1A1A1E;
+  --color-panel: rgba(255, 255, 255, 0.02);
+
+  /* ── Text roles — four grays, not fourteen.
+     low = smallest essential text, 0.50 clears WCAG AA (≥5.1:1) on every
+     surface here; faint is DECORATION ONLY (never sole-source information). */
+  --color-hi: rgba(255, 255, 255, 0.92);
+  --color-mid: rgba(255, 255, 255, 0.62);
+  --color-low: rgba(255, 255, 255, 0.5);
+  --color-faint: rgba(255, 255, 255, 0.35);
+
+  /* ── Hairlines ─────────────────────────────────────────── */
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.14);
+
+  /* ── Results ───────────────────────────────────────────── */
   --color-win: #3FB950;
   --color-loss: #E5484D;
   --color-chart-win: #22C55E;
   --color-chart-loss: #EF4444;
+
+  /* ── Sport accents — icon + eyebrow only, never washes ─── */
   --color-nba: #3B82F6;
   --color-nfl: #22C55E;
   --color-nhl: #00A3E0;
@@ -23,16 +43,76 @@
   --color-ncaaf: #DC2626;
   --color-mlb: #7BC267;
   --color-wc: #14B8A6;
+
+  /* ── Radius scale: chip / card / panel — nothing else ──── */
+  --radius-chip: 10px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+
+  /* ── One elevation (iOS: black 0.45, r14, y6) ──────────── */
+  --shadow-card: 0 6px 14px rgba(0, 0, 0, 0.45);
+
+  /* ── Type ──────────────────────────────────────────────── */
   --font-display: var(--font-barlow);
   --font-body: var(--font-inter);
   --font-mono: var(--font-jbmono);
 }
 
-html { background: #08080A; }
-body { background: #08080A; color: rgba(255, 255, 255, 0.92); font-family: var(--font-body); }
+html {
+  background: #08080A;
+}
+
+body {
+  background-color: #08080A;
+  /* Near-flat atmosphere, ported from the app's background: a faint warm lift
+     at the top and one ultra-quiet gold breath. No haze, no glow. */
+  background-image:
+    radial-gradient(1100px 520px at 50% -120px, rgba(201, 162, 39, 0.07), transparent 70%),
+    linear-gradient(180deg, #0B0B0E 0%, #08080A 480px);
+  background-repeat: no-repeat;
+  color: var(--color-hi);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(201, 162, 39, 0.35);
+  color: #fff;
+}
+
+/* ── Stitch seams — the betting-slip dash from iOS (dash 4, gap 5) ── */
+.stitch-gold {
+  height: 1px;
+  background-image: repeating-linear-gradient(90deg, rgba(201, 162, 39, 0.35) 0 4px, transparent 4px 9px);
+}
+.stitch-faint {
+  height: 1px;
+  background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 4px, transparent 4px 9px);
+}
+
+/* ── Quant panel chrome (iOS quantPanel: white 2% fill, 7% hairline) ── */
+.quant-panel {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-card);
+}
+
+/* ── Tabular numerals for every record figure ── */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ── Entrance: one staggered rise on load, CSS-only ── */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.rise-2 { animation-delay: 90ms; }
+.rise-3 { animation-delay: 180ms; }
+.rise-4 { animation-delay: 270ms; }
+.rise-5 { animation-delay: 360ms; }
+
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
-
-@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }

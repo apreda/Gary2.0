@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Eyebrow } from '@/components/Eyebrow';
+import { PageMasthead, StatTile, StitchRule, ResultLetter } from '@/components/Terminal';
 import {
   fetchAllGameResults, computeRecord, currentStreak, sinceDate,
 } from '@/lib/gary/results';
-import { estDateStr } from '@/lib/gary/dates';
+import { daysAgoEST } from '@/lib/gary/dates';
 import { SPORTS, sportBySlug } from '@/lib/gary/leagues';
 
 export const revalidate = 3600;
@@ -41,7 +41,7 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
 
   const results = allResults.filter(r => (r.league ?? '').toUpperCase() === cfg.code);
   const allTime = computeRecord(results);
-  const l30 = computeRecord(sinceDate(results, estDateStr(new Date(Date.now() - 30 * 86400000))));
+  const l30 = computeRecord(sinceDate(results, daysAgoEST(30)));
   const streak = currentStreak(results);
 
   const recent = results
@@ -52,60 +52,60 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
     .slice(0, 50);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10">
-      <Eyebrow accent={cfg.accent}>{cfg.code} · RESULTS</Eyebrow>
-      <h1 className="mt-2 font-display text-4xl text-white/95">{cfg.longName} Track Record</h1>
-      <p className="mt-2 max-w-2xl text-white/60">
-        Every graded {cfg.name} pick — wins, losses, and pushes — on the public record.
-        Units assume flat 1-unit stakes at the listed odds.
-      </p>
+    <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
+      <PageMasthead
+        title={`${cfg.longName} track record`}
+        meta={`${cfg.code} · RESULTS`}
+        sub={`Every graded ${cfg.name} pick — wins, losses, and pushes — on the public record. Units assume flat 1-unit stakes at the listed odds.`}
+      />
 
       {/* Headline tiles: all-time / L30 / streak */}
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        {([
-          ['ALL-TIME', `${allTime.wins}-${allTime.losses}-${allTime.pushes}`, `${allTime.pct}% · ${fmtUnits(allTime.netUnits)}`],
-          ['LAST 30 DAYS', `${l30.wins}-${l30.losses}-${l30.pushes}`, `${l30.pct}% · ${fmtUnits(l30.netUnits)}`],
-          ['STREAK', streak ? `${streak.count}${streak.kind === 'won' ? 'W' : 'L'}` : '—', streak?.kind === 'won' ? 'riding it' : streak ? 'owning it' : ''],
-        ] as [string, string, string][]).map(([label, big, sub]) => (
-          <div key={label} className="rounded-[12px] border border-white/10 bg-card p-5">
-            <Eyebrow>{label}</Eyebrow>
-            <p className="mt-2 font-display text-3xl text-white/95">{big}</p>
-            {sub && <p className="mt-1 font-mono text-[12px] text-white/55">{sub}</p>}
-          </div>
-        ))}
+      <div className="mt-7 grid grid-cols-3 gap-3">
+        <StatTile
+          label="All-time"
+          value={<>{allTime.wins}<span className="text-faint">–</span>{allTime.losses}</>}
+          sub={`${allTime.pct}% · ${fmtUnits(allTime.netUnits)}`}
+        />
+        <StatTile
+          label="Last 30 days"
+          value={<>{l30.wins}<span className="text-faint">–</span>{l30.losses}</>}
+          sub={`${l30.pct}% · ${fmtUnits(l30.netUnits)}`}
+        />
+        <StatTile
+          label="Streak"
+          value={streak ? `${streak.count}${streak.kind === 'won' ? 'W' : 'L'}` : '—'}
+          sub={streak?.kind === 'won' ? 'riding it' : streak ? 'owning it' : ''}
+          valueClassName={streak?.kind === 'won' ? 'text-win' : streak ? 'text-loss' : 'text-hi'}
+        />
       </div>
 
       {/* Graded results list — last 50 */}
-      <section className="mt-12">
-        <h2 className="font-display text-2xl text-white/95">Graded Results</h2>
+      <section className="mt-16">
+        <h2 className="font-display text-2xl uppercase text-hi">Graded Results</h2>
+        <StitchRule tone="faint" className="mt-3" />
         {recent.length === 0 ? (
-          <div className="mt-6 rounded-[20px] border border-white/10 bg-card p-10 text-center text-white/50">
+          <div className="mt-6 rounded-panel border border-line bg-card p-10 text-center text-low">
             No graded {cfg.name} picks yet — check back when the season is active.{' '}
-            <Link href="/results" className="text-white/75 underline">Full record →</Link>
+            <Link href="/results" className="text-mid underline hover:text-hi">Full record →</Link>
           </div>
         ) : (
           <>
-            <ul className="mt-4 space-y-2">
-              {recent.map((r, i) => {
-                const nr = (r.result ?? '').trim().toLowerCase();
-                return (
-                  <li key={i} className="flex items-center justify-between rounded-[10px] border border-white/8 bg-card px-4 py-2.5">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className={`font-mono text-[12px] font-bold ${nr === 'won' ? 'text-win' : nr === 'lost' ? 'text-loss' : 'text-gold'}`}>
-                        {nr === 'won' ? 'W' : nr === 'lost' ? 'L' : 'P'}
-                      </span>
-                      <span className="truncate font-mono text-[13px] text-white/80">{r.pick_text}</span>
-                    </div>
-                    <div className="ml-3 flex shrink-0 items-center gap-3 font-mono text-[12px] text-white/45">
-                      <span>{r.final_score}</span>
-                      <span>{r.game_date}</span>
-                    </div>
-                  </li>
-                );
-              })}
+            <ul className="mt-1">
+              {recent.map((r, i) => (
+                <li key={i} className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-0">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ResultLetter result={r.result ?? ''} />
+                    <span className="truncate font-mono text-[13px] text-mid">{r.pick_text}</span>
+                  </div>
+                  <div className="tnum ml-3 flex shrink-0 items-center gap-3 font-mono text-[12px] text-low">
+                    <span>{r.final_score}</span>
+                    <span>{r.game_date}</span>
+                  </div>
+                </li>
+              ))}
             </ul>
             {allTime.graded > 50 && (
-              <p className="mt-4 font-mono text-[12px] text-white/40">
+              <p className="tnum mt-4 font-mono text-[12px] text-low">
                 SHOWING LAST 50 OF {allTime.graded} GRADED PICKS
               </p>
             )}
@@ -114,10 +114,10 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
       </section>
 
       <div className="mt-10 flex items-center gap-4">
-        <Link href="/results" className="text-sm text-white/55 underline hover:text-white/85">
+        <Link href="/results" className="text-sm text-mid underline hover:text-hi">
           ← All sports record
         </Link>
-        <Link href={`/picks/${cfg.slug}`} className="text-sm text-white/55 underline hover:text-white/85">
+        <Link href={`/picks/${cfg.slug}`} className="text-sm text-mid underline hover:text-hi">
           Today&apos;s {cfg.name} picks →
         </Link>
       </div>

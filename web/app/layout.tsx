@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 import { Nav } from '@/components/Nav';
@@ -6,9 +6,14 @@ import { Footer } from '@/components/Footer';
 import { JsonLd } from '@/components/JsonLd';
 import './globals.css';
 
-const barlow = Barlow_Condensed({ weight: '700', subsets: ['latin'], variable: '--font-barlow' });
+const barlow = Barlow_Condensed({ weight: ['600', '700'], subsets: ['latin'], variable: '--font-barlow' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jbmono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jbmono' });
+
+export const viewport: Viewport = {
+  themeColor: '#08080A',
+  colorScheme: 'dark',
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.betwithgary.ai'),
