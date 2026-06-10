@@ -1587,7 +1587,6 @@ struct HomeView: View {
     @State private var edgesPostedToday = 0
     @State private var playsOnBoard = 0
     @State private var gamesLiveNow = 0
-    @State private var showHowGaryWorks = false
     // ESPN-for-bettors layer: the Wire, market pulse, prop box, live tape.
     @State private var wireItems: [SupabaseAPI.WireItem] = []
     @State private var pulseRows: [SupabaseAPI.MarketPulseRow] = []
@@ -1704,9 +1703,6 @@ struct HomeView: View {
                 }
                 .padding(.bottom, 110)
             }
-        }
-        .sheet(isPresented: $showHowGaryWorks) {
-            GaryIntroSheet { showHowGaryWorks = false }
         }
         .task {
             #if DEBUG
@@ -1979,33 +1975,17 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.18), value: animateIn)
         }
-        boardSection
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.22), value: animateIn)
+        // Morning carries NO forward-looking sections — the board and slate
+        // live on Tonight (the page split: last night / tonight).
     }
 
-    /// Pre-game: tonight leads — last night collapses to a strip, the free
-    /// pick + doors come up, then the slate by start time and pre-game intel.
+    /// Tonight: the board LEADS — free pick first, then the slate's three
+    /// reads; last night collapses to one strip at the bottom. Nothing graded
+    /// renders here.
     @ViewBuilder private var pregameSections: some View {
-        if lastNightGraded > 0 {
-            HomeCompactStrip(prefix: "LAST NIGHT",
-                             record: Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
-                             net: lastNightNet) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
-        }
-        if let form {
-            HomeGarysForm(model: form) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
-        }
         boardSection
             .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
+            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         if !pregameSlateRows.isEmpty {
             // Three reads on tonight: the board, the spread extremes, and the
             // home dogs — the "what can I bet today" half of the page's job.
@@ -2023,12 +2003,16 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
         }
-        if !receiptLanes.isEmpty {
-            HomeReceiptsSection(lanes: receiptLanes, sub: receiptsSub) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+        // Last night collapses to one strip at the bottom — graded detail
+        // (receipts, marquee, hits) all lives on Morning.
+        if lastNightGraded > 0 {
+            HomeCompactStrip(prefix: "LAST NIGHT",
+                             record: Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
+                             net: lastNightNet) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+            .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
         }
     }
 
@@ -2482,8 +2466,15 @@ struct HomeView: View {
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                     FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
-                } else if !loading, let yPick = yesterdayTopPick {
-                    FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
+                } else if !loading {
+                    // No graded leftovers on TONIGHT's board — yesterday's
+                    // cards live on Morning. An honest empty note instead.
+                    Text("Tonight's free pick posts closer to first pitch.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 22).padding(.horizontal, 18)
+                        .quantPanel()
                 } else if loading {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small).tint(GaryColors.gold.opacity(0.7))
@@ -2498,43 +2489,33 @@ struct HomeView: View {
                 }
                 if let prop = freeProp {
                     FlippablePropCard(prop: prop, showSportBadge: true)
-                } else if !loading, freePick == nil, let yProp = yesterdayTopProp {
-                    FlippablePropCard(prop: yProp, gameResult: yesterdayTopPropResult, showSportBadge: true)
                 }
             }
             .padding(.horizontal, 16)
 
-            // The doors — live counts, not menu labels.
-            VStack(spacing: 0) {
-                HomeDoorRow(icon: "list.bullet.rectangle",
-                            title: playsOnBoard > 0 ? "\(playsOnBoard) plays on the board" : "Board posts closer to game time",
-                            badge: gamesLiveNow > 0 ? "\(gamesLiveNow) LIVE" : nil,
-                            destination: "Winners") {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-                }
-                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
-                HomeDoorRow(icon: "square.grid.2x2",
-                            title: edgesPostedToday > 0 ? "\(edgesPostedToday) edges posted for tonight" : "Tonight's edges are brewing",
-                            destination: "The Hub") {
+            // The doors panel is gone — four uniform icon rows was menu
+            // furniture the tab bar already provides. The one timely line
+            // (WC countdown) keeps a single quiet row while it matters.
+            if let days = Self.daysUntilWorldCup(), days > 0 {
+                Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
-                }
-                if let days = Self.daysUntilWorldCup(), days > 0 {
-                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
-                    HomeDoorRow(icon: "soccerball",
-                                title: "World Cup kicks off in \(days) day\(days == 1 ? "" : "s")",
-                                destination: "The Hub") {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+                } label: {
+                    HStack {
+                        Text("WORLD CUP KICKS OFF IN \(days) DAY\(days == 1 ? "" : "S")")
+                            .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                            .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    .contentShape(Rectangle())
                 }
-                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
-                HomeDoorRow(icon: "questionmark.circle",
-                            title: "New here? How Gary works",
-                            destination: "Intro") {
-                    showHowGaryWorks = true
-                }
+                .buttonStyle(.plain)
+                .quantPanel()
+                .padding(.horizontal, 16)
             }
-            .quantPanel()
-            .padding(.horizontal, 16)
         }
     }
 
@@ -2581,8 +2562,39 @@ struct HomeView: View {
             for r in decisive { if r == top { count += 1 } else { break } }
             streak = (streakWin ? "W" : "L") + "\(count)"
         }
-        return HomeGarysForm.Model(pips: pips, streak: streak, streakWin: streakWin,
-                                   net: net, winRate: winRate)
+        _ = pips; _ = winRate
+        // The editorial headline — the card decides what the data MEANS
+        // instead of rendering the same dataset four ways. Streak + last-10
+        // net resolve into one sentence in Gary's frame.
+        let decisiveCount = { () -> Int in
+            guard let top = decisive.first else { return 0 }
+            var c = 0
+            for r in decisive { if r == top { c += 1 } else { break } }
+            return c
+        }()
+        let story: String
+        if streakWin && decisiveCount >= 3 {
+            story = net < 0 ? "Cold week, hot hand — \(decisiveCount) straight wins."
+                            : "\(decisiveCount) straight wins, in the green."
+        } else if !streak.isEmpty && !streakWin && decisiveCount >= 3 {
+            story = net >= 0 ? "\(decisiveCount) down in a row, still up on the week."
+                             : "Cold stretch — \(decisiveCount) straight losses."
+        } else if streakWin && decisiveCount == 2 {
+            story = "Finding it — back-to-back wins."
+        } else {
+            story = net >= 0 ? "Choppy week, but green." : "Choppy week, in the red."
+        }
+        // The rail carries the whole graded history (drag left for older).
+        let allPips = graded.prefix(46).reversed().map { r -> String in
+            switch r.result {
+            case "won":  return "W"
+            case "lost": return "L"
+            case "push": return "P"
+            default:     return "·"
+            }
+        }
+        return HomeGarysForm.Model(pips: Array(allPips), story: story,
+                                   net: net, total: graded.count)
     }
 
     /// "2026-06-02" -> "Jun 2"
@@ -3237,49 +3249,6 @@ struct HomeReceiptsSection: View {
     }
 }
 
-/// ⑤ A flat door — a live count + destination; the menu that earns its words.
-struct HomeDoorRow: View {
-    let icon: String
-    let title: String
-    var badge: String? = nil
-    let destination: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .frame(width: 20)
-                Text(title)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if let badge {
-                    Text(badge)
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                        .foregroundStyle(GaryColors.gold)
-                }
-                Spacer(minLength: 8)
-                HStack(spacing: 3) {
-                    Text(destination)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
-                }
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Home: ESPN-for-bettors layer (the Wire, market pulse, prop box,
 // live tape + takeover, slate) — the time-aware front page, June 2026.
 
@@ -3434,11 +3403,10 @@ struct HomeCompactStrip: View {
 /// palette (#3FB950 / #E5484D).
 struct HomeGarysForm: View {
     struct Model {
-        let pips: [String]      // oldest → newest
-        let streak: String      // "W4" / "L2" / ""
-        let streakWin: Bool
-        let net: Double
-        let winRate: Int
+        let pips: [String]      // oldest → newest, the WHOLE graded history
+        let story: String       // the editorial headline — what the data means
+        let net: Double         // last-10 net units — the one colored number
+        let total: Int          // graded count, for the footer affordance
     }
     let model: Model
     let onTap: () -> Void
@@ -3446,80 +3414,78 @@ struct HomeGarysForm: View {
     private let win = Color(hex: "#3FB950")
     private let loss = Color(hex: "#E5484D")
 
-    private func pipColor(_ p: String) -> Color {
-        switch p {
-        case "W": return win
-        case "L": return loss
-        case "P": return GaryColors.gold
-        default:  return .white.opacity(0.25)
-        }
+    /// Fills only — no outlines (fill contrast and weight carry the
+    /// difference); older picks fade as they recede left, so the rail
+    /// itself shows time direction.
+    private func pip(_ p: String, age: Double) -> some View {
+        let base: Color = p == "W" ? win : p == "L" ? loss : GaryColors.gold
+        let isWin = p == "W"
+        return Text(p)
+            .font(GaryFonts.mono(10.5, bold: isWin))
+            .foregroundStyle(base.opacity(isWin ? 0.95 : 0.6))
+            .frame(width: 20, height: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(base.opacity(isWin ? 0.16 : 0.09))
+            )
+            .opacity(0.35 + 0.65 * age)   // oldest 0.35 → newest 1.0
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HubSectionHeader(eyebrow: "Gary's form", sub: "Last 10 graded picks")
+            HubSectionHeader(eyebrow: "Gary's form", sub: "Newest on the right — drag for history")
             Button(action: onTap) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Form guide + current streak
-                    HStack(spacing: 4) {
-                        ForEach(Array(model.pips.enumerated()), id: \.offset) { _, p in
-                            Text(p)
-                                .font(GaryFonts.mono(10.5, bold: true))
-                                .foregroundStyle(pipColor(p))
-                                .frame(width: 20, height: 24)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                        .fill(pipColor(p).opacity(0.14))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                                .stroke(pipColor(p).opacity(0.30), lineWidth: 1))
-                                )
-                        }
+                    // The headline: one sentence with a point of view, and the
+                    // net as the single number the eye should land on.
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(model.story)
+                            .font(GaryFonts.text(15, .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 8)
-                        if !model.streak.isEmpty {
-                            Text(model.streak)
-                                .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(model.streakWin ? win : loss)
-                                .padding(.horizontal, 7).padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill((model.streakWin ? win : loss).opacity(0.14))
-                                        .overlay(Capsule()
-                                            .stroke((model.streakWin ? win : loss).opacity(0.30), lineWidth: 1))
-                                )
-                        }
+                        Text(String(format: "%+.1fu", model.net))
+                            .font(GaryFonts.mono(15, bold: true))
+                            .foregroundStyle(model.net >= 0 ? win : loss)
                     }
-                    .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 11)
+                    .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 11)
+
+                    // The rail — every graded pick, anchored at NOW.
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 4) {
+                                ForEach(Array(model.pips.enumerated()), id: \.offset) { i, p in
+                                    pip(p, age: model.pips.count > 1 ? Double(i) / Double(model.pips.count - 1) : 1)
+                                        .id(i)
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                        }
+                        .onAppear { proxy.scrollTo(model.pips.count - 1, anchor: .trailing) }
+                    }
+                    .padding(.bottom, 12)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Recent form \(model.pips.joined(separator: " "))\(model.streak.isEmpty ? "" : ", streak \(model.streak)")")
+                    .accessibilityLabel("Form, oldest to newest: \(model.pips.joined(separator: " "))")
 
                     Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
 
-                    // Footer micro-stats — same label idiom as the scorecard
-                    HStack(spacing: 0) {
-                        formStat("NET · LAST 10", String(format: "%+.1fu", model.net),
-                                 model.net >= 0 ? win : loss)
-                        Spacer(minLength: 12)
-                        formStat("WIN RATE", "\(model.winRate)%", .white.opacity(0.92))
+                    HStack {
+                        Text("ALL \(model.total) GRADED")
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.45))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .quantPanel()
             .padding(.horizontal, 16)
-        }
-    }
-
-    private func formStat(_ label: String, _ value: String, _ color: Color) -> some View {
-        HStack(spacing: 7) {
-            Text(label)
-                .font(.system(size: 10, weight: .semibold)).tracking(0.8)
-                .foregroundStyle(.white.opacity(0.45))
-            Text(value)
-                .font(GaryFonts.mono(13, bold: true))
-                .foregroundStyle(color)
         }
     }
 }

@@ -134,9 +134,23 @@ struct SettingsView: View {
 
     // MARK: - About
 
+    @State private var showHowGaryWorks = false
+
+    @ViewBuilder
     private var aboutRows: some View {
         NavigationLink(destination: ChangelogView()) {
             SettingsRowLabel(title: "What's New", icon: "sparkles", trailingIcon: "chevron.right")
+        }
+        Divider()
+            .background(Color.white.opacity(0.07))
+            .padding(.horizontal, 16)
+        Button {
+            showHowGaryWorks = true
+        } label: {
+            SettingsRowLabel(title: "How Gary Works", icon: "questionmark.circle", trailingIcon: "chevron.right")
+        }
+        .sheet(isPresented: $showHowGaryWorks) {
+            GaryIntroSheet { showHowGaryWorks = false }
         }
     }
 
