@@ -3523,30 +3523,98 @@ struct HomeCompactStrip: View {
 /// editorial headlines recapping the night (Gary's cashes, the market story,
 /// the league's drama). Rows: colored league word + headline + one optional
 /// verdict tag. No sublines — words earn their pixels.
-/// The Morning hero: headline CARDS in the marquee's own language, rotating
-/// like a front-page banner (auto-advance every 6s; swipe anytime).
+/// The Morning hero: a STORY PLAYER (the MLB.com Game Story idiom) — full-
+/// bleed slides with a segmented progress bar, pause, and prev/next
+/// chevrons. Auto-advances in sync with the active segment's fill; tapping
+/// the side thirds steps, the pause pill freezes. Native SwiftUI — no
+/// licensed player, no video.
 struct HomeHeadlinesCarousel: View {
     let stories: [HomeMarqueeHero.Story]
     let onTap: () -> Void
+
     @State private var page = 0
-    private let ticker = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
+    @State private var progress: Double = 0   // 0..1 within the active slide
+    @State private var paused = false
+    private let slideSeconds: Double = 6
+    private let tick = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        TabView(selection: $page) {
-            ForEach(Array(stories.enumerated()), id: \.offset) { i, s in
-                VStack(spacing: 0) {
-                    HomeMarqueeHero(story: s, flipEnabled: false, onTap: onTap)
-                    Spacer(minLength: 0)
+        VStack(spacing: 8) {
+            // Segmented progress — one bar per slide, the active one fills.
+            HStack(spacing: 5) {
+                ForEach(stories.indices, id: \.self) { i in
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.14))
+                            Capsule().fill(GaryColors.gold.opacity(0.9))
+                                .frame(width: geo.size.width * (i < page ? 1 : i == page ? progress : 0))
+                        }
+                    }
+                    .frame(height: 2.5)
                 }
-                .tag(i)
+                // Pause/play — the player's one control (no audio, no mute).
+                Button { paused.toggle() } label: {
+                    Image(systemName: paused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: 22, height: 14)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(paused ? "Play headlines" : "Pause headlines")
+            }
+            .padding(.horizontal, 18)
+
+            ZStack {
+                TabView(selection: $page) {
+                    ForEach(Array(stories.enumerated()), id: \.offset) { i, s in
+                        VStack(spacing: 0) {
+                            HomeMarqueeHero(story: s, flipEnabled: false, onTap: onTap)
+                            Spacer(minLength: 0)
+                        }
+                        .tag(i)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+
+                // Prev/next chevrons — quiet, story-player idiom.
+                HStack {
+                    Button { step(-1) } label: { chevron("chevron.left") }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Previous headline")
+                    Spacer()
+                    Button { step(1) } label: { chevron("chevron.right") }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Next headline")
+                }
+                .padding(.horizontal, 20)
+            }
+            .frame(height: 218)
+        }
+        .onReceive(tick) { _ in
+            guard !paused, stories.count > 1 else { return }
+            progress += 0.05 / slideSeconds
+            if progress >= 1 {
+                progress = 0
+                withAnimation(.easeInOut(duration: 0.4)) { page = (page + 1) % stories.count }
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: .automatic))
-        .frame(height: 230)
-        .onReceive(ticker) { _ in
-            guard stories.count > 1 else { return }
-            withAnimation(.easeInOut(duration: 0.45)) { page = (page + 1) % stories.count }
+        .onChange(of: page) { _ in progress = 0 }   // manual swipe resets the fill
+    }
+
+    private func step(_ d: Int) {
+        progress = 0
+        withAnimation(.easeInOut(duration: 0.3)) {
+            page = (page + d + stories.count) % stories.count
         }
+    }
+
+    private func chevron(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.45))
+            .frame(width: 30, height: 56)
+            .contentShape(Rectangle())
     }
 }
 
