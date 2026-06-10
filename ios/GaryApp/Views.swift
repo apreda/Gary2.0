@@ -3574,10 +3574,11 @@ struct HomeWireSection: View {
                         .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
                         .foregroundStyle(.white.opacity(0.35))
                 } else {
-                    Circle()
-                        .fill(Sport.from(league: item.league ?? "").accentColor)
-                        .frame(width: 6, height: 6)
-                    Text("\((item.league ?? "").uppercased()) · \(kindLabel(item.kind))")
+                    // The league word IS the color chip — no status dot.
+                    Text((item.league ?? "").uppercased())
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
+                        .foregroundStyle(Sport.from(league: item.league ?? "").accentColor.opacity(0.95))
+                    Text("· \(kindLabel(item.kind))")
                         .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
                         .foregroundStyle(.white.opacity(0.35))
                 }
@@ -3594,9 +3595,13 @@ struct HomeWireSection: View {
                     }
                 }
             if let subline = item.subline, !subline.isEmpty {
+                // Sentence-length text in the reading face, not tracked mono
+                // (four horsemen #2) — and bright enough to actually read.
                 Text(subline)
-                    .font(GaryFonts.mono(9.5)).tracking(0.2)
-                    .foregroundStyle(.white.opacity(0.35))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, 12).padding(.horizontal, 14)
@@ -15131,13 +15136,16 @@ struct PropsHubView: View {
             if !ydaySignals.isEmpty {
                 HubSectionHeader(
                     eyebrow: "Yesterday · graded",
-                    sub: hitRate.map { "\($0.hit) of \($0.graded) edges hit" } ?? "Every edge, graded the morning after")
+                    sub: hitRate.map { r in
+                        let pct = r.graded > 0 ? Int((Double(r.hit) / Double(r.graded) * 100).rounded()) : 0
+                        return "\(r.hit) of \(r.graded) hit · \(pct)%"
+                    } ?? "Every edge, graded the morning after")
                 VStack(spacing: 0) {
                     ForEach(Array(ydaySignals.prefix(12).enumerated()), id: \.element.id) { i, s in
                         HStack(spacing: 10) {
                             Text(s.kind.chip)
                                 .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(GaryColors.gold.opacity(0.75))
                                 .frame(width: 86, alignment: .leading)
                             Text(s.headline)
                                 .font(.system(size: 12.5))
