@@ -2395,7 +2395,7 @@ struct HomeView: View {
                 abbrGameMatches($0.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
             }
             let title = live?.abbrGame ?? "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))"
-            let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+            let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
                 .joined(separator: " · ").uppercased()
             return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: nil, chip: p.pick ?? "")
         }
@@ -2411,7 +2411,7 @@ struct HomeView: View {
             let s = p.spread ?? 0
             // Pipeline convention: spread is the HOME line (home favored = negative).
             let favored = s < 0 ? Self.shortTeam(p.homeTeam) : Self.shortTeam(p.awayTeam)
-            let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+            let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
                 .joined(separator: " · ").uppercased()
             return HomeSlateSection.Row(
                 id: "sp-\(p.id)",
@@ -2426,7 +2426,7 @@ struct HomeView: View {
         let dogs = todayPicks.filter { ($0.moneylineHome ?? 0) > 0 }
         let sorted = dogs.sorted { ($0.moneylineHome ?? 0) > ($1.moneylineHome ?? 0) }
         return sorted.prefix(8).map { p in
-            let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+            let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
                 .joined(separator: " · ").uppercased()
             return HomeSlateSection.Row(
                 id: "hd-\(p.id)",
@@ -2443,7 +2443,7 @@ struct HomeView: View {
                 abbrGameMatches($0.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
             }
             guard let ls = live else {
-                let sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
                     .joined(separator: " · ").uppercased()
                 return HomeSlateSection.Row(id: p.id,
                                             title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
@@ -2461,7 +2461,7 @@ struct HomeView: View {
                 sub = v == .covering ? "FINAL · CASHED ✓" : v == .trailing ? "FINAL · NO CASH" : "FINAL"
                 tone = v
             } else {
-                sub = [p.displayTime, p.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
                     .joined(separator: " · ").uppercased()
             }
             return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: tone, chip: p.pick ?? "")
@@ -13316,7 +13316,13 @@ final class LiveScoreCache: ObservableObject {
 
     func status(forMatchup matchup: String) -> LiveScore? {
         guard !matchup.isEmpty else { return nil }
-        return scores.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
+        let matches = scores.filter { abbrGameMatches($0.abbrGame, matchup: matchup) }
+        guard matches.count > 1 else { return matches.first }
+        // Poller artifact: duplicate rows for one matchup (seen live Jun 10 —
+        // a bogus pre-game "final" alongside the real "scheduled" row). A
+        // live row wins; otherwise scheduled beats final — a true final
+        // never coexists with a scheduled row for the same game.
+        return matches.first { $0.isLive } ?? matches.first { !$0.isFinal } ?? matches.first
     }
 }
 
