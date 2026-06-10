@@ -79,6 +79,13 @@ struct ContentView: View {
             showingSettings = true
         }
         .task {
+            #if DEBUG
+            // Screenshot tooling: simctl launch ... --args -forceTab 0
+            if UserDefaults.standard.object(forKey: "forceTab") != nil {
+                let forced = UserDefaults.standard.integer(forKey: "forceTab")
+                if (0...lastValidTabIndex).contains(forced) { selectedTab = forced }
+            }
+            #endif
             // Migrate any out-of-range persisted index (e.g. user was on the old Fantasy index)
             if selectedTab < 0 || selectedTab > lastValidTabIndex { selectedTab = 0 }
             loadedTabs.insert(selectedTab)

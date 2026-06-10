@@ -1942,6 +1942,12 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
+        // MOCK (Jun 10, for review): the headlines feed — candidate
+        // replacement for Gary's form. Sample rows; real sources = results +
+        // market pulse + fact checks + hub grades.
+        HomeHeadlinesFeed(rows: HomeHeadlinesFeed.sampleRows)
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         if let form {
             HomeGarysForm(model: form) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
@@ -3510,6 +3516,63 @@ struct HomeCompactStrip: View {
 /// current streak chip, flat-stake net, and hit rate over the window.
 /// Data only; mirrors the scorecard's label idiom and the Home win/loss
 /// palette (#3FB950 / #E5484D).
+/// "Last night" — the sports-site front page, the bettor's way: 4-5
+/// editorial headlines recapping the night (Gary's cashes, the market story,
+/// the league's drama). Rows: colored league word + headline + one optional
+/// verdict tag. No sublines — words earn their pixels.
+struct HomeHeadlinesFeed: View {
+    struct Row: Identifiable {
+        let id: Int
+        let league: String
+        let headline: String
+        var tag: String? = nil
+        var tagWin: Bool = true
+    }
+    let rows: [Row]
+
+    static let sampleRows: [Row] = [
+        .init(id: 1, league: "MLB", headline: "Angels roll the Astros 10–1 — Gary cashed the ML at +102", tag: "CASHED", tagWin: true),
+        .init(id: 2, league: "MLB", headline: "Dogs went 1–4 on the night — the chalk paid the bills"),
+        .init(id: 3, league: "NBA", headline: "Thunder even the Finals — OKC +3.5 covered with room", tag: "CASHED", tagWin: true),
+        .init(id: 4, league: "MLB", headline: "White Sox bullpen finally cracked after 24 clean innings", tag: "NO CASH", tagWin: false),
+        .init(id: 5, league: "MLB", headline: "Soderstrom stays scorching — three more hits, OPS up to 1.450"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "Last night", sub: "")
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Text(r.league)
+                                .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
+                                .foregroundStyle(Sport.from(league: r.league).accentColor.opacity(0.95))
+                            Spacer()
+                            if let tag = r.tag {
+                                Text(tag)
+                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
+                                    .foregroundStyle(r.tagWin ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                            }
+                        }
+                        Text(r.headline)
+                            .font(.system(size: 14.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineSpacing(2.5)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    if i < rows.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                    }
+                }
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
 struct HomeGarysForm: View {
     struct Model {
         let pips: [String]      // oldest → newest, the WHOLE graded history
@@ -5442,8 +5505,6 @@ struct PlansSheetView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("selectedTab") private var selectedTab: Int = 0
 
-    /// The focused conversion paywall, or the full menu behind the "all plans" link.
-    private enum Screen { case paywall, allPlans }
     /// What the single dominant CTA acts on.
     private enum PlanSelection: Equatable { case allAccess, allAccessAnnual, single(String), worldCup, bundle }
 
@@ -5451,7 +5512,6 @@ struct PlansSheetView: View {
     /// ALL_ANNUAL checkout link (DEBUG today; RELEASE after the live swap).
     private var annualAvailable: Bool { PremiumPicksView.checkoutLinks["ALL_ANNUAL"] != nil }
 
-    @State private var screen: Screen
     @State private var selection: PlanSelection
     @State private var bundlePick: Set<String> = []
     @State private var record: GradedRecord? = nil   // live 30-day proof; nil = hidden
@@ -5481,13 +5541,10 @@ struct PlansSheetView: View {
         self.onBundle = onBundle
         self.onAccount = onAccount
         if let f = focus, Self.sports.contains(f) {
-            _screen = State(initialValue: .allPlans)
             _selection = State(initialValue: .single(f))
         } else if focus == "WC", Self.worldCupWindowActive() {
-            _screen = State(initialValue: .allPlans)
             _selection = State(initialValue: .worldCup)
         } else {
-            _screen = State(initialValue: .paywall)
             _selection = State(initialValue: .allAccess)
         }
     }
@@ -5518,10 +5575,7 @@ struct PlansSheetView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     topBar
-                    switch screen {
-                    case .paywall:  paywallScreen
-                    case .allPlans: allPlansScreen
-                    }
+                    allPlansScreen
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 28)
@@ -5544,21 +5598,6 @@ struct PlansSheetView: View {
 
     private var topBar: some View {
         HStack(spacing: 4) {
-            if screen == .allPlans {
-                Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                        screen = .paywall
-                        clampSelectionForPaywall()
-                    }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .frame(width: 44, height: 44, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back to featured plans")
-            }
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
@@ -5572,18 +5611,6 @@ struct PlansSheetView: View {
         .padding(.horizontal, 16)
     }
 
-    // MARK: State 1 — the paywall
-
-    private var paywallScreen: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            hero
-            benefits
-            proofStrip
-            featuredPlans
-            allPlansLink
-        }
-    }
-
     /// The single-sport context this paywall was opened from (nil = generic).
     /// WC is excluded — it isn't one of the per-sport Winners boards.
     private var focusedSport: String? {
@@ -5593,72 +5620,6 @@ struct PlansSheetView: View {
 
     /// The pitch isn't "more picks" — the free slate already has every game.
     /// It's Gary's *card*: the few plays a night he'd actually back, per sport.
-    private var heroTitle: String {
-        if let s = focusedSport { return "Gary's \(s) card." }
-        return "Gary's card.\nEvery night."
-    }
-    private var heroSubtitle: String {
-        if let s = focusedSport {
-            return "The handful of \(s) plays Gary would actually bet — with the board's own record."
-        }
-        return "The slate's free. The bets are the product — the few plays a night Gary backs, every sport."
-    }
-
-    private var hero: some View {
-        VStack(spacing: 14) {
-            Image("GaryHead")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 58, height: 58)
-                .frame(width: 74, height: 74)
-                .background(
-                    Circle()
-                        .fill(Color(hex: "#111114"))
-                        .overlay(Circle().stroke(GaryColors.gold.opacity(0.9), lineWidth: 2))
-                )
-                .clipShape(Circle())
-            Text(heroTitle)
-                .font(GaryFonts.display(40))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-            Text(heroSubtitle)
-                .font(GaryFonts.text(14.5))
-                .foregroundStyle(.white.opacity(0.5))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 300)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 6)
-    }
-
-    private var benefits: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            benefitRow("The plays Gary would actually bet — not all 40 games")
-            benefitRow("Every sport's Winners board, the moment it posts")
-            benefitRow("The full case on each play — stats, matchup, the read")
-            benefitRow("Every Winners result graded and public — wins and losses")
-        }
-        .padding(.horizontal, 22)
-    }
-
-    private func benefitRow(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(GaryColors.gold)
-                .frame(width: 18, height: 18)
-                .padding(.top, 1)
-            Text(text)
-                .font(GaryFonts.text(15, .medium))
-                .foregroundStyle(.white.opacity(0.9))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    /// The honesty moat as social proof: a real, rolling graded record, with the
-    /// loss column shown alongside the wins. Taps through to the full Results tape.
     @ViewBuilder private var proofStrip: some View {
         if let r = record {
             Button {
@@ -5698,70 +5659,20 @@ struct PlansSheetView: View {
         }
     }
 
-    private var featuredPlans: some View {
-        VStack(spacing: 12) {
-            planCard(selected: selection == .allAccess,
-                     ribbon: GaryPricing.trialDaysFree, ribbonTeal: false,
-                     title: "ALL-ACCESS",
-                     sub: "Every sport's Winners board — the plays Gary backs",
-                     price: GaryPricing.allAccessMonthly, per: "PER MONTH",
-                     a11y: "All-Access. \(GaryPricing.allAccessMonthly) a month. \(GaryPricing.trialDaysFree)." + (selection == .allAccess ? " Selected." : "")) {
-                select(.allAccess)
-            }
-            if annualAvailable {
-                planCard(selected: selection == .allAccessAnnual,
-                         ribbon: "Save 50% vs monthly", ribbonTeal: false,
-                         title: "ALL-ACCESS — ANNUAL",
-                         sub: "Every board, all year · works out to \(GaryPricing.allAccessAnnualMonthly)/mo",
-                         price: GaryPricing.allAccessAnnual, per: "PER YEAR",
-                         a11y: "All-Access annual. \(GaryPricing.allAccessAnnual) a year — about \(GaryPricing.allAccessAnnualMonthly) a month. \(GaryPricing.trialDaysFree)." + (selection == .allAccessAnnual ? " Selected." : "")) {
-                    select(.allAccessAnnual)
-                }
-            }
-            if wcActive {
-                planCard(selected: selection == .worldCup,
-                         ribbon: "Kicks off June 11", ribbonTeal: true,
-                         title: "WORLD CUP PASS",
-                         sub: "All 104 matches · one-time, no renewal",
-                         price: GaryPricing.worldCup, per: "ONE-TIME",
-                         a11y: "World Cup Pass. \(GaryPricing.worldCup), one time. All 104 matches." + (selection == .worldCup ? " Selected." : "")) {
-                    select(.worldCup)
-                }
-            }
-        }
-        .padding(.top, 2)
-        .padding(.horizontal, 16)
-    }
-
-    private var allPlansLink: some View {
-        Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { screen = .allPlans }
-        } label: {
-            HStack(spacing: 8) {
-                Text("Single sports from \(GaryPricing.single)/mo · bundles · free plan")
-                    .font(GaryFonts.text(13.5, .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.35))
-            }
-            .padding(.vertical, 10).padding(.horizontal, 18)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: State 2 — all plans
+    // MARK: The pricing page — ONE screen. The two-state paywall is dead:
+    // every entry point lands here; the proof strip is the only sales asset
+    // that earned its keep.
 
     private var allPlansScreen: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("All plans").font(GaryFonts.display(30)).foregroundStyle(.white)
-                Text("One board or every board — your call.")
+                Text("Gary's card.").font(GaryFonts.display(30)).foregroundStyle(.white)
+                Text("One board or every board — every result graded in public.")
                     .font(.system(size: 13.5)).foregroundStyle(.white.opacity(0.5))
             }
             .padding(.horizontal, 16)
+
+            proofStrip
 
             // All-Access leads as the anchor / best value.
             VStack(alignment: .leading, spacing: 10) {
@@ -6067,14 +5978,6 @@ struct PlansSheetView: View {
         }
     }
 
-    private func clampSelectionForPaywall() {
-        switch selection {
-        case .allAccess, .allAccessAnnual, .worldCup: break
-        default:
-            selection = .allAccess
-            bundlePick.removeAll()   // don't leave bundle chips highlighted behind the paywall
-        }
-    }
 
     // MARK: Reusable pieces
 
@@ -13588,7 +13491,7 @@ enum HubLeagueSel {
         switch self {
         case .mlb: return "MLB"
         case .nba: return "NBA"
-        case .wc: return "WORLD CUP"
+        case .wc: return "WC"   // short — three leagues share one header row
         }
     }
 }
@@ -13640,6 +13543,8 @@ struct MiniBarChart: View {
 
 enum SignalKind {
     case streak, h2h, hot, cold, injury, debut, situational, platoon, ballpark, regression, tournament, hrThreat
+    // June 10 lanes: starter form, first inning, the running game, park weather
+    case starterForm, firstInning, runningGame, parkWeather
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -13654,12 +13559,17 @@ enum SignalKind {
         case .regression: return "chart.line.downtrend.xyaxis"
         case .tournament: return "trophy.fill"
         case .hrThreat: return "baseball.diamond.bases"
+        case .starterForm: return "figure.baseball"
+        case .firstInning: return "1.circle.fill"
+        case .runningGame: return "figure.run"
+        case .parkWeather: return "wind"
         }
     }
     var tint: Color {
         switch self {
         case .hot: return HubPalette.green
         case .hrThreat: return HubPalette.green
+        case .starterForm, .firstInning, .runningGame, .parkWeather: return .white.opacity(0.6)
         case .cold: return HubPalette.red
         case .regression: return HubPalette.red
         // Lane identity stays neutral; the tint only carries hot/cold meaning.
@@ -13680,6 +13590,10 @@ enum SignalKind {
         case .regression: return "REGRESSION"
         case .tournament: return "TOURNAMENT"
         case .hrThreat: return "HR THREAT"
+        case .starterForm: return "STARTER FORM"
+        case .firstInning: return "FIRST INNING"
+        case .runningGame: return "RUNNING GAME"
+        case .parkWeather: return "PARK WEATHER"
         }
     }
 }
@@ -14879,6 +14793,11 @@ extension SignalKind {
         case "regression", "regression watch", "regression_watch": return .regression
         case "tournament", "stakes", "group", "tournament_stakes": return .tournament
         case "gary_hr_threats", "hr_threat", "hr threats": return .hrThreat
+        case "streaking": return .streak
+        case "starter_form": return .starterForm
+        case "first_inning": return .firstInning
+        case "running_game": return .runningGame
+        case "park_weather": return .parkWeather
         default: return nil
         }
     }
