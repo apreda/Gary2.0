@@ -479,6 +479,21 @@ enum SupabaseAPI {
         return rows
     }
 
+    /// The fact check for one graded pick — claims from the rationale graded
+    /// right/wrong/unclear against what actually happened (pick_fact_checks,
+    /// written by the nightly grader). Keyed exactly like game_results.
+    static func fetchFactCheck(date: String, matchup: String) async -> FactCheckRow? {
+        let url = buildURL(table: "pick_fact_checks", query: [
+            URLQueryItem(name: "select", value: "claims,right_count,wrong_count"),
+            URLQueryItem(name: "game_date", value: "eq.\(date)"),
+            URLQueryItem(name: "matchup", value: "eq.\(matchup)")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([FactCheckRow].self, from: data) else { return nil }
+        return rows.first
+    }
+
     /// Graded-edge tally for a date: how many hub edges hit vs were graded
     /// (hit + miss; pushes excluded). Powers the hub's track-record line.
     /// Returns nil on any failure or when nothing is graded yet.

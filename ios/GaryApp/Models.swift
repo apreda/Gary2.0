@@ -168,6 +168,18 @@ struct PlayerInsightPack: Decodable {
     let props: [PropLine]?
 }
 
+// MARK: - Pick Fact Check (claims from the rationale, graded vs reality)
+struct FactClaim: Decodable {
+    let claim: String?
+    let verdict: String?   // "right" | "wrong" | "unclear"
+    let note: String?
+}
+struct FactCheckRow: Decodable {
+    let claims: [FactClaim]?
+    let right_count: Int?
+    let wrong_count: Int?
+}
+
 struct PlayerInsightCardRow: Decodable, Identifiable {
     let player_id: String?
     let player_name: String?

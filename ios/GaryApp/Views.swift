@@ -1774,8 +1774,12 @@ struct HomeView: View {
                         }) {
                             story.take = splitTake(match.rationale).take
                             story.tier = match.confidence.map { convictionTier(min(max($0, 0), 1)) }
-                            marquee = story
                         }
+                        // The fact check — what the game confirmed or refuted.
+                        if let fc = await SupabaseAPI.fetchFactCheck(date: nightDate, matchup: mg.matchup ?? "") {
+                            story.claims = (fc.claims ?? []).filter { $0.verdict == "right" || $0.verdict == "wrong" }
+                        }
+                        marquee = story
                     }
                     cashRows = night.cashes
                     worstBeat = night.beat
@@ -2824,6 +2828,9 @@ struct HomeMarqueeHero: View {
         // card doesn't flip (no matching pick found).
         var take: String? = nil
         var tier: String? = nil
+        /// Graded claims from the rationale (right/wrong only — "unclear"
+        /// stays off the card). Empty = no fact check yet.
+        var claims: [FactClaim] = []
     }
     let story: Story
     let onTap: () -> Void
@@ -2850,7 +2857,7 @@ struct HomeMarqueeHero: View {
                     .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             }
         }
-        .frame(height: flipped ? max(frontH + 150, 320) : (frontH > 0 ? frontH : nil))
+        .frame(height: flipped ? max(frontH + 150 + CGFloat(min(story.claims.count, 4)) * 38, 320) : (frontH > 0 ? frontH : nil))
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .onPreferenceChange(PickCardHeightKey.self) { frontH = $0 }
         .padding(.horizontal, 16)
@@ -2930,6 +2937,28 @@ struct HomeMarqueeHero: View {
                             .lineLimit(8)
                             .minimumScaleFactor(0.85)
                     }
+                }
+
+                // The fact check — the rationale's claims, graded by the game.
+                if !story.claims.isEmpty {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("THE FACT CHECK")
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.35))
+                        ForEach(Array(story.claims.prefix(4).enumerated()), id: \.offset) { _, c in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(c.verdict == "right" ? "✓" : "✗")
+                                    .font(GaryFonts.mono(11, bold: true))
+                                    .foregroundStyle(c.verdict == "right" ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                                Text(c.claim ?? "")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(.top, 12)
                 }
 
                 HStack(spacing: 14) {
