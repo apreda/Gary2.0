@@ -1,6 +1,7 @@
 import SwiftUI
 import Charts
 import WebKit
+import SafariServices
 
 // MARK: - Shared Formatters (expensive to create — reuse)
 
@@ -4143,14 +4144,13 @@ struct SportFilterBar: View {
 //      trial, which is a Stripe-dashboard setting — not an API field).
 //   2. Update the constant here.
 //
-// June 9 2026 flip — STAGED: $29.99/mo + 7-day trial + $179/yr annual. The
-// TEST catalog is live (prices price_1TgbDjLJVzRZvO5HMwgDFOxQ /mo and
-// price_1TgbDkLJVzRZvO5HyEHdsn6I /yr on prod_UeKymtDX7E8fsw, links below in
-// DEBUG checkoutLinks, both 7-day card-required trials).
-// ⚠️ PRE-SHIP (live mode, owner): recreate the $29.99/7-day and $179/yr
-// prices + payment links in LIVE mode and replace the RELEASE "ALL" and
-// "ALL_ANNUAL" links below — the live links still charge $34.99/3-day until
-// then, so NO release build ships before that swap.
+// June 9 2026 flip — COMPLETE in both modes: $29.99/mo + 7-day trial +
+// $179/yr annual. TEST prices price_1TgbDjLJVzRZvO5HMwgDFOxQ (mo) /
+// price_1TgbDkLJVzRZvO5HyEHdsn6I (yr); LIVE prices
+// price_1TgbZhLqUC52RoAIPLjeyQNY (mo) / price_1TgbZhLqUC52RoAI6Wuixo3A (yr).
+// All four payment links carry 7-day card-required trials and are mapped in
+// stripe-webhook v10 (gary2.0/supabase/functions/stripe-webhook). Post-release
+// cleanup: deactivate the retired live $34.99 link once the old build is gone.
 enum GaryPricing {
     static let allAccessMonthly = "$29.99"   // ⚠️ Stripe ALL link must match
     static let allAccessAnnual  = "$179"     // ⚠️ Stripe ALL_ANNUAL link must match
@@ -4205,6 +4205,11 @@ struct PremiumPicksView: View {
     @State private var pendingCheckout: String? = nil
     @State private var pendingBundle: [String]? = nil
     @State private var pendingAuth = false
+    // Stripe checkout rides an IN-APP browser (SFSafariViewController) — US
+    // App Store guideline 3.1.1 allows external purchases for digital goods
+    // incl. in-app web views (post-Epic, verified June 2026). Apple Pay +
+    // autofill work in SFSafariViewController; the user never leaves the app.
+    @State private var checkoutItem: CheckoutItem? = nil
     private func sportUnlocked(_ lg: String) -> Bool {
         isPremium || entitledSports.contains("ALL") || entitledSports.contains(lg)
     }
@@ -4236,10 +4241,12 @@ struct PremiumPicksView: View {
         "NFL":   "https://buy.stripe.com/8x25kEgzS6hPgLO1dBao803",
         "NCAAF": "https://buy.stripe.com/bJe7sM97qeOleDG9K7ao804",
         "NCAAB": "https://buy.stripe.com/dRmeVebfy6hPfHK7BZao805",
-        // ⚠️ PRE-SHIP: this live link still charges $34.99/3-day — recreate
-        // the $29.99/7-day live price+link and swap it (plus a live
-        // "ALL_ANNUAL" $179/yr link) before ANY release build ships.
-        "ALL":   "https://buy.stripe.com/aFabJ21EY21zgLO8G3ao807",
+        // June 9 flip, LIVE: $29.99/mo + $179/yr, 7-day card-required trials
+        // (webhook v10 maps both). The retired $34.99/3-day link
+        // (buy.stripe.com/aFabJ21EY21z...) stays ACTIVE in Stripe until the
+        // build that shipped it is gone — deactivate it post-release.
+        "ALL":        "https://buy.stripe.com/9B6eVednG5dL0MQ09xao80a",
+        "ALL_ANNUAL": "https://buy.stripe.com/3cI7sM4RagWtcvy3lJao80b",
         "WC":    "https://buy.stripe.com/7sYbJ2abubC9dzCe0nao808",
     ]
     #endif
@@ -4258,7 +4265,7 @@ struct PremiumPicksView: View {
                   : (league == "WC" ? "world_cup" : "single")),
             "sport": league, "surface": surface,
         ])
-        UIApplication.shared.open(url)
+        checkoutItem = CheckoutItem(url: url)
     }
     @State private var sportRecords: [String: (w: Int, l: Int)] = [:]
     @Namespace private var tabNS
@@ -4345,6 +4352,19 @@ struct PremiumPicksView: View {
                            onBundle: { lgs in pendingBundle = lgs; showPlansSheet = false },
                            onAccount: { pendingAuth = true; showPlansSheet = false })
         }
+        .sheet(item: $checkoutItem, onDismiss: {
+            // In-app checkout doesn't background the app, so scenePhase never
+            // fires — pick up fresh grants the moment the sheet closes.
+            Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
+        }) { item in
+            SafariView(url: item.url).ignoresSafeArea()
+        }
+    }
+
+    /// Identifiable URL wrapper for the in-app checkout sheet.
+    fileprivate struct CheckoutItem: Identifiable {
+        let url: URL
+        var id: String { url.absoluteString }
     }
 
     /// Bundle checkout goes through the create-checkout edge function — the
@@ -4353,7 +4373,7 @@ struct PremiumPicksView: View {
         guard authManager.isAuthenticated else { showAuthSheet = true; return }
         Task {
             if let url = await SupabaseAPI.createCheckout(leagues: leagues) {
-                await MainActor.run { UIApplication.shared.open(url) }
+                await MainActor.run { checkoutItem = CheckoutItem(url: url) }
             }
         }
     }
@@ -4523,7 +4543,7 @@ struct PremiumPicksView: View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "All-Access", sub: "One plan, every board")
             VStack(spacing: 0) {
-                Button { openCheckout("ALL") } label: {
+                Button { plansFocus = nil; showPlansSheet = true } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 13, weight: .semibold))
@@ -4786,7 +4806,11 @@ struct PremiumPicksView: View {
             HubSectionHeader(eyebrow: "More boards", sub: "Sports you haven't unlocked")
             VStack(spacing: 0) {
                 ForEach(Array(boards.enumerated()), id: \.offset) { i, b in
-                    Button { openCheckout(b.league) } label: { storefrontRow(b) }
+                    // Every locked-board entry routes through the SAME door —
+                    // the Plans sheet, focused on that sport (matches the
+                    // blurred-preview taps). The paywall sells; checkout and
+                    // the sign-in gate come at CTA time, not on first tap.
+                    Button { plansFocus = b.league; showPlansSheet = true } label: { storefrontRow(b) }
                         .buttonStyle(.plain)
                         .disabled(Self.checkoutLinks[b.league] == nil)
                     if i < boards.count - 1 {
@@ -5023,6 +5047,22 @@ struct PremiumPicksView: View {
             loading = false
         }
     }
+}
+
+/// SFSafariViewController wrapper — the in-app checkout browser. The Safari
+/// engine gives Stripe Checkout Apple Pay + autofill without leaving the
+/// app (US App Store 3.1.1 permits external purchases for digital goods,
+/// including in-app web views — post-Epic rules, verified June 2026).
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let vc = SFSafariViewController(url: url)
+        vc.preferredBarTintColor = UIColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1)   // ink #0B0B0C
+        vc.preferredControlTintColor = UIColor(red: 0.788, green: 0.635, blue: 0.153, alpha: 1) // brand gold
+        vc.dismissButtonStyle = .close
+        return vc
+    }
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
 
 /// The pricing page — every plan in one place, in the terminal's own
@@ -5614,8 +5654,8 @@ struct PlansSheetView: View {
     }
 
     private var ctaCaption: String {
-        let tail = signedIn ? "Opens secure checkout in Safari."
-                            : "You'll sign in first, then checkout opens in Safari."
+        let tail = signedIn ? "Opens secure Stripe checkout."
+                            : "You'll sign in first, then secure checkout opens."
         switch selection {
         case .allAccess:
             return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessMonthly)/mo. Cancel anytime. \(tail)"
