@@ -29,15 +29,15 @@ if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
 // ═══════════════════════════════════════════════════════════════════════════
 // Multi-tier retry windows. Most teams post lineups 2-3 hours before first
 // pitch (some — Pirates, Marlins, Rockies — closer to 60-90 min). The scout
-// report HARD FAILs when batting orders aren't posted, so games whose first
-// trigger fires before the team has released get no pick. To catch late
-// posters without sacrificing early picks for on-time teams, we fire up to
-// three triggers per game: T-90, T-60, T-30. The existing dedup in
-// run-agentic-picks.js ("🚫 GAME ALREADY HAS PICK") makes subsequent triggers
-// instant short-circuits once a pick has landed — cost per skip is the script
-// startup overhead (~$0.001).
+// report HARD FAILs when batting orders aren't posted (checking BDL, then the
+// official MLB Stats API), so games whose triggers all fire before lineups
+// exist anywhere get no pick. To catch late posters without sacrificing early
+// picks for on-time teams, we fire up to four triggers per game: T-90, T-60,
+// T-30, T-15. The existing dedup in run-agentic-picks.js ("🚫 GAME ALREADY
+// HAS PICK") makes subsequent triggers instant short-circuits once a pick has
+// landed — cost per skip is the script startup overhead (~$0.001).
 const LEAD_TIME_MINUTES = 90;       // Primary trigger (kept for any external reference)
-const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30]; // First → fallback → final
+const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30, 15]; // First → fallbacks → final
 
 const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
@@ -209,7 +209,7 @@ async function buildPlan(etDateStr) {
 
   schedule.sort((a, b) => a.triggerTime - b.triggerTime);
   // schedule.length is trigger ENTRIES, not unique games. Each game produces
-  // up to RETRY_LEAD_TIMES_MINUTES.length entries (currently 3: T-90/60/30),
+  // up to RETRY_LEAD_TIMES_MINUTES.length entries (currently 4: T-90/60/30/15),
   // but only the first successful tier actually generates a pick — the rest
   // hit the picks-script dedup and exit in ~1 second.
   const uniqueGameIds = new Set(schedule.map(e => e.gameId));
