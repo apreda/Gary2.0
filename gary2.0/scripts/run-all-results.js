@@ -717,8 +717,24 @@ async function processGenericGames(table, date, leagueFilter = null) {
           : await fetchGames(league, date);
         const result = matchGame(games, pick.homeTeam, pick.awayTeam, pickGameId);
         if (result) {
-          matchedGame = result.game;
-          swapped = result.swapped;
+          // FINALITY GATE — never grade a non-final game. A suspended or
+          // in-progress game carries partial scores in the same fields, and the
+          // results dedup makes a wrong grade PERMANENT. (Same bug class as the
+          // WC halftime fix; NFL already gates on status === 'Final' above.)
+          // Status shapes: MLB/NHL 'STATUS_FINAL', NBA 'Final' (scheduled NBA
+          // games carry an ISO datetime — correctly excluded). A missing status
+          // field grades with a warning so a provider shape change can't
+          // silently stall a whole league's grading.
+          const statusStr = String(result.game.status ?? '').trim();
+          if (statusStr && !statusStr.toUpperCase().includes('FINAL')) {
+            console.log(`  ⏳ NOT FINAL — skipping grade for ${pick.awayTeam} @ ${pick.homeTeam} (status: ${statusStr})`);
+          } else {
+            if (!statusStr) {
+              console.warn(`  ⚠️ No status on matched game for ${pick.awayTeam} @ ${pick.homeTeam} — grading anyway`);
+            }
+            matchedGame = result.game;
+            swapped = result.swapped;
+          }
         }
       }
 

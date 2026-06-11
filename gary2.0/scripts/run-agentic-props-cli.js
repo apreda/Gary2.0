@@ -229,7 +229,7 @@ export async function runAgenticPropsCli({
       console.log(`\n📡 Fetching player props...`);
       let playerProps = [];
       try {
-        playerProps = await propOddsService.getPlayerPropOdds(sportKey, game.home_team, game.away_team, game.commence_time);
+        playerProps = await propOddsService.getPlayerPropOdds(sportKey, game.home_team, game.away_team, game.commence_time, game.bdl_game_id ?? game.id ?? null);
         console.log(`✅ Found ${playerProps.length} prop lines`);
       } catch (propsError) {
         console.warn(`⚠️ Could not fetch props: ${propsError.message}`);
@@ -344,6 +344,9 @@ export async function runAgenticPropsCli({
               sport: leagueLabel,
               matchup,
               commence_time: game.commence_time,
+              // BDL game id — pins the prop to the exact game (doubleheaders,
+              // same-series UTC-window collisions) for dedupe + future grading
+              game_id: game.bdl_game_id ?? game.id ?? null,
               bet: pick.bet ? (pick.bet.toLowerCase() === 'yes' ? 'over' : pick.bet.toLowerCase()) : pick.bet,
               confidence: pick.confidence || null
             };

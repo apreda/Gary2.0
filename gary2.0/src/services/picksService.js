@@ -123,8 +123,11 @@ async function gameAlreadyHasPick(league, homeTeam, awayTeam, gameDate = null, g
     const pickAway = normalize(p?.awayTeam);
     if (pickLeague !== targetLeague || pickHome !== targetHome || pickAway !== targetAway) return false;
     if (targetGameId != null) {
-      const pickGameId = p?.game_id != null ? String(p.game_id) : null;
-      // If the existing pick has no game_id, fall through to old teams+date match
+      // Stored game picks stamp the id as bdl_game_id (run-agentic-picks);
+      // accept game_id too for any rows written with the older field name.
+      const rawId = p?.bdl_game_id ?? p?.game_id;
+      const pickGameId = rawId != null ? String(rawId) : null;
+      // If the existing pick has no game id, fall through to old teams+date match
       // (legacy picks). Once they're game-id-stamped, doubleheaders work cleanly.
       if (pickGameId != null && pickGameId !== targetGameId) return false;
     }
@@ -362,6 +365,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
 
   // Create append/merge storage: fetch existing row, merge, then upsert
   await ensureValidSupabaseSession();
+  // Only allow the catch-block service-role fallback to write when the pre-read
+  // succeeded — its upsert REPLACES the whole row, so writing without knowing
+  // the row's current picks can erase the rest of the day.
+  let mergeStateKnown = false;
+  let fallbackPicksRef = validPicks; // reassigned to the FULL merged set once computed
   try {
     const { data: existingRows, error: selectError } = await supabase
       .from('daily_picks')
@@ -370,12 +378,16 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       .limit(1);
 
     if (selectError) {
-      console.error('Error selecting existing daily_picks row:', selectError);
+      // HARD STOP — without the pre-read we don't know what the row holds, and
+      // every write path below (insert OR service-role upsert) REPLACES the row.
+      // Writing blind here wiped-or-could-wipe a full day of public picks.
+      // Fail loud instead; the caller's end-of-run batch store retries fresh.
+      throw new Error(`daily_picks pre-read failed (${selectError.message || selectError.code || 'unknown'}) — refusing to write blind`);
     }
 
     // Prepare merged picks
     let mergedPicks = [];
-    let fallbackPicksRef = validPicks;
+    mergeStateKnown = true; // pre-read succeeded — fallback writes are safe
     if (existingRows && existingRows.length > 0) {
       const existing = existingRows[0];
       const existingPicks = Array.isArray(existing.picks)
@@ -399,10 +411,12 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         if (p.soccer_match_id) {
           return `soccer|${p.soccer_match_id}|${p.type || 'moneyline'}`;
         }
-        // Game picks: ONE per game - use homeTeam/awayTeam regardless of pick direction
-        return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}`;
+        // Game picks: ONE per game — include the BDL game id so a doubleheader's
+        // game 2 never collides with (and silently deletes) game 1's stored pick.
+        const gid = p.bdl_game_id ?? p.game_id ?? '';
+        return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}|${gid}`;
       };
-      
+
       const seen = new Set();
       const toAppend = validPicks.filter(p => {
         const key = gameKey(p);
@@ -414,9 +428,25 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         return true;
       });
 
-      // Filter out existing picks that match the new ones we are about to add
-      const newKeys = new Set(toAppend.map(gameKey));
-      const filteredExisting = existingPicks.filter(p => !newKeys.has(gameKey(p)));
+      // Filter out existing picks that the new batch replaces. Game picks match
+      // by id when BOTH sides carry one (doubleheader-safe); an existing pick
+      // WITHOUT an id falls back to teams-only matching so a re-pick of a
+      // legacy-stamped game replaces it instead of duplicating it.
+      const checkIsGamePick = (p) => !checkIsProp(p) && !p.soccer_match_id;
+      const replaces = (newPick, oldPick) => {
+        if (!checkIsGamePick(newPick) || !checkIsGamePick(oldPick)) {
+          return gameKey(newPick) === gameKey(oldPick);
+        }
+        const teamsEqual = (newPick.league || '') === (oldPick.league || '') &&
+          (newPick.homeTeam || '') === (oldPick.homeTeam || '') &&
+          (newPick.awayTeam || '') === (oldPick.awayTeam || '');
+        if (!teamsEqual) return false;
+        const newId = newPick.bdl_game_id ?? newPick.game_id;
+        const oldId = oldPick.bdl_game_id ?? oldPick.game_id;
+        if (newId != null && oldId != null) return String(newId) === String(oldId);
+        return true; // legacy un-stamped pick: teams+date identity (old behavior)
+      };
+      const filteredExisting = existingPicks.filter(p => !toAppend.some(n => replaces(n, p)));
 
       // Apply cap for props only on the combined set (keep existing first)
       const combined = [...filteredExisting, ...toAppend];
@@ -473,9 +503,16 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
     }
   } catch (error) {
     console.error('❌ Error storing picks:', error);
-    // Final fallback: use service-role direct REST helper (bypasses RLS)
+    if (!mergeStateKnown) {
+      // The pre-read failed — the service-role upsert below replaces the whole
+      // row, so writing now could erase every pick already stored today.
+      throw new Error(`Failed to store picks (no safe fallback — pre-read failed): ${error.message}`);
+    }
+    // Final fallback: use service-role direct REST helper (bypasses RLS).
+    // fallbackPicksRef is the FULL merged set (existing + new), never just the
+    // current batch — the helper's upsert is a wholesale row replace.
     try {
-      const fb = await storeDailyPicks(currentDateString, validPicks);
+      const fb = await storeDailyPicks(currentDateString, fallbackPicksRef);
       if (fb?.success) {
         console.log('✅ Stored picks via service-role REST fallback');
         return { success: true, count: validPicks.length, method: 'service-role' };

@@ -115,10 +115,14 @@ export const propOddsService = {
    * @param {string} homeTeam - Home team name
    * @param {string} awayTeam - Away team name
    * @param {string} [commenceTime] - ISO datetime of game start (used to derive correct search date)
+   * @param {string|number} [gameId] - Exact BDL game id. When provided it is used
+   *   directly — team-name matching is only a fallback for manual runs. Name
+   *   matching picked the WRONG game on 2026-06-10 (yesterday's FINAL game of
+   *   the same series shared the UTC date window) and is doubleheader-blind.
    * @returns {Promise<Array>} - Array of player prop odds
    * @throws {Error} When no valid current player prop data is available
    */
-  getPlayerPropOdds: async (sport, homeTeam, awayTeam, commenceTime) => {
+  getPlayerPropOdds: async (sport, homeTeam, awayTeam, commenceTime, gameId = null) => {
     try {
       console.log(`🔍 Fetching player prop odds for ${sport} game: ${homeTeam} vs ${awayTeam}...`);
 
@@ -144,9 +148,11 @@ export const propOddsService = {
         
         // Find the game ID from BDL
         const nhlGames = await ballDontLieService.getNhlGamesForDate(dateStr);
-        
-        // Find matching game
-        const matchingGame = nhlGames.find(g => {
+
+        // Exact id from the caller wins; name matching is the manual-run fallback
+        const matchingGame = gameId != null
+          ? (nhlGames.find(g => String(g.id) === String(gameId)) ?? { id: gameId })
+          : nhlGames.find(g => {
           const homeMatch = normalizeTeamName(g.home_team?.full_name || '') === normalizedHomeTeam ||
                            normalizeTeamName(g.home_team?.full_name || '').includes(normalizedHomeTeam) ||
                            normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || ''));
@@ -155,7 +161,7 @@ export const propOddsService = {
                            normalizedAwayTeam.includes(normalizeTeamName(g.away_team?.full_name || ''));
           return homeMatch && awayMatch;
         });
-        
+
         if (!matchingGame) {
           console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
           // Fall through to Odds API fallback below
@@ -230,8 +236,10 @@ export const propOddsService = {
         // Find the game ID from BDL
         const nflGames = await ballDontLieService.getNflGamesForDate(dateStr);
 
-        // Find matching game
-        const matchingGame = nflGames.find(g => {
+        // Exact id from the caller wins; name matching is the manual-run fallback
+        const matchingGame = gameId != null
+          ? (nflGames.find(g => String(g.id) === String(gameId)) ?? { id: gameId })
+          : nflGames.find(g => {
           const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '') === normalizedHomeTeam ||
                            normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '').includes(normalizedHomeTeam) ||
                            normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team?.name || ''));
@@ -320,8 +328,10 @@ export const propOddsService = {
         // Find the game ID from BDL
         const nbaGames = await ballDontLieService.getNbaGamesForDate(dateStr);
 
-        // Find matching game
-        const matchingGame = nbaGames.find(g => {
+        // Exact id from the caller wins; name matching is the manual-run fallback
+        const matchingGame = gameId != null
+          ? (nbaGames.find(g => String(g.id) === String(gameId)) ?? { id: gameId })
+          : nbaGames.find(g => {
           const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '') === normalizedHomeTeam ||
                            normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '').includes(normalizedHomeTeam) ||
                            normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team?.name || ''));
@@ -421,20 +431,34 @@ export const propOddsService = {
           return true;
         });
 
-        const matchingGame = mlbGames.find(g => {
-          const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team_name || '') === normalizedHomeTeam ||
-                           normalizeTeamName(g.home_team?.full_name || g.home_team_name || '').includes(normalizedHomeTeam) ||
-                           normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team_name || ''));
-          const awayMatch = normalizeTeamName(g.away_team?.full_name || g.away_team_name || '') === normalizedAwayTeam ||
-                           normalizeTeamName(g.away_team?.full_name || g.away_team_name || '').includes(normalizedAwayTeam) ||
-                           normalizedAwayTeam.includes(normalizeTeamName(g.away_team?.full_name || g.away_team_name || ''));
-          return homeMatch && awayMatch;
-        });
+        // Exact id from the caller wins. The name-match fallback below is for
+        // manual runs only and is hardened: BDL's UTC date window contains the
+        // previous ET-evening game of the same series (on 2026-06-10 it matched
+        // yesterday's FINAL game and pulled 124 stale lines), and a doubleheader
+        // twin shares the same names — so exclude finals and take the candidate
+        // closest to this game's start time, never just the first name match.
+        let matchingGame;
+        if (gameId != null) {
+          matchingGame = mlbGames.find(g => String(g.id) === String(gameId)) ?? { id: gameId };
+        } else {
+          const targetMs = commenceTime ? new Date(commenceTime).getTime() : Date.now();
+          matchingGame = mlbGames
+            .filter(g => {
+              const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team_name || '') === normalizedHomeTeam ||
+                               normalizeTeamName(g.home_team?.full_name || g.home_team_name || '').includes(normalizedHomeTeam) ||
+                               normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team_name || ''));
+              const awayMatch = normalizeTeamName(g.away_team?.full_name || g.away_team_name || '') === normalizedAwayTeam ||
+                               normalizeTeamName(g.away_team?.full_name || g.away_team_name || '').includes(normalizedAwayTeam) ||
+                               normalizedAwayTeam.includes(normalizeTeamName(g.away_team?.full_name || g.away_team_name || ''));
+              return homeMatch && awayMatch && String(g.status || '').toUpperCase() !== 'STATUS_FINAL';
+            })
+            .sort((a, b) => Math.abs(new Date(a.date) - targetMs) - Math.abs(new Date(b.date) - targetMs))[0];
+        }
 
         if (!matchingGame) {
           console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
         } else {
-          console.log(`✅ Found BDL MLB game ID: ${matchingGame.id}`);
+          console.log(`✅ Found BDL MLB game ID: ${matchingGame.id}${gameId != null ? ' (caller-provided)' : ' (name match)'}`);
 
           const bdlProps = await ballDontLieService.getMlbPlayerProps(matchingGame.id);
 

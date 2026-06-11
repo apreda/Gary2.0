@@ -43,17 +43,29 @@ export async function buildMlbScoutReport(game, options = {}) {
   if (!gamePk && startTime) {
     try {
       const { getMlbSchedule } = await import('../../../mlbStatsApiService.js');
-      const gameDate = new Date(startTime).toISOString().split('T')[0];
-      // Try both the game date and next day (UTC offset)
-      for (const d of [gameDate, new Date(new Date(gameDate).getTime() + 86400000).toISOString().split('T')[0]]) {
+      // MLB Stats API ?date= is keyed by the game's OFFICIAL (ET-local) date.
+      // toISOString() shifts any ≥8 PM ET first pitch onto the next UTC day,
+      // probing the wrong schedule day — mid-series that resolves TOMORROW'S
+      // gamePk (wrong probables, inert lineup fallback), and on a series
+      // finale it resolves nothing. Resolve in ET; ET+1 is a safety probe only.
+      const startMs = new Date(startTime).getTime();
+      const etDate = new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const etNext = new Date(startMs + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      for (const d of [etDate, etNext]) {
         const schedule = await getMlbSchedule(d).catch(() => []);
-        const match = schedule.find(g => {
+        const candidates = schedule.filter(g => {
           const hName = (g.teams?.home?.team?.name || '').toLowerCase();
           const aName = (g.teams?.away?.team?.name || '').toLowerCase();
           const homeLast = homeTeam.toLowerCase().split(' ').pop();
           const awayLast = awayTeam.toLowerCase().split(' ').pop();
           return hName.includes(homeLast) && aName.includes(awayLast);
         });
+        // Doubleheaders share teams + date — take the game whose scheduled
+        // first pitch is closest to this game's start, never just the first.
+        const match = candidates.sort((a, b) =>
+          Math.abs(new Date(a.gameDate || 0).getTime() - startMs) -
+          Math.abs(new Date(b.gameDate || 0).getTime() - startMs)
+        )[0];
         if (match?.gamePk) { gamePk = match.gamePk; break; }
       }
       console.log(`[Scout Report] Resolved MLB Stats API gamePk: ${gamePk || 'not found'}`);
