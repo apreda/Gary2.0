@@ -17786,7 +17786,16 @@ struct PlayerInsightSheet: View {
             VStack(spacing: 0) { ForEach(Array(splits.enumerated()), id: \.offset) { _, row in labeledRow(row) } }
                 .quantPanel()
         }
-        if let form = p.form {
+        if let ladder = p.formRows, !ladder.isEmpty {
+            // The ladder a bettor builds by hand from three game logs:
+            // last game → L5 → L10, with the 15-day window closing it out.
+            insightEyebrow("RECENT FORM")
+            VStack(spacing: 0) {
+                ForEach(Array(ladder.enumerated()), id: \.offset) { _, row in labeledRow(row) }
+                if let form = p.form { labeledRow(form) }
+            }
+            .quantPanel()
+        } else if let form = p.form {
             insightEyebrow(form.label ?? "RECENT FORM")
             VStack(spacing: 0) { labeledRow(form, hideLabel: true) }.quantPanel()
         }
@@ -17823,6 +17832,13 @@ struct PlayerInsightSheet: View {
                             .foregroundStyle(.white.opacity(0.45))
                         Text("\(pr.line ?? "")\(pr.odds.map { " (\($0))" } ?? "")")
                             .font(.system(size: 13, weight: .bold)).foregroundStyle(GaryColors.gold)
+                        // Hit rate vs tonight's line over the recent window —
+                        // factual count, no lean implied.
+                        if let rate = pr.rate {
+                            Text(rate.uppercased())
+                                .font(GaryFonts.mono(7.5, bold: true)).tracking(0.4)
+                                .foregroundStyle(.white.opacity(0.5))
+                        }
                     }
                     .padding(.horizontal, 10).padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))

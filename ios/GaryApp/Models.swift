@@ -148,7 +148,7 @@ struct PlayerInsightPack: Decodable {
         let grade: String?    // strong | weak | neutral | thin
     }
     struct SeasonLine: Decodable { let line1: String?; let line2: String? }
-    struct PropLine: Decodable { let label: String?; let line: String?; let odds: String? }
+    struct PropLine: Decodable { let label: String?; let line: String?; let odds: String?; let rate: String? }
 
     let type: String?          // "hitter" | "pitcher"
     let name: String?
@@ -163,6 +163,8 @@ struct PlayerInsightPack: Decodable {
     let xstats: [XStatRow]?
     let splits: [LabeledStat]?
     let form: LabeledStat?
+    /// Form ladder (LAST GAME / LAST 5 / LAST 10) — chrono game-log derived.
+    let formRows: [LabeledStat]?
     let bvp: LabeledStat?
     let pitchMatchup: [PitchRow]?
     let venue: LabeledStat?

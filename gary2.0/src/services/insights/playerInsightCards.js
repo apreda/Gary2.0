@@ -56,6 +56,16 @@ const MAX_STRENGTHS = 3;
 const MAX_WEAKNESSES = 3;
 const MAX_PROPS = 4;
 
+// Form ladder + prop hit-rate windows (June 11 build-out). All windows read
+// getMlbPlayerGameRowsChrono — finals-only, spring-excluded, true chronology
+// (the June 3 audit source) — and FAIL CLOSED below the row/AB minimums.
+const FORM_L5_MIN_ROWS = 4;       // hitter "last 5" rung needs >= 4 games
+const FORM_L10_MIN_ROWS = 8;      // hitter "last 10" rung needs >= 8 games
+const RATE_WINDOW_HITTER = 10;    // prop hit-rate window, hitter (games)
+const RATE_MIN_ROWS_HITTER = 6;
+const RATE_WINDOW_PITCHER = 5;    // prop hit-rate window, pitcher (outings)
+const RATE_MIN_ROWS_PITCHER = 3;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public entry
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,6 +254,16 @@ async function buildHitterPack(a) {
   const props = hitterProps(await getProps(gameId), playerId);
   if (props.length) payload.props = props;
 
+  // Form ladder + prop hit rates from the chrono game log (tonight excluded).
+  const chrono = await safeCall(() => bdl.getMlbPlayerGameRowsChrono(playerId, season), []);
+  const batRows = asArray(chrono).filter(
+    (r) => String(r?.game_id) !== String(gameId) && num(r.at_bats) != null,
+  );
+  const formRows = hitterFormRows(batRows);
+  if (formRows.length) payload.formRows = formRows;
+  attachPropRates(props, batRows, RATE_STAT_HITTER,
+    { window: RATE_WINDOW_HITTER, minRows: RATE_MIN_ROWS_HITTER });
+
   // Strengths / weaknesses (deterministic, derived from the above).
   const { strengths, weaknesses } = hitterStrengthsWeaknesses({
     name, platoon, xstats, form, seasonDisplay, bvp, pitchMatchup,
@@ -299,6 +319,16 @@ async function buildPitcherPack(a) {
   // Tonight's lines for this pitcher (strikeouts etc).
   const props = pitcherProps(await getProps(gameId), playerId);
   if (props.length) payload.props = props;
+
+  // Form ladder + prop hit rates from the chrono game log (tonight excluded).
+  const chrono = await safeCall(() => bdl.getMlbPlayerGameRowsChrono(playerId, season), []);
+  const pitched = asArray(chrono).filter(
+    (r) => String(r?.game_id) !== String(gameId) && ipOuts(r.ip) > 0,
+  );
+  const formRows = pitcherFormRows(pitched);
+  if (formRows.length) payload.formRows = formRows;
+  attachPropRates(props, pitched, RATE_STAT_PITCHER,
+    { window: RATE_WINDOW_PITCHER, minRows: RATE_MIN_ROWS_PITCHER });
 
   // Strengths / weaknesses for the pitcher.
   const { strengths, weaknesses } = pitcherStrengthsWeaknesses({
@@ -886,7 +916,8 @@ function formatProps(propRows, playerId, priorityTypes) {
     const propType = String(r?.prop_type || '').toLowerCase();
     if (seen.has(propType)) continue;
     const line = num(r?.line_value);
-    const entry = { label: propLabel(propType) };
+    // _type is internal — attachPropRates joins on it, then strips it.
+    const entry = { label: propLabel(propType), _type: propType };
     if (line != null) entry.line = String(line);
     const odds = r?.market?.odds;
     if (odds != null && Number.isFinite(Number(odds))) entry.odds = formatOdds(odds);
@@ -896,6 +927,152 @@ function formatProps(propRows, playerId, priorityTypes) {
     if (out.length >= MAX_PROPS) break;
   }
   return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Form ladders + prop hit rates (chrono game-log derived)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MONTHS_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+/** "2026-06-10..." -> "JUN 10" (null on anything unparseable). */
+function shortDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return null;
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return null;
+  return `${MONTHS_ABBR[mo - 1]} ${Number(m[3])}`;
+}
+
+/** BDL ip notation ("5.2" = 5 innings 2 outs) -> total outs. */
+function ipOuts(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const whole = Math.trunc(n);
+  const frac = Math.round((n - whole) * 10);
+  return whole * 3 + (frac === 1 ? 1 : frac === 2 ? 2 : 0);
+}
+
+function outsToIp(outs) { return `${Math.trunc(outs / 3)}.${outs % 3}`; }
+
+/**
+ * Hitter form ladder: LAST GAME -> LAST 5 -> LAST 10, each its own labeled
+ * row. The manual-research connection: the box-score line a bettor would
+ * stitch together from three game logs, pre-aggregated. Rungs that fail
+ * their row/AB minimums are simply omitted.
+ */
+function hitterFormRows(rows) {
+  const out = [];
+  const last = rows[rows.length - 1];
+  if (last) {
+    const ab = num(last.at_bats) ?? 0;
+    const h = num(last.hits) ?? 0;
+    const hr = num(last.hr) ?? 0;
+    const rbi = num(last.rbi) ?? 0;
+    const tb = num(last.total_bases) ?? 0;
+    const bits = [`${h}-for-${ab}`];
+    if (hr > 0) bits.push(`${hr} HR`);
+    if (rbi > 0) bits.push(`${rbi} RBI`);
+    if (hr === 0 && tb > 1) bits.push(`${tb} TB`);
+    const entry = { label: 'LAST GAME', value: bits.join(' · ') };
+    const d = shortDate(last._game?.date);
+    if (d) entry.detail = d;
+    out.push(entry);
+  }
+  for (const [label, n, minRows] of [['LAST 5 GAMES', 5, FORM_L5_MIN_ROWS], ['LAST 10 GAMES', 10, FORM_L10_MIN_ROWS]]) {
+    const win = rows.slice(-n);
+    if (win.length < minRows) continue;
+    let ab = 0; let h = 0; let hr = 0; let rbi = 0;
+    for (const r of win) {
+      ab += num(r.at_bats) ?? 0; h += num(r.hits) ?? 0;
+      hr += num(r.hr) ?? 0; rbi += num(r.rbi) ?? 0;
+    }
+    if (ab < win.length * 2) continue; // pinch-hit-thin window: fail closed
+    const entry = { label, value: `${pct3(h / ab)} (${h}-for-${ab})` };
+    const det = [];
+    if (hr > 0) det.push(`${hr} HR`);
+    if (rbi > 0) det.push(`${rbi} RBI`);
+    if (det.length) entry.detail = det.join(' · ');
+    out.push(entry);
+  }
+  return out;
+}
+
+/**
+ * Pitcher form ladder: LAST OUTING -> LAST 3 -> LAST 5 with real ERA/WHIP
+ * over the window (not an average of averages).
+ */
+function pitcherFormRows(rows) {
+  const out = [];
+  const last = rows[rows.length - 1];
+  if (last) {
+    const entry = {
+      label: 'LAST OUTING',
+      value: `${outsToIp(ipOuts(last.ip))} IP · ${num(last.er) ?? 0} ER · ${num(last.p_k) ?? 0} K`,
+    };
+    const d = shortDate(last._game?.date);
+    if (d) entry.detail = d;
+    out.push(entry);
+  }
+  for (const [label, n] of [['LAST 3 OUTINGS', 3], ['LAST 5 OUTINGS', 5]]) {
+    const win = rows.slice(-n);
+    if (win.length < n) continue;
+    let outs = 0; let er = 0; let k = 0; let hits = 0; let bb = 0;
+    for (const r of win) {
+      outs += ipOuts(r.ip); er += num(r.er) ?? 0;
+      k += num(r.p_k) ?? 0; hits += num(r.p_hits) ?? 0; bb += num(r.p_bb) ?? 0;
+    }
+    if (outs < 9) continue; // under 3 IP across the window: fail closed
+    const ip = outs / 3;
+    out.push({
+      label,
+      value: `${((er / ip) * 9).toFixed(2)} ERA · ${outsToIp(outs)} IP`,
+      detail: `${k} K · ${((hits + bb) / ip).toFixed(2)} WHIP`,
+    });
+  }
+  return out;
+}
+
+// prop_type -> per-game stat extractors. A type with no entry simply gets no
+// rate (fail closed). Hitter and pitcher maps are separate so "strikeouts"
+// can never read the wrong side of a two-way row.
+const RATE_STAT_HITTER = {
+  hits: (r) => num(r.hits) ?? 0,
+  total_bases: (r) => num(r.total_bases) ?? 0,
+  home_runs: (r) => num(r.hr) ?? 0,
+  rbi: (r) => num(r.rbi) ?? 0,
+  runs_batted_in: (r) => num(r.rbi) ?? 0,
+  runs: (r) => num(r.runs) ?? 0,
+  hits_runs_rbis: (r) => (num(r.hits) ?? 0) + (num(r.runs) ?? 0) + (num(r.rbi) ?? 0),
+  stolen_bases: (r) => num(r.stolen_bases) ?? 0,
+  strikeouts: (r) => num(r.k) ?? 0,
+};
+const RATE_STAT_PITCHER = {
+  strikeouts: (r) => num(r.p_k) ?? 0,
+  outs: (r) => ipOuts(r.ip),
+  earned_runs: (r) => num(r.er) ?? 0,
+  hits_allowed: (r) => num(r.p_hits) ?? 0,
+  walks: (r) => num(r.p_bb) ?? 0,
+};
+
+/**
+ * Mutates each prop entry with `rate` — "7/10 over" — counting the games in
+ * the window where the stat finished ABOVE tonight's line. Strictly factual
+ * (no lean implied); strips the internal _type either way.
+ */
+function attachPropRates(props, rows, statMap, { window, minRows }) {
+  if (!Array.isArray(props) || !props.length) return;
+  const win = rows.slice(-window);
+  for (const p of props) {
+    const type = p._type;
+    delete p._type;
+    if (win.length < minRows) continue;
+    const statOf = statMap[type];
+    const line = Number(p.line);
+    if (!statOf || !Number.isFinite(line)) continue;
+    const cleared = win.filter((r) => statOf(r) > line).length;
+    p.rate = `${cleared}/${win.length} over`;
+  }
 }
 
 function marketRank(r) {
