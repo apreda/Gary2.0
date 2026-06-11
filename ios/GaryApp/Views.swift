@@ -5240,9 +5240,14 @@ struct PremiumPicksView: View {
         }) { item in
             SafariView(url: item.url).ignoresSafeArea()
         }
-        .onAppear { // Debug arg (-previewPlans 1): jump straight to the plans
-            // sheet — same family as -forceTab / -previewPhase.
+        .onAppear {
+            // Debug arg (-previewPlans 1): jump straight to the plans sheet —
+            // same family as -forceTab / -previewPhase. DEBUG-only: in a
+            // release build the plans sheet (external Stripe checkout) must
+            // be unreachable while freeLaunch is on (App Store 3.1.1).
+            #if DEBUG
             if UserDefaults.standard.bool(forKey: "previewPlans") { showPlansSheet = true }
+            #endif
         }
     }
 
