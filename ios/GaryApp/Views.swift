@@ -1570,6 +1570,117 @@ struct LiquidGlassBackground: View {
 // Last night's stories on top (the honest tape + the lead), each one a door
 // to today's version of itself; tonight's board underneath. The only true
 // card on the page is the FREE PICK — it earns its box.
+/// Fresh-day pop-up — Gary's GAME-pick performance from the settled night,
+/// fronted by the Gary emotion that matches how it went. Shows once per day
+/// on first open (props keep their own strip in the box scores). Standard
+/// centered-card modal: dim backdrop, tap anywhere or the button to dismiss.
+struct DailyRecapOverlay: View {
+    let record: (w: Int, l: Int, p: Int)
+    let net: Double?
+    let bestOdds: Double?
+    let onDismiss: () -> Void
+
+    private var pct: Double {
+        let graded = record.w + record.l
+        return graded == 0 ? 0 : Double(record.w) / Double(graded)
+    }
+    /// The emotion ladder — image + one line in Gary's voice.
+    private var mood: (image: String, line: String) {
+        if pct >= 0.6, (net ?? 0) > 0 { return ("GaryFire", "Gary ran hot last night.") }
+        if (net ?? 0) >= 0 { return ("GaryCigar", "A winning night on the games.") }
+        if pct >= 0.45 { return ("GaryCoin", "About even on the night.") }
+        if pct >= 0.30 { return ("GaryIceCold", "A cold one on the games.") }
+        return ("GaryDoomsday", "Rough night. Gary remembers.")
+    }
+    private var recordText: String {
+        record.p > 0 ? "\(record.w)–\(record.l)–\(record.p)" : "\(record.w)–\(record.l)"
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.62)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onDismiss)
+
+            VStack(spacing: 0) {
+                Image(mood.image)
+                    .resizable().scaledToFit()
+                    .frame(height: 112)
+                    .padding(.top, 26)
+
+                Text("GARY'S PERFORMANCE")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(2.2)
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.top, 18)
+
+                Text(mood.line)
+                    .font(GaryFonts.text(17, .semibold))
+                    .foregroundStyle(.white.opacity(0.94))
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 6)
+                    .padding(.horizontal, 20)
+
+                HStack(spacing: 0) {
+                    recapCell(recordText, "GAME PICKS", .white.opacity(0.92))
+                    if let net {
+                        recapDivider
+                        recapCell(String(format: "%+.1fu", net), "NET · FLAT STAKES",
+                                  net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                    }
+                    if let bestOdds, bestOdds > 0 {
+                        recapDivider
+                        recapCell("+\(Int(bestOdds))", "BEST CASH", GaryColors.gold)
+                    }
+                }
+                .padding(.vertical, 18)
+                .padding(.horizontal, 8)
+
+                Button(action: onDismiss) {
+                    Text("To today's board")
+                        .font(GaryFonts.text(14, .semibold))
+                        .foregroundStyle(Color(hex: "#121110"))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Capsule().fill(GaryColors.gold))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 22)
+            }
+            .frame(width: 316)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color(hex: "#151311"))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.6), radius: 30, y: 14)
+        }
+    }
+
+    private func recapCell(_ value: String, _ label: String, _ color: Color) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(GaryFonts.mono(22, bold: true))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(.white.opacity(0.45))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var recapDivider: some View {
+        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 32)
+    }
+}
+
 struct HomeView: View {
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var freePick: GaryPick?
@@ -1593,6 +1704,13 @@ struct HomeView: View {
     /// The settled night's combined record (games + props) — the scorecard's
     /// ledger, same set as net + best cash.
     @State private var lastNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
+    /// GAME picks only — the fresh-day recap pop-up's ledger (props keep
+    /// their own strip in the box scores; user call, Jun 11).
+    @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
+    @State private var gamesNightNet: Double? = nil
+    @State private var gamesNightBest: Double? = nil
+    @State private var showDailyRecap = false
+    @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
     @State private var slateGames: [DailySlateRow] = []
@@ -1728,6 +1846,19 @@ struct HomeView: View {
                 .padding(.bottom, 110)
             }
         }
+        .overlay {
+            if showDailyRecap {
+                DailyRecapOverlay(record: gamesNightRecord,
+                                  net: gamesNightNet,
+                                  bestOdds: gamesNightBest) {
+                    let dayFmt = DateFormatter()
+                    dayFmt.dateFormat = "yyyy-MM-dd"
+                    dailyRecapShownDate = dayFmt.string(from: Date())
+                    withAnimation(.easeOut(duration: 0.2)) { showDailyRecap = false }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
         .task {
             #if DEBUG
             // Lets the screenshot tooling drive the switcher:
@@ -1807,6 +1938,20 @@ struct HomeView: View {
                     lastNightRecord = night.record
                     lastNightGraded = night.graded
                     bestCashOdds = night.bestOdds
+
+                    // Fresh-day recap pop-up — GAME picks only, once per day.
+                    let gamesNight = Self.buildLastNight(games: recentGameResults, props: [])
+                    gamesNightRecord = gamesNight.record
+                    gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
+                    gamesNightBest = gamesNight.bestOdds
+                    let dayFmt = DateFormatter()
+                    dayFmt.dateFormat = "yyyy-MM-dd"
+                    let todayKey = dayFmt.string(from: Date())
+                    if gamesNight.graded > 0, dailyRecapShownDate != todayKey {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                            showDailyRecap = true
+                        }
+                    }
 
                     // Gary's form — last 10 graded game picks, same data + math
                     // as the Billfold (BillfoldCompute), so the record never
@@ -10093,7 +10238,7 @@ struct BillfoldView: View {
         let sport = Sport.from(league: result.effectiveLeague)
         let isWon = result.result == "won"
         let isPush = result.result == "push"
-        let stampWord = isWon ? "WON" : (isPush ? "PUSH" : "LOST")
+        let stampWord = isWon ? "CASHED" : (isPush ? "PUSH" : "NO CASH")
         let resultColor = isWon ? positiveColor : (isPush ? brass : negativeColor)
         let propOddsStr: String = {
             let fromField = Formatters.americanOdds(result.odds?.value)
@@ -11181,9 +11326,9 @@ struct ResultStampOverlay: View {
 
     private var stampText: String {
         switch result {
-        case "won": return "WON"
+        case "won": return "CASHED"
         case "push": return "PUSH"
-        default: return "LOST"
+        default: return "NO CASH"
         }
     }
 
@@ -11579,7 +11724,7 @@ struct CompactPickRow: View {
             // Stamp rides the empty space under the bear — clear of the hero
             // type. Gold for every verdict (the brand owns its record).
             if let verdict = displayResult {
-                Text(verdict == "won" ? "CASHED" : (verdict == "push" ? "PUSH" : "LOST"))
+                Text(verdict == "won" ? "CASHED" : (verdict == "push" ? "PUSH" : "NO CASH"))
                     .font(GaryFonts.mono(19, bold: true)).tracking(2.5)
                     .foregroundStyle(GaryColors.gold.opacity(0.92))
                     .padding(.horizontal, 10).padding(.vertical, 4)
@@ -12424,7 +12569,7 @@ struct ShareCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", GaryColors.gold)
+        case "lost": return ("NO CASH", GaryColors.gold)
         default:     return nil
         }
     }
@@ -12626,7 +12771,7 @@ struct SharePropCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", GaryColors.gold)
+        case "lost": return ("NO CASH", GaryColors.gold)
         default:     return nil
         }
     }
@@ -12793,7 +12938,7 @@ struct HeadlineShareCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", GaryColors.gold)
+        case "lost": return ("NO CASH", GaryColors.gold)
         default:     return nil
         }
     }
@@ -12921,7 +13066,7 @@ struct HeadlineSharePropCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", GaryColors.gold)
+        case "lost": return ("NO CASH", GaryColors.gold)
         default:     return nil
         }
     }
@@ -18147,7 +18292,7 @@ struct CompactPropRow: View {
             // Stamp rides the empty space under the bear — gold for every
             // verdict (the brand owns its record).
             if let verdict = resolvedResult {
-                Text(verdict == "won" ? "CASHED" : (verdict == "push" ? "PUSH" : "LOST"))
+                Text(verdict == "won" ? "CASHED" : (verdict == "push" ? "PUSH" : "NO CASH"))
                     .font(GaryFonts.mono(19, bold: true)).tracking(2.5)
                     .foregroundStyle(GaryColors.gold.opacity(0.92))
                     .padding(.horizontal, 10).padding(.vertical, 4)
