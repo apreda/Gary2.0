@@ -56,12 +56,15 @@ let changelogEntries: [ChangelogEntry] = [
         version: "2.13",
         date: "June 2026",
         type: .feature,
-        title: "Gary 2.13 — 2026 FIFA World Cup",
+        title: "Gary 2.13 — World Cup, free for everyone",
         changes: [
+            "Everything is free this version — every board, every sport, no paywall. Accounts optional.",
             "World Cup game picks are live for all 104 matches, June 11 – July 19",
             "Full 3-way market coverage: moneyline (including Draw), Asian handicap, and total goals",
-            "Tale of the Tape for every match: group standing, form, xG and xGA, possession, shots, pass accuracy",
-            "Tournament data from the FIFA World Cup API: fixtures, squads, group tables, head-to-head from past editions",
+            "New Home: morning recaps with stat bullets, the Wire with tap-to-expand stories, the full slate with real lines",
+            "Streaks board in the Hub: team runs, hot and cold bats, who has one on the line tonight",
+            "The Night Board: every homer, gem, multi-hit and steal from last night — searchable",
+            "Tale of the Tape for every WC match: group standing, form, xG and xGA, possession, shots, pass accuracy",
             "World Cup lanes in Today's Edges: venue and altitude notes, group-stage stakes, matchup history"
         ]
     ),
