@@ -1,8 +1,10 @@
 #!/bin/bash
-# Gary 2.0 — Insight Connections generation (launched by launchd 3x daily ET)
-# Computes the day's hub "edges" (insight_connections) for the active leagues
-# and replaces the day's rows in Supabase. Idempotent per day+league, so the
-# later passes simply refresh as lineups firm up.
+# Gary 2.0 — Insight Connections generation (launched by launchd 4x daily ET:
+# 07:15, 11:00, 16:30, 19:30). Computes the day's hub "edges"
+# (insight_connections) for the active leagues and replaces the day's rows in
+# Supabase. Idempotent per day+league, so later passes simply refresh as
+# lineups firm up — the 7:15 pass makes the Hub a morning resource
+# (probables/weather/schedule lanes); lineup-dependent lanes fill in later.
 
 set -euo pipefail
 

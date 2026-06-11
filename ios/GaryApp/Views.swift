@@ -1582,6 +1582,10 @@ struct HomeView: View {
     @State private var yesterdayTopPickScore: String? = nil
     /// Tonight's top Hub edges (relevance-ordered) — the pre-bet checklist.
     @State private var tonightSignals: [Signal] = []
+    /// Yesterday's graded edges + tally — the Edges section's fallback until
+    /// today's board posts with lineups.
+    @State private var ydayEdges: [Signal] = []
+    @State private var edgesHitRate: (hit: Int, graded: Int)? = nil
     /// Live streaks — feeds the Edges row that points at the Hub's board.
     @State private var homeStreaks: [StreakRow] = []
     /// Last night's betting recaps (game_recaps) — the story player's slides.
@@ -1854,6 +1858,19 @@ struct HomeView: View {
                         }
                     }
                     tonightSignals = Array(tonightEdges.prefix(3))
+                    // Today's edges post with lineups (~afternoon). Until
+                    // then the section shows yesterday's GRADED board — the
+                    // Hub's receipts, verdicts attached — instead of nothing.
+                    if tonightSignals.isEmpty {
+                        var graded: [Signal] = []
+                        for lg in ["MLB", "NBA", "WC"] {
+                            if let conns = try? await SupabaseAPI.fetchInsightConnections(date: gradedDate, league: lg) {
+                                graded.append(contentsOf: conns.compactMap { $0.toSignal() }.filter { $0.result != nil })
+                            }
+                        }
+                        ydayEdges = graded
+                        edgesHitRate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
+                    }
 
                     // The night's stories for the player (graded date = the
                     // same night the marquee covers).
@@ -2093,7 +2110,7 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
         }
-        if !tonightSignals.isEmpty || streaksHeadline != nil {
+        if !tonightSignals.isEmpty || !ydayEdges.isEmpty || streaksHeadline != nil {
             tonightEdgesSection
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.18), value: animateIn)
@@ -2174,9 +2191,17 @@ struct HomeView: View {
         return bits.joined(separator: " · ")
     }
 
+    /// "28 of 46 hit · 61%" — yesterday's tally for the fallback header.
+    private var ydayEdgesSub: String {
+        guard let r = edgesHitRate, r.graded > 0 else { return "Yesterday · graded" }
+        let pct = Int((Double(r.hit) / Double(r.graded) * 100).rounded())
+        return "Yesterday · \(r.hit) of \(r.graded) hit · \(pct)%"
+    }
+
     private var tonightEdgesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Edges", sub: "From the Hub · graded tomorrow morning")
+            HubSectionHeader(eyebrow: "Edges",
+                             sub: !tonightSignals.isEmpty ? "Today's board · graded in the morning" : ydayEdgesSub)
             VStack(spacing: 0) {
                 if let sh = streaksHeadline {
                     Button {
@@ -2205,7 +2230,8 @@ struct HomeView: View {
                         Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                     }
                 }
-                ForEach(Array(tonightSignals.enumerated()), id: \.element.id) { i, s in
+                let edgeRows = !tonightSignals.isEmpty ? tonightSignals : Array(ydayEdges.prefix(6))
+                ForEach(Array(edgeRows.enumerated()), id: \.element.id) { i, s in
                     Button {
                         // Land on this row's LANE in the Hub — there's more
                         // than one heat check; the Hub breaks it down.
@@ -2217,11 +2243,28 @@ struct HomeView: View {
                                 .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
                                 .foregroundStyle(GaryColors.gold.opacity(0.75))
                                 .frame(width: 86, alignment: .leading)
-                            Text(s.headline)
-                                .font(.system(size: 12.5))
-                                .foregroundStyle(.white.opacity(0.8))
-                                .lineLimit(2)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(s.headline)
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                // Graded rows carry the night's stat line.
+                                if s.result != nil, let note = s.resultNote, !note.isEmpty {
+                                    Text(note)
+                                        .font(GaryFonts.mono(10.5))
+                                        .foregroundStyle(.white.opacity(0.55))
+                                        .lineLimit(1).minimumScaleFactor(0.85)
+                                }
+                            }
                             Spacer(minLength: 8)
+                            if let result = s.result {
+                                Text(result == "hit" ? "HIT" : result == "push" ? "PUSH" : "MISS")
+                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
+                                    .foregroundStyle(result == "hit" ? GaryColors.win
+                                                     : result == "push" ? GaryColors.gold
+                                                     : GaryColors.loss)
+                            }
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.25))
@@ -2230,7 +2273,7 @@ struct HomeView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if i < tonightSignals.count - 1 {
+                    if i < edgeRows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                     }
                 }
@@ -2472,12 +2515,11 @@ struct HomeView: View {
     }
 
     private func slateRow(_ g: DailySlateRow, id: String, chip: String) -> HomeSlateSection.Row {
-        let sub = [Formatters.formatCommenceTime(g.commence_time), g.venue].compactMap { $0 }
-            .filter { !$0.isEmpty }.joined(separator: " · ").uppercased()
-        return HomeSlateSection.Row(
+        HomeSlateSection.Row(
             id: id,
             title: "\(Self.shortTeam(g.away_team)) @ \(Self.shortTeam(g.home_team))",
-            sub: sub, tone: nil, chip: chip, league: g.league)
+            sub: (g.venue ?? "").uppercased(), tone: nil, chip: chip, league: g.league,
+            time: Formatters.formatCommenceTime(g.commence_time).uppercased())
     }
 
     private var pregameSlateRows: [HomeSlateSection.Row] {
@@ -2486,9 +2528,9 @@ struct HomeView: View {
         guard !slateGames.isEmpty else {
             let sorted = todayPicks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
             return sorted.prefix(8).map { p in
-                let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
-                    .joined(separator: " · ").uppercased()
-                return HomeSlateSection.Row(id: p.id, title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))", sub: sub, tone: nil, chip: p.pick ?? "")
+                HomeSlateSection.Row(id: p.id, title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
+                                     sub: (p.venue ?? "").uppercased(), tone: nil, chip: p.pick ?? "",
+                                     league: p.league, time: Formatters.formatCommenceTime(p.displayTime).uppercased())
             }
         }
         // Start-time order, full stop — the founder's read: "here's the games
@@ -4571,6 +4613,10 @@ struct HomeSlateSection: View {
         /// Sport accent: non-MLB rows wear a small league token so a Finals
         /// game stands out inside a baseball-heavy board.
         var league: String? = nil
+        /// When set, start time owns the trailing slot (big, readable — the
+        /// founder's call: times matter, odds are extra) and the chip
+        /// demotes into the sub line.
+        var time: String? = nil
     }
     /// One read on the slate (BOARD / SPREADS / HOME DOGS). A single tab
     /// renders with no tab strip — the live board stays as it was.
@@ -4663,21 +4709,39 @@ struct HomeSlateSection: View {
                                             .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
                                             .foregroundStyle(Sport.from(league: lg).accentColor.opacity(0.95))
                                     }
-                                    Text(row.sub)
-                                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                                        .foregroundStyle(subColor(row.tone))
+                                    // The line/pick rides small here when the
+                                    // time owns the right column.
+                                    if row.time != nil, !row.chip.isEmpty, row.chip != "—" {
+                                        Text(row.chip.uppercased())
+                                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.6)
+                                            .foregroundStyle(.white.opacity(0.55))
+                                    }
+                                    if !row.sub.isEmpty {
+                                        Text(row.sub)
+                                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                                            .foregroundStyle(subColor(row.tone))
+                                    }
                                 }
                                     .lineLimit(1)
                             }
                             Spacer(minLength: 8)
-                            // Pick reads as clean gold type — no box (the words
-                            // deliver the info; dropping the container lets the
-                            // font breathe bigger).
-                            Text(row.chip.uppercased())
-                                .font(GaryFonts.mono(15, bold: true))
-                                .foregroundStyle(GaryColors.gold)
-                                .lineLimit(1).minimumScaleFactor(0.8)
-                                .frame(maxWidth: 150, alignment: .trailing)
+                            if let t = row.time, !t.isEmpty {
+                                // Start time, big enough to actually read.
+                                Text(t)
+                                    .font(GaryFonts.mono(14, bold: true))
+                                    .foregroundStyle(.white.opacity(0.88))
+                                    .lineLimit(1).minimumScaleFactor(0.8)
+                                    .frame(maxWidth: 150, alignment: .trailing)
+                            } else {
+                                // Pick reads as clean gold type — no box (the words
+                                // deliver the info; dropping the container lets the
+                                // font breathe bigger).
+                                Text(row.chip.uppercased())
+                                    .font(GaryFonts.mono(15, bold: true))
+                                    .foregroundStyle(GaryColors.gold)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
+                                    .frame(maxWidth: 150, alignment: .trailing)
+                            }
                         }
                         .padding(.vertical, 11).padding(.horizontal, 14)
                         .contentShape(Rectangle())
@@ -15575,6 +15639,9 @@ struct NightBoard: View {
 /// same gold-when-active grammar as every other strip.
 struct StreakBoard: View {
     let rows: [StreakRow]
+    /// Tap on a row with a game tonight → that game's page on the Picks tab
+    /// (receives an "Away @ Home" matchup string).
+    var onTapGame: (String) -> Void = { _ in }
     @State private var tab = 0
 
     private struct Group {
@@ -15661,9 +15728,36 @@ struct StreakBoard: View {
         }
     }
 
+    /// The detail line often repeats the badge ("W5 — outscored foes 33-14"
+    /// next to a W5 badge) — strip the echo, keep only what the badge can't say.
+    private func cleanDetail(_ r: StreakRow, badgeText: String) -> String? {
+        guard var d = r.detail, !d.isEmpty else { return nil }
+        for sep in [" — ", " - "] where d.hasPrefix(badgeText + sep) {
+            d = String(d.dropFirst(badgeText.count + sep.count))
+        }
+        return d.isEmpty ? nil : d
+    }
+
+    /// "AT METS · 7:10 PM ET" + "St. Louis Cardinals" → "Cardinals @ Mets"
+    /// (away @ home) — the matchup string the Picks deep-link matches on.
+    private func matchup(_ r: StreakRow) -> String? {
+        guard let next = r.next_game, let team = r.team ?? r.subject else { return nil }
+        let head = next.components(separatedBy: "·").first?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        let up = head.uppercased()
+        let opp: String
+        let homeGame: Bool
+        if up.hasPrefix("AT ") { opp = String(head.dropFirst(3)); homeGame = false }
+        else if up.hasPrefix("VS ") { opp = String(head.dropFirst(3)); homeGame = true }
+        else { return nil }
+        guard !opp.isEmpty else { return nil }
+        return homeGame ? "\(opp) @ \(team)" : "\(team) @ \(opp)"
+    }
+
     private func streakRow(_ r: StreakRow) -> some View {
         let b = badge(r)
-        return HStack(spacing: 12) {
+        let game = matchup(r)
+        let row = HStack(spacing: 12) {
             Text(b.text)
                 .font(GaryFonts.mono(12, bold: true))
                 .foregroundStyle(b.color)
@@ -15671,30 +15765,40 @@ struct StreakBoard: View {
                 .frame(width: 56, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
                 Text(r.subject ?? "")
-                    .font(GaryFonts.text(13.5, .semibold))
+                    .font(GaryFonts.text(14, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
-                if let d = r.detail, !d.isEmpty {
+                if let d = cleanDetail(r, badgeText: b.text) {
                     Text(d)
-                        .font(GaryFonts.mono(9.5))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .font(GaryFonts.mono(11))
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
             Spacer(minLength: 8)
             if let next = r.next_game, !next.isEmpty {
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text("ON THE LINE")
-                        .font(GaryFonts.mono(7.5, bold: true)).tracking(1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.85))
-                    Text(next.uppercased())
-                        .font(GaryFonts.mono(9))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                // Just the game — gold marks it tappable; the section sub
+                // already says these are on the line tonight.
+                Text(next.uppercased())
+                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.4)
+                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                if game != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.3))
                 }
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
+        return SwiftUI.Group {
+            if let game {
+                Button { onTapGame(game) } label: { row.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+            } else {
+                row
+            }
+        }
     }
 }
 
@@ -15928,19 +16032,21 @@ struct PropsHubView: View {
                             && nightRows.isEmpty && streakRows.isEmpty {
                     hubErrorState
                 } else if leagueSignals.isEmpty {
+                    // The morning Hub leads with what's LIVE — streaks, then
+                    // last night's board; yesterday's graded receipts close
+                    // the page. Today's edges fill in as the day's runs land.
                     hubEmptyState
-                    // Last night's board + streaks don't wait for lineups —
-                    // the morning Hub is never an empty room.
+                    if !selStreakRows.isEmpty {
+                        HubSectionHeader(eyebrow: "Streaks", sub: "Live runs · who has one on the line tonight")
+                            .id("streaks")
+                        StreakBoard(rows: selStreakRows, onTapGame: { onSelectGame($0) })
+                            .padding(.horizontal, 16)
+                    }
                     if !selNightRows.isEmpty {
                         HubSectionHeader(eyebrow: "Last Night", sub: "\(selNightRows.count) stat lines · Gary's mark where he had it")
                         NightBoard(rows: selNightRows).padding(.horizontal, 16)
                     }
-                    if !selStreakRows.isEmpty {
-                        HubSectionHeader(eyebrow: "Streaks", sub: "Live runs · who has one on the line tonight")
-                            .id("streaks")
-                        StreakBoard(rows: selStreakRows)
-                            .padding(.horizontal, 16)
-                    }
+                    gradedReceipts
                 } else {
                     // FEATURED — highest relevance, max 2 per lane so the strip mixes kinds
                     HubSectionHeader(eyebrow: "Featured", sub: "Tonight's sharpest reads")
@@ -16020,7 +16126,7 @@ struct PropsHubView: View {
                     if !selStreakRows.isEmpty {
                         HubSectionHeader(eyebrow: "Streaks", sub: "Live runs · who has one on the line tonight")
                             .id("streaks")
-                        StreakBoard(rows: selStreakRows)
+                        StreakBoard(rows: selStreakRows, onTapGame: { onSelectGame($0) })
                             .padding(.horizontal, 16)
                     } else if !items(.streak).isEmpty {
                         HubSectionHeader(eyebrow: "Streaks", sub: "Runs and slides coming in")
@@ -16270,14 +16376,14 @@ struct PropsHubView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                     if !sub.isEmpty {
-                        Text(sub).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                        Text(sub).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 8)
                 if !trail.isEmpty {
                     Text(trail.uppercased())
-                        .font(GaryFonts.mono(8.5, bold: false)).tracking(0.4)
-                        .foregroundStyle(.white.opacity(0.35)).lineLimit(1)
+                        .font(GaryFonts.mono(9.5, bold: false)).tracking(0.4)
+                        .foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
@@ -16326,71 +16432,70 @@ struct PropsHubView: View {
     }
 
     private var hubEmptyState: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(spacing: 8) {
-                Text("NO \(sel.label.uppercased()) EDGES YET")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.55))
-                Text("Tonight's connections post as lineups and matchups firm up.")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
-                    .multilineTextAlignment(.center).padding(.horizontal, 40)
-            }
-            .frame(maxWidth: .infinity).padding(.top, 28).padding(.bottom, 18)
+        VStack(spacing: 8) {
+            Text("NO \(sel.label.uppercased()) EDGES YET")
+                .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                .foregroundStyle(.white.opacity(0.55))
+            Text("Tonight's connections post as lineups and matchups firm up.")
+                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                .multilineTextAlignment(.center).padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity).padding(.top, 20).padding(.bottom, 6)
+    }
 
-            // Meanwhile: yesterday's board, graded — the Hub's receipts fill
-            // the morning instead of a blank room. Rows open the full edge.
-            if !ydaySignals.isEmpty {
-                HubSectionHeader(
-                    eyebrow: "Yesterday · graded",
-                    sub: hitRate.map { r in
-                        let pct = r.graded > 0 ? Int((Double(r.hit) / Double(r.graded) * 100).rounded()) : 0
-                        return "\(r.hit) of \(r.graded) hit · \(pct)%"
-                    } ?? "Every edge, graded the morning after")
-                VStack(spacing: 0) {
-                    ForEach(Array(ydaySignals.prefix(12).enumerated()), id: \.element.id) { i, s in
-                        Button { selectedSignal = s } label: {
-                            HStack(spacing: 10) {
-                                Text(s.kind.chip)
-                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                                    .foregroundStyle(GaryColors.gold.opacity(0.75))
-                                    .frame(width: 86, alignment: .leading)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(s.headline)
-                                        .font(.system(size: 12.5))
-                                        .foregroundStyle(.white.opacity(0.8))
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
-                                    if let note = s.resultNote, !note.isEmpty {
-                                        Text(note)
-                                            .font(GaryFonts.mono(9, bold: false))
-                                            .foregroundStyle(.white.opacity(0.4))
-                                            .lineLimit(1)
-                                    }
+    /// Yesterday's graded board — the Hub's receipts, closing the morning
+    /// page. Rows open the full edge with its verdict + grader's note.
+    @ViewBuilder private var gradedReceipts: some View {
+        if !ydaySignals.isEmpty {
+            HubSectionHeader(
+                eyebrow: "Yesterday · graded",
+                sub: hitRate.map { r in
+                    let pct = r.graded > 0 ? Int((Double(r.hit) / Double(r.graded) * 100).rounded()) : 0
+                    return "\(r.hit) of \(r.graded) hit · \(pct)%"
+                } ?? "Every edge, graded the morning after")
+            VStack(spacing: 0) {
+                ForEach(Array(ydaySignals.prefix(12).enumerated()), id: \.element.id) { i, s in
+                    Button { selectedSignal = s } label: {
+                        HStack(spacing: 10) {
+                            Text(s.kind.chip)
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                                .foregroundStyle(GaryColors.gold.opacity(0.75))
+                                .frame(width: 86, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(s.headline)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                if let note = s.resultNote, !note.isEmpty {
+                                    Text(note)
+                                        .font(GaryFonts.mono(11, bold: false))
+                                        .foregroundStyle(.white.opacity(0.62))
+                                        .lineLimit(1).minimumScaleFactor(0.85)
                                 }
-                                Spacer(minLength: 8)
-                                Text(s.result == "hit" ? "HIT" : s.result == "push" ? "PUSH" : "MISS")
-                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
-                                    .foregroundStyle(s.result == "hit" ? GaryColors.win
-                                                     : s.result == "push" ? GaryColors.gold
-                                                     : GaryColors.loss)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.25))
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .contentShape(Rectangle())
+                            Spacer(minLength: 8)
+                            Text(s.result == "hit" ? "HIT" : s.result == "push" ? "PUSH" : "MISS")
+                                .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
+                                .foregroundStyle(s.result == "hit" ? GaryColors.win
+                                                 : s.result == "push" ? GaryColors.gold
+                                                 : GaryColors.loss)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.25))
                         }
-                        .buttonStyle(.plain)
-                        if i < min(ydaySignals.count, 12) - 1 {
-                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
-                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if i < min(ydaySignals.count, 12) - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                     }
                 }
-                .quantPanel()
-                .padding(.horizontal, 16)
             }
+            .quantPanel()
+            .padding(.horizontal, 16)
         }
-        .frame(maxWidth: .infinity)
     }
 
     private var header: some View {
@@ -16502,7 +16607,7 @@ struct EdgeCardBack: View {
                 Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
                 Text(s.kind.chip).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(s.kind.tint)
                 Spacer()
-                Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
             }
             Text(s.detail)
                 .font(.system(size: 11)).foregroundStyle(.white.opacity(0.78))
@@ -16550,7 +16655,7 @@ struct FeatureEdgeCard: View {
                 Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
                 Text(s.kind.chip).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(s.kind.tint)
                 Spacer()
-                Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
             }
             Text(s.headline)
                 .font(GaryFonts.text(15)).foregroundStyle(.white)
@@ -16590,7 +16695,7 @@ struct RegressionBoard: View {
                             .foregroundStyle(.white.opacity(0.3)).frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(boardName(s)).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                            Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3))
+                            Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45))
                         }
                         Spacer(minLength: 6)
                         if s.spark.count >= 2 { gapBar(s.spark[0], s.spark[1], tint: s.tone.color) }
@@ -16649,14 +16754,14 @@ struct MiniEdgeCard: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+            Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
             Text(name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
             if !s.value.isEmpty {
                 Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
             }
             if !s.spark.isEmpty { MiniBarChart(values: s.spark, line: s.lineVal, tint: s.kind.tint, height: 16) }
             Spacer(minLength: 0)
-            Text(s.detail).font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
+            Text(s.detail).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.6))
                 .lineLimit(3).fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
@@ -16700,7 +16805,7 @@ struct EdgeDetailSheet: View {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.3))
                     }.buttonStyle(.plain)
                 }
-                Text(signal.game.uppercased()).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.4))
+                Text(signal.game.uppercased()).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.55))
                 Text(signal.headline).font(GaryFonts.display(25)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
                 if !signal.value.isEmpty || !signal.spark.isEmpty {
                     HStack(alignment: .bottom, spacing: 16) {
@@ -16716,7 +16821,7 @@ struct EdgeDetailSheet: View {
                 if let note = signal.resultNote, !note.isEmpty {
                     Text(note)
                         .font(GaryFonts.mono(11, bold: false))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.65))
                 }
                 if isMatchup {
                     Button { dismiss(); onSelectGame(signal.game) } label: {
@@ -17088,13 +17193,13 @@ struct SignalRow: View {
                     Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
                     Text(s.kind.chip).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(s.kind.tint)
                     Spacer()
-                    Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                    Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(s.headline).font(GaryFonts.text(16)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
                         if !s.detail.isEmpty {
-                            Text(s.detail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                            Text(s.detail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
                         }
                         if !s.spark.isEmpty {
                             MiniBarChart(values: s.spark, line: s.lineVal, tint: s.kind.tint, height: 20).padding(.top, 2)
