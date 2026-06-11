@@ -3014,9 +3014,13 @@ struct HomeView: View {
             net += unitsDelta(odds: o, result: p.result ?? "")
             if p.result == "won" {
                 bestOdds = max(bestOdds ?? -Double.infinity, o)
+                // Sub = the NIGHT ("3 TB on the night"), never the player's
+                // name again — the title already says who.
+                let actual = Self.trimNum(p.actual_value?.value ?? "")
+                let unit = Self.propUnit(p.prop_type)
                 cashes.append(.init(id: "p-\(p.player_name ?? "")-\(p.pick_text ?? "")",
                                     title: Formatters.propResultTitle(p),
-                                    sub: [p.effectiveLeague, p.player_name].compactMap { $0 }.joined(separator: " · "),
+                                    sub: actual.isEmpty ? (p.matchup ?? "") : "\(actual) \(unit) on the night",
                                     units: unitsDelta(odds: o, result: "won"),
                                     odds: Self.oddsLabel(o)))
             }
@@ -5231,6 +5235,10 @@ struct PremiumPicksView: View {
         }) { item in
             SafariView(url: item.url).ignoresSafeArea()
         }
+        .onAppear { // Debug arg (-previewPlans 1): jump straight to the plans
+            // sheet — same family as -forceTab / -previewPhase.
+            if UserDefaults.standard.bool(forKey: "previewPlans") { showPlansSheet = true }
+        }
     }
 
     /// Identifiable URL wrapper for the in-app checkout sheet.
@@ -5425,7 +5433,7 @@ struct PremiumPicksView: View {
                             Text("ALL-ACCESS")
                                 .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
                                 .foregroundStyle(.white.opacity(0.9))
-                            Text("Every sport's Winners board · the plays Gary backs")
+                            Text("All 7 boards · games + props")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.white.opacity(0.45))
                         }
@@ -5960,14 +5968,22 @@ struct PlansSheetView: View {
     @AppStorage("selectedTab") private var selectedTab: Int = 0
 
     /// What the single dominant CTA acts on.
-    private enum PlanSelection: Equatable { case allAccess, allAccessAnnual, single(String), worldCup, bundle }
+    /// One selection model: tap sports and the plan derives itself —
+    /// 1 = single pass, 2-3 = bundle, automatically. No separate bundle UI.
+    private enum PlanSelection: Equatable { case allAccess, allAccessAnnual, sports, worldCup }
 
     /// The annual card unhides itself once a build flavor carries an
     /// ALL_ANNUAL checkout link (DEBUG today; RELEASE after the live swap).
     private var annualAvailable: Bool { PremiumPicksView.checkoutLinks["ALL_ANNUAL"] != nil }
 
     @State private var selection: PlanSelection
-    @State private var bundlePick: Set<String> = []
+    /// The sports the user has tapped (max 3 — past that All-Access wins on
+    /// price). 1 checks out as a single pass, 2-3 as the bundle.
+    @State private var pickedSports: Set<String> = []
+    /// Set when a 4th tap gets blocked — the caption explains the better deal.
+    @State private var capHint = false
+    /// Per-sport last-30 records — the sport tiles carry proof, not filler.
+    @State private var sportRecords: [String: (w: Int, l: Int)] = [:]
     /// THE RECORD — the website's trust block, ported. All-time W–L across
     /// games and props, last 30 days, current streak. nil = hidden (never
     /// fabricated; the block waits for real graded results).
@@ -6001,7 +6017,8 @@ struct PlansSheetView: View {
         self.onBundle = onBundle
         self.onAccount = onAccount
         if let f = focus, Self.sports.contains(f) {
-            _selection = State(initialValue: .single(f))
+            _selection = State(initialValue: .sports)
+            _pickedSports = State(initialValue: [f])
         } else if focus == "WC", Self.worldCupWindowActive() {
             _selection = State(initialValue: .worldCup)
         } else {
@@ -6123,7 +6140,7 @@ struct PlansSheetView: View {
                     .font(GaryFonts.mono(42, bold: true))
                     .foregroundStyle(.white.opacity(0.96))
                     .lineLimit(1).minimumScaleFactor(0.6)
-                Text("Every pick Gary has made, graded against final scores the next morning. No deletions, no restatements — losses stay on the books with the wins.")
+                Text("Every game pick Gary has made, graded against final scores the next morning. No deletions, no restatements — losses stay on the books with the wins.")
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.6))
                     .lineSpacing(3)
@@ -6196,7 +6213,6 @@ struct PlansSheetView: View {
 
             sportGridSection
             if wcActive { wcRowSection }
-            bundleSection
             includedFreeSection
             if !signedIn { createAccountSection }
             legalFooter
@@ -6205,7 +6221,8 @@ struct PlansSheetView: View {
 
     private var sportGridSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Single sports", sub: "One Winners board, \(GaryPricing.single) a month")
+            HubSectionHeader(eyebrow: "Pick your sports",
+                             sub: "One \(GaryPricing.single)/mo · two \(GaryPricing.twoSport) · three \(GaryPricing.threeSport) — bundles itself")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(orderedSports, id: \.self) { sportCard($0) }
             }
@@ -6231,66 +6248,9 @@ struct PlansSheetView: View {
     /// The bundle sits between $9.99 single and $34.99 All-Access as the smart
     /// middle. Picking 2–3 chips makes the bundle the active selection so the
     /// one CTA carries it; dropping below two reverts to All-Access.
-    private var bundleSection: some View {
-        let ready = bundlePick.count >= 2
-        let bundleSelected = selection == .bundle && ready
-        return VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Bundles", sub: "Two sports \(GaryPricing.twoSport)/mo · three \(GaryPricing.threeSport)/mo")
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 0) {
-                    ForEach(Self.sports, id: \.self) { lg in
-                        let on = bundlePick.contains(lg)
-                        Button { toggleBundle(lg) } label: {
-                            Text(lg)
-                                .font(GaryFonts.mono(11.5, bold: on)).tracking(0.4)
-                                .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.4))
-                                .frame(maxWidth: .infinity, minHeight: 46)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(lg)" + (on ? ", in bundle" : ""))
-                        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
-                    }
-                }
-                .padding(.horizontal, 6)
-                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                Button { if ready { select(.bundle, keepBundle: true) } } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(bundleSelected ? GaryColors.gold : .white.opacity(0.45))
-                            .frame(width: 20)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("BUNDLE")
-                                .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
-                                .foregroundStyle(.white.opacity(0.9))
-                            Text(ready ? bundlePick.sorted().joined(separator: " · ")
-                                 : "Pick two or three sports above")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.45))
-                        }
-                        Spacer(minLength: 8)
-                        if ready {
-                            Text(bundlePick.count == 3 ? GaryPricing.threeSport : GaryPricing.twoSport)
-                                .font(GaryFonts.mono(13, bold: true))
-                                .foregroundStyle(GaryColors.gold)
-                        }
-                        miniMark(bundleSelected)
-                    }
-                    .padding(.vertical, 12).padding(.horizontal, 14)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!ready)
-            }
-            .background(cardBackground(selected: bundleSelected))
-            .padding(.horizontal, 16)
-        }
-    }
-
     private var includedFreeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Free, always", sub: "The research is the resource — open to everyone")
+            HubSectionHeader(eyebrow: "Free, always", sub: "")
             VStack(spacing: 0) {
                 infoRow(icon: "list.bullet.rectangle", title: "THE FULL SLATE",
                         sub: "Every game's pick + the reasoning, every sport", tag: "FREE")
@@ -6388,7 +6348,7 @@ struct PlansSheetView: View {
     }
 
     private var ctaEnabled: Bool {
-        if case .bundle = selection { return bundlePick.count >= 2 }
+        if case .sports = selection { return !pickedSports.isEmpty }
         return true
     }
     /// The arrow-up-right "continues in the browser" affordance only applies
@@ -6399,20 +6359,22 @@ struct PlansSheetView: View {
         if !signedIn {
             switch selection {
             case .allAccess, .allAccessAnnual: return "SIGN IN TO START YOUR TRIAL"
-            case .worldCup:       return "SIGN IN TO PRE-ORDER"
-            case .single(let lg): return "SIGN IN TO START \(lg) PASS"
-            case .bundle:         return bundlePick.count >= 2 ? "SIGN IN TO START BUNDLE" : "PICK TWO OR THREE SPORTS"
+            case .worldCup: return "SIGN IN TO PRE-ORDER"
+            case .sports:
+                return pickedSports.isEmpty ? "PICK A SPORT" : "SIGN IN TO START"
             }
         }
         switch selection {
         case .allAccess:       return "START \(GaryPricing.trialDays)-DAY FREE TRIAL"
         case .allAccessAnnual: return "START FREE TRIAL — \(GaryPricing.allAccessAnnual)/YR"
         case .worldCup:       return "PRE-ORDER WORLD CUP PASS"
-        case .single(let lg): return "START \(lg) PASS — \(GaryPricing.single)/MO"
-        case .bundle:
-            if bundlePick.count < 2 { return "PICK TWO OR THREE SPORTS" }
-            return bundlePick.count == 3 ? "START THREE-SPORT BUNDLE — \(GaryPricing.threeSport)/MO"
-                                         : "START TWO-SPORT BUNDLE — \(GaryPricing.twoSport)/MO"
+        case .sports:
+            switch pickedSports.count {
+            case 0:  return "PICK A SPORT"
+            case 1:  return "START \(pickedSports.first!) PASS — \(GaryPricing.single)/MO"
+            case 2:  return "START 2 SPORTS — \(GaryPricing.twoSport)/MO"
+            default: return "START 3 SPORTS — \(GaryPricing.threeSport)/MO"
+            }
         }
     }
 
@@ -6426,14 +6388,17 @@ struct PlansSheetView: View {
             return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessAnnual)/yr — \(GaryPricing.allAccessAnnualMonthly)/mo. Cancel anytime. \(tail)"
         case .worldCup:
             return "\(GaryPricing.worldCup) once. No renewal — yours for all 104 matches. \(tail)"
-        case .single(let lg):
-            return "Every \(lg) play Gary backs — the Winners board. \(GaryPricing.single)/mo, cancel anytime. \(tail)"
-        case .bundle:
-            if bundlePick.count < 2 {
-                return "Any two sports \(GaryPricing.twoSport)/mo · any three \(GaryPricing.threeSport)/mo. Cancel anytime."
+        case .sports:
+            if capHint {
+                return "Three is the max — All-Access covers all 7 boards for \(GaryPricing.allAccessMonthly)/mo."
             }
-            let p = bundlePick.count == 3 ? GaryPricing.threeSport : GaryPricing.twoSport
-            return "\(bundlePick.sorted().joined(separator: " · ")) — \(p)/mo. Cancel anytime. \(tail)"
+            switch pickedSports.count {
+            case 0:  return "Tap a sport. A second or third bundles automatically."
+            case 1:  return "Every \(pickedSports.first!) play Gary backs. \(GaryPricing.single)/mo, cancel anytime. \(tail)"
+            default:
+                let p = pickedSports.count == 3 ? GaryPricing.threeSport : GaryPricing.twoSport
+                return "\(pickedSports.sorted().joined(separator: " · ")) — \(p)/mo. Cancel anytime. \(tail)"
+            }
         }
     }
 
@@ -6442,34 +6407,49 @@ struct PlansSheetView: View {
         case .allAccess:       onSelect("ALL")
         case .allAccessAnnual: onSelect("ALL_ANNUAL")
         case .worldCup:       onSelect("WC")
-        case .single(let lg): onSelect(lg)
-        case .bundle:
-            guard bundlePick.count >= 2 else { return }
-            onBundle(Array(bundlePick))
+        case .sports:
+            switch pickedSports.count {
+            case 0:  return
+            case 1:  onSelect(pickedSports.first!)
+            default: onBundle(Array(pickedSports))
+            }
         }
     }
 
     // MARK: Selection helpers
 
-    private func select(_ s: PlanSelection, keepBundle: Bool = false) {
+    private func select(_ s: PlanSelection) {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
             selection = s
-            if !keepBundle { bundlePick.removeAll() }   // one thing selected at a time
+            if s != .sports { pickedSports.removeAll(); capHint = false }
         }
         switch s {
         case .allAccess:       SupabaseAPI.logEvent("plan_selected", ["plan": "all_access", "billing": "monthly"])
         case .allAccessAnnual: SupabaseAPI.logEvent("plan_selected", ["plan": "all_access", "billing": "annual"])
-        case .single(let lg): SupabaseAPI.logEvent("plan_selected", ["plan": "single", "sport": lg, "billing": "monthly"])
         case .worldCup:       SupabaseAPI.logEvent("plan_selected", ["plan": "world_cup", "billing": "one_time"])
-        case .bundle:         break   // bundle fires on its own actionable tap
+        case .sports:         break   // logged in toggleSport with the actual sports
         }
     }
 
-    private func toggleBundle(_ lg: String) {
+    private func toggleSport(_ lg: String) {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
-            if bundlePick.contains(lg) { bundlePick.remove(lg) }
-            else if bundlePick.count < 3 { bundlePick.insert(lg) }
-            selection = bundlePick.count >= 2 ? .bundle : .allAccess
+            if pickedSports.contains(lg) {
+                pickedSports.remove(lg)
+                capHint = false
+            } else if pickedSports.count < 3 {
+                pickedSports.insert(lg)
+                capHint = false
+            } else {
+                // A 4th board costs more than all 7 — say so instead of adding.
+                capHint = true
+            }
+            selection = pickedSports.isEmpty ? .allAccess : .sports
+        }
+        if !pickedSports.isEmpty {
+            SupabaseAPI.logEvent("plan_selected", [
+                "plan": pickedSports.count == 1 ? "single" : "bundle",
+                "sport": pickedSports.sorted().joined(separator: ","), "billing": "monthly",
+            ])
         }
     }
 
@@ -6519,11 +6499,13 @@ struct PlansSheetView: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// A compact selectable single-sport tile for the all-plans grid.
+    /// A multi-select sport tile. The sub carries the board's last-30 record
+    /// — proof, not a label repeated seven times. Price lives once, in the
+    /// section header and the CTA.
     private func sportCard(_ lg: String) -> some View {
-        let on = selection == .single(lg)
+        let on = pickedSports.contains(lg)
         let color = lg == "MLB" ? GaryColors.mlbGrass : Sport.from(league: lg).accentColor
-        return Button { select(.single(lg)) } label: {
+        return Button { toggleSport(lg) } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     HStack(spacing: 6) {
@@ -6534,10 +6516,13 @@ struct PlansSheetView: View {
                     Spacer()
                     miniMark(on)
                 }
-                Text("Winners board").font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.45))
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(GaryPricing.single).font(GaryFonts.mono(13, bold: true)).foregroundStyle(GaryColors.gold)
-                    Text("/mo").font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.35))
+                if let r = sportRecords[lg], r.w + r.l > 0 {
+                    Text("\(r.w)–\(r.l) last 30")
+                        .font(GaryFonts.mono(10.5, bold: true))
+                        .foregroundStyle(r.w >= r.l ? Self.winColor.opacity(0.85) : .white.opacity(0.5))
+                } else {
+                    Text("Winners board")
+                        .font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.45))
                 }
             }
             .padding(13)
@@ -6547,7 +6532,7 @@ struct PlansSheetView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(lg) pass. \(GaryPricing.single) a month. The Winners board." + (on ? " Selected." : ""))
+        .accessibilityLabel("\(lg) Winners board." + (on ? " Selected." : " Tap to add."))
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -6623,10 +6608,10 @@ struct PlansSheetView: View {
         let cutoff30 = Calendar.current.date(byAdding: .day, value: -30, to: Date())
             .map { fmt.string(from: $0) } ?? ""
 
-        async let gamesTask = try? SupabaseAPI.fetchAllGameResults(since: nil)
-        async let propsTask = try? SupabaseAPI.fetchPropResults(since: nil)
-        let games = (await gamesTask) ?? []
-        let props = (await propsTask) ?? []
+        // GAME picks only — the same ledger the website's THE RECORD shows.
+        // (Props graded separately; mixing them here would contradict the
+        // public number on betwithgary.ai.)
+        let games = (try? await SupabaseAPI.fetchAllGameResults(since: nil)) ?? []
 
         func norm(_ s: String?) -> String? {
             switch s?.lowercased() {
@@ -6638,8 +6623,16 @@ struct PlansSheetView: View {
         // (date, W/L) for every graded pick, both ledgers merged.
         var marks: [(date: String, mark: String)] = []
         for g in games { if let m = norm(g.result), let d = g.game_date { marks.append((d, m)) } }
-        for pr in props { if let m = norm(pr.result), let d = pr.game_date { marks.append((d, m)) } }
         guard !marks.isEmpty else { return }
+
+        // Per-sport last-30 — the sport tiles carry each board's record.
+        var perSport: [String: (w: Int, l: Int)] = [:]
+        for g in games where (g.game_date ?? "") >= cutoff30 {
+            guard let m = norm(g.result), let lg = g.effectiveLeague?.uppercased() else { continue }
+            var r = perSport[lg] ?? (0, 0)
+            if m == "W" { r.w += 1 } else { r.l += 1 }
+            perSport[lg] = r
+        }
 
         let allW = marks.filter { $0.mark == "W" }.count
         let allL = marks.count - allW
@@ -6665,7 +6658,10 @@ struct PlansSheetView: View {
         let stats = LedgerStats(allW: allW, allL: allL, last30W: l30W, last30L: l30L,
                                 streakChar: streakChar, streakLen: streakLen)
         await MainActor.run {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { ledger = stats }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
+                ledger = stats
+                sportRecords = perSport
+            }
         }
     }
 }
@@ -11306,6 +11302,9 @@ struct CompactPickRow: View {
     /// Live/final state for THIS matchup (shared cache; nil when scheduled
     /// or unknown). Only consulted when the card has no settled result.
     @ObservedObject private var liveCache = LiveScoreCache.shared
+    /// One-tap share from the card FRONT — renders the Stack Row share card
+    /// (story + square) and presents the system sheet.
+    @State private var shareItem: PickShareItem? = nil
     private var liveStatus: LiveScore? {
         guard liveInSlot, resolvedResult == nil else { return nil }
         return liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
@@ -11438,46 +11437,16 @@ struct CompactPickRow: View {
                     }
                 }
 
-                // Matchup hero — serif "Away @ Home", picked side bright, the
-                // other dimmed. The "@" stays neutral so the line reads as a
-                // matchup, not a single name.
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    if let s = awaySeedTag {
-                        Text(s)
-                            .font(GaryFonts.mono(11, bold: true))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                    Text(awayName)
-                        .font(GaryFonts.text(21, awayIsPicked ? .medium : .regular))
-                        .foregroundStyle(.white.opacity(awayIsPicked ? 1.0 : 0.42))
-                    Text("@")
-                        .font(GaryFonts.text(13))
-                        .foregroundStyle(.white.opacity(0.3))
-                    if let s = homeSeedTag {
-                        Text(s)
-                            .font(GaryFonts.mono(11, bold: true))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                    Text(homeName)
-                        .font(GaryFonts.text(21, homeIsPicked ? .medium : .regular))
-                        .foregroundStyle(.white.opacity(homeIsPicked ? 1.0 : 0.42))
-                    Spacer(minLength: 8)
-                    // Flip affordance riding the row's empty right side — adds
-                    // no vertical space, never moves the names.
-                    if showTakeAffordance {
-                        HStack(spacing: 3) {
-                            Text("Gary's Take")
-                                .font(.system(size: 10.5, weight: .semibold))
-                                .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
-                        }
-                        .layoutPriority(1)
-                    }
+                // Matchup hero — STACKED team rows (June 2026 "Stack" front,
+                // mock #25: scoreboard convention, away on top). Each team
+                // gets a whole row: color chip + name, picked side lit, the
+                // other dimmed. The share card is the same object re-framed.
+                VStack(alignment: .leading, spacing: 8) {
+                    matchupRow(name: awayName, team: pick.awayTeam ?? awayName,
+                               seed: awaySeedTag, picked: awayIsPicked)
+                    matchupRow(name: homeName, team: pick.homeTeam ?? homeName,
+                               seed: homeSeedTag, picked: homeIsPicked)
                 }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
 
                 // Bottom — the PICK (abbreviated, gold) stretched full-width: this card's product.
                 // Gold marks exactly what Gary says; the odds stand aside in grey
@@ -11508,6 +11477,35 @@ struct CompactPickRow: View {
                         )
                 )
 
+                // Affordance row — share is ONE tap from the front (the card
+                // is the product; the export is the point). Gary's Take keeps
+                // the right edge it has always owned.
+                if showTakeAffordance {
+                    HStack {
+                        Button {
+                            let images = renderPickShareImages(pick: pick, gameResult: displayResult)
+                            if !images.isEmpty { shareItem = PickShareItem(images: images) }
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .frame(width: 28, height: 20, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Share this pick")
+                        Spacer()
+                        HStack(spacing: 3) {
+                            Text("Gary's Take")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                        }
+                    }
+                }
+
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -11526,6 +11524,27 @@ struct CompactPickRow: View {
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         )
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
+        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
+    }
+
+    /// One stacked matchup row: team-color chip + (seed) + name. Picked side
+    /// carries full white + a brighter chip; the other side dims, mirroring
+    /// the old one-line treatment's 1.0 / 0.42 split.
+    private func matchupRow(name: String, team: String, seed: String?, picked: Bool) -> some View {
+        HStack(spacing: 9) {
+            TeamColorChip(team: team, league: pick.league, size: 22, dimmed: !picked)
+            if let seed {
+                Text(seed)
+                    .font(GaryFonts.mono(11, bold: true))
+                    .foregroundStyle(GaryColors.gold)
+            }
+            Text(name)
+                .font(GaryFonts.text(17, picked ? .semibold : .regular))
+                .foregroundStyle(.white.opacity(picked ? 1.0 : 0.42))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+        }
     }
 }
 
@@ -12510,6 +12529,192 @@ struct ShareCardView: View {
     }
 }
 
+/// "H+R+RBI OVER 0.5" — market (abbreviated exactly like the prop chip)
+/// + side + line, for the prop share card's hero.
+func sharePropMarket(_ prop: PropPick) -> String {
+    var words = Formatters.propDisplay(prop.prop, league: prop.effectiveLeague)
+        .split(separator: " ").map(String.init)
+    if let last = words.last, Double(last) != nil { words.removeLast() }
+    let name = words.joined(separator: " ").uppercased()
+    let market = CompactPropRow.marketAbbrevShared[name] ?? name
+    var call = (prop.bet ?? "").uppercased()
+    if let raw = prop.line?.trimmingCharacters(in: .whitespaces), !raw.isEmpty {
+        let lineText: String
+        if let d = Double(raw) {
+            lineText = d.truncatingRemainder(dividingBy: 1) == 0
+                ? String(format: "%g", d) : String(format: "%.1f", d)
+        } else { lineText = raw }
+        call = call.isEmpty ? lineText : "\(call) \(lineText)"
+    }
+    return call.isEmpty ? market : "\(market) \(call)"
+}
+
+/// The prop sibling of ShareCardView — same sport-skin card, but the stacked
+/// team rows become ONE player row (chip + name + team), and the hero is the
+/// market + call. Same canvas, footer, and CASHED/LOST stamps.
+struct SharePropCardView: View {
+    let prop: PropPick
+    var gameResult: String? = nil
+    var square: Bool = false
+
+    private var sport: Sport { Sport.from(league: prop.effectiveLeague) }
+    private var field: (top: Color, bottom: Color) { shareFieldColors(for: sport) }
+    private var tier: String? { prop.confidence.map { convictionTier(min(max($0, 0), 1)) } }
+    private var stamp: (text: String, color: Color)? {
+        switch gameResult?.lowercased() {
+        case "won":  return ("CASHED", GaryColors.gold)
+        case "lost": return ("LOST", Color(hex: "#E5484D"))
+        default:     return nil
+        }
+    }
+    private var teamShort: String {
+        Formatters.shortTeamName(prop.team, league: prop.effectiveLeague)
+    }
+    private var headerTime: String {
+        let t = Formatters.formatCommenceTime(prop.commence_time)
+        guard !t.isEmpty else { return GaryPageHeader<EmptyView>.shortDateLabel().uppercased() }
+        if let d = parseISO8601(prop.commence_time ?? ""), Calendar.current.isDateInToday(d) {
+            return "TONIGHT — \(t.uppercased())"
+        }
+        return t.uppercased()
+    }
+
+    private var cardWidth: CGFloat { square ? 432 : 448 }
+
+    var body: some View {
+        ZStack {
+            RadialGradient(colors: [Color(hex: "#151311"), Color(hex: "#0B0A09")],
+                           center: .top, startRadius: 60, endRadius: square ? 640 : 1000)
+
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image("GaryIconBG")
+                        .resizable().scaledToFit()
+                        .frame(width: square ? 38 : 46, height: square ? 38 : 46)
+                    Text("GARY A.I.")
+                        .font(GaryFonts.mono(square ? 15 : 17))
+                        .tracking(1.5)
+                        .foregroundStyle(GaryColors.gold)
+                }
+
+                Spacer(minLength: 0)
+                propCard
+                Spacer(minLength: 0)
+
+                HStack {
+                    Text("betwithgary.ai")
+                        .font(GaryFonts.mono(12.5))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Spacer()
+                    Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
+                        .font(GaryFonts.mono(11.5))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                .frame(width: cardWidth)
+            }
+            .padding(.vertical, square ? 26 : 44)
+
+            if let stamp {
+                Text(stamp.text)
+                    .font(GaryFonts.mono(square ? 38 : 46, bold: true)).tracking(4)
+                    .foregroundStyle(stamp.color.opacity(0.92))
+                    .padding(.horizontal, 22).padding(.vertical, 10)
+                    .overlay(Rectangle().stroke(stamp.color.opacity(0.85), lineWidth: 3))
+                    .rotationEffect(.degrees(-12))
+            }
+        }
+        .frame(width: 540, height: square ? 540 : 960)
+    }
+
+    private var propCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(headerTime)
+                    .font(GaryFonts.mono(13.5)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.78))
+                Spacer()
+                Text((prop.effectiveLeague ?? "").uppercased() + " · PROP")
+                    .font(GaryFonts.mono(12.5, bold: true)).tracking(1.5)
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+
+            HStack(spacing: 14) {
+                TeamColorChip(team: prop.team ?? "", league: prop.effectiveLeague,
+                              size: square ? 40 : 46)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(prop.player ?? prop.team ?? "")
+                        .font(GaryFonts.text(square ? 22 : 25, .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    Text(teamShort.uppercased())
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.top, square ? 18 : 24)
+
+            Rectangle()
+                .fill(.white.opacity(0.20))
+                .frame(height: 1.2)
+                .padding(.vertical, square ? 16 : 22)
+
+            Text("GARY'S PICK")
+                .font(GaryFonts.mono(12.5, bold: true)).tracking(2.6)
+                .foregroundStyle(GaryColors.gold)
+
+            Text(sharePropMarket(prop))
+                .font(GaryFonts.display(square ? 42 : 50))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.4)
+                .padding(.top, 6)
+
+            HStack(spacing: 14) {
+                Text(Formatters.americanOdds(prop.odds))
+                    .font(GaryFonts.display(square ? 26 : 30))
+                    .foregroundStyle(.white.opacity(0.85))
+                if let tier {
+                    Text(tier)
+                        .font(GaryFonts.mono(13, bold: true)).tracking(1.2)
+                        .foregroundStyle(GaryColors.gold)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.65), lineWidth: 1.2))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.top, square ? 8 : 10)
+        }
+        .padding(square ? 26 : 30)
+        .frame(width: cardWidth)
+        .background(
+            ZStack {
+                LinearGradient(colors: [field.top, field.bottom],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                SportSeamTexture(sport: sport)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(.white.opacity(0.15), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.55), radius: 26, y: 14)
+    }
+}
+
+/// Renders both prop share formats (9:16 story + square) at 2x. Main-thread
+/// only (ImageRenderer); called from button actions.
+@MainActor
+func renderPropShareImages(prop: PropPick, gameResult: String?) -> [UIImage] {
+    [false, true].compactMap { square in
+        let renderer = ImageRenderer(content: SharePropCardView(prop: prop, gameResult: gameResult, square: square))
+        renderer.scale = 2
+        return renderer.uiImage
+    }
+}
+
 #if DEBUG
 // MARK: Share card previews — one per sport skin + result states
 
@@ -12555,6 +12760,36 @@ private func sharePreviewPick(league: String, away: String, home: String,
         away: "Washington Nationals", home: "San Francisco Giants",
         pickText: "Nationals ML -102", conf: 0.74),
         gameResult: "won", square: true)
+}
+
+private func propPreviewSample() -> PropPick {
+    PropPick(player: "Matt Chapman", team: "San Francisco Giants",
+             prop: "Hits + Runs + RBI", bet: "Over", odds: "+110",
+             confidence: 0.71, analysis: nil, league: "MLB", sport: nil,
+             line: "0.5", time: nil, commence_time: "2026-06-11T23:05:00Z",
+             position: "3B", tdCategory: nil,
+             matchup: "Washington Nationals @ San Francisco Giants", key_stats: nil)
+}
+
+#Preview("Share — MLB prop story") {
+    SharePropCardView(prop: propPreviewSample())
+}
+
+#Preview("Share — prop square · LOST") {
+    SharePropCardView(prop: propPreviewSample(), gameResult: "lost", square: true)
+}
+
+#Preview("Pick Card — stacked front (in-app)") {
+    VStack(spacing: 14) {
+        CompactPickRow(pick: sharePreviewPick(league: "MLB",
+            away: "Washington Nationals", home: "San Francisco Giants",
+            pickText: "Nationals ML -102", conf: 0.74))
+        CompactPickRow(pick: sharePreviewPick(league: "NBA",
+            away: "New York Knicks", home: "Oklahoma City Thunder",
+            pickText: "Knicks +6.5 -110", conf: 0.83))
+    }
+    .padding(16)
+    .background(Color(hex: "#0C0B0A"))
 }
 #endif
 
@@ -13512,411 +13747,6 @@ struct PropCardMobile: View {
     }
 }
 
-// MARK: - Player Initials Avatar
-//
-// Circular avatar used in PlayerStackCard. Initials-only by design — official
-// player headshots from NBA / MLB / NHL are licensed images we'd need rights
-// for in a commercial app. Stylized initials sidestep that entirely and let
-// us control the look uniformly across sports.
-
-struct PlayerInitialsAvatar: View {
-    let name: String?
-    let sport: Sport
-    let confidence: Double?
-    var size: CGFloat = 72
-
-    private var initials: String {
-        guard let name, !name.isEmpty else { return "?" }
-        let parts = name.split(separator: " ").filter { !$0.isEmpty }
-        if parts.count >= 2 {
-            return String(parts.first!.first!) + String(parts.last!.first!)
-        }
-        return String(parts.first?.first ?? "?")
-    }
-
-    /// Hot picks (>=85% confidence) get a gold halo to draw the eye.
-    private var hasHalo: Bool {
-        (confidence ?? 0) >= 0.85
-    }
-
-    var body: some View {
-        ZStack {
-            // Halo glow for high-confidence picks
-            if hasHalo {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [GaryColors.gold.opacity(0.45), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: size * 0.75
-                        )
-                    )
-                    .frame(width: size * 1.6, height: size * 1.6)
-                    .blur(radius: 8)
-            }
-
-            // Sport-accent ring
-            Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: [sport.accentColor.opacity(0.85), sport.accentColor.opacity(0.35)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
-                .frame(width: size, height: size)
-
-            // Dark glass body
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(hex: "#1F1B16"),
-                            Color(hex: "#0F0D0A")
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(width: size - 4, height: size - 4)
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-                )
-
-            // Initials
-            Text(initials)
-                .font(.system(size: size * 0.42, weight: .black))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [GaryColors.lightGold, GaryColors.gold],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .tracking(-0.5)
-
-            // Sport icon dot, lower-right
-            ZStack {
-                Circle()
-                    .fill(Color(hex: "#0A0907"))
-                    .frame(width: size * 0.32, height: size * 0.32)
-                    .overlay(
-                        Circle()
-                            .stroke(sport.accentColor.opacity(0.35), lineWidth: 1)
-                    )
-                Image(systemName: sport.icon)
-                    .font(.system(size: size * 0.16, weight: .bold))
-                    .foregroundStyle(sport.accentColor)
-            }
-            .offset(x: size * 0.30, y: size * 0.30)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Player Stack Card (Featured prop layout)
-//
-// Vertical card that gives each prop more visual weight than CompactPropRow.
-// Toggleable in GaryPropsView header; both card types render the same PropPick
-// data so we can A/B without backend changes.
-
-struct PlayerStackCard: View {
-    let prop: PropPick
-    var gameResult: String? = nil
-
-    private var sport: Sport { Sport.from(league: prop.effectiveLeague) }
-    private var accentColor: Color { sport.accentColor }
-
-    private var confidencePct: Int {
-        Int(round((prop.confidence ?? 0.72) * 100))
-    }
-    private var confidenceFill: CGFloat {
-        CGFloat(max(0.15, min(1.0, prop.confidence ?? 0.72)))
-    }
-
-    private var betLabel: String {
-        guard let bet = prop.bet?.lowercased() else { return "—" }
-        return bet.uppercased()
-    }
-    private var betColor: Color {
-        guard let bet = prop.bet?.lowercased() else { return .white }
-        if bet == "over" || bet == "yes" { return Color(hex: "#22C55E") }
-        return Color(hex: "#EF4444")
-    }
-
-    /// Prop type without the trailing line value — "total_bases 1.5" → "Total Bases"
-    private var propTypeDisplay: String {
-        let raw = prop.prop ?? ""
-        let typeOnly = raw
-            .replacingOccurrences(of: #"\s+[\d.]+$"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: "_", with: " ")
-            .trimmingCharacters(in: .whitespaces)
-        return typeOnly
-            .split(separator: " ")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
-    }
-
-    private var lineDisplay: String {
-        if let line = prop.line, !line.isEmpty { return line }
-        // Fallback — try to extract from prop string
-        if let match = (prop.prop ?? "").range(of: #"[\d.]+$"#, options: .regularExpression) {
-            return String((prop.prop ?? "")[match])
-        }
-        return ""
-    }
-
-    private var oddsDisplay: String {
-        guard let raw = prop.odds, !raw.isEmpty else { return "" }
-        if raw.hasPrefix("-") || raw.hasPrefix("+") { return raw }
-        if let n = Int(raw), n > 0 { return "+\(n)" }
-        return raw
-    }
-
-    private var formattedTime: String {
-        if let iso = prop.commence_time, !iso.isEmpty,
-           let d = parseISO8601(iso) {
-            return Formatters.dayTimeFormatterEST.string(from: d)
-        }
-        return prop.time ?? ""
-    }
-
-    private var resolvedResult: String? {
-        guard let r = gameResult?.lowercased(), !r.isEmpty else { return nil }
-        return r
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // ── Header strip: sport tag + matchup + time ──
-            HStack(spacing: 8) {
-                Text((prop.effectiveLeague ?? "").uppercased())
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(0.8)
-                    .foregroundStyle(accentColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule().fill(accentColor.opacity(0.14))
-                    )
-
-                if let matchup = prop.matchup, !matchup.isEmpty {
-                    Text(matchup)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 0)
-
-                if !formattedTime.isEmpty {
-                    Text(formattedTime)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                }
-            }
-
-            // ── Hero row: avatar + player meta ──
-            HStack(alignment: .center, spacing: 14) {
-                PlayerInitialsAvatar(
-                    name: prop.player,
-                    sport: sport,
-                    confidence: prop.confidence,
-                    size: 64
-                )
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(prop.player ?? "Unknown Player")
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-
-                    HStack(spacing: 6) {
-                        if let team = prop.team, !team.isEmpty {
-                            Text(team)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
-
-                        Text("·")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.3))
-
-                        Text(propTypeDisplay)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(accentColor.opacity(0.85))
-                    }
-                }
-
-                Spacer(minLength: 0)
-            }
-
-            // ── Pick block ──
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    // Bet pill
-                    Text(betLabel)
-                        .font(.system(size: 13, weight: .heavy))
-                        .tracking(0.5)
-                        .foregroundStyle(betColor)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule().fill(betColor.opacity(0.14))
-                        )
-                        .overlay(
-                            Capsule().stroke(betColor.opacity(0.35), lineWidth: 0.5)
-                        )
-
-                    // Line
-                    Text(lineDisplay)
-                        .font(.system(size: 22, weight: .black))
-                        .foregroundStyle(.white)
-                        .tracking(-0.5)
-
-                    Spacer()
-
-                    // Odds
-                    if !oddsDisplay.isEmpty {
-                        Text(oddsDisplay)
-                            .font(GaryFonts.mono(14, bold: true))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                }
-
-                // Confidence bar
-                HStack(spacing: 8) {
-                    Text("CONFIDENCE")
-                        .font(.system(size: 9, weight: .heavy))
-                        .tracking(1.0)
-                        .foregroundStyle(.white.opacity(0.35))
-
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(.white.opacity(0.06))
-                                .frame(height: 4)
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [GaryColors.gold, GaryColors.lightGold],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: geo.size.width * confidenceFill, height: 4)
-                        }
-                    }
-                    .frame(height: 4)
-
-                    Text("\(confidencePct)%")
-                        .font(GaryFonts.mono(11, bold: true))
-                        .foregroundStyle(GaryColors.gold)
-                        .frame(width: 36, alignment: .trailing)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.025))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(.white.opacity(0.04), lineWidth: 0.5)
-                    )
-            )
-
-            // ── Insight strip: key_stats from the agentic pipeline ──
-            if let stats = prop.key_stats, !stats.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(stats.prefix(3), id: \.self) { stat in
-                        HStack(alignment: .top, spacing: 8) {
-                            Circle()
-                                .fill(accentColor.opacity(0.7))
-                                .frame(width: 4, height: 4)
-                                .offset(y: 5)
-                            Text(stat)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.78))
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .padding(.top, 2)
-            } else {
-                // Legacy picks without key_stats — invite tap
-                Text("Tap for analysis →")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(GaryColors.gold.opacity(0.7))
-                    .padding(.top, 2)
-            }
-        }
-        .padding(14)
-        .background(
-            ZStack {
-                // Base
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(hex: "#1C1A1A"))
-
-                // Subtle accent gradient on left edge
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [accentColor.opacity(0.12), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: 80)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .mask(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    )
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            accentColor.opacity(0.45),
-                            accentColor.opacity(0.10)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.8
-                )
-        )
-        .overlay(alignment: .topTrailing) {
-            // Result stamp if the game has been graded
-            if let res = resolvedResult {
-                Text(res == "won" ? "W" : res == "push" ? "P" : "L")
-                    .font(.system(size: 11, weight: .black))
-                    .foregroundStyle(.black)
-                    .frame(width: 22, height: 22)
-                    .background(
-                        Circle().fill(
-                            res == "won" ? GaryColors.gold :
-                            res == "push" ? Color.yellow :
-                            Color(hex: "#6A6A70")
-                        )
-                    )
-                    .offset(x: -10, y: 10)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(prop.effectiveLeague ?? "") prop: \(prop.player ?? "")  \(betLabel) \(propTypeDisplay) \(lineDisplay)")
-    }
-}
-
 // MARK: - Angular Card Shape (Trading-Card silhouette with corner cut)
 //
 // Distinctive PropCardSlate silhouette — standard rounded rect with the
@@ -13947,7 +13777,7 @@ struct AngularCardShape: Shape {
 // MARK: - Prop Card Slate (Sharp, Portrait, Trading-Card Energy)
 //
 // Narrower portrait card optimized to fit two side-by-side per game in the
-// swipe-paged featured view. Distinct aesthetic from PlayerStackCard:
+// swipe-paged featured view:
 //   - Square initials frame (architectural, not friendly)
 //   - Massive line value as the hero element
 //   - Pip-based confidence (●●●○)
@@ -16804,7 +16634,8 @@ struct PropsHubView: View {
                         .quantPanel().padding(.horizontal, 16)
                 }
                 if !streakMatches.isEmpty {
-                    HubSectionHeader(eyebrow: "Streaks", sub: "Live runs")
+                    HubSectionHeader(eyebrow: "Streaks",
+                                     sub: "\(streakMatches.count) live run\(streakMatches.count == 1 ? "" : "s")")
                     VStack(spacing: 0) {
                         ForEach(Array(streakMatches.enumerated()), id: \.offset) { i, r in
                             searchAuxRow(title: r.subject ?? "", sub: r.detail ?? "", trail: r.next_game ?? "",
@@ -16905,12 +16736,18 @@ struct PropsHubView: View {
     /// page. Rows open the full edge with its verdict + grader's note.
     @ViewBuilder private var gradedReceipts: some View {
         if !ydaySignals.isEmpty {
+            // The tally comes from the remote aggregate; on a transient
+            // miss we derive it from the same rows we're about to render —
+            // the real stat beats a slogan either way.
             HubSectionHeader(
                 eyebrow: "Yesterday · graded",
-                sub: hitRate.map { r in
-                    let pct = r.graded > 0 ? Int((Double(r.hit) / Double(r.graded) * 100).rounded()) : 0
-                    return "\(r.hit) of \(r.graded) hit · \(pct)%"
-                } ?? "Every edge, graded the morning after")
+                sub: {
+                    let (hit, graded) = hitRate
+                        ?? (ydaySignals.filter { $0.result == "hit" }.count, ydaySignals.count)
+                    guard graded > 0 else { return "" }
+                    let pct = Int((Double(hit) / Double(graded) * 100).rounded())
+                    return "\(hit) of \(graded) hit · \(pct)%"
+                }())
             VStack(spacing: 0) {
                 ForEach(Array(ydaySignals.prefix(12).enumerated()), id: \.element.id) { i, s in
                     Button { selectedSignal = s } label: {
@@ -17733,6 +17570,9 @@ struct CompactPropRow: View {
     /// Live/final state for THIS matchup (shared cache; nil when scheduled
     /// or unknown). Only consulted when the card has no settled result.
     @ObservedObject private var liveCache = LiveScoreCache.shared
+    /// One-tap share from the prop front — renders the prop share card
+    /// (story + square) and presents the system sheet.
+    @State private var shareItem: PickShareItem? = nil
     private var liveStatus: LiveScore? {
         guard liveInSlot, resolvedResult == nil else { return nil }
         return liveCache.status(forMatchup: prop.matchup ?? "")
@@ -17868,8 +17708,22 @@ struct CompactPropRow: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: 8)
-                    // Flip affordance riding the row's empty right side — adds
+                    // Affordances riding the row's empty right side — share is
+                    // one tap from the front, the flip keeps its corner. Adds
                     // no vertical space, never moves the name or team.
+                    Button {
+                        let images = renderPropShareImages(prop: prop, gameResult: resolvedResult)
+                        if !images.isEmpty { shareItem = PickShareItem(images: images) }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .frame(width: 24, height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share this prop pick")
+                    .layoutPriority(1)
                     HStack(spacing: 3) {
                         Text("Gary's Take")
                             .font(.system(size: 10.5, weight: .semibold))
@@ -17924,6 +17778,7 @@ struct CompactPropRow: View {
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         )
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
+        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
 }
 

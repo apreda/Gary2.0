@@ -126,6 +126,11 @@ struct GaryApp: App {
                 }
             }
             .preferredColorScheme(.dark)
+            .task {
+                #if DEBUG
+                dumpShareCardRendersIfRequested()
+                #endif
+            }
         }
     }
 }
