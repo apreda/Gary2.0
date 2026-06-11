@@ -4726,28 +4726,32 @@ struct HomeSlateSection: View {
                     Button(action: onTap) {
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
+                                // Matchup reads as WORDS (card meta-line
+                                // language), not as a mono label — the June 11
+                                // de-mud pass: mono stays for tokens and
+                                // numbers only.
                                 Text(row.title)
-                                    .font(GaryFonts.mono(13, bold: true)).tracking(0.4)
-                                    .foregroundStyle(.white.opacity(0.92))
+                                    .font(GaryFonts.text(15, .semibold))
+                                    .foregroundStyle(.white.opacity(0.94))
                                     .lineLimit(1).minimumScaleFactor(0.8)
                                 HStack(spacing: 6) {
                                     // Every row wears its league in the sport
                                     // accent — MLB included (founder's call).
                                     if let lg = row.league, !lg.isEmpty {
                                         Text(lg.uppercased())
-                                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                                             .foregroundStyle(Sport.from(league: lg).accentColor.opacity(0.95))
                                     }
                                     // The line/pick rides small here when the
                                     // time owns the right column.
                                     if row.time != nil, !row.chip.isEmpty, row.chip != "—" {
                                         Text(row.chip.uppercased())
-                                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.6)
-                                            .foregroundStyle(.white.opacity(0.55))
+                                            .font(GaryFonts.mono(10))
+                                            .foregroundStyle(.white.opacity(0.5))
                                     }
                                     if !row.sub.isEmpty {
                                         Text(row.sub)
-                                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                                            .font(GaryFonts.mono(9.5))
                                             .foregroundStyle(subColor(row.tone))
                                     }
                                 }
@@ -4755,10 +4759,10 @@ struct HomeSlateSection: View {
                             }
                             Spacer(minLength: 8)
                             if let t = row.time, !t.isEmpty {
-                                // Start time, big enough to actually read.
+                                // Start time, readable but no longer shouting.
                                 Text(t)
-                                    .font(GaryFonts.mono(14, bold: true))
-                                    .foregroundStyle(.white.opacity(0.88))
+                                    .font(GaryFonts.text(13.5, .semibold))
+                                    .foregroundStyle(.white.opacity(0.75))
                                     .lineLimit(1).minimumScaleFactor(0.8)
                                     .frame(maxWidth: 150, alignment: .trailing)
                             } else {
@@ -4766,7 +4770,7 @@ struct HomeSlateSection: View {
                                 // deliver the info; dropping the container lets the
                                 // font breathe bigger).
                                 Text(row.chip.uppercased())
-                                    .font(GaryFonts.mono(15, bold: true))
+                                    .font(GaryFonts.mono(14, bold: true))
                                     .foregroundStyle(GaryColors.gold)
                                     .lineLimit(1).minimumScaleFactor(0.8)
                                     .frame(maxWidth: 150, alignment: .trailing)
@@ -5636,11 +5640,16 @@ struct PremiumPicksView: View {
                                                           showSportBadge: false,
                                                           backHeight: UIScreen.main.bounds.height * 0.68)
                                     } else {
-                                        PropSlipCard(props: group,
-                                                     resultForProp: { [settled = shelf.settled] p in
-                                                         settled ? self.propResult(for: p) : nil
-                                                     },
-                                                     resultLetterTrailing: true)
+                                        // Headline cards stacked — the slip
+                                        // retired with the June 11 redesign.
+                                        VStack(spacing: 10) {
+                                            ForEach(group) { p in
+                                                FlippablePropCard(prop: p,
+                                                                  gameResult: shelf.settled ? propResult(for: p) : nil,
+                                                                  showSportBadge: false,
+                                                                  backHeight: UIScreen.main.bounds.height * 0.68)
+                                            }
+                                        }
                                     }
                                 } else {
                                     // Blurred preview — singles and slips keep
@@ -5652,10 +5661,12 @@ struct PremiumPicksView: View {
                                                 CompactPropRow(prop: group[0], showSportBadge: false)
                                                     .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
                                             } else {
-                                                PropSlipCard(props: group,
-                                                             resultForProp: { _ in nil },
-                                                             resultLetterTrailing: true)
-                                                    .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                                VStack(spacing: 10) {
+                                                    ForEach(group) { p in
+                                                        CompactPropRow(prop: p, showSportBadge: false)
+                                                    }
+                                                }
+                                                .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
                                             }
                                             lockBadge
                                         }
@@ -11391,107 +11402,131 @@ struct CompactPickRow: View {
         return nil
     }
 
+    // MARK: Headline front (June 11 2026 — THE pick card design, everywhere)
+    //
+    // The approved share card ("09-headline-mlb-story") IS the in-app card:
+    // gold eyebrow + bear, the pick as stacked display type, sport-accent
+    // league token leading one meta line, share/tier/take footer. Settled
+    // picks wear the diagonal CASHED/LOST stamp, same as the export.
+
+    /// "TODAY'S PICK" while tonight's card is open; "GARY'S PICK" once it
+    /// settles or for any other day.
+    private var eyebrowLabel: String {
+        if displayResult != nil { return "GARY'S PICK" }
+        if let d = parseISO8601(pick.displayTime ?? ""), Calendar.current.isDateInToday(d) {
+            return "TODAY'S PICK"
+        }
+        return "GARY'S PICK"
+    }
+
+    /// Hero: the picked team's short name over the bet ("NATIONALS" /
+    /// "MONEYLINE", "KNICKS" / "+6.5"). Totals stay one line ("OVER 9.5").
+    private var heroLines: String {
+        var words = pickParts.pick.split(separator: " ").map(String.init)
+        if let i = words.firstIndex(where: { $0.uppercased() == "ML" }) { words[i] = "MONEYLINE" }
+        guard homeIsPicked || awayIsPicked else { return words.joined(separator: " ").uppercased() }
+        let pickedShort = homeIsPicked ? homeName : awayName
+        let pickedFull = homeIsPicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
+        var teamWords = Set(pickedFull.lowercased().split(separator: " ").map(String.init))
+        teamWords.formUnion(pickedShort.lowercased().split(separator: " ").map(String.init))
+        var lead = 0
+        while lead < words.count, teamWords.contains(words[lead].lowercased()) { lead += 1 }
+        let bet = words[lead...].joined(separator: " ")
+        return bet.isEmpty ? pickedShort.uppercased()
+            : "\(pickedShort.uppercased())\n\(bet.uppercased())"
+    }
+
+    /// Meta slot after the league token — opponent + time/live/final + odds.
+    /// State-aware: live games show the live line, settled show the score.
+    private var metaLine: String {
+        let opponent = homeIsPicked ? "vs \(awayName)"
+            : awayIsPicked ? "@ \(homeName)"
+            : "\(awayName) @ \(homeName)"
+        var parts = [opponent]
+        if displayResult != nil {
+            if let finalScore, !finalScore.isEmpty {
+                parts.append(finalScore)
+            } else if let ls = liveFinal, let a = ls.away_score, let h = ls.home_score {
+                parts.append("\(a)–\(h)")
+            } else {
+                parts.append("FINAL")
+            }
+        } else if let live = liveStatus, live.isLive || live.isFinal {
+            // The footer strip carries the live/final state.
+        } else if !formattedTime.isEmpty {
+            parts.append(formattedTime)
+        }
+        if !pickParts.odds.isEmpty { parts.append(pickParts.odds) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Footer's gold state slot — the live line while the game runs, the
+    /// final board before grading lands. Nil keeps the footer slim.
+    private var footerStateText: String? {
+        guard displayResult == nil, let live = liveStatus else { return nil }
+        if live.isLive { return liveSlotText(live, label: "LIVE") }
+        if live.isFinal { return liveSlotText(live, label: "FINAL") }
+        return nil
+    }
+
+    private var tierLabel: String? {
+        pick.confidence.map { convictionTier(min(max($0, 0), 1)) }
+    }
+
     var body: some View {
         ZStack {
-            VStack(alignment: .leading, spacing: 11) {
-                // Eyebrow row — gold mono significance (or sport accent dot) + time.
-                HStack(spacing: 8) {
-                    Image(systemName: sport.icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle((sport == .mlb || sport == .mlbHR) ? GaryColors.mlbGrass : accentColor)
-                    if let significance = significanceTag {
-                        Text(significance)
-                            .font(GaryFonts.mono(11, bold: true))
-                            .tracking(1)
-                            .foregroundStyle((sport == .mlb || sport == .mlbHR) ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 6)
-                    if let verdict = displayResult {
-                        // Settled (stored grade or live verdict): final score +
-                        // a tinted capsule — louder than the old 10pt whisper,
-                        // still typography, not a billboard.
-                        if let finalScore, !finalScore.isEmpty {
-                            Text(finalScore)
-                                .font(GaryFonts.mono(11.5, bold: false))
-                                .foregroundStyle(.white.opacity(0.55))
-                        } else if let ls = liveFinal, let a = ls.away_score, let h = ls.home_score {
-                            Text("\(a)–\(h)")
-                                .font(GaryFonts.mono(11.5, bold: false))
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
-                        Text(verdict == "won" ? "WON" : (verdict == "push" ? "PUSH" : "LOST"))
-                            .font(GaryFonts.mono(12, bold: true))
-                            .tracking(0.8)
-                            .foregroundStyle(resultStampColor)
-                    } else if let live = liveStatus, live.isLive {
-                        Text(liveSlotText(live, label: "LIVE"))
-                            .font(GaryFonts.mono(11, bold: true))
-                            .tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    } else if let live = liveStatus, live.isFinal {
-                        Text(liveSlotText(live, label: "FINAL"))
-                            .font(GaryFonts.mono(11, bold: false))
-                            .tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    } else if !formattedTime.isEmpty {
-                        Text(formattedTime.uppercased())
-                            .font(GaryFonts.mono(11, bold: false))
-                            .tracking(1)
-                            .foregroundStyle(.white.opacity(0.34))
-                            .lineLimit(1)
-                    }
-                }
-
-                // Matchup hero — STACKED team rows (June 2026 "Stack" front,
-                // mock #25: scoreboard convention, away on top). Each team
-                // gets a whole row: color chip + name, picked side lit, the
-                // other dimmed. The share card is the same object re-framed.
-                VStack(alignment: .leading, spacing: 8) {
-                    matchupRow(name: awayName, team: pick.awayTeam ?? awayName,
-                               seed: awaySeedTag, picked: awayIsPicked)
-                    matchupRow(name: homeName, team: pick.homeTeam ?? homeName,
-                               seed: homeSeedTag, picked: homeIsPicked)
-                }
-
-                // Bottom — the PICK (abbreviated, gold) stretched full-width: this card's product.
-                // Gold marks exactly what Gary says; the odds stand aside in grey
-                // so the call alone carries the color.
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(compactPick)
-                        .font(GaryFonts.mono(17, bold: true))
-                        .tracking(0.8)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(eyebrowLabel)
+                        .font(GaryFonts.mono(11.5, bold: true)).tracking(2.2)
                         .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Spacer(minLength: 8)
-                    if !pickParts.odds.isEmpty {
-                        Text(pickParts.odds)
-                            .font(GaryFonts.mono(15, bold: true))
-                            .foregroundStyle(.white.opacity(0.62))
+                        .padding(.top, 6)
+                    Spacer()
+                    if let tier = tierLabel, displayResult == nil {
+                        Text(tier)
+                            .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                            .foregroundStyle(GaryColors.gold)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.6), lineWidth: 1))
+                            .padding(.top, 4)
                     }
+                    Image("GaryIconBG")
+                        .resizable().scaledToFit()
+                        .frame(width: 40, height: 40)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(hex: "#1F1C1C"))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1)
-                        )
-                )
 
-                // Affordance row — share is ONE tap from the front (the card
-                // is the product; the export is the point). Gary's Take keeps
-                // the right edge it has always owned.
+                Text(heroLines)
+                    .font(GaryFonts.display(40))
+                    .foregroundStyle(.white)
+                    .lineSpacing(0)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.55)
+                    .padding(.top, 10)
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(significanceTag ?? (pick.league ?? "").uppercased())
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                        .foregroundStyle((sport == .mlb || sport == .mlbHR) ? GaryColors.mlbGrass : accentColor)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                    Text(metaLine)
+                        .font(GaryFonts.text(13.5, .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .padding(.top, 10)
+
+                // Footer strip — share one tap from the front, the LIVE line
+                // in gold while the game runs (the drama earns its own row),
+                // Gary's Take on the right edge it has always owned.
                 if showTakeAffordance {
-                    HStack {
+                    Rectangle()
+                        .fill(.white.opacity(0.12))
+                        .frame(height: 1)
+                        .padding(.vertical, 12)
+
+                    HStack(spacing: 10) {
                         Button {
                             let images = renderPickShareImages(pick: pick, gameResult: displayResult)
                             if !images.isEmpty { shareItem = PickShareItem(images: images) }
@@ -11499,11 +11534,18 @@ struct CompactPickRow: View {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.5))
-                                .frame(width: 28, height: 20, alignment: .leading)
+                                .frame(width: 24, height: 20, alignment: .leading)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Share this pick")
+                        if let state = footerStateText {
+                            Text(state)
+                                .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                                .foregroundStyle(GaryColors.gold)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
                         Spacer()
                         HStack(spacing: 3) {
                             Text("Gary's Take")
@@ -11513,48 +11555,37 @@ struct CompactPickRow: View {
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
                         }
+                        .layoutPriority(1)
                     }
                 }
-
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(18)
+
+            // Stamp rides the empty space under the bear — clear of the hero
+            // type. Gold for every verdict (the brand owns its record).
+            if let verdict = displayResult {
+                Text(verdict == "won" ? "CASHED" : (verdict == "push" ? "PUSH" : "LOST"))
+                    .font(GaryFonts.mono(19, bold: true)).tracking(2.5)
+                    .foregroundStyle(GaryColors.gold.opacity(0.92))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.85), lineWidth: 2))
+                    .rotationEffect(.degrees(-8))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 64)
+                    .padding(.trailing, 16)
+            }
         }
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#181616"))
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(hex: "#121110"))
                 .overlay(
-                    SportWatermark(league: pick.league)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(.white.opacity(0.10), lineWidth: 1)
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1.0)
-                )
-                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+                .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
         )
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
-    }
-
-    /// One stacked matchup row: team-color chip + (seed) + name. Picked side
-    /// carries full white + a brighter chip; the other side dims, mirroring
-    /// the old one-line treatment's 1.0 / 0.42 split.
-    private func matchupRow(name: String, team: String, seed: String?, picked: Bool) -> some View {
-        HStack(spacing: 9) {
-            TeamColorChip(team: team, league: pick.league, size: 24, dimmed: !picked)
-            if let seed {
-                Text(seed)
-                    .font(GaryFonts.mono(11, bold: true))
-                    .foregroundStyle(GaryColors.gold)
-            }
-            Text(name)
-                .font(GaryFonts.text(17, picked ? .semibold : .regular))
-                .foregroundStyle(.white.opacity(picked ? 1.0 : 0.42))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Spacer(minLength: 0)
-        }
     }
 }
 
@@ -12379,7 +12410,7 @@ struct ShareCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", Color(hex: "#E5484D"))
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }
@@ -12581,7 +12612,7 @@ struct SharePropCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", Color(hex: "#E5484D"))
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }
@@ -12748,7 +12779,7 @@ struct HeadlineShareCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", Color(hex: "#E5484D"))
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }
@@ -12883,17 +12914,18 @@ struct HeadlineSharePropCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("LOST", Color(hex: "#E5484D"))
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }
     private var heroLines: String {
         let parts = sharePropMarketParts(prop)
-        return parts.call.isEmpty ? parts.market : "\(parts.market)\n\(parts.call)"
+        let bet = parts.call.isEmpty ? parts.market : "\(parts.market) \(parts.call)"
+        let player = (prop.player ?? "").uppercased()
+        return player.isEmpty ? bet : "\(player)\n\(bet)"
     }
     private var metaLine: String {
         var parts: [String] = []
-        if let player = prop.player, !player.isEmpty { parts.append(player) }
         let team = Formatters.shortTeamName(prop.team, league: prop.effectiveLeague)
         if !team.isEmpty { parts.append(team) }
         let t = Formatters.formatCommenceTime(prop.commence_time)
@@ -15428,8 +15460,12 @@ struct PicksTodayPage: View {
                 FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
                     .padding(.horizontal, 10)
             } else if !topProps.isEmpty {
-                PropSlipCard(props: topProps, resultForProp: resultForProp)
-                    .padding(.horizontal, 10)
+                VStack(spacing: 10) {
+                    ForEach(topProps) { p in
+                        FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true)
+                    }
+                }
+                .padding(.horizontal, 10)
             }
             EdgesSection(title: "TODAY'S EDGES", edges: edges)
         }
@@ -15482,7 +15518,9 @@ struct PicksGamePage: View {
                                   showSportBadge: false,
                                   liveInSlot: false)
                     .padding(.horizontal, 10)
-            } else {
+            } else if heroScore?.isFinal != true {
+                // A finished game's result already rides the LiveScoreStrip
+                // above — "drops closer" copy only fits a game still ahead.
                 Text("Game pick drops closer to game time.")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
                     .padding(.horizontal, 16)
@@ -15493,8 +15531,12 @@ struct PicksGamePage: View {
                 FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true, liveInSlot: false)
                     .padding(.horizontal, 10)
             } else if !topProps.isEmpty {
-                PropSlipCard(props: topProps, resultForProp: resultForProp, liveInHeader: false)
-                    .padding(.horizontal, 10)
+                VStack(spacing: 10) {
+                    ForEach(topProps) { p in
+                        FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true, liveInSlot: false)
+                    }
+                }
+                .padding(.horizontal, 10)
             }
             PlayerIntelSection(matchup: group.matchup)
             EdgesSection(title: "GAME INTEL", edges: edges)
@@ -17974,91 +18016,133 @@ struct CompactPropRow: View {
         return side
     }
 
+    // MARK: Headline front (June 11 2026 — THE pick card design, everywhere)
+    //
+    // Same anatomy as the game card: gold eyebrow + bear, the market and call
+    // stacked as display type, accent league token + player meta line, the
+    // share/tier/take footer, diagonal stamp when settled.
+
+    private var eyebrowLabel: String {
+        if resolvedResult != nil { return "GARY'S PICK" }
+        if let d = parseISO8601(prop.commence_time ?? ""), Calendar.current.isDateInToday(d) {
+            return "TODAY'S PICK"
+        }
+        return "GARY'S PICK"
+    }
+
+    /// "MATT CHAPMAN" over "H+R+RBI OVER 0.5" — the player IS the headline
+    /// (user call, Jun 11: the name was hiding in the meta line).
+    private var heroLines: String {
+        let call = compactCall
+        let bet = call.isEmpty ? marketName : "\(marketName) \(call)"
+        let player = (prop.player ?? "").uppercased()
+        return player.isEmpty ? bet : "\(player)\n\(bet)"
+    }
+
+    private var metaLine: String {
+        var parts: [String] = []
+        let team = Formatters.shortTeamName(prop.team, league: prop.effectiveLeague)
+        if !team.isEmpty { parts.append(team) }
+        if resolvedResult != nil {
+            if let ls = liveCache.status(forMatchup: prop.matchup ?? ""),
+               ls.isFinal, let s = ls.scoreLine {
+                parts.append("FINAL · \(s)")
+            } else {
+                parts.append("FINAL")
+            }
+        } else if let live = liveStatus, live.isLive || live.isFinal {
+            // The footer strip carries the live/final state.
+        } else if !formattedTime.isEmpty {
+            parts.append(formattedTime)
+        }
+        let odds = Formatters.americanOdds(prop.odds)
+        if !odds.isEmpty { parts.append(odds) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Footer's gold state slot — live line while the game runs.
+    private var footerStateText: String? {
+        guard resolvedResult == nil, let live = liveStatus else { return nil }
+        if live.isLive { return liveSlotText(live, label: "LIVE") }
+        if live.isFinal { return liveSlotText(live, label: "FINAL") }
+        return nil
+    }
+
+    private var tierLabel: String? {
+        prop.confidence.map { convictionTier(min(max($0, 0), 1)) }
+    }
+
     var body: some View {
         ZStack {
-            VStack(alignment: .leading, spacing: 11) {
-                // Eyebrow row — sport accent dot/icon + league + time + result.
-                // Mirrors CompactPickRow's header exactly; sport identity stays
-                // in the sport accent, only gold→silver is swapped elsewhere.
-                HStack(spacing: 8) {
-                    Image(systemName: leagueIcon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(isMLBProp ? GaryColors.mlbGrass : accentColor)
-                    if let league = leagueTag {
-                        Text(league)
-                            .font(GaryFonts.mono(11, bold: true))
-                            .tracking(1)
-                            .foregroundStyle(isMLBProp ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
-                            .lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(eyebrowLabel)
+                        .font(GaryFonts.mono(11.5, bold: true)).tracking(2.2)
+                        .foregroundStyle(GaryColors.gold)
+                        .padding(.top, 6)
+                    Spacer()
+                    if let tier = tierLabel, resolvedResult == nil {
+                        Text(tier)
+                            .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                            .foregroundStyle(GaryColors.gold)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.6), lineWidth: 1))
+                            .padding(.top, 4)
                     }
-                    Spacer(minLength: 6)
-                    if resolvedResult != nil {
-                        // Settled: final score + the verdict word — the exact
-                        // twin of the gold card's settled eyebrow.
-                        if let ls = liveCache.status(forMatchup: prop.matchup ?? ""),
-                           ls.isFinal, let s = ls.scoreLine {
-                            Text("FINAL · \(s)")
-                                .font(GaryFonts.mono(11.5, bold: false))
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
-                        Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
-                            .font(GaryFonts.mono(12, bold: true))
-                            .tracking(0.8)
-                            .foregroundStyle(resultStampColor)
-                    } else if let live = liveStatus, live.isLive {
-                        Text(liveSlotText(live, label: "LIVE"))
-                            .font(GaryFonts.mono(11, bold: true))
-                            .tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    } else if let live = liveStatus, live.isFinal {
-                        Text(liveSlotText(live, label: "FINAL"))
-                            .font(GaryFonts.mono(11, bold: false))
-                            .tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    } else if !formattedTime.isEmpty {
-                        Text(formattedTime.uppercased())
-                            .font(GaryFonts.mono(11, bold: false))
-                            .tracking(1)
-                            .foregroundStyle(.white.opacity(0.34))
-                            .lineLimit(1)
-                    }
+                    Image("GaryIconBG")
+                        .resizable().scaledToFit()
+                        .frame(width: 40, height: 40)
                 }
 
-                // Hero — player name at game-card presence, team small and
-                // baseline-aligned beside it (frees the second line entirely).
+                Text(heroLines)
+                    .font(GaryFonts.display(36))
+                    .foregroundStyle(.white)
+                    .lineSpacing(0)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.5)
+                    .padding(.top, 10)
+
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(prop.player ?? prop.team ?? "")
-                        .font(GaryFonts.text(24, .medium))
-                        .foregroundStyle(.white)
+                    Text(((prop.effectiveLeague ?? "") + " · PROP").uppercased())
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                        .foregroundStyle(isMLBProp ? GaryColors.mlbGrass : accentColor)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                    if let team = prop.team, !team.isEmpty {
-                        Text(Formatters.shortTeamName(team, league: prop.effectiveLeague).uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(GaryColors.silver.opacity(0.8))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                    // Affordances riding the row's empty right side — share is
-                    // one tap from the front, the flip keeps its corner. Adds
-                    // no vertical space, never moves the name or team.
+                        .layoutPriority(1)
+                    Text(metaLine)
+                        .font(GaryFonts.text(13.5, .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .padding(.top, 10)
+
+                // Footer strip — share, gold live line, Gary's Take.
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(height: 1)
+                    .padding(.vertical, 12)
+
+                HStack(spacing: 10) {
                     Button {
                         let images = renderPropShareImages(prop: prop, gameResult: resolvedResult)
                         if !images.isEmpty { shareItem = PickShareItem(images: images) }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.45))
-                            .frame(width: 24, height: 18)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .frame(width: 24, height: 20, alignment: .leading)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share this prop pick")
-                    .layoutPriority(1)
+                    if let state = footerStateText {
+                        Text(state)
+                            .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                            .foregroundStyle(GaryColors.gold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Spacer()
                     HStack(spacing: 3) {
                         Text("Gary's Take")
                             .font(.system(size: 10.5, weight: .semibold))
@@ -18069,48 +18153,31 @@ struct CompactPropRow: View {
                     }
                     .layoutPriority(1)
                 }
-
-                // Bottom — silver box, and the ONLY gold on the card is the
-                // pick itself: "TOTAL BASES OVER 1.5". Odds and border are
-                // silver (the card's metal); gold marks exactly what Gary says,
-                // and the call wears its direction (OVER gold / UNDER silver).
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    propPickStyled("\(marketName) \(compactCall)")
-                        .font(GaryFonts.mono(17, bold: true))
-                        .tracking(0.8)
-                        .foregroundStyle(GaryColors.heroAccent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                    Spacer(minLength: 8)
-                    Text(Formatters.americanOdds(prop.odds))
-                        .font(GaryFonts.mono(15, bold: true))
-                        .foregroundStyle(GaryColors.silver.opacity(0.8))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(hex: "#1F1C1C"))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(GaryColors.silver.opacity(0.55), lineWidth: 1)
-                        )
-                )
-
-
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(18)
+
+            // Stamp rides the empty space under the bear — gold for every
+            // verdict (the brand owns its record).
+            if let verdict = resolvedResult {
+                Text(verdict == "won" ? "CASHED" : (verdict == "push" ? "PUSH" : "LOST"))
+                    .font(GaryFonts.mono(19, bold: true)).tracking(2.5)
+                    .foregroundStyle(GaryColors.gold.opacity(0.92))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.85), lineWidth: 2))
+                    .rotationEffect(.degrees(-8))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 64)
+                    .padding(.trailing, 16)
+            }
         }
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#181616"))
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(hex: "#121110"))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(GaryColors.silver.opacity(0.4), lineWidth: 1.0)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(.white.opacity(0.10), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+                .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
         )
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
