@@ -11925,6 +11925,31 @@ struct FlippablePickCard: View {
     }
 }
 
+/// Sportsbook brand casing — one source for every odds table. Keys are
+/// normalized (lowercased, no spaces/underscores); unknown books fall back
+/// to simple capitalization, never raw lowercase keys.
+enum SportsbookNames {
+    static let byKey: [String: String] = [
+        "draftkings": "DraftKings", "fanduel": "FanDuel", "betmgm": "BetMGM",
+        "betrivers": "BetRivers", "caesars": "Caesars", "fanatics": "Fanatics",
+        "espnbet": "ESPN BET", "bet365": "bet365", "pointsbet": "PointsBet",
+        "pinnacle": "Pinnacle", "bovada": "Bovada", "polymarket": "Polymarket",
+        "kalshi": "Kalshi", "hardrockbet": "Hard Rock Bet", "hardrock": "Hard Rock Bet",
+        "wynnbet": "WynnBET", "unibet": "Unibet", "ballybet": "Bally Bet",
+        "barstool": "Barstool", "williamhill": "Caesars", "mybookieag": "MyBookie",
+        "lowvig": "LowVig", "betonlineag": "BetOnline", "bovadalv": "Bovada"
+    ]
+    static func display(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "—" }
+        let key = raw.lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: ".", with: "")
+        if let n = byKey[key] { return n }
+        return raw.prefix(1).uppercased() + raw.dropFirst()
+    }
+}
+
 /// Collapsible "Sportsbook Lines" dropdown for the back of a game-pick card —
 /// the multi-book spread/ML comparison from the pick's sportsbook_odds.
 struct SportsbookLinesDropdown: View {
@@ -11950,25 +11975,49 @@ struct SportsbookLinesDropdown: View {
 
             if open {
                 VStack(spacing: 0) {
+                    // Column captions — the numbers read as data, not décor.
+                    // Spread/ML are quoted from the PICKED side's perspective.
+                    HStack(spacing: 8) {
+                        Text("BOOK").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("SPREAD").frame(width: 96, alignment: .trailing)
+                        Text("ML").frame(width: 56, alignment: .trailing)
+                    }
+                    .font(GaryFonts.mono(8)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.45))
+                    .padding(.vertical, 6)
                     ForEach(odds) { o in
                         HStack(spacing: 8) {
-                            Text(o.book ?? "—").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
+                            Text(SportsbookNames.display(o.book))
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1).minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            if let s = o.spread {
-                                Text(String(format: "%+.1f", s)).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.6))
+                            Group {
+                                if let s = o.spread {
+                                    let juice = (o.spread_odds?.isEmpty == false) ? " \(o.spread_odds!)" : ""
+                                    Text(String(format: "%+.1f", s) + juice)
+                                        .foregroundStyle(.white.opacity(0.75))
+                                } else {
+                                    Text("—").foregroundStyle(.white.opacity(0.3))
+                                }
                             }
-                            if let so = o.spread_odds, !so.isEmpty {
-                                Text(so).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.4))
+                            .font(GaryFonts.mono(11.5))
+                            .frame(width: 96, alignment: .trailing)
+                            Group {
+                                if let ml = o.ml, !ml.isEmpty, ml != "-" {
+                                    Text(ml).foregroundStyle(GaryColors.gold.opacity(0.9))
+                                } else {
+                                    Text("—").foregroundStyle(.white.opacity(0.3))
+                                }
                             }
-                            if let ml = o.ml, !ml.isEmpty {
-                                Text("ML \(ml)").font(GaryFonts.mono(11, bold: false)).foregroundStyle(GaryColors.gold.opacity(0.85))
-                            }
+                            .font(GaryFonts.mono(11.5, bold: true))
+                            .frame(width: 56, alignment: .trailing)
                         }
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 6)
                         if o.id != odds.last?.id { Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5) }
                     }
                 }
-                .padding(.top, 6)
+                .padding(.top, 2)
             }
         }
     }
@@ -12772,21 +12821,8 @@ struct SportsbookOddsTable: View {
             .max(by: { $0.2 < $1.2 })?.0
     }
 
-    private static let bookDisplayNames: [String: String] = [
-        "draftkings": "DraftKings",
-        "fanduel": "FanDuel",
-        "betmgm": "BetMGM",
-        "betrivers": "BetRivers",
-        "caesars": "Caesars",
-        "fanatics": "Fanatics",
-        "polymarket": "Polymarket",
-        "kalshi": "Kalshi",
-        "pointsbet": "PointsBet",
-        "bovada": "Bovada",
-    ]
-
     private func displayName(for book: String) -> String {
-        Self.bookDisplayNames[book.lowercased()] ?? book.prefix(1).uppercased() + book.dropFirst()
+        SportsbookNames.display(book)
     }
 
     /// Find the best ML odds (highest/least negative)
