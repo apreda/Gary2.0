@@ -2226,7 +2226,7 @@ struct HomeView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if !tonightSignals.isEmpty {
+                    if !tonightSignals.isEmpty || !ydayEdges.isEmpty {
                         Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                     }
                 }
