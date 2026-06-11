@@ -5419,6 +5419,10 @@ struct PremiumPicksView: View {
                     allAccessSection
                         .padding(.top, 6)
                 }
+                if Self.freeLaunch {
+                    plansComingCard
+                        .padding(.top, 6)
+                }
                 accountRow
             } else {
                 Button { withAnimation { isPremium = false } } label: {
@@ -5427,6 +5431,29 @@ struct PremiumPicksView: View {
                 }
                 .frame(maxWidth: .infinity).padding(.top, 12)
             }
+        }
+    }
+
+    /// Free-launch announcement — paid plans land June 18, in the exact slot
+    /// the storefront will occupy. Informational only: no prices and no
+    /// purchase path in-app (the App Store 3.1.1 fence stays up).
+    private var plansComingCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "Paid Plans", sub: "Coming June 18")
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Every board is free until June 18.")
+                    .font(GaryFonts.text(15, .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                Text("Single-sport plans, bundles, and All-Access — plans and pricing land right here on June 18.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineSpacing(2)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .quantPanel()
+            .padding(.horizontal, 16)
         }
     }
 
@@ -11469,10 +11496,6 @@ struct CompactPickRow: View {
         return nil
     }
 
-    private var tierLabel: String? {
-        pick.confidence.map { convictionTier(min(max($0, 0), 1)) }
-    }
-
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
@@ -11482,14 +11505,6 @@ struct CompactPickRow: View {
                         .foregroundStyle(GaryColors.gold)
                         .padding(.top, 6)
                     Spacer()
-                    if let tier = tierLabel, displayResult == nil {
-                        Text(tier)
-                            .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                            .foregroundStyle(GaryColors.gold)
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.6), lineWidth: 1))
-                            .padding(.top, 4)
-                    }
                     Image("GaryIconBG")
                         .resizable().scaledToFit()
                         .frame(width: 40, height: 40)
@@ -11570,8 +11585,7 @@ struct CompactPickRow: View {
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.85), lineWidth: 2))
                     .rotationEffect(.degrees(-8))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 64)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .padding(.trailing, 16)
             }
         }
@@ -12879,13 +12893,6 @@ struct HeadlineShareCardView: View {
                     .font(GaryFonts.mono(12.5))
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Spacer()
-                if let tier {
-                    Text(tier)
-                        .font(GaryFonts.mono(12.5, bold: true)).tracking(1.2)
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.horizontal, 9).padding(.vertical, 4)
-                        .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.65), lineWidth: 1.2))
-                }
             }
         }
         .padding(square ? 30 : 34)
@@ -13003,13 +13010,6 @@ struct HeadlineSharePropCardView: View {
                     .font(GaryFonts.mono(12.5))
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Spacer()
-                if let tier {
-                    Text(tier)
-                        .font(GaryFonts.mono(12.5, bold: true)).tracking(1.2)
-                        .foregroundStyle(GaryColors.gold)
-                        .padding(.horizontal, 9).padding(.vertical, 4)
-                        .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.65), lineWidth: 1.2))
-                }
             }
         }
         .padding(square ? 30 : 34)
@@ -18068,10 +18068,6 @@ struct CompactPropRow: View {
         return nil
     }
 
-    private var tierLabel: String? {
-        prop.confidence.map { convictionTier(min(max($0, 0), 1)) }
-    }
-
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
@@ -18081,14 +18077,6 @@ struct CompactPropRow: View {
                         .foregroundStyle(GaryColors.gold)
                         .padding(.top, 6)
                     Spacer()
-                    if let tier = tierLabel, resolvedResult == nil {
-                        Text(tier)
-                            .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                            .foregroundStyle(GaryColors.gold)
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.6), lineWidth: 1))
-                            .padding(.top, 4)
-                    }
                     Image("GaryIconBG")
                         .resizable().scaledToFit()
                         .frame(width: 40, height: 40)
@@ -18165,8 +18153,7 @@ struct CompactPropRow: View {
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.85), lineWidth: 2))
                     .rotationEffect(.degrees(-8))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 64)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .padding(.trailing, 16)
             }
         }
