@@ -390,6 +390,7 @@ enum SupabaseAPI {
     /// consequence, a curated X voice, or league pace. Written 3x daily by
     /// run-wire-items.js.
     struct WireItem: Decodable, Identifiable {
+        struct Meta: Decodable { let body: String? }
         let id: Int?
         let date: String?
         let league: String?
@@ -399,12 +400,14 @@ enum SupabaseAPI {
         let source_handle: String? // set for kind == voice ("@handle")
         let game: String?
         let relevance_score: Int?
+        /// meta.body = the deeper read revealed by the inline expand.
+        let meta: Meta?
     }
 
     /// Today's wire items, lead-worthiest first. Returns [] on any failure.
     static func fetchWireItems(date: String, limit: Int = 12) async -> [WireItem] {
         let url = buildURL(table: "wire_items", query: [
-            URLQueryItem(name: "select", value: "id,date,league,kind,headline,subline,source_handle,game,relevance_score"),
+            URLQueryItem(name: "select", value: "id,date,league,kind,headline,subline,source_handle,game,relevance_score,meta"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "relevance_score.desc.nullslast"),
             URLQueryItem(name: "limit", value: "\(limit)")

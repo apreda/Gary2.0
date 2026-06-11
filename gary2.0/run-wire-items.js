@@ -211,6 +211,8 @@ function buildPrompt({ date, league, resultsContext }) {
     `  "kind": one of "result" | "line_move" | "injury" | "voice" | "pace"\n` +
     `  "headline": short, punchy, <= 90 chars\n` +
     `  "subline": one sentence of supporting detail (or null)\n` +
+    `  "body": 2-3 further sentences for readers who tap to expand — what happened, why the ` +
+    `market moved, and what it means for tonight. No repetition of the headline/subline. (or null)\n` +
     `  "source_handle": the analyst handle for 'voice' items, else null\n` +
     `  "game": the matchup this is about ("Away @ Home"), or null if league-wide\n` +
     `  "relevance_score": integer 0-100 (higher = more lead-worthy / front-page)\n\n` +
@@ -315,7 +317,10 @@ function toRow(item, league, date) {
         : null,
     game: item.game != null && String(item.game).trim() ? String(item.game).trim() : null,
     relevance_score: score,
-    meta: null,
+    meta:
+      item.body != null && String(item.body).trim()
+        ? { body: String(item.body).trim() }
+        : null,
     generated_by: 'run-wire-items.js@gemini-3-flash-preview',
   };
 }
