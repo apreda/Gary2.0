@@ -5812,6 +5812,17 @@ struct PremiumPicksView: View {
         .padding(.horizontal, 16)
     }
 
+    /// Winners order: ungraded picks (still to play) first, then settled results —
+    /// each group by start time, so upcoming games lead and finished ones fall to the back.
+    private func sortedShelfPicks(_ shelf: GameShelf) -> [GaryPick] {
+        shelf.picks.sorted { a, b in
+            let aGraded = shelf.settled && gamePickResult(a) != nil
+            let bGraded = shelf.settled && gamePickResult(b) != nil
+            if aGraded != bGraded { return !aGraded }   // ungraded (still to play) first
+            return (a.commence_time ?? "") < (b.commence_time ?? "")   // then earliest start time
+        }
+    }
+
     private func gameShelfView(_ shelf: GameShelf) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league,
@@ -5826,10 +5837,11 @@ struct PremiumPicksView: View {
                     // carries LIVE/FINAL state, and a strip above only the live
                     // card knocked the shelf out of alignment (June 4 fix).
                     HStack(alignment: .top, spacing: 10) {
-                        ForEach(shelf.picks, id: \.id) { pick in
+                        ForEach(sortedShelfPicks(shelf), id: \.id) { pick in
                             ZStack {
                                 if sportUnlocked(shelf.league) {
                                     FlippablePickCard(pick: pick,
+                                                            alwaysShowStartTime: true,
                                                             gameResult: shelf.settled ? gamePickResult(pick) : nil,
                                                             showSportBadge: false,
                                                             backHeight: UIScreen.main.bounds.height * 0.68)
@@ -11557,6 +11569,8 @@ struct CompactPickRow: View {
     var showTakeAffordance: Bool = true
     /// Overrides the eyebrow label (e.g. "FREE PICK" on the Tonight page).
     var eyebrowOverride: String? = nil
+    /// Winners keeps the start time visible even on settled cards (it sorts by start time).
+    var alwaysShowStartTime: Bool = false
     /// When set, the card renders at this EXACT height so every pick card in a
     /// rail/list is the same size regardless of headline length or footer (the
     /// flip-card wrappers pass it; Billfold/share leave it nil for natural size).
@@ -11871,7 +11885,9 @@ struct CompactPickRow: View {
     /// Start time, shown on the eyebrow row pre-game. Live/settled cards carry
     /// their state in the meta line / footer instead, so this returns nil for them.
     private var frontTime: String? {
-        guard displayResult == nil else { return nil }
+        // Pre-game shows the start time. Settled cards normally hide it, but the Winners
+        // page (alwaysShowStartTime) keeps it visible since that page sorts by start time.
+        if displayResult != nil { return alwaysShowStartTime ? (formattedTime.isEmpty ? nil : formattedTime) : nil }
         if let live = liveStatus, live.isLive || live.isFinal { return nil }
         return formattedTime.isEmpty ? nil : formattedTime
     }
@@ -11947,7 +11963,7 @@ struct CompactPickRow: View {
                             // Pre-game: start time anchors the footer's left corner, opposite the chevron.
                             Text(t)
                                 .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(GaryColors.gold)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }
@@ -12371,6 +12387,7 @@ struct FlippableScoreboardCard: View {
 struct FlippablePickCard: View {
     let pick: GaryPick
     var eyebrowOverride: String? = nil
+    var alwaysShowStartTime: Bool = false
     var gameResult: String? = nil
     var finalScore: String? = nil
     var showSportBadge: Bool = false
@@ -12392,7 +12409,7 @@ struct FlippablePickCard: View {
             // Front pinned to the uniform height so every pick card in a rail is
             // the same size (fixedHeight on CompactPickRow) — no per-card measuring,
             // which is what let 2-line heroes end up taller than 1-line ones.
-            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, eyebrowOverride: eyebrowOverride, fixedHeight: CompactPickRow.uniformHeight)
+            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, eyebrowOverride: eyebrowOverride, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight)
                 .opacity(flipped ? 0 : 1)
 
             PickCardBack(pick: pick, gameResult: gameResult)
@@ -14864,6 +14881,10 @@ final class PropsSlateStore: ObservableObject {
     @Published var gamePicks: [GaryPick] = []
     @Published var yesterdayGamePicks: [GaryPick] = []
     @Published var gameResultsMap: [String: String] = [:]
+    /// Today's FULL slate (daily_slate) — every game scheduled today, so the
+    /// Picks page can surface today's matchups with a "pick drops near game
+    /// time" placeholder + intel before Gary's picks actually post.
+    @Published var slate: [DailySlateRow] = []
 
     @Published var loading = true
     @Published var fetchFailed = false
@@ -14898,6 +14919,17 @@ final class PropsSlateStore: ObservableObject {
             }
         } catch {
             didFail = true
+        }
+
+        // Keep only FRESH props (game today or upcoming). A game that already
+        // happened — e.g. yesterday's props mis-dated under today's key — is not
+        // today's slate and must never show as a live pick without a result; the
+        // yesterday-results fallback below still surfaces graded recaps.
+        props = props.filter { p in
+            guard let iso = p.commence_time, let d = parseISO8601(iso) else { return true }
+            var cal = Calendar.current
+            cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+            return d >= cal.startOfDay(for: Date())
         }
 
         let allResults = (try? await SupabaseAPI.fetchPropResults(since: SupabaseAPI.yesterdayEST(), forceRefresh: forceRefresh)) ?? []
@@ -14947,6 +14979,10 @@ final class PropsSlateStore: ObservableObject {
         if let arr = try? await SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh) {
             today = arr.filter { !($0.pick ?? "").isEmpty }
         }
+        // Today's full slate — every scheduled game, so the Picks page shows
+        // tonight's matchups (with a "pick drops near game time" placeholder +
+        // intel) before Gary's picks post.
+        slate = await SupabaseAPI.fetchDailySlate(date: date)
         let freshSports = Set(today.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
 
         var yPicks: [GaryPick] = []
@@ -15560,7 +15596,17 @@ struct PicksCarouselView: View {
         var s = Set(store.slateProps.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
         s.formUnion(store.gamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
         s.formUnion(store.yesterdayGamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
-        return ["ALL"] + s.sorted()
+        // Today's slate leagues too — so a sport with games tonight but no picks
+        // yet still gets a filter chip (matches the look-ahead matchups below).
+        s.formUnion(store.slate.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+        // Display priority — WC leads, then MLB, then MLB HR (user call Jun 13
+        // 2026: the World Cup outranks MLB while it's on, so it sits closest to
+        // ALL). Anything else falls back to alphabetical.
+        let priority: [String: Int] = ["WC": 0, "MLB": 1, "MLB HR": 2]
+        return ["ALL"] + s.sorted { a, b in
+            let ra = priority[a] ?? 50, rb = priority[b] ?? 50
+            return ra == rb ? a < b : ra < rb
+        }
     }
     private var filteredProps: [PropPick] {
         sport == "ALL" ? store.slateProps : store.slateProps.filter { ($0.effectiveLeague ?? "").uppercased() == sport }
@@ -15596,12 +15642,54 @@ struct PicksCarouselView: View {
         }
         merge(store.gamePicks)
         merge(store.yesterdayGamePicks)
-        // Games with a TODAY pick/prop sort first; settled (W/L-only) games follow.
+
+        // LOOK-AHEAD: include every game on TODAY's slate, even before picks or
+        // props post, so the user sees tonight's matchups with a "pick drops near
+        // game time" placeholder + game intel (PicksGamePage renders that). Dedup
+        // by team last-words — the slate's full team names differ from the
+        // picks/props short matchup format.
+        var seenKeys = Set(out.map { Self.matchupKey($0.matchup) })
+        for s in store.slate {
+            let lg = (s.league ?? "").uppercased()
+            guard sport == "ALL" || lg == sport else { continue }
+            let a = (s.away_team ?? "").trimmingCharacters(in: .whitespaces)
+            let h = (s.home_team ?? "").trimmingCharacters(in: .whitespaces)
+            guard !a.isEmpty, !h.isEmpty else { continue }
+            let mu = "\(a) @ \(h)"
+            let key = Self.matchupKey(mu)
+            guard !seenKeys.contains(key) else { continue }
+            seenKeys.insert(key)
+            let time: String = {
+                if let iso = s.commence_time, let d = parseISO8601(iso) {
+                    return Formatters.dayTimeFormatterEST.string(from: d) + " ET"
+                }
+                return ""
+            }()
+            out.append((matchup: mu, time: time, props: []))
+        }
+
+        // Today's games (a pick, a fresh prop, or just on today's slate) lead;
+        // settled/yesterday games follow.
         return out.sorted { gameIsFresh($0) && !gameIsFresh($1) }
     }
+
+    /// Match key from team last-words ("San Diego Padres @ LA Dodgers" →
+    /// "padres|dodgers") — dedups the slate's full names against the picks/props
+    /// short matchup format.
+    static func matchupKey(_ m: String) -> String {
+        let sides = m.lowercased().components(separatedBy: " @ ")
+        guard sides.count == 2 else { return m.lowercased() }
+        let a = sides[0].components(separatedBy: " ").last ?? sides[0]
+        let h = sides[1].components(separatedBy: " ").last ?? sides[1]
+        return "\(a)|\(h)"
+    }
+
     private func gameIsFresh(_ g: (matchup: String, time: String, props: [PropPick])) -> Bool {
         if let e = store.gamePickEntry(forMatchup: g.matchup), !e.isYesterday { return true }
-        return g.props.contains { !store.isYesterdayProp($0) }
+        if g.props.contains(where: { !store.isYesterdayProp($0) }) { return true }
+        // A game on today's slate (upcoming — pick not posted yet) is "today" too.
+        let key = Self.matchupKey(g.matchup)
+        return store.slate.contains { Self.matchupKey("\($0.away_team ?? "") @ \($0.home_team ?? "")") == key }
     }
     private var topProps: [PropPick] {
         // Today's props lead; until they post, yesterday's top props hold the
@@ -15752,7 +15840,10 @@ struct PicksCarouselView: View {
     private func sportChipStyle(_ s: String, on: Bool) -> AnyShapeStyle {
         guard on else { return AnyShapeStyle(Color.white.opacity(0.35)) }
         if s == "ALL" { return AnyShapeStyle(GaryColors.gold) }
-        if s == "MLB" { return AnyShapeStyle(GaryColors.mlbFieldText) }
+        if s == "MLB" || s == "MLB HR" {
+            // MLB reads in its field gradient (grass green → dirt brown → base white).
+            return Sport.mlb.accentGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(GaryColors.mlbFieldText)
+        }
         return AnyShapeStyle(Sport.from(league: s).accentColor)
     }
 
@@ -15945,11 +16036,32 @@ struct PicksGamePage: View {
                                   liveInSlot: false)
                     .padding(.horizontal, 10)
             } else if heroScore?.isFinal != true {
-                // A finished game's result already rides the LiveScoreStrip
-                // above — "drops closer" copy only fits a game still ahead.
-                Text("Game pick drops closer to game time.")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
-                    .padding(.horizontal, 16)
+                // Look-ahead placeholder in the pick's slot — the game's on the
+                // board, Gary's pick lands ~90 min out, and the intel below is
+                // live now. (A finished game's result rides the LiveScoreStrip
+                // above, so this only shows for a game still ahead.)
+                HStack(spacing: 11) {
+                    Image(systemName: "clock.badge")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(GaryColors.gold.opacity(0.7))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("GARY'S PICK")
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.6)
+                            .foregroundStyle(GaryColors.gold)
+                        Text("Drops ~90 min before game time — the read's below.")
+                            .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.03))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(GaryColors.gold.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                )
+                .padding(.horizontal, 10)
             }
 
             if topProps.count == 1, let only = topProps.first {
