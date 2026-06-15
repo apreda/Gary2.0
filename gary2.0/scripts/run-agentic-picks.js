@@ -15,6 +15,7 @@
 // MUST load env vars FIRST before any other imports
 import '../src/loadEnv.js';
 import { ncaabSeason } from '../src/utils/dateUtils.js';
+import { countRealStats } from '../src/services/agentic/statsSubstance.js';
 
 // Now import modules that depend on env vars
 const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/orchestrator/index.js');
@@ -1626,6 +1627,18 @@ async function main() {
               ? `${config.name} picks use supplemental web-sourced analytics. Confidence may be lower than NBA/NFL.`
               : null
           };
+
+          // HARD FAIL: a pick whose Tale of the Tape carries no real values means the
+          // stats pipeline returned nothing for this game (every row "N/A") — Gary
+          // cannot have analyzed it, so the rationale is ungrounded. Never store a
+          // no-stats pick. (WC's BDL feed silently returns empty pre-match / on fetch
+          // failure; this gate is the check that was missing.)
+          const realStatCount = countRealStats(statsData, tokenToIosKey);
+          if (realStatCount === 0) {
+            console.error(`\n🛑 [${config.name}] HARD FAIL: "${result.pick}" — ZERO real Tale-of-the-Tape stats (all N/A). Stats pipeline returned nothing; the pick is ungrounded. REJECTING — no pick stored.`);
+            if (i < finalGames.length - 1) { await sleep(2000); }
+            continue;
+          }
 
           // World Cup ships TWO plays per match — a SIDE (3-way ML or Asian
           // handicap) and a TOTAL (Over/Under) — in one analysis run. The

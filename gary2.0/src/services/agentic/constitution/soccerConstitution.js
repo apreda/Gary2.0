@@ -20,7 +20,9 @@ World Cup context to be aware of: confirmed lineups and formation (squads rotate
 
 Investigation questions to work through for BOTH teams: recent results and form (this edition and prior ones); attacking output (goals, shots on target, xG, chance creation) and how it was generated; defensive record (goals and shots conceded, clean sheets); set-piece threat both ways; confirmed availability of key players; the group situation and what each side needs; and any weather/altitude/travel factors the data actually shows. Report findings with specific numbers. Do not state what any single factor means for the pick — that is yours to decide after investigating.
 
-AVAILABILITY: treat availability conservatively — "returned to training" is not "will start". Distinguish confirmed-out vs doubtful vs available, and note the date of the latest update.`,
+AVAILABILITY: treat availability conservatively — "returned to training" is not "will start". Distinguish confirmed-out vs doubtful vs available, and note the date of the latest update.
+
+STATS DISCIPLINE: ground every claim in the real data you actually fetched (the Tale of the Tape and tool results). If a factor's data is missing or shows N/A, say it is unavailable — do NOT invent figures, records, form, or narrative (no fabricated travel/flight/lineup stories). If the match has essentially no real stats to work from, you have no basis to make a pick: do not manufacture one.`,
   pass25DecisionGuards: ``,
   guardrails: ``,
   bilateralCasePrompt: (homeTeam, awayTeam) => `Before outputting INVESTIGATION COMPLETE, include three short sections in your Pass 1 synthesis (2-3 sentences each), grounded only in the evidence you investigated:
