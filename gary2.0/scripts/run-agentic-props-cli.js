@@ -48,6 +48,18 @@ function getESTDate() {
   return `${year}-${month}-${day}`;
 }
 
+// The ET calendar date (YYYY-MM-DD) of a game from its commence_time. Props are
+// keyed by THIS, not the run's "today" — a late / cross-midnight run must file a
+// game's props under the game's date, never tomorrow's (the bug where June 14
+// games landed under the June 15 prop_picks key). Falls back to today on a bad
+// timestamp.
+function estDateFromISO(iso) {
+  if (!iso) return getESTDate();
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return getESTDate();
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // en-CA → YYYY-MM-DD
+}
+
 export async function runAgenticPropsCli({
   sportKey,
   leagueLabel,
@@ -185,7 +197,9 @@ export async function runAgenticPropsCli({
         const supabase = createClient(supabaseUrl, supabaseKey, {
           auth: { autoRefreshToken: false, persistSession: false }
         });
-        const dateParam = getESTDate();
+        // Dedup against the row where these props WILL land — keyed by the
+        // game's ET date (not the run's "today"), so the check matches storage.
+        const dateParam = estDateFromISO(filtered[0]?.commence_time);
         const { data } = await supabase
           .from(testTableName)
           .select('picks')
@@ -444,7 +458,10 @@ export async function runAgenticPropsCli({
         auth: { autoRefreshToken: false, persistSession: false }
       });
 
-      const dateParam = getESTDate();
+      // Store under the GAME's ET date (from commence_time), never the run's
+      // "today" — fixes props from a game landing under tomorrow's key when the
+      // run crosses ET midnight (the June 14 → June 15 mis-dating bug).
+      const dateParam = estDateFromISO(validPicks[0]?.commence_time);
       const { data: existingData } = await supabase
         .from(testTableName)
         .select('picks')

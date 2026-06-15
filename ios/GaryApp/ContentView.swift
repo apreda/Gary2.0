@@ -67,6 +67,10 @@ struct ContentView: View {
                 // Settings now lives in every page header's three-dot button
                 // (GaryPageHeader / Billfold post ShowSettingsMenu).
             }
+            // Always fill the screen so the bottom-aligned tab bar can't ride up
+            // to the middle when the active page momentarily collapses (a bare
+            // loading/empty state) — the "nav bar stuck in the middle" glitch.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Tab bar — Gary is raised + larger center button
             GaryCenteredTabBar(selectedTab: $selectedTab)
