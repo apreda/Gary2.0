@@ -11810,9 +11810,8 @@ struct CompactPickRow: View {
             }
         } else if let live = liveStatus, live.isLive || live.isFinal {
             // The footer strip carries the live/final state.
-        } else if !formattedTime.isEmpty {
-            parts.append(formattedTime)
         }
+        // Start time moved to the eyebrow row (frontTime); meta keeps matchup + odds.
         // Odds render separately in the sport's accent color (see body) — not appended here.
         return parts.joined(separator: " · ")
     }
@@ -11875,14 +11874,29 @@ struct CompactPickRow: View {
         return nil
     }
 
+    /// Start time, shown on the eyebrow row pre-game. Live/settled cards carry
+    /// their state in the meta line / footer instead, so this returns nil for them.
+    private var frontTime: String? {
+        guard displayResult == nil else { return nil }
+        if let live = liveStatus, live.isLive || live.isFinal { return nil }
+        return formattedTime.isEmpty ? nil : formattedTime
+    }
+
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
                     Text(eyebrowLabel)
                         .font(GaryFonts.mono(11.5, bold: true)).tracking(2.2)
                         .foregroundStyle(GaryColors.gold)
                         .padding(.top, 6)
+                    if let t = frontTime {
+                        Text("· \(t)")
+                            .font(GaryFonts.mono(11)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.4))
+                            .padding(.top, 6)
+                            .lineLimit(1)
+                    }
                     Spacer()
                     Image(GaryBrand.mark)
                         .resizable().scaledToFit()
