@@ -2124,11 +2124,26 @@ struct HomeView: View {
                         freePick = nil
                     }
 
-                    // Select Top Prop: highest confidence
+                    // Select Top Prop: highest confidence — but FRESH props only
+                    // (game today or upcoming). Props whose game has already
+                    // happened (e.g. yesterday's props mis-dated under today's
+                    // key) are stale; showing one as a free pick with no result is
+                    // the bug. Excluding them lets the prop slot fall back to
+                    // yesterday's GRADED prop (with Cash/No Cash) only when there's
+                    // no fresh pick at all — never a stale prop without a result.
                     var propCount = 0
                     if let allProps = try? await propPicksFetch, !allProps.isEmpty {
-                        freeProp = allProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
-                        propCount = allProps.count
+                        var estCal = Calendar.current
+                        estCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+                        let todayStart = estCal.startOfDay(for: Date())
+                        let freshProps = allProps.filter { p in
+                            guard let iso = p.commence_time, let gd = parseISO8601(iso) else { return false }
+                            return gd >= todayStart   // game is today or later (not a past game)
+                        }
+                        if let top = freshProps.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first {
+                            freeProp = top
+                            propCount = freshProps.count
+                        }
                     }
                     playsOnBoard = (todayOnlyPicks?.count ?? 0) + propCount
                     todayPicks = todayOnlyPicks ?? []
@@ -11853,11 +11868,7 @@ struct CompactPickRow: View {
         if ls.isLive {
             var bits = ["LIVE"]
             if let sl = ls.scoreLine { bits.append(sl) }
-            switch liveBetTone {
-            case .covering: bits.append("COVERING")
-            case .trailing: bits.append("TRAILING")
-            case .neutral: break
-            }
+            // Covering/trailing is shown by a small colored dot in the footer, not a word.
             return bits.joined(separator: " · ")
         }
         if ls.isFinal { return liveSlotText(ls, label: "FINAL") }
@@ -11926,11 +11937,17 @@ struct CompactPickRow: View {
 
                     HStack(spacing: 10) {
                         if let live = liveFooterText {
-                            Text(live)
-                                .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
-                                .foregroundStyle(liveToneColor)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                            HStack(spacing: 6) {
+                                // Green = covering, red = trailing — a dot, not a word. Score stays gold.
+                                if liveBetTone != .neutral {
+                                    Circle().fill(liveToneColor).frame(width: 6, height: 6)
+                                }
+                                Text(live)
+                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                                    .foregroundStyle(GaryColors.gold)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
