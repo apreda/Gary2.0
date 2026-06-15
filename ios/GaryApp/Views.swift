@@ -11885,18 +11885,11 @@ struct CompactPickRow: View {
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
                     Text(eyebrowLabel)
                         .font(GaryFonts.mono(11.5, bold: true)).tracking(2.2)
                         .foregroundStyle(GaryColors.gold)
                         .padding(.top, 6)
-                    if let t = frontTime {
-                        Text("· \(t)")
-                            .font(GaryFonts.mono(11)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.4))
-                            .padding(.top, 6)
-                            .lineLimit(1)
-                    }
                     Spacer()
                     Image(GaryBrand.mark)
                         .resizable().scaledToFit()
@@ -11962,6 +11955,13 @@ struct CompactPickRow: View {
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                             }
+                        } else if let t = frontTime {
+                            // Pre-game: start time anchors the footer's left corner, opposite the chevron.
+                            Text(t)
+                                .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                                .foregroundStyle(.white.opacity(0.5))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
