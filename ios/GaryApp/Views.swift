@@ -3011,15 +3011,11 @@ struct HomeView: View {
 
     private var boardSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HubSectionHeader(eyebrow: "Board", sub: "")
-
-            // The FREE PICK — the page's one true card.
+            // The FREE PICK — the page's one true card. Its eyebrow reads "FREE PICK",
+            // so the old "Board" + "FREE PICK" section labels are no longer needed.
             VStack(alignment: .leading, spacing: 6) {
                 if let pick = freePick {
-                    Text("FREE PICK")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
+                    FlippablePickCard(pick: pick, eyebrowOverride: "FREE PICK", gameResult: nil, showSportBadge: true)
                 } else if !loading, let yPick = yesterdayTopPick {
                     // Until today's pick posts, yesterday's free pick holds
                     // the slot — wearing its W/L stamp, so it reads as the
@@ -11559,6 +11555,8 @@ struct CompactPickRow: View {
     var liveInSlot: Bool = true
     /// Billfold's recent picks are static (no flip) — they hide the affordance.
     var showTakeAffordance: Bool = true
+    /// Overrides the eyebrow label (e.g. "FREE PICK" on the Tonight page).
+    var eyebrowOverride: String? = nil
     /// When set, the card renders at this EXACT height so every pick card in a
     /// rail/list is the same size regardless of headline length or footer (the
     /// flip-card wrappers pass it; Billfold/share leave it nil for natural size).
@@ -11747,14 +11745,10 @@ struct CompactPickRow: View {
     // league token leading one meta line, share/tier/take footer. Settled
     // picks wear the diagonal CASHED/LOST stamp, same as the export.
 
-    /// "TODAY'S PICK" while tonight's card is open; "GARY'S PICK" once it
-    /// settles or for any other day.
+    /// Always "GARY'S PICK" app-wide, unless a caller overrides it (the Tonight
+    /// page passes "FREE PICK", so it needs no separate section label).
     private var eyebrowLabel: String {
-        if displayResult != nil { return "GARY'S PICK" }
-        if let d = parseISO8601(pick.displayTime ?? ""), Calendar.current.isDateInToday(d) {
-            return "TODAY'S PICK"
-        }
-        return "GARY'S PICK"
+        eyebrowOverride ?? "GARY'S PICK"
     }
 
     /// Noun for a totals card's second line, by league ("TOTAL RUNS" /
@@ -11944,17 +11938,11 @@ struct CompactPickRow: View {
 
                     HStack(spacing: 10) {
                         if let live = liveFooterText {
-                            HStack(spacing: 6) {
-                                // Green = covering, red = trailing — a dot, not a word. Score stays gold.
-                                if liveBetTone != .neutral {
-                                    Circle().fill(liveToneColor).frame(width: 6, height: 6)
-                                }
-                                Text(live)
-                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
-                                    .foregroundStyle(GaryColors.gold)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                            }
+                            Text(live)
+                                .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                                .foregroundStyle(GaryColors.gold)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         } else if let t = frontTime {
                             // Pre-game: start time anchors the footer's left corner, opposite the chevron.
                             Text(t)
@@ -12382,6 +12370,7 @@ struct FlippableScoreboardCard: View {
 
 struct FlippablePickCard: View {
     let pick: GaryPick
+    var eyebrowOverride: String? = nil
     var gameResult: String? = nil
     var finalScore: String? = nil
     var showSportBadge: Bool = false
@@ -12403,7 +12392,7 @@ struct FlippablePickCard: View {
             // Front pinned to the uniform height so every pick card in a rail is
             // the same size (fixedHeight on CompactPickRow) — no per-card measuring,
             // which is what let 2-line heroes end up taller than 1-line ones.
-            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, fixedHeight: CompactPickRow.uniformHeight)
+            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, eyebrowOverride: eyebrowOverride, fixedHeight: CompactPickRow.uniformHeight)
                 .opacity(flipped ? 0 : 1)
 
             PickCardBack(pick: pick, gameResult: gameResult)
@@ -13250,7 +13239,7 @@ struct HeadlineShareCardView: View {
     private var headlineCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                Text("TODAY'S PICK")
+                Text("GARY'S PICK")
                     .font(GaryFonts.mono(14, bold: true)).tracking(3)
                     .foregroundStyle(GaryColors.gold)
                     .padding(.top, 8)
@@ -13365,7 +13354,7 @@ struct HeadlineSharePropCardView: View {
     private var headlineCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                Text("TODAY'S PICK")
+                Text("GARY'S PICK")
                     .font(GaryFonts.mono(14, bold: true)).tracking(3)
                     .foregroundStyle(GaryColors.gold)
                     .padding(.top, 8)
@@ -13632,6 +13621,19 @@ struct PickCardBack: View {
                     .font(GaryFonts.mono(9, bold: true))
                     .foregroundStyle(Color(hex: "#16A34A").opacity(0.9))
                     .lineLimit(1)
+            }
+
+            // Venue / stadium (BDL supplies it for WC). On the back so the front stays uncrowded.
+            if let venue = pick.venue, !venue.isEmpty {
+                HStack(spacing: 5) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Text(venue)
+                        .font(GaryFonts.mono(9.5)).tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.45))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
             }
 
             if pick.confidence != nil {
@@ -18497,11 +18499,7 @@ struct CompactPropRow: View {
     // share/tier/take footer, diagonal stamp when settled.
 
     private var eyebrowLabel: String {
-        if resolvedResult != nil { return "GARY'S PICK" }
-        if let d = parseISO8601(prop.commence_time ?? ""), Calendar.current.isDateInToday(d) {
-            return "TODAY'S PICK"
-        }
-        return "GARY'S PICK"
+        "GARY'S PICK"
     }
 
     /// "MATT CHAPMAN" over "H+R+RBI OVER 0.5" — the player IS the headline
