@@ -16035,11 +16035,12 @@ struct PicksGamePage: View {
                                   showSportBadge: false,
                                   liveInSlot: false)
                     .padding(.horizontal, 10)
-            } else if heroScore?.isFinal != true {
+            } else if !(heroScore?.isLive ?? false) && !(heroScore?.isFinal ?? false) {
                 // Look-ahead placeholder in the pick's slot — the game's on the
                 // board, Gary's pick lands ~90 min out, and the intel below is
-                // live now. (A finished game's result rides the LiveScoreStrip
-                // above, so this only shows for a game still ahead.)
+                // live now. Only for an UPCOMING game (a live/final game shows its
+                // score on the LiveScoreStrip above; "drops ~90 min before" copy
+                // would be wrong once the game has started).
                 HStack(spacing: 11) {
                     Image(systemName: "clock.badge")
                         .font(.system(size: 15, weight: .semibold))
