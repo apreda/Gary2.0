@@ -32,7 +32,7 @@ struct AuthView: View {
 
                     // Logo
                     VStack(spacing: 0) {
-                        Image("GaryIconBG")
+                        Image(GaryBrand.mark)
                             .resizable()
                             .scaledToFit()
                             .frame(width: 180, height: 180)

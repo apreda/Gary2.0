@@ -90,7 +90,7 @@ struct SettingsView: View {
 
     private var appInfoCard: some View {
         HStack(spacing: 16) {
-            Image("GaryIconBG")
+            Image(GaryBrand.mark)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 84, height: 84)

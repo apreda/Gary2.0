@@ -85,3 +85,65 @@ describe('soccer totals + Asian handicap parsing', () => {
     expect(out.handicap ?? null).toBeNull();
   });
 });
+
+// Regression: the WC two-pick formatter shipped malformed strings to the app card
+// AND the X auto-poster — odds doubled ("Under 3.5 @ 105 +105"), unsigned handicap
+// jammed next to the team with a dangling "@" ("Cabo Verde 3.3 @ -160"), and the
+// stored `type`/`odds` disagreeing with the displayed string. The fix rebuilds a
+// clean, self-contained pick string from the resolved market data.
+describe('soccer pick string is rebuilt clean from market data', () => {
+  it('total: no "@", no doubled odds — single signed price ("Under 3.5 +105")', () => {
+    const out = normalizePickFormat(
+      { pick: 'Under 3.5 @ 105', rationale: RATIONALE },
+      'Spain', 'Cabo Verde', 'soccer_world_cup',
+      { soccer_total: { line: 3.5, over: -130, under: 105 } }
+    );
+    expect(out).not.toBeNull();
+    expect(out.type).toBe('total');
+    expect(out.goal_line).toBe(3.5);
+    expect(out.odds).toBe(105);
+    expect(out.pick).toBe('Under 3.5 +105');
+    expect(out.pick).not.toContain('@');
+    expect(out.pick).not.toMatch(/105\s*\+?105/); // odds not doubled
+  });
+
+  it('asian handicap: unsigned prose handicap becomes a clean signed line from the market ("Cabo Verde +3.3 -160")', () => {
+    const out = normalizePickFormat(
+      { pick: 'Cabo Verde 3.3 @ -160', rationale: RATIONALE },
+      'Spain', 'Cabo Verde', 'soccer_world_cup',
+      { soccer_spread: { homeValue: -3.3, homeOdds: 120, awayValue: 3.3, awayOdds: -160 } }
+    );
+    expect(out).not.toBeNull();
+    expect(out.type).toBe('asian_handicap');
+    expect(out.handicap).toBe(3.3);
+    expect(out.odds).toBe(-160);
+    expect(out.pick).toBe('Cabo Verde +3.3 -160');
+    expect(out.pick).not.toContain('@');
+  });
+
+  it('moneyline still renders clean ("Iran ML -120")', () => {
+    const out = normalizePickFormat(
+      { pick: 'Iran ML -120', rationale: RATIONALE },
+      'Iran', 'New Zealand', 'soccer_world_cup',
+      { soccer_three_way_ml: { home: -120, draw: 240, away: 320 } }
+    );
+    expect(out).not.toBeNull();
+    expect(out.type).toBe('moneyline');
+    expect(out.odds).toBe(-120);
+    expect(out.pick).toBe('Iran ML -120');
+  });
+});
+
+// The "append odds" step only recognized SIGNED odds, so an unsigned plus-money
+// price already in the text (Gary drops the +) got a second copy appended.
+describe('unsigned trailing odds are normalized, not duplicated (all sports)', () => {
+  it('MLB: "Yankees ML 150" → "Yankees ML +150" (no "150 +150")', () => {
+    const out = normalizePickFormat(
+      { pick: 'Yankees ML 150', rationale: RATIONALE },
+      'Yankees', 'Red Sox', 'baseball_mlb', {}
+    );
+    expect(out).not.toBeNull();
+    expect(out.pick).toBe('Yankees ML +150');
+    expect(out.pick).not.toMatch(/150\s*\+?150/);
+  });
+});

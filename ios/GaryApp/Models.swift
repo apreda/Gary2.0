@@ -572,6 +572,9 @@ struct StatValues: Codable {
     let bigChances: String?
     let passAccuracy: String?
     let corners: String?
+    // Futures-implied strength (always available pre-tournament)
+    let advancePct: String?
+    let titleOdds: String?
     // NCAAB Barttorvik rankings
     let adjoeRank: String?
     let adjdeRank: String?
@@ -636,6 +639,8 @@ struct StatValues: Codable {
         case bigChances = "big_chances"
         case passAccuracy = "pass_accuracy"
         case corners
+        case advancePct = "advance_pct"
+        case titleOdds = "title_odds"
         case tovRate = "tov_rate"
         case turnoversPerGame = "turnovers_per_game"
         case orebRate = "oreb_rate"
@@ -851,6 +856,8 @@ struct StatValues: Codable {
             bigChances: dict["big_chances"] as? String ?? (dict["big_chances"] as? NSNumber)?.stringValue,
             passAccuracy: dict["pass_accuracy"] as? String ?? (dict["pass_accuracy"] as? NSNumber)?.stringValue,
             corners: dict["corners"] as? String ?? (dict["corners"] as? NSNumber)?.stringValue,
+            advancePct: dict["advance_pct"] as? String ?? (dict["advance_pct"] as? NSNumber)?.stringValue,
+            titleOdds: dict["title_odds"] as? String ?? (dict["title_odds"] as? NSNumber)?.stringValue,
             // NCAAB Barttorvik rankings
             adjoeRank: dict["adjoe_rank"] as? String,
             adjdeRank: dict["adjde_rank"] as? String,
@@ -1099,6 +1106,8 @@ struct StatValues: Codable {
         case "BIG_CHANCES": return bigChances ?? "N/A"
         case "PASS_ACC": return passAccuracy ?? "N/A"
         case "CORNERS_GM": return corners ?? "N/A"
+        case "ADVANCE": return advancePct ?? "N/A"
+        case "TITLE_ODDS": return titleOdds ?? "N/A"
         default: return offensiveRating ?? defensiveRating ?? netRating ?? overall ?? totalYardsPerGame ?? pointsPerGame ?? goalsForPerGame ?? "N/A"
         }
     }

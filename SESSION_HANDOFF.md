@@ -1,13 +1,34 @@
 # Gary A.I. — Session Handoff (Marketing)
 
-**Last updated:** June 3, 2026
-**Read order:** This file → `CLAUDE_MARKETING.md` (branding/voice) → `MARKETING_LOG.md` (running tweet log + KPI tracking) → `RAMP_PLAN_MAY6_TO_10.md` (5-day ramp reference, historical)
+**Last updated:** June 9, 2026
+**Read order:** This file → `GARY_VOICE.md` (character/voice playbook + content pillars — June 9, defines WHO Gary is) → `CHANNEL_ROLLOUT.md` (multi-channel plan: Threads → TikTok/Reels/Shorts — June 9) → `CLAUDE_MARKETING.md` (branding/voice) → `MARKETING_LOG.md` (running tweet log + KPI tracking) → `RAMP_PLAN_MAY6_TO_10.md` (5-day ramp reference, historical)
+
+> **NEW (June 9):** On top of the automated pick threads, the daily manual layer is: 1 live **sweat** reaction + 1 **brain/character** standalone post (formats and examples in `GARY_VOICE.md`). Personality posts get logged in `social_post_log` with `pick_text = 'PERSONALITY <date>'`, `thread_format = 'personality'`.
 
 > ⚠️ **NOTE (June 3):** Where `CLAUDE_MARKETING.md` says "3 bullet points" for POTD tweets, that is STALE. Current voice = **paragraph reasoning, NO bullets**, in the 3-tweet thread format described below. This file wins on any conflict.
 
 ---
 
-## 🤖 AUTOMATION (LIVE as of June 3, 2026)
+## 🤖 AUTOMATION v2 — SERVER-SIDE (LIVE as of June 12, 2026; metrics-refresh added v6, June 13)
+
+Posting no longer depends on the desktop app. **Supabase pg_cron job `social-auto-post-hourly`** (`45 * * * *` UTC) calls the **`social-auto-post` edge function**, which checks ET time internally (DST-proof): ET hour 10 → daily recap; ET hours 11/14/17/20 → pick slot. LLM = **Gemini** (`GEMINI_API_KEY` secret, already set; model default `gemini-3.5-flash`, override via `GEMINI_MODEL` secret).
+
+- **Metrics auto-refresh (v6, June 13 2026):** EVERY hourly run (regardless of slot) first refreshes `impressions/likes/replies/retweets` for all `social_post_log` rows from the last 6 days, so KPI numbers stay live 24/7 with nobody in the loop. Each row's number = **SUM across all tweets in the thread** (hook + reasoning + CTA) = true thread reach — do NOT change this to hook-only, it would ~3× undercount. Refresh is wrapped in try/catch and can never block posting. Manual trigger: `GET /functions/v1/social-auto-post?metrics_only=1` (anon key). Verified June 13: June MTD ~9.6k impressions, ~875/active-day — above the 666/day pace for the 20k/month KPI.
+- **Voice hardening + formatting (v7, June 13 2026):** VOICE_RULES now bans AI tells — NO em/en dashes (`killDashes()` is a hard backstop that survives even if the model slips), no rule-of-three lists, no "it's not just X, it's Y", no stacked inflated adjectives. Odds de-dupe: pick strings already embed odds (e.g. "Dodgers ML -174"), so we no longer append "(-174)" a second time. CTA reworded to drop the em-dash + "completely free". Preview any pick's composed thread anytime (ignores game timing, posts nothing): `GET /functions/v1/social-auto-post?preview=1`.
+- **Personality layer / Option A (v9, June 13 2026):** New `personality` mode fires daily at **ET hour 12 (12:45pm)** — a single standalone CHARACTER tweet (no link, no bet breakdown), logged as `thread_format='personality'`, `slot='midday'`. It is GROUNDED so it's earned, not random: yesterday's win rate → **mood ladder** (≥80 Fire / 70-79 Cooking / 50-69 Beer / 40-49 IceCold / <40 Doomsday / no games Coin — Worried was merged into Beer per Adam) sets the emotional register, plus today's slate size + top pick for forward flavor. Decided to add as a MODE in the existing function (not a separate function): modes are isolated by the hour they fire, so a personality bug can't touch picks, and it reuses VOICE_RULES + killDashes + logging. Preview: `?dry_run=1&force_mode=personality`. To pause just this layer without touching picks, change `PERSONALITY_HOUR` off 12.
+
+## 📉 CONVERSION FUNNEL (diagnosed June 13, 2026)
+
+Impressions are above KPI pace but downloads lag. Per-tweet metrics show WHY: the App Store link sits in tweet 3 (the CTA reply), which only gets **~12-18% of the hook's impressions, and ~0 link clicks**. Meanwhile the hook earns more **profile** clicks than link clicks. So the profile is the real conversion surface, not the buried CTA. Fixes shipped:
+
+- **Attribution links (so X→download is measurable):** all App Store links now carry an Apple campaign tag `ct=` + `mt=8`, distinct per surface: `ct=x_bio` (profile website), `ct=x_pinned` (pinned tweet), `ct=x_thread` (in-thread CTA). Check **App Store Connect → App Analytics** for these campaigns. For guaranteed first-party rows, owner can also generate official Campaign Links in ASC or supply a provider token (`pt`) to bake in.
+- **Profile updated via API (June 13):** new `update-x-profile` edge function (X API v1.1 `account/update_profile`, OAuth 1.0a, verify_jwt false; v1.1 worked on this tier). Bio + website (`ct=x_bio`) set live. Body `{description?, url?, name?, location?}`, `?dry_run=1` to preview. NOTE: pinning a tweet has NO API endpoint — must be done in the X UI.
+- **Pinned tweet posted:** `2065820358230376542` (evergreen what-is-Gary + `ct=x_pinned` link). OWNER STEP: pin it (••• menu → Pin to profile).
+- **OPEN / strategic (not yet acted):** threads may give away the whole product (full pick + full analysis) leaving weak download incentive. Revisit tease-vs-payoff once attribution data is in. Bigger lever for raw volume = reply-engagement (Gary replying to big sports-Twitter accounts; currently zero).
+
+- **Selection (timing-aware):** posts the unposted pick whose game starts NEXT; ties (same start) → highest confidence. **Last-chance rule:** if no later run could catch a game before it starts, post it now (fixes games falling between slots, e.g. the June 5 zero-post day). Catch-all: if nothing upcoming remains and cap not hit, may post a game that started <60 min ago with live framing. Cap = 3 pick threads/day + recap (recap/personality rows don't count).\n- **Testing:** `GET /functions/v1/social-auto-post?dry_run=1&force_mode=pick|recap` (anon key auth) — composes without posting/logging.\n- **The old Cowork scheduled tasks (`betwithgary-auto-tweet`, `betwithgary-daily-recap`, `betwithgary-nhl-cupfinal-tonight`) are DISABLED** — do not re-enable, they'd double-post against the edge function. The section below describes v1 for historical reference; voice/format rules in it still apply.
+
+## 🤖 AUTOMATION v1 — COWORK TASK (DISABLED June 12, 2026; was live June 3)
 
 Daily posting is now automated via a **Cowork scheduled task** — `betwithgary-auto-tweet` (file: `~/Claude/Scheduled/betwithgary-auto-tweet/SKILL.md`). It is the single source of posting logic; read it to see exactly what runs.
 

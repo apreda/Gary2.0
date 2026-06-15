@@ -145,3 +145,16 @@ From today, posting is automated. See the new **Automation** section in `SESSION
 Thread URL: https://x.com/BetwithGary/status/2062215450788802681
 
 **Notes:** Thin 1-pick slate today; posted ~13 min before first pitch (manual, to go live same-day). Logged in `social_post_log` (id 326c772d). All stats sourced strictly from Gary's Supabase rationale — no outside knowledge injected (trust-Supabase rule).
+
+## June 9, 2026 (Tue) — Personality layer debut
+
+New Social/Growth direction kicked off. `GARY_VOICE.md` (character playbook) and `CHANNEL_ROLLOUT.md` (Threads → TikTok/Reels/Shorts plan) created.
+
+| # | Time | Type | Tweet ID | Summary |
+|---|------|------|----------|---------|
+| 1 | 10:21pm ET | Live Sweat (reply on Nats thread) | 2064533314719903787 | García Jr. HR + Alvarez 3K + Houser 46 pitches — "Exactly the script." |
+| 2 | 10:21pm ET | Character (standalone) | 2064533403727253762 | "Confidence was 0.82... Some things don't get automated." |
+
+Also logged in `social_post_log` as `PERSONALITY 2026-06-09` (personality format) so metrics refresh picks them up.
+
+Context: pick threads earn replies but ~zero likes/follows (June: 18 threads, 31 replies, 3 likes). Personality + sweat + brain posts (see GARY_VOICE.md pillars) are the fix. Daily targets going forward: 1 sweat, 1 brain/character post on top of automated pick threads.

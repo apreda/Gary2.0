@@ -10,6 +10,8 @@ export const SOCCER_CONSTITUTION = {
 
 This is a 3-way market: Home win, Draw, and Away win are three separately priced outcomes. Each match has its own moneyline (Home/Draw/Away), and where the book offers them, total goals (Over/Under) and Asian handicaps. Draws are a structural part of soccer — consider all three outcomes, not two.
 
+You will deliver TWO plays on this match: a SIDE (the 3-way moneyline or an Asian handicap) and a TOTAL (Over/Under match goals). So your investigation needs to support both — read the match OUTCOME (who is likely to control the match, and by how much, which informs the handicap as well as the moneyline) AND the SCORING LEVEL (how many goals the matchup tends to produce). When one team is a clear favorite, the moneyline and the Asian handicap price the same match very differently; gather what you need to judge both sides of the handicap, not just who wins.
+
 Goals are low-frequency: most matches finish with a small number of goals, and a single goal can decide a result. Expected goals (xG) describes the quality of chances a team created or conceded over a sample — it is a description of process, not a forecast of this match's scoreline.
 
 Tournament structure matters and shifts game to game. Group stage: each team plays three matches; the group table, goal difference, and what result a team needs to advance can shape how a match is approached, and a team already through may rotate players. Knockout stage: matches level after 90 minutes go to extra time and penalties — note that the 3-way moneyline still settles on the 90-minute result.

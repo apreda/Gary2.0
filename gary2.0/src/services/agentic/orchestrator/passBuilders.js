@@ -405,11 +405,16 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
-  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline' : (isSoccer ? '3-way moneyline, totals, or Asian handicap' : 'spread'));
+  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline' : (isSoccer ? 'side (3-way ML or Asian handicap) AND a total' : 'spread'));
   const betTypeNote = isNHL
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
     : isSoccer
-    ? `**BET TYPE:** You have three options — 3-WAY MONEYLINE (Home win, Draw, or Away win — three separately priced outcomes, settles on 90 minutes), TOTALS (Over/Under match goals), or ASIAN HANDICAP (team ±0.5/1.0/1.5 goals). Use only markets present in the odds. Backing the Draw is allowed when it is the value play.`
+    ? `**TWO PLAYS REQUIRED (World Cup):** Output BOTH of these for this match — they are stored and shown as two separate cards:
+1. A SIDE play — EITHER the 3-WAY MONEYLINE (Home win / Draw / Away win — three separately priced outcomes, settles on 90 minutes) OR an ASIAN HANDICAP (team ±0.5 / 1.0 / 1.5 / 2.0 goals). Backing the Draw is allowed when it is the value play.
+2. A TOTAL play — Over or Under the match-goals line.
+Use only markets the odds actually show, and report the EXACT odds for each play.
+
+FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, the short ML price pays little and carries little value to investigate. The Asian handicap is a separately priced market on the same match — weigh the favorite laying goals (e.g. -1.5) against the underdog receiving them (+1.5), and take whichever side of the handicap your evidence supports. Do not default to a big favorite's moneyline just because they are likely to win; investigate which side of the handicap is the bet.`
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
@@ -426,6 +431,44 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 
   const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const useOpenDecision = isMLB || isNCAAB;
+
+  // Soccer ships TWO plays per match (a side + a total), so the "Final Decision"
+  // line and the structured-output JSON differ from the single-pick sports.
+  const finalDecisionInstruction = isSoccer
+    ? `Final Decision — SIDE: [your side at the 3-way ML or Asian handicap, with exact odds]
+Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
+    : `Final Decision: [your side at this ${lineLabel}]`;
+
+  const structuredOutputFormat = isSoccer
+    ? `Format (TWO picks — you MUST fill in BOTH the side and the total):
+
+\`\`\`json
+{
+  "side_pick": "[Team] [ML / Draw / -1.5 / +0.5 ...] [odds]",
+  "side_rationale": "Gary's Take\\n\\n[2-4 sentences: why this side, drawn from your read above]",
+  "side_confidence": 0.XX,
+  "total_pick": "[Over/Under] [goals] [odds]",
+  "total_rationale": "Gary's Take\\n\\n[2-4 sentences: why this total, drawn from your read above]",
+  "total_confidence": 0.XX
+}
+\`\`\`
+
+**confidence (0.50-1.00):** Set EACH organically from the strength of the evidence for that specific play — do NOT default. The two plays are independent and may differ in confidence.
+
+Your JSON must include all six fields. A missing field will cause a system error.`
+    : `Format:
+
+\`\`\`json
+{
+  "final_pick": "[Team] [spread/ML] [odds]",
+  "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
+  "confidence_score": 0.XX
+}
+\`\`\`
+
+**confidence_score (0.50-1.00):** How confident are you in this pick? Set it organically based on the strength of the evidence — do NOT default.
+
+Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
   return `
 <decision_checkpoint>
@@ -458,7 +501,7 @@ Write your FINAL DECISION and FULL CARD RATIONALE DRAFT in natural language, THE
 
 Use this exact format:
 
-Final Decision: [your side at this ${lineLabel}]
+${finalDecisionInstruction}
 
 Gary's Take
 
@@ -496,21 +539,9 @@ ${betTypeNote}
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
-4. The "final_pick" field MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
+4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
-Format:
-
-\`\`\`json
-{
-  "final_pick": "[Team] [spread/ML] [odds]",
-  "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
-  "confidence_score": 0.XX
-}
-\`\`\`
-
-**confidence_score (0.50-1.00):** How confident are you in this pick? Set it organically based on the strength of the evidence — do NOT default.
-
-Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.
+${structuredOutputFormat}
 </instructions>
 `.trim();
 }
@@ -627,15 +658,28 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isSoccer ? `**BET TYPE:** You have three options — 3-WAY MONEYLINE (Home / Draw / Away — settles on 90 minutes), TOTALS (Over/Under match goals), or ASIAN HANDICAP (team ±0.5/1.0/1.5 goals). Report the EXACT odds from the scout report for your chosen market.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
+${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isSoccer ? `**TWO PLAYS REQUIRED (World Cup):** Output BOTH a SIDE play (3-WAY MONEYLINE Home/Draw/Away — settles on 90 minutes — OR an ASIAN HANDICAP team ±0.5/1.0/1.5/2.0) and a TOTAL play (Over/Under match goals). Report the EXACT odds for each. For the side, when a team is a heavy ML favorite weigh the handicap (favorite -1.5 vs underdog +1.5) instead of defaulting to the short moneyline.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
-4. The "final_pick" field MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
+4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
-Output your final pick as JSON:
+${isSoccer ? `Output your final picks as JSON (BOTH the side and the total — all six fields required):
+
+\`\`\`json
+{
+  "side_pick": "[Team] [ML / Draw / -1.5 / +0.5 ...] [odds]",
+  "side_rationale": "Gary's Take\\n\\n[2-4 sentences on the side]",
+  "side_confidence": 0.XX,
+  "total_pick": "[Over/Under] [goals] [odds]",
+  "total_rationale": "Gary's Take\\n\\n[2-4 sentences on the total]",
+  "total_confidence": 0.XX
+}
+\`\`\`
+
+**confidence (0.50-1.00):** Set each organically; the two plays are independent and may differ.` : `Output your final pick as JSON:
 
 \`\`\`json
 {
@@ -645,7 +689,7 @@ Output your final pick as JSON:
 }
 \`\`\`
 
-**confidence_score (0.50-1.00):** How confident are you in this pick?
+**confidence_score (0.50-1.00):** How confident are you in this pick?`}
 </output_requirements>
 
 <instructions>
@@ -654,7 +698,7 @@ Output your final pick as JSON:
 Output your final pick JSON now using the exact format above.
 Use the Pass 2.5 decision + rationale draft as source of truth.
 
-Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.
+${isSoccer ? `Your JSON must include all six fields (side_pick, side_rationale, side_confidence, total_pick, total_rationale, total_confidence). A missing field will cause a system error.` : `Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`}
 </instructions>
 `.trim();
 }

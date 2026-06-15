@@ -653,6 +653,25 @@ async function processGenericGames(table, date, leagueFilter = null) {
   const stats = { w: 0, l: 0, p: 0 };
   for (const row of rows) {
     const picks = typeof row.picks === 'string' ? JSON.parse(row.picks) : (row.picks || row.picks_array || []);
+
+    // Winners game picks = top 3 per league by (is_top_pick, then confidence) —
+    // mirrors the app's Winners game shelves (sortedBest().prefix(3)). We stamp
+    // is_winners_pick on the graded row so Home can show a Winners-only record.
+    const winnerKey = (p) => `${(p.league || '').toUpperCase()}|${p.pick}|${p.awayTeam} @ ${p.homeTeam}`;
+    const winnerKeys = new Set();
+    {
+      const byLeague = {};
+      for (const p of picks) (byLeague[(p.league || 'UNKNOWN').toUpperCase()] ||= []).push(p);
+      for (const lg of Object.keys(byLeague)) {
+        const ranked = byLeague[lg].slice().sort((a, b) => {
+          const at = a.is_top_pick ? 1 : 0, bt = b.is_top_pick ? 1 : 0;
+          if (at !== bt) return bt - at;
+          return (b.confidence ?? 0) - (a.confidence ?? 0);
+        });
+        for (const p of ranked.slice(0, 3)) winnerKeys.add(winnerKey(p));
+      }
+    }
+
     for (const pick of picks) {
       if (leagueFilter && pick.league?.toUpperCase() !== leagueFilter) continue;
       const league = pick.league || (table === 'weekly_nfl_picks' ? 'NFL' : 'UNKNOWN');
@@ -789,16 +808,19 @@ async function processGenericGames(table, date, leagueFilter = null) {
         // iOS doesn't read pick_id so storing the parent row id is correct.
         const perPickId = row.id;
         const targetTable = league === 'NFL' ? 'nfl_results' : 'game_results';
+        const isWinnersPick = winnerKeys.has(winnerKey(pick));
         const insertPayload = league === 'NFL'
           ? {
               nfl_pick_id: perPickId, game_date: gameDate, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
+              is_winners_pick: isWinnersPick,
             }
           : {
               pick_id: perPickId, game_date: gameDate, league, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
+              is_winners_pick: isWinnersPick,
             };
 
         let alreadyExists = false;

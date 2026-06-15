@@ -54,6 +54,55 @@ async function aggregateRateStats(teamId) {
   }
 }
 
+// ── Futures-implied strength ─────────────────────────────────────────────────
+// Match-stat aggregates are empty until a team plays (opening matches read all
+// N/A). Futures odds, by contrast, are published for every team before kickoff,
+// so they give the Tale of the Tape always-available strength rows: "Advance %"
+// (implied chance to escape the group) and "Title Odds" (outright price).
+
+function americanToImplied(am) {
+  const n = Number(am);
+  if (!Number.isFinite(n) || n === 0) return undefined;
+  return n < 0 ? (-n) / (-n + 100) : 100 / (n + 100);
+}
+
+function decimalToAmerican(dec) {
+  if (!Number.isFinite(dec) || dec <= 1) return undefined;
+  return dec >= 2 ? `+${Math.round((dec - 1) * 100)}` : `${Math.round(-100 / (dec - 1))}`;
+}
+
+function median(nums) {
+  const xs = nums.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (!xs.length) return undefined;
+  const mid = Math.floor(xs.length / 2);
+  return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+}
+
+/** Decimal odds for a team's market across vendors → median (consensus). */
+function consensusDecimal(futures, teamId, teamName, marketType) {
+  const rows = futures.filter(
+    (f) =>
+      f.market_type === marketType &&
+      (f.subject?.id === teamId || (teamName && f.subject?.name === teamName))
+  );
+  const decs = rows.map((f) =>
+    Number.isFinite(f.decimal_odds)
+      ? f.decimal_odds
+      : (americanToImplied(f.american_odds) ? 1 / americanToImplied(f.american_odds) : undefined)
+  );
+  return median(decs);
+}
+
+/** Always-available strength stats for a team from futures markets. */
+function futuresStrengthFor(futures, teamId, teamName) {
+  if (!Array.isArray(futures) || !futures.length) return {};
+  const qualDec = consensusDecimal(futures, teamId, teamName, 'qualify_from_group');
+  const titleDec = consensusDecimal(futures, teamId, teamName, 'outright');
+  const advance_pct = qualDec ? `${Math.round((1 / qualDec) * 100)}%` : undefined;
+  const title_odds = titleDec ? decimalToAmerican(titleDec) : undefined;
+  return { advance_pct, title_odds };
+}
+
 function standingsFor(standings, teamId) {
   const row = standings.find(s => s.team?.id === teamId);
   if (!row) return {};
@@ -78,17 +127,20 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const awayId = game.away_team_data?.id ?? game.away_team?.id ?? null;
   console.log(`[Scout Report] Building WC report: ${homeTeam} vs ${awayTeam}`);
 
-  const [standings, homeAgg, awayAgg] = await Promise.all([
+  const [standings, homeAgg, awayAgg, futures] = await Promise.all([
     wc.getGroupStandings().catch(() => []),
     aggregateRateStats(homeId),
     aggregateRateStats(awayId),
+    wc.getFutures().catch(() => []),
   ]);
 
   const homeStand = standingsFor(standings, homeId);
   const awayStand = standingsFor(standings, awayId);
+  const homeFut = futuresStrengthFor(futures, homeId, homeTeam);
+  const awayFut = futuresStrengthFor(futures, awayId, awayTeam);
 
-  const homeProfile = { teamName: homeTeam, record: homeStand.record, seasonStats: { ...homeStand, ...homeAgg } };
-  const awayProfile = { teamName: awayTeam, record: awayStand.record, seasonStats: { ...awayStand, ...awayAgg } };
+  const homeProfile = { teamName: homeTeam, record: homeStand.record, seasonStats: { ...homeStand, ...homeAgg, ...homeFut } };
+  const awayProfile = { teamName: awayTeam, record: awayStand.record, seasonStats: { ...awayStand, ...awayAgg, ...awayFut } };
 
   const stage = game.soccer_stage || 'Group Stage';
   const groupLabel = game.soccer_group ? ` (${game.soccer_group})` : '';

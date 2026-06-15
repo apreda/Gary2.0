@@ -18,7 +18,7 @@ struct AccessView: View {
                 
                 // Logo - no glow, matches home page
                 VStack(spacing: 0) {
-                    Image("GaryIconBG")
+                    Image(GaryBrand.mark)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 260, height: 260)

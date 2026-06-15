@@ -354,6 +354,10 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const l5Form = formatStat(homeL5, awayL5);
     rows = [
       { label: 'Group Pos', ...formatStat(homeStats.group_position, awayStats.group_position) },
+      // Futures-implied strength — populated from kickoff (rate stats below are
+      // N/A until a team plays a group game), so the tape is never empty early.
+      { label: 'Advance', ...formatStat(homeStats.advance_pct, awayStats.advance_pct) },
+      { label: 'Title Odds', ...formatStat(homeStats.title_odds, awayStats.title_odds) },
       { label: 'Points', ...formatStat(homeStats.points, awayStats.points) },
       { label: 'GF/Gm', ...formatStat(fmtNum(homeStats.goals_for), fmtNum(awayStats.goals_for)) },
       { label: 'GA/Gm', ...formatStat(fmtNum(homeStats.goals_against), fmtNum(awayStats.goals_against)) },

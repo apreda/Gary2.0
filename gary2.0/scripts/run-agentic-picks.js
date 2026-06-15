@@ -1420,6 +1420,8 @@ async function main() {
               'RUNS_PER_GAME': 'runs_per_game',
               // Soccer / World Cup (tokens auto-derived from Tale-of-Tape row labels)
               'GROUP_POS': 'group_pos',
+              'ADVANCE': 'advance_pct',
+              'TITLE_ODDS': 'title_odds',
               'POINTS': 'points',
               'GF_GM': 'goals_for',
               'GA_GM': 'goals_against',
@@ -1459,7 +1461,7 @@ async function main() {
             console.log(`   ✓ ${sportLabel}: Added ${statsData.length} stats from verified Tale of Tape`);
 
             // Per-sport expected row counts — drift is a silent iOS rendering bug
-            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14, 'WC': 13 }[sportLabel];
+            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14, 'WC': 15 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }
@@ -1625,17 +1627,47 @@ async function main() {
               : null
           };
 
+          // World Cup ships TWO plays per match — a SIDE (3-way ML or Asian
+          // handicap) and a TOTAL (Over/Under) — in one analysis run. The
+          // orchestrator returns the side as the primary result and the total in
+          // result.additionalPicks. Build a sibling pick for each, cloning the
+          // shared game/context fields and overriding only the bet-specific ones.
+          // Each gets a category-suffixed pick_id; the storage layer keys soccer
+          // by (match_id, type) so the two coexist as separate cards.
+          const wcCategory = (t) => (t === 'total' ? 'total' : 'side');
+          const picksForGame = [cleanPick];
+          if (config.key === 'soccer_world_cup') {
+            cleanPick.pick_category = wcCategory(cleanPick.type);
+            cleanPick.pick_id = `agentic-${config.key}-${game.id || Date.now()}-${cleanPick.pick_category}`;
+          }
+          for (const extra of (result.additionalPicks || [])) {
+            if (!extra || !extra.pick) continue;
+            const cat = wcCategory(extra.type);
+            picksForGame.push({
+              ...cleanPick,
+              pick: extra.pick,
+              type: extra.type,
+              odds: extra.odds,
+              confidence: extra.confidence || cleanPick.confidence,
+              rationale: extra.rationale || cleanPick.rationale,
+              goal_line: extra.goal_line ?? extra.total ?? null,
+              handicap: extra.handicap ?? null,
+              pick_category: cat,
+              pick_id: `agentic-${config.key}-${game.id || Date.now()}-${cat}`,
+            });
+          }
+
           // Add to picks
-          sportPicks.push(cleanPick);
-          picksGenerated += 1;
+          sportPicks.push(...picksForGame);
+          picksGenerated += picksForGame.length;
 
           // Store each pick immediately so it appears in the app as soon as it's ready
           // Skip immediate store in test mode — test picks are stored in batch at the end
           if (shouldStore && !useTestTable && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
             try {
-              console.log(`\n📤 [${config.name}] Storing pick immediately: ${cleanPick.pick}`);
-              await storePicks([cleanPick]);
-              console.log(`✅ [${config.name}] Pick stored to Supabase`);
+              console.log(`\n📤 [${config.name}] Storing ${picksForGame.length} pick(s) immediately: ${picksForGame.map(p => p.pick).join(' | ')}`);
+              await storePicks(picksForGame);
+              console.log(`✅ [${config.name}] Pick(s) stored to Supabase`);
               // Persist investigation context so the "Talk to Gary" chat feature
               // can speak from the actual depth Gary saw. Non-fatal on failure.
               if (result._context) {

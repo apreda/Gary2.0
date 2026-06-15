@@ -437,7 +437,7 @@ struct GaryCenteredTabBar: View {
         return Button {
             tabAction(index: garyIndex)
         } label: {
-            Image("GaryHead")
+            Image(GaryBrand.mark)
                 .resizable()
                 .scaledToFit()
                 .frame(width: logoSize, height: logoSize)

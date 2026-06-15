@@ -64,6 +64,12 @@ const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 // game_results is the grounding source for "Gary-relevant" framing.
 const RESULTS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/game_results` : null;
 
+// daily_picks is the grounding source for TODAY's real slate (the teams Gary is
+// actually dealing with). Used to build the real-team allowlist that prevents the
+// model from fabricating games (e.g. inventing a 2024-Finals NBA matchup when the
+// NBA pipeline has produced nothing real).
+const DAILY_PICKS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_picks` : null;
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,10 +192,112 @@ async function fetchResultsContext(date, league) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Real-team allowlist (anti-fabrication gate)
+//
+// The model — even with google_search — will free-associate a "salient" matchup
+// from its training prior when there's no real, current data for a league (e.g.
+// inventing the 2024 Celtics–Mavericks Finals during the 2026 NBA injuries-API
+// outage). The cure is to ground items in the teams Gary is ACTUALLY dealing with:
+// today's slate (daily_picks) plus yesterday's graded games (game_results). If a
+// league has none, we skip it entirely — a dark Wire beats a fabricated one. Items
+// that name a team outside the allowlist are dropped after generation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Words that are too generic to discriminate one team from another (city/qualifier
+// words shared across teams). Stripped from both sides before token matching so the
+// discriminating signal is the mascot/country token (dodgers, celtics, paraguay).
+const TEAM_STOPWORDS = new Set([
+  'los', 'angeles', 'new', 'york', 'san', 'st', 'saint', 'fc', 'sc', 'cf', 'afc',
+  'united', 'city', 'club', 'the', 'of', 'and', 'de', 'real', 'sporting',
+]);
+
+/** Lowercase, strip punctuation, split to discriminating tokens (stopwords removed). */
+function teamTokens(name) {
+  if (!name) return [];
+  return String(name)
+    .toLowerCase()
+    .replace(/&/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !TEAM_STOPWORDS.has(w));
+}
+
+/** Pull today's slate team names for a league from daily_picks. */
+async function fetchSlateTeams(date, league) {
+  if (!DAILY_PICKS_REST_URL) return [];
+  try {
+    const resp = await axios({
+      method: 'GET',
+      url: DAILY_PICKS_REST_URL,
+      headers: restHeaders,
+      params: { select: 'picks', date: `eq.${date}`, limit: 1 },
+    });
+    const row = Array.isArray(resp.data) ? resp.data[0] : null;
+    const picks = Array.isArray(row?.picks) ? row.picks : [];
+    const names = [];
+    for (const p of picks) {
+      if (String(p?.league || '').toUpperCase() !== league) continue;
+      if (p?.awayTeam) names.push(p.awayTeam);
+      if (p?.homeTeam) names.push(p.homeTeam);
+    }
+    return names;
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.warn(`   ⚠️  [${league}] slate fetch failed (non-fatal): ${detail}`);
+    return [];
+  }
+}
+
+/**
+ * Build the real-team allowlist for a league: full names (for the prompt) + a token
+ * set (for validation), drawn from today's slate and yesterday's graded results.
+ */
+function buildAllowlist(slateTeams, resultsContext) {
+  const names = new Set();
+  for (const n of slateTeams) if (n) names.add(String(n).trim());
+  for (const r of resultsContext) {
+    // matchup is "Away @ Home"
+    for (const side of String(r.matchup || '').split(/\s*@\s*|\s+vs\.?\s+/i)) {
+      const s = side.trim();
+      if (s) names.add(s);
+    }
+  }
+  const tokens = new Set();
+  for (const n of names) for (const t of teamTokens(n)) tokens.add(t);
+  return { names: [...names], tokens };
+}
+
+/**
+ * Decide whether an item is grounded in the allowlist. Game-specific kinds
+ * (result/line_move/injury) MUST reference at least one real team in their `game`
+ * or headline. League-wide commentary (voice/pace with no game) is allowed through,
+ * but if it names a game, that game must check out.
+ */
+function isItemGrounded(item, allowTokens) {
+  if (!allowTokens || allowTokens.size === 0) return false;
+  const gameSpecific = item.kind === 'result' || item.kind === 'line_move' || item.kind === 'injury';
+  const hay = `${item.game || ''} ${item.headline || ''} ${item.subline || ''}`;
+  const refTokens = teamTokens(hay);
+  const overlap = refTokens.some((t) => allowTokens.has(t));
+
+  if (item.game) {
+    // A named matchup must contain a real team; otherwise it's an invented game.
+    const gameTokens = teamTokens(item.game);
+    const gameHasReal = gameTokens.some((t) => allowTokens.has(t));
+    if (!gameHasReal) return false;
+  }
+  if (gameSpecific) {
+    // result/line_move/injury without any real-team reference = fabrication.
+    return overlap;
+  }
+  return true; // voice/pace league-wide commentary
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Prompt + Gemini call (grounded)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildPrompt({ date, league, resultsContext }) {
+function buildPrompt({ date, league, resultsContext, allowNames }) {
   const yday = yesterdayOf(date);
   const ctxBlock = resultsContext.length
     ? resultsContext
@@ -200,11 +308,19 @@ function buildPrompt({ date, league, resultsContext }) {
         .join('\n')
     : '(no graded Gary games on file for yesterday — use search results only)';
 
+  const teamsBlock = allowNames && allowNames.length
+    ? allowNames.map((n) => `- ${n}`).join('\n')
+    : '(none)';
+
   return `You are the editor of "The Wire", a betting-news ticker for sharp sports bettors. ` +
     `Generate news items for ${league} for ${date} (today, ET). Yesterday was ${yday}.\n\n` +
-    `Use Google Search to find REAL, current information: yesterday's final scores against the closing ` +
-    `spread/total, line moves on today's slate, injury news and its market reaction, recent posts from ` +
-    `prominent betting analysts, and pace/scoring-environment notes.\n\n` +
+    `These are the ONLY real teams in play right now (today's slate + yesterday's graded games). ` +
+    `Every item MUST be about one of these teams. Do NOT write about any team not on this list, and ` +
+    `do NOT invent matchups, series, or playoff rounds from memory — if you are not certain a game is ` +
+    `happening on the real ${date} schedule, omit it:\n${teamsBlock}\n\n` +
+    `Use Google Search to find REAL, current information about THESE teams: yesterday's final scores ` +
+    `against the closing spread/total, line moves on today's slate, injury news and its market reaction, ` +
+    `recent posts from prominent betting analysts, and pace/scoring-environment notes.\n\n` +
     `Gary's recently graded games (for framing 'result' items against games our users bet):\n${ctxBlock}\n\n` +
     `Return a STRICT JSON array (no prose, no markdown fences, no commentary) of 4 to 8 items. ` +
     `Each item is an object with EXACTLY these keys:\n` +
@@ -370,18 +486,44 @@ async function run() {
     console.log(`\n── ${league} ──`);
     try {
       const resultsContext = await fetchResultsContext(targetDate, league);
-      console.log(`   Context: ${resultsContext.length} graded result row(s) for framing.`);
+      const slateTeams = await fetchSlateTeams(targetDate, league);
+      const allow = buildAllowlist(slateTeams, resultsContext);
+      console.log(
+        `   Context: ${resultsContext.length} graded result row(s), ` +
+          `${slateTeams.length} slate team-slot(s) → ${allow.names.length} real team(s).`
+      );
 
-      const prompt = buildPrompt({ date: targetDate, league, resultsContext });
+      // Anti-fabrication gate: no real teams in play → no Wire for this league.
+      // (Fixes the NBA-outage hallucination — a dark Wire beats an invented one.)
+      if (allow.tokens.size === 0) {
+        console.log(`   ⏭️  Skipping ${league}: no real slate or graded games to ground items.`);
+        if (!dryRun) {
+          await deleteDayRows(targetDate, league); // clear any stale/fabricated rows
+          console.log(`   🧹 Cleared any existing ${league} rows for ${targetDate}.`);
+        }
+        continue;
+      }
+
+      const prompt = buildPrompt({ date: targetDate, league, resultsContext, allowNames: allow.names });
       const text = await callWireModel(prompt);
       const parsed = parseWireItems(text);
 
-      const rows = parsed
+      const allRows = parsed
         .map((item) => toRow(item, league, targetDate))
         .filter(Boolean);
 
+      // Drop items naming a team that isn't really in play (caught fabrications).
+      const rows = allRows.filter((r) => isItemGrounded(r, allow.tokens));
+      const dropped = allRows.length - rows.length;
+      if (dropped > 0) {
+        console.log(`   🚫 Dropped ${dropped} ungrounded item(s) (team not on the real slate).`);
+      }
+
       if (rows.length === 0) {
-        console.log(`   No wire items generated for ${league} on ${targetDate}.`);
+        console.log(`   No grounded wire items for ${league} on ${targetDate}.`);
+        if (!dryRun) {
+          await deleteDayRows(targetDate, league); // don't leave stale rows behind
+        }
         continue;
       }
 

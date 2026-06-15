@@ -2,7 +2,7 @@
  * Gary Picks Service - Fully Integrated
  * Handles NBA, NFL, NHL, NCAAF, NCAAB pick generation and storage
  */
-import { supabase, storeDailyPicks } from '../supabaseClient.js';
+import { supabase, supabaseAdmin, storeDailyPicks } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { getESTDate } from '../utils/dateUtils.js';
 
@@ -827,7 +827,9 @@ export async function storePickContext(pick, context) {
       moneyline_away: pick.moneylineAway ?? null,
       total: typeof pick.total === 'number' ? pick.total : null,
     };
-    const { error } = await supabase
+    // Service-role client: pick_context is a server-only table; the anon key is
+    // blocked by RLS on insert (the same reason daily_picks uses a service path).
+    const { error } = await supabaseAdmin
       .from('pick_context')
       .upsert(row, { onConflict: 'pick_id' });
     if (error) {

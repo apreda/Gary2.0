@@ -53,6 +53,21 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.14",
+        date: "June 2026",
+        type: .update,
+        title: "Gary 2.14 — Sharper, faster, more accurate",
+        changes: [
+            "The Wire only reports real games now — no more stale or off-day news",
+            "Tale of the Tape for World Cup shows a team's odds to advance and title price from kickoff, not just once group games are played",
+            "World Cup matchups now get their own page on the Picks tab, like every other sport",
+            "Every pick card is the same clean size, whatever the headline length",
+            "Last night's late games keep their full recap and bullets on Home",
+            "Picks page: sport filter moved above the matchups; combo props read as H+R+RBI",
+            "Fixed a Hub header glitch and tightened up scrolling and load times"
+        ]
+    ),
+    ChangelogEntry(
         version: "2.13",
         date: "June 2026",
         type: .feature,
@@ -363,7 +378,7 @@ struct ChangelogView: View {
     private var headerView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Image("GaryCoin")
+                Image(GaryBrand.mark)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 50, height: 50)

@@ -21,6 +21,17 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 })
 
+// Service-role client for server-side pipeline writes that RLS blocks for the
+// anon key (e.g. pick_context — written only by the pipeline, never the app).
+// daily_picks already bypasses RLS via the direct-REST storeDailyPicks helper;
+// this gives the supabase-js write paths the same admin access. Falls back to
+// the anon client when no service key is set (writes will then hit RLS).
+export const supabaseAdmin = supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+  : supabase;
+
 /**
  * CRITICAL FIX: Specialized function for directly storing picks in the daily_picks table
  * Implementing direct API approach to bypass PostgreSQL JSON handling issues

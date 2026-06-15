@@ -48,8 +48,19 @@ const SPORTS = [
   // dfsArgs ['--limit','1'] when it returns: ~$0.54/lineup at MLB context size,
   // so Main-only (~$33/mo) until the free labs feature earns full coverage.
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: false, dfsArgs: ['--limit', '1'] },
-  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: null, dfs: false }, // 2026 FIFA World Cup — game picks only
+  // 2026 FIFA World Cup — game picks only. Runs at a FIXED 10:00 AM ET (not the
+  // per-game T-90/60/30/15 lead times). Rationale (user call, Jun 13 2026): the
+  // T-90 cascade exists to wait out NBA/NHL/MLB lineup posts; soccer has no such
+  // gate, and fans want the WC read + reasoning early in the day, not 90 min
+  // before kickoff. fixedTriggerET drives the fixed-time path in buildPlan().
+  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: null, dfs: false, fixedTriggerET: { hour: 10, minute: 0 } },
 ];
+
+// Spaced retries for fixed-trigger sports, as minutes AFTER the fixed time
+// (10:00 → 10:45 → 11:30 ET). Like the lead-time tiers, every retry after a
+// successful pick hits run-agentic-picks.js's "already has pick" dedup and
+// exits in ~1s, so the extra triggers are a cheap reliability net.
+const FIXED_TRIGGER_RETRY_OFFSETS_MINUTES = [0, 45, 90];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LOGGING
@@ -183,25 +194,36 @@ async function buildPlan(etDateStr) {
       const matchup = `${awayTeam} @ ${homeTeam}`;
       const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
 
-      // Emit one schedule entry per retry tier. Each fires at startTime - tier.
-      // The pick + props scripts' own dedup ("already has pick" / props) makes
-      // entries after a successful pick into ~instant no-ops.
+      // Emit one schedule entry per trigger tier. Two shapes:
+      //   • Fixed-time sports (WC): fire at a fixed ET wall-clock time + spaced
+      //     retries (10:00/10:45/11:30 ET), capped so we never trigger after
+      //     kickoff. leadMin is null → distinguishes these in the run logs.
+      //   • Lead-time sports (NBA/NHL/MLB): fire at startTime − T-90/60/30/15.
+      // Either way, run-agentic-picks.js's "already has pick" dedup turns every
+      // tier after a successful pick into a ~1s no-op.
       const tierLabels = [];
-      for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
-        const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
-        const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
-        const tier = i + 1; // 1 = primary, 2 = first retry, 3 = final retry
-        schedule.push({
-          sport,
-          matchup,
-          startTime,
-          triggerTime,
-          gameId: game.id,
-          tier,
-          leadMin,
-        });
-        const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-        tierLabels.push(`T${leadMin}=${triggerET}`);
+      if (sport.fixedTriggerET) {
+        const base = instantForETDate(etDateStr, sport.fixedTriggerET.hour, sport.fixedTriggerET.minute);
+        const latest = new Date(startTime.getTime() - 15 * 60 * 1000); // never pick after kickoff
+        for (let i = 0; i < FIXED_TRIGGER_RETRY_OFFSETS_MINUTES.length; i++) {
+          let triggerTime = new Date(base.getTime() + FIXED_TRIGGER_RETRY_OFFSETS_MINUTES[i] * 60 * 1000);
+          if (triggerTime > latest) {
+            if (i === 0) triggerTime = latest; // early game: keep one trigger, fire ASAP
+            else continue;                      // drop retries that would land after kickoff
+          }
+          schedule.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin: null });
+          const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+          tierLabels.push(`fixed=${triggerET}`);
+        }
+      } else {
+        for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
+          const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
+          const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
+          const tier = i + 1; // 1 = primary, 2 = first retry, 3 = final retry
+          schedule.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier, leadMin });
+          const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+          tierLabels.push(`T${leadMin}=${triggerET}`);
+        }
       }
       log(`    ${matchup} | Game: ${startET} | ${tierLabels.join(' / ')} | id: ${game.id}`);
     }
@@ -350,6 +372,21 @@ async function executeSchedule(schedule) {
 
   log(`\n📦 ${batches.length} trigger windows for ${schedule.length} games`);
 
+  // Coverage tracking. A game is a confirmed MISS once its FINAL retry tier has
+  // fired and no pick is stored. We check the instant that last tier completes —
+  // not at end-of-day — so an early slate (WC at 10 AM) surfaces by late morning
+  // instead of after the night's last MLB game. (log + rollup; no real-time push.)
+  const lastTierTime = new Map(); // gameId -> latest triggerTime (ms)
+  for (const e of schedule) {
+    const t = e.triggerTime.getTime();
+    if (!lastTierTime.has(e.gameId) || t > lastTierTime.get(e.gameId)) lastTierTime.set(e.gameId, t);
+  }
+  const uniqueGameIds = new Set(schedule.map(e => e.gameId));
+  const missedGames = [];
+  let gameAlreadyHasPick = null;
+  try { ({ gameAlreadyHasPick } = await import('../src/services/picksService.js')); }
+  catch (e) { log(`⚠️ Coverage check disabled — picksService load failed: ${e.message}`); }
+
   for (const batch of batches) {
     const triggerTime = batch[0].triggerTime;
     const now = Date.now();
@@ -383,7 +420,8 @@ async function executeSchedule(schedule) {
       // We pass --game-id (BDL game id) so we always target the exact game,
       // never a substring match (which would collide on Red/White Sox or doubleheaders).
       for (const entry of games) {
-        const tierTag = entry.tier > 1 ? ` [retry T-${entry.leadMin}]` : ` [primary T-${entry.leadMin}]`;
+        const tierWord = entry.tier > 1 ? 'retry' : 'primary';
+        const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
         try {
           log(`  📊 Game picks: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
           await runScript('scripts/run-agentic-picks.js', [sport.flag, '--game-id', String(entry.gameId)]);
@@ -396,12 +434,33 @@ async function executeSchedule(schedule) {
       // propsScript (e.g. World Cup — game picks only) skip this entirely.
       for (const entry of games) {
         if (!sport.propsScript) break;
-        const tierTag = entry.tier > 1 ? ` [retry T-${entry.leadMin}]` : ` [primary T-${entry.leadMin}]`;
+        const tierWord = entry.tier > 1 ? 'retry' : 'primary';
+        const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
         try {
           log(`  🎯 Props: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
           await runScript(`scripts/${sport.propsScript}`, ['--game-id', String(entry.gameId)]);
         } catch (e) {
           log(`  ❌ Props failed: ${entry.matchup}${tierTag}: ${e.message}`);
+        }
+      }
+    }
+
+    // Coverage: any game in this window whose FINAL tier just fired with no
+    // stored pick is a confirmed miss — flag it now (picks store synchronously
+    // during runScript above, so the DB read here is accurate). Checked once per
+    // game (only at its last tier), so no duplicate warnings.
+    if (typeof gameAlreadyHasPick === 'function') {
+      for (const entry of batch) {
+        if (entry.triggerTime.getTime() !== lastTierTime.get(entry.gameId)) continue;
+        const etDate = entry.startTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        try {
+          const res = await gameAlreadyHasPick(entry.sport.label, entry.homeTeam, entry.awayTeam, etDate, entry.gameId);
+          if (!res?.exists) {
+            missedGames.push(entry);
+            log(`⚠️ MISSED PICK: ${entry.sport.label} ${entry.matchup} — 0 stored after all retry tiers (id ${entry.gameId})`);
+          }
+        } catch (e) {
+          log(`⚠️ Coverage check failed for ${entry.sport.label} ${entry.matchup}: ${e.message}`);
         }
       }
     }
@@ -413,6 +472,15 @@ async function executeSchedule(schedule) {
   }
 
   log('\n🏁 All games complete for today.');
+
+  // End-of-day rollup from the per-game checks logged above (the Jun 5/8/10 NBA
+  // outages were all silent — this makes a dead slate announce itself).
+  const covered = uniqueGameIds.size - missedGames.length;
+  if (missedGames.length === 0) {
+    log(`📊 Daily pick coverage: ${covered}/${uniqueGameIds.size} games covered — no misses ✅`);
+  } else {
+    log(`📊 Daily pick coverage: ${covered}/${uniqueGameIds.size} covered — ${missedGames.length} MISSED: ${missedGames.map(g => `${g.sport.label} ${g.matchup}`).join(' | ')}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -289,7 +289,8 @@ const ALL_TOKENS = [...new Set([
   ...NCAAB_TOKENS,
   ...NCAAF_TOKENS,
   ...NHL_TOKENS,
-  ...MLB_TOKENS
+  ...MLB_TOKENS,
+  ...SOCCER_WC_TOKENS
 ])];
 
 /**
@@ -310,7 +311,7 @@ Typical analysis needs 2-5 stat categories.`,
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "MLB"],
+            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "MLB", "WC"],
             description: "The sport league"
           },
           token: {

@@ -178,7 +178,7 @@ enum SupabaseAPI {
             }
         }
 
-        // No results found in last 7 days - return zeros (GaryCoin will show)
+        // No results found in last 7 days - return zeros (neutral GaryIconBG mark will show)
         print("[SupabaseAPI] No results found in last 7 days")
         return (0, 0, 0)
     }
@@ -537,16 +537,65 @@ enum SupabaseAPI {
         return rows
     }
 
+    /// `yyyy-MM-dd` one day after the given date string (UTC-safe, no TZ math).
+    static func dayAfter(_ dateStr: String) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "UTC")
+        guard let d = f.date(from: dateStr) else { return dateStr }
+        return f.string(from: d.addingTimeInterval(86_400))
+    }
+
     static func fetchGameRecaps(date: String) async -> [GameRecapRow] {
+        // A sporting night spans two UTC dates: a 9pm-ET game (a World Cup night
+        // kickoff, a late west-coast game) is graded under the NEXT day's UTC
+        // date. Fetch the graded ET date AND the following day so those late
+        // games' recaps — and their bullet summaries — aren't dropped from the
+        // Morning headline carousel (the bug where the USA card showed a
+        // headline but no bullets).
+        let next = dayAfter(date)
         let url = buildURL(table: "game_recaps", query: [
             URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,headline,recap,bullets"),
-            URLQueryItem(name: "game_date", value: "eq.\(date)"),
+            URLQueryItem(name: "game_date", value: "in.(\(date),\(next))"),
             URLQueryItem(name: "order", value: "result.desc")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([GameRecapRow].self, from: data) else { return [] }
         return rows
+    }
+
+    /// The most recent WINNERS-only game record (the top-per-sport game picks the
+    /// premium tab surfaces and we grade daily — `is_winners_pick` is stamped at
+    /// grading time). Anchors on the date with the MOST winners results (the real
+    /// slate) + its UTC-rollover day, matching the Home scorecard's logic — so a
+    /// missed/empty day (an outage) shows the last real slate, not a lone
+    /// straggler. Returns nil if nothing graded. Games only (props excluded).
+    static func fetchYesterdayWinnersRecord() async -> (w: Int, l: Int, p: Int)? {
+        struct Row: Decodable { let result: String?; let game_date: String? }
+        let url = buildURL(table: "game_results", query: [
+            URLQueryItem(name: "select", value: "result,game_date"),
+            URLQueryItem(name: "is_winners_pick", value: "eq.true"),
+            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "limit", value: "60")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([Row].self, from: data), !rows.isEmpty else { return nil }
+        var counts: [String: Int] = [:]
+        for r in rows { if let d = r.game_date { counts[d, default: 0] += 1 } }
+        guard let anchor = counts.max(by: { $0.value != $1.value ? $0.value < $1.value : $0.key < $1.key })?.key else { return nil }
+        let nightSet: Set<String> = [anchor, dayAfter(anchor)]
+        var w = 0, l = 0, p = 0
+        for r in rows where nightSet.contains(r.game_date ?? "") {
+            switch r.result?.lowercased() {
+            case "won": w += 1
+            case "lost": l += 1
+            case "push": p += 1
+            default: break
+            }
+        }
+        return (w + l + p) > 0 ? (w, l, p) : nil
     }
 
     /// The fact check for one graded pick — claims from the rationale graded

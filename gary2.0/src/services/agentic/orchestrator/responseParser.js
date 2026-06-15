@@ -285,7 +285,84 @@ export function validatePickTeam(pickText, homeTeam, awayTeam) {
   return homeMatch || awayMatch;
 }
 
+// SOCCER (World Cup) dual-pick: one analysis run emits BOTH a side play (3-way
+// ML or Asian handicap) and a total play (Over/Under) in one JSON. Expand into
+// two independently-normalized picks — the side is primary, the total rides in
+// `additionalPicks` so the storage layer writes each as its own card
+// (keyed soccer|match_id|type, they coexist). Degrades to a single pick if the
+// model only fills one play. _dualExpanded guards the recursive normalize calls.
+// Resolve a World Cup pick's odds (and line/handicap) from the consensus MARKET
+// data we already fetched — soccer_three_way_ml { home, draw, away },
+// soccer_spread { homeValue, homeOdds, awayValue, awayOdds }, and
+// soccer_total { line, over, under } — keyed by the pick's market + side. This is
+// the source of truth: Gary's prose is only a label and can drop the +sign or the
+// odds entirely (e.g. "Over 2.5 115"). Returns null when the matching market isn't
+// present, so the caller keeps whatever it parsed from the text as a fallback.
+function resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds) {
+  if (!gameOdds) return null;
+  const ml = gameOdds.soccer_three_way_ml || null;
+  const sp = gameOdds.soccer_spread || null;
+  const tot = gameOdds.soccer_total || null;
+  const lc = (pickText || '').toLowerCase();
+  const refs = (name) => (name || '').toLowerCase().split(/\s+/).some(w => w.length >= 3 && lc.includes(w));
+  const namesHome = refs(homeTeam);
+  const namesAway = refs(awayTeam);
+
+  if (parsed.type === 'total' && tot) {
+    const isOver = /\bover\b/.test(lc);
+    return { odds: (isOver ? tot.over : tot.under) ?? null, goal_line: tot.line ?? null, handicap: null };
+  }
+  if (parsed.type === 'asian_handicap' && sp) {
+    if (namesHome && !namesAway) return { odds: sp.homeOdds ?? null, handicap: sp.homeValue ?? null, goal_line: null };
+    if (namesAway && !namesHome) return { odds: sp.awayOdds ?? null, handicap: sp.awayValue ?? null, goal_line: null };
+  }
+  if (parsed.type === 'draw' && ml) {
+    return { odds: ml.draw ?? null, handicap: null, goal_line: null };
+  }
+  if (parsed.type === 'moneyline' && ml) {
+    if (namesHome && !namesAway) return { odds: ml.home ?? null, handicap: null, goal_line: null };
+    if (namesAway && !namesHome) return { odds: ml.away ?? null, handicap: null, goal_line: null };
+  }
+  return null;
+}
+
+function expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds) {
+  const build = (pickText, rationale, conf, forceType) => {
+    if (!pickText || typeof pickText !== 'string' || !pickText.trim()) return null;
+    const sub = {
+      pick: pickText,
+      rationale: rationale || parsed.rationale || '',
+      confidence_score: conf ?? parsed.confidence_score ?? parsed.confidence ?? null,
+      _dualExpanded: true,
+    };
+    if (forceType) sub.type = forceType;
+    return normalizePickFormat(sub, homeTeam, awayTeam, sport, gameOdds);
+  };
+  const side = build(parsed.side_pick, parsed.side_rationale, parsed.side_confidence, null);
+  const total = build(parsed.total_pick, parsed.total_rationale, parsed.total_confidence, 'total');
+  const primary = side || total;
+  if (!primary) {
+    console.error('[Orchestrator] ⚽ WC dual-pick: neither side_pick nor total_pick parsed — null');
+    return null;
+  }
+  if (side && total) {
+    primary.additionalPicks = [primary === side ? total : side];
+    console.log(`[Orchestrator] ⚽ WC dual-pick — SIDE "${side.pick}" (${side.type}) + TOTAL "${total.pick}"`);
+  } else {
+    console.warn(`[Orchestrator] ⚽ WC dual-pick: only one play parsed ("${primary.pick}") — storing single pick`);
+  }
+  return primary;
+}
+
 export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
+  // SOCCER dual-pick expansion — must run before the single-pick logic below.
+  const isSoccerDual = (sport === 'soccer_world_cup' || sport === 'WC')
+    && parsed && !parsed._dualExpanded
+    && (parsed.side_pick || parsed.total_pick);
+  if (isSoccerDual) {
+    return expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds);
+  }
+
   // CRITICAL: Support both legacy format (pick) and new format (final_pick)
   // The new Pass 2.5 format uses "final_pick" instead of "pick"
   if (!parsed.pick && parsed.final_pick) {
@@ -337,7 +414,11 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     // Handicap lines are small (±0.25 to ±4ish); larger signed numbers in the
     // pick text are odds (e.g. "Mexico -230") and must NOT read as a handicap.
     const signedNums = [...pickText.matchAll(/([+-]\d+(?:\.\d+)?)/g)].map(m => parseFloat(m[1]));
-    const handicapValue = signedNums.find(v => Math.abs(v) < 10);
+    // Gary's prose sometimes drops the sign on a handicap ("Cabo Verde 3.3"); a small
+    // unsigned DECIMAL that isn't a 3+ digit odds price is a handicap candidate too.
+    const unsignedHandicap = [...pickText.matchAll(/(?:^|\s)(\d+\.\d+)(?=\s|@|$)/g)]
+      .map(m => parseFloat(m[1])).find(v => Math.abs(v) < 10);
+    const handicapValue = signedNums.find(v => Math.abs(v) < 10) ?? unsignedHandicap ?? null;
     const handicapMatch = handicapValue != null;
     if (/\b(draw|tie)\b/i.test(pickText)) {
       parsed.type = 'draw';
@@ -353,6 +434,34 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     } else if (!parsed.type) {
       parsed.type = 'moneyline';
       console.log(`[Orchestrator] ⚽ WC: Detected moneyline pick`);
+    }
+    // HOLISTIC ODDS: take the price (and line/handicap) from the consensus market
+    // data we already fetched, keyed by the pick's market + side — NOT scraped
+    // from Gary's prose, which can drop the +sign or odds entirely. Gary's text
+    // stays the label; the book's number is authoritative.
+    const mkt = resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds);
+    if (mkt) {
+      if (mkt.odds != null) parsed.odds = mkt.odds;
+      if (mkt.goal_line != null) parsed.goal_line = mkt.goal_line;
+      if (mkt.handicap != null) parsed.handicap = mkt.handicap;
+      console.log(`[Orchestrator] ⚽ WC: market odds → odds=${parsed.odds ?? '-'} line=${parsed.goal_line ?? '-'} hcap=${parsed.handicap ?? '-'}`);
+    }
+    // Rebuild a clean, self-contained pick string from the resolved structured
+    // fields. Gary's prose is only a label and arrives malformed (dropped signs,
+    // doubled odds, a dangling "@"); the resolved book number is authoritative, and
+    // both the app card and the X auto-poster read this string — so keep it clean.
+    const sgn = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
+    const soccerSide = detectPickedTeam(pickText, homeTeam, awayTeam);
+    const soccerTeam = soccerSide === 'home' ? homeTeam : soccerSide === 'away' ? awayTeam : null;
+    if (parsed.type === 'total' && parsed.goal_line != null) {
+      const ou = /\bover\b/i.test(pickText) ? 'Over' : 'Under';
+      parsed.pick = [`${ou} ${parsed.goal_line}`, sgn(parsed.odds)].filter(Boolean).join(' ');
+    } else if (parsed.type === 'asian_handicap' && soccerTeam && parsed.handicap != null) {
+      parsed.pick = [`${soccerTeam} ${sgn(parsed.handicap)}`, sgn(parsed.odds)].filter(Boolean).join(' ');
+    } else if (parsed.type === 'draw') {
+      parsed.pick = ['Draw', sgn(parsed.odds)].filter(Boolean).join(' ');
+    } else if (parsed.type === 'moneyline' && soccerTeam) {
+      parsed.pick = [`${soccerTeam} ML`, sgn(parsed.odds)].filter(Boolean).join(' ');
     }
   }
   // DETECT TYPE FROM PICK TEXT if not explicitly provided (non-NHL)
@@ -425,6 +534,15 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     if (oddsMatch) {
       parsed.odds = parseInt(oddsMatch[1], 10);
       console.log(`[Orchestrator] 📋 Extracted odds from pick text: ${parsed.odds}`);
+    } else {
+      // Unsigned American odds — the model sometimes drops the + on a plus-money
+      // price (e.g. "Over 2.5 115"). A trailing 3-4 digit integer with no sign and
+      // no decimal is positive odds; never let it silently store as null.
+      const bare = parsed.pick.match(/(?:^|\s)(\d{3,4})\s*$/);
+      if (bare && !new RegExp(`\\.${bare[1]}\\b|${bare[1]}\\.`).test(parsed.pick)) {
+        parsed.odds = parseInt(bare[1], 10);
+        console.log(`[Orchestrator] 📋 Inferred unsigned positive odds: +${parsed.odds}`);
+      }
     }
   }
   
@@ -487,10 +605,17 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   if (odds == null) {
     console.warn(`[Orchestrator] ⚠️ NO ODDS AVAILABLE for pick "${pickText}" — AI and game data both missing`);
   }
-  // Append odds to pick text if not already present
-  // American odds are 3+ digits (e.g., -115, +111) — don't confuse with spreads (e.g., +10.5, -7.5)
-  const alreadyHasOdds = /[+-]\d{3,}/.test(pickText);
-  if (!alreadyHasOdds && odds != null && typeof odds === 'number') {
+  // Normalize the trailing odds. Strip an existing trailing price — a signed token
+  // (always odds) OR an unsigned copy of THIS price (Gary drops the + on plus-money,
+  // e.g. "... 105") — then append the authoritative price with a correct sign. Fixes
+  // the missing-sign and doubled-odds ("... 105 +105") bugs without touching spread/
+  // total lines (decimals or ≤2 digits never look like a 3+ digit trailing price).
+  if (odds != null && typeof odds === 'number') {
+    const absOdds = Math.abs(odds);
+    pickText = pickText
+      .replace(/\s*[+-]\d{3,}\s*$/, '')
+      .replace(new RegExp(`\\s*${absOdds}\\s*$`), '')
+      .trim();
     const oddsStr = odds > 0 ? `+${odds}` : `${odds}`;
     pickText = `${pickText} ${oddsStr}`;
   }
@@ -575,8 +700,11 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   const lowerRationale = rationale.toLowerCase().trim();
   const isPlaceholderRationale = invalidRationales.some(inv => lowerRationale.includes(inv));
 
-  // Minimum 1000 chars — a proper Gary's Take should be 3-4 paragraphs (~300-400 words ≈ 1500-2400 chars)
-  const isTooShort = rationale.length < 1000;
+  // Minimum 1000 chars — a proper Gary's Take should be 3-4 paragraphs (~300-400 words ≈ 1500-2400 chars).
+  // EXCEPTION: World Cup dual picks ship TWO plays per match, each with its own
+  // focused 2-4 sentence take, so their per-pick rationale is intentionally short.
+  const minRationaleChars = parsed._dualExpanded ? 120 : 1000;
+  const isTooShort = rationale.length < minRationaleChars;
 
   // Retry if rationale is a placeholder, completely missing, or too short for a proper analysis
   if (isPlaceholderRationale || rationale.length === 0 || isTooShort) {
