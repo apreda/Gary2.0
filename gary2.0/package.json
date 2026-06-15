@@ -31,5 +31,11 @@
     "eslint": "^9.39.4",
     "globals": "^15.15.0",
     "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.4",
+    "protobufjs": "^7.6.3",
+    "esbuild": "^0.28.1",
+    "axios": { "form-data": "^4.0.6" }
   }
 }
