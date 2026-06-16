@@ -25,7 +25,11 @@ const FINISHED = new Set(['FT', 'AET', 'PEN']);
 
 const cache = new Map();
 const getCached = (k) => { const e = cache.get(k); return e && Date.now() - e.ts < e.ttl ? e.data : null; };
+// Entry-aware read: distinguishes a live cached value (whose .data may legitimately
+// be null — a negative cache) from a miss. Returns { data } when live, else null.
+const getCachedEntry = (k) => { const e = cache.get(k); return e && Date.now() - e.ts < e.ttl ? { data: e.data } : null; };
 const setCache = (k, data, ttl) => cache.set(k, { data, ts: Date.now(), ttl });
+const TTL_NEG = 30 * 60 * 1000; // negative cache (unresolved name) — short, so it retries later
 export const clearApiFootballCache = () => cache.clear();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -47,42 +51,82 @@ async function afFetch(path, params = {}) {
   const url = `${BASE}${path}${qs ? `?${qs}` : ''}`;
   let lastErr;
   for (let i = 0; i < 3; i++) {
+    let res;
     try {
-      const res = await fetch(url, { headers: { 'x-apisports-key': API_KEY } });
-      if (!res.ok) throw new Error(`API-Football ${res.status}: ${path}`);
-      const json = await res.json();
-      // API-Football returns errors as {} (object) when none, or a populated
-      // object/array when present. Only treat a non-empty payload as an error.
-      const errs = json?.errors;
-      const hasErr = Array.isArray(errs) ? errs.length > 0 : (errs && typeof errs === 'object' && Object.keys(errs).length > 0);
-      if (hasErr) throw new Error(`API-Football error: ${JSON.stringify(errs)}`);
-      return Array.isArray(json?.response) ? json.response : [];
+      res = await fetch(url, { headers: { 'x-apisports-key': API_KEY } });
     } catch (e) {
+      // Network/transport error — retryable.
       lastErr = e;
-      if (i < 2) await sleep(500 * (i + 1));
+      if (i < 2) { await sleep(500 * (i + 1)); continue; }
+      throw e;
     }
+    if (!res.ok) {
+      // 4xx (incl. 429 rate-limit, 499 plan-limit) are deterministic — retrying the
+      // identical request won't help. Only 5xx is transient.
+      const err = new Error(`API-Football ${res.status}: ${path}`);
+      if (res.status < 500) throw err;
+      lastErr = err;
+      if (i < 2) { await sleep(500 * (i + 1)); continue; }
+      throw err;
+    }
+    const json = await res.json();
+    // API-Football returns errors as {} (object) when none, or a populated
+    // object/array when present. A populated payload is a deterministic API error.
+    const errs = json?.errors;
+    const hasErr = Array.isArray(errs) ? errs.length > 0 : (errs && typeof errs === 'object' && Object.keys(errs).length > 0);
+    if (hasErr) throw new Error(`API-Football error: ${JSON.stringify(errs)}`);
+    return Array.isArray(json?.response) ? json.response : [];
   }
   throw lastErr;
 }
 
-/** Resolve a national team name (e.g. "France", "Senegal") to its API-Football team id. */
+// A few country names break API-Football's alphanumeric-only `search` param (it 400s
+// on `&` / apostrophes) or read differently than our internal label. Map the problem
+// cases to the API's spelling; everything else falls through to the sanitizer below.
+const TEAM_NAME_ALIASES = {
+  'bosnia & herzegovina': 'Bosnia and Herzegovina',
+  'bosnia and herzegovina': 'Bosnia and Herzegovina',
+  "côte d'ivoire": 'Ivory Coast',
+  "cote d'ivoire": 'Ivory Coast',
+  'cabo verde': 'Cape Verde',
+  'cape verde islands': 'Cape Verde',
+  'dr congo': 'Congo DR',
+  'democratic republic of congo': 'Congo DR',
+  'south korea': 'South Korea',
+  'republic of korea': 'South Korea',
+  'usa': 'USA',
+  'united states': 'USA',
+};
+// Drop women's ("... W") and youth (U17/U20/U23) squads — `national: true` is true for
+// all of them, so picking pool[0] blindly grabbed e.g. "Cape Verde W" for "Cabo Verde".
+const isYouthOrWomenTeam = (n) => /\bU\d{1,2}\b/i.test(n || '') || /\bW$/.test(n || '');
+
+/** Resolve a national team name (e.g. "France", "Senegal") to its senior API-Football team id. */
 export async function resolveNationalTeamId(name) {
   if (!name) return null;
   const key = `natid_${name.toLowerCase()}`;
-  const cached = getCached(key);
-  if (cached !== null) return cached;
+  const entry = getCachedEntry(key);
+  if (entry) return entry.data; // honors a cached null (negative cache) — no re-fetch storm
   let id = null;
   try {
-    const rows = await afFetch('/teams', { search: name });
-    const national = rows.filter((r) => r.team?.national === true);
-    const pool = national.length ? national : rows;
-    // Prefer an exact (case-insensitive) name match, else the first national team.
-    const exact = pool.find((r) => (r.team?.name || '').toLowerCase() === name.toLowerCase());
+    const aliased = TEAM_NAME_ALIASES[name.toLowerCase()] || name;
+    // API search rejects non-alphanumerics — strip them for the query, match on names.
+    const query = aliased.replace(/[^a-zA-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const rows = await afFetch('/teams', { search: query });
+    const senior = rows.filter((r) => r.team?.national === true && !isYouthOrWomenTeam(r.team?.name));
+    const pool = senior.length ? senior : rows.filter((r) => !isYouthOrWomenTeam(r.team?.name));
+    // Prefer an exact (case-insensitive) name match against alias or original, else first senior.
+    const exact = pool.find((r) => {
+      const tn = (r.team?.name || '').toLowerCase();
+      return tn === aliased.toLowerCase() || tn === name.toLowerCase();
+    });
     id = (exact || pool[0])?.team?.id ?? null;
+    if (id == null) console.warn(`[API-Football] resolveNationalTeamId: no senior team for "${name}" (query="${query}")`);
   } catch (e) {
     console.warn(`[API-Football] resolveNationalTeamId(${name}) failed: ${e.message}`);
   }
-  setCache(key, id, TTL_STATIC);
+  // Cache the result, including null — short TTL on misses so transient failures self-heal.
+  setCache(key, id, id == null ? TTL_NEG : TTL_STATIC);
   return id;
 }
 
@@ -152,7 +196,7 @@ export async function getRecentForm(teamIdOrName, lastN = 10) {
 }
 
 /** Current injuries for a national team's squad. Returns [{player, reason, type}]. */
-export async function getInjuries(teamIdOrName, season) {
+export async function getInjuries(teamIdOrName, season = DEFAULT_SEASON_AF) {
   const teamId = typeof teamIdOrName === 'number' ? teamIdOrName : await resolveNationalTeamId(teamIdOrName);
   if (!teamId) return [];
   const key = `inj_${teamId}_${season}`;
@@ -228,7 +272,8 @@ export async function getH2H(team1, team2, lastN = 6) {
   let rows = [];
   try { rows = await afFetch('/fixtures/headtohead', { h2h: `${id1}-${id2}`, last: lastN }); }
   catch { return { meetings: [], summary: null }; }
-  const meetings = rows.filter(f => f.goals?.home != null).map(f => ({
+  // Completed matches only — an upcoming or abandoned fixture has no settled result.
+  const meetings = rows.filter(f => FINISHED.has(f.fixture?.status?.short) && f.goals?.home != null).map(f => ({
     date: f.fixture?.date?.slice(0, 10), league: f.league?.name,
     home: f.teams?.home?.name, away: f.teams?.away?.name, score: `${f.goals.home}-${f.goals.away}`,
   }));
@@ -239,8 +284,10 @@ export async function getH2H(team1, team2, lastN = 6) {
 
 /**
  * National-team squad season stats (recent international goals/assists/apps/shots)
- * keyed by lowercased player name. Used as player-prop grounding. National squads
- * are ~23-26 players → 2 pages of /players.
+ * keyed by lowercased player name. Used as player-prop grounding. Across a full
+ * cycle (qualifiers + friendlies + Nations League) a national team rotates 30-40+
+ * players, so 2 pages (40 players) silently truncated busy squads — page up to 6,
+ * stopping early on a short/empty page.
  */
 export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
   const teamId = typeof teamIdOrName === 'number' ? teamIdOrName : await resolveNationalTeamId(teamIdOrName);
@@ -249,7 +296,7 @@ export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
   const cached = getCached(key);
   if (cached) return cached;
   const out = {};
-  for (let page = 1; page <= 2; page++) {
+  for (let page = 1; page <= 6; page++) {
     let rows;
     try { rows = await afFetch('/players', { team: teamId, season, page }); } catch { break; }
     if (!rows.length) break;
@@ -267,6 +314,7 @@ export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
         position: r.player?.position || s.games?.position || null,
       };
     }
+    if (rows.length < 20) break; // API-Football pages /players 20/page; a short page is the last
   }
   setCache(key, out, TTL_FORM);
   return out;
