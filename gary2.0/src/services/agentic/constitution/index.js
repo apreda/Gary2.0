@@ -13,6 +13,7 @@ import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
 import { MLB_PROPS_CONSTITUTION } from './mlbPropsConstitution.js';
+import { WC_PROPS_CONSTITUTION } from './wcPropsConstitution.js';
 /**
  * BASE RULES - Applied to ALL sports
  * These rules govern data sources and external influence
@@ -112,10 +113,12 @@ const PROPS_CONSTITUTIONS = {
   NBA_PROPS: NBA_PROPS_CONSTITUTION,
   NHL_PROPS: NHL_PROPS_CONSTITUTION,
   MLB_PROPS: MLB_PROPS_CONSTITUTION,
+  WC_PROPS: WC_PROPS_CONSTITUTION,
   basketball_nba_props: NBA_PROPS_CONSTITUTION,
   americanfootball_nfl_props: NFL_PROPS_CONSTITUTION,
   icehockey_nhl_props: NHL_PROPS_CONSTITUTION,
   baseball_mlb_props: MLB_PROPS_CONSTITUTION,
+  soccer_world_cup_props: WC_PROPS_CONSTITUTION,
 };
 
 /**

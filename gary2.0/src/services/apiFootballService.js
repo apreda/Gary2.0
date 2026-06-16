@@ -18,6 +18,7 @@ const API_KEY =
 const TTL_STATIC = 24 * 60 * 60 * 1000; // team-id resolution
 const TTL_FORM = 6 * 60 * 60 * 1000;    // recent fixtures / form
 const TTL_INJURY = 2 * 60 * 60 * 1000;  // injuries
+const DEFAULT_SEASON_AF = 2026;         // API-Football season for the current international cycle
 
 const cache = new Map();
 const getCached = (k) => { const e = cache.get(k); return e && Date.now() - e.ts < e.ttl ? e.data : null; };
@@ -226,4 +227,39 @@ export async function getH2H(team1, team2, lastN = 6) {
   return out;
 }
 
-export default { hasApiFootballKey, resolveNationalTeamId, getRecentForm, getRecentTeamStats, getH2H, getInjuries, clearApiFootballCache };
+/**
+ * National-team squad season stats (recent international goals/assists/apps/shots)
+ * keyed by lowercased player name. Used as player-prop grounding. National squads
+ * are ~23-26 players → 2 pages of /players.
+ */
+export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
+  const teamId = typeof teamIdOrName === 'number' ? teamIdOrName : await resolveNationalTeamId(teamIdOrName);
+  if (!teamId) return {};
+  const key = `squad_${teamId}_${season}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const out = {};
+  for (let page = 1; page <= 2; page++) {
+    let rows;
+    try { rows = await afFetch('/players', { team: teamId, season, page }); } catch { break; }
+    if (!rows.length) break;
+    for (const r of rows) {
+      const name = r.player?.name;
+      if (!name) continue;
+      const s = (r.statistics || [])[0] || {};
+      out[name.toLowerCase()] = {
+        name,
+        goals: s.goals?.total ?? 0,
+        assists: s.goals?.assists ?? 0,
+        appearances: s.games?.appearences ?? 0,
+        shots: s.shots?.total ?? null,
+        shots_on: s.shots?.on ?? null,
+        position: r.player?.position || s.games?.position || null,
+      };
+    }
+  }
+  setCache(key, out, TTL_FORM);
+  return out;
+}
+
+export default { hasApiFootballKey, resolveNationalTeamId, getRecentForm, getRecentTeamStats, getH2H, getInjuries, getSquadStats, clearApiFootballCache };
