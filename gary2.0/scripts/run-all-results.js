@@ -342,10 +342,16 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
     }
   }
 
-  // 4. Moneyline Logic (Fallback)
+  // 3-way moneyline DRAW pick (soccer/WC: win · tie · lose) — wins only on a
+  // level result. Checked before the team-ML fallback, which would otherwise
+  // misgrade a correct draw pick as a loss.
+  if (/\b(draw|tie)\b/.test(pickLower)) return (hScore === vScore) ? 'won' : 'lost';
+
+  // 4. Moneyline Logic (Fallback). A team-to-win ML loses on a draw — (hScore >
+  // vScore) is false on a level result, so a tie correctly grades 'lost'.
   const isHomePick = pickLower.includes(hMascot) || pickLower.includes(hFull);
   const isVisitorPick = pickLower.includes(vMascot) || pickLower.includes(vFull);
-  
+
   if (isHomePick && !isVisitorPick) return (hScore > vScore) ? 'won' : 'lost';
   if (isVisitorPick && !isHomePick) return (vScore > hScore) ? 'won' : 'lost';
   

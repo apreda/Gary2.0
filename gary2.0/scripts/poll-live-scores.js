@@ -197,7 +197,11 @@ function wcRows() {
       away_score: numOrNull(m.away_score),
       home_score: numOrNull(m.home_score),
       status,
-      detail: status === 'final' ? 'FINAL' : status === 'live' ? 'LIVE' : null,
+      // Live WC matches carry the match minute in clock_display ("67'") — surface
+      // it as the detail so the card shows the minute, not a bare "LIVE".
+      detail: status === 'final' ? 'FINAL'
+        : status === 'live' ? (String(m.clock_display || '').trim() || 'LIVE')
+        : null,
       outs: null,
       bases: null,
     };

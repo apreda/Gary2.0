@@ -1008,13 +1008,13 @@ private func relativeTimeString(from date: Date) -> String {
     return "Updated \(hours)h ago"
 }
 
-/// Shorten "Los Angeles Kings @ New York Islanders" → "Kings @ Islanders"
+/// Shorten "Los Angeles Kings @ New York Islanders" → "Kings @ Islanders".
+/// Keeps two-word mascots intact ("Toronto Blue Jays @ Chicago White Sox"
+/// → "Blue Jays @ White Sox", not "Jays @ Sox").
 private func shortenMatchup(_ matchup: String) -> String {
     let parts = matchup.components(separatedBy: " @ ")
     guard parts.count == 2 else { return matchup }
-    let away = parts[0].components(separatedBy: " ").last ?? parts[0]
-    let home = parts[1].components(separatedBy: " ").last ?? parts[1]
-    return "\(away) @ \(home)"
+    return "\(Formatters.proMascot(parts[0])) @ \(Formatters.proMascot(parts[1]))"
 }
 
 // MARK: - Async Helpers
@@ -11733,7 +11733,7 @@ struct CompactPickRow: View {
     private var liveGraded: String? {
         guard let ls = liveFinal,
               let s = orientedFinalScores(ls, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam) else { return nil }
-        return liveGradeGamePick(pickText: pickParts.pick,
+        return liveGradeGamePick(pickText: pickParts.pick, betType: pick.type ?? "",
                                  awayPicked: awayIsPicked, homePicked: homeIsPicked,
                                  away: s.away, home: s.home)
     }
@@ -15602,7 +15602,7 @@ func orientedFinalScores(_ ls: LiveScore, awayTeam: String?, homeTeam: String?) 
 /// Returns "won" / "lost" / "push", or nil when the verdict can't be called
 /// confidently (unparseable side, or a drawn moneyline — soccer three-ways
 /// are the backend grader's call). pickText must already have odds stripped.
-func liveGradeGamePick(pickText: String, awayPicked: Bool, homePicked: Bool, away: Int, home: Int) -> String? {
+func liveGradeGamePick(pickText: String, betType: String = "", awayPicked: Bool, homePicked: Bool, away: Int, home: Int) -> String? {
     func firstDouble(_ pattern: String, in s: String) -> Double? {
         guard let rx = try? NSRegularExpression(pattern: pattern),
               let m = rx.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
@@ -15617,6 +15617,11 @@ func liveGradeGamePick(pickText: String, awayPicked: Bool, homePicked: Bool, awa
         if total == line { return "push" }
         return (total > line) == lower.contains("over") ? "won" : "lost"
     }
+    // 3-way moneyline DRAW pick (soccer/WC: win · tie · lose) — Gary took the
+    // tie, so it wins ONLY on a level result.
+    if betType.lowercased() == "draw" || lower.contains("draw") {
+        return away == home ? "won" : "lost"
+    }
     // Side picks — need a side to grade.
     let picked: Int, other: Int
     if homePicked { picked = home; other = away }
@@ -15629,8 +15634,9 @@ func liveGradeGamePick(pickText: String, awayPicked: Bool, homePicked: Bool, awa
         if adjusted == 0 { return "push" }
         return adjusted > 0 ? "won" : "lost"
     }
-    // Moneyline.
-    if margin == 0 { return nil }
+    // Moneyline — a team-to-win pick LOSES on a draw (3-way market: win · tie ·
+    // lose). Only soccer can finish level; 2-way sports never reach margin == 0
+    // at FINAL, so this stays correct for MLB / NBA / NHL.
     return margin > 0 ? "won" : "lost"
 }
 
@@ -15641,7 +15647,6 @@ struct PicksCarouselView: View {
     @State private var connLoaded = false
     @State private var sport = "ALL"
     @State private var page = 0
-    @Namespace private var pickTabNS
     @State private var selectedProp: PropPick?
     /// Today's live-score snapshots (poller-fed); refreshed every 60s while visible.
     @State private var liveScores: [LiveScore] = []
@@ -15916,14 +15921,9 @@ struct PicksCarouselView: View {
                 Text(status?.text ?? " ")
                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
                     .foregroundStyle(status?.color ?? .clear)
-                Group {
-                    if on {
-                        Capsule().fill(GaryColors.gold).frame(height: 2)
-                            .matchedGeometryEffect(id: "pickTabUnderline", in: pickTabNS)
-                    } else {
-                        Capsule().fill(Color.clear).frame(height: 2)
-                    }
-                }
+                // Gold active-underline removed (user call, Jun 16) — with the time
+                // gone the tab reads as just the team names; the active tab is marked
+                // by the brighter white label (dimmed 0.45 when inactive).
             }
             .contentShape(Rectangle())
         }
@@ -21132,8 +21132,28 @@ enum Formatters {
     // single common word (Knights, Leafs, Jackets, Wings) so matchup rows fit
     // the way the other sports do.
     private static let twoWordMascots = [
-        "Red Sox", "White Sox", "Blue Jays", "Trail Blazers", "Tar Heels"
+        // MLB
+        "Red Sox", "White Sox", "Blue Jays",
+        // NHL
+        "Maple Leafs", "Red Wings", "Blue Jackets", "Golden Knights",
+        // NBA
+        "Trail Blazers",
+        // NCAA (most college names are handled by collegeSchoolName)
+        "Tar Heels"
     ]
+
+    /// Last word of a pro team name, but keep two-word mascots whole
+    /// ("Toronto Blue Jays" → "Blue Jays", "Chicago White Sox" → "White Sox").
+    /// Pro-only: no World Cup nation / college handling, so callers that can
+    /// see those must guard first (shortTeamName does; shortenMatchup only ever
+    /// receives pro matchups since World Cup has no props/grouped sections).
+    static func proMascot(_ name: String) -> String {
+        let lower = name.lowercased()
+        for mascot in twoWordMascots where lower.hasSuffix(mascot.lowercased()) {
+            return mascot
+        }
+        return name.components(separatedBy: " ").last.map(String.init) ?? name
+    }
 
     static func shortTeamName(_ team: String?, league: String? = nil) -> String {
         guard let team = team, !team.isEmpty else { return "" }
