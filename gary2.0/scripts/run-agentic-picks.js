@@ -26,6 +26,100 @@ const fifaWorldCupService = await import('../src/services/fifaWorldCupService.js
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
+// Map verifiedTaleOfTape tokens to iOS StatValues property names.
+// iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.;
+// getValue(for: token) then uses the token to look up the value from those properties.
+// Module-scoped (static, sport-agnostic) so BOTH the Tale-of-Tape builder AND the
+// downstream no-stats hard-fail gate (countRealStats) can see it. It previously lived
+// inside the per-game `if (verifiedTaleOfTape)` block, which left it out of scope at the
+// gate — a ReferenceError that silently rejected every completed pick.
+const tokenToIosKey = {
+  // Common stats
+  'L5_FORM': 'last_5',
+  'L10_FORM': 'last_10',
+  'RECORD': 'overall',
+  'CONF_RECORD': 'conference_record',
+  'EFG_PCT': 'efg_pct',
+  // NBA stats (from BDL advanced + base)
+  'OFF_RATING': 'offensive_rating',
+  'DEF_RATING': 'defensive_rating',
+  'NET_RATING': 'net_rating',
+  'PACE': 'pace',
+  'TS_PCT': 'true_shooting_pct',
+  'PPG': 'points_per_game',
+  'RPG': 'rebounds_per_game',
+  'APG': 'assists_per_game',
+  'FG_PCT': 'fg_pct',
+  '3PT_PCT': 'three_pct',
+  'FT_PCT': 'ft_pct',
+  'TOV_GM': 'turnovers_per_game',
+  'OREB_GM': 'oreb_per_game',
+  'DREB_GM': 'dreb_per_game',
+  // NCAAB Barttorvik stats
+  'ADJOE': 'offensive_rating',
+  'ADJDE': 'defensive_rating',
+  'ADJEM': 'net_rating',
+  'TEMPO': 'tempo',
+  'T_RANK': 'kenpom_rank',
+  'BARTHAG': 'efg_pct',  // Reuse efg_pct slot for Barthag display
+  'WAB': 'wab',
+  // NHL stats
+  'GOALS_FOR_GM': 'goals_for_per_game',
+  'GOALS_AGST_GM': 'goals_against_per_game',
+  'SHOTS_FOR_GM': 'shots_for',
+  'PP_PCT': 'power_play_pct',
+  'PK_PCT': 'penalty_kill_pct',
+  'FO_PCT': 'faceoff_pct',
+  'CORSI_PCT': 'corsi_pct',
+  'XG_PCT': 'xg_pct',
+  'PDO': 'pdo',
+  'SH_PCT_5V5': 'sh_pct_5v5',
+  'SV_PCT_5V5': 'sv_pct_5v5',
+  // NCAAB Barttorvik rankings
+  'ADJOE_RANK': 'adjoe_rank',
+  'ADJDE_RANK': 'adjde_rank',
+  'PROJ_RECORD': 'proj_record',
+  // MLB stats (RECORD already mapped above; do not duplicate)
+  'L10_RECORD': 'l10',
+  'HOME_AWAY': 'home_away',
+  'HOME_AWAY_RECORD': 'home_away',
+  'SP_ERA': 'sp_era',
+  'SP_WHIP': 'sp_whip',
+  'SP_K9': 'sp_k9',
+  'SP_BB9': 'sp_bb9',
+  'SP_RECORD': 'sp_record',
+  'SP_IP': 'sp_ip',
+  'SP_SO': 'sp_so',
+  'TEAM_AVG': 'team_avg',
+  'TEAM_OBP': 'team_obp',
+  'TEAM_SLG': 'team_slg',
+  'TEAM_OPS': 'team_ops',
+  'TEAM_HR': 'team_hr',
+  'SP_NAME': 'sp_name',
+  // BDL team season stats — TEAM_ERA and RUNS_PER_GAME have no iOS
+  // StatValues field yet, so the data lands in the row dict but
+  // getValue(for:) falls through to the default. Either add iOS cases
+  // or stop emitting these tokens from the scout report.
+  'TEAM_ERA': 'team_era',
+  'TEAM_OPS_BDL': 'team_ops',
+  'RUNS_PER_GAME': 'runs_per_game',
+  // Soccer / World Cup (tokens auto-derived from Tale-of-Tape row labels)
+  'GROUP_POS': 'group_pos',
+  'ADVANCE': 'advance_pct',
+  'TITLE_ODDS': 'title_odds',
+  'POINTS': 'points',
+  'GF_GM': 'goals_for',
+  'GA_GM': 'goals_against',
+  'XG': 'expected_goals',
+  'XGA': 'expected_goals_against',
+  'POSSESSION': 'possession_pct',
+  'SHOTS_GM': 'shots',
+  'SOT_GM': 'shots_on_target',
+  'BIG_CHANCES': 'big_chances',
+  'PASS_ACC': 'pass_accuracy',
+  'CORNERS_GM': 'corners',
+};
+
 /**
  * Fetch multi-book sportsbook odds from BDL for a single game.
  * Returns array in the shape formatSportsbookComparison() expects:
@@ -1346,95 +1440,8 @@ async function main() {
             const sportLabel = sportLabels[config.key] || config.key;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
-            // Map verifiedTaleOfTape tokens to iOS StatValues property names
-            // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.
-            // getValue(for: token) then uses the token to look up the value from those properties
-            const tokenToIosKey = {
-              // Common stats
-              'L5_FORM': 'last_5',
-              'L10_FORM': 'last_10',
-              'RECORD': 'overall',
-              'CONF_RECORD': 'conference_record',
-              'EFG_PCT': 'efg_pct',
-              // NBA stats (from BDL advanced + base)
-              'OFF_RATING': 'offensive_rating',
-              'DEF_RATING': 'defensive_rating',
-              'NET_RATING': 'net_rating',
-              'PACE': 'pace',
-              'TS_PCT': 'true_shooting_pct',
-              'PPG': 'points_per_game',
-              'RPG': 'rebounds_per_game',
-              'APG': 'assists_per_game',
-              'FG_PCT': 'fg_pct',
-              '3PT_PCT': 'three_pct',
-              'FT_PCT': 'ft_pct',
-              'TOV_GM': 'turnovers_per_game',
-              'OREB_GM': 'oreb_per_game',
-              'DREB_GM': 'dreb_per_game',
-              // NCAAB Barttorvik stats
-              'ADJOE': 'offensive_rating',
-              'ADJDE': 'defensive_rating',
-              'ADJEM': 'net_rating',
-              'TEMPO': 'tempo',
-              'T_RANK': 'kenpom_rank',
-              'BARTHAG': 'efg_pct',  // Reuse efg_pct slot for Barthag display
-              'WAB': 'wab',
-              // NHL stats
-              'GOALS_FOR_GM': 'goals_for_per_game',
-              'GOALS_AGST_GM': 'goals_against_per_game',
-              'SHOTS_FOR_GM': 'shots_for',
-              'PP_PCT': 'power_play_pct',
-              'PK_PCT': 'penalty_kill_pct',
-              'FO_PCT': 'faceoff_pct',
-              'CORSI_PCT': 'corsi_pct',
-              'XG_PCT': 'xg_pct',
-              'PDO': 'pdo',
-              'SH_PCT_5V5': 'sh_pct_5v5',
-              'SV_PCT_5V5': 'sv_pct_5v5',
-              // NCAAB Barttorvik rankings
-              'ADJOE_RANK': 'adjoe_rank',
-              'ADJDE_RANK': 'adjde_rank',
-              'PROJ_RECORD': 'proj_record',
-              // MLB stats (RECORD already mapped above; do not duplicate)
-              'L10_RECORD': 'l10',
-              'HOME_AWAY': 'home_away',
-              'HOME_AWAY_RECORD': 'home_away',
-              'SP_ERA': 'sp_era',
-              'SP_WHIP': 'sp_whip',
-              'SP_K9': 'sp_k9',
-              'SP_BB9': 'sp_bb9',
-              'SP_RECORD': 'sp_record',
-              'SP_IP': 'sp_ip',
-              'SP_SO': 'sp_so',
-              'TEAM_AVG': 'team_avg',
-              'TEAM_OBP': 'team_obp',
-              'TEAM_SLG': 'team_slg',
-              'TEAM_OPS': 'team_ops',
-              'TEAM_HR': 'team_hr',
-              'SP_NAME': 'sp_name',
-              // BDL team season stats — TEAM_ERA and RUNS_PER_GAME have no iOS
-              // StatValues field yet, so the data lands in the row dict but
-              // getValue(for:) falls through to the default. Either add iOS cases
-              // or stop emitting these tokens from the scout report.
-              'TEAM_ERA': 'team_era',
-              'TEAM_OPS_BDL': 'team_ops',
-              'RUNS_PER_GAME': 'runs_per_game',
-              // Soccer / World Cup (tokens auto-derived from Tale-of-Tape row labels)
-              'GROUP_POS': 'group_pos',
-              'ADVANCE': 'advance_pct',
-              'TITLE_ODDS': 'title_odds',
-              'POINTS': 'points',
-              'GF_GM': 'goals_for',
-              'GA_GM': 'goals_against',
-              'XG': 'expected_goals',
-              'XGA': 'expected_goals_against',
-              'POSSESSION': 'possession_pct',
-              'SHOTS_GM': 'shots',
-              'SOT_GM': 'shots_on_target',
-              'BIG_CHANCES': 'big_chances',
-              'PASS_ACC': 'pass_accuracy',
-              'CORNERS_GM': 'corners',
-            };
+            // tokenToIosKey is now a module-scoped constant (see top of file) so the
+            // no-stats hard-fail gate downstream can also reference it.
 
             // Clear any toolCallHistory stats and use the verified rows instead
             statsData.length = 0;
@@ -1845,7 +1852,7 @@ async function main() {
 ║  Total Picks: ${String(allPicks.length).padStart(3)}                                               ║
 ║  Total Time: ${totalTime.padStart(6)}s                                            ║
 ║                                                                  ║
-║  ✅ Picks are now live in Supabase!                              ║
+║  ${allPicks.length > 0 ? '✅ Picks are now live in Supabase!' : 'ℹ️  No picks stored this run — see per-game detail in the log above.'}
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
