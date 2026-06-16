@@ -226,6 +226,11 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
 // carry Over/Under pairs per goal line. "Main" line = most balanced juice
 // (smallest |homeOdds + awayOdds| in American terms), which lands on the
 // book's true main number (e.g. Total 2.5) rather than a ladder extreme.
+// A clean half-goal line (±0.5, ±1.5, ±2.5 ...): value*2 is odd — excludes whole
+// (±1.0) and tenth (±1.3) alt lines, giving the American-style number every other
+// sport shows.
+const isHalfGoalLine = (v) => Number.isInteger(Math.abs(v) * 2) && !Number.isInteger(Math.abs(v));
+
 function extractMainSpread(markets) {
   const lines = [];
   for (const mkt of (markets || [])) {
@@ -247,9 +252,13 @@ function extractMainSpread(markets) {
   // beyond that, then balance-pick within the realistic band.
   const realistic = lines.filter(l => Math.abs(l.homeValue) <= 4.5);
   if (realistic.length === 0) return null;
-  realistic.sort((a, b) =>
+  // Prefer American-style half-goal lines over the alt Asian lines (-1.3, -0.8,
+  // ±1.0) books also list; balance-pick within whichever pool we have.
+  const half = realistic.filter(l => isHalfGoalLine(l.homeValue));
+  const pool = half.length ? half : realistic;
+  pool.sort((a, b) =>
     Math.abs((a.homeOdds ?? 0) + (a.awayOdds ?? 0)) - Math.abs((b.homeOdds ?? 0) + (b.awayOdds ?? 0)));
-  return realistic[0];
+  return pool[0];
 }
 
 function extractMainTotal(markets) {
@@ -274,8 +283,12 @@ function extractMainTotal(markets) {
   // feeding Gary an absurd number.
   const realistic = pairs.filter(e => e.line >= 1.0 && e.line <= 5.0);
   if (realistic.length === 0) return null;
-  realistic.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
-  return realistic[0];
+  // Prefer clean half-goal O/U lines (1.5, 2.5, 3.5) — American style — over whole
+  // or alt lines, like the other sports.
+  const half = realistic.filter(e => isHalfGoalLine(e.line));
+  const pool = half.length ? half : realistic;
+  pool.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
+  return pool[0];
 }
 
 export async function getStadiums(seasons = [DEFAULT_SEASON]) {
