@@ -155,10 +155,13 @@ export async function buildSoccerScoutReport(game, options = {}) {
     groupRows.length ? `\n### GROUP STANDINGS\n${groupRows.join('\n')}` : '',
     `\n### RAW ODDS VALUES (use these EXACT numbers — never approximate odds)`,
     ml ? `3-way moneyline: ${homeTeam} ${ml.home} / Draw ${ml.draw} / ${awayTeam} ${ml.away}` : '3-way moneyline: pending',
-    game.soccer_spread
+    game.soccer_spread && Math.abs(Number(game.soccer_spread.homeValue)) <= 4.5
       ? `Asian handicap (main line): ${homeTeam} ${game.soccer_spread.homeValue} @ ${game.soccer_spread.homeOdds} / ${awayTeam} ${game.soccer_spread.awayValue} @ ${game.soccer_spread.awayOdds}`
       : 'Asian handicap: NOT AVAILABLE — do not pick or cite a handicap line',
-    game.soccer_total
+    // Sanity floor (defense-in-depth behind extractMainTotal): a real match-goals
+    // main line lives ~1.0-5.0. Anything outside is a ladder extreme — never feed
+    // it to Gary, so he can't pick an absurd "Under 10".
+    game.soccer_total && Number(game.soccer_total.line) >= 1.0 && Number(game.soccer_total.line) <= 5.0
       ? `Total goals (main line): ${game.soccer_total.line} — Over ${game.soccer_total.over} / Under ${game.soccer_total.under}`
       : 'Total goals: NOT AVAILABLE — do not pick or cite a total',
     `\n(Injuries, suspensions, confirmed lineups, and weather/altitude come from Flash grounding for this match.)`,

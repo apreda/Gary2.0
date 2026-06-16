@@ -239,9 +239,14 @@ function extractMainSpread(markets) {
     });
   }
   if (lines.length === 0) return null;
-  lines.sort((a, b) =>
+  // Balanced juice alone can crown a ladder EXTREME as the "main" line. Real soccer
+  // Asian handicaps don't exceed ~±4.5 even for big mismatches — reject anything
+  // beyond that, then balance-pick within the realistic band.
+  const realistic = lines.filter(l => Math.abs(l.homeValue) <= 4.5);
+  if (realistic.length === 0) return null;
+  realistic.sort((a, b) =>
     Math.abs((a.homeOdds ?? 0) + (a.awayOdds ?? 0)) - Math.abs((b.homeOdds ?? 0) + (b.awayOdds ?? 0)));
-  return lines[0];
+  return realistic[0];
 }
 
 function extractMainTotal(markets) {
@@ -259,8 +264,15 @@ function extractMainTotal(markets) {
   }
   const pairs = [...byLine.values()].filter(e => e.over != null && e.under != null);
   if (pairs.length === 0) return null;
-  pairs.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
-  return pairs[0];
+  // Balanced juice alone once crowned a "10 goals" alt line as the main total and
+  // shipped "Under 10 -115". Restrict the election to a realistic main match-goals
+  // band (~1.0-5.0) FIRST, then balance-pick within it. If the book only offers
+  // extreme lines, return null so the scout report omits the total rather than
+  // feeding Gary an absurd number.
+  const realistic = pairs.filter(e => e.line >= 1.0 && e.line <= 5.0);
+  if (realistic.length === 0) return null;
+  realistic.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
+  return realistic[0];
 }
 
 export async function getStadiums(seasons = [DEFAULT_SEASON]) {
