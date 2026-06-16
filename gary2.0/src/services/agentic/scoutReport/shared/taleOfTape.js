@@ -45,7 +45,10 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
   // Helper to format stat — neutral presentation, no directional arrows
   // Gary compares the numbers himself — we don't pre-digest who's "better"
   const formatStat = (homeStat, awayStat) => {
-    return { arrow: '|', home: homeStat || 'N/A', away: awayStat || 'N/A' };
+    // A genuine 0 (clean sheet, 0 turnovers, 0 group points) is real data — only
+    // null/undefined/'' is "no data". `|| 'N/A'` used to blank real zeros.
+    const fmt = (v) => (v === null || v === undefined || v === '') ? 'N/A' : v;
+    return { arrow: '|', home: fmt(homeStat), away: fmt(awayStat) };
   };
 
   // Get key injuries for each team (truncate if too long)
@@ -369,7 +372,7 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       { label: 'Big Chances', ...formatStat(fmtNum(homeStats.big_chances), fmtNum(awayStats.big_chances)) },
       { label: 'Pass Acc', ...formatStat(fmtPct(homeStats.pass_accuracy, 0), fmtPct(awayStats.pass_accuracy, 0)) },
       { label: 'Corners/Gm', ...formatStat(fmtNum(homeStats.corners), fmtNum(awayStats.corners)) },
-      { label: 'L5 Form', ...l5Form },
+      { label: 'L5 Form', ...formatStat(homeStats.recent_form || homeL5, awayStats.recent_form || awayL5) },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
 

@@ -6,6 +6,7 @@
  * grounding (no structured injury feed), so injuries is empty here by design.
  */
 import * as wc from '../../../fifaWorldCupService.js';
+import * as apiFootball from '../../../apiFootballService.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 
@@ -127,11 +128,16 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const awayId = game.away_team_data?.id ?? game.away_team?.id ?? null;
   console.log(`[Scout Report] Building WC report: ${homeTeam} vs ${awayTeam}`);
 
-  const [standings, homeAgg, awayAgg, futures] = await Promise.all([
+  const [standings, homeAgg, awayAgg, futures, homeForm, awayForm] = await Promise.all([
     wc.getGroupStandings().catch(() => []),
     aggregateRateStats(homeId),
     aggregateRateStats(awayId),
     wc.getFutures().catch(() => []),
+    // Recent-international form (qualifiers + friendlies + Nations League) from
+    // API-Football — the always-available CURRENT data that fills the tape and
+    // grounds the rationale when the 2026 edition is empty (opening matchday).
+    apiFootball.getRecentForm(homeTeam, 10).catch(() => null),
+    apiFootball.getRecentForm(awayTeam, 10).catch(() => null),
   ]);
 
   const homeStand = standingsFor(standings, homeId);
@@ -139,8 +145,43 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const homeFut = futuresStrengthFor(futures, homeId, homeTeam);
   const awayFut = futuresStrengthFor(futures, awayId, awayTeam);
 
-  const homeProfile = { teamName: homeTeam, record: homeStand.record, seasonStats: { ...homeStand, ...homeAgg, ...homeFut } };
-  const awayProfile = { teamName: awayTeam, record: awayStand.record, seasonStats: { ...awayStand, ...awayAgg, ...awayFut } };
+  // Recent-form aggregates → tape rows. The 2026-edition standings win once a
+  // team has actually played a tournament match; until then we fall back to
+  // recent-international form (labeled as such in the report so it's never
+  // passed off as 2026 tournament data).
+  const recentSeasonStats = (form) => {
+    if (!form?.l10) return {};
+    return {
+      goals_for: form.l10.gfPerMatch,
+      goals_against: form.l10.gaPerMatch,
+      recent_form: form.l5?.form || form.l10.form,
+      recent_record: `${form.l10.w}-${form.l10.d}-${form.l10.l}`,
+    };
+  };
+  const homeRF = recentSeasonStats(homeForm);
+  const awayRF = recentSeasonStats(awayForm);
+
+  const homeProfile = { teamName: homeTeam, record: homeStand.record || homeRF.recent_record, seasonStats: {
+    ...homeRF, ...homeStand, ...homeAgg, ...homeFut,
+    goals_for: homeStand.goals_for ?? homeRF.goals_for,
+    goals_against: homeStand.goals_against ?? homeRF.goals_against,
+    recent_form: homeRF.recent_form,
+  } };
+  const awayProfile = { teamName: awayTeam, record: awayStand.record || awayRF.recent_record, seasonStats: {
+    ...awayRF, ...awayStand, ...awayAgg, ...awayFut,
+    goals_for: awayStand.goals_for ?? awayRF.goals_for,
+    goals_against: awayStand.goals_against ?? awayRF.goals_against,
+    recent_form: awayRF.recent_form,
+  } };
+
+  // Honestly-labeled recent-form lines for the report text (Gary reads these).
+  const formLine = (team, form) => {
+    if (!form?.l10) return `${team}: recent form unavailable`;
+    const f = form.l10;
+    const recent = form.fixtures.slice(0, 5)
+      .map(x => `${x.result} ${x.gf}-${x.ga} v ${x.opponent} (${x.league})`).join('; ');
+    return `${team} — last ${f.played} internationals: ${f.w}W-${f.d}D-${f.l}L, ${f.gfPerMatch} GF/match, ${f.gaPerMatch} GA/match. Recent: ${recent}`;
+  };
 
   const stage = game.soccer_stage || 'Group Stage';
   const groupLabel = game.soccer_group ? ` (${game.soccer_group})` : '';
@@ -153,6 +194,9 @@ export async function buildSoccerScoutReport(game, options = {}) {
     `## MATCHUP: ${homeTeam} vs ${awayTeam}`,
     `FIFA World Cup 2026 — ${stage}${groupLabel}. Venue: ${game.venue || 'TBD'}.`,
     groupRows.length ? `\n### GROUP STANDINGS\n${groupRows.join('\n')}` : '',
+    (homeForm?.l10 || awayForm?.l10)
+      ? `\n### RECENT INTERNATIONAL FORM (current cycle — qualifiers, friendlies, Nations League; NOT 2026 tournament data, treat as recent form)\n${formLine(homeTeam, homeForm)}\n${formLine(awayTeam, awayForm)}`
+      : '',
     `\n### RAW ODDS VALUES (use these EXACT numbers — never approximate odds)`,
     ml ? `3-way moneyline: ${homeTeam} ${ml.home} / Draw ${ml.draw} / ${awayTeam} ${ml.away}` : '3-way moneyline: pending',
     game.soccer_spread && Math.abs(Number(game.soccer_spread.homeValue)) <= 4.5
