@@ -44,13 +44,34 @@ function n(v) {
  * meta.next_cursor accumulating each page's data[]. Returns data[] (or the
  * accumulated array when paginating).
  */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// A momentary network blip — undici's "TypeError: fetch failed" (DNS / connection
+// reset, no HTTP response) — must NOT drop a whole sport for the day. Retry the
+// transport a few times with backoff. HTTP error STATUSES are not retried here;
+// they surface to the caller via res.ok. Root cause of the 2026-06-16 WC miss: a
+// single 7:31am "fetch failed" on /matches killed World Cup for the entire day,
+// because buildPlanResilient only retries when EVERY sport is empty (MLB had games).
+async function fifaFetchWithRetry(url, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetch(url, { headers: { Authorization: API_KEY } });
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await sleep(500 * (i + 1)); // 0.5s, then 1s
+    }
+  }
+  throw lastErr;
+}
+
 async function fifaFetch(path, params = {}, { paginate = false } = {}) {
   let cursor = params.cursor;
   const all = [];
   for (let page = 0; page < 500; page++) {
     const qs = buildQuery({ ...params, cursor });
     const url = `${FIFA_BASE}${path}${qs}`;
-    const res = await fetch(url, { headers: { Authorization: API_KEY } });
+    const res = await fifaFetchWithRetry(url);
     if (!res.ok) throw new Error(`FIFA API ${res.status}: ${path}`);
     const json = await res.json();
     const rows = Array.isArray(json?.data) ? json.data : [];

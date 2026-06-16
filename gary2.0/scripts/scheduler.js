@@ -177,7 +177,10 @@ async function buildPlan(etDateStr) {
   for (const sport of SPORTS) {
     const games = await fetchGamesForETDate(sport.key, etDateStr);
     if (games === null) {
-      log(`  ${sport.label}: fetch FAILED — will retry`);
+      // NOTE: buildPlanResilient only retries intra-day when the WHOLE slate is
+      // empty. If another sport has games, this failed sport is dropped until the
+      // next daily build — so "will retry" here means tomorrow, not in minutes.
+      log(`  ${sport.label}: fetch FAILED — will retry on next daily build (intra-day only if no sport has games)`);
       fetchFailed = true;
       continue;
     }
