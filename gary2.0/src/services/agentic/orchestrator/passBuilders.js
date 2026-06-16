@@ -714,6 +714,8 @@ const PROP_TYPE_DESCRIPTIONS = {
   icehockey_nhl: 'Market type ONLY — e.g. "shots_on_goal", "anytime_goal", "points", "assists", "saves". Match the exact prop_type from the available lines.',
   baseball_mlb: 'Market type ONLY — e.g. "hits", "home_runs", "total_bases", "rbis", "runs_scored", "walks", "stolen_bases", "singles", "doubles", "strikeouts", "pitcher_strikeouts", "pitcher_outs", "pitcher_earned_runs", "hits_runs_rbis". Match the exact prop_type from the available lines. Do NOT use NBA prop types like points/rebounds/assists.',
   americanfootball_nfl: 'Market type ONLY — e.g. "passing_yards", "rushing_yards", "receiving_yards", "passing_touchdowns", "anytime_touchdown", "receptions", "completions". Match the exact prop_type from the available lines.',
+  soccer_world_cup: 'Market type ONLY — e.g. "anytime_goal", "shots", "shots_on_target", "assists", "tackles", "saves", "cards". Match the exact prop_type from the available lines. Do NOT use NBA prop types like points/rebounds/assists. For anytime_goal (over-only milestone markets), use bet: "yes".',
+  WC: 'Market type ONLY — e.g. "anytime_goal", "shots", "shots_on_target", "assists", "tackles", "saves", "cards". Match the exact prop_type from the available lines. Do NOT use NBA prop types like points/rebounds/assists. For anytime_goal (over-only milestone markets), use bet: "yes".',
 };
 
 function getPropsPickSchema(sport) {
