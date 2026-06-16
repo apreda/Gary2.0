@@ -226,6 +226,69 @@ export const propOddsService = {
         }
       }
       
+      // ============ World Cup: Ball Don't Lie FIFA Player Props API ============
+      if (sport === 'soccer_world_cup') {
+        console.log(`[PropOdds] Using BDL FIFA for World Cup player props`);
+        const wc = await import('./fifaWorldCupService.js');
+        // For WC the caller's gameId IS the FIFA match id (game.id = soccer_match_id).
+        const matchId = gameId;
+        if (!matchId) { console.warn('[PropOdds] WC: no match id provided'); return []; }
+        const bdlProps = await wc.getPlayerProps({ matchId });
+        if (bdlProps && bdlProps.length > 0) {
+          // Resolve player names + the nation each plays for (rosters).
+          const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
+          const [players, matchRows] = await Promise.all([
+            wc.getPlayers({ playerIds }).catch(() => []),
+            wc.getMatches({ matchIds: [matchId] }).catch(() => []),
+          ]);
+          const nameMap = {};
+          for (const p of players) nameMap[p.id] = p.name || p.full_name;
+          const m = matchRows[0] || {};
+          const teamNameById = {};
+          if (m.home_team) teamNameById[m.home_team.id] = m.home_team.name;
+          if (m.away_team) teamNameById[m.away_team.id] = m.away_team.name;
+          const teamMap = {};
+          const teamIds = Object.keys(teamNameById).map(Number);
+          if (teamIds.length) {
+            const rosters = await wc.getRosters({ teamIds }).catch(() => []);
+            for (const r of rosters) if (r.player?.id) teamMap[r.player.id] = teamNameById[r.team_id] || 'WC';
+          }
+          // Transform to standard format (milestone → over-only odds; over_under → both).
+          const transformedProps = bdlProps.map(prop => {
+            const isOU = prop.market?.type === 'over_under';
+            const isMilestone = prop.market?.type === 'milestone';
+            return {
+              player: nameMap[prop.player_id] || `Player ${prop.player_id}`,
+              player_id: prop.player_id,
+              team: teamMap[prop.player_id] || 'WC',
+              prop_type: prop.prop_type,
+              line: parseFloat(prop.line_value) || 0.5,
+              over_odds: isOU ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
+              under_odds: isOU ? prop.market?.under_odds : null,
+              vendor: prop.vendor,
+            };
+          });
+          // Consolidate vendor odds (best price), same as NHL/NFL.
+          const grouped = {};
+          for (const prop of transformedProps) {
+            const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+            if (!grouped[key]) grouped[key] = { ...prop };
+            else {
+              if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) grouped[key].over_odds = prop.over_odds;
+              if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) grouped[key].under_odds = prop.under_odds;
+            }
+          }
+          const result = Object.values(grouped);
+          const propTypes = {};
+          result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+          console.log(`[PropOdds] BDL WC props breakdown:`, propTypes);
+          console.log(`[PropOdds] BDL returned ${result.length} unique WC player props`);
+          return propOddsService.filterPropsByOddsValue(result);
+        }
+        console.warn(`[PropOdds] WC: no props for match ${matchId}`);
+        return [];
+      }
+
       // ============ NFL: Use Ball Don't Lie Player Props API ============
       if (sport === 'americanfootball_nfl') {
         console.log(`[PropOdds] Using Ball Don't Lie for NFL player props`);

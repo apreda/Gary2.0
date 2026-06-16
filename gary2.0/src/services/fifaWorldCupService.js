@@ -368,6 +368,25 @@ export const getMatchTeamForm = (matchIds) => matchScoped('/match_team_form', ma
 export const getMatchBestPlayers = (matchIds) => matchScoped('/match_best_players', matchIds);
 
 /**
+ * Player prop odds for a match (/odds/player_props): anytime_goal, assists, shots,
+ * shots_on_target, saves, tackles, cards, etc. NOT paginated — one call per match.
+ * Returns raw rows [{ player_id, vendor, prop_type, line_value, market }].
+ */
+export async function getPlayerProps({ matchId, playerId, propType, vendors } = {}) {
+  if (!matchId) return [];
+  const key = `pprops_${matchId}_${playerId || ''}_${propType || ''}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const params = { match_id: matchId };
+  if (playerId) params.player_id = playerId;
+  if (propType) params.prop_type = propType;
+  if (vendors) params.vendors = vendors;
+  const data = await fifaFetch('/odds/player_props', params);
+  setCache(key, data, TTL_FAST);
+  return data;
+}
+
+/**
  * Normalize a FIFA match (+ optional consensus odds) into the pipeline's game
  * shape (id/home_team/away_team/home_team_data/commence_time/status/venue),
  * with soccer-specific fields embedded for the storage layer (Plan B).
