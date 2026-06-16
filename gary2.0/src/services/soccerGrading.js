@@ -35,11 +35,21 @@ export function gradeSoccerGame(pick, regHome, regAway) {
     const margin = picksAway ? (regAway - regHome) : (regHome - regAway);
     const adj = margin + h;
     if (adj === 0) return 'push'; // whole-number AH can push
+    // Quarter lines (±0.25/0.75) split the stake across two adjacent half/whole
+    // lines, settling as half-win or half-loss. The downstream record/P&L model is
+    // flat-unit (run-all-results keys the W/L counter off result[0]; iOS reads the
+    // result string), with no partial-stake concept — and at the RECORD level the
+    // sign of `adj` is already correct (a half-win nets positive → won; a half-loss
+    // nets negative → lost). So binary won/lost is the right settlement here; do NOT
+    // introduce half_won/half_lost unless the whole P&L pipeline gains stake fractions.
     return adj > 0 ? 'won' : 'lost';
   }
 
   // moneyline (3-way: no push — a draw loses both Home and Away ML)
   if (picksHome && !picksAway) return regHome > regAway ? 'won' : 'lost';
   if (picksAway && !picksHome) return regAway > regHome ? 'won' : 'lost';
-  return 'lost';
+  // Couldn't unambiguously map the pick to a side — no team matched, or BOTH matched
+  // (mascot substring collision, e.g. a shared word). Returning 'lost' here fabricated
+  // false losses on the record; return null so the caller leaves it ungraded.
+  return null;
 }

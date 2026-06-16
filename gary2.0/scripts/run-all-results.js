@@ -503,6 +503,50 @@ function getStatValue(sport, data, name, type) {
 }
 
 /**
+ * World Cup prop stat extraction. player_match_stats keys on player_id only, so we
+ * resolve the prop's player name → id via the lineup-built nameToId map. BDL returns
+ * null for a zero stat (a player who didn't score has goals: null), so null coerces
+ * to 0. There is no total-shots field in player_match_stats — "shots" comes from the
+ * counted match_shots events (shotsByPlayer); if that's empty the caller falls back
+ * to grounding.
+ */
+function getStatValueSoccer(stats, nameToId, shotsByPlayer, name, type) {
+  if (!stats || !stats.length) return null;
+  const target = normalizeName(name);
+  const targetLast = target.split(' ').pop();
+  // Resolve player → id: exact normalized name, else last-name match (handles
+  // "R. Lukaku" vs "Romelu Lukaku" and accent differences via normalizeName).
+  let pid = nameToId[target];
+  if (pid == null) {
+    const hit = Object.keys(nameToId).find((n) => {
+      const last = n.split(' ').pop();
+      return last === targetLast && last.length > 3;
+    });
+    if (hit != null) pid = nameToId[hit];
+  }
+  if (pid == null) return null;
+  const row = stats.find((s) => s.player_id === pid);
+  if (!row) return null;
+  const t = type.toLowerCase();
+  const num = (v) => (v == null ? 0 : Number(v)); // BDL stores 0 as null
+  if (/anytime|goalscorer|to score/.test(t) || (t.includes('goal') && !t.includes('against'))) return num(row.goals);
+  if (t.includes('assist')) return num(row.assists);
+  if (t.includes('save')) return num(row.saves);
+  if (t.includes('tackle')) return num(row.tackles);
+  if (t.includes('interception')) return num(row.interceptions);
+  if (t.includes('clearance')) return num(row.clearances);
+  if (t.includes('pass')) return num(row.key_passes); // "key passes" prop
+  // Shots-on-target before total shots (the word "shots" appears in both).
+  if (t.includes('shot') && (t.includes('target') || t.includes(' on ') || t.includes('sot'))) return num(row.shots_on_target);
+  if (t.includes('shot')) {
+    // No total-shots field on player_match_stats — use counted shot events if present.
+    return (shotsByPlayer && shotsByPlayer[pid] != null) ? shotsByPlayer[pid] : null;
+  }
+  console.warn(`    [Stat] WC: found ${name} but no mapping for prop type "${type}"`);
+  return null;
+}
+
+/**
  * Rationale Fact Check
  * After a game pick is graded, grade Gary's RATIONALE claim-by-claim against
  * what actually happened (rows land in pick_fact_checks; the app reads them to
@@ -902,20 +946,54 @@ async function processPropBets(date) {
 
   console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats`);
 
+  // World Cup: player_match_stats carries only player_id, so build a name→id bridge
+  // from lineups (everyone who played is listed). player_match_stats has no total-shots
+  // field — count shot events from match_shots for "shots" props.
+  let wcStats = [];
+  const wcNameToId = {};
+  const wcShotsByPlayer = {};
+  try {
+    const wcMatches = (await Promise.all(dates.map(d => fifaWorldCup.getMatchesForDate(d)))).flat()
+      .filter(m => m.status === 'completed');
+    const wcIds = [...new Set(wcMatches.map(m => m.id).filter(Boolean))];
+    if (wcIds.length) {
+      wcStats = await fifaWorldCup.getPlayerMatchStats(wcIds);
+      const lineups = await fifaWorldCup.getMatchLineups(wcIds);
+      for (const l of (lineups || [])) {
+        const nm = l.player?.name, id = l.player?.id;
+        if (nm && id != null) wcNameToId[normalizeName(nm)] = id;
+      }
+      try {
+        const shots = await fifaWorldCup.getMatchShots(wcIds);
+        for (const s of (shots || [])) {
+          const id = s.player_id ?? s.player?.id;
+          if (id != null) wcShotsByPlayer[id] = (wcShotsByPlayer[id] || 0) + 1;
+        }
+      } catch (e) { console.warn(`  ⚠️ WC match_shots unavailable (total-shots props will use grounding): ${e.message}`); }
+      console.log(`  ⚽ WC: ${wcStats.length} player-match-stat rows across ${wcIds.length} match(es), ${Object.keys(wcNameToId).length} players mapped`);
+    }
+  } catch (e) { console.warn(`  ⚠️ WC stat prep failed (props will fall back to grounding): ${e.message}`); }
+
   const stats = { w: 0, l: 0 };
   const handled = new Set();
 
   for (const row of rows) {
     const picks = typeof row.props === 'string' ? JSON.parse(row.props) : (row.props || row.picks || []);
     for (const p of picks) {
-      const name = p.player || p.player_name, rawProp = p.prop || p.prop_type, type = rawProp?.split(' ')?.[0] || rawProp;
-      const line = p.line || p.line_value, bet = p.bet;
+      const name = p.player || p.player_name, rawProp = p.prop || p.prop_type;
       // 'MLB HR' is the dedicated home-run lane's sport label: it keeps its
       // own label in prop_results (own record, never mixed into the main MLB
       // props record) but routes to MLB data sources for grading.
       const sport = p.sport?.toUpperCase();
       const dataSport = sport === 'MLB HR' ? 'MLB' : sport;
-      if (!name || !type || line === undefined) continue;
+      // Soccer props are multi-word ("Shots On Target", "Anytime Goal"); the first-word
+      // truncation used for US sports would collapse them and confuse SoT with total shots.
+      const type = dataSport === 'WC' ? (rawProp || '').trim() : (rawProp?.split(' ')?.[0] || rawProp);
+      const line = p.line || p.line_value, bet = p.bet;
+      // Anytime-goalscorer settles on whether the player scored at all (no over/under
+      // line), so it's allowed through the line guard below.
+      const isAnytimeGoal = dataSport === 'WC' && /anytime|goalscorer|to score/i.test(type);
+      if (!name || !type || (line === undefined && !isAnytimeGoal)) continue;
 
       const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
       if (handled.has(key)) continue; handled.add(key);
@@ -933,6 +1011,7 @@ async function processPropBets(date) {
       else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
       else if (dataSport === 'MLB') actual = getStatValue('MLB', mlbStats, name, type);
       else if (dataSport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
+      else if (dataSport === 'WC') actual = getStatValueSoccer(wcStats, wcNameToId, wcShotsByPlayer, name, type);
 
       if (actual !== null) {
         source = 'api';
@@ -943,7 +1022,9 @@ async function processPropBets(date) {
       }
 
       if (actual !== null) {
-        const res = gradeProp(actual, line, bet);
+        // Anytime-goalscorer wins if the player scored at all (>= 1) — a strict
+        // over-the-line grade marked a player who scored exactly once as a loss.
+        const res = isAnytimeGoal ? (actual >= 1 ? 'won' : 'lost') : gradeProp(actual, line, bet);
         let propInsertFailed = false;
         let propAlreadyExists = false;
         const { data: exist, error: dedupErr } = await supabase
