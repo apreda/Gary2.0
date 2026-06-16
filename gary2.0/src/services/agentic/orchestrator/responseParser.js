@@ -343,8 +343,16 @@ function expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds) {
     if (forceType) sub.type = forceType;
     return normalizePickFormat(sub, homeTeam, awayTeam, sport, gameOdds);
   };
-  const side = build(parsed.side_pick, parsed.side_rationale, parsed.side_confidence, null);
+  let side = build(parsed.side_pick, parsed.side_rationale, parsed.side_confidence, null);
   const total = build(parsed.total_pick, parsed.total_rationale, parsed.total_confidence, 'total');
+  // The side leg must be a 3-way ML / draw / Asian handicap — never a total. If the
+  // side slot parsed to a total (Gary mis-slotted it, or the text read "over/under"),
+  // it's not a valid side: drop it rather than ship two totals with one mislabeled as
+  // the side (which the category-by-role storage would then record as a phantom side).
+  if (side && side.type === 'total') {
+    console.warn(`[Orchestrator] ⚽ WC dual-pick: side_pick "${side.pick}" resolved to a TOTAL — dropping as invalid side`);
+    side = null;
+  }
   const primary = side || total;
   if (!primary) {
     console.error('[Orchestrator] ⚽ WC dual-pick: neither side_pick nor total_pick parsed — null');

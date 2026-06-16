@@ -49,6 +49,7 @@ async function aggregateRateStats(teamId) {
       big_chances: avg('big_chances'),
       corners: avg('corners'),
       pass_accuracy: totalPasses ? (accuratePasses / totalPasses) * 100 : undefined,
+      count: stats.length, // matches in the sample — caller gates a thin sample (see merge)
     };
   } catch {
     return {};
@@ -169,16 +170,25 @@ export async function buildSoccerScoutReport(game, options = {}) {
   // Merge order matters: API-Football recent-match aggregates (xG/possession/shots)
   // fill in FIRST, then BDL 2026-edition stats override them once the tournament is
   // underway (real tournament data wins), then standings/futures add their fields.
+  // But a thin BDL sample (1-2 group matches) is noise, not signal — a single match's
+  // xG must NOT clobber a 6-match API-Football aggregate. Gate the WC override on a
+  // real sample (>= 3 matches, i.e. group stage complete); strip the count helper so
+  // it doesn't leak into the tape.
+  const { count: homeAggN = 0, ...homeAggStats } = homeAgg;
+  const { count: awayAggN = 0, ...awayAggStats } = awayAgg;
   const homeProfile = { teamName: homeTeam, record: homeStand.record || homeRF.recent_record, seasonStats: {
-    ...homeRF, ...homeTeamStats, ...homeStand, ...homeAgg, ...homeFut,
-    goals_for: homeStand.goals_for ?? homeRF.goals_for,
-    goals_against: homeStand.goals_against ?? homeRF.goals_against,
+    ...homeRF, ...homeTeamStats, ...homeStand, ...(homeAggN >= 3 ? homeAggStats : {}), ...homeFut,
+    // Standings GF/GA divide by games played — a single 1-0 group win reads as
+    // "1.0 GF/match" and would override the 10-match recent-form rate. Only trust
+    // standings GF/GA once the group is complete (>= 3 played), else use recent form.
+    goals_for: (homeStand.played >= 3 ? homeStand.goals_for : undefined) ?? homeRF.goals_for,
+    goals_against: (homeStand.played >= 3 ? homeStand.goals_against : undefined) ?? homeRF.goals_against,
     recent_form: homeRF.recent_form,
   } };
   const awayProfile = { teamName: awayTeam, record: awayStand.record || awayRF.recent_record, seasonStats: {
-    ...awayRF, ...awayTeamStats, ...awayStand, ...awayAgg, ...awayFut,
-    goals_for: awayStand.goals_for ?? awayRF.goals_for,
-    goals_against: awayStand.goals_against ?? awayRF.goals_against,
+    ...awayRF, ...awayTeamStats, ...awayStand, ...(awayAggN >= 3 ? awayAggStats : {}), ...awayFut,
+    goals_for: (awayStand.played >= 3 ? awayStand.goals_for : undefined) ?? awayRF.goals_for,
+    goals_against: (awayStand.played >= 3 ? awayStand.goals_against : undefined) ?? awayRF.goals_against,
     recent_form: awayRF.recent_form,
   } };
 
