@@ -53,7 +53,7 @@ const SPORTS = [
   // T-90 cascade exists to wait out NBA/NHL/MLB lineup posts; soccer has no such
   // gate, and fans want the WC read + reasoning early in the day, not 90 min
   // before kickoff. fixedTriggerET drives the fixed-time path in buildPlan().
-  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: null, dfs: false, fixedTriggerET: { hour: 10, minute: 0 } },
+  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: 'run-wc-props.js', dfs: false, fixedTriggerET: { hour: 10, minute: 0 } },
 ];
 
 // Spaced retries for fixed-trigger sports, as minutes AFTER the fixed time
