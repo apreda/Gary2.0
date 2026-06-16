@@ -128,7 +128,7 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const awayId = game.away_team_data?.id ?? game.away_team?.id ?? null;
   console.log(`[Scout Report] Building WC report: ${homeTeam} vs ${awayTeam}`);
 
-  const [standings, homeAgg, awayAgg, futures, homeForm, awayForm] = await Promise.all([
+  const [standings, homeAgg, awayAgg, futures, homeForm, awayForm, homeTeamStats, awayTeamStats, h2h] = await Promise.all([
     wc.getGroupStandings().catch(() => []),
     aggregateRateStats(homeId),
     aggregateRateStats(awayId),
@@ -138,6 +138,11 @@ export async function buildSoccerScoutReport(game, options = {}) {
     // grounds the rationale when the 2026 edition is empty (opening matchday).
     apiFootball.getRecentForm(homeTeam, 10).catch(() => null),
     apiFootball.getRecentForm(awayTeam, 10).catch(() => null),
+    // Per-match performance aggregates (xG, possession, shots, SoT, corners, pass
+    // acc) over recent fixtures — fills the tape rows BDL can't until 2026 plays.
+    apiFootball.getRecentTeamStats(homeTeam, 6).catch(() => ({})),
+    apiFootball.getRecentTeamStats(awayTeam, 6).catch(() => ({})),
+    apiFootball.getH2H(homeTeam, awayTeam, 6).catch(() => ({ meetings: [], summary: null })),
   ]);
 
   const homeStand = standingsFor(standings, homeId);
@@ -161,14 +166,17 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const homeRF = recentSeasonStats(homeForm);
   const awayRF = recentSeasonStats(awayForm);
 
+  // Merge order matters: API-Football recent-match aggregates (xG/possession/shots)
+  // fill in FIRST, then BDL 2026-edition stats override them once the tournament is
+  // underway (real tournament data wins), then standings/futures add their fields.
   const homeProfile = { teamName: homeTeam, record: homeStand.record || homeRF.recent_record, seasonStats: {
-    ...homeRF, ...homeStand, ...homeAgg, ...homeFut,
+    ...homeRF, ...homeTeamStats, ...homeStand, ...homeAgg, ...homeFut,
     goals_for: homeStand.goals_for ?? homeRF.goals_for,
     goals_against: homeStand.goals_against ?? homeRF.goals_against,
     recent_form: homeRF.recent_form,
   } };
   const awayProfile = { teamName: awayTeam, record: awayStand.record || awayRF.recent_record, seasonStats: {
-    ...awayRF, ...awayStand, ...awayAgg, ...awayFut,
+    ...awayRF, ...awayTeamStats, ...awayStand, ...awayAgg, ...awayFut,
     goals_for: awayStand.goals_for ?? awayRF.goals_for,
     goals_against: awayStand.goals_against ?? awayRF.goals_against,
     recent_form: awayRF.recent_form,
@@ -182,6 +190,19 @@ export async function buildSoccerScoutReport(game, options = {}) {
       .map(x => `${x.result} ${x.gf}-${x.ga} v ${x.opponent} (${x.league})`).join('; ');
     return `${team} — last ${f.played} internationals: ${f.w}W-${f.d}D-${f.l}L, ${f.gfPerMatch} GF/match, ${f.gaPerMatch} GA/match. Recent: ${recent}`;
   };
+  // Per-match performance (xG, possession, shots) aggregated over recent fixtures.
+  const statsLine = (team, ts) => {
+    if (!ts) return null;
+    const bits = [];
+    if (ts.xg != null) bits.push(`${ts.xg} xG/match`);
+    if (ts.possession_pct != null) bits.push(`${ts.possession_pct}% possession`);
+    if (ts.shots != null) bits.push(`${ts.shots} shots/match (${ts.shots_on_target ?? '?'} on target)`);
+    if (ts.corners != null) bits.push(`${ts.corners} corners/match`);
+    if (ts.pass_accuracy != null) bits.push(`${ts.pass_accuracy}% pass accuracy`);
+    return bits.length ? `${team} (last ${ts.sampleMatches}): ${bits.join(', ')}` : null;
+  };
+  const homeStatsLine = statsLine(homeTeam, homeTeamStats);
+  const awayStatsLine = statsLine(awayTeam, awayTeamStats);
 
   const stage = game.soccer_stage || 'Group Stage';
   const groupLabel = game.soccer_group ? ` (${game.soccer_group})` : '';
@@ -196,6 +217,12 @@ export async function buildSoccerScoutReport(game, options = {}) {
     groupRows.length ? `\n### GROUP STANDINGS\n${groupRows.join('\n')}` : '',
     (homeForm?.l10 || awayForm?.l10)
       ? `\n### RECENT INTERNATIONAL FORM (current cycle — qualifiers, friendlies, Nations League; NOT 2026 tournament data, treat as recent form)\n${formLine(homeTeam, homeForm)}\n${formLine(awayTeam, awayForm)}`
+      : '',
+    (homeStatsLine || awayStatsLine)
+      ? `\n### RECENT PERFORMANCE (per-match averages over recent fixtures — xG, possession, shots)\n${[homeStatsLine, awayStatsLine].filter(Boolean).join('\n')}`
+      : '',
+    h2h?.meetings?.length
+      ? `\n### HEAD TO HEAD (recent meetings)\n${h2h.meetings.map(m => `${m.date}: ${m.home} ${m.score} ${m.away} (${m.league})`).join('\n')}`
       : '',
     `\n### RAW ODDS VALUES (use these EXACT numbers — never approximate odds)`,
     ml ? `3-way moneyline: ${homeTeam} ${ml.home} / Draw ${ml.draw} / ${awayTeam} ${ml.away}` : '3-way moneyline: pending',

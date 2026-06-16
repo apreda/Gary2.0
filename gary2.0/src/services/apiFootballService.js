@@ -165,4 +165,65 @@ export async function getInjuries(teamIdOrName, season) {
   return out;
 }
 
-export default { hasApiFootballKey, resolveNationalTeamId, getRecentForm, getInjuries, clearApiFootballCache };
+/**
+ * Aggregate per-match team performance stats (xG, possession, shots, SoT, corners,
+ * pass accuracy) over a team's recent fixtures via /fixtures/statistics. Fills the
+ * tape/report rows BDL can't provide until the 2026 tournament is underway. {} when
+ * unavailable. One stats call per recent fixture (capped by lastN) — cached.
+ */
+export async function getRecentTeamStats(teamIdOrName, lastN = 6) {
+  const teamId = typeof teamIdOrName === 'number' ? teamIdOrName : await resolveNationalTeamId(teamIdOrName);
+  if (!teamId) return {};
+  const key = `tstats_${teamId}_${lastN}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  let fixtures = [];
+  try { fixtures = await afFetch('/fixtures', { team: teamId, last: lastN }); } catch { return {}; }
+  const ids = fixtures.filter(f => f.goals?.home != null).map(f => f.fixture?.id).filter(Boolean);
+  if (!ids.length) return {};
+  const num = (s) => { const v = parseFloat(String(s ?? '').replace('%', '')); return Number.isFinite(v) ? v : null; };
+  const acc = { xg: [], poss: [], shots: [], sot: [], corners: [], passAcc: [] };
+  for (const fid of ids) {
+    let rows;
+    try { rows = await afFetch('/fixtures/statistics', { fixture: fid, team: teamId }); } catch { continue; }
+    const stats = rows?.[0]?.statistics || [];
+    const get = (...types) => { for (const t of types) { const r = stats.find(s => s.type === t); if (r && num(r.value) != null) return num(r.value); } return null; };
+    const push = (arr, v) => { if (v != null) arr.push(v); };
+    push(acc.xg, get('expected_goals', 'Expected Goals'));
+    push(acc.poss, get('Ball Possession'));
+    push(acc.shots, get('Total Shots'));
+    push(acc.sot, get('Shots on Goal'));
+    push(acc.corners, get('Corner Kicks'));
+    push(acc.passAcc, get('Passes %'));
+  }
+  const avg = (arr) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : undefined;
+  const out = {
+    xg: avg(acc.xg), possession_pct: avg(acc.poss), shots: avg(acc.shots),
+    shots_on_target: avg(acc.sot), corners: avg(acc.corners), pass_accuracy: avg(acc.passAcc),
+    sampleMatches: ids.length,
+  };
+  setCache(key, out, TTL_FORM);
+  return out;
+}
+
+/** Head-to-head record between two national teams (recent meetings). */
+export async function getH2H(team1, team2, lastN = 6) {
+  const id1 = typeof team1 === 'number' ? team1 : await resolveNationalTeamId(team1);
+  const id2 = typeof team2 === 'number' ? team2 : await resolveNationalTeamId(team2);
+  if (!id1 || !id2) return { meetings: [], summary: null };
+  const key = `h2h_${id1}_${id2}_${lastN}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  let rows = [];
+  try { rows = await afFetch('/fixtures/headtohead', { h2h: `${id1}-${id2}`, last: lastN }); }
+  catch { return { meetings: [], summary: null }; }
+  const meetings = rows.filter(f => f.goals?.home != null).map(f => ({
+    date: f.fixture?.date?.slice(0, 10), league: f.league?.name,
+    home: f.teams?.home?.name, away: f.teams?.away?.name, score: `${f.goals.home}-${f.goals.away}`,
+  }));
+  const out = { meetings, summary: meetings.length ? `${meetings.length} recent meetings` : null };
+  setCache(key, out, TTL_FORM);
+  return out;
+}
+
+export default { hasApiFootballKey, resolveNationalTeamId, getRecentForm, getRecentTeamStats, getH2H, getInjuries, clearApiFootballCache };
