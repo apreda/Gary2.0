@@ -323,6 +323,21 @@ export async function runAgenticPropsCli({
 
         // Post-process orchestrator picks: normalize line + format prop for iOS display
         if (result.picks && result.picks.length > 0) {
+          // HR lane (hrOnly) must store ONLY home-run props. The candidate pool is
+          // already HR-filtered, but the orchestrator can still surface non-HR props
+          // (total_bases, strikeouts, ...) from its tools/context — and they'd get
+          // stamped sport:"MLB HR" below, polluting the Home Run Threats lane. Drop
+          // any non-HR pick here so the lane stays pure.
+          if (hrOnly) {
+            const beforeHR = result.picks.length;
+            result.picks = result.picks.filter(p =>
+              (p.prop || '').toLowerCase().includes('home_run') ||
+              (p.prop_type || '').toLowerCase().includes('home_run')
+            );
+            if (result.picks.length !== beforeHR) {
+              console.log(`🏠 HR-only OUTPUT filter: dropped ${beforeHR - result.picks.length} non-HR pick(s) the orchestrator emitted`);
+            }
+          }
           result.picks = result.picks.map(pick => {
             // Extract line from prop string if embedded (e.g. "player_points 25.5")
             let prop = pick.prop || '';

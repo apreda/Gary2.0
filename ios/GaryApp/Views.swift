@@ -5815,10 +5815,19 @@ struct PremiumPicksView: View {
     /// Winners order: ungraded picks (still to play) first, then settled results —
     /// each group by start time, so upcoming games lead and finished ones fall to the back.
     private func sortedShelfPicks(_ shelf: GameShelf) -> [GaryPick] {
-        shelf.picks.sorted { a, b in
-            let aGraded = shelf.settled && gamePickResult(a) != nil
-            let bGraded = shelf.settled && gamePickResult(b) != nil
-            if aGraded != bGraded { return !aGraded }   // ungraded (still to play) first
+        // A pick is "done" — bump to the BACK of the rail — once its game is
+        // FINAL, so fresh upcoming/live picks always lead and the user scrolls
+        // right to see settled (CASHED/NO CASH) ones. Detect FINAL from the live
+        // score (covers today's finished games), plus the yesterday shelf's
+        // graded results. (User call: graded picks go to the back.)
+        func isDone(_ p: GaryPick) -> Bool {
+            if shelf.settled && gamePickResult(p) != nil { return true }
+            let mu = "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")"
+            return LiveScoreCache.shared.status(forMatchup: mu)?.isFinal == true
+        }
+        return shelf.picks.sorted { a, b in
+            let ad = isDone(a), bd = isDone(b)
+            if ad != bd { return !ad }                 // upcoming/live first, FINAL to the back
             return (a.commence_time ?? "") < (b.commence_time ?? "")   // then earliest start time
         }
     }
@@ -5888,6 +5897,25 @@ struct PremiumPicksView: View {
         return order.compactMap { byGame[$0] }
     }
 
+    /// propGameGroups with graded/FINAL groups bumped to the BACK of the rail —
+    /// the same Winners rule the game shelf uses (fresh picks lead, settled
+    /// trail). A group is "done" once its game reads FINAL (live cache) or it
+    /// carries a graded result.
+    private func sortedPropGroups(_ shelf: PropShelf) -> [[PropPick]] {
+        func isDone(_ g: [PropPick]) -> Bool {
+            guard let p = g.first else { return false }
+            if shelf.settled && propResult(for: p) != nil { return true }
+            return LiveScoreCache.shared.status(forMatchup: p.matchup ?? "")?.isFinal == true
+        }
+        return propGameGroups(shelf.props).enumerated().sorted { l, r in
+            let ld = isDone(l.element), rd = isDone(r.element)
+            if ld != rd { return !ld }                       // fresh first, FINAL to the back
+            let lt = l.element.first?.commence_time ?? "", rt = r.element.first?.commence_time ?? ""
+            if lt != rt { return lt < rt }                   // then earliest start
+            return l.offset < r.offset                       // stable for ties
+        }.map { $0.element }
+    }
+
     private func propShelfView(_ shelf: PropShelf) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league, status: shelf.props.isEmpty ? "·  —"
@@ -5900,13 +5928,14 @@ struct PremiumPicksView: View {
                 // slip; a lone game's prop rides as its own card.
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 10) {
-                        ForEach(Array(propGameGroups(shelf.props).enumerated()), id: \.offset) { _, group in
+                        ForEach(Array(sortedPropGroups(shelf).enumerated()), id: \.offset) { _, group in
                             ZStack {
                                 if sportUnlocked(shelf.league) {
                                     if group.count == 1, let only = group.first {
                                         FlippablePropCard(prop: only,
                                                           gameResult: shelf.settled ? propResult(for: only) : nil,
                                                           showSportBadge: false,
+                                                          alwaysShowStartTime: true,
                                                           backHeight: UIScreen.main.bounds.height * 0.68)
                                     } else {
                                         // Headline cards stacked — the slip
@@ -5916,6 +5945,7 @@ struct PremiumPicksView: View {
                                                 FlippablePropCard(prop: p,
                                                                   gameResult: shelf.settled ? propResult(for: p) : nil,
                                                                   showSportBadge: false,
+                                                                  alwaysShowStartTime: true,
                                                                   backHeight: UIScreen.main.bounds.height * 0.68)
                                             }
                                         }
@@ -6125,7 +6155,17 @@ struct PremiumPicksView: View {
 
     private func leagueKey(_ p: GaryPick) -> String { (p.league ?? "OTHER").uppercased() }
     private func propLeagueKey(_ p: PropPick) -> String {
-        (p.effectiveLeague ?? p.sport ?? p.league ?? "OTHER").uppercased()
+        let key = (p.effectiveLeague ?? p.sport ?? p.league ?? "OTHER").uppercased()
+        // The MLB HR lane is Home Run Threats only. Guard against non-HR props that
+        // were mislabeled "MLB HR" upstream (e.g. total_bases/strikeouts) — route them
+        // to the regular MLB shelf so the HR lane never shows a non-HR prop.
+        if key == "MLB HR" {
+            let prop = (p.prop ?? "").lowercased()
+            if !prop.contains("home_run") && !prop.contains("home run") {
+                return "MLB"
+            }
+        }
+        return key
     }
 
     /// Premium props: the top 5 by confidence across the sport — no per-game
@@ -11872,13 +11912,8 @@ struct CompactPickRow: View {
     /// live standing, colored green/red by `liveToneColor`.
     private var liveFooterText: String? {
         guard displayResult == nil, let ls = liveStatus else { return nil }
-        if ls.isLive {
-            var bits = ["LIVE"]
-            if let sl = ls.scoreLine { bits.append(sl) }
-            // Covering/trailing is shown by a small colored dot in the footer, not a word.
-            return bits.joined(separator: " · ")
-        }
-        if ls.isFinal { return liveSlotText(ls, label: "FINAL") }
+        if ls.isLive { return liveLineRich(ls, label: "LIVE") }
+        if ls.isFinal { return liveLineRich(ls, label: "FINAL") }
         return nil
     }
 
@@ -13766,6 +13801,9 @@ struct FlippablePropCard: View {
     var gameResult: String? = nil
     var showSportBadge: Bool = false
     var liveInSlot: Bool = true
+    /// Passed straight to the front card — Winners shows the start time on settled
+    /// cards (it sorts by time), mirroring the game card.
+    var alwaysShowStartTime: Bool = false
     /// When set, the flipped back grows to at least this height — Best Bets
     /// wants a full-page read; the default keeps the compact expansion elsewhere.
     var backHeight: CGFloat? = nil
@@ -13783,7 +13821,7 @@ struct FlippablePropCard: View {
             // Front pinned to the shared uniform height so prop cards match the
             // game cards exactly (fixedHeight on CompactPropRow) — no per-card
             // measuring, which is what let content-length drive different sizes.
-            CompactPropRow(prop: prop, gameResult: gameResult, showSportBadge: showSportBadge, liveInSlot: liveInSlot, fixedHeight: CompactPickRow.uniformHeight)
+            CompactPropRow(prop: prop, gameResult: gameResult, showSportBadge: showSportBadge, liveInSlot: liveInSlot, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight)
                 .opacity(flipped ? 0 : 1)
 
             // ONE back design for prop cards everywhere — the slip's back
@@ -15414,6 +15452,25 @@ func liveSlotText(_ ls: LiveScore, label: String) -> String {
     return bits.joined(separator: " · ")
 }
 
+/// The rich live line shared by game + prop cards so they read identically:
+/// team abbrs + score + the live situation. WC/NBA/NHL carry the poller's
+/// `detail` (match minute "67'" / "Q3 4:12" / period); MLB adds outs + base
+/// runners. e.g. "LIVE · URU 0 · KSA 1 · 67'" or
+/// "LIVE · SD 4 · PHI 6 · BOT 7 · 2 OUT · 1B·3B".
+func liveLineRich(_ ls: LiveScore, label: String) -> String {
+    var bits: [String] = [label]
+    if let sl = ls.scoreLine { bits.append(sl) }
+    else if let a = ls.away_score, let h = ls.home_score { bits.append("\(a)–\(h)") }
+    guard label == "LIVE" else { return bits.joined(separator: " · ") }
+    if let det = ls.detail, !det.isEmpty, det != "LIVE", det != "FINAL" { bits.append(det) }
+    if (ls.league ?? "").uppercased() == "MLB" {
+        if let o = ls.outs { bits.append("\(o) OUT") }
+        let runners = [ls.onFirst ? "1B" : nil, ls.onSecond ? "2B" : nil, ls.onThird ? "3B" : nil].compactMap { $0 }
+        if !runners.isEmpty { bits.append(runners.joined(separator: "·")) }
+    }
+    return bits.joined(separator: " · ")
+}
+
 /// Conviction tiers — Gary's vocabulary, not calculator language ("82%" is
 /// fake precision and self-inflicted accountability). Bands set from the real
 /// Apr–Jun 2026 confidence distribution so the tiers actually spread:
@@ -15879,7 +15936,7 @@ struct PicksCarouselView: View {
         liveScores.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
     }
 
-    private func statusLine(for g: (matchup: String, time: String, props: [PropPick])) -> (text: String, color: Color) {
+    private func statusLine(for g: (matchup: String, time: String, props: [PropPick])) -> (text: String, color: Color)? {
         if !gameIsFresh(g) {
             return ("YESTERDAY", .white.opacity(0.3))
         }
@@ -15893,7 +15950,10 @@ struct PicksCarouselView: View {
                 return ("FINAL · \(score)", .white.opacity(0.35))
             }
         }
-        return (g.time.isEmpty ? "TODAY" : g.time, .white.opacity(0.35))
+        // Pre-game: the start time used to render here, but it's redundant with the
+        // detail hero shown on tap (user call, Jun 16) — drop it so the tab reads as
+        // just the two team names. LIVE/FINAL/YESTERDAY stay (status, not the time).
+        return nil
     }
 
     private var emptyState: some View {
@@ -16018,8 +16078,11 @@ struct PicksGamePage: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.time.isEmpty ? "MATCHUP" : group.time.uppercased())
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(0.8))
+                    // On-tap start time — now the ONLY place the time shows, so give it
+                    // the sans face (GaryFonts.text) a touch larger instead of the tiny
+                    // mono eyebrow it borrowed before (user call, Jun 16).
+                    .font(GaryFonts.text(12, .semibold)).tracking(0.6)
+                    .foregroundStyle(GaryColors.gold.opacity(0.85))
                 Text(shortMatchup)
                     .font(.system(size: 22, weight: .heavy)).tracking(0.3).foregroundStyle(.white)
             }
@@ -16358,14 +16421,11 @@ struct PropSlipCard: View {
                                     .lineLimit(1)
                             }
                             Spacer(minLength: 8)
-                            HStack(spacing: 3) {
-                                Text("Gary's Take")
-                                    .font(.system(size: 10.5, weight: .semibold))
-                                    .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
-                            }
+                            // Chevron only — "Gary's Take" words dropped to match the
+                            // game/prop cards (user call: keep the arrow, lose the label).
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(GaryColors.heroAccent.opacity(0.7))
                             .layoutPriority(1)
                             if resultLetterTrailing, let r = resultLetter(p) {
                                 resultCapsule(r)
@@ -18495,6 +18555,11 @@ struct CompactPropRow: View {
     /// Game pages carry the score in the page hero (LiveScoreStrip), so their
     /// cards keep the plain start time in the slot. Everywhere else stays state-aware.
     var liveInSlot: Bool = true
+    /// Winners keeps the start time visible on settled cards (it sorts by time);
+    /// elsewhere settled cards hide it. Mirrors the game card's flag exactly.
+    /// Declared BEFORE fixedHeight to match CompactPickRow's field order (the
+    /// synthesized init is positional, and the flip wrapper passes them in order).
+    var alwaysShowStartTime: Bool = false
     /// Exact height when the flip wrapper passes one — uniform with the game card
     /// (shares CompactPickRow.uniformHeight). nil = natural size (raw/share use).
     var fixedHeight: CGFloat? = nil
@@ -18624,6 +18689,9 @@ struct CompactPropRow: View {
         return player.isEmpty ? bet : "\(player)\n\(bet)"
     }
 
+    /// Matchup context for the meta row — team (+ FINAL score when settled).
+    /// Time and odds render SEPARATELY (time in the footer, odds in gold) to
+    /// match the game card exactly.
     private var metaLine: String {
         var parts: [String] = []
         let team = Formatters.shortTeamName(prop.team, league: prop.effectiveLeague)
@@ -18635,21 +18703,28 @@ struct CompactPropRow: View {
             } else {
                 parts.append("FINAL")
             }
-        } else if let live = liveStatus, live.isLive || live.isFinal {
-            // The footer strip carries the live/final state.
-        } else if !formattedTime.isEmpty {
-            parts.append(formattedTime)
         }
-        let odds = Formatters.americanOdds(prop.odds)
-        if !odds.isEmpty { parts.append(odds) }
         return parts.joined(separator: " · ")
     }
 
-    /// Footer's gold state slot — live line while the game runs.
-    private var footerStateText: String? {
-        guard resolvedResult == nil, let live = liveStatus else { return nil }
-        if live.isLive { return liveSlotText(live, label: "LIVE") }
-        if live.isFinal { return liveSlotText(live, label: "FINAL") }
+    /// Odds rendered separately in sport-gold in the meta row (game card parity).
+    private var oddsText: String { Formatters.americanOdds(prop.odds) }
+
+    /// Start time on the footer's left corner — game card parity. Settled cards
+    /// keep it on the Winners page (alwaysShowStartTime), matching the game card;
+    /// live cards hide it (the footer carries the live line instead).
+    private var propFrontTime: String? {
+        if resolvedResult != nil { return alwaysShowStartTime ? (formattedTime.isEmpty ? nil : formattedTime) : nil }
+        if let live = liveStatus, live.isLive || live.isFinal { return nil }
+        return formattedTime.isEmpty ? nil : formattedTime
+    }
+
+    /// Footer live line — teams + score + situation (minute / outs+bases),
+    /// IDENTICAL to the game card via the shared formatter.
+    private var liveFooterText: String? {
+        guard resolvedResult == nil, let ls = liveStatus else { return nil }
+        if ls.isLive { return liveLineRich(ls, label: "LIVE") }
+        if ls.isFinal { return liveLineRich(ls, label: "FINAL") }
         return nil
     }
 
@@ -18675,27 +18750,20 @@ struct CompactPropRow: View {
                     .minimumScaleFactor(0.5)
                     .padding(.top, 10)
 
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(((prop.effectiveLeague ?? "") + " · PROP").uppercased())
                         .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
                         .foregroundStyle(isMLBProp ? GaryColors.mlbGrass : accentColor)
                         .lineLimit(1)
                         .layoutPriority(1)
-                    Text(metaLine)
+                    (Text(metaLine).foregroundColor(.white.opacity(0.55))
+                        + Text((oddsText.isEmpty || metaLine.isEmpty) ? "" : " · ").foregroundColor(.white.opacity(0.4))
+                        + Text(oddsText).foregroundColor(GaryColors.gold))
                         .font(GaryFonts.text(13.5, .medium))
-                        .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                }
-                .padding(.top, 10)
-
-                // Footer strip — share, gold live line, Gary's Take.
-                Rectangle()
-                    .fill(.white.opacity(0.12))
-                    .frame(height: 1)
-                    .padding(.vertical, 12)
-
-                HStack(spacing: 10) {
+                    Spacer(minLength: 4)
+                    // Share — same spot as the game card (meta row), frees the footer.
                     Button {
                         let images = renderPropShareImages(prop: prop, gameResult: resolvedResult)
                         if !images.isEmpty { shareItem = PickShareItem(images: images) }
@@ -18703,28 +18771,40 @@ struct CompactPropRow: View {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.5))
-                            .frame(width: 24, height: 20, alignment: .leading)
+                            .frame(width: 26, height: 22)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share this prop pick")
-                    if let state = footerStateText {
-                        Text(state)
+                }
+                .padding(.top, 10)
+
+                // Footer — live line (teams + score + situation) or start time on
+                // the left, tap-to-flip chevron on the right. Matches the game card
+                // exactly: share moved up to the meta row, no "Gary's Take" words.
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(height: 1)
+                    .padding(.vertical, 12)
+
+                HStack(spacing: 10) {
+                    if let live = liveFooterText {
+                        Text(live)
+                            .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                            .foregroundStyle(GaryColors.gold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    } else if let t = propFrontTime {
+                        Text(t)
                             .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                             .foregroundStyle(GaryColors.gold)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
                     Spacer()
-                    HStack(spacing: 3) {
-                        Text("Gary's Take")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
-                    }
-                    .layoutPriority(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.7))
                 }
             }
             .padding(18)
@@ -18740,6 +18820,10 @@ struct CompactPropRow: View {
                     .rotationEffect(.degrees(-8))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .padding(.trailing, 16)
+                    // Prop heroes run two long lines (player + market/call), so the
+                    // long 2nd line crowds a centered stamp. Sit it a line higher
+                    // than the game card's — the user's "move the stamp slightly up".
+                    .offset(y: -26)
             }
         }
         // Uniform card height — matches the game card so every pick card is the
