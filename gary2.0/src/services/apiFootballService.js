@@ -19,6 +19,9 @@ const TTL_STATIC = 24 * 60 * 60 * 1000; // team-id resolution
 const TTL_FORM = 6 * 60 * 60 * 1000;    // recent fixtures / form
 const TTL_INJURY = 2 * 60 * 60 * 1000;  // injuries
 const DEFAULT_SEASON_AF = 2026;         // API-Football season for the current international cycle
+// Only COMPLETED matches count toward recent form — a live or scheduled fixture
+// (including the very match being predicted) must never pollute the averages.
+const FINISHED = new Set(['FT', 'AET', 'PEN']);
 
 const cache = new Map();
 const getCached = (k) => { const e = cache.get(k); return e && Date.now() - e.ts < e.ttl ? e.data : null; };
@@ -101,7 +104,9 @@ export async function getRecentForm(teamIdOrName, lastN = 10) {
 
   let rows;
   try {
-    rows = await afFetch('/fixtures', { team: teamId, last: lastN });
+    // Fetch a few extra so we still get lastN after dropping any in-progress or
+    // upcoming fixture (incl. the match being predicted).
+    rows = await afFetch('/fixtures', { team: teamId, last: lastN + 3 });
   } catch (e) {
     console.warn(`[API-Football] getRecentForm(${teamId}) failed: ${e.message}`);
     return empty;
@@ -109,6 +114,8 @@ export async function getRecentForm(teamIdOrName, lastN = 10) {
 
   const fixtures = [];
   for (const f of rows) {
+    if (!FINISHED.has(f.fixture?.status?.short)) continue; // completed matches only
+    if (fixtures.length >= lastN) break;
     const isHome = f.teams?.home?.id === teamId;
     const gf = isHome ? f.goals?.home : f.goals?.away;
     const ga = isHome ? f.goals?.away : f.goals?.home;
@@ -179,27 +186,30 @@ export async function getRecentTeamStats(teamIdOrName, lastN = 6) {
   const cached = getCached(key);
   if (cached) return cached;
   let fixtures = [];
-  try { fixtures = await afFetch('/fixtures', { team: teamId, last: lastN }); } catch { return {}; }
-  const ids = fixtures.filter(f => f.goals?.home != null).map(f => f.fixture?.id).filter(Boolean);
+  try { fixtures = await afFetch('/fixtures', { team: teamId, last: lastN + 3 }); } catch { return {}; }
+  const ids = fixtures.filter(f => FINISHED.has(f.fixture?.status?.short)).map(f => f.fixture?.id).filter(Boolean).slice(0, lastN);
   if (!ids.length) return {};
   const num = (s) => { const v = parseFloat(String(s ?? '').replace('%', '')); return Number.isFinite(v) ? v : null; };
-  const acc = { xg: [], poss: [], shots: [], sot: [], corners: [], passAcc: [] };
+  const acc = { xg: [], xga: [], poss: [], shots: [], sot: [], corners: [], passAcc: [] };
   for (const fid of ids) {
     let rows;
-    try { rows = await afFetch('/fixtures/statistics', { fixture: fid, team: teamId }); } catch { continue; }
-    const stats = rows?.[0]?.statistics || [];
-    const get = (...types) => { for (const t of types) { const r = stats.find(s => s.type === t); if (r && num(r.value) != null) return num(r.value); } return null; };
+    // Fetch BOTH teams (no team filter) so the opponent's xG gives this team's xGA.
+    try { rows = await afFetch('/fixtures/statistics', { fixture: fid }); } catch { continue; }
+    const mine = (rows.find(r => r.team?.id === teamId)?.statistics) || [];
+    const opp = (rows.find(r => r.team?.id !== teamId)?.statistics) || [];
+    const pick = (stats, ...types) => { for (const t of types) { const r = stats.find(s => s.type === t); if (r && num(r.value) != null) return num(r.value); } return null; };
     const push = (arr, v) => { if (v != null) arr.push(v); };
-    push(acc.xg, get('expected_goals', 'Expected Goals'));
-    push(acc.poss, get('Ball Possession'));
-    push(acc.shots, get('Total Shots'));
-    push(acc.sot, get('Shots on Goal'));
-    push(acc.corners, get('Corner Kicks'));
-    push(acc.passAcc, get('Passes %'));
+    push(acc.xg, pick(mine, 'expected_goals', 'Expected Goals'));
+    push(acc.xga, pick(opp, 'expected_goals', 'Expected Goals')); // opponent xG = this team's xGA
+    push(acc.poss, pick(mine, 'Ball Possession'));
+    push(acc.shots, pick(mine, 'Total Shots'));
+    push(acc.sot, pick(mine, 'Shots on Goal'));
+    push(acc.corners, pick(mine, 'Corner Kicks'));
+    push(acc.passAcc, pick(mine, 'Passes %'));
   }
   const avg = (arr) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : undefined;
   const out = {
-    xg: avg(acc.xg), possession_pct: avg(acc.poss), shots: avg(acc.shots),
+    xg: avg(acc.xg), xga: avg(acc.xga), possession_pct: avg(acc.poss), shots: avg(acc.shots),
     shots_on_target: avg(acc.sot), corners: avg(acc.corners), pass_accuracy: avg(acc.passAcc),
     sampleMatches: ids.length,
   };
