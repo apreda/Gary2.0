@@ -18813,17 +18813,17 @@ struct CompactPropRow: View {
             // verdict (the brand owns its record).
             if let verdict = resolvedResult {
                 Text(verdict == "won" ? "CASHED" : (verdict == "push" ? "PUSH" : "NO CASH"))
-                    .font(GaryFonts.mono(19, bold: true)).tracking(2.5)
+                    .font(GaryFonts.mono(16, bold: true)).tracking(2)
                     .foregroundStyle(GaryColors.gold.opacity(0.92))
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.85), lineWidth: 2))
-                    .rotationEffect(.degrees(-8))
+                    .padding(.horizontal, 9).padding(.vertical, 4)
+                    .overlay(Rectangle().stroke(GaryColors.gold.opacity(0.85), lineWidth: 1.5))
+                    // Smaller + STRAIGHT (no slant), unlike the game card's diagonal
+                    // stamp: prop heroes run two long lines, and the tilt's taller
+                    // footprint crowded line 2. A compact horizontal stamp tucks into
+                    // the upper-right with less overlap (user call, Jun 16).
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .padding(.trailing, 16)
-                    // Prop heroes run two long lines (player + market/call), so the
-                    // long 2nd line crowds a centered stamp. Sit it a line higher
-                    // than the game card's — the user's "move the stamp slightly up".
-                    .offset(y: -26)
+                    .offset(y: -24)
             }
         }
         // Uniform card height — matches the game card so every pick card is the
@@ -21152,7 +21152,7 @@ enum Formatters {
         for mascot in twoWordMascots where lower.hasSuffix(mascot.lowercased()) {
             return mascot
         }
-        return name.components(separatedBy: " ").last.map(String.init) ?? name
+        return name.components(separatedBy: " ").last ?? name
     }
 
     static func shortTeamName(_ team: String?, league: String? = nil) -> String {
