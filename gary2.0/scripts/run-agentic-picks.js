@@ -1644,8 +1644,12 @@ async function main() {
           // no-stats pick. (WC's BDL feed silently returns empty pre-match / on fetch
           // failure; this gate is the check that was missing.)
           const realStatCount = countRealStats(statsData, tokenToIosKey);
-          if (realStatCount === 0) {
-            console.error(`\n🛑 [${config.name}] HARD FAIL: "${result.pick}" — ZERO real Tale-of-the-Tape stats (all N/A). Stats pipeline returned nothing; the pick is ungrounded. REJECTING — no pick stored.`);
+          // World Cup needs ≥3 real PERFORMANCE rows (metadata excluded in
+          // countRealStats) — a pick resting only on futures/standings is priced
+          // off the market itself (circular). Other sports keep the ZERO floor.
+          const minRealStats = config.key === 'soccer_world_cup' ? 3 : 1;
+          if (realStatCount < minRealStats) {
+            console.error(`\n🛑 [${config.name}] HARD FAIL: "${result.pick}" — only ${realStatCount} real performance stat(s) (need ${minRealStats}). Tale of the Tape is metadata-only; the pick is ungrounded. REJECTING — no pick stored.`);
             if (i < finalGames.length - 1) { await sleep(2000); }
             continue;
           }
@@ -1657,15 +1661,20 @@ async function main() {
           // shared game/context fields and overriding only the bet-specific ones.
           // Each gets a category-suffixed pick_id; the storage layer keys soccer
           // by (match_id, type) so the two coexist as separate cards.
-          const wcCategory = (t) => (t === 'total' ? 'total' : 'side');
+          // Category is the BUILD-TIME ROLE, not derived from the resolved type —
+          // deriving from type let a side that resolved to "Over 2.5" collide with
+          // the total leg on the (match_id,category) dedup key and silently drop one
+          // play. The primary result is the SIDE; additionalPicks are the TOTAL.
           const picksForGame = [cleanPick];
           if (config.key === 'soccer_world_cup') {
-            cleanPick.pick_category = wcCategory(cleanPick.type);
-            cleanPick.pick_id = `agentic-${config.key}-${game.id || Date.now()}-${cleanPick.pick_category}`;
+            cleanPick.pick_category = 'side';
+            cleanPick.pick_id = `agentic-${config.key}-${game.id || Date.now()}-side`;
           }
+          let extraIdx = 0;
           for (const extra of (result.additionalPicks || [])) {
             if (!extra || !extra.pick) continue;
-            const cat = wcCategory(extra.type);
+            const cat = extraIdx === 0 ? 'total' : `total${extraIdx + 1}`;
+            extraIdx++;
             picksForGame.push({
               ...cleanPick,
               pick: extra.pick,

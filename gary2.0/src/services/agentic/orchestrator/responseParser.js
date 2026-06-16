@@ -451,6 +451,20 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       if (mkt.handicap != null) parsed.handicap = mkt.handicap;
       console.log(`[Orchestrator] ⚽ WC: market odds → odds=${parsed.odds ?? '-'} line=${parsed.goal_line ?? '-'} hcap=${parsed.handicap ?? '-'}`);
     }
+    // GRID GUARD: a line that survived only from Gary's prose (no consensus market
+    // resolved it) must sit on a real book increment, else it's a phantom that can
+    // never settle ("Cabo Verde +3.3", "Under 2.8"). Totals live on a 0.5 grid in
+    // 1.0–5.0; Asian handicaps on a 0.25 grid. Off-grid → drop the leg (do NOT snap;
+    // the price was never resolved against a real market).
+    const onGrid = (v, step) => { if (v == null) return false; const q = Number(v) / step; return Number.isFinite(q) && Math.abs(q - Math.round(q)) < 1e-9; };
+    if (parsed.type === 'total' && !(onGrid(parsed.goal_line, 0.5) && parsed.goal_line >= 1.0 && parsed.goal_line <= 5.0)) {
+      console.warn(`[Orchestrator] ⚽ WC: REJECTING total — off-grid / no-market line ${parsed.goal_line}`);
+      return null;
+    }
+    if (parsed.type === 'asian_handicap' && !onGrid(parsed.handicap, 0.25)) {
+      console.warn(`[Orchestrator] ⚽ WC: REJECTING handicap — off-grid / no-market line ${parsed.handicap}`);
+      return null;
+    }
     // Rebuild a clean, self-contained pick string from the resolved structured
     // fields. Gary's prose is only a label and arrives malformed (dropped signs,
     // doubled odds, a dangling "@"); the resolved book number is authoritative, and

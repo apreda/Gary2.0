@@ -411,10 +411,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
           // Props: allow multiple per game but dedupe by player+prop
           return `prop|${p.league || ''}|${p.player || ''}|${p.prop || p.statType || ''}`;
         }
-        // Soccer (World Cup): ONE pick per MARKET per match — ML, total, and Asian
-        // handicap can coexist on the same match (rendered as separate cards).
+        // Soccer (World Cup): the SIDE and TOTAL legs coexist as separate cards.
+        // Key on pick_category (build-time role: side/total), NOT type — a side that
+        // resolves to "total" would otherwise collide with the total leg and drop one.
         if (p.soccer_match_id) {
-          return `soccer|${p.soccer_match_id}|${p.type || 'moneyline'}`;
+          return `soccer|${p.soccer_match_id}|${p.pick_category || p.type || 'moneyline'}`;
         }
         // Game picks: ONE per game — include the BDL game id so a doubleheader's
         // game 2 never collides with (and silently deletes) game 1's stored pick.
