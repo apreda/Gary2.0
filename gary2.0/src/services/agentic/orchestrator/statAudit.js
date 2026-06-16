@@ -191,6 +191,15 @@ export function auditPickRationale(pick, messages) {
   const corpus = buildNumericCorpus(messages);
   if (corpus.size === 0) return empty; // no data → nothing to audit against
 
+  // Soccer/World Cup now ships a structured scout report (recent form, xG,
+  // possession, GF/GA from BDL + API-Football), so its highest-risk stale-memory
+  // classes are no longer "uncheckable" — if such a number doesn't trace, force a
+  // corrective retry instead of a silent windowed warning. Gated to soccer so
+  // other sports' windowed-warn behavior is untouched.
+  const isSoccer = (Array.isArray(messages) ? messages : [])
+    .some(m => typeof m?.content === 'string' && /world\s*cup|fifa|soccer/i.test(m.content));
+  const SOCCER_STRICT = new Set(['xg', 'per-game', 'possession', 'caps', 'ranking']);
+
   const claims = extractNumericClaims(rationale);
   const unsupported = [];
   const retryable = [];
@@ -208,7 +217,8 @@ export function auditPickRationale(pick, messages) {
       seen.add(c.context);
       const entry = `[${c.kind}${c.windowed ? '/windowed' : ''}] "...${c.context}..."`;
       unsupported.push(entry);
-      (c.windowed ? warnOnly : retryable).push(entry);
+      const forceRetry = isSoccer && SOCCER_STRICT.has(c.kind);
+      ((c.windowed && !forceRetry) ? warnOnly : retryable).push(entry);
     }
   }
   return { unsupported, retryable, warnOnly, checked: claims.length };

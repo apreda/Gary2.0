@@ -1578,6 +1578,9 @@ async function main() {
             moneylineAway: result.moneylineAway,
             total: result.total,
             rationale: result.rationale,
+            // Audit trail: rationale numbers that didn't trace to provided data
+            // (null when all traced). Visibility/filtering hook — was being dropped.
+            statAuditWarnings: result._statAuditWarnings ?? null,
             league: config.name,
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
