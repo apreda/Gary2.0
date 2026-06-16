@@ -265,7 +265,10 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         goal_line: pick.goal_line ?? null,
         handicap: pick.handicap ?? null,
         // Multi-book sportsbook odds comparison (for iOS app display)
-        sportsbook_odds: pick.sportsbook_odds || null
+        sportsbook_odds: pick.sportsbook_odds || null,
+        // World Cup side/total tag — set by run-agentic-picks; carry it through so
+        // the two WC plays per match stay distinguishable (was being dropped → null).
+        pick_category: pick.pick_category ?? null
       };
 
       // Add the generated pick ID
@@ -331,7 +334,9 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       goal_line: pick.goal_line ?? null,
       handicap: pick.handicap ?? null,
       // Multi-book sportsbook odds comparison (for iOS app display)
-      sportsbook_odds: pick.sportsbook_odds || null
+      sportsbook_odds: pick.sportsbook_odds || null,
+      // World Cup side/total tag — carry it through (was being dropped → null).
+      pick_category: pick.pick_category ?? null
     };
 
     // Add the generated pick ID

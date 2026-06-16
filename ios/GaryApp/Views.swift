@@ -15107,6 +15107,25 @@ final class PropsSlateStore: ObservableObject {
         return nil
     }
 
+    /// ALL game picks for a matchup — World Cup ships TWO plays per match (a SIDE
+    /// and a TOTAL), so the per-game page must render both, not just the first.
+    /// Today's picks lead as a set; if none, yesterday's (stamped) as a set.
+    func gamePicksForMatchup(_ matchup: String) -> [(pick: GaryPick, isYesterday: Bool)] {
+        let today = allMatchGamePicks(in: gamePicks, matchup: matchup)
+        if !today.isEmpty { return today.map { ($0, false) } }
+        return allMatchGamePicks(in: yesterdayGamePicks, matchup: matchup).map { ($0, true) }
+    }
+
+    private func allMatchGamePicks(in arr: [GaryPick], matchup: String) -> [GaryPick] {
+        let m = matchup.lowercased()
+        return arr.filter { p in
+            guard let h = p.homeTeam?.lowercased(), let a = p.awayTeam?.lowercased(), !h.isEmpty, !a.isEmpty else { return false }
+            let hKey = h.split(separator: " ").last.map(String.init) ?? h
+            let aKey = a.split(separator: " ").last.map(String.init) ?? a
+            return m.contains(hKey) && m.contains(aKey)
+        }
+    }
+
     func gamePickResult(_ pick: GaryPick) -> String? {
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
@@ -15844,7 +15863,7 @@ struct PicksCarouselView: View {
                 ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                     ScrollView(showsIndicators: false) {
                         PicksGamePage(group: g,
-                                      entry: store.gamePickEntry(forMatchup: g.matchup),
+                                      entries: store.gamePicksForMatchup(g.matchup),
                                       gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
                                       edges: edges(for: g), onTapProp: { selectedProp = $0 })
                             .padding(.bottom, 130)
@@ -16051,7 +16070,7 @@ struct PicksTodayPage: View {
 
 struct PicksGamePage: View {
     let group: (matchup: String, time: String, props: [PropPick])
-    let entry: (pick: GaryPick, isYesterday: Bool)?
+    let entries: [(pick: GaryPick, isYesterday: Bool)]
     let gamePickResult: (GaryPick) -> String?
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
@@ -16092,12 +16111,19 @@ struct PicksGamePage: View {
                 LiveScoreStrip(score: ls).padding(.horizontal, 16)
             }
 
-            if let entry {
-                FlippablePickCard(pick: entry.pick,
-                                  gameResult: entry.isYesterday ? gamePickResult(entry.pick) : nil,
-                                  showSportBadge: false,
-                                  liveInSlot: false)
-                    .padding(.horizontal, 10)
+            if !entries.isEmpty {
+                // World Cup ships two plays per match (a SIDE and a TOTAL) — render
+                // every game pick for this matchup, not just the first. Single-pick
+                // sports (MLB/NBA/NHL) still show exactly one card.
+                VStack(spacing: 10) {
+                    ForEach(Array(entries.enumerated()), id: \.offset) { _, e in
+                        FlippablePickCard(pick: e.pick,
+                                          gameResult: e.isYesterday ? gamePickResult(e.pick) : nil,
+                                          showSportBadge: false,
+                                          liveInSlot: false)
+                    }
+                }
+                .padding(.horizontal, 10)
             } else if !(heroScore?.isLive ?? false) && !(heroScore?.isFinal ?? false) {
                 // Look-ahead placeholder in the pick's slot — the game's on the
                 // board, Gary's pick lands ~90 min out, and the intel below is
