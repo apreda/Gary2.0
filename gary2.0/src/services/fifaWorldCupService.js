@@ -203,13 +203,16 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
       draw: row.moneyline_draw_odds ?? null,
       away: row.moneyline_away_odds ?? null,
     },
-    spread: row.spread_home_value != null ? {
+    // Flat fields bypass the realistic-line band that guards extractMain*; run them
+    // through the same band first, else fall back to the (banded) ladder extractor.
+    // This is the other half of the "Under 10 -115" guard.
+    spread: (row.spread_home_value != null && Math.abs(Number(row.spread_home_value)) <= 4.5) ? {
       homeValue: row.spread_home_value,
       homeOdds: row.spread_home_odds ?? null,
       awayValue: row.spread_away_value ?? null,
       awayOdds: row.spread_away_odds ?? null,
     } : extractMainSpread(row.markets),
-    total: row.total_value != null ? {
+    total: (row.total_value != null && Number(row.total_value) >= 1.0 && Number(row.total_value) <= 5.0) ? {
       line: row.total_value,
       over: row.total_over_odds ?? null,
       under: row.total_under_odds ?? null,

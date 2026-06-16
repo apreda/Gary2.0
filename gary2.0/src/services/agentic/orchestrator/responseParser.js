@@ -309,6 +309,11 @@ function resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds)
   const namesAway = refs(awayTeam);
 
   if (parsed.type === 'total' && tot) {
+    // Defensive band guard (matches the odds-sourcing band): never stamp an
+    // out-of-range goal line like "10". Upstream banding should prevent this;
+    // if it slips through, null the line so the pick is rejected, not shipped.
+    const line = Number(tot.line);
+    if (!(line >= 1.0 && line <= 5.0)) return { odds: null, goal_line: null, handicap: null };
     const isOver = /\bover\b/.test(lc);
     return { odds: (isOver ? tot.over : tot.under) ?? null, goal_line: tot.line ?? null, handicap: null };
   }
