@@ -196,26 +196,36 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
     if (row) break;
   }
   if (!row) row = oddsRows[0];
+  const ml = {
+    home: cleanOdds(row.moneyline_home_odds),
+    draw: cleanOdds(row.moneyline_draw_odds),
+    away: cleanOdds(row.moneyline_away_odds),
+  };
+  // Flat fields bypass the realistic-line band + sentinel guard that protect
+  // extractMain*; only trust a flat spread that is in-band AND a clean half-goal
+  // line with non-sentinel odds, else fall back to the (guarded) ladder extractor.
+  // This is the other half of the "Under 10 -115" guard.
+  const flatSpreadOk = row.spread_home_value != null
+    && Math.abs(Number(row.spread_home_value)) <= 4.5
+    && isHalfGoalLine(Number(row.spread_home_value))
+    && cleanOdds(row.spread_home_odds) != null && cleanOdds(row.spread_away_odds) != null;
+  const flatTotalOk = row.total_value != null
+    && Number(row.total_value) >= 1.0 && Number(row.total_value) <= 5.0
+    && isHalfGoalLine(Number(row.total_value))
+    && cleanOdds(row.total_over_odds) != null && cleanOdds(row.total_under_odds) != null;
   return {
     vendor: row.vendor,
-    moneyline: {
-      home: row.moneyline_home_odds ?? null,
-      draw: row.moneyline_draw_odds ?? null,
-      away: row.moneyline_away_odds ?? null,
-    },
-    // Flat fields bypass the realistic-line band that guards extractMain*; run them
-    // through the same band first, else fall back to the (banded) ladder extractor.
-    // This is the other half of the "Under 10 -115" guard.
-    spread: (row.spread_home_value != null && Math.abs(Number(row.spread_home_value)) <= 4.5) ? {
+    moneyline: ml,
+    spread: flatSpreadOk ? {
       homeValue: row.spread_home_value,
-      homeOdds: row.spread_home_odds ?? null,
+      homeOdds: cleanOdds(row.spread_home_odds),
       awayValue: row.spread_away_value ?? null,
-      awayOdds: row.spread_away_odds ?? null,
-    } : extractMainSpread(row.markets),
-    total: (row.total_value != null && Number(row.total_value) >= 1.0 && Number(row.total_value) <= 5.0) ? {
+      awayOdds: cleanOdds(row.spread_away_odds),
+    } : extractMainSpread(row.markets, ml),
+    total: flatTotalOk ? {
       line: row.total_value,
-      over: row.total_over_odds ?? null,
-      under: row.total_under_odds ?? null,
+      over: cleanOdds(row.total_over_odds),
+      under: cleanOdds(row.total_under_odds),
     } : extractMainTotal(row.markets),
   };
 }
@@ -230,8 +240,20 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
 // (±1.0) and tenth (±1.3) alt lines, giving the American-style number every other
 // sport shows.
 const isHalfGoalLine = (v) => Number.isInteger(Math.abs(v) * 2) && !Number.isInteger(Math.abs(v));
+// Books mark an unavailable price with a sentinel (±9999 / 100000). Treat anything
+// past a realistic American-odds magnitude as missing so it can't poison the
+// balanced-juice election or ship as a real number.
+const ODDS_SENTINEL = 8000;
+const cleanOdds = (v) => {
+  const n = Number(v);
+  return (v == null || !Number.isFinite(n) || Math.abs(n) >= ODDS_SENTINEL) ? null : n;
+};
 
-function extractMainSpread(markets) {
+// `ml` (optional): the 3-way moneyline { home, away } for THIS match. When present we
+// require the favorite (more negative ML) to be GIVING goals — i.e. a negative handicap
+// on their side — so a data error or deep alt line can't ship the favorite RECEIVING
+// points (e.g. a -8000 favorite "+2.5").
+function extractMainSpread(markets, ml = null) {
   const lines = [];
   for (const mkt of (markets || [])) {
     if (mkt.type !== 'spread' || mkt.period !== 'match' || mkt.scope !== 'match') continue;
@@ -239,26 +261,30 @@ function extractMainSpread(markets) {
     const away = (mkt.outcomes || []).find(o => o.side === 'away' || o.type === 'away');
     const value = parseFloat(home?.handicap ?? home?.line_value);
     if (!home || !away || !Number.isFinite(value)) continue;
-    lines.push({
-      homeValue: value,
-      homeOdds: home.american_odds ?? null,
-      awayValue: parseFloat(away.handicap ?? away.line_value),
-      awayOdds: away.american_odds ?? null,
-    });
+    const homeOdds = cleanOdds(home.american_odds);
+    const awayOdds = cleanOdds(away.american_odds);
+    if (homeOdds == null || awayOdds == null) continue; // can't balance-score a sentinel line
+    lines.push({ homeValue: value, homeOdds, awayValue: parseFloat(away.handicap ?? away.line_value), awayOdds });
   }
   if (lines.length === 0) return null;
   // Balanced juice alone can crown a ladder EXTREME as the "main" line. Real soccer
   // Asian handicaps don't exceed ~±4.5 even for big mismatches — reject anything
   // beyond that, then balance-pick within the realistic band.
-  const realistic = lines.filter(l => Math.abs(l.homeValue) <= 4.5);
+  let realistic = lines.filter(l => Math.abs(l.homeValue) <= 4.5);
   if (realistic.length === 0) return null;
-  // Prefer American-style half-goal lines over the alt Asian lines (-1.3, -0.8,
-  // ±1.0) books also list; balance-pick within whichever pool we have.
+  // Enforce ML-sign consistency: the favorite must lay (not receive) goals.
+  if (ml && ml.home != null && ml.away != null) {
+    const homeFav = Number(ml.home) < Number(ml.away);
+    const consistent = realistic.filter(l => homeFav ? l.homeValue <= 0 : l.homeValue >= 0);
+    if (consistent.length) realistic = consistent; // keep band if ML/lines disagree (degenerate)
+  }
+  // American-style half-goal lines only (-0.5, -1.5, -2.5 ...) — never a pushable whole
+  // line or an alt (-1.3, -0.8). If the book lists no clean half line, omit the spread
+  // (Gary leans on the 3-way ML for the side) rather than ship an odd number.
   const half = realistic.filter(l => isHalfGoalLine(l.homeValue));
-  const pool = half.length ? half : realistic;
-  pool.sort((a, b) =>
-    Math.abs((a.homeOdds ?? 0) + (a.awayOdds ?? 0)) - Math.abs((b.homeOdds ?? 0) + (b.awayOdds ?? 0)));
-  return pool[0];
+  if (half.length === 0) return null;
+  half.sort((a, b) => Math.abs(a.homeOdds + a.awayOdds) - Math.abs(b.homeOdds + b.awayOdds));
+  return half[0];
 }
 
 function extractMainTotal(markets) {
@@ -269,8 +295,8 @@ function extractMainTotal(markets) {
       const line = parseFloat(o.line_value);
       if (!Number.isFinite(line)) continue;
       const entry = byLine.get(line) || { line, over: null, under: null };
-      if (o.type === 'over') entry.over = o.american_odds ?? null;
-      if (o.type === 'under') entry.under = o.american_odds ?? null;
+      if (o.type === 'over') entry.over = cleanOdds(o.american_odds);
+      if (o.type === 'under') entry.under = cleanOdds(o.american_odds);
       byLine.set(line, entry);
     }
   }
@@ -283,12 +309,12 @@ function extractMainTotal(markets) {
   // feeding Gary an absurd number.
   const realistic = pairs.filter(e => e.line >= 1.0 && e.line <= 5.0);
   if (realistic.length === 0) return null;
-  // Prefer clean half-goal O/U lines (1.5, 2.5, 3.5) — American style — over whole
-  // or alt lines, like the other sports.
+  // Clean half-goal O/U lines (1.5, 2.5, 3.5) only — American style, never pushable.
+  // No half line in band → omit the total rather than ship a whole/alt number.
   const half = realistic.filter(e => isHalfGoalLine(e.line));
-  const pool = half.length ? half : realistic;
-  pool.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
-  return pool[0];
+  if (half.length === 0) return null;
+  half.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
+  return half[0];
 }
 
 export async function getStadiums(seasons = [DEFAULT_SEASON]) {
