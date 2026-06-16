@@ -16,7 +16,7 @@
  */
 
 import '../src/loadEnv.js';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 
@@ -572,6 +572,14 @@ async function main() {
   log('═══════════════════════════════════════════════════════════');
   log('🐻 GARY AUTO-SCHEDULER STARTED (per-game mode)');
   log('═══════════════════════════════════════════════════════════');
+  // Node caches modules at boot, so a long-running scheduler keeps executing the
+  // code it started with — a stale process silently defeats every later fix. Log
+  // the commit it's actually running so drift is visible at a glance in the logs.
+  try {
+    const sha = execSync('git rev-parse --short HEAD', { cwd: PROJECT_DIR }).toString().trim();
+    const dirty = execSync('git status --porcelain', { cwd: PROJECT_DIR }).toString().trim() ? ' (+uncommitted changes)' : '';
+    log(`🔖 Running commit: ${sha}${dirty} — restart the scheduler after pulling/committing to pick up code changes`);
+  } catch { log('🔖 Running commit: (unavailable — not a git checkout)'); }
   log(`Lead time: ${LEAD_TIME_MINUTES} min before each game`);
   log(`Sports: ${SPORTS.map(s => s.label).join(', ')}`);
 
