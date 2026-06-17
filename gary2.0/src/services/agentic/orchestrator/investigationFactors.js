@@ -131,6 +131,7 @@ export const INVESTIGATION_FACTORS = {
     DEFENSE: ['TEAM_MATCH_STATS', 'GOALS_CONCEDED'],
     GROUP_CONTEXT: ['GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT'],
     H2H: ['H2H_HISTORY'],
+    AVAILABILITY: ['LINEUPS'], // confirmed starting XI (structured); injuries/suspensions via grounding
   },
   WC: {
     FORM: ['TEAM_FORM', 'RECENT_FORM'],
@@ -138,6 +139,7 @@ export const INVESTIGATION_FACTORS = {
     DEFENSE: ['TEAM_MATCH_STATS', 'GOALS_CONCEDED'],
     GROUP_CONTEXT: ['GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT'],
     H2H: ['H2H_HISTORY'],
+    AVAILABILITY: ['LINEUPS'],
   }
 };
 

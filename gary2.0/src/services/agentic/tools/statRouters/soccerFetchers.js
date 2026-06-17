@@ -211,9 +211,39 @@ async function h2hHistory(ctx = {}) {
   };
 }
 
+// WC_LINEUPS / WC_AVAILABILITY — confirmed starting XI from BDL FIFA. Posts ~2-2.5h
+// before kickoff, so it's available at the T-90 run (it was empty under the old fixed
+// 10 AM run). The structured availability signal: who is ACTUALLY starting — better
+// than grounding for the XI. Injury REASONS / suspensions still come from grounding.
+async function lineupsSummary(ctx = {}) {
+  if (!ctx.matchId) {
+    return { homeValue: 'No match id available for lineup lookup.', awayValue: '', comparison: 'Confirmed starting XI', source: SOURCE };
+  }
+  const rows = await wc.getMatchLineups(ctx.matchId).catch(() => []);
+  if (!rows || rows.length === 0) {
+    return {
+      homeValue: 'Confirmed lineups not posted yet (they post ~2h before kickoff). Use grounding for the latest availability/injury news; do not invent a lineup.',
+      awayValue: '', comparison: 'Confirmed starting XI', source: SOURCE,
+    };
+  }
+  const xiFor = (teamId) => rows
+    .filter(r => r.team_id === teamId && r.is_starter)
+    .map(r => `${r.player?.name ?? '?'}${r.position ? ` (${r.position})` : ''}`);
+  const homeXI = xiFor(ctx.homeTeamId);
+  const awayXI = xiFor(ctx.awayTeamId);
+  return {
+    homeValue: homeXI.length ? `Starting XI (${homeXI.length}): ${homeXI.join(', ')}` : 'Starting XI unavailable',
+    awayValue: awayXI.length ? `Starting XI (${awayXI.length}): ${awayXI.join(', ')}` : 'Starting XI unavailable',
+    comparison: 'Confirmed starting XI',
+    source: SOURCE,
+  };
+}
+
 export const soccerFetchers = {
   WC_TEAM_FORM: teamFormSummary,
   WC_RECENT_FORM: teamFormSummary,
+  WC_LINEUPS: lineupsSummary,
+  WC_AVAILABILITY: lineupsSummary,
   WC_GROUP_STANDINGS: groupStandings,
   WC_GROUP_STAGE_CONTEXT: groupStandings,
   WC_TEAM_MATCH_STATS: teamMatchStatsSummary,
