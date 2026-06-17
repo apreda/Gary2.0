@@ -694,7 +694,7 @@ async function detectScheduleFatigue(teamIds, gameDate) {
 
     // Use generic games endpoint to check for yesterday's games
     const yesterdayGames = await safeApiCallArray(
-      () => ballDontLieService.getGamesGeneric(SPORT_KEY, { dates: [yesterdayStr], team_ids: teamIds }),
+      () => ballDontLieService.getGames(SPORT_KEY, { dates: [yesterdayStr], team_ids: teamIds }),
       `MLB Props: Schedule fatigue check for ${yesterdayStr}`
     );
 
