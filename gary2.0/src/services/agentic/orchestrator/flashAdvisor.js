@@ -202,6 +202,7 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
+    const isWCSport = sport === 'soccer_world_cup' || sport === 'WC';
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
 
     // All sports get high thinking + full output. Baseball especially needs depth
@@ -274,7 +275,7 @@ Investigate using fetch_stats for tokens that ADD information beyond the scout r
 - MLB_STATCAST — last-3-games contact quality (exit velo, launch angle, xwOBA, bat speed, whiff/chase)
 - MLB_PARK_FACTORS, MLB_WEATHER — venue and conditions
 
-Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}`;
+Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}${isWCSport ? ` (WORLD CUP — STATS COME FROM fetch_stats, NOT SEARCH: fetch_stats routes to the structured feeds (API-Football recent-international form/xG + BDL FIFA). Use fetch_stats for EVERY statistic — form, xG/xGA, possession, shots, shots on target, goals for/against, clean sheets. If a stat token returns N/A / "no data" / "unavailable", that statistic is simply UNAVAILABLE for that team: report it as unavailable and move on. Do NOT use fetch_narrative_context (web search) to find, estimate, or backfill ANY stat number — a figure pulled from a search summary is not reliable or current enough to trust (it can be stale, approximate, or for the wrong competition). For the World Cup, fetch_narrative_context is ONLY for things that are not statistics and have no structured feed: injuries, suspensions, confirmed lineups/availability, and breaking team news. Never report an xG, possession, shots, goals, or form figure that came from search instead of fetch_stats.)` : ''}`;
 
     console.log(`[Research Briefing] Sending scout report to Gemini Flash (factor-by-factor investigation)`);
 
