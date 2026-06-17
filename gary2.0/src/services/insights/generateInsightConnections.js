@@ -72,6 +72,7 @@ import { computeWcKnockoutPath } from './computers/wcKnockoutPath.js';
 // xG / possession recap of the most recent completed match day. Silent ([])
 // pre-tournament; lights up once matches are played.
 import { computeWcXg } from './computers/wcXg.js';
+import { computeWcConfirmedXI } from './computers/wcConfirmedXI.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -113,6 +114,7 @@ const WC_COMPUTERS = [
   computeWcGroupValue,
   computeWcKnockoutPath,
   computeWcXg,
+  computeWcConfirmedXI, // confirmed-XI shape/availability edges (match-day only — needs posted lineups)
 ];
 
 const WC_PREVIEW_COMPUTERS = [
