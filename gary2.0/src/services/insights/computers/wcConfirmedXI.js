@@ -114,10 +114,22 @@ async function rowsForMatch(match, season) {
     if (c) cands.push(c);
   }
   cands.sort((x, y) => y.score - x.score);
+
+  // Structured team sheets for the iOS "Confirmed XI" card (formation + the 11).
+  const sheet = (side, teamName) => ({
+    team: teamName,
+    formation: side.formation,
+    xi: side.starters
+      .map((s) => ({ n: s.player?.name, p: s.position, num: s.shirt_number ?? null }))
+      .filter((p) => p.n),
+  });
+  const meta = { kind: 'confirmedXI', home: sheet(h, home.name), away: sheet(a, away.name) };
+
   return cands.slice(0, 2).map((c) => makeRow({
     category: 'situational',
     headline: c.headline, value: c.value, detail: c.detail,
     game: label, game_id: matchId, tone: c.tone, relevance_score: c.score,
+    meta,
   }));
 }
 
