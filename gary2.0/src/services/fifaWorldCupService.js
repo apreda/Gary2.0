@@ -249,6 +249,19 @@ const cleanOdds = (v) => {
   return (v == null || !Number.isFinite(n) || Math.abs(n) >= ODDS_SENTINEL) ? null : n;
 };
 
+// Rough main Asian-handicap a favorite's moneyline implies, used to anchor the
+// spread pick so a deep alt line can't masquerade as the main number. A slight
+// favorite (~-140) lines around -0.5; a heavy one (~-1000) around -2.5.
+function expectedAhFromMl(favAmerican) {
+  const m = Math.abs(Number(favAmerican));
+  if (!Number.isFinite(m) || m === 0) return null;
+  if (m < 175) return 0.5;   // ~-140 slight favorite
+  if (m < 350) return 1.0;   // ~-250
+  if (m < 750) return 1.5;   // ~-400 to -700
+  if (m < 1300) return 2.0;  // ~-800 to -1200 heavy
+  return 2.5;
+}
+
 // `ml` (optional): the 3-way moneyline { home, away } for THIS match. When present we
 // require the favorite (more negative ML) to be GIVING goals — i.e. a negative handicap
 // on their side — so a data error or deep alt line can't ship the favorite RECEIVING
@@ -283,6 +296,26 @@ function extractMainSpread(markets, ml = null) {
   // (Gary leans on the 3-way ML for the side) rather than ship an odd number.
   const half = realistic.filter(l => isHalfGoalLine(l.homeValue));
   if (half.length === 0) return null;
+  // ML-MAGNITUDE ANCHOR: the main handicap must track the moneyline's implied
+  // supremacy. Balanced juice alone can crown a DEEP alt line that happens to carry
+  // even-money odds in the feed (a -2.5 at 100/-140 for a -140 favorite, whose true
+  // main line is -0.5). Keep only half lines within ~1 goal of the ML-implied
+  // handicap, pick the CLOSEST (balanced juice breaks ties); if none qualify, omit
+  // the spread (Gary uses the 3-way ML) rather than ship a number the price contradicts.
+  if (ml && ml.home != null && ml.away != null) {
+    const homeFav = Number(ml.home) < Number(ml.away);
+    const expected = expectedAhFromMl(homeFav ? ml.home : ml.away);
+    if (expected != null) {
+      const consistent = half.filter(l => Math.abs(Math.abs(l.homeValue) - expected) <= 0.75);
+      if (consistent.length === 0) return null;
+      consistent.sort((a, b) => {
+        const da = Math.abs(Math.abs(a.homeValue) - expected);
+        const db = Math.abs(Math.abs(b.homeValue) - expected);
+        return da !== db ? da - db : Math.abs(a.homeOdds + a.awayOdds) - Math.abs(b.homeOdds + b.awayOdds);
+      });
+      return consistent[0];
+    }
+  }
   half.sort((a, b) => Math.abs(a.homeOdds + a.awayOdds) - Math.abs(b.homeOdds + b.awayOdds));
   return half[0];
 }
