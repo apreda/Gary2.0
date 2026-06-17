@@ -76,8 +76,12 @@ function buildPrompt({ pick, result, evidence }) {
     `no cliches like "in a thrilling contest".\n` +
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
     `OUTPUT:\n` +
-    `- "headline": a punchy 6-12 word betting headline (e.g. "Angels roll as +102 dogs, Gary cashes"). ` +
-    `No ending period.\n` +
+    `- "headline": a clean, professional game headline in plain English — the result and the one ` +
+    `thing that decided it. 6-12 words. Lead with the team and what they actually did. ` +
+    `NO betting jargon ("dogs", "chalk", "cover", "cashes"), NO hype verbs ("explodes", "erupts", ` +
+    `"power show", "roll"), NO odds or prices in the headline, NO cliches or clickbait. ` +
+    `Good: "Tigers take down the Astros behind Colt Keith's three homers". ` +
+    `Bad: "Tigers roll as +106 dogs behind Colt Keith power show". No ending period.\n` +
     `- "recap": the 2-4 sentence body.\n` +
     `- "bullets": 2-4 short stat lines from the game — the night's hard numbers. ` +
     `Each bullet is at most ${MAX_BULLET_CHARS} characters. Facts STRICTLY from the evidence above. ` +
