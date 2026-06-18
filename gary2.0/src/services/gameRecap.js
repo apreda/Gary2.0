@@ -57,11 +57,23 @@ function describeBetForPrompt(pick) {
 }
 
 function buildPrompt({ pick, result, evidence }) {
+  const lg = String(pick.league || '').toLowerCase();
+  const isWC = lg.includes('world_cup') || lg === 'wc' || lg.includes('soccer_world_cup');
+  // 2026 World Cup games are at NEUTRAL venues — except the three host nations,
+  // who genuinely play at home. Everyone else has no home-field edge.
+  const homeIsHost = ['united states', 'usa', ' usmnt', 'canada', 'mexico']
+    .some((h) => String(pick.homeTeam || '').toLowerCase().includes(h.trim()));
+  const neutralNote = (isWC && !homeIsHost)
+    ? `NEUTRAL SITE: this is a 2026 World Cup match at a neutral venue — do NOT say either ` +
+      `team is playing "at home", and do NOT cite home-field, home-crowd, or travel advantage. ` +
+      `The "(home)" tag below is only bracket bookkeeping for which side is listed where.\n`
+    : '';
   return (
     `You write a short, ESPN-style recap of a finished game FROM THE BETTING PERSPECTIVE — ` +
     `the voice of a sharp friend recapping last night: the drama, the prices, and how the bet fared, ` +
     `woven into one tight story.\n\n` +
     `GAME: ${pick.awayTeam} (away) @ ${pick.homeTeam} (home) — ${pick.league}\n` +
+    neutralNote +
     `THE BET: ${describeBetForPrompt(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
     `WHAT ACTUALLY HAPPENED — this is the ONLY source of facts you may use:\n${evidence}\n\n` +
@@ -89,7 +101,12 @@ function buildPrompt({ pick, result, evidence }) {
     `"Matt Olson 2 HR (+340 to homer)" is allowed only if a home-run prop price for Olson is ` +
     `listed in the evidence — otherwise the bullet is just "Matt Olson 2 HR". ` +
     `Other examples: "Burns 7 K over 5.1 IP"; "Over 9.5 cashed by 1.5 runs" (only if the total ` +
-    `line is the bet above). Never invent a price, a line, or a stat.\n\n` +
+    `line is the bet above). Never invent a price, a line, or a stat.\n` +
+    `- A player-prop bullet (shots, saves, goals, assists, tackles, passes, K's, HR) may carry a ` +
+    `price ONLY if that exact player's prop price is printed in the evidence above. Soccer / World ` +
+    `Cup games here have NO prop prices — so for those, every bullet is a plain stat line ` +
+    `("Harry Kane 7 shots", "Livaković 7 saves"), NEVER "(over 4 at +115)". Do not attach a market ` +
+    `that is not in the evidence.\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
     `{"headline":"...","recap":"...","bullets":["...","..."]}`
   );
@@ -143,6 +160,36 @@ export function filterPropsForGame(propRows, homeTeam, awayTeam) {
     if (!m) return false;
     return (m.includes(h) || m.includes(hLast)) && (m.includes(a) || m.includes(aLast));
   });
+}
+
+/**
+ * Enforce "no invented prices" deterministically: a bullet may only carry a
+ * betting price (American odds like +115 / -130) that LITERALLY appears in the
+ * evidence. Flash sometimes invents prop odds for sports it has strong priors on
+ * — soccer shots/saves especially — despite the prompt forbidding it (verified:
+ * a WC recap shipped "Harry Kane 7 shots (over 4 at +115)" with no such prop in
+ * existence). WC games carry no props, so any odds there are fabricated.
+ *
+ * This is NOT a heuristic fabrication detector (which guesses and would block a
+ * pick) — it removes only a price the evidence provably does not contain, so a
+ * made-up line can never reach the card. A real graded-prop price IS in the
+ * evidence, so it survives. A spread/total like "+2.5" is untouched: \d{2,4}
+ * requires a 2-to-4-digit American price, so "+2.5" / "9.5" never match.
+ */
+export function sanitizeBulletPrices(bullet, evidence) {
+  const ev = String(evidence || '');
+  const inEv = (p) => ev.includes(p);
+  let out = String(bullet);
+  // Drop any (...) group containing a price the evidence lacks ("(over 4 at +115)").
+  out = out.replace(/\s*\([^()]*\)/g, (grp) => {
+    const prices = grp.match(/[+-]\d{2,4}\b/g) || [];
+    return prices.some((p) => !inEv(p)) ? '' : grp;
+  });
+  // Drop a bare "at +115" / "at -130" whose price isn't in the evidence.
+  out = out.replace(/\s*\bat\s+([+-]\d{2,4})\b/gi, (m, p) => (inEv(p) ? m : ''));
+  // Strip any remaining stray fabricated price token.
+  out = out.replace(/[+-]\d{2,4}\b/g, (p) => (inEv(p) ? p : ''));
+  return out.replace(/\s{2,}/g, ' ').replace(/\s+([.,;)])/g, '$1').trim();
 }
 
 /**
@@ -200,6 +247,7 @@ export async function generateRecap({ pick, result, evidence }) {
   const bullets = Array.isArray(parsed.bullets)
     ? parsed.bullets
         .map((b) => String(b).trim())
+        .map((b) => sanitizeBulletPrices(b, evidence)) // strip any price the evidence can't source
         .filter(Boolean)
         .map((b) => (b.length > MAX_BULLET_CHARS ? b.slice(0, MAX_BULLET_CHARS).trimEnd() : b))
         .slice(0, MAX_BULLETS)

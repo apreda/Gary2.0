@@ -36,6 +36,8 @@ const MIN_ONE_RUN_GAMES = 12;     // need a real one-run sample
 const ONE_RUN_WIN_PCT_EXTREME = 0.640; // |wp - .5| this far -> flag
 // (B) ERA-xERA tunables.
 const MIN_ERA_XERA_GAP = 1.10;    // |ERA - xERA| this big -> flag
+const MAX_ERA_XERA_GAP = 5.0;     // beyond this is small-sample noise / bad data, not a real edge
+const MIN_XERA_PA = 80;           // batters faced — xERA is unstable on a tiny sample (~20 IP)
 const MAX_TEAM_ROWS = 6;          // cap one-run rows per slate
 const REL_ONE_RUN_SCALE = 120;
 const REL_XERA_SCALE = 18;
@@ -215,6 +217,13 @@ async function xeraForGame(game, { season, bdl, xByName, gameLabel }) {
       ? Number(x.era_minus_xera_diff)
       : era - xera;
     if (Math.abs(gap) < MIN_ERA_XERA_GAP) continue;
+    // Sanity: a tiny batters-faced sample or a physically-implausible gap is
+    // noise, not an edge (e.g. a 10.29 ERA vs 1.7 xERA on a handful of innings —
+    // a real season ERA-xERA gap rarely exceeds ~4). Drop those so the board
+    // never ships a garbage "8.59 run gap" insight.
+    const pa = Number(x.pa);
+    if (Number.isFinite(pa) && pa < MIN_XERA_PA) continue;
+    if (Math.abs(gap) > MAX_ERA_XERA_GAP) continue;
 
     const overperforming = gap < 0; // ERA below xERA = lucky/overperforming
     const oppBa = Number(x.ba);
