@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — g02 Gold Pick-Card Native</title>
+<!--
+  g02 — GOLD PICK-CARD NATIVE
+  The XI framed as an extension of Gary's LOCKED gold pick-card. Top is a real Gary game
+  pick-card (gold chrome: eyebrow -> matchup -> "Gary's Take >" -> gold pick chip w/ grey odds).
+  The pitch lives INSIDE the same warm gold card shell, so the XI reads native to the existing
+  card system. Contested slot = gold-pick vs silver-fade role contrast.
+  States: PROJECTED (hedged) -> CONTESTED (Ali's slot debated) -> CONFIRMED (fires w/ odds).
+  Fonts: geometric sans (body) + mono numerals (Quant Terminal rule) stand in for GaryFonts.
+  Palette: warm cream world, gold = Gary's voice + the ONE key affordance + branded seams.
+-->
+<style>
+  :root{
+    /* cream world */
+    --cream:#F6F1E7;      /* warmWhite */
+    --cream2:#EFE6D6;     /* deeper */
+    --panel:#FBF7EF;      /* panel field */
+    --chip:#F8F3E9;
+    /* ink */
+    --ink:#221C15;        /* warm near-black */
+    --ink2:#4A4032;
+    --ink3:#6B5F4E;       /* muted subline */
+    --ink4:#8A7C66;       /* fainter subline */
+    /* gold — Gary's signature + voice */
+    --gold:#B5862F;
+    --gold-deep:#7E5C18;
+    --gold-soft:#E7D7AD;
+    --gold-wash:#F1E6C6;
+    --gold-line:#DCC587;
+    /* silver — the FADE role (vs gold pick) */
+    --silver:#A9A296;
+    --silver-soft:#E4DECF;
+    --silver-line:#CFC7B5;
+    /* small soccer accent — thin seam only */
+    --maroon:#7C2B3B;
+    --green:#2E8059;
+    --green-soft:#CFE6D8;
+    --red:#B23B36;
+    /* pitch — warm cream field, NOT a grass slab */
+    --pitch:#EFE6D2;
+    --pitch2:#E8DDC6;
+    --pitch-line:rgba(126,92,24,.30);
+    --hair:#E4D8C0;
+    --sh:0 1px 0 rgba(255,255,255,.55) inset, 0 10px 30px rgba(40,30,12,.13);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,"Helvetica Neue",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:var(--sans);color:var(--ink);min-height:100vh;
+    background:radial-gradient(120% 80% at 50% -8%,#ECE3D1 0%,#DED3BC 60%,#D2C7AF 100%);
+    display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 12px 60px}
+
+  .legend{max-width:430px;width:100%;font-size:11px;color:#5a5038;line-height:1.55;
+    background:rgba(255,255,255,.45);border:1px solid rgba(120,100,60,.22);border-radius:11px;padding:10px 13px}
+  .legend b{color:#3a3020}
+  .legend .k{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+
+  /* phone */
+  .phone{width:430px;max-width:100%;background:var(--cream);border-radius:32px;overflow:hidden;
+    box-shadow:var(--sh);border:1px solid rgba(120,100,60,.18)}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
+    font-family:var(--mono);font-size:11px;color:var(--ink2)}
+  .status .r{letter-spacing:.04em}
+  .nav{display:flex;align-items:center;gap:10px;padding:4px 16px 10px}
+  .nav .chev{font-size:21px;color:var(--ink3);line-height:1}
+  .nav .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.20em;color:var(--ink3);text-transform:uppercase}
+  .nav .share{margin-left:auto;font-size:15px;color:var(--ink4)}
+
+  /* ===== THE GARY PICK-CARD SHELL ============================================ */
+  .card{margin:2px 16px 0;background:var(--panel);border-radius:18px;overflow:hidden;
+    border:1px solid var(--gold-line);
+    box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 8px 22px rgba(60,46,18,.12)}
+  /* warm gold chrome seam at the very top — the card's signature edge */
+  .card .goldseam{height:3px;background:linear-gradient(90deg,var(--gold-deep),var(--gold),var(--gold-soft),var(--gold))}
+
+  /* card header — eyebrow / matchup / kickoff state badge */
+  .chead{padding:13px 16px 11px;border-bottom:1px solid var(--hair)}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--gold);font-weight:700;
+    text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .eyebrow .seam{height:1px;flex:1;background:linear-gradient(90deg,var(--gold-line),transparent)}
+  .matchup{margin-top:8px;display:flex;align-items:baseline;gap:8px}
+  .matchup .t{font-size:23px;font-weight:800;letter-spacing:-.012em;color:var(--ink)}
+  .matchup .v{color:var(--ink4);font-weight:600;font-size:15px}
+  .meta{margin-top:4px;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;color:var(--ink4);text-transform:uppercase}
+
+  .badgerow{margin-top:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .badge{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:8px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.06em;font-weight:700;text-transform:uppercase}
+  .badge .dot{width:7px;height:7px;border-radius:50%}
+  .badge.projected{background:var(--gold-wash);color:var(--gold-deep);border:1px solid var(--gold-line)}
+  .badge.projected .dot{background:var(--gold);box-shadow:0 0 0 3px rgba(181,134,47,.18)}
+  .badge.confirmed{background:var(--green-soft);color:#1c5638;border:1px solid #b9d8c6}
+  .badge.confirmed .dot{background:var(--green)}
+  .badge .ko{font-weight:500;opacity:.75}
+  /* self-grade chip — trust receipt */
+  .grade{margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--ink3);
+    border:1px dashed var(--silver-line);border-radius:7px;padding:4px 8px;display:flex;align-items:center;gap:6px;text-transform:uppercase}
+  .grade .n{font-weight:700;color:var(--ink)}
+  .grade.hit{border-style:solid;border-color:#b9d8c6;color:#1c5638}
+  .grade.hit .n{color:#1c5638}
+
+  /* matte capsule state selector — single gold active pill, mono chips */
+  .seg{display:flex;gap:4px;margin:11px 16px 0 16px;background:var(--cream2);padding:4px;border-radius:12px}
+  .seg button{flex:1;border:0;background:transparent;padding:8px 4px;border-radius:9px;font-family:var(--mono);
+    font-size:10px;letter-spacing:.05em;color:var(--ink3);font-weight:700;cursor:pointer;transition:.15s;text-transform:uppercase}
+  .seg button .sub{display:block;font-size:8px;font-weight:500;color:var(--ink4);margin-top:2px;letter-spacing:.02em;text-transform:none}
+  .seg button.on{background:var(--ink);color:var(--gold-soft);box-shadow:0 2px 8px rgba(34,28,21,.28)}
+  .seg button.on .sub{color:rgba(231,215,173,.7)}
+
+  /* team toggle — quiet underline tabs (matchup grammar) */
+  .tt{display:flex;align-items:center;gap:14px;margin:11px 16px 0;border-bottom:1px solid var(--hair);padding-bottom:1px}
+  .tt button{border:0;background:transparent;font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink4);
+    padding:6px 0;cursor:pointer;position:relative;font-weight:700}
+  .tt button.on{color:var(--ink)}
+  .tt button.on::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;background:var(--gold)}
+  .tt .form{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink2);font-weight:700;letter-spacing:.04em}
+
+  /* ===== THE PITCH — lives INSIDE the card language (warm gold field) ======== */
+  .pitchcard{margin:12px 16px 0;border:1px solid var(--gold-line);border-radius:14px;overflow:hidden;
+    background:var(--panel);box-shadow:0 1px 0 rgba(255,255,255,.5) inset}
+  .pitchcard .ph{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--hair)}
+  .pitchcard .ph .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--gold-deep);font-weight:700;text-transform:uppercase}
+  .pitchcard .ph .att{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.10em;color:var(--ink4);text-transform:uppercase}
+
+  .pitchwrap{padding:8px}
+  .pitch{position:relative;width:100%;aspect-ratio:.72;border-radius:8px;overflow:hidden;
+    background:var(--pitch);
+    background-image:repeating-linear-gradient(0deg,var(--pitch) 0 9.09%,var(--pitch2) 9.09% 18.18%);
+    box-shadow:inset 0 0 0 1px rgba(126,92,24,.16)}
+  .mk{position:absolute;border:1px solid var(--pitch-line)}
+  .mk.frame{inset:3.5%;border-radius:3px}
+  .mk.center{left:3.5%;right:3.5%;top:50%;height:0;border-width:1px 0 0 0}
+  .mk.circle{left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}
+  .mk.spot{left:50%;top:50%;width:3px;height:3px;border-radius:50%;background:var(--pitch-line);transform:translate(-50%,-50%);border:0}
+  .mk.boxT{left:26%;right:26%;top:3.5%;height:12%;border-top:0}
+  .mk.boxB{left:26%;right:26%;bottom:3.5%;height:12%;border-bottom:0}
+  .mk.sixT{left:37%;right:37%;top:3.5%;height:5%;border-top:0}
+  .mk.sixB{left:37%;right:37%;bottom:3.5%;height:5%;border-bottom:0}
+  /* a single thin maroon seam — the small sport accent */
+  .seam-accent{position:absolute;left:3.5%;right:3.5%;top:50%;height:2px;transform:translateY(-50%);
+    background:linear-gradient(90deg,transparent,rgba(124,43,59,.35),transparent)}
+
+  /* PLAYER — a small Gary pick-disc + label */
+  .player{position:absolute;transform:translate(-50%,-50%);width:72px;display:flex;flex-direction:column;
+    align-items:center;gap:2px;cursor:pointer;z-index:2}
+  .disc{width:31px;height:31px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;font-size:12px;color:var(--ink);
+    background:var(--chip);border:1.5px solid var(--silver-line);box-shadow:0 2px 5px rgba(60,46,18,.22);transition:.15s}
+  .pname{font-size:10px;font-weight:700;color:var(--ink);line-height:1.05;text-align:center;letter-spacing:-.01em;
+    max-width:76px;margin-top:3px;text-shadow:0 1px 0 rgba(255,255,255,.7)}
+  .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.07em;color:var(--ink4);text-transform:uppercase}
+
+  /* projected/contested: pencilled disc (dashed) = "not locked" */
+  .state-projected .disc,.state-contested .disc{border-style:dashed;background:rgba(248,243,233,.95)}
+  /* confirmed: solid filled ink disc = "locked, on paper" */
+  .state-confirmed .disc{background:var(--ink);border:1.5px solid var(--ink);color:var(--gold-soft)}
+
+  /* CONTESTED slot — the GOLD PICK. The drama lives in the warm palette. */
+  .player.contested .disc{background:var(--gold-wash);border:1.5px solid var(--gold);border-style:solid;color:var(--gold-deep);
+    box-shadow:0 0 0 3px rgba(181,134,47,.22),0 2px 5px rgba(60,46,18,.28)}
+  .player.contested .pname{color:var(--gold-deep);font-weight:800}
+  .player.contested .ppos{color:var(--gold)}
+  /* the editorial query tag on the gold pick */
+  .player.contested .q{position:absolute;top:-8px;right:7px;width:14px;height:14px;border-radius:50%;
+    background:var(--gold);color:#fff;font-family:var(--mono);font-size:9px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;line-height:1;box-shadow:0 1px 3px rgba(80,60,20,.4)}
+  /* in CONTESTED state the rest of the XI SILVER-FADES (the role contrast) */
+  .state-contested .player:not(.contested) .disc{border-color:var(--silver-line);background:var(--silver-soft);
+    color:var(--silver);box-shadow:0 1px 3px rgba(60,46,18,.10)}
+  .state-contested .player:not(.contested) .pname{color:var(--silver)}
+  .state-contested .player:not(.contested) .ppos{color:var(--silver)}
+  .state-contested .player:not(.contested){opacity:.85}
+  .player.contested{z-index:4}
+  .state-contested .player.contested .disc{animation:breathe 1.6s ease-in-out infinite}
+  @keyframes breathe{0%,100%{box-shadow:0 0 0 3px rgba(181,134,47,.22),0 2px 5px rgba(60,46,18,.28)}
+    50%{box-shadow:0 0 0 8px rgba(181,134,47,.10),0 2px 5px rgba(60,46,18,.28)}}
+
+  /* source / dateline credit strip — under the pitch, inside the card */
+  .credit{margin:9px 16px 0;display:flex;align-items:baseline;gap:7px;font-family:var(--mono);font-size:9px;
+    color:var(--ink4);letter-spacing:.02em;flex-wrap:wrap;line-height:1.5}
+  .credit .src{color:var(--ink3)}
+  .credit .agree{color:var(--gold-deep);font-weight:700}
+  .credit em{font-style:normal;color:var(--silver)}
+
+  /* ===== GARY'S TAKE — the pick-card payoff (eyebrow -> read -> gold chip) ==== */
+  .take{margin:12px 16px 0;background:var(--panel);border:1px solid var(--hair);border-radius:14px;overflow:hidden}
+  .take .th{display:flex;align-items:center;gap:8px;padding:11px 14px 9px;border-bottom:1px solid var(--hair)}
+  .take .byline{font-family:var(--mono);font-size:10px;letter-spacing:.10em;color:var(--gold);font-weight:700;text-transform:uppercase}
+  .take .arrow{color:var(--gold);font-weight:700;font-size:13px}
+  .take .body{padding:11px 14px 4px}
+  .lede{font-size:14px;line-height:1.5;color:var(--ink);font-weight:500}
+  .lede b{font-weight:800}
+  .lede .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+  .rlist{padding:2px 14px 4px}
+  .rline{display:flex;gap:9px;padding:8px 0;border-top:1px solid var(--hair);font-size:12.5px;line-height:1.42;color:var(--ink2)}
+  .rline .mark{flex:0 0 auto;width:5px;height:5px;border-radius:50%;margin-top:6px;background:var(--gold)}
+  .rline.hot .mark{background:var(--green)} .rline.cold .mark{background:var(--red)} .rline.warn .mark{background:var(--gold)}
+  .rline b{color:var(--ink);font-weight:700}
+  .rline .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+  .hedge{margin:2px 14px 12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.02em;color:var(--ink4);
+    border-top:1px dotted var(--silver-line);padding-top:9px;display:flex;align-items:center;gap:7px;line-height:1.5}
+
+  /* THE GOLD PICK CHIP — locked pick-card grammar: gold label + GREY odds */
+  .pickchip{margin:4px 14px 14px;display:flex;align-items:center;gap:10px;
+    background:linear-gradient(180deg,#FBF2DA,#F1E2BB);border:1px solid var(--gold-line);border-radius:12px;padding:11px 13px;
+    box-shadow:0 1px 0 rgba(255,255,255,.55) inset, 0 3px 10px rgba(126,92,24,.14)}
+  .pickchip .lbl{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .pickchip .lbl .kk{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--gold-deep);font-weight:700;text-transform:uppercase}
+  .pickchip .lbl .pk{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.01em;line-height:1.15}
+  .pickchip .odds{margin-left:auto;font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink3);
+    background:var(--cream);border:1px solid var(--silver-line);border-radius:8px;padding:5px 10px;white-space:nowrap}
+  .pickchip.soft{background:var(--cream2);border-color:var(--silver-line);box-shadow:none}
+  .pickchip.soft .kk{color:var(--ink4)} .pickchip.soft .pk{color:var(--ink2)}
+  .pickchip.soft .odds{color:var(--silver);font-style:italic}
+
+  /* contested pull-quote — gold rule, the FAN's drama */
+  .pullquote{margin:0 14px 14px;border-left:2px solid var(--gold);background:var(--gold-wash);
+    border-radius:0 9px 9px 0;padding:9px 12px}
+  .pullquote .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.10em;color:var(--gold-deep);font-weight:700;text-transform:uppercase;margin-bottom:5px}
+  .pullquote p{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink)}
+  .pullquote .tap{display:block;margin-top:7px;font-family:var(--mono);font-size:9px;letter-spacing:.03em;color:var(--gold-deep);font-weight:700}
+
+  .cardpad{height:14px}
+
+  /* ===== BOTTOM SHEET — a pick-card "dossier" ============================== */
+  .scrim{position:fixed;inset:0;background:rgba(28,22,10,.42);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,103%);width:430px;max-width:100%;
+    background:var(--cream);border-radius:22px 22px 0 0;padding:0 0 26px;z-index:41;
+    transition:transform .26s cubic-bezier(.3,.9,.3,1);box-shadow:0 -12px 44px rgba(40,28,10,.32);
+    border-top:1px solid rgba(120,100,60,.22);max-height:90vh;overflow:auto}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:34px;height:4px;border-radius:2px;background:#cdbfa3;margin:8px auto 0}
+  .sh-seam{height:3px;background:linear-gradient(90deg,var(--gold-deep),var(--gold),var(--gold-soft));margin:10px 0 0}
+  .sh-head{padding:13px 20px 0;display:flex;align-items:flex-end;gap:12px}
+  .sh-no{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--ink);line-height:.85}
+  .sh-no .h{font-size:13px;color:var(--ink4);vertical-align:super}
+  .sh-nm{font-size:22px;font-weight:800;line-height:1;letter-spacing:-.01em}
+  .sh-sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--ink4);margin-top:5px;text-transform:uppercase}
+  .sh-tag{margin-left:auto;font-family:var(--mono);font-size:9px;font-weight:700;padding:4px 8px;border-radius:7px;
+    letter-spacing:.06em;text-transform:uppercase;border:1px solid}
+  .sh-tag.contested{border-color:var(--gold);color:var(--gold-deep);background:var(--gold-wash)}
+  .sh-tag.confirmed{border-color:#b9d8c6;color:#1c5638;background:var(--green-soft)}
+
+  .sh-sec{padding:0 20px;margin-top:16px}
+  .sh-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--gold);font-weight:700;
+    text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+  .sh-lbl::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+  /* source split — gold START vs silver BENCH (the role contrast, again) */
+  .tally{display:flex;align-items:stretch;border:1px solid var(--hair);border-radius:9px;overflow:hidden}
+  .tally .col{flex:1;padding:11px 12px}
+  .tally .col.bench{border-left:1px solid var(--hair)}
+  .tally .cnt{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--ink);line-height:1}
+  .tally .cnt .of{font-size:12px;color:var(--silver)}
+  .tally .verdict{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--ink4);margin-top:5px;text-transform:uppercase}
+  .tally .col.start{background:var(--gold-wash)}
+  .tally .col.start .cnt{color:var(--gold-deep)}
+  .tally .col.start .verdict{color:var(--gold-deep)}
+  .tally .col.bench{background:var(--silver-soft)}
+  .tally .col.bench .cnt{color:var(--ink3)}
+  .tally .names{margin-top:8px;font-size:11px;color:var(--ink2);line-height:1.4}
+
+  .agree-row{margin-top:10px;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9px;color:var(--ink4);letter-spacing:.04em}
+  .agree-row .bar{flex:1;height:4px;background:var(--silver-soft);border-radius:2px;overflow:hidden}
+  .agree-row .bar span{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-soft))}
+  .agree-row .pct{color:var(--gold-deep);font-weight:700}
+
+  .dossier{font-size:13px;line-height:1.5;color:var(--ink2)}
+  .dossier b{color:var(--ink);font-weight:700}
+  .dossier .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+  .branch{margin-top:11px}
+  .branch .b{display:flex;gap:10px;padding:9px 11px;border-radius:9px;margin-top:7px}
+  .branch .b .if{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;flex:0 0 62px;text-transform:uppercase;padding-top:2px}
+  .branch .b.starts{background:var(--gold-wash);border:1px solid var(--gold-line)}
+  .branch .b.starts .if{color:var(--gold-deep)}
+  .branch .b.benched{background:var(--silver-soft);border:1px solid var(--silver-line)}
+  .branch .b.benched .if{color:var(--ink3)}
+  .branch .b .txt{font-size:12.5px;line-height:1.4;color:var(--ink2)}
+  .branch .b .txt b{color:var(--ink)} .branch .b .txt .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+
+  .watch{margin:14px 20px 0;font-family:var(--mono);font-size:10px;letter-spacing:.02em;color:var(--gold-deep);
+    background:var(--gold-wash);border:1px solid var(--gold-line);border-radius:9px;padding:9px 11px;line-height:1.5}
+
+  /* form stat grid — ledger cells, mono numerals */
+  .ledger{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--hair);border-radius:9px;overflow:hidden}
+  .ledger .cell{padding:11px 8px;text-align:center;border-left:1px solid var(--hair);border-top:1px solid var(--hair)}
+  .ledger .cell:nth-child(-n+3){border-top:0}
+  .ledger .cell:nth-child(3n+1){border-left:0}
+  .ledger .v{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--ink);line-height:1}
+  .ledger .l{font-family:var(--mono);font-size:8px;letter-spacing:.05em;color:var(--ink4);margin-top:5px;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>g02 · Gold Pick-Card Native.</b> The XI framed as an extension of Gary's locked gold pick-card —
+  <span class="k">eyebrow</span> → matchup → the pitch lives <b>inside the same card shell</b> → <b>Gary's Take ›</b> → a
+  gold pick chip with grey odds. The contested <b>Almoez Ali</b> slot is the <b>gold pick</b>; the rest of the XI
+  <b>silver-fades</b> (pick-vs-fade role contrast). Tap the state pills <b>Projected → Contested → Confirmed</b>; tap any disc for the dossier.
+</div>
+
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">GARY · XI</span></div>
+  <div class="nav">
+    <span class="chev">‹</span>
+    <span class="ttl">Starting XI</span>
+    <span class="share">↗</span>
+  </div>
+
+  <!-- ===== THE GARY PICK-CARD ===== -->
+  <div class="card">
+    <div class="goldseam"></div>
+
+    <div class="chead">
+      <div class="eyebrow"><span>World Cup · Group B</span><span class="seam"></span><span id="eyebrow-r">Starting XI</span></div>
+      <div class="matchup"><span class="t">Canada</span><span class="v">v</span><span class="t">Qatar</span></div>
+      <div class="meta">BC Place · Vancouver · 6:00 PM ET</div>
+      <div class="badgerow">
+        <span id="badge"></span>
+        <span class="grade" id="grade"></span>
+      </div>
+    </div>
+
+    <!-- matte capsule state selector -->
+    <div class="seg">
+      <button data-state="projected" class="on">Projected<span class="sub">all day · ~6h KO</span></button>
+      <button data-state="contested">Contested<span class="sub">the debated slot</span></button>
+      <button data-state="confirmed">Confirmed<span class="sub">~38m KO</span></button>
+    </div>
+
+    <!-- team toggle -->
+    <div class="tt">
+      <button data-team="QAT" class="on">QATAR</button>
+      <button data-team="CAN">CANADA</button>
+      <span class="form" id="formlbl">4-3-3</span>
+    </div>
+
+    <!-- the pitch, native to the card language -->
+    <div class="pitchcard">
+      <div class="ph">
+        <span class="lab" id="pitchlab">Qatar · 4-3-3</span>
+        <span class="att">Attacking ↑</span>
+      </div>
+      <div class="pitchwrap">
+        <div class="pitch" id="pitch">
+          <div class="mk frame"></div>
+          <div class="mk center"></div>
+          <div class="mk circle"></div>
+          <div class="mk spot"></div>
+          <div class="mk boxT"></div><div class="mk boxB"></div>
+          <div class="mk sixT"></div><div class="mk sixB"></div>
+          <div class="seam-accent"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="credit" id="credit"></div>
+
+    <!-- Gary's Take -->
+    <div class="take" id="take"></div>
+
+    <div class="cardpad"></div>
+  </div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- data ------------------------------------------------------------ */
+const TEAMS = {
+  QAT:{
+    name:'Qatar', formation:'4-3-3', agree:82,
+    lines:[
+      {y:88, men:[{n:1,nm:'Barsham',pos:'GK'}]},
+      {y:68, men:[{n:2,nm:'Pedro Miguel',pos:'RB'},{n:15,nm:'Khoukhi',pos:'CB'},{n:5,nm:'Hassan',pos:'CB'},{n:3,nm:'Homam',pos:'LB'}]},
+      {y:46, men:[{n:12,nm:'Madibo',pos:'CM'},{n:8,nm:'Hatim',pos:'CM'},{n:23,nm:'Boudiaf',pos:'CM'}]},
+      {y:23, men:[{n:11,nm:'Afif',pos:'LW'},{n:19,nm:'Almoez Ali',pos:'ST',contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW'}]},
+    ],
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    lede:{
+      proj:'A front three of Afif, Ali and Edmilson reads as a side that wants the ball — which leans Qatar team-total <b>OVER</b>. <b>If this XI holds</b>, it firms up the moment the official sheet posts.',
+      conf:'<b>Confirmed: Ali starts.</b> Qatar\'s leading scorer is on the sheet — the over and the anytime-scorer ticket are no longer hedged. Qatar over / Ali anytime-scorer <span class="odds">+180</span> live.'
+    },
+    projRead:[
+      {t:'<b>Must-win posture.</b> Drew the opener, sit 0-1-0 in Group B — that history points to a fuller, forward-leaning eleven.',cls:'warn'},
+      {t:'<b>The whole read waits on one name.</b> The front three only means OVER if the centre-forward is the one the markets price. See the contested slot.',cls:'warn'},
+    ],
+    confRead:[
+      {t:'<b>Confirmed 4-3-3, front three intact.</b> A genuine go-forward selection vs Canada — leans the match OVER and Qatar\'s side of the total.',cls:'hot'},
+      {t:'<b>Ali anytime-scorer <span class="odds">+180</span>.</b> A clean ticket now, not a contingency.',cls:'hot'},
+    ],
+    pick:{
+      proj:{kk:'Gary\'s lean · soft until confirmed', pk:'Qatar team-total OVER', odds:'pending', soft:true},
+      conf:{kk:'Gary\'s pick · confirmed', pk:'Ali anytime scorer', odds:'+180', soft:false}
+    }
+  },
+  CAN:{
+    name:'Canada', formation:'4-3-3', agree:91,
+    lines:[
+      {y:88, men:[{n:16,nm:'Crépeau',pos:'GK'}]},
+      {y:68, men:[{n:2,nm:'Johnston',pos:'RB'},{n:4,nm:'Vitória',pos:'CB'},{n:5,nm:'Cornelius',pos:'CB'},{n:3,nm:'Adekugbe',pos:'LB'}]},
+      {y:46, men:[{n:7,nm:'Eustáquio',pos:'CM'},{n:13,nm:'Koné',pos:'CM'},{n:11,nm:'Buchanan',pos:'CM'}]},
+      {y:23, men:[{n:20,nm:'David',pos:'ST'},{n:17,nm:'Larin',pos:'ST'},{n:19,nm:'Davies',pos:'LW'}]},
+    ],
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    lede:{
+      proj:'High agreement (91%) makes this a near-locked side, so the reads below carry weight even pre-confirmation. David and Davies give Canada\'s line real pace.',
+      conf:'<b>Confirmed as projected.</b> No surprises — the pre-confirmation reads stand. A full-strength front line keeps Canada\'s scoring and -1.5 markets in play.'
+    },
+    projRead:[
+      {t:'<b>David + Davies up top.</b> Canada\'s pace leans the match toward Canada\'s side of the spread.',cls:'warn'},
+      {t:'<b>Settled sheet.</b> With 91% source agreement, little is likely to move at confirmation.',cls:'warn'},
+    ],
+    confRead:[
+      {t:'<b>Full-strength attacking line.</b> David / Larin / Davies all start — Canada to score and -1.5 markets in play.',cls:'hot'},
+      {t:'<b>Projection matched the sheet.</b> The pre-confirmation reads stand.',cls:'hot'},
+    ],
+    pick:{
+      proj:{kk:'Gary\'s lean · soft until confirmed', pk:'Canada -1.5', odds:'pending', soft:true},
+      conf:{kk:'Gary\'s pick · confirmed', pk:'David anytime scorer', odds:'+120', soft:false}
+    }
+  },
+};
+
+/* per-player dossier */
+const READS = {
+  'Almoez Ali':{
+    sub:'Qatar · Striker · #19',
+    contested:{
+      start:3, bench:2, of:5, agree:82,
+      startNames:'The Athletic · ESPN · Sports Mole',
+      benchNames:'RotoWire · bet365',
+      dossier:'Qatar\'s all-time leading scorer — <b>12 goals in qualifying</b>. The entire match read pivots on this one slot.',
+      starts:'Ali anytime-scorer <span class="odds">+180</span>; Qatar team-total <b>OVER</b> firms up.',
+      benched:'Fade Qatar\'s over; Canada clean-sheet <span class="odds">+165</span> gains.',
+      watch:'Watch the team sheet at ~T-40 before betting this game.'
+    },
+    stats:[['12','Qual goals'],['82%','Agreement'],['1','GP this WC']],
+  },
+  'David':{ sub:'Canada · Striker · #20',
+    dossier:'Canada\'s focal point. With a settled XI around him, <b>David anytime-scorer <span class="odds">+120</span></b> and Canada team-total <b>OVER</b> are the cleaner reads.',
+    stats:[['2','WC goals'],['.61','xG/90'],['2','GP this WC']] },
+};
+
+/* ---- render ---------------------------------------------------------- */
+let state='projected', team='QAT';
+
+function render(){
+  const T=TEAMS[team];
+  const isConf = state==='confirmed';
+  document.getElementById('formlbl').textContent=T.formation;
+  document.getElementById('pitchlab').textContent = T.name+' · '+T.formation;
+  document.getElementById('eyebrow-r').textContent = isConf?'Confirmed XI':'Starting XI';
+
+  // state badge + self-grade chip
+  document.getElementById('badge').outerHTML = isConf
+    ? `<span class="badge confirmed" id="badge"><span class="dot"></span>Confirmed XI<span class="ko">· lineups in · 38m KO</span></span>`
+    : `<span class="badge projected" id="badge"><span class="dot"></span>Projected XI<span class="ko">· ${T.agree}% agree</span></span>`;
+  const g=document.getElementById('grade');
+  g.className = isConf?'grade hit':'grade';
+  g.innerHTML = isConf ? `Projection hit <span class="n">10/11</span>` : `Tourn. avg <span class="n">9/11</span>`;
+
+  // pitch
+  const p=document.getElementById('pitch');
+  p.className='pitch state-'+state;
+  [...p.querySelectorAll('.player')].forEach(e=>e.remove());
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      const x=(i+1)/(n+1)*100;
+      const contested = m.contested && !isConf;
+      const el=document.createElement('div');
+      el.className='player'+(contested?' contested':'');
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+      el.innerHTML=`${contested?'<span class="q">?</span>':''}
+        <div class="disc">${m.n}</div>
+        <div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,contested);
+      p.appendChild(el);
+    });
+  });
+
+  // credit / dateline
+  document.getElementById('credit').innerHTML = isConf
+    ? `<span class="src">Official team sheet</span><em>·</em><span>cross-checked vs BDL + API-Football</span>`
+    : `<span>Projected from</span> <span class="src">${T.sources.join(' · ')}</span><em>·</em> <span class="agree">${T.agree}% agree</span>`;
+
+  // Gary's Take
+  const ledeTxt = isConf ? T.lede.conf : T.lede.proj;
+  const reads = isConf ? T.confRead : T.projRead;
+  const pick = isConf ? T.pick.conf : T.pick.proj;
+  let html = `<div class="th"><span class="byline">Gary's Take</span><span class="arrow">›</span></div>
+    <div class="body"><p class="lede">${ledeTxt}</p></div>
+    <div class="rlist">`;
+  reads.forEach(r=>{ html+=`<div class="rline ${r.cls}"><span class="mark"></span><span>${r.t}</span></div>`; });
+  html += `</div>`;
+  if(!isConf){
+    html += `<div class="hedge">◴ Soft until confirmed — these firm up when the official sheet posts (~T-40).</div>`;
+  }
+  if(state==='contested' && team==='QAT'){
+    html += `<div class="pullquote"><div class="lbl">The contested slot</div>
+      <p>Three desks start Almoez Ali; two bench him. Qatar's entire over swings on it — the one question to settle before betting this match.</p>
+      <span class="tap">Tap the gold disc for the source split →</span></div>`;
+  }
+  // gold pick chip
+  html += `<div class="pickchip${pick.soft?' soft':''}">
+      <div class="lbl"><span class="kk">${pick.kk}</span><span class="pk">${pick.pk}</span></div>
+      <span class="odds">${pick.odds}</span></div>`;
+  document.getElementById('take').innerHTML=html;
+}
+
+/* ---- bottom sheet ---------------------------------------------------- */
+function openSheet(name,pos,num,contested){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const tag = contested
+    ? `<span class="sh-tag contested">Contested</span>`
+    : (state==='confirmed' ? `<span class="sh-tag confirmed">Confirmed</span>` : '');
+
+  let body=`<div class="grab"></div><div class="sh-seam"></div>
+    <div class="sh-head">
+      <div class="sh-no">${num}<span class="h"> #</span></div>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${tag}
+    </div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl">Source split · ${c.of} desks</div>
+      <div class="tally">
+        <div class="col start"><div class="cnt">${c.start}<span class="of">/${c.of}</span></div>
+          <div class="verdict">Start</div><div class="names">${c.startNames}</div></div>
+        <div class="col bench"><div class="cnt">${c.bench}<span class="of">/${c.of}</span></div>
+          <div class="verdict">Bench</div><div class="names">${c.benchNames}</div></div>
+      </div>
+      <div class="agree-row"><span>Source agreement</span>
+        <span class="bar"><span style="width:${c.agree}%"></span></span><span class="pct">${c.agree}%</span></div>
+    </div>
+    <div class="sh-sec"><div class="sh-lbl">Why it matters</div>
+      <p class="dossier">${c.dossier}</p>
+      <div class="branch">
+        <div class="b starts"><span class="if">If starts</span><span class="txt">${c.starts}</span></div>
+        <div class="b benched"><span class="if">If benched</span><span class="txt">${c.benched}</span></div>
+      </div>
+    </div>
+    <div class="watch">◷ ${c.watch}</div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">The read</div><p class="dossier">${r.dossier}</p></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="sh-lbl">The read</div>
+      <p class="dossier">Per-player notes attach here — recent form, the matchup against the opposite number, and any prop angle. <em>(Mock: full dossiers wired for Ali &amp; David.)</em></p></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">Form</div><div class="ledger">`;
+    r.stats.forEach(s=>{ body+=`<div class="cell"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring ---------------------------------------------------------- */
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state; render();
+});
+document.querySelectorAll('.tt button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tt button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){
+    state='projected';
+    document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>

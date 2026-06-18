@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WC Starting XI — Gary brand directions</title>
+<style>
+  :root{
+    --bg:#EFE6D6; --card:#FBF7EF; --line:rgba(120,100,60,.22);
+    --ink:#221C15; --ink2:#4A4032; --ink3:#8A7C66; --gold:#B5862F; --gold-deep:#7E5C18; --gold-soft:#E7D7AD;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1100px 520px at 50% -8%,#F6F1E7,var(--bg));color:var(--ink);font-family:var(--sans);min-height:100vh}
+  header.top{position:sticky;top:0;z-index:5;backdrop-filter:blur(8px);
+    background:linear-gradient(180deg,rgba(246,241,231,.95),rgba(246,241,231,.8));border-bottom:1px solid var(--line);padding:18px 26px 16px}
+  .kick{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--gold);text-transform:uppercase;font-weight:700}
+  h1{margin:6px 0 4px;font-size:25px;font-weight:800;letter-spacing:-.01em}
+  .sub{font-size:13px;color:var(--ink2);line-height:1.5;max-width:780px}
+  .sub b{color:var(--ink)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:22px;padding:24px 26px 60px;max-width:1200px;margin:0 auto}
+  a.card{display:flex;flex-direction:column;text-decoration:none;color:inherit;background:var(--card);
+    border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:.16s;box-shadow:0 6px 22px rgba(60,45,15,.12)}
+  a.card:hover{transform:translateY(-3px);border-color:var(--gold);box-shadow:0 14px 32px rgba(60,45,15,.2)}
+  .chead{display:flex;align-items:baseline;gap:9px;padding:13px 15px 4px}
+  .num{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--gold-deep);
+    background:rgba(181,134,47,.12);border:1px solid rgba(181,134,47,.35);border-radius:7px;padding:2px 7px}
+  .nm{font-size:15.5px;font-weight:800}
+  .desc{padding:3px 15px 12px;font-size:12px;color:var(--ink2);line-height:1.45;min-height:34px}
+  .thumb{width:100%;height:580px;overflow:hidden;position:relative;background:#E7DFCF;border-top:1px solid var(--line)}
+  .scaler{position:absolute;inset:0;display:flex;justify-content:center}
+  .scaler iframe{width:430px;height:760px;border:0;transform:scale(.86);transform-origin:top center;pointer-events:none}
+  .open{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink3);padding:9px 15px;display:flex;justify-content:space-between;border-top:1px solid var(--line)}
+  .open .go{color:var(--gold-deep);font-weight:700}
+  footer{padding:0 26px 50px;color:var(--ink2);font-size:13px;max-width:800px;margin:0 auto;line-height:1.55}
+  footer b{color:var(--ink)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--gold-deep);border:1px solid rgba(181,134,47,.35);border-radius:20px;padding:3px 10px;margin-top:8px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="kick">Gary · Brand-Locked Set</div>
+  <h1>World Cup Starting XI — 6 Gary directions</h1>
+  <div class="sub">All six wear the locked <b>Quant Terminal</b> skin — cream <b>#F6F1E7</b> chrome, warm gold as Gary's voice, mono numerals — so they're all unmistakably the same app. They differ only in <b>composition</b>: each shows the XI living inside a different existing Gary surface. Open any full-screen to play with the states. <b>Tell me your favorite</b> (or splice two).</div>
+</header>
+
+<div class="grid" id="grid"></div>
+
+<footer>
+  These live in <b>wc-xi-proposals/gary/</b>. Pick the winner (or "g2's card shell + g4's flip") and it becomes the spec for the real SwiftUI <b>PitchView</b> — which we build on the hardened confirmed/projected data layer we agreed on.
+  <div class="pill">6 / 6 rendered · brand-locked</div>
+</footer>
+
+<script>
+const M=[
+  ['g01','g01-quant-board.html','Quant Terminal Board','The definitive house style — a no-green cream parchment board, ink hairlines, Ali the lone gold-ringed disc. Calm, premium, editorial.'],
+  ['g02','g02-pick-card.html','Gold Pick-Card Native','The XI lives inside Gary’s locked gold pick-card shell — “Gary’s Take ›”, gold chip; contested Ali = gold pick, the rest silver-fade.'],
+  ['g03','g03-terminal-tape.html','Terminal Tape','Winners-style: matte ink status-bar header + the XI as “tape chips” over a subtle pitch, maroon team seam, segmented state toggle.'],
+  ['g04','g04-hub-lane.html','Hub Flip-Lane','Native Hub lane — the pitch card physically FLIPS to reveal Gary’s read; the contested Ali slot is its own flip to the 3/5 split.'],
+  ['g05','g05-matte-capsule.html','Warm Pitch + Matte Capsule','Led by the Home matte-capsule / gold-active-pill switcher, over a warm cream-sage pitch. Feels native to the Home page.'],
+  ['g06','g06-quant-dashboard.html','Quant Terminal Dashboard','The XI as the hero module in a scrollable warm-cream terminal stack — gold-eyebrowed modules joined by branded seams.'],
+];
+const g=document.getElementById('grid');
+M.forEach(m=>{
+  const a=document.createElement('a');
+  a.className='card'; a.href=m[1]; a.target='_blank';
+  a.innerHTML=`<div class="chead"><span class="num">${m[0]}</span><span class="nm">${m[2]}</span></div>
+    <div class="desc">${m[3]}</div>
+    <div class="thumb"><div class="scaler"><iframe loading="lazy" src="${m[1]}"></iframe></div></div>
+    <div class="open"><span>brand-locked mock</span><span class="go">open full ↗</span></div>`;
+  g.appendChild(a);
+});
+</script>
+</body>
+</html>

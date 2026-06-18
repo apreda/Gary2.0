@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — d10 Jersey Kit</title>
+<!--
+  d10 — JERSEY KIT direction.
+  Classic green pitch + stylized Qatar maroon SHIRTS per player (Sofascore/EA-FIFA familiarity, done premium).
+  Names UNDER the shirt on a name-plate, shirt number ON the maroon kit (mono numerals = Quant Terminal rule).
+  Contested slot (Almoez Ali #19) = glowing kit outline + 3/5 flag pill.
+  States: PROJECTED -> CONTESTED -> CONFIRMED. Toggle + tap-a-player bottom sheet with source split + betting read.
+  Fonts: system sans + ui-monospace numerals STAND IN for GaryFonts. Warm gold = Gary's voice/affordance.
+  Self-contained, offline. Kits drawn in pure CSS (no images).
+-->
+<style>
+  :root{
+    --cream:#F6F1E7; --cream2:#EFE6D6; --panel:#FBF7EF;
+    --ink:#221C15; --ink2:#4A4032; --ink3:#8A7C66;
+    --gold:#B5862F; --gold-soft:#E7D7AD; --gold-deep:#7E5C18;
+    /* classic broadcast pitch */
+    --grass-a:#2E7D46; --grass-b:#2A763F; --grass-line:rgba(255,255,255,.55);
+    /* Qatar kit maroon */
+    --qat:#7A1530; --qat-d:#5E0F25; --qat-l:#9B2244; --qat-trim:#F2E4D4;
+    /* Canada kit red */
+    --can:#C8202E; --can-d:#9E1622; --can-l:#E03A47; --can-trim:#FBFAF7;
+    --amber:#C9772A; --amber-soft:#F1D9BE;
+    --green:#2E8059; --green-soft:#CFE6D8;
+    --red:#B23B36;
+    --chip-line:#E4D8C0;
+    --sh:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(40,30,12,.10);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:linear-gradient(160deg,#E9E0D0,#D9CFBC);font-family:var(--sans);color:var(--ink);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:14px;padding:26px 12px 60px}
+  .cap{font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .legend{max-width:430px;width:100%;font-size:11.5px;color:#5b5038;line-height:1.5;
+    background:rgba(255,255,255,.5);border:1px solid rgba(120,100,60,.2);border-radius:12px;padding:10px 13px}
+  .legend b{color:#3a3020}
+
+  /* phone */
+  .phone{width:430px;max-width:100%;background:var(--cream);border-radius:34px;overflow:hidden;box-shadow:var(--sh);
+    border:1px solid rgba(120,100,60,.18)}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;
+    font-family:var(--mono);color:var(--ink2)}
+  .nav{display:flex;align-items:center;gap:10px;padding:6px 16px 12px}
+  .nav .chev{font-size:22px;color:var(--ink2);line-height:1}
+  .nav .ttl{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--ink2)}
+  .nav .share{margin-left:auto;font-size:16px;color:var(--ink3)}
+
+  /* match header */
+  .mhead{padding:2px 16px 10px}
+  .mrow{display:flex;align-items:baseline;gap:8px}
+  .teams{font-size:23px;font-weight:800;letter-spacing:-.01em}
+  .teams .v{color:var(--ink3);font-weight:600;font-size:15px;margin:0 2px}
+  .meta{margin-top:3px;font-size:11.5px;color:var(--ink3);font-family:var(--mono);letter-spacing:.03em}
+
+  /* state badge */
+  .badge{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:6px 11px;border-radius:9px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;font-weight:600}
+  .badge .dot{width:7px;height:7px;border-radius:50%}
+  .badge.projected{background:var(--amber-soft);color:#7c4711}
+  .badge.projected .dot{background:var(--amber);box-shadow:0 0 0 3px rgba(201,119,42,.18)}
+  .badge.confirmed{background:var(--green-soft);color:#1c5638}
+  .badge.confirmed .dot{background:var(--green)}
+  .badge .ko{opacity:.7;font-weight:500}
+
+  /* segmented timeline switcher */
+  .seg{display:flex;gap:5px;margin:12px 16px 0;background:var(--cream2);padding:5px;border-radius:13px}
+  .seg button{flex:1;border:0;background:transparent;padding:9px 4px;border-radius:9px;font-family:var(--mono);
+    font-size:11px;letter-spacing:.04em;color:var(--ink2);font-weight:600;cursor:pointer;transition:.15s}
+  .seg button .sub{display:block;font-size:9px;font-weight:500;color:var(--ink3);margin-top:2px;letter-spacing:.02em}
+  .seg button.on{background:var(--ink);color:var(--gold-soft);box-shadow:0 2px 8px rgba(34,28,21,.25)}
+  .seg button.on .sub{color:rgba(231,215,173,.65)}
+
+  /* team toggle */
+  .tt{display:flex;gap:6px;margin:11px 16px 2px;align-items:center}
+  .tt button{border:1px solid var(--chip-line);background:var(--panel);padding:5px 16px;border-radius:20px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink2);cursor:pointer;font-weight:600}
+  .tt button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tt .kitchip{width:14px;height:14px;border-radius:3px;display:inline-block;vertical-align:-2px;margin-right:6px;
+    box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6)}
+  .tt .form{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink2);font-weight:700;
+    background:var(--cream2);padding:4px 10px;border-radius:8px}
+
+  /* pitch — classic broadcast green, mowed stripes */
+  .pitchwrap{margin:13px 16px 0;border-radius:14px;overflow:hidden;position:relative;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.12),0 10px 24px rgba(20,50,25,.22)}
+  .pitch{position:relative;width:100%;aspect-ratio:.72;
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.10)),
+      repeating-linear-gradient(0deg,var(--grass-a) 0 9.09%,var(--grass-b) 9.09% 18.18%);}
+  .pitch::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(120% 80% at 50% 12%,rgba(255,255,255,.10),transparent 55%),
+              radial-gradient(120% 90% at 50% 100%,rgba(0,0,0,.22),transparent 60%)}
+  .pitch .mk{position:absolute;border:2px solid var(--grass-line)}
+  .pitch .center{left:6%;right:6%;top:50%;height:0;border-width:2px 0 0 0}
+  .pitch .circle{left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}
+  .pitch .spot{left:50%;top:50%;width:5px;height:5px;border-radius:50%;background:var(--grass-line);transform:translate(-50%,-50%);border:0}
+  .pitch .boxT{left:26%;right:26%;top:0;height:12%;border-top:0}
+  .pitch .boxTs{left:38%;right:38%;top:0;height:5.5%;border-top:0}
+  .pitch .boxB{left:26%;right:26%;bottom:0;height:12%;border-bottom:0}
+  .pitch .boxBs{left:38%;right:38%;bottom:0;height:5.5%;border-bottom:0}
+  .pitch .frame{inset:3% 4%;border-radius:3px}
+
+  /* ===== JERSEY KIT ===== */
+  .player{position:absolute;transform:translate(-50%,-50%);width:60px;display:flex;flex-direction:column;
+    align-items:center;gap:4px;cursor:pointer}
+  .kit{position:relative;width:46px;height:42px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.4));transition:.18s}
+  /* the shirt body: a torso trapezoid built from a clipped block */
+  .shirt{position:absolute;left:7px;right:7px;top:8px;bottom:0;border-radius:4px 4px 7px 7px;
+    background:linear-gradient(160deg,var(--kit-l),var(--kit) 42%,var(--kit-d));
+    clip-path:polygon(0 14%,18% 0,82% 0,100% 14%,100% 100%,0 100%);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.18),inset 0 2px 5px rgba(255,255,255,.16)}
+  /* sleeves */
+  .sleeveL,.sleeveR{position:absolute;top:6px;width:12px;height:16px;
+    background:linear-gradient(160deg,var(--kit-l),var(--kit-d));border-radius:3px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+  .sleeveL{left:0;clip-path:polygon(0 22%,100% 0,100% 100%,40% 100%)}
+  .sleeveR{right:0;clip-path:polygon(0 0,100% 22%,60% 100%,0 100%)}
+  /* collar */
+  .collar{position:absolute;left:50%;top:7px;transform:translateX(-50%);width:14px;height:6px;
+    background:var(--kit-trim);border-radius:0 0 6px 6px;opacity:.85}
+  /* trim hem stripe */
+  .hem{position:absolute;left:8px;right:8px;bottom:3px;height:2px;background:var(--kit-trim);opacity:.55;border-radius:2px}
+  /* shirt number */
+  .num{position:absolute;left:0;right:0;top:46%;transform:translateY(-50%);text-align:center;
+    font-family:var(--mono);font-weight:800;font-size:16px;color:var(--kit-trim);
+    text-shadow:0 1px 2px rgba(0,0,0,.45);letter-spacing:-.02em}
+  /* GK keeps a distinct (teal) kit via inline override */
+
+  /* name plate UNDER the shirt */
+  .plate{display:flex;flex-direction:column;align-items:center;gap:1px}
+  .pname{font-size:10px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);line-height:1.04;
+    text-align:center;max-width:66px;letter-spacing:-.01em}
+  .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.06em;color:rgba(255,255,255,.78);
+    text-shadow:0 1px 2px rgba(0,0,0,.7)}
+
+  /* projected look — softer kits, dashed plate underline cue */
+  .state-projected .kit,.state-contested .kit{filter:drop-shadow(0 4px 6px rgba(0,0,0,.4)) saturate(.96)}
+
+  /* contested slot — glowing kit outline + flag */
+  .player.contested{z-index:5}
+  .player.contested .kit::before{content:"";position:absolute;inset:-7px;border-radius:12px;
+    border:2px dashed var(--amber);box-shadow:0 0 18px 3px rgba(201,119,42,.45);
+    background:radial-gradient(closest-side,rgba(201,119,42,.16),transparent)}
+  .player.contested .flag{position:absolute;top:-12px;left:50%;transform:translateX(-50%);z-index:6;
+    background:var(--amber);color:#fff;font-family:var(--mono);font-size:8px;font-weight:800;
+    padding:2px 6px;border-radius:7px;letter-spacing:.04em;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+  .player.contested .pname{color:#FBE9C9}
+  .state-contested .player:not(.contested){opacity:.4;filter:grayscale(.25)}
+  .player.contested.pulse .kit::before{animation:pl 1.5s ease-in-out infinite}
+  @keyframes pl{0%,100%{box-shadow:0 0 14px 2px rgba(201,119,42,.40)}
+    50%{box-shadow:0 0 26px 8px rgba(201,119,42,.22)}}
+
+  /* confirmed: contested slot resolves to a confirmed green tick */
+  .player.resolved .tick{position:absolute;top:-9px;left:50%;transform:translateX(-50%);z-index:6;
+    background:var(--green);color:#fff;font-family:var(--mono);font-size:8px;font-weight:800;
+    padding:2px 7px;border-radius:7px;letter-spacing:.03em;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+
+  /* source / accuracy strip */
+  .srcbar{margin:11px 16px 0;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;
+    color:var(--ink3);letter-spacing:.02em;flex-wrap:wrap}
+  .srcbar .agree{color:#7c4711;font-weight:700}
+  .acc{margin-left:auto;background:var(--cream2);border-radius:7px;padding:3px 8px;color:var(--ink2);font-weight:700}
+  .acc.hit{background:var(--green-soft);color:#1c5638}
+
+  /* the read panel */
+  .read{margin:14px 16px 18px;background:var(--panel);border:1px solid var(--chip-line);border-radius:15px;padding:14px 15px}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--gold);font-weight:700;margin-bottom:9px}
+  .rline{display:flex;gap:9px;padding:7px 0;border-top:1px solid rgba(160,140,100,.16);font-size:13px;line-height:1.4;color:var(--ink2)}
+  .rline:first-of-type{border-top:0;padding-top:2px}
+  .rline .k{flex:0 0 auto;width:5px;height:5px;border-radius:50%;margin-top:7px;background:var(--gold)}
+  .rline.hot .k{background:var(--green)} .rline.warn .k{background:var(--amber)} .rline.cold .k{background:var(--red)}
+  .rline b{color:var(--ink)}
+  .hedge{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:10px;display:flex;align-items:center;gap:6px}
+  .callout{margin-top:11px;background:var(--amber-soft);border-radius:11px;padding:11px 12px;font-size:12.5px;
+    color:#6e3f10;line-height:1.45}
+  .callout b{color:#542d06}
+  .odds{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+
+  /* bottom sheet */
+  .scrim{position:fixed;inset:0;background:rgba(20,15,8,.42);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,102%);width:430px;max-width:100%;
+    background:var(--cream);border-radius:22px 22px 0 0;padding:8px 18px 26px;z-index:41;transition:transform .26s cubic-bezier(.3,.9,.3,1);
+    box-shadow:0 -10px 40px rgba(30,20,8,.3)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:38px;height:4px;border-radius:2px;background:#cdbfa3;margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:12px}
+  /* mini-kit in the sheet header */
+  .sh-kit{width:44px;height:42px;position:relative;flex:0 0 auto}
+  .sh-nm{font-size:18px;font-weight:800}
+  .sh-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink3);letter-spacing:.04em;margin-top:1px}
+  .sh-status{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;padding:5px 9px;border-radius:8px}
+  .sh-status.contested{background:var(--amber-soft);color:#7c4711}
+  .sh-status.confirmed{background:var(--green-soft);color:#1c5638}
+  .sh-sec{margin-top:15px}
+  .sh-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--gold);font-weight:700;margin-bottom:7px}
+  .splitbar{display:flex;height:30px;border-radius:8px;overflow:hidden;font-family:var(--mono);font-size:10px;font-weight:700}
+  .splitbar .s1{background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;gap:5px}
+  .splitbar .s2{background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;gap:5px}
+  .srclist{margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--ink2);line-height:1.6}
+  .srclist .y{color:var(--green)} .srclist .n{color:var(--amber)}
+  .bet{background:var(--panel);border:1px solid var(--chip-line);border-radius:12px;padding:12px 13px;font-size:13px;
+    line-height:1.5;color:var(--ink2)}
+  .bet b{color:var(--ink)}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+  .stat{background:var(--panel);border:1px solid var(--chip-line);border-radius:10px;padding:9px;text-align:center}
+  .stat .v{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--ink)}
+  .stat .l{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;color:var(--ink3);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>d10 · Jersey Kit.</b> Classic broadcast pitch with stylized maroon Qatar shirts (number on the kit, name on the plate) —
+  the familiar Sofascore / EA-FIFA read, done premium. Tap the timeline pills:
+  <b>Projected</b> → <b>Contested</b> (Almoez Ali's kit glows + a 3/5 flag) → <b>Confirmed</b> (slot resolves, reads fire).
+  Tap any shirt for the drill-down. Toggle <b>QAT/CAN</b>.
+</div>
+
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="cap">Gary</span></div>
+  <div class="nav">
+    <span class="chev">‹</span>
+    <span class="ttl">STARTING XI</span>
+    <span class="share">⤴</span>
+  </div>
+
+  <div class="mhead">
+    <div class="mrow"><span class="teams">Canada <span class="v">v</span> Qatar</span></div>
+    <div class="meta">GROUP B · BC PLACE · VANCOUVER · 6:00 PM ET</div>
+    <div id="badge"></div>
+  </div>
+
+  <div class="seg">
+    <button data-state="projected" class="on">PROJECTED<span class="sub">all day · ~6h to KO</span></button>
+    <button data-state="contested">CONTESTED<span class="sub">the debated slot</span></button>
+    <button data-state="confirmed">CONFIRMED<span class="sub">~38m to KO</span></button>
+  </div>
+
+  <div class="tt">
+    <button data-team="QAT" class="on"><span class="kitchip" style="background:linear-gradient(160deg,#9B2244,#5E0F25)"></span>QATAR</button>
+    <button data-team="CAN"><span class="kitchip" style="background:linear-gradient(160deg,#E03A47,#9E1622)"></span>CANADA</button>
+    <span class="form" id="formlbl">4-3-3</span>
+  </div>
+
+  <div class="pitchwrap">
+    <div class="pitch" id="pitch">
+      <div class="mk frame"></div>
+      <div class="mk center"></div>
+      <div class="mk circle"></div>
+      <div class="mk spot"></div>
+      <div class="mk boxT"></div>
+      <div class="mk boxTs"></div>
+      <div class="mk boxB"></div>
+      <div class="mk boxBs"></div>
+    </div>
+  </div>
+
+  <div class="srcbar" id="srcbar"></div>
+
+  <div class="read" id="read"></div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- kit palettes (per team) ---------------------------------------- */
+const KITS = {
+  QAT:{c:'#7A1530',d:'#5E0F25',l:'#9B2244',trim:'#F2E4D4'},
+  CAN:{c:'#C8202E',d:'#9E1622',l:'#E03A47',trim:'#FBFAF7'},
+};
+const GK_KIT = {c:'#1F8A7A',d:'#136055',l:'#34B59F',trim:'#F2F8F5'}; // distinct keeper kit
+
+/* render a CSS kit into a target node */
+function kitMarkup(num,kit){
+  return `<span class="kit" style="--kit:${kit.c};--kit-d:${kit.d};--kit-l:${kit.l};--kit-trim:${kit.trim}">
+      <span class="sleeveL"></span><span class="sleeveR"></span>
+      <span class="shirt"></span><span class="collar"></span><span class="hem"></span>
+      <span class="num">${num}</span>
+    </span>`;
+}
+
+/* ---- data ------------------------------------------------------------ */
+const TEAMS = {
+  QAT: {
+    name:'Qatar', formation:'4-3-3',
+    lines:[
+      {y:90, men:[{n:1,nm:'Barsham',pos:'GK'}]},
+      {y:70, men:[{n:2,nm:'Pedro Miguel',pos:'RB'},{n:15,nm:'Khoukhi',pos:'CB'},{n:5,nm:'Hassan',pos:'CB'},{n:3,nm:'Homam',pos:'LB'}]},
+      {y:48, men:[{n:12,nm:'Madibo',pos:'CM'},{n:8,nm:'Hatim',pos:'CM'},{n:23,nm:'Boudiaf',pos:'CM'}]},
+      {y:25, men:[{n:11,nm:'Afif',pos:'LW'},{n:19,nm:'Almoez Ali',pos:'ST',contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW'}]},
+    ],
+    agree:82,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    projRead:[
+      {t:'<b>If this XI holds:</b> the front three of Afif + Ali + Edmilson leans Qatar to push the game — points toward Qatar team-total OVER. <i>Firms up at the confirmed lineup.</i>',cls:'hot'},
+      {t:'<b>Behind 0-1-0 in Group B.</b> Drew the opener — closer to a must-win, which usually means a fuller-strength, attacking sheet.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed: Ali starts.</b> Qatar over / Ali anytime-scorer <span class="odds">+180</span> live — not hedged.',cls:'hot'},
+      {t:'<b>4-3-3, front three intact.</b> A genuine go-forward selection vs Canada — leans the match OVER and Qatar\'s side of the total.',cls:'hot'},
+    ],
+  },
+  CAN: {
+    name:'Canada', formation:'4-3-3',
+    lines:[
+      {y:90, men:[{n:16,nm:'Crépeau',pos:'GK'}]},
+      {y:70, men:[{n:2,nm:'Johnston',pos:'RB'},{n:4,nm:'Vitória',pos:'CB'},{n:5,nm:'Cornelius',pos:'CB'},{n:3,nm:'Adekugbe',pos:'LB'}]},
+      {y:48, men:[{n:7,nm:'Eustáquio',pos:'CM'},{n:13,nm:'Koné',pos:'CM'},{n:11,nm:'Buchanan',pos:'CM'}]},
+      {y:25, men:[{n:20,nm:'David',pos:'ST'},{n:17,nm:'Larin',pos:'ST'},{n:19,nm:'Davies',pos:'LW'}]},
+    ],
+    agree:91,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    projRead:[
+      {t:'<b>High source agreement (91%).</b> Settled side — the projected XI is near-locked, so the reads below carry weight even pre-confirmation.',cls:'hot'},
+      {t:'<b>David + Davies pace up top.</b> Canada\'s front line leans the match toward Canada\'s side of the spread.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed XI matches the projection.</b> No surprises — the pre-confirmation reads stand.',cls:'hot'},
+      {t:'<b>Full-strength attacking line.</b> David / Larin / Davies all start — Canada to score / -1.5 markets in play.',cls:'hot'},
+    ],
+  },
+};
+
+/* per-player drill-down */
+const READS = {
+  'Almoez Ali':{
+    sub:'Qatar · ST · #19',
+    contested:{split:[60,40,'3 of 5 START','2 BENCH'],
+      sources:'<span class="y">▲ START</span> The Athletic · ESPN · Sports Mole &nbsp; <span class="n">▼ BENCH</span> RotoWire · bet365',
+      bet:'Qatar\'s all-time top scorer (60 caps, <b>12 in qualifying</b>). The whole match hinges on this kit: <br>• If he <b>starts</b> → Ali anytime-scorer <span class="odds">+180</span>, Qatar team-total OVER more live.<br>• If he\'s <b>benched</b> → fade Qatar\'s over, Canada clean-sheet <span class="odds">+165</span> gains.<br><b>Watch the team sheet at ~T-40 before betting this game.</b>'},
+    stats:[['12','QUAL GOALS'],['60','CAREER'],['1','GP THIS WC']],
+  },
+  'David':{ sub:'Canada · ST · #20',
+    bet:'Canada\'s focal point. With a settled XI around him, <b>David anytime-scorer <span class="odds">+120</span></b> and Canada team-total OVER are the cleaner reads.',
+    stats:[['2','WC GOALS'],['.61','xG/90'],['2','GP THIS WC']] },
+};
+
+/* ---- render ---------------------------------------------------------- */
+let state='projected', team='QAT';
+
+function render(){
+  const T=TEAMS[team];
+  const kit=KITS[team];
+  document.getElementById('formlbl').textContent=T.formation;
+  const isConf = state==='confirmed';
+
+  // badge
+  document.getElementById('badge').innerHTML = isConf
+    ? `<span class="badge confirmed"><span class="dot"></span>CONFIRMED XI<span class="ko">· lineups in · 38m to KO</span></span>`
+    : `<span class="badge projected"><span class="dot"></span>PROJECTED XI<span class="ko">· ${T.agree}% source agreement</span></span>`;
+
+  // pitch
+  const p=document.getElementById('pitch');
+  p.className='pitch state-'+state;
+  [...p.querySelectorAll('.player')].forEach(e=>e.remove());
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      const x=(i+1)/(n+1)*100;
+      const contested = m.contested && !isConf;          // glows pre-confirmation
+      const resolved  = m.contested && isConf;            // confirmed → resolves
+      const el=document.createElement('div');
+      let cls='player';
+      if(contested) cls+=' contested'+(state==='contested'?' pulse':'');
+      if(resolved)  cls+=' resolved';
+      el.className=cls;
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+      const useKit = m.pos==='GK' ? GK_KIT : kit;
+      el.innerHTML=`
+        ${contested?'<span class="flag">3/5 START</span>':''}
+        ${resolved?'<span class="tick">✓ STARTS</span>':''}
+        ${kitMarkup(m.n,useKit)}
+        <div class="plate"><div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div></div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,contested,useKit);
+      p.appendChild(el);
+    });
+  });
+
+  // source / accuracy strip
+  document.getElementById('srcbar').innerHTML = isConf
+    ? `<span>Source: official team sheet · cross-checked vs BDL + API-Football</span>
+       <span class="acc hit">PROJECTION HIT 10/11 ✓</span>`
+    : `<span>Projected from <b>${T.sources.join(' · ')}</b></span><span class="agree">${T.agree}% agree</span>
+       <span class="acc">TOURN. AVG 9/11</span>`;
+
+  // read panel
+  const reads = isConf ? T.confRead : T.projRead;
+  let html = `<div class="eyebrow">${isConf?'THE READ · CONFIRMED':'THE READ · PROJECTED'}</div>`;
+  reads.forEach(r=>{ html+=`<div class="rline ${r.cls}"><span class="k"></span><span>${r.t}</span></div>`; });
+  if(!isConf){
+    html += `<div class="hedge">◴ Soft until confirmed — these firm up when the official sheet posts (~T-40).</div>`;
+  }
+  if(state==='contested' && team==='QAT'){
+    html += `<div class="callout">⚠️ <b>Contested kit — Almoez Ali.</b> 3 of 5 outlets start Qatar's top scorer; 2 bench him. Qatar's entire over / team-total read swings on it. <b>This is the question to ask before you bet this game.</b> Tap his shirt for the full split.</div>`;
+  }
+  document.getElementById('read').innerHTML=html;
+}
+
+/* ---- bottom sheet ---------------------------------------------------- */
+function openSheet(name,pos,num,contested,kit){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const statusHtml = contested
+    ? `<span class="sh-status contested">CONTESTED</span>`
+    : (state==='confirmed' ? `<span class="sh-status confirmed">CONFIRMED</span>` : '');
+  let body=`<div class="grab"></div>
+    <div class="sh-head">
+      <span class="sh-kit">${kitMarkup(num,kit)}</span>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${statusHtml}</div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl">SOURCE SPLIT</div>
+      <div class="splitbar"><div class="s1" style="flex:${c.split[0]}">${c.split[2]}</div>
+        <div class="s2" style="flex:${c.split[1]}">${c.split[3]}</div></div>
+      <div class="srclist">${c.sources}</div></div>
+      <div class="sh-sec"><div class="sh-lbl">WHY IT MATTERS</div><div class="bet">${c.bet}</div></div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">THE READ</div><div class="bet">${r.bet}</div></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="bet">Per-player reads attach here — recent form, matchup vs the opposite number, and any prop angle. (Mock: detailed cards wired for Ali &amp; David.)</div></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">FORM</div><div class="statgrid">`;
+    r.stats.forEach(s=>{ body+=`<div class="stat"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring ---------------------------------------------------------- */
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state; render();
+});
+document.querySelectorAll('.tt button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tt button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){ // Canada has no contested slot — fall back to projected
+    state='projected';
+    document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>

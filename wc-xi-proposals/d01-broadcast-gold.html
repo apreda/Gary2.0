@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — d01 Broadcast Gold</title>
+<!--
+  DIRECTION d01 — "BROADCAST GOLD"
+  A TV pre-match broadcast graphic. Dark stadium-gradient field, huge gold display-weight
+  "STARTING XI" wordmark, formation shown big, players as gold-ringed numbered discs on a
+  dramatic angled/perspective pitch. The contested Almoez Ali slot is a gold flare/burst.
+  State is expressed as a broadcast lower-third bar that slides in.
+  System fonts stand in for GaryFonts. Mono numerals = "Quant Terminal" house rule.
+-->
+<style>
+  :root{
+    /* warm gold — Gary's signature voice */
+    --gold:#E8B838; --gold-hi:#FFE9A6; --gold-deep:#A9791A; --gold-line:rgba(232,184,56,.55);
+    --gold-glow:rgba(255,209,92,.85);
+    /* dark stadium chrome */
+    --night:#070B14; --night2:#0C1322; --night3:#13203A;
+    --turf-a:#0E2A1E; --turf-b:#0A2117; --turf-line:rgba(255,255,255,.20);
+    --ink-hi:#F5F2EA; --ink-mid:#C9C3B4; --ink-dim:#7E8AA0;
+    --green:#46D6A0; --green-deep:#0E7D55;
+    --amber:#FF9E3D; --red:#FF6052;
+    --mono:ui-monospace,SFMono-Regular,Menlo,"Roboto Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;min-height:100vh;font-family:var(--sans);color:var(--ink-hi);
+    background:radial-gradient(1200px 600px at 50% -10%,#1a2540,#0a1020 55%,#06080f);
+    display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 12px 56px}
+  .cap{font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+
+  .legend{max-width:430px;width:100%;font-size:11.5px;color:#aeb8cc;line-height:1.55;
+    background:rgba(255,255,255,.04);border:1px solid rgba(180,200,240,.14);border-radius:12px;padding:10px 13px}
+  .legend b{color:var(--gold-hi)}
+
+  /* ---------- phone ---------- */
+  .phone{width:430px;max-width:100%;background:linear-gradient(180deg,#0A0F1C,#070B14 60%,#05080F);
+    border-radius:36px;overflow:hidden;position:relative;
+    box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(232,184,56,.10),inset 0 0 0 1px rgba(255,255,255,.03)}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;
+    font-family:var(--mono);color:var(--ink-dim)}
+  .status .gy{color:var(--gold);letter-spacing:.16em;font-weight:700}
+  .nav{display:flex;align-items:center;gap:10px;padding:4px 18px 8px}
+  .nav .chev{font-size:23px;color:var(--ink-dim);line-height:1}
+  .nav .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--ink-dim)}
+  .nav .share{margin-left:auto;font-size:16px;color:var(--gold)}
+
+  /* ---------- broadcast title block ---------- */
+  .opener{position:relative;padding:6px 18px 2px;overflow:hidden}
+  .opener::before{content:"";position:absolute;left:-10%;right:-10%;top:8px;height:120px;
+    background:radial-gradient(60% 80% at 18% 30%,rgba(232,184,56,.16),transparent 70%);pointer-events:none}
+  .matchline{display:flex;align-items:baseline;gap:9px;position:relative}
+  .matchline .teams{font-size:15px;font-weight:800;letter-spacing:.01em;color:var(--ink-hi)}
+  .matchline .teams .v{color:var(--gold);font-weight:700;margin:0 3px}
+  .matchline .grp{margin-left:auto;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+    color:var(--gold-hi);background:rgba(232,184,56,.12);border:1px solid var(--gold-line);
+    padding:3px 8px;border-radius:6px}
+  .venue{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-dim);margin-top:5px}
+
+  .wordmark{position:relative;margin:4px 0 2px;line-height:.86}
+  .wordmark .big{display:block;font-size:62px;font-weight:900;letter-spacing:-.022em;
+    background:linear-gradient(178deg,#FFF4D2 0%,var(--gold) 42%,var(--gold-deep) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 2px 30px rgba(232,184,56,.28);filter:drop-shadow(0 4px 16px rgba(0,0,0,.5))}
+  .wordmark .big .sub{font-size:62px}
+  .wordmark .row2{display:flex;align-items:flex-end;gap:12px;margin-top:2px}
+  .wordmark .esp{font-family:var(--mono);font-size:11px;letter-spacing:.42em;color:var(--gold-deep);
+    font-weight:700;padding-left:3px}
+  .wordmark .formchip{margin-left:auto;display:flex;align-items:baseline;gap:8px;
+    background:linear-gradient(180deg,#15233F,#0C1526);border:1px solid var(--gold-line);
+    border-radius:10px;padding:6px 12px 7px;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  .wordmark .formchip .fl{font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:var(--ink-dim)}
+  .wordmark .formchip .fn{font-family:var(--mono);font-size:21px;font-weight:800;color:var(--gold-hi);
+    letter-spacing:.04em}
+  .goldrule{height:2px;margin:9px 0 0;border-radius:2px;
+    background:linear-gradient(90deg,transparent,var(--gold) 18%,var(--gold-hi) 50%,var(--gold) 82%,transparent)}
+
+  /* team switch + grade chip */
+  .subbar{display:flex;align-items:center;gap:8px;padding:10px 18px 2px}
+  .tt{display:flex;gap:6px}
+  .tt button{border:1px solid rgba(232,184,56,.28);background:rgba(255,255,255,.03);padding:6px 14px;border-radius:20px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-mid);cursor:pointer;font-weight:700;transition:.16s}
+  .tt button.on{background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:#1a1304;border-color:var(--gold-hi);
+    box-shadow:0 0 18px rgba(232,184,56,.35)}
+  .grade{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;
+    letter-spacing:.04em;font-weight:700;padding:6px 11px;border-radius:8px;
+    background:rgba(70,214,160,.10);border:1px solid rgba(70,214,160,.32);color:var(--green)}
+  .grade .tk{font-size:10px}
+  .grade.proj{background:rgba(180,200,240,.07);border-color:rgba(180,200,240,.2);color:var(--ink-mid)}
+
+  /* ---------- the angled pitch ---------- */
+  .stage{margin:10px 14px 0;border-radius:18px;overflow:hidden;position:relative;
+    background:radial-gradient(120% 100% at 50% 0%,#0d1830,#070b14);
+    border:1px solid rgba(232,184,56,.16);box-shadow:inset 0 0 60px rgba(0,0,0,.6),0 18px 40px rgba(0,0,0,.45)}
+  .pitch3d{position:relative;width:100%;aspect-ratio:.80;perspective:760px;perspective-origin:50% 22%;overflow:hidden}
+  /* the tilted turf plane */
+  .turf{position:absolute;left:50%;top:54%;width:128%;height:118%;transform:translate(-50%,-50%) rotateX(46deg);
+    transform-origin:50% 50%;
+    background:
+      repeating-linear-gradient(90deg,var(--turf-a) 0 8.33%,var(--turf-b) 8.33% 16.66%);
+    box-shadow:0 0 120px rgba(0,0,0,.6)}
+  /* stadium haze behind the far end */
+  .haze{position:absolute;left:0;right:0;top:0;height:42%;pointer-events:none;
+    background:linear-gradient(180deg,rgba(40,60,110,.55),rgba(20,30,60,.0));mix-blend-mode:screen}
+  .floor-vig{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(120% 80% at 50% 78%,transparent 40%,rgba(0,0,0,.55) 100%)}
+  /* pitch line markings, drawn on the tilted plane */
+  .mk{position:absolute;border:1.5px solid var(--turf-line)}
+  .turf .mk{filter:drop-shadow(0 0 4px rgba(255,255,255,.12))}
+  .turf .frame{inset:6% 4%;border-radius:3px}
+  .turf .halfway{left:4%;right:4%;top:50%;height:0;border-width:1.5px 0 0 0}
+  .turf .circle{left:50%;top:50%;width:26%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}
+  .turf .spot{left:50%;top:50%;width:5px;height:5px;border-radius:50%;background:var(--turf-line);transform:translate(-50%,-50%);border:0}
+  .turf .boxF{left:30%;right:30%;top:6%;height:18%;border-top:0}
+  .turf .boxN{left:24%;right:24%;bottom:6%;height:22%;border-bottom:0}
+
+  /* players float ABOVE the tilted plane (upright, not tilted) */
+  .players{position:absolute;inset:0;z-index:5}
+  .player{position:absolute;transform:translate(-50%,-50%);width:78px;display:flex;flex-direction:column;
+    align-items:center;gap:3px;cursor:pointer;transition:opacity .25s}
+  .player .shadow{position:absolute;bottom:-10px;width:34px;height:9px;border-radius:50%;
+    background:radial-gradient(closest-side,rgba(0,0,0,.55),transparent);filter:blur(1px)}
+  .disc{position:relative;width:40px;height:40px;border-radius:50%;
+    background:radial-gradient(circle at 38% 32%,#1d2c4c,#0b1426);
+    border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:800;font-size:15px;color:var(--gold-hi);
+    box-shadow:0 0 0 1px rgba(0,0,0,.5),0 8px 16px rgba(0,0,0,.55),inset 0 1px 2px rgba(255,255,255,.18);
+    transition:.18s}
+  .disc::after{content:"";position:absolute;inset:-5px;border-radius:50%;
+    border:1px solid rgba(232,184,56,.0);transition:.18s}
+  .player:active .disc{transform:translateY(-2px)}
+  .pname{font-size:10.5px;font-weight:800;color:var(--ink-hi);letter-spacing:.01em;line-height:1.05;text-align:center;
+    max-width:84px;text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 1px #000}
+  .ppos{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--gold);text-shadow:0 1px 3px rgba(0,0,0,.9)}
+
+  /* PROJECTED look — discs read as outline/ghosted (not yet locked) */
+  .state-projected .disc,.state-contested .disc{
+    background:radial-gradient(circle at 38% 32%,rgba(40,56,92,.55),rgba(10,18,36,.7));
+    border-style:dashed;border-color:rgba(232,184,56,.7)}
+  /* CONFIRMED look — discs go solid molten gold */
+  .state-confirmed .disc{background:radial-gradient(circle at 38% 30%,#FFE9A6,var(--gold) 70%,var(--gold-deep));
+    color:#1a1304;border-color:var(--gold-hi);box-shadow:0 0 0 1px rgba(0,0,0,.4),0 8px 18px rgba(0,0,0,.5),0 0 22px rgba(232,184,56,.45)}
+  .state-confirmed .ppos{color:var(--gold-hi)}
+
+  /* ---------- CONTESTED slot = the gold flare/burst ---------- */
+  .player.contested{z-index:9}
+  .flare{position:absolute;top:50%;left:50%;width:150px;height:150px;transform:translate(-50%,-58%);
+    pointer-events:none;opacity:0;transition:opacity .3s}
+  .flare .ray{position:absolute;left:50%;top:50%;width:3px;height:78px;transform-origin:bottom center;
+    background:linear-gradient(180deg,transparent,var(--gold-glow));border-radius:2px;
+    transform:translate(-50%,-100%) rotate(var(--r))}
+  .flare .core{position:absolute;left:50%;top:50%;width:96px;height:96px;transform:translate(-50%,-50%);border-radius:50%;
+    background:radial-gradient(circle,rgba(255,224,140,.65),rgba(232,184,56,.28) 38%,transparent 70%)}
+  .state-contested .player.contested .flare{opacity:1;animation:flarepulse 1.7s ease-in-out infinite}
+  @keyframes flarepulse{0%,100%{transform:translate(-50%,-58%) scale(.92);opacity:.85}
+    50%{transform:translate(-50%,-58%) scale(1.06);opacity:1}}
+  .player.contested .disc{border-color:var(--gold-hi);
+    background:radial-gradient(circle at 38% 30%,#FFF0BE,var(--gold) 72%);color:#1a1304;
+    box-shadow:0 0 0 2px rgba(255,233,166,.7),0 0 30px rgba(255,209,92,.7),0 8px 18px rgba(0,0,0,.5)}
+  .player.contested .vote{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+    background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:#1a1304;font-family:var(--mono);
+    font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:7px;letter-spacing:.04em;white-space:nowrap;
+    box-shadow:0 4px 10px rgba(0,0,0,.5)}
+  .player.contested .pname{color:var(--gold-hi);text-shadow:0 1px 6px rgba(0,0,0,.95),0 0 10px rgba(232,184,56,.4)}
+  /* dim everyone else when contested */
+  .state-contested .player:not(.contested){opacity:.28;filter:saturate(.5)}
+
+  /* ---------- broadcast lower-third state bar ---------- */
+  .lower3{position:relative;margin:0;display:flex;align-items:stretch;
+    background:linear-gradient(90deg,#0A1120 0%,#0E1A30 60%,#0A1120 100%);
+    border-top:1px solid rgba(232,184,56,.22);border-bottom:1px solid rgba(0,0,0,.5)}
+  .lower3 .flag{width:8px;align-self:stretch;background:linear-gradient(180deg,var(--gold-hi),var(--gold-deep))}
+  .lower3.proj .flag{background:linear-gradient(180deg,#9fb0cc,#43506e)}
+  .lower3 .l3body{flex:1;padding:9px 14px;display:flex;align-items:center;gap:10px}
+  .lower3 .l3tag{font-family:var(--mono);font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--gold-hi)}
+  .lower3.proj .l3tag{color:var(--ink-mid)}
+  .lower3 .l3sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;color:var(--ink-dim)}
+  .lower3 .live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);
+    font-size:9px;font-weight:800;letter-spacing:.08em;color:var(--green)}
+  .lower3.proj .live{color:var(--amber)}
+  .lower3 .live .led{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;
+    animation:blink 1.3s ease-in-out infinite}
+  @keyframes blink{50%{opacity:.35}}
+
+  /* timeline switcher styled as a broadcast cue rail */
+  .cuerail{display:flex;gap:2px;margin:0;background:#070C16;border-bottom:1px solid rgba(232,184,56,.14)}
+  .cuerail button{flex:1;border:0;background:transparent;padding:10px 4px 9px;cursor:pointer;
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--ink-dim);
+    border-top:2px solid transparent;transition:.16s}
+  .cuerail button .sub{display:block;font-size:8px;font-weight:600;color:#5a667e;margin-top:3px;letter-spacing:.02em}
+  .cuerail button.on{color:var(--gold-hi);border-top-color:var(--gold);background:linear-gradient(180deg,rgba(232,184,56,.10),transparent)}
+  .cuerail button.on .sub{color:var(--gold-deep)}
+
+  /* ---------- source strip ---------- */
+  .srcbar{padding:10px 18px 0;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;
+    color:var(--ink-dim);letter-spacing:.02em;flex-wrap:wrap}
+  .srcbar b{color:var(--ink-mid);font-weight:700}
+  .srcbar .agree{color:var(--gold-hi);font-weight:800}
+
+  /* ---------- THE READ ---------- */
+  .read{margin:12px 16px 18px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));
+    border:1px solid rgba(232,184,56,.18);border-radius:15px;padding:14px 15px 15px;position:relative;overflow:hidden}
+  .read::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:linear-gradient(180deg,var(--gold-hi),var(--gold-deep))}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--gold);font-weight:800;
+    margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .eyebrow .voice{font-size:9px;color:var(--gold-deep);letter-spacing:.1em}
+  .rline{display:flex;gap:10px;padding:8px 0;border-top:1px solid rgba(232,184,56,.10);font-size:13px;line-height:1.42;
+    color:var(--ink-mid)}
+  .rline:first-of-type{border-top:0;padding-top:2px}
+  .rline .k{flex:0 0 auto;width:6px;height:6px;border-radius:50%;margin-top:6px;background:var(--gold);box-shadow:0 0 8px var(--gold-glow)}
+  .rline.hot .k{background:var(--green);box-shadow:0 0 8px rgba(70,214,160,.7)}
+  .rline.warn .k{background:var(--amber);box-shadow:0 0 8px rgba(255,158,61,.7)}
+  .rline.cold .k{background:var(--red);box-shadow:0 0 8px rgba(255,96,82,.7)}
+  .rline b{color:var(--ink-hi)}
+  .rline .odds{font-family:var(--mono);color:var(--gold-hi);font-weight:800}
+  .hedge{font-family:var(--mono);font-size:9.5px;color:var(--ink-dim);margin-top:11px;display:flex;align-items:center;gap:6px;
+    padding-top:9px;border-top:1px dashed rgba(180,200,240,.16)}
+  .callout{margin-top:11px;background:linear-gradient(180deg,rgba(232,184,56,.12),rgba(232,184,56,.04));
+    border:1px solid var(--gold-line);border-radius:11px;padding:11px 12px;font-size:12.5px;
+    color:var(--gold-hi);line-height:1.45}
+  .callout b{color:#FFF4D2}
+
+  /* ---------- bottom sheet ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(4,6,12,.66);opacity:0;pointer-events:none;transition:.22s;z-index:40;backdrop-filter:blur(2px)}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,102%);width:430px;max-width:100%;
+    background:linear-gradient(180deg,#0C1322,#070B14);border:1px solid rgba(232,184,56,.22);border-bottom:0;
+    border-radius:22px 22px 0 0;padding:8px 18px 28px;z-index:41;transition:transform .28s cubic-bezier(.25,.9,.3,1);
+    box-shadow:0 -16px 50px rgba(0,0,0,.7)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:40px;height:4px;border-radius:2px;background:rgba(232,184,56,.4);margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:12px}
+  .sh-num{width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 38% 30%,#FFE9A6,var(--gold) 70%,var(--gold-deep));
+    color:#1a1304;font-family:var(--mono);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:17px;
+    box-shadow:0 0 22px rgba(232,184,56,.4),inset 0 1px 2px rgba(255,255,255,.4)}
+  .sh-nm{font-size:19px;font-weight:800;color:var(--ink-hi)}
+  .sh-sub{font-family:var(--mono);font-size:10px;color:var(--ink-dim);letter-spacing:.05em;margin-top:2px}
+  .sh-status{margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:800;padding:5px 10px;border-radius:8px;letter-spacing:.04em}
+  .sh-status.contested{background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:#1a1304}
+  .sh-status.confirmed{background:rgba(70,214,160,.14);color:var(--green);border:1px solid rgba(70,214,160,.4)}
+  .sh-sec{margin-top:16px}
+  .sh-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--gold);font-weight:800;margin-bottom:8px}
+  .splitbar{display:flex;height:32px;border-radius:9px;overflow:hidden;font-family:var(--mono);font-size:10px;font-weight:800;
+    box-shadow:0 4px 12px rgba(0,0,0,.4)}
+  .splitbar .s1{background:linear-gradient(180deg,#5BE3AE,var(--green-deep));color:#04150E;display:flex;align-items:center;justify-content:center;gap:5px}
+  .splitbar .s2{background:linear-gradient(180deg,var(--gold-hi),var(--gold-deep));color:#1a1304;display:flex;align-items:center;justify-content:center;gap:5px}
+  .srclist{margin-top:9px;font-family:var(--mono);font-size:10.5px;color:var(--ink-mid);line-height:1.7}
+  .srclist .y{color:var(--green)} .srclist .n{color:var(--gold-hi)}
+  .bet{background:rgba(255,255,255,.03);border:1px solid rgba(232,184,56,.16);border-radius:12px;padding:12px 13px;font-size:13px;
+    line-height:1.55;color:var(--ink-mid)}
+  .bet b{color:var(--ink-hi)} .bet .odds{font-family:var(--mono);color:var(--gold-hi);font-weight:800}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+  .stat{background:rgba(255,255,255,.03);border:1px solid rgba(232,184,56,.14);border-radius:10px;padding:10px;text-align:center}
+  .stat .v{font-family:var(--mono);font-size:18px;font-weight:800;color:var(--gold-hi)}
+  .stat .l{font-family:var(--mono);font-size:8.5px;letter-spacing:.07em;color:var(--ink-dim);margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>d01 · Broadcast Gold.</b> A TV pre-match opener for Gary's WC Starting XI. Tap the cue rail to run the same Qatar XI through
+  <b>Projected</b> (consensus, hedged) → <b>Contested</b> (Almoez Ali's slot bursts into a gold flare) →
+  <b>Confirmed</b> (~38m to KO, discs go molten gold, reads fire with odds). Tap any disc for the source split + read.
+</div>
+
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="gy cap">GARY</span></div>
+  <div class="nav">
+    <span class="chev">‹</span>
+    <span class="ttl">WORLD CUP · LINEUPS</span>
+    <span class="share">⤴</span>
+  </div>
+
+  <!-- broadcast opener -->
+  <div class="opener">
+    <div class="matchline">
+      <span class="teams">Canada <span class="v">v</span> Qatar</span>
+      <span class="grp">GROUP&nbsp;B</span>
+    </div>
+    <div class="venue">BC PLACE · VANCOUVER · 6:00 PM ET</div>
+
+    <div class="wordmark">
+      <span class="big">STARTING<span class="sub"> XI</span></span>
+      <div class="row2">
+        <span class="esp">XI INICIAL</span>
+        <span class="formchip"><span class="fl">FORMATION</span><span class="fn" id="formlbl">4-3-3</span></span>
+      </div>
+    </div>
+    <div class="goldrule"></div>
+  </div>
+
+  <!-- team switch + self-grade chip -->
+  <div class="subbar">
+    <div class="tt">
+      <button data-team="QAT" class="on">QATAR</button>
+      <button data-team="CAN">CANADA</button>
+    </div>
+    <span class="grade proj" id="grade"></span>
+  </div>
+
+  <!-- the angled broadcast pitch -->
+  <div class="stage">
+    <div class="pitch3d state-projected" id="pitch3d">
+      <div class="turf" id="turf">
+        <div class="mk frame"></div>
+        <div class="mk halfway"></div>
+        <div class="mk circle"></div>
+        <div class="mk spot"></div>
+        <div class="mk boxF"></div>
+        <div class="mk boxN"></div>
+      </div>
+      <div class="haze"></div>
+      <div class="floor-vig"></div>
+      <div class="players" id="players"></div>
+    </div>
+    <!-- broadcast lower-third state bar -->
+    <div class="lower3 proj" id="lower3">
+      <div class="flag"></div>
+      <div class="l3body">
+        <span class="l3tag" id="l3tag">PROJECTED XI</span>
+        <span class="l3sub" id="l3sub">consensus · ~6h to KO</span>
+        <span class="live" id="l3live"><span class="led"></span>SOFT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- cue rail (timeline) -->
+  <div class="cuerail">
+    <button data-state="projected" class="on">PROJECTED<span class="sub">all day</span></button>
+    <button data-state="contested">CONTESTED<span class="sub">debated slot</span></button>
+    <button data-state="confirmed">CONFIRMED<span class="sub">~38m · KO</span></button>
+  </div>
+
+  <div class="srcbar" id="srcbar"></div>
+  <div class="read" id="read"></div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- data (identical match data across the wall) -------------------- */
+const TEAMS = {
+  QAT: {
+    name:'Qatar', formation:'4-3-3', agree:82,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    /* y: 0 = far (attacking) end, 100 = near (own GK) end — drawn into the tilted frame */
+    lines:[
+      {y:88, men:[{n:1,nm:'Barsham',pos:'GK'}]},
+      {y:68, men:[{n:2,nm:'Pedro Miguel',pos:'RB'},{n:15,nm:'Khoukhi',pos:'CB'},{n:5,nm:'Hassan',pos:'CB'},{n:3,nm:'Homam',pos:'LB'}]},
+      {y:46, men:[{n:12,nm:'Madibo',pos:'CM'},{n:8,nm:'Hatim',pos:'CM'},{n:23,nm:'Boudiaf',pos:'CM'}]},
+      {y:22, men:[{n:11,nm:'Afif',pos:'LW'},{n:19,nm:'Almoez Ali',pos:'ST',contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW'}]},
+    ],
+    projRead:[
+      {t:'<b>Go-forward shape.</b> Afif + Ali + Edmilson up top leans Qatar to push the game — points toward Qatar team-total OVER and anytime-scorer markets.',cls:'hot'},
+      {t:'<b>0-1-0 in Group B.</b> Drew the opener — closer to a must-win, which usually means a fuller-strength, attacking sheet.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed: Ali starts.</b> Qatar over / Ali anytime-scorer <span class="odds">+180</span> live — not hedged.',cls:'hot'},
+      {t:'<b>4-3-3, front three intact.</b> A genuine go-forward selection vs Canada — leans the match OVER and Qatar\'s side of the total.',cls:'hot'},
+    ],
+  },
+  CAN: {
+    name:'Canada', formation:'4-3-3', agree:91,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    lines:[
+      {y:88, men:[{n:16,nm:'Crépeau',pos:'GK'}]},
+      {y:68, men:[{n:2,nm:'Johnston',pos:'RB'},{n:4,nm:'Vitória',pos:'CB'},{n:5,nm:'Cornelius',pos:'CB'},{n:3,nm:'Adekugbe',pos:'LB'}]},
+      {y:46, men:[{n:7,nm:'Eustáquio',pos:'CM'},{n:13,nm:'Koné',pos:'CM'},{n:11,nm:'Buchanan',pos:'CM'}]},
+      {y:22, men:[{n:20,nm:'David',pos:'ST'},{n:17,nm:'Larin',pos:'ST'},{n:19,nm:'Davies',pos:'LW'}]},
+    ],
+    projRead:[
+      {t:'<b>High source agreement (91%).</b> Settled side — the projected XI is near-locked, so these reads carry weight even pre-confirmation.',cls:'hot'},
+      {t:'<b>David + Davies pace up top.</b> Canada\'s front line leans the match toward Canada\'s side of the spread.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed XI matches the projection.</b> No surprises — the pre-confirmation reads stand.',cls:'hot'},
+      {t:'<b>Full-strength attacking line.</b> David / Larin / Davies all start — Canada to score / -1.5 markets in play.',cls:'hot'},
+    ],
+  },
+};
+
+const READS = {
+  'Almoez Ali':{ sub:'Qatar · ST · #19',
+    contested:{split:[60,40,'3 of 5 START','2 BENCH'],
+      sources:'<span class="y">▲ START</span> The Athletic · ESPN · Sports Mole &nbsp; <span class="n">▼ BENCH</span> RotoWire · bet365',
+      bet:'Qatar\'s all-time top scorer (60 caps, <b>12 in qualifying</b>). The whole match hinges on this slot:<br>• If he <b>starts</b> → Ali anytime-scorer <span class="odds">+180</span>, Qatar team-total OVER more live.<br>• If he\'s <b>benched</b> → fade Qatar\'s over, Canada clean-sheet <span class="odds">+165</span> gains.<br><b>Watch the team sheet at ~T-40 before betting this game.</b>'},
+    stats:[['12','QUAL GOALS'],['60','CAREER'],['1','GP THIS WC']] },
+  'David':{ sub:'Canada · ST · #20',
+    bet:'Canada\'s focal point. With a settled XI around him, <b>David anytime-scorer <span class="odds">+120</span></b> and Canada team-total OVER are the cleaner reads.',
+    stats:[['2','WC GOALS'],['.61','xG/90'],['2','GP THIS WC']] },
+};
+
+/* ---- render --------------------------------------------------------- */
+let state='projected', team='QAT';
+
+function render(){
+  const T=TEAMS[team];
+  const isConf = state==='confirmed';
+  document.getElementById('formlbl').textContent=T.formation;
+
+  /* self-grade chip */
+  const grade=document.getElementById('grade');
+  if(isConf){ grade.className='grade'; grade.innerHTML=`<span class="tk">✓</span>PROJECTION HIT 10/11`; }
+  else { grade.className='grade proj'; grade.innerHTML=`<span class="tk">◷</span>TOURN. AVG 9/11`; }
+
+  /* pitch state class */
+  const p=document.getElementById('pitch3d');
+  p.className='pitch3d state-'+state;
+
+  /* players (rendered upright above the tilted plane) */
+  const layer=document.getElementById('players');
+  layer.innerHTML='';
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      // spread x across the visible tilted width; narrow the far (top) end slightly for perspective
+      const persp = 0.80 + (line.y/100)*0.20;        // far end pinched in
+      const x = 50 + ((i+1)/(n+1)*100 - 50) * persp;
+      const contested = m.contested && !isConf;
+      const el=document.createElement('div');
+      el.className='player'+(contested?' contested':'');
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+      el.innerHTML=`
+        <div class="shadow"></div>
+        ${contested?'<div class="flare"><div class="core"></div>'+rays()+'</div>':''}
+        ${contested?'<span class="vote">3 / 5 START</span>':''}
+        <div class="disc">${m.n}</div>
+        <div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,contested);
+      layer.appendChild(el);
+    });
+  });
+
+  /* lower-third broadcast bar */
+  const l3=document.getElementById('lower3');
+  if(isConf){
+    l3.className='lower3';
+    document.getElementById('l3tag').textContent='CONFIRMED XI';
+    document.getElementById('l3sub').textContent='official team sheet · 38m to KO';
+    document.getElementById('l3live').innerHTML='<span class="led"></span>LIVE';
+  } else {
+    l3.className='lower3 proj';
+    document.getElementById('l3tag').textContent= state==='contested' ? 'CONTESTED · 1 SLOT' : 'PROJECTED XI';
+    document.getElementById('l3sub').textContent= state==='contested'
+      ? T.agree+'% agree · Almoez Ali debated' : 'consensus · ~6h to KO';
+    document.getElementById('l3live').innerHTML='<span class="led"></span>SOFT';
+  }
+
+  /* source strip */
+  document.getElementById('srcbar').innerHTML = isConf
+    ? `<span>Source: official team sheet · cross-checked vs BDL + API-Football</span>`
+    : `<span>Projected from <b>${T.sources.join(' · ')}</b></span><span class="agree">${T.agree}% AGREE</span>`;
+
+  /* the read */
+  const reads = isConf ? T.confRead : T.projRead;
+  let html = `<div class="eyebrow">THE READ · ${isConf?'CONFIRMED':'PROJECTED'}<span class="voice">GARY</span></div>`;
+  reads.forEach(r=>{ html+=`<div class="rline ${r.cls}"><span class="k"></span><span>${r.t}</span></div>`; });
+  if(!isConf){
+    html += `<div class="hedge">◷ Soft until confirmed — these firm up when the official sheet posts (~T-40).</div>`;
+  }
+  if(state==='contested' && team==='QAT'){
+    html += `<div class="callout"><b>Contested slot — Almoez Ali.</b> 3 of 5 outlets start Qatar's top scorer; 2 bench him. Qatar's entire over / team-total read swings on it. <b>This is the question to ask before you bet this game.</b> Tap his disc for the full split.</div>`;
+  }
+  document.getElementById('read').innerHTML=html;
+}
+
+/* 16-ray gold flare */
+function rays(){
+  let s='';
+  for(let a=0;a<360;a+=22.5){ s+=`<div class="ray" style="--r:${a}deg"></div>`; }
+  return s;
+}
+
+/* ---- bottom sheet --------------------------------------------------- */
+function openSheet(name,pos,num,contested){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const statusHtml = contested
+    ? `<span class="sh-status contested">CONTESTED</span>`
+    : (state==='confirmed' ? `<span class="sh-status confirmed">CONFIRMED</span>` : '');
+  let body=`<div class="grab"></div>
+    <div class="sh-head"><div class="sh-num">${num}</div>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${statusHtml}</div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl">SOURCE SPLIT</div>
+      <div class="splitbar"><div class="s1" style="flex:${c.split[0]}">${c.split[2]}</div>
+        <div class="s2" style="flex:${c.split[1]}">${c.split[3]}</div></div>
+      <div class="srclist">${c.sources}</div></div>
+      <div class="sh-sec"><div class="sh-lbl">WHY IT MATTERS</div><div class="bet">${c.bet}</div></div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">THE READ</div><div class="bet">${r.bet}</div></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="bet">Per-player reads attach here — recent form, matchup vs the opposite number, and any prop angle. (Mock: detailed cards wired for Ali &amp; David.)</div></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">FORM</div><div class="statgrid">`;
+    r.stats.forEach(s=>{ body+=`<div class="stat"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring --------------------------------------------------------- */
+document.querySelectorAll('.cuerail button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.cuerail button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state;
+  if(state==='contested' && team!=='QAT'){ /* contested example lives on QAT */ }
+  render();
+});
+document.querySelectorAll('.tt button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tt button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){
+    state='projected';
+    document.querySelectorAll('.cuerail button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>

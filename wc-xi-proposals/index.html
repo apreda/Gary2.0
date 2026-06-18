@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WC Starting XI — 15 directions</title>
+<style>
+  :root{
+    --bg:#17130E; --bg2:#1F1A13; --card:#221C14; --line:rgba(220,200,160,.16);
+    --ink:#F3ECDD; --ink2:#B6A988; --ink3:#7E7259; --gold:#D6A94A; --gold2:#B5862F;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#241d14,var(--bg));color:var(--ink);
+    font-family:var(--sans);min-height:100vh}
+  header.top{position:sticky;top:0;z-index:5;backdrop-filter:blur(10px);
+    background:linear-gradient(180deg,rgba(23,19,14,.94),rgba(23,19,14,.78));border-bottom:1px solid var(--line);
+    padding:18px 26px 16px}
+  .kick{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--gold);text-transform:uppercase}
+  h1{margin:6px 0 4px;font-size:25px;font-weight:800;letter-spacing:-.01em}
+  .sub{font-size:13px;color:var(--ink2);line-height:1.5;max-width:760px}
+  .sub b{color:var(--ink)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:22px;padding:24px 26px 70px;
+    max-width:1500px;margin:0 auto}
+  a.card{display:flex;flex-direction:column;text-decoration:none;color:inherit;background:var(--card);
+    border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:.16s;box-shadow:0 8px 26px rgba(0,0,0,.32)}
+  a.card:hover{transform:translateY(-3px);border-color:rgba(214,169,74,.5);box-shadow:0 14px 36px rgba(0,0,0,.45)}
+  .chead{display:flex;align-items:baseline;gap:9px;padding:13px 15px 4px}
+  .num{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--gold);
+    background:rgba(214,169,74,.12);border:1px solid rgba(214,169,74,.3);border-radius:7px;padding:2px 7px}
+  .nm{font-size:15.5px;font-weight:700}
+  .desc{padding:3px 15px 12px;font-size:12px;color:var(--ink2);line-height:1.45;min-height:34px}
+  .thumb{width:100%;height:560px;overflow:hidden;position:relative;background:#0d0b08;border-top:1px solid var(--line)}
+  .thumb iframe{width:430px;height:738px;border:0;transform-origin:top left;pointer-events:none;
+    position:absolute;left:50%;margin-left:-215px;top:0}
+  /* scale 430 -> card; we letterbox by centering and scaling */
+  .scaler{position:absolute;inset:0;display:flex;justify-content:center}
+  .scaler iframe{transform:scale(.83);transform-origin:top center;position:static;margin:0;left:auto}
+  .open{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink3);padding:9px 15px;
+    display:flex;justify-content:space-between;border-top:1px solid var(--line)}
+  .open .go{color:var(--gold)}
+  footer{padding:0 26px 50px;color:var(--ink2);font-size:13px;max-width:780px;margin:0 auto;line-height:1.55}
+  footer b{color:var(--ink)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--gold);border:1px solid rgba(214,169,74,.3);
+    border-radius:20px;padding:3px 10px;margin-top:8px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="kick">Gary · Design Wall</div>
+  <h1>World Cup Starting XI — 15 directions</h1>
+  <div class="sub">Same Canada v Qatar XI, same contested Almoez Ali slot, same projected→confirmed states across all 15 — so you're comparing <b>design</b>, not content. Click any card to open it full-screen and play with the states &amp; tap-throughs. <b>Shortlist the numbers you're drawn to</b> (like SYNC'D's d9) and I'll refine.</div>
+</header>
+
+<div class="grid" id="grid"></div>
+
+<footer>
+  Built as self-contained mocks in <b>wc-xi-proposals/</b>. Tell me which numbers to take forward — you can pick several and I'll merge the best parts, or push one direction deeper. The winner becomes the spec for the real SwiftUI <b>PitchView</b>.
+  <div class="pill">15 / 15 rendered</div>
+</footer>
+
+<script>
+const M=[
+  ['d01','d01-broadcast-gold.html','Broadcast Gold','Cinematic TV graphic — angled perspective turf, gold flare bursting on the contested slot.'],
+  ['d02','d02-editorial-board.html','Editorial Tactical Board','Athletic/NYT restraint — ink on parchment, gold reserved only for Ali + Gary’s read. Quant-Terminal native.'],
+  ['d03','d03-obsidian.html','Obsidian Premium','Near-black premium — the contested slot is the pitch’s only light source, glowing gold.'],
+  ['d04','d04-both-xis.html','Both XIs, One Pitch','Both line-ups on a single pitch, mirrored at the halfway line (the NYT style). Dense tactical overview.'],
+  ['d05','d05-list-pitch.html','List + Reference Pitch','Data-first box-score roster; the pitch demoted to a 92px thumbnail. Scannable.'],
+  ['d06','d06-sportsbook-slip.html','Sportsbook Slip','Bet-slip styling — the contested slot is a literal if-starts / if-benched odds fork.'],
+  ['d07','d07-terminal.html','Terminal Scoreboard','Literal CRT terminal — scanlines, phosphor line-art pitch, an amber node that blinks on contest.'],
+  ['d08','d08-programme.html','Matchday Programme','Print programme — engraved line-art XI on stippled paper, an editor’s gold-pen ring on Ali.'],
+  ['d09','d09-confidence-rings.html','Confidence Rings','Every player wears a source-agreement ring; the contested slot’s is a split amber/green arc. Trust-forward.'],
+  ['d10','d10-jersey-kit.html','Jersey Kit','Maroon Qatar kits, Sofascore-familiar; the contested kit resolves to a green “✓ STARTS” at confirm.'],
+  ['d11','d11-story-carousel.html','Story Carousel','Swipeable chapters: the XI → the debate → the read. Narrative-forward for the fan.'],
+  ['d12','d12-swiss-minimal.html','Swiss Minimal','Austere Swiss minimalism — hairline pitch, whitespace, a single gold tick on the debate.'],
+  ['d13','d13-vapor-glass.html','Vapor Glass','Frosted glass chips on a luminous sky/lilac field; iris-glow halo on the contested slot (SYNC’D echo).'],
+  ['d14','d14-threat-heatmap.html','Threat Heat-Map','The pitch IS a cool-to-scorching threat field; a thermometer needle pins the attack-heavy shape to OVER.'],
+  ['d15','d15-dashboard.html','Matchday Dashboard','The XI as one module in a full five-module bettors page; state chips drive everything in sync.'],
+];
+const g=document.getElementById('grid');
+M.forEach(m=>{
+  const a=document.createElement('a');
+  a.className='card'; a.href=m[1]; a.target='_blank';
+  a.innerHTML=`<div class="chead"><span class="num">${m[0]}</span><span class="nm">${m[2]}</span></div>
+    <div class="desc">${m[3]}</div>
+    <div class="thumb"><div class="scaler"><iframe loading="lazy" src="${m[1]}"></iframe></div></div>
+    <div class="open"><span>self-contained mock</span><span class="go">open full ↗</span></div>`;
+  g.appendChild(a);
+});
+</script>
+</body>
+</html>

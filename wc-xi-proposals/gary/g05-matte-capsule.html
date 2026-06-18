@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — g05 Warm Pitch + Matte Capsule</title>
+<!--
+  g05 — WARM PITCH + MATTE CAPSULE
+  Leads with Gary's Home-page MATTE CAPSULE state switcher: a single matte capsule, one
+  gold active pill (Projected · Contested · Confirmed). Below it a warm-toned pitch — a muted
+  cream-sage that harmonizes with the cream chrome (NOT a cartoon green) — players as warm discs.
+  Gold = Gary's voice + the one key affordance + branded seams. Soccer accent stays a thin seam.
+  States: PROJECTED (hedged) -> CONTESTED (Ali's slot debated) -> CONFIRMED (fires, odds live).
+  System sans + ui-monospace numerals STAND IN for GaryFonts (Quant Terminal mono-numeral rule).
+-->
+<style>
+  :root{
+    /* warm cream chrome */
+    --cream:#F6F1E7; --cream2:#EFE6D6; --panel:#FBF7EF; --chip:#F8F3E9;
+    /* ink */
+    --ink:#221C15; --ink2:#4A4032; --ink3:#6B5F4E; --ink4:#8A7C66;
+    /* gold — Gary's signature + voice */
+    --gold:#B5862F; --gold-soft:#E7D7AD; --gold-deep:#7E5C18; --gold-line:#D8C076; --gold-wash:#EFE2C0;
+    /* warm cream-sage pitch — harmonizes with cream, never cartoon green */
+    --pitch-a:#D9DCC0; --pitch-b:#D2D6B6; --pitch-line:rgba(94,84,52,.30);
+    /* the contested amber (drama, within the warm world) */
+    --amber:#C9772A; --amber-soft:#F1D9BE; --amber-deep:#8A4A12;
+    /* confirmed sage-green + small soccer maroon seam */
+    --green:#2E7B54; --green-soft:#CFE6D8; --green-deep:#1C5638;
+    --maroon:#7E3B3B;
+    --hair:#E4D8C0; --hair2:#EFE6D0;
+    --sh:0 1px 0 rgba(0,0,0,.04),0 10px 30px rgba(40,30,12,.12);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:radial-gradient(120% 80% at 50% -8%,#EDE4D2 0%,#E0D6C2 60%,#D5CAB2 100%);
+    font-family:var(--sans);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;gap:14px;padding:24px 12px 60px}
+
+  .legend{max-width:430px;width:100%;font-size:11px;color:#5a5038;line-height:1.55;
+    background:rgba(255,255,255,.46);border:1px solid rgba(120,100,60,.22);border-radius:11px;padding:10px 13px}
+  .legend b{color:#3a3020} .legend .k{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+
+  /* phone */
+  .phone{width:430px;max-width:100%;background:var(--cream);border-radius:34px;overflow:hidden;box-shadow:var(--sh);
+    border:1px solid rgba(120,100,60,.18)}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
+    font-family:var(--mono);font-size:11px;color:var(--ink2)}
+  .status .r{letter-spacing:.10em;font-size:10px}
+
+  .nav{display:flex;align-items:center;gap:10px;padding:6px 18px 10px}
+  .nav .chev{font-size:22px;color:var(--ink3);line-height:1}
+  .nav .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.20em;color:var(--ink3);text-transform:uppercase}
+  .nav .share{margin-left:auto;font-size:16px;color:var(--ink4)}
+
+  /* match header — pick-card grammar: gold eyebrow -> matchup -> meta */
+  .mhead{padding:2px 18px 0}
+  .eyebrow{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--gold);font-weight:700;
+    text-transform:uppercase;margin-bottom:6px}
+  .teams{font-size:24px;font-weight:800;letter-spacing:-.015em;line-height:1.05}
+  .teams .v{color:var(--ink4);font-weight:600;font-size:15px;margin:0 4px}
+  .meta{margin-top:5px;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink3);text-transform:uppercase}
+
+  /* ====== THE MATTE CAPSULE — Gary Home-page state switcher (the lead element) ====== */
+  .capsule{margin:15px 18px 0;background:var(--ink);border-radius:15px;padding:5px;display:flex;gap:4px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 6px 18px rgba(34,28,21,.28);
+    border:1px solid rgba(0,0,0,.25);position:relative}
+  .capsule button{flex:1;border:0;background:transparent;padding:9px 4px 8px;border-radius:11px;cursor:pointer;
+    font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:rgba(247,241,231,.62);font-weight:700;
+    text-transform:uppercase;transition:.18s;text-align:center;position:relative}
+  .capsule button .sub{display:block;font-size:8px;font-weight:500;letter-spacing:.03em;
+    color:rgba(247,241,231,.40);margin-top:3px;text-transform:none}
+  /* the single gold active pill */
+  .capsule button.on{background:linear-gradient(180deg,#C7943A,#A8791F);color:#2A2010;
+    box-shadow:0 2px 7px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.30)}
+  .capsule button.on .sub{color:rgba(42,32,16,.66)}
+
+  /* badge row under capsule: state stamp + self-grade chip */
+  .badgerow{margin:12px 18px 0;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .stamp{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+    font-weight:700;padding:5px 10px;border-radius:8px;text-transform:uppercase}
+  .stamp .dot{width:7px;height:7px;border-radius:50%}
+  .stamp.projected{background:var(--amber-soft);color:var(--amber-deep)}
+  .stamp.projected .dot{background:var(--amber);box-shadow:0 0 0 3px rgba(201,119,42,.18)}
+  .stamp.contested{background:var(--gold-wash);color:var(--gold-deep)}
+  .stamp.contested .dot{background:var(--gold);box-shadow:0 0 0 3px rgba(181,134,47,.18)}
+  .stamp.confirmed{background:var(--green-soft);color:var(--green-deep)}
+  .stamp.confirmed .dot{background:var(--green)}
+  .stamp .ko{opacity:.72;font-weight:500;letter-spacing:.03em}
+  .grade{margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--ink3);
+    border:1px dashed var(--hair);border-radius:7px;padding:5px 9px;display:flex;align-items:center;gap:6px;text-transform:uppercase}
+  .grade .n{font-weight:700;color:var(--ink);font-size:10px}
+  .grade.hit{border-style:solid;border-color:var(--green-soft);color:var(--green-deep)}
+  .grade.hit .n{color:var(--green-deep)}
+
+  /* team toggle — mono chips */
+  .tt{display:flex;gap:7px;margin:12px 18px 0;align-items:center}
+  .tt button{border:1px solid var(--hair);background:var(--panel);padding:5px 15px;border-radius:18px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink3);cursor:pointer;font-weight:700}
+  .tt button.on{background:var(--ink);color:var(--cream);border-color:var(--ink)}
+  .tt .form{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink2);font-weight:700;letter-spacing:.06em}
+
+  /* ====== WARM PITCH — cream-sage, harmonized ====== */
+  .pitchwrap{margin:13px 18px 0;border-radius:16px;overflow:hidden;position:relative;
+    box-shadow:inset 0 0 0 1px rgba(94,84,52,.16),0 6px 16px rgba(60,46,18,.10)}
+  .pitch{position:relative;width:100%;aspect-ratio:.72;
+    background:repeating-linear-gradient(0deg,var(--pitch-a) 0 9.09%,var(--pitch-b) 9.09% 18.18%)}
+  .pitch::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;
+    background-image:radial-gradient(rgba(94,84,52,.06) 1px,transparent 1px);background-size:5px 5px}
+  /* a thin soccer-maroon seam at the top edge — the only sport accent */
+  .pitch::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;
+    background:linear-gradient(90deg,transparent,var(--maroon) 18%,var(--maroon) 82%,transparent);opacity:.55;z-index:5}
+  .mk{position:absolute;border:1.25px solid var(--pitch-line)}
+  .mk.frame{inset:3.5%;border-radius:3px}
+  .mk.center{left:3.5%;right:3.5%;top:50%;height:0;border-width:1.25px 0 0 0}
+  .mk.circle{left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}
+  .mk.spot{left:50%;top:50%;width:4px;height:4px;border-radius:50%;background:var(--pitch-line);transform:translate(-50%,-50%);border:0}
+  .mk.boxT{left:27%;right:27%;top:3.5%;height:11%;border-top:0}
+  .mk.boxB{left:27%;right:27%;bottom:3.5%;height:11%;border-bottom:0}
+  .mk.sixT{left:38%;right:38%;top:3.5%;height:5%;border-top:0}
+  .mk.sixB{left:38%;right:38%;bottom:3.5%;height:5%;border-bottom:0}
+  .fieldtag{position:absolute;top:9px;left:13px;font-family:var(--mono);font-size:9px;letter-spacing:.12em;
+    color:var(--ink3);text-transform:uppercase;z-index:5}
+  .attacking{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-family:var(--mono);
+    font-size:8px;letter-spacing:.18em;color:var(--ink4);text-transform:uppercase;z-index:5}
+
+  /* PLAYER — warm disc */
+  .player{position:absolute;transform:translate(-50%,-50%);width:72px;display:flex;flex-direction:column;
+    align-items:center;gap:3px;cursor:pointer;z-index:3}
+  .disc{width:34px;height:34px;border-radius:50%;background:var(--chip);border:1.5px solid var(--hair);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:13px;
+    color:var(--ink);box-shadow:0 3px 7px rgba(60,46,18,.22);transition:transform .15s,box-shadow .15s}
+  .pname{font-size:10.5px;font-weight:700;color:var(--ink);line-height:1.05;text-align:center;
+    letter-spacing:-.01em;max-width:76px;text-shadow:0 1px 0 rgba(255,255,255,.4)}
+  .ppos{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase}
+  /* projected/contested: dashed disc reads "not locked yet" */
+  .state-projected .disc,.state-contested .disc{border-style:dashed;background:rgba(248,243,233,.95)}
+  /* confirmed: solid filled, ink ring — "on the sheet" */
+  .state-confirmed .disc{background:var(--ink);border-style:solid;border-color:var(--ink);color:var(--gold-soft)}
+
+  /* the CONTESTED slot — the dramatic centerpiece, gold/amber within cream */
+  .player.contested .disc{border-color:var(--amber);border-style:solid;background:var(--amber-soft);color:var(--amber-deep);
+    box-shadow:0 0 0 3px rgba(201,119,42,.26),0 3px 7px rgba(60,46,18,.3)}
+  .player.contested .pname{color:var(--amber-deep);font-weight:800}
+  .player.contested .ppos{color:var(--amber)}
+  .player.contested .flag{position:absolute;top:-8px;right:6px;background:var(--amber);color:#fff;font-family:var(--mono);
+    font-size:8px;font-weight:700;padding:1px 5px;border-radius:6px;letter-spacing:.02em;z-index:4}
+  .state-contested .player:not(.contested){opacity:.38}
+  .player.contested{z-index:4}
+  .state-contested .player.contested .disc{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(201,119,42,.26),0 3px 7px rgba(60,46,18,.3)}
+    50%{box-shadow:0 0 0 8px rgba(201,119,42,.10),0 3px 7px rgba(60,46,18,.3)}}
+
+  /* source / self-grade credit strip */
+  .credit{margin:11px 18px 0;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;
+    color:var(--ink3);letter-spacing:.02em;flex-wrap:wrap;line-height:1.5}
+  .credit .src{color:var(--ink2)}
+  .credit .agree{color:var(--gold-deep);font-weight:700}
+
+  /* ====== THE READ — Gary's voice. Gold lives here. ====== */
+  .read{margin:14px 18px 18px;background:var(--panel);border:1px solid var(--hair);border-radius:14px;overflow:hidden}
+  .read .top{display:flex;align-items:center;gap:8px;padding:12px 16px 10px;border-bottom:1px solid var(--hair2)}
+  .read .byline{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--gold);font-weight:700;text-transform:uppercase}
+  .read .take{margin-left:auto;font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;color:var(--gold-deep);font-weight:700}
+  .rlist{padding:8px 16px 4px}
+  .rline{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--hair2);font-size:13px;line-height:1.42;color:var(--ink2)}
+  .rline:first-child{border-top:0}
+  .rline .k{flex:0 0 auto;width:6px;height:6px;border-radius:50%;margin-top:6px;background:var(--gold)}
+  .rline.hot .k{background:var(--green)} .rline.warn .k{background:var(--amber)} .rline.cold .k{background:var(--maroon)}
+  .rline b{color:var(--ink);font-weight:700}
+  .rline .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+  .hedge{margin:2px 16px 12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;color:var(--ink3);
+    border-top:1px dotted var(--hair);padding-top:9px;display:flex;align-items:center;gap:7px;line-height:1.5}
+
+  /* the gold PICK CHIP — Gary's one key affordance (grey odds, pick-card grammar) */
+  .pickchip{margin:0 16px 14px;display:flex;align-items:center;gap:0;background:var(--ink);border-radius:11px;
+    overflow:hidden;box-shadow:0 4px 12px rgba(34,28,21,.22)}
+  .pickchip .lead{flex:1;padding:11px 14px;display:flex;flex-direction:column;gap:2px}
+  .pickchip .ll{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--gold-soft);text-transform:uppercase;opacity:.8}
+  .pickchip .lp{font-size:13.5px;font-weight:800;color:var(--cream);letter-spacing:-.01em}
+  .pickchip .odds{font-family:var(--mono);font-size:13px;font-weight:700;color:#B8AC93;padding:0 16px 0 8px}
+  .pickchip .go{align-self:stretch;display:flex;align-items:center;padding:0 15px;
+    background:linear-gradient(180deg,#C7943A,#A8791F);color:#2A2010;font-family:var(--mono);font-size:14px;font-weight:800}
+
+  /* contested pull-quote — gold rule sidebar */
+  .pullquote{margin:0 16px 14px;border-left:2px solid var(--gold);padding:4px 0 4px 13px;background:linear-gradient(90deg,rgba(181,134,47,.05),transparent)}
+  .pullquote .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--gold-deep);font-weight:700;
+    text-transform:uppercase;margin-bottom:5px}
+  .pullquote p{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink)}
+  .pullquote p b{font-weight:800}
+  .pullquote .tap{display:block;margin-top:8px;font-family:var(--mono);font-size:9px;letter-spacing:.04em;color:var(--gold-deep);font-weight:700}
+
+  /* ====== BOTTOM SHEET ====== */
+  .scrim{position:fixed;inset:0;background:rgba(28,22,10,.42);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,103%);width:430px;max-width:100%;
+    background:var(--cream);border-radius:22px 22px 0 0;padding:0 0 26px;z-index:41;
+    transition:transform .26s cubic-bezier(.3,.9,.3,1);box-shadow:0 -12px 44px rgba(40,28,10,.32);
+    border-top:1px solid rgba(120,100,60,.22);max-height:88vh;overflow:auto}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:36px;height:4px;border-radius:2px;background:#cdbfa3;margin:8px auto 0}
+  .sh-mast{padding:12px 20px 0;display:flex;align-items:baseline;justify-content:space-between}
+  .sh-kick{font-family:var(--mono);font-size:9px;letter-spacing:.20em;color:var(--ink3);text-transform:uppercase}
+  .sh-kick.gold{color:var(--gold-deep);font-weight:700}
+  .sh-head{padding:14px 20px 0;display:flex;align-items:center;gap:13px}
+  .sh-num{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--gold-soft);font-family:var(--mono);
+    font-weight:700;display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 auto}
+  .sh-nm{font-size:20px;font-weight:800;letter-spacing:-.01em}
+  .sh-sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--ink3);margin-top:3px;text-transform:uppercase}
+  .sh-tag{margin-left:auto;font-family:var(--mono);font-size:9px;font-weight:700;padding:5px 9px;border-radius:7px;
+    letter-spacing:.06em;text-transform:uppercase}
+  .sh-tag.contested{background:var(--amber-soft);color:var(--amber-deep)}
+  .sh-tag.confirmed{background:var(--green-soft);color:var(--green-deep)}
+  .sh-sec{padding:0 20px;margin-top:17px}
+  .sh-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--gold);font-weight:700;
+    text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+  .sh-lbl::after{content:"";flex:1;height:1px;background:var(--hair2)}
+
+  /* source split tally */
+  .tally{display:flex;border:1px solid var(--hair);border-radius:10px;overflow:hidden}
+  .tally .col{flex:1;padding:11px 13px}
+  .tally .col.bench{border-left:1px solid var(--hair)}
+  .tally .cnt{font-family:var(--mono);font-size:23px;font-weight:700;color:var(--ink);line-height:1}
+  .tally .cnt .of{font-size:12px;color:var(--ink4)}
+  .tally .col.start .cnt{color:var(--gold-deep)}
+  .tally .verdict{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--ink3);margin-top:5px;text-transform:uppercase}
+  .tally .names{margin-top:8px;font-size:11.5px;color:var(--ink2);line-height:1.4;font-weight:600}
+  .agree-row{margin-top:10px;display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:9px;
+    color:var(--ink3);letter-spacing:.04em;text-transform:uppercase}
+  .agree-row .bar{flex:1;height:4px;background:var(--hair2);border-radius:2px;overflow:hidden}
+  .agree-row .bar span{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-line))}
+  .agree-row .pct{color:var(--gold-deep);font-weight:700;font-size:10px}
+
+  .dossier{font-size:13.5px;line-height:1.5;color:var(--ink2)}
+  .dossier b{color:var(--ink);font-weight:700}
+  .dossier .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+  .branch{margin-top:11px;border-top:1px solid var(--hair2)}
+  .branch .b{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--hair2)}
+  .branch .b .if{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.05em;color:var(--ink3);
+    flex:0 0 66px;text-transform:uppercase;padding-top:1px}
+  .branch .b.starts .if{color:var(--gold-deep)}
+  .branch .b .txt{font-size:12.5px;line-height:1.4;color:var(--ink2)}
+  .branch .b .txt b{color:var(--ink)}
+  .branch .b .txt .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+  .watch{margin:15px 20px 0;font-family:var(--mono);font-size:10px;letter-spacing:.03em;color:var(--gold-deep);
+    background:var(--gold-wash);border:1px solid var(--gold-line);border-radius:9px;padding:10px 12px;line-height:1.5}
+  .ledger{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--hair);border-radius:10px;overflow:hidden}
+  .ledger .cell{padding:12px 8px;text-align:center;border-left:1px solid var(--hair2)}
+  .ledger .cell:first-child{border-left:0}
+  .ledger .v{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--ink);line-height:1}
+  .ledger .l{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--ink3);margin-top:6px;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>g05 · Warm Pitch + Matte Capsule.</b> Leads with Gary's Home-page <span class="k">matte capsule</span> —
+  one gold active pill: <b>Projected → Contested → Confirmed</b>. Below it a warm cream-sage pitch (harmonized
+  with the cream chrome, not cartoon green); players are warm discs. <span class="k">Gold</span> = Gary's voice +
+  the pick chip + branded seams. Tap any disc for the source-split dossier. Toggle <b>QAT/CAN</b>.
+</div>
+
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">GARY · XI</span></div>
+
+  <div class="nav">
+    <span class="chev">‹</span>
+    <span class="ttl">Starting XI</span>
+    <span class="share">↗</span>
+  </div>
+
+  <div class="mhead">
+    <div class="eyebrow">World Cup · Group B</div>
+    <div class="teams">Canada <span class="v">v</span> Qatar</div>
+    <div class="meta">BC Place · Vancouver · 6:00 PM ET</div>
+  </div>
+
+  <!-- THE MATTE CAPSULE — lead element -->
+  <div class="capsule">
+    <button data-state="projected" class="on">Projected<span class="sub">all day · ~6h to KO</span></button>
+    <button data-state="contested">Contested<span class="sub">the debated slot</span></button>
+    <button data-state="confirmed">Confirmed<span class="sub">~38m to KO</span></button>
+  </div>
+
+  <div class="badgerow">
+    <span id="stamp"></span>
+    <span class="grade" id="grade"></span>
+  </div>
+
+  <div class="tt">
+    <button data-team="QAT" class="on">QATAR</button>
+    <button data-team="CAN">CANADA</button>
+    <span class="form" id="formlbl">4-3-3</span>
+  </div>
+
+  <div class="pitchwrap">
+    <div class="pitch" id="pitch">
+      <div class="mk frame"></div>
+      <div class="mk center"></div>
+      <div class="mk circle"></div>
+      <div class="mk spot"></div>
+      <div class="mk boxT"></div><div class="mk boxB"></div>
+      <div class="mk sixT"></div><div class="mk sixB"></div>
+      <div class="fieldtag" id="fieldtag">QATAR · 4-3-3</div>
+      <div class="attacking">Attacking ↑</div>
+    </div>
+  </div>
+
+  <div class="credit" id="credit"></div>
+
+  <div class="read" id="read"></div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- data ------------------------------------------------------------ */
+const TEAMS = {
+  QAT:{
+    name:'Qatar', formation:'4-3-3', agree:82,
+    lines:[
+      {y:88, men:[{n:1,nm:'Barsham',pos:'GK'}]},
+      {y:68, men:[{n:2,nm:'Pedro Miguel',pos:'RB'},{n:15,nm:'Khoukhi',pos:'CB'},{n:5,nm:'Hassan',pos:'CB'},{n:3,nm:'Homam',pos:'LB'}]},
+      {y:46, men:[{n:12,nm:'Madibo',pos:'CM'},{n:8,nm:'Hatim',pos:'CM'},{n:23,nm:'Boudiaf',pos:'CM'}]},
+      {y:23, men:[{n:11,nm:'Afif',pos:'LW'},{n:19,nm:'Almoez Ali',pos:'ST',contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW'}]},
+    ],
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    projRead:[
+      {t:'<b>Front three leans Qatar.</b> Afif + Ali + Edmilson reads as a side that wants the ball — points toward Qatar team-total OVER and anytime-scorer markets.',cls:'warn'},
+      {t:'<b>Must-win posture.</b> Drew the opener, 0-1-0 in Group B — history points to a fuller-strength, forward-leaning eleven.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed: Ali starts.</b> Qatar\'s leading scorer is on the sheet — the over and the anytime-scorer ticket are live, not hedged.',cls:'hot'},
+      {t:'<b>4-3-3, front three intact.</b> A genuine go-forward selection vs Canada — leans the match OVER and Qatar\'s side of the total.',cls:'hot'},
+    ],
+    hedgeLine:'If this XI holds: front three leans Qatar team-total OVER — firms up at confirmed lineup.',
+    pick:{ proj:null,
+      conf:{lbl:'Gary\'s play · live', play:'Ali anytime scorer', odds:'+180'} },
+  },
+  CAN:{
+    name:'Canada', formation:'4-3-3', agree:91,
+    lines:[
+      {y:88, men:[{n:16,nm:'Crépeau',pos:'GK'}]},
+      {y:68, men:[{n:2,nm:'Johnston',pos:'RB'},{n:4,nm:'Vitória',pos:'CB'},{n:5,nm:'Cornelius',pos:'CB'},{n:3,nm:'Adekugbe',pos:'LB'}]},
+      {y:46, men:[{n:7,nm:'Eustáquio',pos:'CM'},{n:13,nm:'Koné',pos:'CM'},{n:11,nm:'Buchanan',pos:'CM'}]},
+      {y:23, men:[{n:20,nm:'David',pos:'ST'},{n:17,nm:'Larin',pos:'ST'},{n:19,nm:'Davies',pos:'LW'}]},
+    ],
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    projRead:[
+      {t:'<b>Settled side (91% agree).</b> The desks barely disagree — the projected XI is near-locked, so the reads carry weight even pre-confirmation.',cls:'hot'},
+      {t:'<b>David + Davies up top.</b> Canada\'s pace leans the match toward Canada\'s side of the spread.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed as projected.</b> No surprises — the pre-confirmation reads stand.',cls:'hot'},
+      {t:'<b>Full-strength attacking line.</b> David / Larin / Davies all start — Canada to score / -1.5 markets in play.',cls:'hot'},
+    ],
+    hedgeLine:'If this XI holds: David + Davies pace leans Canada\'s side of the spread — firms up at confirmed lineup.',
+    pick:{ proj:null,
+      conf:{lbl:'Gary\'s play · live', play:'David anytime scorer', odds:'+120'} },
+  },
+};
+
+/* per-player dossier */
+const READS = {
+  'Almoez Ali':{
+    sub:'Qatar · Striker · #19',
+    contested:{
+      start:3, bench:2, of:5, agree:82,
+      startNames:'The Athletic · ESPN · Sports Mole',
+      benchNames:'RotoWire · bet365',
+      dossier:'Qatar\'s all-time top scorer — <b>12 goals in qualifying</b>. The whole match read pivots on this one slot.',
+      starts:'Ali anytime scorer <span class="odds">+180</span>; Qatar team-total OVER firms up live.',
+      benched:'Fade Qatar\'s over; Canada clean sheet <span class="odds">+165</span> gains.',
+      watch:'Watch the team sheet at ~T-40 before betting this game.'
+    },
+    stats:[['12','QUAL GOALS'],['60','CAREER'],['1','GP THIS WC']],
+  },
+  'David':{ sub:'Canada · Striker · #20',
+    dossier:'Canada\'s focal point. With a settled XI around him, <b>David anytime scorer <span class="odds">+120</span></b> and Canada team-total OVER are the cleaner reads.',
+    stats:[['2','WC GOALS'],['.61','xG/90'],['2','GP THIS WC']] },
+};
+
+/* ---- render ---------------------------------------------------------- */
+let state='projected', team='QAT';
+
+function render(){
+  const T=TEAMS[team];
+  const isConf = state==='confirmed';
+  document.getElementById('formlbl').textContent=T.formation;
+  document.getElementById('fieldtag').innerHTML = `${T.name.toUpperCase()} · ${T.formation}`;
+
+  // state stamp + self-grade chip
+  const stampCls = isConf ? 'confirmed' : (state==='contested' ? 'contested' : 'projected');
+  const stampTxt = isConf ? 'Confirmed XI' : (state==='contested' ? 'Contested slot' : 'Projected XI');
+  const koTxt = isConf ? '· lineups in · 38m to KO'
+              : (state==='contested' ? '· one slot debated' : `· ${T.agree}% source agreement`);
+  document.getElementById('stamp').outerHTML =
+    `<span class="stamp ${stampCls}" id="stamp"><span class="dot"></span>${stampTxt}<span class="ko">${koTxt}</span></span>`;
+  const grade=document.getElementById('grade');
+  grade.className = isConf ? 'grade hit' : 'grade';
+  grade.innerHTML = isConf ? `Projection hit <span class="n">10/11</span>` : `Tourn. avg <span class="n">9/11</span>`;
+
+  // pitch
+  const p=document.getElementById('pitch');
+  p.className='pitch state-'+state;
+  [...p.querySelectorAll('.player')].forEach(e=>e.remove());
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      const x=(i+1)/(n+1)*100;
+      const contested = m.contested && !isConf;
+      const el=document.createElement('div');
+      el.className='player'+(contested?' contested':'');
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+      el.innerHTML=`${contested?'<span class="flag">3/5</span>':''}
+        <div class="disc">${m.n}</div>
+        <div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,contested);
+      p.appendChild(el);
+    });
+  });
+
+  // credit / source strip
+  document.getElementById('credit').innerHTML = isConf
+    ? `<span class="src">Sourced from the official team sheet</span><span>· cross-checked vs BDL + API-Football</span>`
+    : `<span>Projected from <span class="src">${T.sources.join(' · ')}</span></span><span class="agree">${T.agree}% agree</span>`;
+
+  // the read column
+  let html = `<div class="top"><span class="byline">Gary\'s Take · ${isConf?'Confirmed':'Projected'}</span>
+    <span class="take">${isConf?'reads live ›':'reads soft ›'}</span></div><div class="rlist">`;
+  const reads = isConf ? T.confRead : T.projRead;
+  reads.forEach(r=>{ html+=`<div class="rline ${r.cls}"><span class="k"></span><span>${r.t}</span></div>`; });
+  html += `</div>`;
+
+  if(!isConf){
+    html += `<div class="hedge">◴ ${T.hedgeLine}</div>`;
+  }
+
+  // contested pull-quote (QAT only)
+  if(state==='contested' && team==='QAT'){
+    html += `<div class="pullquote"><div class="lbl">The contested slot · Almoez Ali</div>
+      <p>3 of 5 outlets start Qatar\'s top scorer; 2 bench him. Qatar\'s entire over / team-total read <b>swings on this one name</b> — the question to settle before you bet this match.</p>
+      <span class="tap">Tap his disc for the source split →</span></div>`;
+  }
+
+  // the gold PICK CHIP — only fires at confirmed (Gary's one key affordance)
+  if(isConf && T.pick.conf){
+    const pk=T.pick.conf;
+    html += `<div class="pickchip">
+      <div class="lead"><span class="ll">${pk.lbl}</span><span class="lp">${pk.play}</span></div>
+      <span class="odds">${pk.odds}</span><span class="go">›</span></div>`;
+  }
+
+  document.getElementById('read').innerHTML=html;
+}
+
+/* ---- bottom sheet ---------------------------------------------------- */
+function openSheet(name,pos,num,contested){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const tag = contested
+    ? `<span class="sh-tag contested">Contested</span>`
+    : (state==='confirmed' ? `<span class="sh-tag confirmed">Confirmed</span>` : '');
+
+  let body=`<div class="grab"></div>
+    <div class="sh-mast"><span class="sh-kick gold">Player Dossier</span><span class="sh-kick">${team}</span></div>
+    <div class="sh-head">
+      <div class="sh-num">${num}</div>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${tag}
+    </div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl">Source split · ${c.of} outlets</div>
+      <div class="tally">
+        <div class="col start"><div class="cnt">${c.start}<span class="of">/${c.of}</span></div>
+          <div class="verdict">Start</div><div class="names">${c.startNames}</div></div>
+        <div class="col bench"><div class="cnt">${c.bench}<span class="of">/${c.of}</span></div>
+          <div class="verdict">Bench</div><div class="names">${c.benchNames}</div></div>
+      </div>
+      <div class="agree-row"><span>Source agreement</span>
+        <span class="bar"><span style="width:${c.agree}%"></span></span><span class="pct">${c.agree}%</span></div>
+    </div>
+    <div class="sh-sec"><div class="sh-lbl">Why it matters</div>
+      <p class="dossier">${c.dossier}</p>
+      <div class="branch">
+        <div class="b starts"><span class="if">If starts</span><span class="txt">${c.starts}</span></div>
+        <div class="b"><span class="if">If benched</span><span class="txt">${c.benched}</span></div>
+      </div>
+    </div>
+    <div class="watch">◷ ${c.watch}</div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">The read</div><p class="dossier">${r.dossier}</p></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="sh-lbl">The read</div>
+      <p class="dossier">Per-player notes attach here — recent form, the matchup vs the opposite number, and any prop angle. <em>(Mock: full dossiers wired for Ali &amp; David.)</em></p></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">Form</div><div class="ledger">`;
+    r.stats.forEach(s=>{ body+=`<div class="cell"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring ---------------------------------------------------------- */
+document.querySelectorAll('.capsule button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.capsule button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state;
+  // contested example lives on QAT; settle to QAT to show the drama
+  if(state==='contested' && team!=='QAT'){
+    team='QAT';
+    document.querySelectorAll('.tt button').forEach(x=>x.classList.toggle('on',x.dataset.team==='QAT'));
+  }
+  render();
+});
+document.querySelectorAll('.tt button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tt button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){ // Canada has no contested slot
+    state='projected';
+    document.querySelectorAll('.capsule button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>

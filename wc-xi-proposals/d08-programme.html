@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — d08 Matchday Programme</title>
+<!--
+  d08 — MATCHDAY PROGRAMME (PRINT)
+  Ink-on-paper magazine. Big serif headline, editorial columns, hero pitch illustration,
+  pull-quote for the contested debate. Gold = the accent rule. The fan reads it like a programme.
+  Same data + 3 states (PROJECTED -> CONTESTED -> CONFIRMED) + self-grade chip + tap-player bottom sheet.
+  System serif/sans stand in for GaryFonts; numerals in mono per the Quant Terminal rule.
+-->
+<style>
+  :root{
+    /* paper + ink */
+    --paper:#F3ECDC; --paper2:#ECE2CE; --paperEdge:#E2D6BC;
+    --ink:#1C1813; --ink2:#46402F; --ink3:#7B7058; --hair:#C9BC9C;
+    --rule:#1C1813;
+    /* gold accent rule */
+    --gold:#9A6E1E; --gold-deep:#704E0F; --gold-soft:#E7D2A0; --gold-wash:#F0E2BE;
+    /* editorial signal inks */
+    --red:#9B2D24; --red-wash:#EBD4C8;
+    --green:#2D5E3C; --green-wash:#D6E0C7;
+    --amber:#A8631C; --amber-wash:#F0DCB6;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Hoefler Text",Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:var(--serif);color:var(--ink);
+    background:
+      radial-gradient(120% 80% at 50% -10%, #5a5142 0%, #46402f 38%, #2c281e 100%);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 12px 60px}
+
+  .legend{max-width:430px;width:100%;font-family:var(--sans);font-size:11.5px;color:#e8ddc2;line-height:1.55;
+    background:rgba(0,0,0,.22);border:1px solid rgba(231,210,160,.22);border-radius:11px;padding:10px 13px}
+  .legend b{color:#f3e6c6}
+
+  /* ---- the programme (phone frame, like a folded booklet) ---- */
+  .prog{width:430px;max-width:100%;background:var(--paper);border-radius:6px;overflow:hidden;position:relative;
+    box-shadow:0 2px 0 rgba(0,0,0,.18), 0 24px 60px rgba(0,0,0,.5), inset 0 0 0 1px var(--paperEdge);
+    /* paper grain */
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(0,0,0,.020) 0 1px, transparent 1px),
+      radial-gradient(circle at 62% 38%, rgba(0,0,0,.018) 0 1px, transparent 1px),
+      radial-gradient(circle at 84% 74%, rgba(0,0,0,.020) 0 1px, transparent 1px),
+      radial-gradient(circle at 38% 88%, rgba(0,0,0,.015) 0 1px, transparent 1px);
+    background-size:7px 7px, 9px 9px, 8px 8px, 11px 11px;}
+  /* spine shadow down the left, like a stapled fold */
+  .prog::before{content:"";position:absolute;top:0;bottom:0;left:0;width:18px;z-index:6;pointer-events:none;
+    background:linear-gradient(90deg, rgba(0,0,0,.12), rgba(0,0,0,0));}
+
+  /* status bar */
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 18px 0 24px;
+    font-family:var(--mono);font-size:11px;color:var(--ink2)}
+  .status .g{font-family:var(--serif);font-weight:700;letter-spacing:.02em}
+
+  /* masthead */
+  .mast{padding:4px 22px 0 24px}
+  .mastline{display:flex;align-items:center;gap:9px;border-bottom:2px solid var(--rule);padding-bottom:7px}
+  .nav-back{font-family:var(--serif);font-size:22px;line-height:1;color:var(--ink);text-decoration:none;margin-top:-2px}
+  .mast-title{font-family:var(--mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--ink2);font-weight:700}
+  .mast-share{margin-left:auto;font-size:15px;color:var(--ink3);cursor:pointer}
+  .folio{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:9px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);padding:5px 0 0}
+  .folio .ed{color:var(--gold-deep);font-weight:700}
+
+  /* dateline / kicker */
+  .kicker{padding:11px 24px 0}
+  .kicker .tag{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--paper);background:var(--ink);padding:3px 8px 2px;border-radius:1px;vertical-align:middle}
+  .kicker .where{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);
+    margin-left:8px}
+
+  /* headline */
+  .head{padding:7px 24px 0}
+  .head h1{margin:0;font-weight:800;letter-spacing:-.018em;line-height:.98;font-size:33px;
+    /* faux ink press: very dark with a hair of warmth */
+    color:#171309;text-shadow:0 1px 0 rgba(255,255,255,.18)}
+  .head h1 .em{font-style:italic;font-weight:700}
+  .head h1 .gold{color:var(--gold-deep)}
+  .deck{margin:9px 0 0;font-family:var(--sans);font-size:12.5px;line-height:1.5;color:var(--ink2);max-width:380px}
+  .deck .by{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-deep);
+    font-weight:700;display:block;margin-bottom:5px}
+
+  /* gold accent rule (the brand rule) */
+  .goldrule{height:3px;margin:12px 24px 0;background:
+    linear-gradient(90deg,var(--gold) 0%, var(--gold-soft) 50%, var(--gold) 100%);border-radius:2px;position:relative}
+  .goldrule::after{content:"";position:absolute;left:0;right:0;top:5px;height:1px;background:var(--rule);opacity:.5}
+
+  /* state stamp (top-right, like a press stamp) */
+  .stamp{position:absolute;top:84px;right:18px;z-index:5;transform:rotate(-7deg);
+    font-family:var(--mono);text-align:center;padding:6px 9px 5px;border:2px solid;border-radius:3px;
+    line-height:1;background:rgba(243,236,220,.6)}
+  .stamp .s1{font-size:13px;font-weight:700;letter-spacing:.08em;display:block}
+  .stamp .s2{font-size:7.5px;letter-spacing:.1em;margin-top:3px;display:block;opacity:.85}
+  .stamp.projected{color:var(--amber);border-color:var(--amber)}
+  .stamp.confirmed{color:var(--green);border-color:var(--green);transform:rotate(5deg)}
+
+  /* edition switcher = "issue" tabs styled like programme sections */
+  .editions{display:flex;margin:13px 24px 0;border:1px solid var(--ink);border-radius:2px;overflow:hidden;
+    background:var(--paper2)}
+  .editions button{flex:1;border:0;border-right:1px solid var(--hair);background:transparent;padding:8px 4px 7px;
+    font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--ink2);font-weight:700;cursor:pointer;
+    text-transform:uppercase;transition:.14s;line-height:1.3}
+  .editions button:last-child{border-right:0}
+  .editions button .sub{display:block;font-size:7.5px;font-weight:500;color:var(--ink3);margin-top:2px;letter-spacing:.04em;text-transform:none;font-family:var(--sans)}
+  .editions button.on{background:var(--ink);color:var(--gold-soft)}
+  .editions button.on .sub{color:rgba(231,210,160,.7)}
+
+  /* team toggle — small caps line */
+  .lineupbar{display:flex;align-items:baseline;gap:0;margin:13px 24px 0;border-bottom:1px solid var(--ink);padding-bottom:5px}
+  .lineupbar .ttl{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink3)}
+  .teamtabs{margin-left:auto;display:flex;gap:4px}
+  .teamtabs button{border:1px solid var(--hair);background:transparent;padding:3px 11px 2px;font-family:var(--mono);
+    font-size:9.5px;letter-spacing:.06em;color:var(--ink2);cursor:pointer;font-weight:700;border-radius:1px}
+  .teamtabs button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .form-no{margin-left:9px;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--gold-deep)}
+
+  /* ---- hero pitch illustration (engraved / line-art on paper) ---- */
+  .plate{margin:12px 24px 0;border:1.5px solid var(--ink);position:relative;background:var(--paper);
+    box-shadow:inset 0 0 0 4px var(--paper), inset 0 0 0 5px var(--hair)}
+  .plate .cap{position:absolute;top:-1px;left:-1px;font-family:var(--mono);font-size:8px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--paper);background:var(--ink);padding:3px 7px 2px;z-index:4}
+  .pitch{position:relative;width:100%;aspect-ratio:.72;overflow:hidden;
+    /* faint engraved turf hatching */
+    background:
+      repeating-linear-gradient(0deg, rgba(28,24,19,.035) 0 2px, transparent 2px 13px),
+      var(--paper);}
+  .pitch svg{position:absolute;inset:0;width:100%;height:100%}
+  .pl-line{stroke:var(--ink);stroke-width:1;fill:none;opacity:.55}
+
+  /* players = engraved tokens */
+  .player{position:absolute;transform:translate(-50%,-50%);width:64px;display:flex;flex-direction:column;
+    align-items:center;gap:2px;cursor:pointer;z-index:3}
+  .tok{width:30px;height:30px;border-radius:50%;background:var(--paper);border:1.5px solid var(--ink);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:12px;
+    color:var(--ink);box-shadow:2px 2px 0 rgba(28,24,19,.85);transition:.14s}
+  .pname{font-family:var(--serif);font-size:10px;font-weight:700;color:var(--ink);line-height:1;text-align:center;
+    text-shadow:0 1px 0 rgba(243,236,220,.9)}
+  .ppos{font-family:var(--mono);font-size:7px;letter-spacing:.06em;color:var(--ink3)}
+
+  /* projected look = engraving stipple (dashed outline) */
+  .state-projected .tok, .state-contested .tok{border-style:dashed}
+  /* contested slot = circled in gold/red editor's pen */
+  .player.contested{z-index:5}
+  .player.contested .tok{border:2px solid var(--red);background:var(--red-wash);box-shadow:2px 2px 0 var(--red)}
+  .player.contested .penring{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:48px;height:48px;
+    border:2px solid var(--gold-deep);border-radius:50%;opacity:.9;pointer-events:none}
+  .player.contested .pennote{position:absolute;top:-22px;left:50%;transform:translateX(-50%) rotate(-4deg);
+    font-family:var(--serif);font-style:italic;font-size:9px;font-weight:700;color:var(--red);white-space:nowrap;
+    text-shadow:0 1px 0 rgba(243,236,220,.9)}
+  .state-contested .player:not(.contested){opacity:.34}
+  .player.contested.pulse .penring{animation:penpulse 1.5s ease-in-out infinite}
+  @keyframes penpulse{0%,100%{box-shadow:0 0 0 0 rgba(154,110,30,.0)}50%{box-shadow:0 0 0 5px rgba(154,110,30,.16)}}
+
+  /* confirmed: token inks solid + a checkmark stamp on the slot */
+  .player.resolved .tok{background:var(--green-wash);border:2px solid var(--green);box-shadow:2px 2px 0 var(--green)}
+  .player.resolved .pennote{color:var(--green);content:""}
+
+  /* byline strip under the plate: sourcing + self-grade chip */
+  .sourcing{margin:9px 24px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:9px;letter-spacing:.02em;color:var(--ink3);text-transform:uppercase}
+  .sourcing .who{color:var(--ink2)}
+  .sourcing .agree{color:var(--gold-deep);font-weight:700}
+  .gradechip{margin-left:auto;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--ink);
+    background:var(--paper2);padding:3px 8px 2px;font-weight:700;color:var(--ink);border-radius:1px}
+  .gradechip .tick{color:var(--green)}
+  .gradechip.proj{color:var(--ink2)}
+
+  /* ---- editorial body: drop-cap column + the read ---- */
+  .body{padding:13px 24px 6px;position:relative}
+  /* center column rule like a magazine gutter */
+  .body .colrule{position:absolute;left:50%;top:14px;bottom:18px;width:1px;background:var(--hair);display:none}
+
+  .lede{font-family:var(--sans);font-size:0}/* reset */
+  .report{font-family:var(--serif);font-size:13.5px;line-height:1.5;color:var(--ink);text-align:justify;
+    hyphens:auto}
+  .report .dropcap{float:left;font-family:var(--serif);font-weight:800;font-size:50px;line-height:.78;
+    padding:4px 8px 0 0;color:var(--gold-deep)}
+  .report b{font-weight:800}
+  .report .ink-num{font-family:var(--mono);font-weight:700;font-size:12.5px}
+
+  /* THE READ — set as a boxed editorial sidebar */
+  .readbox{margin:13px 0 2px;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:11px 0 12px}
+  .readbox .eyebrow{font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--gold-deep);font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+  .readbox .eyebrow .bug{font-family:var(--serif);font-style:italic;font-weight:700;font-size:11px;color:var(--ink);letter-spacing:0;text-transform:none}
+  .ritem{display:flex;gap:10px;padding:6px 0;font-family:var(--serif);font-size:13px;line-height:1.42;color:var(--ink2)}
+  .ritem+.ritem{border-top:1px dotted var(--hair)}
+  .ritem .mark{flex:0 0 auto;font-family:var(--mono);font-weight:700;font-size:11px;width:14px;text-align:center;
+    color:var(--gold-deep);margin-top:1px}
+  .ritem.hot .mark{color:var(--green)} .ritem.warn .mark{color:var(--amber)} .ritem.cold .mark{color:var(--red)}
+  .ritem b{color:var(--ink);font-weight:800}
+  .ritem .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+  .hedge{font-family:var(--mono);font-size:9px;letter-spacing:.04em;color:var(--ink3);margin-top:9px;text-transform:uppercase;
+    display:flex;align-items:center;gap:6px}
+  .hedge::before{content:"";width:14px;height:1px;background:var(--ink3)}
+
+  /* PULL QUOTE — the contested debate, big serif italic */
+  .pullquote{margin:14px 24px 2px;padding:14px 6px 12px;border-top:3px solid var(--gold);border-bottom:1px solid var(--ink);
+    position:relative}
+  .pullquote .mk{font-family:var(--serif);font-size:46px;line-height:.4;color:var(--gold);position:absolute;top:18px;left:-2px}
+  .pullquote q{display:block;font-family:var(--serif);font-style:italic;font-weight:700;font-size:19px;line-height:1.2;
+    color:var(--ink);padding-left:26px;quotes:none}
+  .pullquote q::before,.pullquote q::after{content:""}
+  .pullquote .attr{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-deep);
+    margin-top:9px;padding-left:26px;font-weight:700}
+  .pullquote .split{display:flex;margin-top:11px;height:18px;border:1px solid var(--ink);border-radius:1px;overflow:hidden;
+    font-family:var(--mono);font-size:8.5px;font-weight:700}
+  .pullquote .split .a{background:var(--green);color:var(--paper);display:flex;align-items:center;justify-content:center}
+  .pullquote .split .b{background:var(--amber);color:var(--paper);display:flex;align-items:center;justify-content:center}
+  .pullquote .readmore{font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:var(--gold-deep);margin-top:8px;
+    font-weight:700;text-transform:uppercase;cursor:pointer;padding-left:26px}
+
+  /* footer colophon */
+  .colophon{margin:16px 24px 18px;border-top:1px solid var(--hair);padding-top:8px;font-family:var(--mono);font-size:8px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);display:flex;justify-content:space-between;align-items:center}
+  .colophon .g{font-family:var(--serif);font-weight:700;letter-spacing:.02em;color:var(--ink2)}
+
+  /* ---- bottom sheet (a tucked-in programme card) ---- */
+  .scrim{position:fixed;inset:0;background:rgba(20,16,8,.5);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,103%);width:430px;max-width:100%;
+    background:var(--paper);border-radius:6px 6px 0 0;padding:8px 22px 26px;z-index:41;
+    transition:transform .26s cubic-bezier(.3,.9,.3,1);
+    box-shadow:0 -12px 44px rgba(20,14,4,.5);border-top:3px solid var(--gold);
+    background-image:
+      radial-gradient(circle at 22% 16%, rgba(0,0,0,.02) 0 1px, transparent 1px),
+      radial-gradient(circle at 70% 60%, rgba(0,0,0,.018) 0 1px, transparent 1px);
+    background-size:8px 8px, 10px 10px;}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:40px;height:4px;border-radius:2px;background:var(--hair);margin:6px auto 13px}
+  .sh-head{display:flex;align-items:center;gap:11px;border-bottom:2px solid var(--ink);padding-bottom:10px}
+  .sh-num{width:42px;height:42px;border-radius:50%;background:var(--paper);border:2px solid var(--ink);color:var(--ink);
+    font-family:var(--mono);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:16px;
+    box-shadow:2px 2px 0 rgba(28,24,19,.85)}
+  .sh-nm{font-family:var(--serif);font-size:21px;font-weight:800;letter-spacing:-.01em;line-height:1}
+  .sh-sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:3px}
+  .sh-status{margin-left:auto;font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.08em;padding:4px 8px 3px;
+    border:1px solid;border-radius:1px;text-transform:uppercase}
+  .sh-status.contested{color:var(--red);border-color:var(--red);background:var(--red-wash)}
+  .sh-status.confirmed{color:var(--green);border-color:var(--green);background:var(--green-wash)}
+  .sh-sec{margin-top:15px}
+  .sh-lbl{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-deep);
+    font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .sh-lbl::after{content:"";flex:1;height:1px;background:var(--hair)}
+  .splitbar{display:flex;height:30px;border:1.5px solid var(--ink);border-radius:1px;overflow:hidden;
+    font-family:var(--mono);font-size:9.5px;font-weight:700}
+  .splitbar .s1{background:var(--green);color:var(--paper);display:flex;align-items:center;justify-content:center;gap:5px}
+  .splitbar .s2{background:var(--amber);color:var(--paper);display:flex;align-items:center;justify-content:center;gap:5px}
+  .srclist{margin-top:9px;font-family:var(--mono);font-size:10px;color:var(--ink2);line-height:1.7;letter-spacing:.01em}
+  .srclist .y{color:var(--green);font-weight:700}
+  .srclist .n{color:var(--amber);font-weight:700}
+  .bet{font-family:var(--serif);font-size:13px;line-height:1.55;color:var(--ink2)}
+  .bet b{color:var(--ink);font-weight:800}
+  .bet .odds{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--ink)}
+  .stat{padding:10px 6px;text-align:center;border-right:1px solid var(--hair)}
+  .stat:last-child{border-right:0}
+  .stat .v{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--ink)}
+  .stat .l{font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>d08 — Matchday Programme (print).</b> An ink-on-paper issue of the same fixture. Flip the
+  <b>editions</b> (Projected → Contested → Confirmed) to watch the story firm up: the engraved XI, an editor's-pen
+  ring on the Almoez Ali slot, the pull-quote debate, and the read going from hedged prose to fired odds. Tap any
+  player token for the programme card.
+</div>
+
+<div class="prog" id="prog">
+  <div class="status"><span>9:41</span><span class="g">Gary</span></div>
+
+  <!-- masthead -->
+  <div class="mast">
+    <div class="mastline">
+      <a class="nav-back" href="javascript:void(0)">‹</a>
+      <span class="mast-title">The Matchday</span>
+      <span class="mast-share" onclick="alert('Share this issue')">⤴</span>
+    </div>
+    <div class="folio">
+      <span>No. 11 · Group Stage</span>
+      <span class="ed">Gary's Programme</span>
+      <span>FIFA World Cup 2026</span>
+    </div>
+  </div>
+
+  <!-- kicker -->
+  <div class="kicker">
+    <span class="tag">Group B</span>
+    <span class="where">BC Place · Vancouver · 6:00 PM ET</span>
+  </div>
+
+  <!-- headline -->
+  <div class="head">
+    <h1 id="headline"></h1>
+    <p class="deck"><span class="by">Match Preview — Canada v Qatar</span><span id="deck"></span></p>
+  </div>
+
+  <div class="goldrule"></div>
+
+  <!-- state stamp -->
+  <div id="stamp"></div>
+
+  <!-- editions switcher -->
+  <div class="editions">
+    <button data-state="projected" class="on">Early Edition<span class="sub">all day · ~6h to KO</span></button>
+    <button data-state="contested">The Debate<span class="sub">contested slot</span></button>
+    <button data-state="confirmed">Final Sheet<span class="sub">~38m to KO</span></button>
+  </div>
+
+  <!-- lineup bar -->
+  <div class="lineupbar">
+    <span class="ttl">Team Sheet</span>
+    <div class="teamtabs">
+      <button data-team="QAT" class="on">QAT</button>
+      <button data-team="CAN">CAN</button>
+    </div>
+    <span class="form-no" id="formno">4-3-3</span>
+  </div>
+
+  <!-- hero pitch plate -->
+  <div class="plate">
+    <span class="cap" id="platecap">Fig. 1 — Projected XI</span>
+    <div class="pitch state-projected" id="pitch">
+      <svg viewBox="0 0 100 139" preserveAspectRatio="none" aria-hidden="true">
+        <rect class="pl-line" x="3" y="3" width="94" height="133"/>
+        <line class="pl-line" x1="3" y1="69.5" x2="97" y2="69.5"/>
+        <circle class="pl-line" cx="50" cy="69.5" r="14"/>
+        <circle cx="50" cy="69.5" r="1" fill="#1C1813" opacity=".55"/>
+        <rect class="pl-line" x="26" y="3" width="48" height="18"/>
+        <rect class="pl-line" x="26" y="118" width="48" height="18"/>
+        <rect class="pl-line" x="38" y="3" width="24" height="7"/>
+        <rect class="pl-line" x="38" y="129" width="24" height="7"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- sourcing + self-grade -->
+  <div class="sourcing" id="sourcing"></div>
+
+  <!-- editorial body -->
+  <div class="body">
+    <div class="report" id="report"></div>
+
+    <div class="readbox" id="readbox"></div>
+  </div>
+
+  <!-- pull quote -->
+  <div class="pullquote" id="pullquote"></div>
+
+  <!-- colophon -->
+  <div class="colophon">
+    <span>Set in serif · figures in mono</span>
+    <span class="g">Gary · est. 2026</span>
+  </div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- data ------------------------------------------------------------ */
+const TEAMS = {
+  QAT:{
+    name:'Qatar', formation:'4-3-3', agree:82,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    lines:[
+      {y:90, men:[{n:1,nm:'Barsham',pos:'GK'}]},
+      {y:70, men:[{n:2,nm:'Pedro Miguel',pos:'RB'},{n:15,nm:'Khoukhi',pos:'CB'},{n:5,nm:'Hassan',pos:'CB'},{n:3,nm:'Homam',pos:'LB'}]},
+      {y:48, men:[{n:12,nm:'Madibo',pos:'CM'},{n:8,nm:'Hatim',pos:'CM'},{n:23,nm:'Boudiaf',pos:'CM'}]},
+      {y:25, men:[{n:11,nm:'Afif',pos:'LW'},{n:19,nm:'Almoez Ali',pos:'ST',contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW'}]},
+    ],
+    headline:{a:"Qatar's XI — ", em:"and the one slot ", b:"that decides it"},
+    deck:'A go-forward 4-3-3 reads toward goals — but the whole sheet leans on whether the top scorer is named. Three outlets start him; two leave him out.',
+    report:'Behind after a drawn opener, Qatar arrive at BC Place needing to push the game. The projected sheet is built from a <b>consensus of five outlets</b> — The Athletic, ESPN, Sports Mole, RotoWire and bet365 — and the shape is the same in every version: a back four, a settled midfield three, and a front line built to chase. The argument is at the very tip of it.',
+    readEyebrow:'Projected',
+    proj:[
+      {m:'△',cls:'hot',t:'<b>The shape says goals.</b> A front three of Afif, Ali and Edmilson leans Qatar toward team-total <b>OVER</b> — firms up at the confirmed sheet.'},
+      {m:'·',cls:'',t:'<b>0-1-0 in Group B.</b> A drawn opener turns this closer to a must-win, which tends to mean a fuller-strength, attacking eleven.'},
+    ],
+    conf:[
+      {m:'▲',cls:'hot',t:'<b>Confirmed: Ali starts.</b> Qatar over / Ali anytime-scorer (<span class="odds">+180</span>) live — no longer hedged.'},
+      {m:'▲',cls:'hot',t:'<b>Front three intact.</b> A genuine go-forward selection vs Canada — leans the match <b>OVER</b> and Qatar\'s side of the total.'},
+    ],
+    quote:{
+      text:'If Almoez Ali starts, you bet Qatar over. If he doesn\'t, you fade it. Everything hangs on one name.',
+      attr:'— The contested slot · #19 Almoez Ali',
+      split:['3 of 5 START','2 BENCH'],
+      conf:'Resolved: Ali named in the XI.'
+    },
+  },
+  CAN:{
+    name:'Canada', formation:'4-3-3', agree:91,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    lines:[
+      {y:90, men:[{n:16,nm:'Crépeau',pos:'GK'}]},
+      {y:70, men:[{n:2,nm:'Johnston',pos:'RB'},{n:4,nm:'Vitória',pos:'CB'},{n:5,nm:'Cornelius',pos:'CB'},{n:3,nm:'Adekugbe',pos:'LB'}]},
+      {y:48, men:[{n:7,nm:'Eustáquio',pos:'CM'},{n:13,nm:'Koné',pos:'CM'},{n:11,nm:'Buchanan',pos:'CM'}]},
+      {y:25, men:[{n:20,nm:'David',pos:'ST'},{n:17,nm:'Larin',pos:'ST'},{n:19,nm:'Davies',pos:'LW'}]},
+    ],
+    headline:{a:"Canada's XI — ", em:"a settled sheet ", b:"and a pace problem for Qatar"},
+    deck:'Near-unanimous selections across the outlets. With the side this settled, the reads below carry weight even before the official sheet posts.',
+    report:'Canada come in with a side the outlets agree on almost to the man — <b>91% source agreement</b>. The back four and midfield three are locked, and the question marks that haunt Qatar\'s sheet simply aren\'t here. David and Davies give the front line pace that travels, and a settled eleven means the projected reads firm up early.',
+    readEyebrow:'Projected',
+    proj:[
+      {m:'△',cls:'hot',t:'<b>High agreement (<span class="odds">91%</span>).</b> A settled side — the projected XI is near-locked, so the reads carry weight even pre-confirmation.'},
+      {m:'·',cls:'',t:'<b>David + Davies set the pace.</b> Canada\'s front line leans the match toward Canada\'s side of the spread.'},
+    ],
+    conf:[
+      {m:'▲',cls:'hot',t:'<b>Confirmed XI matches the projection.</b> No surprises — the pre-confirmation reads stand.'},
+      {m:'▲',cls:'hot',t:'<b>Full-strength front line.</b> David / Larin / Davies all start — Canada to score / -1.5 markets in play.'},
+    ],
+    quote:{
+      text:'No debate here — Canada wrote their team sheet a week ago. The edge is what that does to Qatar.',
+      attr:'— Settled side · 91% agreement',
+      split:['Near-unanimous','—'],
+      conf:'Confirmed as projected.'
+    },
+  },
+};
+
+/* per-player drill-down */
+const READS = {
+  'Almoez Ali':{ sub:'Qatar · ST · #19',
+    contested:{split:[60,40,'3 of 5 START','2 BENCH'],
+      sources:'<span class="y">▲ START</span> The Athletic · ESPN · Sports Mole &nbsp;&nbsp; <span class="n">▼ BENCH</span> RotoWire · bet365',
+      bet:'Qatar\'s all-time top scorer — 60 caps, <b>12 goals in qualifying</b>. The whole match hinges on this slot:<br>• If he <b>starts</b> → Ali anytime-scorer <span class="odds">+180</span>, Qatar team-total OVER firms up.<br>• If he\'s <b>benched</b> → fade Qatar\'s over, Canada clean sheet <span class="odds">+165</span> gains.<br><b>Read the team sheet at ~T-40 before you bet this game.</b>'},
+    stats:[['12','Qual Goals'],['60','Caps'],['1','GP this WC']] },
+  'David':{ sub:'Canada · ST · #20',
+    bet:'Canada\'s focal point. With a settled XI around him, <b>David anytime-scorer <span class="odds">+120</span></b> and Canada team-total OVER are the cleaner reads.',
+    stats:[['2','WC Goals'],['.61','xG/90'],['2','GP this WC']] },
+};
+
+/* ---- render ---------------------------------------------------------- */
+let state='projected', team='QAT';
+
+function render(){
+  const T=TEAMS[team];
+  const isConf = state==='confirmed';
+  const isContested = state==='contested';
+
+  document.getElementById('formno').textContent=T.formation;
+
+  // headline
+  const h=T.headline;
+  document.getElementById('headline').innerHTML =
+    `${h.a}<span class="em gold">${h.em}</span>${h.b}`;
+  document.getElementById('deck').textContent = T.deck;
+
+  // state stamp
+  document.getElementById('stamp').outerHTML = isConf
+    ? `<div id="stamp" class="stamp confirmed"><span class="s1">CONFIRMED</span><span class="s2">38M TO KO</span></div>`
+    : `<div id="stamp" class="stamp projected"><span class="s1">PROJECTED</span><span class="s2">${T.agree}% AGREE</span></div>`;
+
+  // plate caption
+  document.getElementById('platecap').textContent =
+    isConf ? 'Fig. 1 — Confirmed XI' : (isContested ? 'Fig. 1 — XI under debate' : 'Fig. 1 — Projected XI');
+
+  // pitch tokens
+  const p=document.getElementById('pitch');
+  p.className='pitch state-'+state;
+  [...p.querySelectorAll('.player')].forEach(e=>e.remove());
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      const x=(i+1)/(n+1)*100;
+      const contested = m.contested && !isConf;
+      const resolved  = m.contested && isConf;
+      const el=document.createElement('div');
+      el.className='player'+(contested?' contested':'')+(resolved?' resolved':'')+(contested&&isContested?' pulse':'');
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+      let extras='';
+      if(contested){
+        extras = `<span class="penring"></span><span class="pennote">contested →</span>`;
+      } else if(resolved){
+        extras = `<span class="pennote">named ✓</span>`;
+      }
+      el.innerHTML=`${extras}<div class="tok">${m.n}</div><div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,contested);
+      p.appendChild(el);
+    });
+  });
+
+  // sourcing + self-grade chip
+  document.getElementById('sourcing').innerHTML = isConf
+    ? `<span class="who">Official team sheet · cross-checked vs BDL + API-Football</span>
+       <span class="gradechip"><span class="tick">✓</span> Projection hit 10/11</span>`
+    : `<span class="who">From ${T.sources.join(' · ')}</span><span class="agree">${T.agree}% agree</span>
+       <span class="gradechip proj">Tourn. avg 9/11</span>`;
+
+  // report (drop cap on first letter)
+  const rpt=T.report;
+  const first=rpt.charAt(0), rest=rpt.slice(1);
+  document.getElementById('report').innerHTML = `<span class="dropcap">${first}</span>${rest}`;
+
+  // the read box
+  const reads = isConf ? T.conf : T.proj;
+  let rb = `<div class="eyebrow">The Read · ${isConf?'Confirmed':'Projected'} <span class="bug">— Gary's call</span></div>`;
+  reads.forEach(r=>{ rb += `<div class="ritem ${r.cls}"><span class="mark">${r.m}</span><span>${r.t}</span></div>`; });
+  if(!isConf){
+    rb += `<div class="hedge">Soft until confirmed — these fire when the official sheet posts (~T-40)</div>`;
+  }
+  document.getElementById('readbox').innerHTML = rb;
+
+  // pull quote
+  const q=T.quote;
+  let pq = `<span class="mk">“</span><q>${q.text}</q><div class="attr">${q.attr}</div>`;
+  if(isConf){
+    pq += `<div class="split"><div class="a" style="flex:1">${q.conf}</div></div>`;
+  } else if(q.split[1]!=='—'){
+    pq += `<div class="split"><div class="a" style="flex:${parseInt(q.split[0])||3}">${q.split[0]}</div>
+            <div class="b" style="flex:${parseInt(q.split[1])||2}">${q.split[1]}</div></div>`;
+  } else {
+    pq += `<div class="split"><div class="a" style="flex:1">${q.split[0]}</div></div>`;
+  }
+  if(team==='QAT' && !isConf){
+    pq += `<div class="readmore" onclick="openSheet('Almoez Ali','ST',19,${isContested})">▸ Read the full split — Almoez Ali</div>`;
+  }
+  document.getElementById('pullquote').innerHTML = pq;
+}
+
+/* ---- bottom sheet ---------------------------------------------------- */
+function openSheet(name,pos,num,contested){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const statusHtml = contested
+    ? `<span class="sh-status contested">Contested</span>`
+    : (state==='confirmed' ? `<span class="sh-status confirmed">Confirmed</span>` : '');
+  let body=`<div class="grab"></div>
+    <div class="sh-head"><div class="sh-num">${num}</div>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${statusHtml}</div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl">Source Split</div>
+      <div class="splitbar"><div class="s1" style="flex:${c.split[0]}">${c.split[2]}</div>
+        <div class="s2" style="flex:${c.split[1]}">${c.split[3]}</div></div>
+      <div class="srclist">${c.sources}</div></div>
+      <div class="sh-sec"><div class="sh-lbl">Why It Matters</div><div class="bet">${c.bet}</div></div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">The Read</div><div class="bet">${r.bet}</div></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="sh-lbl">Notebook</div><div class="bet">Per-player notes attach here — recent form, the matchup against the opposite number, and any prop angle. <i>(Issue mock: full cards set for Ali &amp; David.)</i></div></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">Form</div><div class="statgrid">`;
+    r.stats.forEach(s=>{ body+=`<div class="stat"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring ---------------------------------------------------------- */
+document.querySelectorAll('.editions button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.editions button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state; render();
+});
+document.querySelectorAll('.teamtabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.teamtabs button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){
+    state='projected';
+    document.querySelectorAll('.editions button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC XI — d07 Terminal Scoreboard</title>
+<!--
+  d07 "Terminal Scoreboard" — retro LED / split-flap / monospace trading-terminal aesthetic.
+  Amber + green phosphor on near-black. Pitch = crisp line-art grid (ASCII-flavored).
+  Numerals everywhere are mono (Quant Terminal house rule). Warm GOLD = Gary's voice + key affordance.
+  States: PROJECTED -> CONTESTED (Almoez Ali slot blinks amber) -> CONFIRMED (reads FIRE).
+  Self-contained: inline CSS/JS only, no network. System mono fonts stand in for GaryFonts.
+-->
+<style>
+  :root{
+    --bg:#07090a;            /* near-black phosphor field */
+    --bg2:#0b0f10;
+    --panel:#0d1113;
+    --panel2:#10161a;
+    --grid:#15201f;          /* faint CRT grid line */
+    --rule:#1b2628;
+    --amber:#ffae3b;         /* amber phosphor accent */
+    --amber-dim:#a8732a;
+    --green:#34e08a;         /* green phosphor */
+    --green-dim:#1f8e58;
+    --green-deep:#0e3a26;
+    --gold:#e7b24a;          /* Gary's voice — warm gold */
+    --gold-soft:#f4d690;
+    --ink:#aeb8b6;           /* default mono text (cool phosphor gray) */
+    --ink-dim:#5f6f6d;
+    --ink-faint:#3a4644;
+    --red:#ff5a52;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#020303;font-family:var(--mono);color:var(--ink);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 12px 60px}
+
+  .legend{max-width:430px;width:100%;font-size:11px;color:#7c8a87;line-height:1.55;
+    background:#0a0d0e;border:1px solid #18211f;border-radius:10px;padding:10px 12px;letter-spacing:.02em}
+  .legend b{color:var(--amber);font-weight:700}
+  .legend .g{color:var(--green)}
+
+  /* ---- phone shell ---- */
+  .phone{width:430px;max-width:100%;background:var(--bg);border-radius:30px;overflow:hidden;
+    border:1px solid #1c2624;position:relative;
+    box-shadow:0 0 0 1px rgba(52,224,138,.04),0 24px 60px rgba(0,0,0,.7);}
+  /* CRT scanlines + faint phosphor grid overlay */
+  .phone::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:30;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 80% at 50% 0%, rgba(52,224,138,.05), transparent 60%);
+    mix-blend-mode:screen;border-radius:30px}
+  /* vignette */
+  .phone::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:29;border-radius:30px;
+    box-shadow:inset 0 0 120px rgba(0,0,0,.85)}
+
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;
+    font-size:10.5px;color:var(--ink-dim);letter-spacing:.08em}
+  .status .dotlive{color:var(--green)}
+
+  /* terminal top bar */
+  .tbar{display:flex;align-items:center;gap:9px;padding:4px 16px 10px;font-size:11px;letter-spacing:.14em;color:var(--ink-dim)}
+  .tbar .chev{font-size:18px;color:var(--ink-dim);line-height:1;cursor:pointer}
+  .tbar .ttl{color:var(--amber);font-weight:700}
+  .tbar .sys{margin-left:auto;color:var(--green-dim);letter-spacing:.1em}
+  .tbar .blink{animation:cursor 1.05s step-end infinite}
+  @keyframes cursor{50%{opacity:0}}
+
+  /* ticker header — fixture as a flap board */
+  .fix{margin:0 14px;border:1px solid var(--rule);border-radius:8px;background:
+      linear-gradient(180deg,#0b1011,#080b0c);overflow:hidden}
+  .fixtop{display:flex;align-items:stretch;border-bottom:1px solid var(--rule)}
+  .flap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:11px 6px;position:relative}
+  .flap+.flap{border-left:1px solid var(--rule)}
+  .flap .abbr{font-size:24px;font-weight:800;letter-spacing:.04em;color:#dfe7e5;
+    text-shadow:0 0 10px rgba(120,180,160,.18)}
+  .flap .nm{font-size:9px;letter-spacing:.18em;color:var(--ink-dim)}
+  .flap.qa .abbr{color:var(--amber);text-shadow:0 0 14px rgba(255,174,59,.3)}
+  .vs{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 14px;color:var(--ink-faint)}
+  .vs .v{font-size:11px;letter-spacing:.1em}
+  .vs .ko{font-size:13px;color:var(--green);letter-spacing:.04em;margin-top:3px;font-weight:700}
+  .fixmeta{display:flex;align-items:center;gap:10px;padding:7px 12px;font-size:9.5px;letter-spacing:.1em;color:var(--ink-dim);flex-wrap:wrap}
+  .fixmeta .b{color:var(--ink)}
+  .fixmeta .grp{color:var(--gold);font-weight:700}
+
+  /* state line — the readout */
+  .stateline{display:flex;align-items:center;gap:8px;margin:11px 16px 0;font-size:11px;letter-spacing:.06em}
+  .lamp{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+  .lamp.amb{background:var(--amber);box-shadow:0 0 10px rgba(255,174,59,.8)}
+  .lamp.grn{background:var(--green);box-shadow:0 0 10px rgba(52,224,138,.8)}
+  .stateline .st{font-weight:800;letter-spacing:.12em}
+  .st.amb{color:var(--amber)} .st.grn{color:var(--green)}
+  .stateline .tag{color:var(--ink-dim)}
+  /* self-grade chip — trust signal */
+  .grade{margin-left:auto;font-size:9.5px;letter-spacing:.06em;border:1px solid var(--rule);border-radius:5px;
+    padding:3px 8px;color:var(--ink);background:#0b1011}
+  .grade .v{color:var(--green);font-weight:800}
+  .grade.proj .v{color:var(--gold)}
+
+  /* segmented state machine */
+  .seg{display:flex;margin:11px 14px 0;border:1px solid var(--rule);border-radius:7px;overflow:hidden;background:#080b0c}
+  .seg button{flex:1;border:0;background:transparent;padding:8px 4px;font-family:var(--mono);
+    font-size:10px;letter-spacing:.1em;color:var(--ink-dim);font-weight:700;cursor:pointer;transition:.12s;position:relative}
+  .seg button+button{border-left:1px solid var(--rule)}
+  .seg button .sub{display:block;font-size:8px;font-weight:600;color:var(--ink-faint);margin-top:3px;letter-spacing:.04em}
+  .seg button.on{background:#11181a;color:var(--amber)}
+  .seg button.on .sub{color:var(--amber-dim)}
+  .seg button.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .seg button[data-state="confirmed"].on{color:var(--green)}
+  .seg button[data-state="confirmed"].on::after{background:var(--green);box-shadow:0 0 8px var(--green)}
+
+  /* team toggle + formation readout */
+  .tt{display:flex;align-items:center;gap:7px;margin:10px 16px 0;font-size:10px;letter-spacing:.08em}
+  .tt button{border:1px solid var(--rule);background:#0a0e0f;padding:4px 13px;border-radius:5px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink-dim);cursor:pointer;font-weight:700}
+  .tt button.on{background:var(--amber);color:#1a1206;border-color:var(--amber);text-shadow:none}
+  .tt .form{margin-left:auto;color:var(--green);font-weight:800;letter-spacing:.2em;font-size:12px}
+  .tt .form .lbl{color:var(--ink-faint);font-size:9px;letter-spacing:.1em;margin-right:5px}
+
+  /* ---- pitch: line-art grid terminal ---- */
+  .pitchwrap{margin:12px 14px 0;border:1px solid var(--green-deep);border-radius:8px;overflow:hidden;position:relative;
+    background:#040706}
+  .pitch{position:relative;width:100%;aspect-ratio:.76;
+    background:
+      /* phosphor grid */
+      repeating-linear-gradient(0deg, transparent 0 23px, var(--grid) 23px 24px),
+      repeating-linear-gradient(90deg, transparent 0 23px, var(--grid) 23px 24px),
+      radial-gradient(120% 90% at 50% 8%, #06120c, #030605 70%);}
+  .pitch svg{position:absolute;inset:0;width:100%;height:100%}
+  .pitch .line{stroke:rgba(52,224,138,.32);stroke-width:1;fill:none}
+  .pitch .line.faint{stroke:rgba(52,224,138,.16)}
+  .endlabel{position:absolute;left:0;right:0;text-align:center;font-size:8px;letter-spacing:.3em;color:var(--green-dim);opacity:.7}
+  .endlabel.t{top:5px} .endlabel.b{bottom:5px}
+
+  /* player node */
+  .player{position:absolute;transform:translate(-50%,-50%);width:62px;display:flex;flex-direction:column;
+    align-items:center;gap:2px;cursor:pointer;z-index:5}
+  .disc{width:30px;height:30px;border-radius:4px;background:#0a0f10;border:1px solid var(--green-dim);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:800;font-size:12px;
+    color:var(--green);box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 10px rgba(52,224,138,.15);transition:.12s;position:relative}
+  .pname{font-size:9px;font-weight:700;color:#cdd6d4;letter-spacing:.02em;line-height:1.05;text-align:center;max-width:64px;
+    text-shadow:0 0 6px rgba(0,0,0,.9)}
+  .ppos{font-size:7.5px;letter-spacing:.1em;color:var(--ink-dim)}
+
+  /* PROJECTED look — dashed/dim, "unconfirmed" */
+  .state-projected .disc, .state-contested .disc{border-style:dashed;color:var(--green-dim)}
+  .state-projected .disc::after, .state-contested .disc::after{content:"~";position:absolute;top:-9px;right:-2px;
+    font-size:9px;color:var(--green-dim);opacity:.7}
+  /* CONFIRMED — solid, bright, locked */
+  .state-confirmed .disc{border-style:solid;border-color:var(--green);color:var(--green);
+    box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 12px rgba(52,224,138,.4)}
+
+  /* CONTESTED slot — blinks amber */
+  .player.contested .disc{border-color:var(--amber)!important;color:var(--amber)!important;background:#16100a;
+    box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 14px rgba(255,174,59,.45)}
+  .player.contested .disc::after{content:"?";color:var(--amber);opacity:1}
+  .player.contested .pname{color:var(--amber)}
+  .player.contested .flag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--amber);
+    color:#1a1206;font-size:8px;font-weight:800;padding:1px 5px;border-radius:3px;letter-spacing:.04em;white-space:nowrap}
+  .player.contested{z-index:8}
+  /* dim others while contested so the debate pops */
+  .state-contested .player:not(.contested){opacity:.34}
+  .blink-amber .disc{animation:flap 1.15s steps(1,end) infinite}
+  @keyframes flap{
+    0%,49%{box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 4px rgba(255,174,59,.25);border-color:var(--amber-dim)}
+    50%,100%{box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 16px rgba(255,174,59,.6);border-color:var(--amber)}}
+
+  /* ---- source / projection readout strip ---- */
+  .srcbar{margin:11px 14px 0;border:1px solid var(--rule);border-radius:6px;background:#080b0c;padding:8px 11px;
+    font-size:9.5px;letter-spacing:.04em;color:var(--ink-dim);line-height:1.65}
+  .srcbar .lbl{color:var(--ink-faint)}
+  .srcbar .src{color:var(--ink)}
+  .srcbar .agree{color:var(--amber);font-weight:800}
+  .srcbar .ok{color:var(--green);font-weight:800}
+
+  /* ---- THE READ panel ---- */
+  .read{margin:12px 14px 18px;border:1px solid var(--rule);border-radius:8px;background:
+      linear-gradient(180deg,#0b1011,#080b0c);padding:13px 13px 14px}
+  .eyebrow{display:flex;align-items:center;gap:7px;font-size:9.5px;letter-spacing:.18em;color:var(--gold);font-weight:800;
+    margin-bottom:11px;text-shadow:0 0 10px rgba(231,178,74,.25)}
+  .eyebrow .barcode{flex:1;height:8px;background:repeating-linear-gradient(90deg,var(--ink-faint) 0 1px,transparent 1px 3px);opacity:.4;border-radius:1px}
+  .rline{display:flex;gap:9px;padding:8px 0;border-top:1px dashed #18211f;font-size:12px;line-height:1.45;color:var(--ink)}
+  .rline:first-of-type{border-top:0;padding-top:0}
+  .rline .k{flex:0 0 auto;font-size:11px;line-height:1.4;color:var(--gold);font-weight:800}
+  .rline.hot .k{color:var(--green)} .rline.warn .k{color:var(--amber)} .rline.cold .k{color:var(--red)}
+  .rline b{color:#dde5e3}
+  .rline .odds{color:var(--gold-soft);font-weight:800;background:#16120a;border:1px solid #3a2e12;border-radius:3px;padding:0 4px}
+  .hedge{margin-top:11px;font-size:9.5px;letter-spacing:.04em;color:var(--amber-dim);border-top:1px solid var(--rule);padding-top:9px}
+  .hedge b{color:var(--amber)}
+  /* contested callout */
+  .callout{margin-top:11px;border:1px solid var(--amber-dim);border-radius:7px;padding:10px 11px;background:#140e05;
+    font-size:11px;line-height:1.5;color:var(--amber-dim);letter-spacing:.02em}
+  .callout b{color:var(--amber)}
+  .callout .blink-txt{animation:cursor 1.1s step-end infinite;color:var(--amber)}
+
+  /* ---- bottom sheet ---- */
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.7);opacity:0;pointer-events:none;transition:.2s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,102%);width:430px;max-width:100%;
+    background:var(--bg);border:1px solid #1c2624;border-bottom:0;border-radius:18px 18px 0 0;padding:8px 16px 26px;z-index:41;
+    transition:transform .24s cubic-bezier(.3,.9,.3,1);box-shadow:0 -12px 50px rgba(0,0,0,.8)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:36px;height:3px;border-radius:2px;background:#26302e;margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:11px}
+  .sh-num{width:38px;height:38px;border-radius:5px;background:#0a0f10;border:1px solid var(--green-dim);color:var(--green);
+    font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 0 10px rgba(52,224,138,.2)}
+  .sh-num.amb{border-color:var(--amber);color:var(--amber);box-shadow:0 0 12px rgba(255,174,59,.3)}
+  .sh-nm{font-size:17px;font-weight:800;color:#e4ece9;letter-spacing:.01em}
+  .sh-sub{font-size:9.5px;color:var(--ink-dim);letter-spacing:.08em;margin-top:2px}
+  .sh-status{margin-left:auto;font-size:9px;font-weight:800;letter-spacing:.08em;padding:4px 8px;border-radius:4px;border:1px solid}
+  .sh-status.contested{color:var(--amber);border-color:var(--amber-dim);background:#140e05}
+  .sh-status.confirmed{color:var(--green);border-color:var(--green-dim);background:var(--green-deep)}
+  .sh-sec{margin-top:14px}
+  .sh-lbl{font-size:9px;letter-spacing:.16em;color:var(--gold);font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .sh-lbl .barcode{flex:1;height:7px;background:repeating-linear-gradient(90deg,var(--ink-faint) 0 1px,transparent 1px 3px);opacity:.35}
+  /* split bar */
+  .splitbar{display:flex;height:30px;border:1px solid var(--rule);border-radius:5px;overflow:hidden;font-size:9.5px;font-weight:800;letter-spacing:.05em}
+  .splitbar .s1{background:var(--green-deep);color:var(--green);display:flex;align-items:center;justify-content:center;gap:5px;border-right:1px solid var(--rule)}
+  .splitbar .s2{background:#140e05;color:var(--amber);display:flex;align-items:center;justify-content:center;gap:5px}
+  .srclist{margin-top:8px;font-size:10px;color:var(--ink-dim);line-height:1.7;letter-spacing:.03em}
+  .srclist .y{color:var(--green);font-weight:700} .srclist .n{color:var(--amber);font-weight:700}
+  .bet{border:1px solid var(--rule);border-radius:6px;padding:11px 12px;font-size:12px;line-height:1.55;color:var(--ink);background:#080b0c;letter-spacing:.01em}
+  .bet b{color:#dde5e3}
+  .bet .odds{color:var(--gold-soft);font-weight:800;background:#16120a;border:1px solid #3a2e12;border-radius:3px;padding:0 4px}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .stat{border:1px solid var(--rule);border-radius:6px;padding:9px 6px;text-align:center;background:#080b0c}
+  .stat .v{font-size:18px;font-weight:800;color:var(--green);text-shadow:0 0 10px rgba(52,224,138,.2)}
+  .stat .l{font-size:7.5px;letter-spacing:.08em;color:var(--ink-dim);margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>d07 · TERMINAL SCOREBOARD.</b> Same Qatar XI as a trading-desk readout. Flip the state machine:
+  <b>PROJECTED</b> (all-day consensus, reads hedged) → <b>CONTESTED</b> (the <span class="g">#19 Almoez&nbsp;Ali</span> slot blinks amber) →
+  <b>CONFIRMED</b> (~38m to KO, reads fire with odds). Tap any node for the source split + read. Toggle QAT/CAN.
+</div>
+
+<div class="phone">
+  <div class="status"><span>9:41</span><span><span class="dotlive">●</span> GARY//TERM</span></div>
+
+  <div class="tbar">
+    <span class="chev">‹</span>
+    <span class="ttl">XI_FEED</span>
+    <span>:: LINEUP TERMINAL<span class="blink">_</span></span>
+    <span class="sys" id="sysclock">T-MINUS 06:00:00</span>
+  </div>
+
+  <!-- fixture flap board -->
+  <div class="fix">
+    <div class="fixtop">
+      <div class="flap"><div class="abbr">CAN</div><div class="nm">CANADA</div></div>
+      <div class="vs"><div class="v">VS</div><div class="ko">18:00 ET</div></div>
+      <div class="flap qa"><div class="abbr">QAT</div><div class="nm">QATAR</div></div>
+    </div>
+    <div class="fixmeta">
+      <span class="grp">GROUP B</span><span>·</span><span class="b">BC PLACE</span><span>·</span><span>VANCOUVER</span>
+    </div>
+  </div>
+
+  <!-- state readout -->
+  <div class="stateline" id="stateline"></div>
+
+  <!-- state machine -->
+  <div class="seg">
+    <button data-state="projected" class="on">PROJECTED<span class="sub">ALL DAY · T-6H</span></button>
+    <button data-state="contested">CONTESTED<span class="sub">DEBATED SLOT</span></button>
+    <button data-state="confirmed">CONFIRMED<span class="sub">T-38M</span></button>
+  </div>
+
+  <!-- team toggle -->
+  <div class="tt">
+    <button data-team="QAT" class="on">QAT</button>
+    <button data-team="CAN">CAN</button>
+    <span class="form"><span class="lbl">FORM</span><span id="formlbl">4-3-3</span></span>
+  </div>
+
+  <!-- pitch -->
+  <div class="pitchwrap">
+    <div class="pitch" id="pitch">
+      <svg viewBox="0 0 100 130" preserveAspectRatio="none">
+        <rect class="line" x="3" y="3" width="94" height="124" rx="1"/>
+        <line class="line" x1="3" y1="65" x2="97" y2="65"/>
+        <circle class="line" cx="50" cy="65" r="14"/>
+        <circle class="line" cx="50" cy="65" r="0.8" fill="rgba(52,224,138,.4)"/>
+        <!-- top box (Canada end) -->
+        <rect class="line" x="28" y="3" width="44" height="16"/>
+        <rect class="line faint" x="40" y="3" width="20" height="7"/>
+        <!-- bottom box (Qatar end) -->
+        <rect class="line" x="28" y="111" width="44" height="16"/>
+        <rect class="line faint" x="40" y="120" width="20" height="7"/>
+      </svg>
+      <div class="endlabel t">CAN GOAL</div>
+      <div class="endlabel b">QAT GOAL</div>
+    </div>
+  </div>
+
+  <!-- source readout -->
+  <div class="srcbar" id="srcbar"></div>
+
+  <!-- the read -->
+  <div class="read" id="read"></div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- data ------------------------------------------------------------ */
+const TEAMS = {
+  QAT: {
+    name:'Qatar', abbr:'QAT', formation:'4-3-3',
+    lines:[
+      {y:90, men:[{n:1,nm:'Barsham',pos:'GK'}]},
+      {y:71, men:[{n:2,nm:'Pedro Miguel',pos:'RB'},{n:15,nm:'Khoukhi',pos:'CB'},{n:5,nm:'Hassan',pos:'CB'},{n:3,nm:'Homam',pos:'LB'}]},
+      {y:49, men:[{n:12,nm:'Madibo',pos:'CM'},{n:8,nm:'Hatim',pos:'CM'},{n:23,nm:'Boudiaf',pos:'CM'}]},
+      {y:26, men:[{n:11,nm:'Afif',pos:'LW'},{n:19,nm:'Almoez Ali',pos:'ST',contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW'}]},
+    ],
+    agree:82,
+    sources:['THE ATHLETIC','ESPN','SPORTS MOLE','ROTOWIRE','BET365'],
+    projRead:[
+      {t:'<b>FRONT THREE = GO-FORWARD SHAPE.</b> Afif + Ali + Edmilson leans Qatar to push the game — points at Qatar team-total OVER + anytime-scorer markets.',cls:'hot'},
+      {t:'<b>0-1-0 IN GROUP B.</b> Drew the opener; closer to a must-win, which usually means a fuller-strength attacking sheet.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>CONFIRMED: ALI STARTS.</b> Qatar’s leading scorer is IN. Qatar team-total OVER + Ali anytime-scorer <span class="odds">+180</span> are LIVE — no longer hedged.',cls:'hot'},
+      {t:'<b>4-3-3 INTACT.</b> Genuine go-forward selection vs Canada — leans the match OVER and Qatar’s side of the total.',cls:'hot'},
+    ],
+  },
+  CAN: {
+    name:'Canada', abbr:'CAN', formation:'4-3-3',
+    lines:[
+      {y:90, men:[{n:16,nm:'Crépeau',pos:'GK'}]},
+      {y:71, men:[{n:2,nm:'Johnston',pos:'RB'},{n:4,nm:'Vitória',pos:'CB'},{n:5,nm:'Cornelius',pos:'CB'},{n:3,nm:'Adekugbe',pos:'LB'}]},
+      {y:49, men:[{n:7,nm:'Eustáquio',pos:'CM'},{n:13,nm:'Koné',pos:'CM'},{n:11,nm:'Buchanan',pos:'CM'}]},
+      {y:26, men:[{n:20,nm:'David',pos:'ST'},{n:17,nm:'Larin',pos:'ST'},{n:19,nm:'Davies',pos:'LW'}]},
+    ],
+    agree:91,
+    sources:['THE ATHLETIC','ESPN','SPORTS MOLE','ROTOWIRE','BET365'],
+    projRead:[
+      {t:'<b>91% SOURCE AGREEMENT.</b> Settled side — the projected XI is near-locked, so the reads below carry weight even pre-confirmation.',cls:'hot'},
+      {t:'<b>DAVID + DAVIES PACE.</b> Canada’s front line leans the match toward Canada’s side of the spread.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>CONFIRMED XI = PROJECTION.</b> No surprises — the pre-confirmation reads stand.',cls:'hot'},
+      {t:'<b>FULL-STRENGTH FRONT LINE.</b> David / Larin / Davies all start — Canada-to-score / −1.5 markets in play.',cls:'hot'},
+    ],
+  },
+};
+
+const READS = {
+  'Almoez Ali':{
+    sub:'QATAR · ST · #19',
+    contested:{split:[60,40,'3/5 START','2/5 BENCH'],
+      sources:'<span class="y">▲ START</span> THE ATHLETIC · ESPN · SPORTS MOLE &nbsp;&nbsp; <span class="n">▼ BENCH</span> ROTOWIRE · BET365',
+      bet:'Qatar’s all-time top scorer — 60 caps, <b>12 goals in qualifying</b>. The entire match read hinges on this node:<br>• IF he <b>STARTS</b> → Ali anytime-scorer <span class="odds">+180</span>, Qatar team-total OVER lights up.<br>• IF he’s <b>BENCHED</b> → fade Qatar’s over; Canada clean-sheet <span class="odds">+165</span> gains.<br><b>WATCH THE TEAM SHEET @ T-38 BEFORE BETTING THIS GAME.</b>'},
+    stats:[['12','QUAL GOALS'],['60','CAREER'],['1','GP THIS WC']],
+  },
+  'David':{ sub:'CANADA · ST · #20',
+    bet:'Canada’s focal point. With a settled XI around him, <b>David anytime-scorer <span class="odds">+120</span></b> and Canada team-total OVER are the cleaner reads.',
+    stats:[['2','WC GOALS'],['.61','xG/90'],['2','GP THIS WC']] },
+};
+
+/* ---- render ---------------------------------------------------------- */
+let state='projected', team='QAT';
+
+function render(){
+  const T=TEAMS[team];
+  const isConf = state==='confirmed';
+  document.getElementById('formlbl').textContent=T.formation;
+
+  // sys clock
+  document.getElementById('sysclock').textContent = isConf ? 'T-MINUS 00:38:00'
+    : (state==='contested' ? 'T-MINUS 02:14:00' : 'T-MINUS 06:00:00');
+
+  // state readout line + self-grade chip
+  const sl = document.getElementById('stateline');
+  if(isConf){
+    sl.innerHTML = `<span class="lamp grn"></span><span class="st grn">CONFIRMED XI</span>
+      <span class="tag">// OFFICIAL SHEET IN · T-38M</span>
+      <span class="grade"><span>PROJECTION HIT</span> <span class="v">10/11</span></span>`;
+  } else {
+    sl.innerHTML = `<span class="lamp amb"></span><span class="st amb">PROJECTED XI</span>
+      <span class="tag">// ${T.agree}% SRC AGREEMENT</span>
+      <span class="grade proj"><span>TOURN. AVG</span> <span class="v">9/11</span></span>`;
+  }
+
+  // pitch nodes
+  const p=document.getElementById('pitch');
+  p.className='pitch state-'+state;
+  [...p.querySelectorAll('.player')].forEach(e=>e.remove());
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      const x=(i+1)/(n+1)*100;
+      const contested = m.contested && !isConf;
+      const el=document.createElement('div');
+      el.className='player'+(contested?' contested':'')+(contested && state==='contested'?' blink-amber':'');
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+      el.innerHTML=`${contested?'<span class="flag">3/5 START · 2/5 BENCH</span>':''}
+        <div class="disc">${m.n}</div>
+        <div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,contested);
+      p.appendChild(el);
+    });
+  });
+
+  // source bar
+  document.getElementById('srcbar').innerHTML = isConf
+    ? `<span class="lbl">SOURCE</span> <span class="src">OFFICIAL TEAM SHEET</span> // X-CHECK vs BDL + API-FOOTBALL <span class="ok">[OK]</span><br>
+       <span class="lbl">GRADE</span> projection vs confirmed → <span class="ok">10/11 SLOTS MATCHED</span>`
+    : `<span class="lbl">SRC[5]</span> <span class="src">${T.sources.join(' / ')}</span><br>
+       <span class="lbl">CONSENSUS</span> <span class="agree">${T.agree}% AGREE</span> // SOFT UNTIL OFFICIAL SHEET @ T-38`;
+
+  // read panel
+  const reads = isConf ? T.confRead : T.projRead;
+  let html = `<div class="eyebrow"><span>GARY // THE READ</span><span class="barcode"></span><span>${isConf?'[CONFIRMED]':'[PROJECTED]'}</span></div>`;
+  reads.forEach(r=>{ html+=`<div class="rline ${r.cls}"><span class="k">${r.cls==='hot'?'▸':'▪'}</span><span>${r.t}</span></div>`; });
+  if(!isConf){
+    html += `<div class="hedge">◴ <b>HEDGED.</b> Reads are SOFT until the official sheet posts (~T-38). They firm to live odds at CONFIRMED.</div>`;
+  }
+  if(state==='contested' && team==='QAT'){
+    html += `<div class="callout">⚠ <b>CONTESTED NODE — #19 ALMOEZ ALI.</b> 3/5 outlets START Qatar’s top scorer; 2/5 BENCH him. Qatar’s entire OVER / team-total read swings on this one slot. <b>This is the question to ask before you bet this game.</b><span class="blink-txt"> ▸ TAP NODE _</span></div>`;
+  }
+  document.getElementById('read').innerHTML=html;
+}
+
+/* ---- bottom sheet ---------------------------------------------------- */
+function openSheet(name,pos,num,contested){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const statusHtml = contested
+    ? `<span class="sh-status contested">CONTESTED</span>`
+    : (state==='confirmed' ? `<span class="sh-status confirmed">CONFIRMED</span>` : '');
+  let body=`<div class="grab"></div>
+    <div class="sh-head"><div class="sh-num${contested?' amb':''}">${num}</div>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${statusHtml}</div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl"><span>SOURCE SPLIT</span><span class="barcode"></span></div>
+      <div class="splitbar"><div class="s1" style="flex:${c.split[0]}">▲ ${c.split[2]}</div>
+        <div class="s2" style="flex:${c.split[1]}">▼ ${c.split[3]}</div></div>
+      <div class="srclist">${c.sources}</div></div>
+      <div class="sh-sec"><div class="sh-lbl"><span>WHY IT MATTERS</span><span class="barcode"></span></div><div class="bet">${c.bet}</div></div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl"><span>THE READ</span><span class="barcode"></span></div><div class="bet">${r.bet}</div></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="bet">Per-node read attaches here — recent form, matchup vs the opposite number, prop angle. (Mock: detailed cards wired for ALI &amp; DAVID.)</div></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl"><span>FORM</span><span class="barcode"></span></div><div class="statgrid">`;
+    r.stats.forEach(s=>{ body+=`<div class="stat"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring ---------------------------------------------------------- */
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state;
+  if(state==='contested' && team!=='QAT'){
+    team='QAT';
+    document.querySelectorAll('.tt button').forEach(x=>x.classList.toggle('on',x.dataset.team==='QAT'));
+  }
+  render();
+});
+document.querySelectorAll('.tt button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tt button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){
+    state='projected';
+    document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>

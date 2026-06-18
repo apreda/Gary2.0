@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — Sportsbook Slip (d06)</title>
+<!--
+  DIRECTION d06 — "SPORTSBOOK SLIP"
+  The Starting XI rendered as Gary's bet slip / pick card. The pitch collapses to a small
+  header thumbnail (formation crest). The body is a stack of player ROWS, each with a betting
+  angle + a gold odds chip. The contested Almoez Ali slot is the HERO row — an if-starts /
+  if-benched FORK. Feels like a premium sportsbook ticket: perforated edge, "slip" header,
+  running stake/return footer.
+  States: PROJECTED (hedged, soft chips) -> CONTESTED (fork row opens) -> CONFIRMED (chips fire).
+  Numerals in mono (Quant Terminal rule). Warm gold = Gary's voice + key affordance.
+  Self-contained, no network. System fonts stand in for GaryFonts.
+-->
+<style>
+  :root{
+    --paper:#F6F1E7; --paper2:#EFE6D6; --slip:#FBF8F1; --slip2:#F3ECDE;
+    --ink:#1E1810; --ink2:#473D2E; --ink3:#8A7C66; --ink4:#A99B82;
+    --gold:#B5862F; --gold-lo:#E7D7AD; --gold-hi:#D9A53A; --gold-deep:#7E5C18;
+    --pitch-a:#21392C; --pitch-b:#1B3225; --pline:rgba(246,241,231,.4);
+    --amber:#C9772A; --amber-soft:#F3DCBF; --amber-ink:#7c4711;
+    --green:#2E8059; --green-soft:#D2E7D9; --green-ink:#1c5638;
+    --red:#B23B36; --red-soft:#F2D7D2;
+    --line:#E6DAC0; --line2:#EFE6D2;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --sh:0 1px 0 rgba(0,0,0,.03),0 18px 50px rgba(40,30,12,.16);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:linear-gradient(165deg,#E7DECC,#D6CBB6 60%,#CFC3AC);font-family:var(--sans);
+    color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:14px;
+    padding:24px 12px 64px}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .legend{max-width:430px;width:100%;font-size:11.5px;color:#5b5038;line-height:1.5;
+    background:rgba(255,255,255,.5);border:1px solid rgba(120,100,60,.2);border-radius:12px;padding:10px 13px}
+  .legend b{color:#3a3020}
+
+  /* ---- phone shell ------------------------------------------------------ */
+  .phone{width:430px;max-width:100%;background:var(--paper);border-radius:36px;overflow:hidden;
+    box-shadow:var(--sh);border:1px solid rgba(120,100,60,.2);position:relative}
+  .status{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
+    font-size:12px;color:var(--ink2)}
+  .status .r{display:flex;gap:6px;align-items:center;font-size:11px}
+  .nav{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+  .nav .chev{font-size:24px;color:var(--ink2);line-height:1}
+  .nav .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--ink3);font-weight:700}
+  .nav .share{margin-left:auto;font-size:15px;color:var(--ink3);
+    border:1px solid var(--line);border-radius:9px;padding:5px 9px;background:var(--slip)}
+
+  /* ---- the SLIP --------------------------------------------------------- */
+  .slipwrap{padding:2px 14px 16px}
+  .slip{background:var(--slip);border-radius:20px;border:1px solid var(--line);
+    box-shadow:0 1px 0 #fff inset, 0 10px 28px rgba(40,30,12,.12);overflow:hidden}
+
+  /* slip header: collapsed pitch thumbnail + matchup */
+  .shead{display:flex;gap:13px;padding:15px 16px 14px;align-items:center;position:relative;
+    background:linear-gradient(180deg,#fff,var(--slip));border-bottom:1px dashed var(--line)}
+  .crest{flex:0 0 auto;width:60px;height:78px;border-radius:11px;overflow:hidden;position:relative;
+    box-shadow:0 4px 12px rgba(20,40,28,.32),0 0 0 1px rgba(0,0,0,.06);cursor:pointer}
+  .crest .grass{position:absolute;inset:0;
+    background:repeating-linear-gradient(0deg,var(--pitch-a) 0 14.28%,var(--pitch-b) 14.28% 28.56%)}
+  .crest .ln{position:absolute;border:1px solid var(--pline)}
+  .crest .ctr{left:14%;right:14%;top:50%;height:0;border-width:1px 0 0 0}
+  .crest .cir{left:50%;top:50%;width:42%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}
+  .crest .boxT{left:28%;right:28%;top:0;height:16%;border-top:0}
+  .crest .boxB{left:28%;right:28%;bottom:0;height:16%;border-bottom:0}
+  /* dots representing the XI inside the crest */
+  .crest .dot{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--gold-lo);
+    transform:translate(-50%,-50%);box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+  .crest .dot.hot{background:var(--amber);box-shadow:0 0 0 1.5px rgba(201,119,42,.4)}
+  .crest .fform{position:absolute;left:0;right:0;bottom:0;text-align:center;font-family:var(--mono);
+    font-size:9px;font-weight:700;color:#fff;letter-spacing:.08em;padding:2px 0;
+    background:linear-gradient(180deg,transparent,rgba(0,0,0,.55))}
+
+  .smeta{flex:1;min-width:0}
+  .smeta .league{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--gold);
+    font-weight:700;text-transform:uppercase}
+  .smeta .teams{font-size:20px;font-weight:800;letter-spacing:-.01em;margin-top:3px;line-height:1.05}
+  .smeta .teams .v{color:var(--ink4);font-weight:600;font-size:14px;margin:0 3px}
+  .smeta .venue{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:4px;letter-spacing:.02em}
+  .smeta .picked{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-family:var(--mono);
+    font-size:9.5px;letter-spacing:.06em;color:var(--ink2);background:var(--slip2);border:1px solid var(--line);
+    padding:3px 8px;border-radius:7px;font-weight:600}
+  .smeta .picked .qb{width:6px;height:6px;border-radius:50%;background:var(--gold-hi)}
+
+  /* state badge sits top-right of header */
+  .sbadge{position:absolute;top:13px;right:14px;display:inline-flex;align-items:center;gap:6px;
+    padding:5px 10px;border-radius:8px;font-family:var(--mono);font-size:10px;letter-spacing:.05em;font-weight:700}
+  .sbadge .d{width:7px;height:7px;border-radius:50%}
+  .sbadge.projected{background:var(--amber-soft);color:var(--amber-ink)}
+  .sbadge.projected .d{background:var(--amber);box-shadow:0 0 0 3px rgba(201,119,42,.2)}
+  .sbadge.confirmed{background:var(--green-soft);color:var(--green-ink)}
+  .sbadge.confirmed .d{background:var(--green);animation:livep 1.6s ease-in-out infinite}
+  @keyframes livep{0%,100%{box-shadow:0 0 0 0 rgba(46,128,89,.5)}50%{box-shadow:0 0 0 4px rgba(46,128,89,0)}}
+
+  /* state toggle (segmented) */
+  .seg{display:flex;gap:4px;margin:12px 16px 4px;background:var(--paper2);padding:4px;border-radius:12px}
+  .seg button{flex:1;border:0;background:transparent;padding:8px 4px;border-radius:9px;font-family:var(--mono);
+    font-size:10px;letter-spacing:.05em;color:var(--ink2);font-weight:700;cursor:pointer;transition:.16s}
+  .seg button .sub{display:block;font-size:8.5px;font-weight:500;color:var(--ink3);margin-top:2px;letter-spacing:.01em}
+  .seg button.on{background:var(--ink);color:var(--gold-lo);box-shadow:0 3px 10px rgba(30,24,16,.3)}
+  .seg button.on .sub{color:rgba(231,215,173,.6)}
+
+  /* slip sub-header: leg count + self-grade */
+  .slegs{display:flex;align-items:center;gap:9px;padding:11px 16px 9px;border-bottom:1px solid var(--line2)}
+  .slegs .legcount{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--ink2);font-weight:700}
+  .slegs .legcount span{color:var(--gold-deep)}
+  .grade{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9.5px;
+    font-weight:700;letter-spacing:.04em;padding:4px 9px;border-radius:8px;background:var(--slip2);
+    border:1px solid var(--line);color:var(--ink2)}
+  .grade .gi{font-size:10px}
+  .grade.hit{background:var(--green-soft);border-color:#bfdcc8;color:var(--green-ink)}
+
+  /* ---- player rows ------------------------------------------------------ */
+  .rows{padding:2px 0}
+  .row{display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line2);
+    cursor:pointer;position:relative;transition:background .14s}
+  .row:active{background:var(--slip2)}
+  .row:last-child{border-bottom:0}
+  .pos{flex:0 0 auto;width:30px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;
+    color:var(--ink3);text-align:center;line-height:1.2}
+  .pos .ln{display:block;font-size:7.5px;color:var(--ink4);font-weight:600;margin-top:1px;letter-spacing:.02em}
+  .jersey{flex:0 0 auto;width:30px;height:30px;border-radius:8px;background:var(--paper);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:12px;
+    color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .who{flex:1;min-width:0}
+  .who .nm{font-size:14px;font-weight:700;letter-spacing:-.005em;line-height:1.1}
+  .who .angle{font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.25}
+  .who .angle b{color:var(--ink2);font-weight:600}
+
+  /* gold odds chip */
+  .chip{flex:0 0 auto;min-width:54px;text-align:center;font-family:var(--mono);font-weight:700;font-size:12.5px;
+    padding:6px 9px;border-radius:9px;letter-spacing:.01em;line-height:1;position:relative}
+  .chip .lbl{display:block;font-size:7.5px;font-weight:600;letter-spacing:.06em;margin-bottom:3px}
+  /* soft (projected) chips: outline gold, muted */
+  .chip.soft{background:transparent;border:1px dashed var(--gold);color:var(--gold-deep)}
+  .chip.soft .lbl{color:var(--ink4)}
+  /* fired (confirmed) chips: solid gold */
+  .chip.fire{background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:#2a1e07;
+    box-shadow:0 3px 9px rgba(181,134,47,.4),0 0 0 1px rgba(126,92,24,.4)}
+  .chip.fire .lbl{color:rgba(42,30,7,.62)}
+  /* neutral structural chip (GK / depth players) */
+  .chip.mut{background:var(--slip2);border:1px solid var(--line);color:var(--ink3)}
+  .chip.mut .lbl{color:var(--ink4)}
+
+  /* dim non-key rows in CONTESTED to spotlight the fork */
+  .rows.spotlight .row:not(.heroRow){opacity:.4}
+  .rows.spotlight .heroRow{opacity:1}
+
+  /* ---- HERO fork row (contested slot) ----------------------------------- */
+  .hero{border:1.5px solid var(--amber);border-radius:14px;margin:10px 14px;background:
+    linear-gradient(180deg,#FFF9F0,#FCEFDD);box-shadow:0 8px 22px rgba(201,119,42,.18);overflow:hidden;
+    position:relative}
+  .hero .tab{position:absolute;top:0;right:0;background:var(--amber);color:#fff;font-family:var(--mono);
+    font-size:8.5px;font-weight:700;letter-spacing:.06em;padding:3px 9px;border-radius:0 0 0 9px}
+  .hero .htop{display:flex;align-items:center;gap:11px;padding:14px 15px 11px;cursor:pointer}
+  .hero .jersey{width:38px;height:38px;border-radius:10px;background:#fff;border:1.5px solid var(--amber);
+    font-size:15px;box-shadow:0 0 0 3px rgba(201,119,42,.16)}
+  .hero .htop.contestState .jersey{animation:pulse 1.5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(201,119,42,.16)}50%{box-shadow:0 0 0 7px rgba(201,119,42,.05)}}
+  .hero .hnm{font-size:16px;font-weight:800;letter-spacing:-.01em}
+  .hero .hsub{font-family:var(--mono);font-size:9.5px;color:var(--amber-ink);font-weight:600;margin-top:2px;
+    letter-spacing:.03em}
+  .hero .hgrade{margin-left:auto;text-align:right}
+  .hero .hgrade .pct{font-family:var(--mono);font-size:17px;font-weight:800;color:var(--amber-ink);line-height:1}
+  .hero .hgrade .pl{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--ink3);margin-top:2px}
+
+  /* source split mini-bar */
+  .splitwrap{padding:0 15px 12px}
+  .splitbar{display:flex;height:26px;border-radius:8px;overflow:hidden;font-family:var(--mono);font-size:9.5px;
+    font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.12) inset}
+  .splitbar .s1{background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;gap:4px}
+  .splitbar .s2{background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;gap:4px}
+  .splitsrc{font-family:var(--mono);font-size:9px;color:var(--ink3);margin-top:7px;line-height:1.5;letter-spacing:.01em}
+  .splitsrc .y{color:var(--green);font-weight:700}.splitsrc .n{color:var(--amber);font-weight:700}
+
+  /* the FORK: two outcome legs */
+  .fork{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--amber-soft)}
+  .leg{padding:12px 14px;position:relative}
+  .leg.ifstart{background:rgba(46,128,89,.06)}
+  .leg.ifbench{background:rgba(178,59,54,.05);border-left:1px solid var(--amber-soft)}
+  .leg .lh{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;display:flex;align-items:center;gap:5px}
+  .leg.ifstart .lh{color:var(--green-ink)}.leg.ifbench .lh{color:var(--red)}
+  .leg .lh .ar{font-size:11px}
+  .leg .ltxt{font-size:11px;color:var(--ink2);line-height:1.35;margin-top:7px}
+  .leg .ltxt b{color:var(--ink);font-weight:700}
+  .leg .lchip{margin-top:9px;display:inline-flex;align-items:center;font-family:var(--mono);font-weight:700;
+    font-size:11.5px;padding:4px 9px;border-radius:8px}
+  .leg.ifstart .lchip{background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:#2a1e07;
+    box-shadow:0 2px 7px rgba(181,134,47,.36)}
+  .leg.ifbench .lchip{background:var(--red-soft);color:var(--red);border:1px solid #e3b8b3}
+  /* when resolved, dim the losing fork leg */
+  .fork.resolved .leg.ifbench{opacity:.42;filter:saturate(.5)}
+  .fork.resolved .leg.ifstart{box-shadow:inset 3px 0 0 var(--green)}
+  .leg .resolveTag{display:none}
+  .fork.resolved .leg.ifstart .resolveTag{display:inline-flex;align-items:center;gap:4px;margin-top:8px;
+    font-family:var(--mono);font-size:9px;font-weight:700;color:var(--green-ink);background:var(--green-soft);
+    padding:3px 7px;border-radius:6px}
+
+  /* ---- Gary's read (the slip's "stake" line) ---------------------------- */
+  .gread{margin:12px 14px 4px;border-radius:14px;padding:13px 14px;
+    background:linear-gradient(180deg,#FBF5E8,#F6EDD9);border:1px solid var(--gold-lo);position:relative}
+  .gread .ge{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+    color:var(--gold-deep);font-weight:700;margin-bottom:8px}
+  .gread .gmark{width:18px;height:18px;border-radius:5px;background:linear-gradient(180deg,var(--gold-hi),var(--gold));
+    display:flex;align-items:center;justify-content:center;color:#2a1e07;font-weight:800;font-size:11px;font-family:var(--sans)}
+  .gread .gtxt{font-size:13px;line-height:1.45;color:var(--ink2)}
+  .gread .gtxt b{color:var(--ink);font-weight:700}
+  .gread .gtxt .odds{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+  .gread .hedge{margin-top:9px;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9.5px;
+    color:var(--ink3)}
+  .gread .hedge .hi{color:var(--amber)}
+
+  /* ---- slip footer: perforation + return line --------------------------- */
+  .perf{height:1px;margin:12px 0 0;background:none;position:relative}
+  .perf::before{content:"";position:absolute;left:14px;right:14px;top:0;
+    border-top:2px dashed var(--line);}
+  .perf .pl,.perf .pr{position:absolute;top:-9px;width:18px;height:18px;border-radius:50%;
+    background:var(--paper);box-shadow:0 0 0 1px rgba(120,100,60,.14) inset}
+  .perf .pl{left:-9px}.perf .pr{right:-9px}
+  .sfoot{display:flex;align-items:center;padding:14px 16px 16px;gap:10px}
+  .sfoot .col{display:flex;flex-direction:column;gap:2px}
+  .sfoot .fl{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;color:var(--ink3);font-weight:600}
+  .sfoot .fv{font-family:var(--mono);font-size:14px;font-weight:800;color:var(--ink)}
+  .sfoot .fv.gold{color:var(--gold-deep)}
+  .sfoot .place{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.04em;
+    padding:11px 16px;border-radius:11px;border:0;cursor:pointer;
+    background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:#2a1e07;
+    box-shadow:0 4px 12px rgba(181,134,47,.4)}
+  .sfoot .place.soft{background:var(--slip2);color:var(--ink3);box-shadow:none;border:1px dashed var(--line)}
+
+  /* ---- bottom sheet ----------------------------------------------------- */
+  .scrim{position:fixed;inset:0;background:rgba(20,15,8,.44);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,102%);width:430px;max-width:100%;
+    background:var(--paper);border-radius:24px 24px 0 0;padding:8px 18px 28px;z-index:41;
+    transition:transform .27s cubic-bezier(.3,.9,.3,1);box-shadow:0 -12px 44px rgba(30,20,8,.32)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:40px;height:4px;border-radius:2px;background:#cdbfa3;margin:6px auto 15px}
+  .sh-head{display:flex;align-items:center;gap:12px}
+  .sh-num{width:42px;height:42px;border-radius:11px;background:var(--ink);color:var(--gold-lo);font-family:var(--mono);
+    font-weight:700;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .sh-nm{font-size:19px;font-weight:800}
+  .sh-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink3);letter-spacing:.04em;margin-top:2px}
+  .sh-status{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;padding:5px 10px;border-radius:8px}
+  .sh-status.contested{background:var(--amber-soft);color:var(--amber-ink)}
+  .sh-status.confirmed{background:var(--green-soft);color:var(--green-ink)}
+  .sh-sec{margin-top:16px}
+  .sh-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--gold);font-weight:700;margin-bottom:8px}
+  .sh-splitbar{display:flex;height:30px;border-radius:9px;overflow:hidden;font-family:var(--mono);font-size:10px;font-weight:700}
+  .sh-splitbar .s1{background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;gap:5px}
+  .sh-splitbar .s2{background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;gap:5px}
+  .sh-srclist{margin-top:9px;font-family:var(--mono);font-size:10.5px;color:var(--ink2);line-height:1.7}
+  .sh-srclist .y{color:var(--green);font-weight:700}.sh-srclist .n{color:var(--amber);font-weight:700}
+  .bet{background:var(--slip);border:1px solid var(--line);border-radius:13px;padding:13px 14px;font-size:13px;
+    line-height:1.5;color:var(--ink2)}
+  .bet b{color:var(--ink)} .bet .odds{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:4px}
+  .stat{background:var(--slip);border:1px solid var(--line);border-radius:11px;padding:10px;text-align:center}
+  .stat .v{font-family:var(--mono);font-size:17px;font-weight:800;color:var(--ink)}
+  .stat .l{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--ink3);margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>d06 — Sportsbook Slip.</b> The Qatar XI rendered as Gary's bet slip. The pitch collapses to a
+  header crest; the body is a stack of player <b>legs</b> with gold odds chips. Tap the state pills:
+  <b>Projected</b> (soft dashed chips, hedged) → <b>Contested</b> (the Almoez Ali fork row opens, the rest dim) →
+  <b>Confirmed</b> (chips fire, the fork resolves). Tap any leg for the source split + read.
+</div>
+
+<div class="phone">
+  <div class="status">
+    <span class="num">9:41</span>
+    <span class="r"><span>Gary</span></span>
+  </div>
+  <div class="nav">
+    <span class="chev">‹</span>
+    <span class="ttl">STARTING XI · SLIP</span>
+    <span class="share">⤴</span>
+  </div>
+
+  <!-- state toggle -->
+  <div class="seg">
+    <button data-state="projected" class="on">PROJECTED<span class="sub">all day · ~6h KO</span></button>
+    <button data-state="contested">CONTESTED<span class="sub">the fork</span></button>
+    <button data-state="confirmed">CONFIRMED<span class="sub">~38m KO</span></button>
+  </div>
+
+  <div class="slipwrap">
+    <div class="slip">
+
+      <!-- slip header: collapsed pitch thumbnail + matchup -->
+      <div class="shead">
+        <div class="crest" id="crest" onclick="document.querySelector('[data-state=contested]').click()">
+          <div class="grass"></div>
+          <div class="ln ctr"></div><div class="ln cir"></div>
+          <div class="ln boxT"></div><div class="ln boxB"></div>
+          <!-- 11 dots, 4-3-3 -->
+          <div class="dot" style="left:50%;top:90%"></div>
+          <div class="dot" style="left:20%;top:70%"></div><div class="dot" style="left:40%;top:70%"></div>
+          <div class="dot" style="left:60%;top:70%"></div><div class="dot" style="left:80%;top:70%"></div>
+          <div class="dot" style="left:28%;top:48%"></div><div class="dot" style="left:50%;top:48%"></div>
+          <div class="dot" style="left:72%;top:48%"></div>
+          <div class="dot" style="left:24%;top:26%"></div>
+          <div class="dot hot" id="crestHot" style="left:50%;top:24%"></div>
+          <div class="dot" style="left:76%;top:26%"></div>
+          <div class="fform">4-3-3</div>
+        </div>
+        <div class="smeta">
+          <div class="league">Group B · World Cup</div>
+          <div class="teams">Canada <span class="v">v</span> Qatar</div>
+          <div class="venue num">BC PLACE · VANCOUVER · 6:00 PM ET</div>
+          <div class="picked"><span class="qb"></span>QATAR XI · <span class="num">4-3-3</span></div>
+        </div>
+        <div id="sbadge"></div>
+      </div>
+
+      <!-- leg count + self-grade -->
+      <div class="slegs">
+        <div class="legcount"><span class="num" id="legN">11</span>-LEG STARTING SLIP</div>
+        <div id="grade"></div>
+      </div>
+
+      <!-- player rows render here -->
+      <div class="rows" id="rows"></div>
+
+      <!-- Gary's read -->
+      <div id="gread"></div>
+
+      <!-- perforation + footer -->
+      <div class="perf"><span class="pl"></span><span class="pr"></span></div>
+      <div class="sfoot" id="sfoot"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---------- data ------------------------------------------------------- */
+/* Each row carries a betting "angle" + a chip value. Chips read soft in
+   projected, fire in confirmed. Almoez Ali is the contested hero/fork. */
+const ROWS = [
+  {pos:'GK',num:1,nm:'Barsham',
+    angle:{p:'Shot-stopper — anchors any CAN clean-sheet fade',c:'In goal — Qatar to keep it tight early'},
+    chip:{p:{lbl:'CS',v:'+165',k:'mut'}, c:{lbl:'CS',v:'+165',k:'mut'}}},
+  {pos:'RB',ln:'#2',num:2,nm:'Pedro Miguel',
+    angle:{p:'Right back — overlaps feed Edmilson',c:'Right back — gets forward on Qatar pushes'},
+    chip:{p:{lbl:'ASST',v:'+650',k:'mut'}, c:{lbl:'ASST',v:'+650',k:'mut'}}},
+  {pos:'CB',ln:'#15',num:15,nm:'Khoukhi',
+    angle:{p:'Centre-half — set-piece header threat',c:'Centre-half — Qatar corner target'},
+    chip:{p:{lbl:'SCORE',v:'+1400',k:'mut'}, c:{lbl:'SCORE',v:'+1400',k:'mut'}}},
+  {pos:'CB',ln:'#5',num:5,nm:'Hassan',
+    angle:{p:'Centre-half — leads the back line',c:'Centre-half — marshals the CS attempt'},
+    chip:{p:{lbl:'—',v:'XI',k:'mut'}, c:{lbl:'—',v:'XI',k:'mut'}}},
+  {pos:'LB',ln:'#3',num:3,nm:'Homam',
+    angle:{p:'Left back — width on Davies\' flank',c:'Left back — matched up on Davies'},
+    chip:{p:{lbl:'—',v:'XI',k:'mut'}, c:{lbl:'—',v:'XI',k:'mut'}}},
+  {pos:'CM',ln:'#12',num:12,nm:'Madibo',
+    angle:{p:'Holding mid — shields the back four',c:'Anchor — screens vs CAN transitions'},
+    chip:{p:{lbl:'TKL',v:'o2.5',k:'mut'}, c:{lbl:'TKL',v:'o2.5',k:'mut'}}},
+  {pos:'CM',ln:'#8',num:8,nm:'Hatim',
+    angle:{p:'Creator — feeds the front three',c:'Creator — key to Qatar OVER',hot:true},
+    chip:{p:{lbl:'ASST',v:'+320',k:'soft'}, c:{lbl:'ASST',v:'+320',k:'fire'}}},
+  {pos:'CM',ln:'#23',num:23,nm:'Boudiaf',
+    angle:{p:'Box-to-box — late runs',c:'Box-to-box — arrives in the box'},
+    chip:{p:{lbl:'SCORE',v:'+900',k:'mut'}, c:{lbl:'SCORE',v:'+900',k:'mut'}}},
+  {pos:'LW',ln:'#11',num:11,nm:'Afif',
+    angle:{p:'Qatar\'s engine — drives the OVER',c:'Talisman — anytime-scorer live',hot:true},
+    chip:{p:{lbl:'SCORE',v:'+240',k:'soft'}, c:{lbl:'SCORE',v:'+210',k:'fire'}}},
+  /* HERO — contested slot lives in its own block, not this list */
+  {pos:'RW',ln:'#10',num:10,nm:'Edmilson Jr.',
+    angle:{p:'Right wing — stretches the CAN line',c:'Right wing — anytime-scorer in play',hot:true},
+    chip:{p:{lbl:'SCORE',v:'+300',k:'soft'}, c:{lbl:'SCORE',v:'+275',k:'fire'}}},
+];
+
+/* contested hero (Almoez Ali) */
+const HERO = {
+  pos:'ST', num:19, nm:'Almoez Ali', sub:'QATAR · STRIKER · ALL-TIME TOP SCORER',
+  split:[60,40,'3 of 5 START','2 BENCH'],
+  srcYes:'The Athletic · ESPN · Sports Mole', srcNo:'RotoWire · bet365',
+};
+
+const STATE_COPY = {
+  projected:{
+    badge:`<span class="sbadge projected"><span class="d"></span>PROJECTED</span>`,
+    grade:`<span class="grade"><span class="gi">◴</span>TOURN. AVG <span class="num">9/11</span></span>`,
+    gread:`<div class="gread">
+      <div class="ge"><span class="gmark">G</span>GARY'S READ · PROJECTED</div>
+      <div class="gtxt"><b>If this XI holds:</b> the front three (Afif / Ali / Edmilson) leans Qatar
+        <b>team-total OVER</b> and stacks anytime-scorer angles — <b>firms up at the confirmed lineup.</b></div>
+      <div class="hedge"><span class="hi">◴</span> Soft until confirmed — chips below are projected, not live. Posts ~T-40.</div>
+    </div>`,
+    foot:`<div class="col"><span class="fl">SLIP READ</span><span class="fv">HEDGED</span></div>
+          <div class="col"><span class="fl">CONSENSUS</span><span class="fv gold num">82%</span></div>
+          <button class="place soft">SOFT · WAIT FOR XI</button>`,
+  },
+  contested:{
+    badge:`<span class="sbadge projected"><span class="d"></span>PROJECTED</span>`,
+    grade:`<span class="grade"><span class="gi">◴</span>TOURN. AVG <span class="num">9/11</span></span>`,
+    gread:`<div class="gread">
+      <div class="ge"><span class="gmark">G</span>GARY'S READ · CONTESTED</div>
+      <div class="gtxt"><b>One leg decides this slip.</b> 3 of 5 outlets start Qatar's all-time top scorer; 2 bench him.
+        Qatar's <b>entire OVER / team-total</b> swings on the fork above — <b>this is the question to ask before you bet.</b></div>
+      <div class="hedge"><span class="hi">◴</span> Don't place until the team sheet resolves the #19 fork (~T-40).</div>
+    </div>`,
+    foot:`<div class="col"><span class="fl">SLIP READ</span><span class="fv">ON THE FORK</span></div>
+          <div class="col"><span class="fl">CONSENSUS</span><span class="fv gold num">82%</span></div>
+          <button class="place soft">HOLD · #19 PENDING</button>`,
+  },
+  confirmed:{
+    badge:`<span class="sbadge confirmed"><span class="d"></span>CONFIRMED · 38m KO</span>`,
+    grade:`<span class="grade hit"><span class="gi">✓</span>PROJECTION HIT <span class="num">10/11</span></span>`,
+    gread:`<div class="gread">
+      <div class="ge"><span class="gmark">G</span>GARY'S READ · CONFIRMED</div>
+      <div class="gtxt"><b>Confirmed: Ali starts.</b> Qatar over / Ali anytime-scorer <span class="odds">+180</span> live.
+        Front three intact — a genuine go-forward sheet that leans the match <b>OVER</b> and Qatar's side of the total.</div>
+      <div class="hedge"><span class="hi" style="color:var(--green)">●</span> Live now — chips fired, the #19 fork resolved START.</div>
+    </div>`,
+    foot:`<div class="col"><span class="fl">HEADLINE</span><span class="fv gold num">+180</span></div>
+          <div class="col"><span class="fl">LIVE LEGS</span><span class="fv num">4</span></div>
+          <button class="place">PLACE QATAR OVER</button>`,
+  },
+};
+
+/* per-player drill-down */
+const READS = {
+  'Almoez Ali':{ sub:'Qatar · ST · #19',
+    contested:true,
+    bet:'Qatar\'s all-time top scorer (60 caps, <b>12 in qualifying</b>). The whole slip hinges on this leg:<br>• If he <b>starts</b> → Ali anytime-scorer <span class="odds">+180</span>, Qatar team-total OVER fires live.<br>• If he\'s <b>benched</b> → fade Qatar\'s over, Canada clean-sheet <span class="odds">+165</span> gains.<br><b>Watch the team sheet at ~T-40 before placing this slip.</b>',
+    stats:[['12','QUAL GOALS'],['60','CAREER'],['1','GP THIS WC']] },
+  'Afif':{ sub:'Qatar · LW · #11',
+    bet:'Qatar\'s engine and creative hub. With the front three intact, <b>Afif anytime-scorer <span class="odds">+210</span></b> and Qatar team-total OVER are the cleaner reads.',
+    stats:[['—','ASIA POTY'],['10','QUAL G/A'],['1','GP THIS WC']] },
+};
+
+/* ---------- render ----------------------------------------------------- */
+let state='projected';
+
+function chipHtml(c){ return `<div class="chip ${c.k}"><span class="lbl">${c.lbl}</span>${c.v}</div>`; }
+
+function render(){
+  const isConf = state==='confirmed';
+  const isCont = state==='contested';
+  const SC = STATE_COPY[state];
+
+  document.getElementById('sbadge').innerHTML = SC.badge;
+  document.getElementById('grade').innerHTML = SC.grade;
+  document.getElementById('gread').innerHTML = SC.gread;
+  document.getElementById('sfoot').innerHTML = SC.foot;
+  document.getElementById('crestHot').style.opacity = isConf ? '0' : '1';
+  document.getElementById('crestHot').style.background = isConf ? 'var(--gold-lo)' : 'var(--amber)';
+
+  // build player rows + insert hero in the FWD line
+  const rowsEl = document.getElementById('rows');
+  rowsEl.className = 'rows' + (isCont ? ' spotlight' : '');
+  let html = '';
+  ROWS.forEach((r,idx)=>{
+    // hero fork is injected right before Edmilson (the RW, last item) so it sits inside the front line
+    if(r.nm==='Edmilson Jr.') html += heroHtml(isConf,isCont);
+    const a = isConf ? r.angle.c : r.angle.p;
+    const c = isConf ? r.chip.c : r.chip.p;
+    const ln = r.ln ? `<span class="ln">${r.ln}</span>` : '';
+    html += `<div class="row" onclick="openSheet('${r.nm}','${r.pos}',${r.num},false)">
+      <div class="pos">${r.pos}${ln}</div>
+      <div class="jersey num">${r.num}</div>
+      <div class="who"><div class="nm">${r.nm}</div><div class="angle">${a}</div></div>
+      ${chipHtml(c)}
+    </div>`;
+  });
+  rowsEl.innerHTML = html;
+}
+
+function heroHtml(isConf,isCont){
+  const tab = isConf ? 'CONFIRMED · STARTS' : (isCont ? 'CONTESTED · 3 vs 2' : 'WATCH · #19');
+  const pct = isConf ? '100%' : '60%';
+  const pl  = isConf ? 'STARTS — RESOLVED' : 'START SHARE · 3/5';
+  const contestCls = isCont ? ' contestState' : '';
+  const forkResolved = isConf ? ' resolved' : '';
+  // source split only shown in contested/projected; confirmed collapses to resolved fork
+  const splitBlock = isConf ? '' : `
+    <div class="splitwrap">
+      <div class="splitbar">
+        <div class="s1" style="flex:${HERO.split[0]}">▲ ${HERO.split[2]}</div>
+        <div class="s2" style="flex:${HERO.split[1]}">▼ ${HERO.split[3]}</div>
+      </div>
+      <div class="splitsrc"><span class="y">▲ START</span> ${HERO.srcYes} &nbsp;·&nbsp;
+        <span class="n">▼ BENCH</span> ${HERO.srcNo}</div>
+    </div>`;
+
+  return `<div class="hero heroRow">
+    <span class="tab">${tab}</span>
+    <div class="htop${contestCls}" onclick="openSheet('Almoez Ali','ST',19,true)">
+      <div class="jersey num">19</div>
+      <div>
+        <div class="hnm">Almoez Ali</div>
+        <div class="hsub">QATAR · ST · TOP SCORER · 12 QUAL G</div>
+      </div>
+      <div class="hgrade"><div class="pct num">${pct}</div><div class="pl">${pl}</div></div>
+    </div>
+    ${splitBlock}
+    <div class="fork${forkResolved}">
+      <div class="leg ifstart">
+        <div class="lh"><span class="ar">▲</span>IF HE STARTS</div>
+        <div class="ltxt"><b>Qatar over</b> firms · Ali anytime-scorer live.</div>
+        <div class="lchip num">+180</div>
+        <div class="resolveTag">✓ RESOLVED · STARTS</div>
+      </div>
+      <div class="leg ifbench">
+        <div class="lh"><span class="ar">▼</span>IF HE'S BENCHED</div>
+        <div class="ltxt">Fade Qatar over · <b>Canada clean sheet</b>.</div>
+        <div class="lchip num">+165</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- bottom sheet ----------------------------------------------- */
+function openSheet(name,pos,num,contested){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const isConf = state==='confirmed';
+  const statusHtml = (contested && !isConf)
+    ? `<span class="sh-status contested">CONTESTED</span>`
+    : (isConf ? `<span class="sh-status confirmed">CONFIRMED</span>` : '');
+  let body=`<div class="grab"></div>
+    <div class="sh-head"><div class="sh-num num">${num}</div>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:'Qatar · '+pos+' · #'+num}</div></div>
+      ${statusHtml}</div>`;
+
+  if(name==='Almoez Ali' && !isConf){
+    body+=`<div class="sh-sec"><div class="sh-lbl">SOURCE SPLIT · 82% AGREE</div>
+      <div class="sh-splitbar"><div class="s1" style="flex:${HERO.split[0]}">▲ ${HERO.split[2]}</div>
+        <div class="s2" style="flex:${HERO.split[1]}">▼ ${HERO.split[3]}</div></div>
+      <div class="sh-srclist"><span class="y">▲ START</span> ${HERO.srcYes}<br><span class="n">▼ BENCH</span> ${HERO.srcNo}</div></div>
+      <div class="sh-sec"><div class="sh-lbl">THE FORK</div><div class="bet">${r.bet}</div></div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">${name==='Almoez Ali'?'CONFIRMED · THE READ':'THE READ'}</div><div class="bet">${r.bet}</div></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="bet">Per-leg reads attach here — recent form, the matchup vs the opposite number, and any prop angle. <i>(Mock: detailed cards wired for Ali &amp; Afif.)</i></div></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">FORM</div><div class="statgrid">`;
+    r.stats.forEach(s=>{ body+=`<div class="stat"><div class="v num">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---------- wiring ----------------------------------------------------- */
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state; render();
+});
+render();
+</script>
+</body>
+</html>

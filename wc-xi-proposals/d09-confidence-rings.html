@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — d09 Confidence Rings</title>
+<!--
+  d09 — CONFIDENCE RINGS.  Data-viz / trust-forward direction.
+  Every player disc wears a thin SVG ring = source-agreement %. Full ring = locked, partial = uncertain.
+  The contested slot (Almoez Ali) wears a SPLIT ring (amber/green 60/40).
+  HERO: self-grade chip + a source-consensus meter at the top. Pitch = a dark data canvas.
+  Numerals in mono (Quant Terminal rule). Warm gold = Gary's voice + key affordance only.
+-->
+<style>
+  :root{
+    /* warm cream chrome (Gary house) */
+    --cream:#F6F1E7; --cream2:#EFE6D6; --panel:#FBF7EF;
+    --ink:#1C1812; --ink2:#4A4032; --ink3:#8A7C66;
+    --gold:#B5862F; --gold-soft:#E7D7AD; --gold-deep:#7E5C18; --gold-glow:rgba(181,134,47,.35);
+    /* data canvas (dark) */
+    --canvas-a:#11161B; --canvas-b:#0C1014; --grid:rgba(120,160,190,.10);
+    --grid2:rgba(120,160,190,.16);
+    /* ring states */
+    --lock:#37B07A; --lock-soft:#7FE3B6;
+    --amber:#E0902F; --amber-soft:#F4C77E;
+    --track:rgba(255,255,255,.10);
+    --red:#D85148;
+    --chip-line:#E4D8C0;
+    --sh:0 1px 0 rgba(0,0,0,.04),0 10px 30px rgba(40,30,12,.12);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:radial-gradient(120% 80% at 50% -10%,#E9E0D0,#D4CAB6);font-family:var(--sans);
+    color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:14px;padding:26px 12px 60px}
+  .cap{font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .num{font-family:var(--mono);font-feature-settings:"tnum" 1}
+  .legend{max-width:430px;width:100%;font-size:11.5px;color:#5b5038;line-height:1.5;
+    background:rgba(255,255,255,.5);border:1px solid rgba(120,100,60,.2);border-radius:12px;padding:10px 13px}
+  .legend b{color:#3a3020}
+
+  /* phone */
+  .phone{width:430px;max-width:100%;background:var(--cream);border-radius:34px;overflow:hidden;box-shadow:var(--sh);
+    border:1px solid rgba(120,100,60,.18)}
+  .status{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;
+    font-family:var(--mono);color:var(--ink2)}
+  .nav{display:flex;align-items:center;gap:10px;padding:6px 16px 10px}
+  .nav .chev{font-size:22px;color:var(--ink2);line-height:1}
+  .nav .ttl{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--ink2)}
+  .nav .share{margin-left:auto;font-size:16px;color:var(--ink3)}
+
+  /* match header */
+  .mhead{padding:0 16px 4px}
+  .teams{font-size:23px;font-weight:800;letter-spacing:-.01em}
+  .teams .v{color:var(--ink3);font-weight:600;font-size:15px;margin:0 3px}
+  .meta{margin-top:3px;font-size:11px;color:var(--ink3);font-family:var(--mono);letter-spacing:.03em}
+
+  /* ===== HERO: self-grade chip + consensus meter ===== */
+  .hero{margin:12px 16px 0;background:linear-gradient(180deg,#15191F,#0E1216);border-radius:18px;
+    padding:14px 15px 15px;color:#EAE3D4;position:relative;overflow:hidden;
+    box-shadow:0 10px 26px rgba(15,20,26,.35),inset 0 1px 0 rgba(255,255,255,.05)}
+  .hero::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(60% 40% at 14% 0,rgba(181,134,47,.18),transparent 70%)}
+  .hero-top{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+  /* self-grade dial */
+  .grade{position:relative;width:62px;height:62px;flex:0 0 auto}
+  .grade svg{transform:rotate(-90deg)}
+  .grade .gnum{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .grade .gnum b{font-family:var(--mono);font-size:16px;font-weight:700;color:#fff;line-height:1}
+  .grade .gnum s{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--gold-soft);text-decoration:none;margin-top:1px}
+  .hero-lab{flex:1;min-width:0}
+  .hero-lab .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--gold-soft);font-weight:700}
+  .hero-lab .v{font-size:14.5px;font-weight:800;color:#fff;margin-top:3px;line-height:1.15}
+  .hero-lab .s{font-family:var(--mono);font-size:10px;color:#9aa6b0;margin-top:3px;letter-spacing:.02em}
+  .state-pill{margin-left:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.05em;padding:5px 9px;border-radius:8px}
+  .state-pill .d{width:7px;height:7px;border-radius:50%}
+  .state-pill.projected{background:rgba(224,144,47,.16);color:var(--amber-soft);box-shadow:inset 0 0 0 1px rgba(224,144,47,.4)}
+  .state-pill.projected .d{background:var(--amber);box-shadow:0 0 0 3px rgba(224,144,47,.22)}
+  .state-pill.confirmed{background:rgba(55,176,122,.16);color:var(--lock-soft);box-shadow:inset 0 0 0 1px rgba(55,176,122,.4)}
+  .state-pill.confirmed .d{background:var(--lock);box-shadow:0 0 7px rgba(55,176,122,.7)}
+
+  /* consensus meter */
+  .meter{margin-top:14px;position:relative;z-index:1}
+  .meter-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px}
+  .meter-head .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:#9aa6b0;font-weight:700}
+  .meter-head .pct{font-family:var(--mono);font-size:15px;font-weight:700;color:#fff}
+  .meter-head .pct small{font-size:9px;color:var(--lock-soft);letter-spacing:.04em;margin-left:5px;font-weight:600}
+  .track{height:9px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;position:relative;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.4)}
+  .track .fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#2E9E6C,var(--lock-soft));
+    box-shadow:0 0 10px rgba(55,176,122,.5);transition:width .5s cubic-bezier(.3,.9,.3,1)}
+  .track .notch{position:absolute;top:-3px;bottom:-3px;width:2px;background:rgba(255,255,255,.35)}
+  /* outlet dots */
+  .outlets{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
+  .outlet{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;letter-spacing:.02em;
+    color:#aeb8c0;background:rgba(255,255,255,.05);border-radius:20px;padding:3px 8px 3px 6px}
+  .outlet .od{width:6px;height:6px;border-radius:50%}
+  .outlet .od.y{background:var(--lock)} .outlet .od.n{background:var(--amber)}
+
+  /* team toggle + segmented state */
+  .controls{margin:12px 16px 0;display:flex;gap:8px;align-items:center}
+  .tt{display:flex;gap:5px;background:var(--cream2);padding:4px;border-radius:11px}
+  .tt button{border:0;background:transparent;padding:6px 13px;border-radius:8px;font-family:var(--mono);font-size:10.5px;
+    letter-spacing:.05em;color:var(--ink2);cursor:pointer;font-weight:700;transition:.15s}
+  .tt button.on{background:var(--ink);color:var(--gold-soft);box-shadow:0 2px 6px rgba(28,24,18,.3)}
+  .form{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--ink2);font-weight:800;letter-spacing:.04em}
+
+  .seg{display:flex;gap:5px;margin:9px 16px 0;background:var(--cream2);padding:5px;border-radius:13px}
+  .seg button{flex:1;border:0;background:transparent;padding:8px 4px;border-radius:9px;font-family:var(--mono);
+    font-size:10.5px;letter-spacing:.04em;color:var(--ink2);font-weight:700;cursor:pointer;transition:.15s}
+  .seg button .sub{display:block;font-size:8.5px;font-weight:500;color:var(--ink3);margin-top:2px;letter-spacing:.02em}
+  .seg button.on{background:var(--ink);color:var(--gold-soft);box-shadow:0 2px 8px rgba(28,24,18,.28)}
+  .seg button.on .sub{color:rgba(231,215,173,.6)}
+
+  /* ===== PITCH = data canvas ===== */
+  .pitchwrap{margin:12px 16px 0;border-radius:18px;overflow:hidden;position:relative;
+    box-shadow:inset 0 0 0 1px rgba(120,160,190,.14),0 8px 22px rgba(15,20,26,.22)}
+  .pitch{position:relative;width:100%;aspect-ratio:.72;background:
+    radial-gradient(120% 90% at 50% 0,#171E25,var(--canvas-b));}
+  /* faint grid + halfway markings, drawn in SVG-ish CSS */
+  .pitch .grid{position:absolute;inset:0;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:9.09% 8.33%;opacity:.8}
+  .pitch .mk{position:absolute;border:1px solid var(--grid2)}
+  .pitch .center{left:6%;right:6%;top:50%;height:0;border-width:1px 0 0 0;border-style:dashed}
+  .pitch .circle{left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;border-style:dashed}
+  .pitch .boxT{left:26%;right:26%;top:0;height:11%;border-top:0}
+  .pitch .boxB{left:26%;right:26%;bottom:0;height:11%;border-bottom:0}
+  .pitch .spot{position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;background:var(--grid2);transform:translate(-50%,-50%)}
+  .axis{position:absolute;font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:rgba(150,180,200,.4)}
+  .axis.t{top:6px;left:10px} .axis.b{bottom:6px;left:10px}
+
+  /* player nodes */
+  .player{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;
+    cursor:pointer;z-index:2}
+  .ringbox{position:relative;width:46px;height:46px;display:flex;align-items:center;justify-content:center;transition:transform .15s}
+  .player:active .ringbox{transform:scale(.93)}
+  .ringbox svg{position:absolute;inset:0;transform:rotate(-90deg)}
+  .disc{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;font-size:12px;z-index:1;
+    background:radial-gradient(120% 120% at 30% 25%,#2A323B,#171D23);color:#EAE3D4;
+    box-shadow:0 3px 8px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08)}
+  .pct-chip{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:7.5px;
+    font-weight:700;letter-spacing:.02em;padding:1px 4px;border-radius:7px;background:#0D1115;
+    box-shadow:0 0 0 1px rgba(255,255,255,.08);color:var(--lock-soft);z-index:3;white-space:nowrap}
+  .pct-chip.amber{color:var(--amber-soft)}
+  .pname{font-size:9.5px;font-weight:700;color:#E7E2D6;text-shadow:0 1px 3px rgba(0,0,0,.8);line-height:1.05;text-align:center;
+    max-width:74px;margin-top:5px}
+  .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.06em;color:rgba(180,200,215,.6)}
+
+  /* contested node */
+  .player.contested .disc{background:radial-gradient(120% 120% at 30% 25%,#3A2C18,#241A0E);color:#F4C77E}
+  .player.contested{z-index:4}
+  .player.contested .flag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--amber);color:#1C1208;
+    font-family:var(--mono);font-size:7.5px;font-weight:800;padding:1px 5px;border-radius:6px;letter-spacing:.02em;white-space:nowrap;
+    box-shadow:0 2px 6px rgba(0,0,0,.5)}
+  /* dim others only in contested state */
+  .state-contested .player:not(.contested){opacity:.4;filter:saturate(.6)}
+  .state-contested .player.contested .ringbox{animation:halo 1.6s ease-in-out infinite}
+  @keyframes halo{0%,100%{filter:drop-shadow(0 0 2px rgba(224,144,47,.5))}50%{filter:drop-shadow(0 0 9px rgba(224,144,47,.7))}}
+  /* confirmed: rings go full green, contested resolves */
+  .state-confirmed .disc{box-shadow:0 3px 8px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08),0 0 0 1px rgba(55,176,122,.25)}
+
+  /* ===== source/accuracy strip ===== */
+  .srcbar{margin:11px 16px 0;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;
+    color:var(--ink3);letter-spacing:.02em;flex-wrap:wrap;line-height:1.5}
+  .srcbar b{color:var(--ink2)}
+  .srcbar .agree{color:#1c6a47;font-weight:700}
+  .acc{margin-left:auto;background:var(--ink);color:var(--gold-soft);border-radius:7px;padding:3px 9px;font-weight:700;letter-spacing:.04em}
+
+  /* ===== the read panel ===== */
+  .read{margin:13px 16px 18px;background:var(--panel);border:1px solid var(--chip-line);border-radius:15px;padding:14px 15px}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--gold);font-weight:700;margin-bottom:10px;
+    display:flex;align-items:center;gap:7px}
+  .eyebrow .bar{flex:1;height:1px;background:linear-gradient(90deg,var(--gold-soft),transparent)}
+  .rline{display:flex;gap:9px;padding:8px 0;border-top:1px solid rgba(160,140,100,.16);font-size:13px;line-height:1.42;color:var(--ink2)}
+  .rline:first-of-type{border-top:0;padding-top:2px}
+  .rline .k{flex:0 0 auto;width:6px;height:6px;border-radius:50%;margin-top:6px;background:var(--gold);box-shadow:0 0 0 3px var(--gold-glow)}
+  .rline.hot .k{background:var(--lock);box-shadow:0 0 0 3px rgba(55,176,122,.25)}
+  .rline.warn .k{background:var(--amber);box-shadow:0 0 0 3px rgba(224,144,47,.22)}
+  .rline.cold .k{background:var(--red);box-shadow:0 0 0 3px rgba(216,81,72,.22)}
+  .rline b{color:var(--ink)}
+  .rline .odds{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+  .hedge{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:11px;display:flex;align-items:center;gap:6px}
+  .callout{margin-top:12px;background:linear-gradient(180deg,#FBEFD8,#F6E4C2);border:1px solid rgba(224,144,47,.35);
+    border-radius:12px;padding:11px 12px;font-size:12.5px;color:#6e3f10;line-height:1.45}
+  .callout b{color:#542d06}
+  .callout .swing{display:flex;gap:8px;margin-top:9px}
+  .callout .leg{flex:1;background:rgba(255,255,255,.55);border-radius:9px;padding:8px 9px;font-size:11px;line-height:1.35}
+  .callout .leg .h{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;font-weight:800;margin-bottom:3px}
+  .callout .leg.y .h{color:#1c6a47} .callout .leg.n .h{color:#9a5410}
+  .callout .leg .odds{font-family:var(--mono);font-weight:700;color:var(--gold-deep)}
+
+  /* ===== bottom sheet ===== */
+  .scrim{position:fixed;inset:0;background:rgba(12,15,18,.5);opacity:0;pointer-events:none;transition:.22s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,102%);width:430px;max-width:100%;
+    background:var(--cream);border-radius:22px 22px 0 0;padding:8px 18px 26px;z-index:41;
+    transition:transform .26s cubic-bezier(.3,.9,.3,1);box-shadow:0 -10px 40px rgba(15,20,26,.4)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:38px;height:4px;border-radius:2px;background:#cdbfa3;margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:12px}
+  .sh-ring{position:relative;width:52px;height:52px;flex:0 0 auto}
+  .sh-ring svg{transform:rotate(-90deg)}
+  .sh-ring .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+    font-weight:700;font-size:15px;color:var(--ink)}
+  .sh-nm{font-size:18px;font-weight:800}
+  .sh-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink3);letter-spacing:.04em;margin-top:1px}
+  .sh-status{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;padding:5px 9px;border-radius:8px;letter-spacing:.04em}
+  .sh-status.contested{background:#F4E0BE;color:#8a4f11}
+  .sh-status.confirmed{background:#CFEADB;color:#1c5638}
+  .sh-status.locked{background:#CFEADB;color:#1c5638}
+  .sh-sec{margin-top:16px}
+  .sh-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--gold);font-weight:700;margin-bottom:8px}
+  /* agreement split bar */
+  .splitbar{display:flex;height:34px;border-radius:9px;overflow:hidden;font-family:var(--mono);font-size:10px;font-weight:700;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+  .splitbar .s1{background:linear-gradient(180deg,#3CB680,#2E9E6C);color:#fff;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:1px;line-height:1.1}
+  .splitbar .s2{background:linear-gradient(180deg,#E89A38,#D9842A);color:#fff;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:1px;line-height:1.1}
+  .splitbar .s1 small,.splitbar .s2 small{font-size:7.5px;font-weight:600;opacity:.9;letter-spacing:.04em}
+  .srclist{margin-top:9px;font-family:var(--mono);font-size:10.5px;color:var(--ink2);line-height:1.7}
+  .srclist .y{color:#1c6a47;font-weight:700} .srclist .n{color:#9a5410;font-weight:700}
+  .bet{background:var(--panel);border:1px solid var(--chip-line);border-radius:12px;padding:12px 13px;font-size:13px;
+    line-height:1.5;color:var(--ink2)}
+  .bet b{color:var(--ink)}
+  .bet .odds{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+  .stat{background:var(--panel);border:1px solid var(--chip-line);border-radius:10px;padding:9px;text-align:center}
+  .stat .v{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--ink)}
+  .stat .l{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--ink3);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>d09 · Confidence Rings.</b> Every player wears a ring = <b>source-agreement %</b> (full ring = locked,
+  partial = uncertain). The contested <b>Almoez Ali</b> slot wears a split amber/green ring (60/40). The
+  <b>self-grade dial</b> + <b>consensus meter</b> are the hero up top. Tap the timeline to move
+  Projected → Contested → Confirmed; tap any node for the drill-down.
+</div>
+
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="cap">Gary</span></div>
+  <div class="nav">
+    <span class="chev">‹</span>
+    <span class="ttl">STARTING XI</span>
+    <span class="share">⤴</span>
+  </div>
+
+  <div class="mhead">
+    <div class="teams">Canada <span class="v">v</span> Qatar</div>
+    <div class="meta">GROUP B · BC PLACE · VANCOUVER · 6:00 PM ET</div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-top">
+      <div class="grade" id="grade"></div>
+      <div class="hero-lab" id="herolab"></div>
+      <span id="statepill"></span>
+    </div>
+    <div class="meter">
+      <div class="meter-head">
+        <span class="lab">SOURCE CONSENSUS</span>
+        <span class="pct" id="meterpct"></span>
+      </div>
+      <div class="track"><div class="fill" id="meterfill"></div><div class="notch" style="left:70%"></div></div>
+      <div class="outlets" id="outlets"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="tt">
+      <button data-team="QAT" class="on">QATAR</button>
+      <button data-team="CAN">CANADA</button>
+    </div>
+    <span class="form" id="formlbl">4-3-3</span>
+  </div>
+
+  <div class="seg">
+    <button data-state="projected" class="on">PROJECTED<span class="sub">all day · ~6h to KO</span></button>
+    <button data-state="contested">CONTESTED<span class="sub">the debated slot</span></button>
+    <button data-state="confirmed">CONFIRMED<span class="sub">~38m to KO</span></button>
+  </div>
+
+  <div class="pitchwrap">
+    <div class="pitch" id="pitch">
+      <div class="grid"></div>
+      <div class="mk boxT"></div>
+      <div class="mk boxB"></div>
+      <div class="mk circle"></div>
+      <div class="mk center"></div>
+      <div class="spot"></div>
+      <span class="axis t cap">ATTACK ▲</span>
+      <span class="axis b cap">DEFENCE ▼</span>
+    </div>
+  </div>
+
+  <div class="srcbar" id="srcbar"></div>
+
+  <div class="read" id="read"></div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- data ------------------------------------------------------------ */
+const TEAMS = {
+  QAT: {
+    name:'Qatar', formation:'4-3-3', agree:82,
+    sources:[['The Athletic','y'],['ESPN','y'],['Sports Mole','y'],['RotoWire','n'],['bet365','n']],
+    lines:[
+      {y:90, men:[{n:1,nm:'Barsham',pos:'GK',conf:96}]},
+      {y:70, men:[{n:2,nm:'Pedro Miguel',pos:'RB',conf:88},{n:15,nm:'Khoukhi',pos:'CB',conf:94},{n:5,nm:'Hassan',pos:'CB',conf:92},{n:3,nm:'Homam',pos:'LB',conf:84}]},
+      {y:48, men:[{n:12,nm:'Madibo',pos:'CM',conf:90},{n:8,nm:'Hatim',pos:'CM',conf:88},{n:23,nm:'Boudiaf',pos:'CM',conf:80}]},
+      {y:25, men:[{n:11,nm:'Afif',pos:'LW',conf:97},{n:19,nm:'Almoez Ali',pos:'ST',conf:60,contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW',conf:86}]},
+    ],
+    projRead:[
+      {t:'<b>Go-forward shape.</b> A front three of Afif + Ali + Edmilson leans Qatar to push the game — points toward Qatar team-total OVER and anytime-scorer markets.',cls:'hot'},
+      {t:'<b>Behind 0-1-0 in Group B.</b> Drew the opener — closer to a must-win, which tends to mean a fuller-strength, attacking sheet.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed: Ali starts.</b> Qatar\'s leading scorer is in the XI — Qatar over / Ali anytime-scorer <span class="odds">+180</span> live, not hedged.',cls:'hot'},
+      {t:'<b>4-3-3, front three intact.</b> A genuine go-forward selection vs Canada — leans the match OVER and Qatar\'s side of the total.',cls:'hot'},
+    ],
+  },
+  CAN: {
+    name:'Canada', formation:'4-3-3', agree:91,
+    sources:[['The Athletic','y'],['ESPN','y'],['Sports Mole','y'],['RotoWire','y'],['bet365','n']],
+    lines:[
+      {y:90, men:[{n:16,nm:'Crépeau',pos:'GK',conf:98}]},
+      {y:70, men:[{n:2,nm:'Johnston',pos:'RB',conf:90},{n:4,nm:'Vitória',pos:'CB',conf:93},{n:5,nm:'Cornelius',pos:'CB',conf:88},{n:3,nm:'Adekugbe',pos:'LB',conf:86}]},
+      {y:48, men:[{n:7,nm:'Eustáquio',pos:'CM',conf:91},{n:13,nm:'Koné',pos:'CM',conf:84},{n:11,nm:'Buchanan',pos:'CM',conf:89}]},
+      {y:25, men:[{n:20,nm:'David',pos:'ST',conf:97},{n:17,nm:'Larin',pos:'ST',conf:82},{n:19,nm:'Davies',pos:'LW',conf:99}]},
+    ],
+    projRead:[
+      {t:'<b>High source agreement (91%).</b> Near-locked side — the projected XI carries more weight even pre-confirmation.',cls:'hot'},
+      {t:'<b>David + Davies pace up top.</b> Canada\'s front line leans the match toward Canada\'s side of the spread.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed XI matches the projection.</b> No surprises — the pre-confirmation reads stand.',cls:'hot'},
+      {t:'<b>Full-strength attacking line.</b> David / Larin / Davies all start — Canada to score / -1.5 markets in play.',cls:'hot'},
+    ],
+  },
+};
+
+/* per-player drill-down */
+const READS = {
+  'Almoez Ali':{
+    sub:'Qatar · ST · #19',
+    contested:{split:[60,40],
+      sources:'<span class="y">▲ START</span> The Athletic · ESPN · Sports Mole &nbsp; <span class="n">▼ BENCH</span> RotoWire · bet365',
+      bet:'Qatar\'s all-time top scorer (60 caps, <b>12 in qualifying</b>). The whole match hinges on this slot. Watch the official team sheet at ~T-38 before betting Qatar\'s total.'},
+    stats:[['12','QUAL GOALS'],['60','CAREER'],['1','GP THIS WC']],
+  },
+  'David':{ sub:'Canada · ST · #20', conf:97,
+    bet:'Canada\'s focal point. With a settled XI around him, <b>David anytime-scorer <span class="odds">+120</span></b> and Canada team-total OVER are the cleaner reads.',
+    stats:[['2','WC GOALS'],['.61','xG/90'],['2','GP THIS WC']] },
+};
+
+/* ---- ring renderer (SVG) -------------------------------------------- */
+// single-color ring with a track behind it
+function ringSVG(size, stroke, pct, color, track){
+  const r=(size-stroke)/2, c=size/2, circ=2*Math.PI*r;
+  const dash = circ*(pct/100);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${track}" stroke-width="${stroke}"/>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+      stroke-linecap="round" stroke-dasharray="${dash} ${circ-dash}"/>
+  </svg>`;
+}
+// split ring: green arc (startPct) + amber arc (rest), used for the contested slot
+function splitRingSVG(size, stroke, greenPct, amberPct){
+  const r=(size-stroke)/2, c=size/2, circ=2*Math.PI*r;
+  const gLen=circ*(greenPct/100), aLen=circ*(amberPct/100);
+  const gap=circ*0.02; // tiny visual gap between arcs
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--track)" stroke-width="${stroke}"/>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--lock)" stroke-width="${stroke}"
+      stroke-linecap="butt" stroke-dasharray="${gLen-gap} ${circ-gLen+gap}"/>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--amber)" stroke-width="${stroke}"
+      stroke-linecap="butt" stroke-dasharray="${aLen-gap} ${circ-aLen+gap}" stroke-dashoffset="${-gLen}"/>
+  </svg>`;
+}
+
+/* ---- render ---------------------------------------------------------- */
+let state='projected', team='QAT';
+
+function render(){
+  const T=TEAMS[team];
+  const isConf = state==='confirmed';
+  document.getElementById('formlbl').textContent=T.formation;
+
+  /* HERO — self-grade dial */
+  const gradeNum = isConf ? '10' : '9';
+  const gradeLab = isConf ? 'HIT' : 'AVG';
+  const gradePct = isConf ? (10/11)*100 : (9/11)*100;
+  document.getElementById('grade').innerHTML =
+    ringSVG(62,5,gradePct,'var(--gold)','rgba(255,255,255,.12)') +
+    `<div class="gnum"><b>${gradeNum}/11</b><s>${gradeLab}</s></div>`;
+
+  document.getElementById('herolab').innerHTML = isConf
+    ? `<div class="k">PROJECTION HIT</div><div class="v">Gary called 10 of 11</div>
+       <div class="s">official sheet posted · graded vs his projection</div>`
+    : `<div class="k">TOURN. PROJECTION AVG</div><div class="v">Gary hits 9 of 11</div>
+       <div class="s">across confirmed XIs this tournament</div>`;
+
+  document.getElementById('statepill').outerHTML = isConf
+    ? `<span id="statepill" class="state-pill confirmed"><span class="d"></span>CONFIRMED</span>`
+    : `<span id="statepill" class="state-pill projected"><span class="d"></span>PROJECTED</span>`;
+
+  /* HERO — consensus meter */
+  const agree = isConf ? 100 : T.agree;
+  document.getElementById('meterpct').innerHTML = isConf
+    ? `100%<small>OFFICIAL SHEET</small>`
+    : `${T.agree}%<small>${T.sources.filter(s=>s[1]==='y').length}/${T.sources.length} OUTLETS</small>`;
+  document.getElementById('meterfill').style.width = agree+'%';
+  document.getElementById('outlets').innerHTML = T.sources.map(s=>
+    `<span class="outlet"><span class="od ${isConf?'y':s[1]}"></span>${s[0]}</span>`).join('');
+
+  /* PITCH */
+  const p=document.getElementById('pitch');
+  p.className='pitch state-'+state;
+  [...p.querySelectorAll('.player')].forEach(e=>e.remove());
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      const x=(i+1)/(n+1)*100;
+      const contested = m.contested && !isConf;
+      const el=document.createElement('div');
+      el.className='player'+(contested?' contested':'');
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+
+      // ring: contested -> split; confirmed -> full lock; else -> conf% in green/amber
+      let ringHtml, chipPct, chipCls;
+      if(contested){
+        ringHtml = splitRingSVG(46,4,60,40);   // 60 green / 40 amber
+        chipPct='60%'; chipCls='amber';
+      } else if(isConf){
+        ringHtml = ringSVG(46,4,100,'var(--lock)','var(--track)');
+        chipPct='✓'; chipCls='';
+      } else {
+        const col = m.conf>=85 ? 'var(--lock)' : 'var(--amber)';
+        ringHtml = ringSVG(46,4,m.conf,col,'var(--track)');
+        chipPct=m.conf+'%'; chipCls = m.conf>=85?'':'amber';
+      }
+      el.innerHTML=`${contested && state==='contested'?'<span class="flag">SPLIT 3·2</span>':''}
+        <div class="ringbox">${ringHtml}<div class="disc">${m.n}</div>
+          <span class="pct-chip ${chipCls}">${chipPct}</span></div>
+        <div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,m.conf,contested);
+      p.appendChild(el);
+    });
+  });
+
+  /* source / accuracy strip */
+  document.getElementById('srcbar').innerHTML = isConf
+    ? `<span>Source: <b>official team sheet</b> · cross-checked vs BDL + API-Football</span>
+       <span class="acc">PROJECTION HIT 10/11</span>`
+    : `<span>Projected from <b>${T.sources.map(s=>s[0]).join(' · ')}</b></span>
+       <span class="agree">${T.agree}% agree</span><span class="acc">TOURN. AVG 9/11</span>`;
+
+  /* read panel */
+  const reads = isConf ? T.confRead : T.projRead;
+  let html = `<div class="eyebrow">${isConf?'THE READ · CONFIRMED':'THE READ · PROJECTED'}<span class="bar"></span></div>`;
+  reads.forEach(r=>{ html+=`<div class="rline ${r.cls}"><span class="k"></span><span>${r.t}</span></div>`; });
+  if(!isConf){
+    html += `<div class="hedge">◴ Soft until confirmed — these firm up when the official sheet posts (~T-38).</div>`;
+  }
+  if(state==='contested' && team==='QAT'){
+    html += `<div class="callout">⚠️ <b>Contested ring — Almoez Ali.</b> 3 of 5 outlets start Qatar's top scorer; 2 bench him. His ring is the only split one on the pitch — and Qatar's entire over / team-total read swings on it.
+      <div class="swing">
+        <div class="leg y"><div class="h">IF HE STARTS</div>Ali anytime-scorer <span class="odds">+180</span> · Qatar total OVER</div>
+        <div class="leg n"><div class="h">IF HE'S BENCHED</div>Fade Qatar's over · Canada clean sheet <span class="odds">+165</span></div>
+      </div>
+      <b style="display:block;margin-top:8px">Tap his node for the full source split.</b></div>`;
+  }
+  document.getElementById('read').innerHTML=html;
+}
+
+/* ---- bottom sheet ---------------------------------------------------- */
+function openSheet(name,pos,num,conf,contested){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+
+  // head ring
+  let headRing, status;
+  if(contested){
+    headRing = splitRingSVG(52,5,60,40);
+    status = `<span class="sh-status contested">SPLIT 3·2</span>`;
+  } else if(state==='confirmed'){
+    headRing = ringSVG(52,5,100,'var(--lock)','rgba(0,0,0,.08)');
+    status = `<span class="sh-status locked">LOCKED ✓</span>`;
+  } else {
+    const c = conf!=null?conf:90;
+    headRing = ringSVG(52,5,c,c>=85?'var(--lock)':'var(--amber)','rgba(0,0,0,.08)');
+    status = `<span class="sh-status confirmed">${c}% AGREE</span>`;
+  }
+
+  let body=`<div class="grab"></div>
+    <div class="sh-head">
+      <div class="sh-ring">${headRing}<div class="c">${num}</div></div>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${status}</div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl">SOURCE AGREEMENT</div>
+      <div class="splitbar"><div class="s1" style="flex:${c.split[0]}">3 START<small>60% · ▲</small></div>
+        <div class="s2" style="flex:${c.split[1]}">2 BENCH<small>40% · ▼</small></div></div>
+      <div class="srclist">${c.sources}</div></div>
+      <div class="sh-sec"><div class="sh-lbl">WHY THE RING IS SPLIT</div><div class="bet">${c.bet}</div></div>
+      <div class="sh-sec"><div class="sh-lbl">THE SWING</div>
+        <div class="bet" style="line-height:1.6">• Starts → Ali anytime-scorer <span class="odds">+180</span>, Qatar total OVER more live.<br>• Benched → fade Qatar's over, Canada clean sheet <span class="odds">+165</span>.</div></div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">THE READ</div><div class="bet">${r.bet}</div></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="sh-lbl">RING READ</div><div class="bet">Ring fill = <b>${conf!=null?conf+'% source agreement':'consensus'}</b> on this start. Per-player form, the matchup vs the opposite number, and any prop angle attach here. <span style="color:var(--ink3)">(Mock: detailed cards wired for Ali &amp; David.)</span></div></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">FORM</div><div class="statgrid">`;
+    r.stats.forEach(s=>{ body+=`<div class="stat"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring ---------------------------------------------------------- */
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state;
+  if(state==='contested' && team!=='QAT'){ /* contested example lives on QAT */ }
+  render();
+});
+document.querySelectorAll('.tt button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tt button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){
+    state='projected';
+    document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>

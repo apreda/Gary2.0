@@ -310,7 +310,7 @@ These are noted for future sessions. None are urgent for today.
 
 2. **Live-tweet poller.** Capability exists but no cron. Future build.
 
-3. **Promoted-tweet experimentation.** We discussed paid tweet boosts ($20-30 per post via X's promote button) as a higher-ROI alternative to Premium+ upgrade. Adam is currently on Premium (not Premium+). Recommendation was to wait for 2 weeks of organic data, then try one promoted tweet on a high-conviction pick.
+3. **Promoted-tweet experimentation.** We discussed paid tweet boosts ($20-30 per post via X's promote button) on a high-conviction pick. **Adam is now on Premium+ (Active, $40/mo, confirmed Jun 16 2026)** — so the account already gets the maximum Premium+ reach + reply-visibility boost. NOTE: Premium+ is the consumer subscription; it does NOT change the X API developer tier, so the reply-engine precondition (confirm the API plan permits conversation/mention reads) still stands separately.
 
 4. **Recap automation.** Morning recap tweets from `game_results` are easy to automate (deterministic). Not yet built.
 
