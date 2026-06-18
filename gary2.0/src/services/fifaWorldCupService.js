@@ -13,8 +13,13 @@ import { API_KEY, BALLDONTLIE_API_BASE_URL, buildQuery } from './ballDontLie/bdl
 const FIFA_BASE = `${BALLDONTLIE_API_BASE_URL}/fifa/worldcup/v1`;
 export const DEFAULT_SEASON = 2026;
 
-// Sportsbooks in priority order for single-book consensus odds.
-export const PREFERRED_VENDORS = ['draftkings', 'fanduel', 'betmgm', 'caesars', 'betrivers', 'fanatics'];
+// Sportsbooks in priority order for a SINGLE-book quote: one primary + two
+// fallbacks. We deliberately keep this list tight to the sharpest, most liquid
+// US books — thin books carry more stale/garbage rungs, and we'd rather omit a
+// line than trust one. selectConsensusOdds takes the first of these that's
+// present; if none are, it returns null (no line) rather than reach for a
+// thin book.
+export const PREFERRED_VENDORS = ['draftkings', 'fanduel', 'betmgm'];
 
 // TTLs by volatility.
 const TTL_STATIC = 24 * 60 * 60 * 1000; // teams, stadiums
@@ -195,7 +200,12 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
     row = oddsRows.find(o => o.vendor === v);
     if (row) break;
   }
-  if (!row) row = oddsRows[0];
+  // Only the trusted primary+fallback books — if none quoted this match, omit
+  // the line entirely rather than fall back to a thin book's ladder.
+  if (!row) {
+    console.warn(`[fifa] no preferred book (${vendors.join('/')}) in odds rows; omitting line`);
+    return null;
+  }
   const ml = {
     home: cleanOdds(row.moneyline_home_odds),
     draw: cleanOdds(row.moneyline_draw_odds),
@@ -233,9 +243,15 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
 // The flat spread_*/total_* fields are null on every 2026 row (verified live)
 // while the real ladders live in the nested markets[] — full-match spread
 // markets carry one Asian-handicap line each (home/away outcomes), totals
-// carry Over/Under pairs per goal line. "Main" line = most balanced juice
-// (smallest |homeOdds + awayOdds| in American terms), which lands on the
-// book's true main number (e.g. Total 2.5) rather than a ladder extreme.
+// carry Over/Under pairs per goal line. The feed carries NO main/alternate
+// flag, so we ELECT the main line: it is the rung priced closest to pick'em
+// (both sides near -110), i.e. the smallest gap between the two sides' implied
+// probabilities (juiceGap). That lands on the book's true main number
+// (e.g. Total 2.5 at -110/-115) rather than a juiced ladder rung like 3.5 at
+// +235/-300. NOTE: do NOT score balance as |over + under| in American odds —
+// the main line (-110/-110) sums to -220 while an alt (+235/-300) sums to -65,
+// so an odds-sum metric prefers the ALT. Implied probability is continuous
+// across the ±100 boundary; the raw American sum/difference is not.
 // A clean half-goal line (±0.5, ±1.5, ±2.5 ...): value*2 is odd — excludes whole
 // (±1.0) and tenth (±1.3) alt lines, giving the American-style number every other
 // sport shows.
@@ -248,6 +264,14 @@ const cleanOdds = (v) => {
   const n = Number(v);
   return (v == null || !Number.isFinite(n) || Math.abs(n) >= ODDS_SENTINEL) ? null : n;
 };
+
+// American odds -> implied win probability (vig included). Used to measure how
+// balanced a two-way price is: the MAIN line minimizes the gap between the two
+// sides' implied probabilities (both ~0.52 at -110). Continuous across ±100,
+// unlike an American odds sum/difference, so it can't be fooled by the
+// discontinuity (e.g. +100 vs -120 are ~equal probability but differ by 220).
+const impliedProb = (a) => { const n = Number(a); return n < 0 ? (-n) / (-n + 100) : 100 / (n + 100); };
+const juiceGap = (o1, o2) => Math.abs(impliedProb(o1) - impliedProb(o2));
 
 // Rough main Asian-handicap a favorite's moneyline implies, used to anchor the
 // spread pick so a deep alt line can't masquerade as the main number. A slight
@@ -311,12 +335,12 @@ function extractMainSpread(markets, ml = null) {
       consistent.sort((a, b) => {
         const da = Math.abs(Math.abs(a.homeValue) - expected);
         const db = Math.abs(Math.abs(b.homeValue) - expected);
-        return da !== db ? da - db : Math.abs(a.homeOdds + a.awayOdds) - Math.abs(b.homeOdds + b.awayOdds);
+        return da !== db ? da - db : juiceGap(a.homeOdds, a.awayOdds) - juiceGap(b.homeOdds, b.awayOdds);
       });
       return consistent[0];
     }
   }
-  half.sort((a, b) => Math.abs(a.homeOdds + a.awayOdds) - Math.abs(b.homeOdds + b.awayOdds));
+  half.sort((a, b) => juiceGap(a.homeOdds, a.awayOdds) - juiceGap(b.homeOdds, b.awayOdds));
   return half[0];
 }
 
@@ -346,7 +370,8 @@ function extractMainTotal(markets) {
   // No half line in band → omit the total rather than ship a whole/alt number.
   const half = realistic.filter(e => isHalfGoalLine(e.line));
   if (half.length === 0) return null;
-  half.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
+  // Main line = the rung priced closest to pick'em (smallest implied-prob gap).
+  half.sort((a, b) => juiceGap(a.over, a.under) - juiceGap(b.over, b.under));
   return half[0];
 }
 
