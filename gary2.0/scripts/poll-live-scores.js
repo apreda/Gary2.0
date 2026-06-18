@@ -22,6 +22,10 @@
 import '../src/loadEnv.js';
 
 import axios from 'axios';
+import { spawn } from 'node:child_process';
+import { existsSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getESTDate } from '../src/utils/dateUtils.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
@@ -34,6 +38,9 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/live_scores` : null;
+const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
+const GRADE_LOCK = '/tmp/gary-live-grade.lock';
+const GRADE_LOCK_TTL_MS = 8 * 60 * 1000; // a hung grader can't wedge triggering forever
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -213,9 +220,58 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// ── Live grading on FINAL ────────────────────────────────────────────────────
+// When a game JUST went final, grade its pick + props + insights now instead of
+// waiting for the 6:45am batch — so Billfold / Winners / Home / The Receipts
+// update on the next app refresh, minutes after the final whistle. The graders
+// are idempotent (they dedup / skip already-graded rows), and a lock keeps two
+// finals from grading concurrently (which could double-insert results). The
+// 6:45am batch stays as a backstop for anything missed (e.g. a late game that
+// finalizes after midnight under the prior date).
+
+/** Game-ids that were ALREADY final in live_scores before this poll wrote. */
+async function fetchPrevFinalIds(date) {
+  try {
+    const { data } = await axios.get(
+      `${REST_URL}?date=eq.${date}&status=eq.final&select=league,game_id`,
+      { headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` }, timeout: 10000 },
+    );
+    return new Set((data || []).map((r) => `${r.league}:${r.game_id}`));
+  } catch {
+    return null; // unknown prior state -> don't trigger this cycle; the next one retries
+  }
+}
+
+function gradingLocked() {
+  try {
+    return existsSync(GRADE_LOCK) && (Date.now() - statSync(GRADE_LOCK).mtimeMs) < GRADE_LOCK_TTL_MS;
+  } catch { return false; }
+}
+
+function triggerGrading(date) {
+  if (gradingLocked()) {
+    console.log('[live-grade] a grading run is already in flight — skipping this trigger');
+    return;
+  }
+  try { writeFileSync(GRADE_LOCK, String(Date.now())); } catch { /* best-effort lock */ }
+  console.log(`[live-grade] grading ${date} — picks + props, then the insight board…`);
+  // Picks/props first (game_results, prop_results), then insights. Release the
+  // lock when both finish OR on error so a crash can't wedge future triggers.
+  const cmd =
+    `node scripts/run-all-results.js ${date} && node run-grade-insights.js --date ${date}; rm -f ${GRADE_LOCK}`;
+  const child = spawn('bash', ['-lc', cmd], {
+    cwd: PROJECT_DIR, detached: true, stdio: 'ignore', env: process.env,
+  });
+  child.unref();
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function run() {
+  // Which games were ALREADY final before this poll wrote — so we grade only the
+  // ones that flip to final on THIS poll (each game triggers grading exactly once).
+  const prevFinalIds = dryRun ? null : await fetchPrevFinalIds(targetDate);
+
   const settled = await Promise.allSettled([mlbRows(), nbaRows(), nhlRows(), wcRows()]);
   const rows = [];
   for (const r of settled) {
@@ -249,6 +305,18 @@ async function run() {
     },
   });
   console.log(`✅ live_scores: ${stamped.length} game(s) for ${targetDate} (${live} live, ${final} final).`);
+
+  // Grade any game that JUST went final — picks/props/insights now, not at 6:45am.
+  if (prevFinalIds) {
+    const newlyFinal = stamped.filter(
+      (r) => r.status === 'final' && !prevFinalIds.has(`${r.league}:${r.game_id}`),
+    );
+    if (newlyFinal.length > 0) {
+      const labels = newlyFinal.map((r) => `${r.away_abbr ?? '?'}@${r.home_abbr ?? '?'}`).join(', ');
+      console.log(`[live-grade] ${newlyFinal.length} game(s) just went FINAL: ${labels}`);
+      triggerGrading(targetDate);
+    }
+  }
 }
 
 run()
