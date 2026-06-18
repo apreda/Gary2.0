@@ -261,14 +261,16 @@ const MLB_TOKENS = [
 ];
 
 // Every token here resolves to a real WC_ fetcher in soccerFetchers.js.
-// Removed (no API source — use fetch_narrative_context grounding instead):
-// SHOTS_ON_TARGET (included in TEAM_MATCH_STATS output), SET_PIECES,
-// KEY_PLAYERS, INJURIES, SUSPENSIONS, LINEUP_FORMATION. Advertising unbacked
-// tokens is the MLB fabrication bug class (prompt asks, no tool answers).
+// INJURIES + RECENT_INTL_FORM are now BACKED by API-Football (getInjuries /
+// getRecentForm) — added Jun 18 so Gary can drill into the same depth MLB/NBA get,
+// not just read it in the prose scout report. Still unbacked (use grounding via
+// fetch_narrative_context instead): SET_PIECES, KEY_PLAYERS, SUSPENSIONS,
+// LINEUP_FORMATION (SHOTS_ON_TARGET already rides TEAM_MATCH_STATS). Advertising an
+// unbacked token is the MLB fabrication bug class — prompt asks, no tool answers.
 const SOCCER_WC_TOKENS = [
-  'TEAM_FORM', 'RECENT_FORM', 'GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT',
+  'TEAM_FORM', 'RECENT_FORM', 'RECENT_INTL_FORM', 'GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT',
   'TEAM_MATCH_STATS', 'POSSESSION_STATS', 'EXPECTED_GOALS',
-  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'H2H_HISTORY',
+  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'H2H_HISTORY', 'INJURIES',
 ];
 
 // Combine all tokens by sport

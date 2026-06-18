@@ -257,17 +257,12 @@ export async function runAgenticPropsCli({
         console.log(`🏠 HR-only mode: ${beforeCount} total → ${playerProps.length} HR props`);
       }
 
-      // Regular MLB slate: home_runs are clearly-priced lottery tickets that
-      // were dragging the main props record (14.7% lifetime hit rate) — they
-      // belong exclusively to the dedicated MLB HR runner/lane, tracked as
-      // their own for-fun record (prop_type='home_runs' in prop_results).
-      if (!hrOnly && sportKey === 'baseball_mlb') {
-        const beforeCount = playerProps.length;
-        playerProps = playerProps.filter(p => !(p.prop_type || '').toLowerCase().includes('home_run'));
-        if (playerProps.length !== beforeCount) {
-          console.log(`🚫 Excluded ${beforeCount - playerProps.length} home_run props from the regular slate (MLB HR lane owns them)`);
-        }
-      }
+      // HR props now ride the SAME MLB run (user, Jun 18) — no separate paid HR
+      // pass. They're evaluated alongside the regular props in one orchestrator
+      // call; the per-game cap (propsSharedUtils) keeps AT MOST ONE HR per game,
+      // and the pick mapping below re-stamps HR picks as sport:"MLB HR" so they
+      // route to the Home Run Threats lane. (run-mlb-hr-picks.js still works for
+      // a manual on-demand HR-only run, but the daily slate no longer needs it.)
 
       if (playerProps.length === 0) {
         console.log(`⚠️ No${hrOnly ? ' HR' : ''} props available for this game, skipping...`);
@@ -370,7 +365,10 @@ export async function runAgenticPropsCli({
               ...pick,
               prop: displayProp,
               line: line != null ? String(line) : null,
-              sport: leagueLabel,
+              // HR picks route to the "MLB HR" lane even though they came from the
+              // regular MLB run (same orchestrator pass, no extra cost). Everything
+              // else keeps the run's own label.
+              sport: (sportKey === 'baseball_mlb' && displayProp.toLowerCase().includes('home_run')) ? 'MLB HR' : leagueLabel,
               matchup,
               commence_time: game.commence_time,
               // BDL game id — pins the prop to the exact game (doubleheaders,
@@ -487,11 +485,15 @@ export async function runAgenticPropsCli({
       const newMatchups = new Set(validPicks.map(p => p.matchup?.toLowerCase()).filter(Boolean));
       // Check if new picks include TD picks (for NFL categorized format)
       const newHasTdPicks = validPicks.some(p => p.td_category);
-      
+      // The MLB run now emits BOTH lanes — regular "MLB" + the folded-in "MLB HR" —
+      // so it owns and replaces both for the matchups it just processed (otherwise a
+      // stale HR pick would linger beside the freshly generated one).
+      const ownedLanes = leagueLabel === 'MLB' ? new Set(['MLB', 'MLB HR']) : new Set([leagueLabel]);
+
       if (existingData?.picks) {
         existingPicks = existingData.picks.filter(p => {
-          // Always keep picks from other sports
-          if (p.sport !== leagueLabel) return true;
+          // Always keep picks from lanes this run doesn't own
+          if (!ownedLanes.has(p.sport)) return true;
           
           const pickMatchup = p.matchup?.toLowerCase();
           const isSameMatchup = pickMatchup && newMatchups.has(pickMatchup);

@@ -16,6 +16,7 @@
  * the 2022 World Cup from training and must never fill 2026 gaps from memory.
  */
 import * as wc from '../../../fifaWorldCupService.js';
+import * as apiFootball from '../../../apiFootballService.js';
 
 const SOURCE = 'FIFA World Cup API (BDL)';
 const PRE_TOURNAMENT = (teamName) =>
@@ -239,6 +240,42 @@ async function lineupsSummary(ctx = {}) {
   };
 }
 
+// WC_INJURIES — reported squad injuries/unavailability (API-Football). Feeds lag,
+// so this is a STARTING point: Gary should still confirm late team news via
+// grounding, and never read "no rows" as a guaranteed clean bill of health.
+async function injuriesSummary(ctx = {}) {
+  const sides = [ctx.homeTeam || 'Home', ctx.awayTeam || 'Away'];
+  const out = [];
+  for (const name of sides) {
+    const rows = await apiFootball.getInjuries(name).catch(() => []);
+    if (!rows || !rows.length) {
+      out.push(`${name}: no injuries listed by the feed — verify late team news via grounding (do NOT assume a clean bill of health).`);
+    } else {
+      out.push(`${name}: ${rows.slice(0, 10).map(r => (r.reason ? `${r.player} (${r.reason})` : r.player)).join('; ')}`);
+    }
+  }
+  return { homeValue: out[0], awayValue: out[1], comparison: 'Reported injuries/unavailability — feeds lag; confirm late news with grounding', source: 'API-Football' };
+}
+
+// WC_RECENT_INTL_FORM — last internationals (qualifiers + friendlies), result by
+// result, plus L5/L10 W-D-L and goal rates. The broad recent sample that BDL's
+// 2026-only rows can't give early in the tournament.
+async function recentIntlFormSummary(ctx = {}) {
+  const sides = [ctx.homeTeam || 'Home', ctx.awayTeam || 'Away'];
+  const out = [];
+  for (const name of sides) {
+    const f = await apiFootball.getRecentForm(name, 10).catch(() => null);
+    const span = f && (f.l10 || f.l5);
+    if (!span) {
+      out.push(`${name}: recent international form unavailable from the feed.`);
+    } else {
+      const recent = (f.fixtures || []).slice(0, 5).map(x => `${x.result} ${x.gf}-${x.ga} v ${x.opponent}`).join('; ');
+      out.push(`${name}: last 5 — ${recent || 'n/a'}. L${span.played} ${span.w}-${span.d}-${span.l}, ${span.gfPerMatch} scored/gm, ${span.gaPerMatch} conceded/gm.`);
+    }
+  }
+  return { homeValue: out[0], awayValue: out[1], comparison: 'Recent internationals (qualifiers + friendlies) — broader sample than 2026-only', source: 'API-Football' };
+}
+
 export const soccerFetchers = {
   WC_TEAM_FORM: teamFormSummary,
   WC_RECENT_FORM: teamFormSummary,
@@ -252,4 +289,6 @@ export const soccerFetchers = {
   WC_GOALS_PER_MATCH: goalsSummary,
   WC_GOALS_CONCEDED: goalsSummary,
   WC_H2H_HISTORY: h2hHistory,
+  WC_INJURIES: injuriesSummary,
+  WC_RECENT_INTL_FORM: recentIntlFormSummary,
 };
