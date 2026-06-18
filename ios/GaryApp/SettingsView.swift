@@ -10,9 +10,10 @@ struct SettingsView: View {
     @State private var animateIn = false
     @State private var showSignOutConfirm = false
     @State private var showSignIn = false
-    /// Billfold/Home results format — units by default (no profit-claim
-    /// framing); on = the hypothetical $100/bet dollar view.
-    @AppStorage("showDollarResults") private var showDollarResults = false
+    /// Billfold/Home results format — CASH by default (user call, Jun 18) at a
+    /// hypothetical $100/bet; off = the units view. Default must match the
+    /// Billfold declaration or the toggle reads stale.
+    @AppStorage("showDollarResults") private var showDollarResults = true
 
     var body: some View {
         ZStack {

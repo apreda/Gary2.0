@@ -257,7 +257,37 @@ enum SupabaseAPI {
             SportRecord(league: league, wins: stats.wins, losses: stats.losses, pushes: stats.pushes)
         }.sorted { $0.total > $1.total }
     }
-    
+
+    /// Per-sport GAME-pick record over the last 7 days (game_results, all sports) —
+    /// feeds the Home "7-Day Form" module. Every graded game pick; no props, no
+    /// Winners filter. Sports with no graded games in the window drop out.
+    static func fetchSevenDayFormBySport() async throws -> [SportRecord] {
+        guard let tz = TimeZone(identifier: "America/New_York") else { return [] }
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+        let since = formatDateEST(cal.date(byAdding: .day, value: -7, to: Date()) ?? Date())
+        let results = try await fetchAllGameResults(since: since)
+
+        var sportStats: [String: (wins: Int, losses: Int, pushes: Int)] = [:]
+        for result in results {
+            let league = result.league?.uppercased() ?? "OTHER"
+            var current = sportStats[league] ?? (0, 0, 0)
+            switch result.result?.lowercased() {
+            case "won", "win", "w":   current.wins += 1
+            case "lost", "loss", "l": current.losses += 1
+            case "push", "p":         current.pushes += 1
+            default: break
+            }
+            sportStats[league] = current
+        }
+        return sportStats.map { league, stats in
+            SportRecord(league: league, wins: stats.wins, losses: stats.losses, pushes: stats.pushes)
+        }
+        // Only sports with a meaningful week — keeps end-of-season stragglers
+        // (a stray NHL/NBA game) off the Home module; the active sports lead.
+        .filter { $0.wins + $0.losses + $0.pushes >= 3 }
+        .sorted { $0.total > $1.total }
+    }
+
     /// Get NFL week start date (Monday) for a given date
     private static func getNFLWeekStart(for date: Date = Date()) -> String {
         guard let tz = TimeZone(identifier: "America/New_York") else { return todayEST() }

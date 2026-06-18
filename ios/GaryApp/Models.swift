@@ -92,6 +92,22 @@ struct SwapMeta: Decodable {
     let out_note: String?    // "Oblique · On the injury report for 4 days"
     let in_name: String?
     let in_note: String?     // "BATS 1ST · .794 OPS · .284 AVG"
+    // Confirmed-XI payload (kind == "confirmedXI"): both teams' team sheets.
+    let home: TeamSheet?
+    let away: TeamSheet?
+}
+
+/// One team's confirmed starting XI (WC Confirmed XI lane).
+struct TeamSheet: Decodable {
+    let team: String?
+    let formation: String?   // "4-2-3-1"
+    let xi: [XIMan]?
+}
+
+struct XIMan: Decodable {
+    let n: String?           // player name
+    let p: String?           // position: G / D / M / F
+    let num: Int?            // shirt number
 }
 
 // MARK: - Live Scores (2-minute poller snapshots)
