@@ -112,17 +112,27 @@ async function teamMatchStatsSummary(ctx = {}) {
   ];
   const values = [];
   for (const [teamId, name] of sides) {
+    // PREFER API-Football (user call, Jun 18) — it's the only xG/xGA source and
+    // carries a broader recent-international sample than BDL's 2026-only rows.
+    // Fall back to BDL's tournament aggregate only when API-Football has nothing.
+    const af = await apiFootball.getRecentTeamStats(name, 6).catch(() => ({}));
+    if (af && af.sampleMatches) {
+      values.push(`${name} (last ${af.sampleMatches} internationals): xG ${af.xg ?? 'N/A'}/gm, xGA ${af.xga ?? 'N/A'}/gm, ` +
+        `possession ${af.possession_pct ?? 'N/A'}%, shots ${af.shots ?? 'N/A'}/gm (${af.shots_on_target ?? 'N/A'} on target), ` +
+        `corners ${af.corners ?? 'N/A'}/gm, pass acc ${af.pass_accuracy ?? 'N/A'}%`);
+      continue;
+    }
     const agg = await aggregateTeamStats(teamId, ctx.seasons).catch(() => null);
     values.push(!agg
       ? PRE_TOURNAMENT(name)
-      : `${name} (${agg.games} matches): xG ${fmt2(agg.xg)}/gm, possession ${fmt1(agg.possession)}%, ` +
+      : `${name} (${agg.games} matches, 2026 only): xG ${fmt2(agg.xg)}/gm, possession ${fmt1(agg.possession)}%, ` +
         `shots ${fmt1(agg.shots)}/gm (${fmt1(agg.shotsOnTarget)} on target), corners ${fmt1(agg.corners)}/gm`);
   }
   return {
     homeValue: values[0],
     awayValue: values[1],
-    comparison: '2026 in-tournament per-match averages (completed matches only)',
-    source: SOURCE,
+    comparison: 'Recent per-match averages — API-Football internationals preferred, BDL 2026 fallback',
+    source: 'API-Football / BDL',
   };
 }
 
@@ -134,16 +144,23 @@ async function goalsSummary(ctx = {}) {
   ];
   const values = [];
   for (const [teamId, name] of sides) {
+    // Prefer API-Football recent internationals (broader sample); BDL 2026 fallback.
+    const f = await apiFootball.getRecentForm(name, 10).catch(() => null);
+    const span = f && (f.l10 || f.l5);
+    if (span) {
+      values.push(`${name}: ${span.gfPerMatch} goals scored/gm, ${span.gaPerMatch} conceded/gm (last ${span.played} internationals)`);
+      continue;
+    }
     const agg = await aggregateTeamStats(teamId, ctx.seasons).catch(() => null);
     values.push(!agg
       ? PRE_TOURNAMENT(name)
-      : `${name}: ${fmt2(agg.gfPerGame)} goals scored/gm, ${fmt2(agg.gaPerGame)} conceded/gm (${agg.games} matches)`);
+      : `${name}: ${fmt2(agg.gfPerGame)} goals scored/gm, ${fmt2(agg.gaPerGame)} conceded/gm (${agg.games} matches, 2026 only)`);
   }
   return {
     homeValue: values[0],
     awayValue: values[1],
-    comparison: '2026 in-tournament scoring rates (completed matches only)',
-    source: SOURCE,
+    comparison: 'Scoring rates — API-Football internationals preferred, BDL 2026 fallback',
+    source: 'API-Football / BDL',
   };
 }
 
