@@ -293,6 +293,26 @@ async function recentIntlFormSummary(ctx = {}) {
   return { homeValue: out[0], awayValue: out[1], comparison: 'Recent internationals (qualifiers + friendlies) — broader sample than 2026-only', source: 'API-Football' };
 }
 
+// WC_KEY_PLAYERS — the squad's leading contributors (API-Football national-team
+// season stats): goals, assists, shot volume + position. Season totals, not this-
+// match form — pair with grounding/injuries for who actually starts. National
+// teams are built from these individuals, so who's available swings the match.
+async function keyPlayersSummary(ctx = {}) {
+  const sides = [ctx.homeTeam || 'Home', ctx.awayTeam || 'Away'];
+  const out = [];
+  for (const name of sides) {
+    const squad = await apiFootball.getSquadStats(name).catch(() => ({}));
+    const players = Object.values(squad || {}).filter(p => (p.appearances || 0) > 0);
+    if (!players.length) { out.push(`${name}: squad stats unavailable from the feed.`); continue; }
+    const top = players
+      .sort((a, b) => (b.goals || 0) - (a.goals || 0) || (b.shots || 0) - (a.shots || 0) || (b.appearances || 0) - (a.appearances || 0))
+      .slice(0, 6)
+      .map(p => `${p.name}${p.position ? ` (${p.position})` : ''}: ${p.goals}g/${p.assists}a${p.shots != null ? `, ${p.shots} shots` : ''} in ${p.appearances} caps`);
+    out.push(`${name}: ${top.join('; ')}`);
+  }
+  return { homeValue: out[0], awayValue: out[1], comparison: 'Leading squad contributors — national-team season totals (API-Football); confirm starters via grounding/injuries', source: 'API-Football' };
+}
+
 export const soccerFetchers = {
   WC_TEAM_FORM: teamFormSummary,
   WC_RECENT_FORM: teamFormSummary,
@@ -308,4 +328,5 @@ export const soccerFetchers = {
   WC_H2H_HISTORY: h2hHistory,
   WC_INJURIES: injuriesSummary,
   WC_RECENT_INTL_FORM: recentIntlFormSummary,
+  WC_KEY_PLAYERS: keyPlayersSummary,
 };

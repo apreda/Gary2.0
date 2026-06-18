@@ -129,7 +129,7 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const awayId = game.away_team_data?.id ?? game.away_team?.id ?? null;
   console.log(`[Scout Report] Building WC report: ${homeTeam} vs ${awayTeam}`);
 
-  const [standings, homeAgg, awayAgg, futures, homeForm, awayForm, homeTeamStats, awayTeamStats, h2h] = await Promise.all([
+  const [standings, homeAgg, awayAgg, futures, homeForm, awayForm, homeTeamStats, awayTeamStats, h2h, homeSquad, awaySquad] = await Promise.all([
     wc.getGroupStandings().catch(() => []),
     aggregateRateStats(homeId),
     aggregateRateStats(awayId),
@@ -144,6 +144,11 @@ export async function buildSoccerScoutReport(game, options = {}) {
     apiFootball.getRecentTeamStats(homeTeam, 6).catch(() => ({})),
     apiFootball.getRecentTeamStats(awayTeam, 6).catch(() => ({})),
     apiFootball.getH2H(homeTeam, awayTeam, 6).catch(() => ({ meetings: [], summary: null })),
+    // Squad's leading contributors (goals/assists/shots) — a national team IS its
+    // players, so who is fit and in form swings the match. Season totals; pair with
+    // the injury list. Game picks were team-only before this (user call, Jun 18).
+    apiFootball.getSquadStats(homeTeam).catch(() => ({})),
+    apiFootball.getSquadStats(awayTeam).catch(() => ({})),
   ]);
 
   const homeStand = standingsFor(standings, homeId);
@@ -213,6 +218,18 @@ export async function buildSoccerScoutReport(game, options = {}) {
   };
   const homeStatsLine = statsLine(homeTeam, homeTeamStats);
   const awayStatsLine = statsLine(awayTeam, awayTeamStats);
+  // Squad's leading contributors (season totals) — who actually drives a result.
+  const keyPlayersLine = (team, squad) => {
+    const players = Object.values(squad || {}).filter(p => (p.appearances || 0) > 0);
+    if (!players.length) return null;
+    const top = players
+      .sort((a, b) => (b.goals || 0) - (a.goals || 0) || (b.shots || 0) - (a.shots || 0) || (b.appearances || 0) - (a.appearances || 0))
+      .slice(0, 5)
+      .map(p => `${p.name}${p.position ? ` (${p.position})` : ''} ${p.goals}g/${p.assists}a${p.shots != null ? `/${p.shots}sh` : ''} in ${p.appearances} caps`);
+    return `${team}: ${top.join('; ')}`;
+  };
+  const homeKeyPlayers = keyPlayersLine(homeTeam, homeSquad);
+  const awayKeyPlayers = keyPlayersLine(awayTeam, awaySquad);
 
   const stage = game.soccer_stage || 'Group Stage';
   const groupLabel = game.soccer_group ? ` (${game.soccer_group})` : '';
@@ -230,6 +247,9 @@ export async function buildSoccerScoutReport(game, options = {}) {
       : '',
     (homeStatsLine || awayStatsLine)
       ? `\n### RECENT PERFORMANCE (per-match averages over recent fixtures — xG, possession, shots)\n${[homeStatsLine, awayStatsLine].filter(Boolean).join('\n')}`
+      : '',
+    (homeKeyPlayers || awayKeyPlayers)
+      ? `\n### KEY PLAYERS (national-team season totals — goals/assists/shots in caps; NOT this-match form, and availability must be confirmed against injuries + lineups before leaning on any single name)\n${[homeKeyPlayers, awayKeyPlayers].filter(Boolean).join('\n')}`
       : '',
     h2h?.meetings?.length
       ? `\n### HEAD TO HEAD (recent meetings)\n${h2h.meetings.map(m => `${m.date}: ${m.home} ${m.score} ${m.away} (${m.league})`).join('\n')}`
