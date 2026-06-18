@@ -33,6 +33,9 @@ private struct BillfoldTopPickCandidate {
 struct GaryPageHeader<Trailing: View>: View {
     let title: String
     var accent: String? = nil
+    /// Optional tappable replacement for the plain `accent` date — Winners uses it for
+    /// the date dropdown. Defaults nil so Home/Picks keep their static date unchanged.
+    var accentMenu: AnyView? = nil
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -47,7 +50,9 @@ struct GaryPageHeader<Trailing: View>: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .layoutPriority(1)
-                if let accent, !accent.isEmpty {
+                if let accentMenu {
+                    accentMenu
+                } else if let accent, !accent.isEmpty {
                     Text(accent)
                         .font(GaryFonts.mono(10))
                         .foregroundStyle(.white.opacity(0.55))
@@ -92,8 +97,8 @@ struct GaryPageHeader<Trailing: View>: View {
 }
 
 extension GaryPageHeader where Trailing == EmptyView {
-    init(title: String, accent: String? = nil) {
-        self.init(title: title, accent: accent, trailing: { EmptyView() })
+    init(title: String, accent: String? = nil, accentMenu: AnyView? = nil) {
+        self.init(title: title, accent: accent, accentMenu: accentMenu, trailing: { EmptyView() })
     }
 }
 
@@ -3073,24 +3078,34 @@ struct HomeView: View {
     /// the marquee FREE pick pulled to the front. Sports lead with the free pick's
     /// league, then follow first-appearance order.
     private var tonightCarouselPicks: [GaryPick] {
+        // Selection (unchanged): the strongest few per league, by confidence.
         var groups: [String: [GaryPick]] = [:]
         for p in todayPicks { groups[p.league ?? "", default: []].append(p) }
-        var order: [String] = []
-        if let lead = freePick?.league, groups[lead] != nil { order.append(lead) }
-        for p in todayPicks {
-            let lg = p.league ?? ""
-            if !order.contains(lg) { order.append(lg) }
+        var selected: [GaryPick] = []
+        for (_, ps) in groups {
+            selected.append(contentsOf: ps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(3))
         }
-        var out: [GaryPick] = []
-        for lg in order {
-            out.append(contentsOf: (groups[lg] ?? [])
-                .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
-                .prefix(3))
+        // Order (user call, Jun 18): LIVE games first, then upcoming by start time
+        // (earliest game up next), and GRADED/FINAL games sink to the very back —
+        // so as each game kicks off it stays in front, then finishes and drops back,
+        // surfacing the next game's picks. No free-pick-first override; a finished
+        // free pick belongs at the back like any other.
+        let live = LiveScoreCache.shared
+        func bucket(_ p: GaryPick) -> Int {
+            let mu = "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")"
+            guard let ls = live.status(forMatchup: mu) else { return 1 } // unknown → treat as upcoming
+            if ls.isFinal { return 2 }
+            if ls.isLive { return 0 }
+            return 1
         }
-        if let fp = freePick, let idx = out.firstIndex(where: { $0.id == fp.id }), idx != 0 {
-            out.remove(at: idx); out.insert(fp, at: 0)
+        func start(_ p: GaryPick) -> Date {
+            if let iso = p.commence_time, let d = parseISO8601(iso) { return d }
+            return .distantFuture
         }
-        return out
+        return selected.sorted {
+            let (a, b) = (bucket($0), bucket($1))
+            return a != b ? a < b : start($0) < start($1)
+        }
     }
 
     @ViewBuilder private var tonightPicksCarousel: some View {
@@ -5575,7 +5590,6 @@ struct PremiumPicksView: View {
                     // opaque fill that could never match the gradient behind it.
                     LazyVStack(alignment: .leading, spacing: 0) {
                         header
-                        dateSelector
 
                         if loading {
                             HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
@@ -5701,8 +5715,34 @@ struct PremiumPicksView: View {
     // AWAITING SLATE, and league chips all retired: the body owns its states
     // and the shelves announce their own leagues.
     private var header: some View {
-        GaryPageHeader(title: "Winners", accent: GaryPageHeader<EmptyView>.dateLabel())
+        GaryPageHeader(title: "Winners", accentMenu: AnyView(
+            Menu {
+                ForEach(0..<8, id: \.self) { offset in
+                    Button(daySelectorLabel(offset)) {
+                        withAnimation { selectedDate = offset == 0 ? nil : dayDateString(offset) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(headerDateLabel)
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.4))
+                }
+            }
+        ))
             .padding(.bottom, 8)
+    }
+
+    /// Long-form date for the header dropdown trigger — "Thursday, June 18" today,
+    /// or the chosen day. Replaces the old "TODAY ▾" pill.
+    private var headerDateLabel: String {
+        guard let d = selectedDate else { return GaryPageHeader<EmptyView>.dateLabel() }
+        let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"
+        inF.timeZone = TimeZone(identifier: "America/New_York")
+        guard let date = inF.date(from: d) else { return d }
+        let outF = DateFormatter(); outF.dateFormat = "EEEE, MMMM d"; outF.timeZone = inF.timeZone
+        return outF.string(from: date)
     }
 
     private var emptyState: some View {
@@ -6053,7 +6093,7 @@ struct PremiumPicksView: View {
                                 }
                             }
                             }
-                            .frame(width: 308)
+                            .frame(width: UIScreen.main.bounds.width - 44)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -6161,7 +6201,7 @@ struct PremiumPicksView: View {
                                 }
                             }
                             }
-                            .frame(width: group.count > 1 ? 344 : 308)
+                            .frame(width: UIScreen.main.bounds.width - 44)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -6436,47 +6476,9 @@ struct PremiumPicksView: View {
 
     // MARK: - Date selector UI
 
-    private var dateChipLabel: String {
-        guard let d = selectedDate else { return "TODAY" }
-        let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"
-        inF.timeZone = TimeZone(identifier: "America/New_York")
-        guard let date = inF.date(from: d) else { return d }
-        let outF = DateFormatter(); outF.dateFormat = "MMM d"; outF.timeZone = inF.timeZone
-        return outF.string(from: date).uppercased()
-    }
-
-    private var dateSelector: some View {
-        HStack(spacing: 10) {
-            // The same dropdown as the Picks day selector, just deeper: the last 7
-            // days (user call, Jun 17) — Today, Yesterday, then named days.
-            Menu {
-                ForEach(0..<8, id: \.self) { offset in
-                    Button(daySelectorLabel(offset)) {
-                        withAnimation { selectedDate = offset == 0 ? nil : dayDateString(offset) }
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar").font(.system(size: 11, weight: .semibold))
-                    Text(dateChipLabel).font(GaryFonts.mono(12, bold: true)).tracking(0.8)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                }
-                .foregroundStyle(GaryColors.gold)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Capsule().fill(GaryColors.gold.opacity(0.10)))
-                .overlay(Capsule().stroke(GaryColors.gold.opacity(0.30), lineWidth: 0.5))
-            }
-            if selectedDate != nil {
-                Button { selectedDate = nil } label: {
-                    Text("BACK TO TODAY").font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.45))
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16).padding(.bottom, 10)
-    }
+    // The date selector moved into the page header (see `header` / `headerDateLabel`):
+    // the date next to the "WINNERS" wordmark is now the day dropdown. The old "TODAY ▾"
+    // pill and its `dateChipLabel`/`dateSelector` were retired here.
 
     /// "yyyy-MM-dd" (EST) for today minus `offset` days.
     private func dayDateString(_ offset: Int) -> String {
@@ -9001,7 +9003,7 @@ struct GaryPropsView: View {
 
             let line = normalizeLine(result.line_value?.value ?? "")
             let matchup = normalizeMatchup(result.matchup ?? "")
-            let key = makeResultKey(player: playerName, propType: propType, line: line, matchup: matchup)
+            let key = makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)
             todayMap[key] = outcome.lowercased()
         }
 
@@ -9031,7 +9033,7 @@ struct GaryPropsView: View {
 
                     let line = normalizeLine(result.line_value?.value ?? "")
                     let matchup = normalizeMatchup(result.matchup ?? "")
-                    let key = makeResultKey(player: playerName, propType: propType, line: line, matchup: matchup)
+                    let key = makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)
                     yMap[key] = outcome.lowercased()
                 }
             }
@@ -15230,6 +15232,12 @@ final class PropsSlateStore: ObservableObject {
     /// today's games, so half of yesterday's tabs were falling back to the start
     /// time instead of showing FINAL.
     @Published var gameScoreMap: [String: String] = [:]
+    /// TODAY's graded results — game picks ("away@home" -> won/lost) and props
+    /// (player+type+line+matchup -> won/lost). Live grading writes these the moment
+    /// a game finishes, so the TODAY board stamps finished picks immediately instead
+    /// of waiting for the 6:45am batch (which only fed the Yesterday tab).
+    @Published var todayGameResults: [String: String] = [:]
+    @Published var todayPropResults: [String: String] = [:]
     /// Today's FULL slate (daily_slate) — every game scheduled today, so the
     /// Picks page can surface today's matchups with a "pick drops near game
     /// time" placeholder + intel before Gary's picks actually post.
@@ -15306,12 +15314,25 @@ final class PropsSlateStore: ObservableObject {
                     guard !actualValue.isEmpty else { continue }
                     let line = normalizeLine(result.line_value?.value ?? "")
                     let matchup = normalizeMatchup(result.matchup ?? "")
-                    let key = makeResultKey(player: playerName, propType: propType, line: line, matchup: matchup)
+                    let key = makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)
                     yMap[key] = outcome.lowercased()
                 }
             }
         } catch {
             // Yesterday fetch failed — just show today's props
+        }
+
+        // TODAY's graded props — same keying as resultForProp, so the Today board
+        // stamps finished props live. Require only a result (actual_value is just
+        // for display and isn't always populated for team props like "Czechia Team
+        // shots", which is exactly the one that wasn't showing its CASHED).
+        var tPropMap: [String: String] = [:]
+        for result in allResults.filter({ $0.game_date == date }) {
+            guard let playerName = result.player_name, let propType = result.prop_type,
+                  let outcome = result.result, !outcome.isEmpty else { continue }
+            let line = normalizeLine(result.line_value?.value ?? "")
+            let matchup = normalizeMatchup(result.matchup ?? "")
+            tPropMap[makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)] = outcome.lowercased()
         }
 
         // Keep-last-good: a refresh that returns nothing (a failed or transient
@@ -15330,6 +15351,7 @@ final class PropsSlateStore: ObservableObject {
         if !yPropsAll.isEmpty || yesterdayPropsAll.isEmpty {
             yesterdayPropsAll = yPropsAll
         }
+        if !tPropMap.isEmpty || todayPropResults.isEmpty { todayPropResults = tPropMap }
         fetchFailed = didFail && allProps.isEmpty && yesterdayProps.isEmpty
         loading = false
         loaded = true
@@ -15352,19 +15374,23 @@ final class PropsSlateStore: ObservableObject {
         var yPicksAll: [GaryPick] = []
         var resultsMap: [String: String] = [:]
         var scoreMap: [String: String] = [:]
+        var todayMap: [String: String] = [:]
         let yesterday = SupabaseAPI.yesterdayEST()
         if let fetched = try? await SupabaseAPI.fetchDailyPicks(date: yesterday) {
             yPicksAll = fetched.filter { !($0.pick ?? "").isEmpty }   // UNGATED — explicit Yesterday view
             yPicks = yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }
-            // Load results/scores for the WHOLE day (not just the gated subset) so
-            // the Yesterday tab can stamp/score MLB etc. that also plays today.
-            if !yPicksAll.isEmpty {
-                let results = (try? await SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)) ?? []
-                for r in results.filter({ $0.game_date == yesterday }) {
-                    guard let k = gpKey(from: r.matchup) else { continue }
-                    if let outcome = r.result { resultsMap[k] = outcome.lowercased() }
-                    if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = s }
-                }
+        }
+        // Grades for BOTH days — `since: yesterday` covers today too. Today's feed
+        // the live "grade as it finishes" stamps on the Today board; yesterday's
+        // feed the Yesterday tab + its FINAL scores.
+        let results = (try? await SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)) ?? []
+        for r in results {
+            guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
+            if r.game_date == yesterday {
+                resultsMap[k] = outcome.lowercased()
+                if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = s }
+            } else if r.game_date == date {
+                todayMap[k] = outcome.lowercased()
             }
         }
 
@@ -15378,6 +15404,7 @@ final class PropsSlateStore: ObservableObject {
         if !yPicksAll.isEmpty || yesterdayGamePicksAll.isEmpty {
             yesterdayGamePicksAll = yPicksAll
         }
+        if !todayMap.isEmpty || todayGameResults.isEmpty { todayGameResults = todayMap }
     }
 
     /// Yesterday's settled final score ("6-8") for a matchup, or nil if not graded.
@@ -15436,15 +15463,18 @@ final class PropsSlateStore: ObservableObject {
         return showingYesterdayResults && !sportsWithFreshProps.contains(sport)
     }
 
-    func resultForProp(_ prop: PropPick) -> String? {
-        guard isYesterdayProp(prop) else { return nil }
+    /// `forYesterday`: the Yesterday tab matches yesterday's results; the Today tab
+    /// matches today's (live-graded) results, so a finished game's prop shows its
+    /// CASHED/LOST the moment it grades — not just the morning after.
+    func resultForProp(_ prop: PropPick, forYesterday: Bool = true) -> String? {
         let player = (prop.player ?? "").lowercased()
         let propType = normalizePropType(prop.prop ?? "")
         guard !player.isEmpty, !propType.isEmpty else { return nil }
         let line = normalizeLine(prop.line ?? "")
         let matchup = normalizeMatchup(prop.matchup ?? "")
         let key = makeResultKey(player: player, propType: propType, line: line, matchup: matchup)
-        return yesterdayResultsMap[key]
+        // STRICT per-day (see gamePickResult) — never borrow the other day's result.
+        return forYesterday ? yesterdayResultsMap[key] : todayPropResults[key]
     }
 
     /// Today's game pick for a matchup first; else yesterday's (settled).
@@ -15482,10 +15512,17 @@ final class PropsSlateStore: ObservableObject {
         }
     }
 
-    func gamePickResult(_ pick: GaryPick) -> String? {
+    /// `forYesterday`: Yesterday tab → yesterday's results; Today tab → today's
+    /// live-graded results, so a finished game's pick shows CASHED/LOST immediately.
+    func gamePickResult(_ pick: GaryPick, forYesterday: Bool = true) -> String? {
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
-        return gameResultsMap["\(away)@\(home)"]
+        let key = "\(away)@\(home)"
+        // STRICT per-day — no cross-day fallback. Each tab's picks already match its
+        // own day (Today shows today's entries, Yesterday shows yesterday's), so a
+        // today pick with no today result is simply ungraded — it must NOT borrow a
+        // same-matchup series result from the other day (that stamped a live game).
+        return forYesterday ? gameResultsMap[key] : todayGameResults[key]
     }
 
     private func matchGamePick(in arr: [GaryPick], matchup: String) -> GaryPick? {
@@ -16033,8 +16070,6 @@ struct PicksCarouselView: View {
     @State private var sport = "ALL"
     @State private var page = 0
     @State private var selectedProp: PropPick?
-    /// Today's live-score snapshots (poller-fed); refreshed every 60s while visible.
-    @State private var liveScores: [LiveScore] = []
     /// Shared-element namespace for the sliding gold underline under the active matchup tab.
     @Namespace private var pickTabNS
 
@@ -16147,11 +16182,14 @@ struct PicksCarouselView: View {
             }
         }
 
-        // Today leads with upcoming games (fresh first, finished bumped back);
-        // Yesterday is already all-settled, keep its time order.
-        return pickDay == .today
-            ? out.sorted { gameIsFresh($0) && !gameIsFresh($1) }
-            : out
+        // Today: LIVE games first, then upcoming by start time, then finished/graded
+        // bumped to the very back — so the bar stays current as the day rolls on.
+        // Yesterday is already all-settled; keep its existing time order.
+        guard pickDay == .today else { return out }
+        return out
+            .map { (g: $0, bucket: gameStatusBucket($0), start: gameStart($0)) }
+            .sorted { ($0.bucket, $0.start) < ($1.bucket, $1.start) }
+            .map { $0.g }
     }
 
     /// Match key from team last-words ("San Diego Padres @ LA Dodgers" →
@@ -16165,12 +16203,25 @@ struct PicksCarouselView: View {
         return "\(a)|\(h)"
     }
 
-    private func gameIsFresh(_ g: (matchup: String, time: String, props: [PropPick])) -> Bool {
-        if let e = store.gamePickEntry(forMatchup: g.matchup), !e.isYesterday { return true }
-        if g.props.contains(where: { !store.isYesterdayProp($0) }) { return true }
-        // A game on today's slate (upcoming — pick not posted yet) is "today" too.
+    /// Matchup-bar order: LIVE (0) → upcoming (1) → finished/graded (2). Reads the
+    /// live-score cache, so a game sinks to the back the moment it goes final.
+    private func gameStatusBucket(_ g: (matchup: String, time: String, props: [PropPick])) -> Int {
+        if let ls = LiveScoreCache.shared.status(forMatchup: g.matchup) {
+            if ls.isFinal { return 2 }
+            if ls.isLive { return 0 }
+        }
+        return 1
+    }
+    /// Kickoff/first-pitch as a Date, to order within a bucket (earliest game up
+    /// next) — from the matchup's props, else today's slate row, else its game pick.
+    private func gameStart(_ g: (matchup: String, time: String, props: [PropPick])) -> Date {
+        if let iso = g.props.first?.commence_time, let d = parseISO8601(iso) { return d }
         let key = Self.matchupKey(g.matchup)
-        return store.slate.contains { Self.matchupKey("\($0.away_team ?? "") @ \($0.home_team ?? "")") == key }
+        if let s = store.slate.first(where: { Self.matchupKey("\($0.away_team ?? "") @ \($0.home_team ?? "")") == key }),
+           let iso = s.commence_time, let d = parseISO8601(iso) { return d }
+        if let p = store.gamePicksForMatchup(g.matchup, preferYesterday: false).first?.pick,
+           let iso = p.commence_time, let d = parseISO8601(iso) { return d }
+        return .distantFuture
     }
     private var topProps: [PropPick] {
         // The selected day's props only (dropdown): Today = fresh, Yesterday = settled.
@@ -16204,13 +16255,11 @@ struct PicksCarouselView: View {
             if !connLoaded { await loadConnections() }
         }
         .task {
-            // Live-score loop: refresh every 60s while this tab is on screen
-            // (.task cancels on disappear). The poller updates the table every
-            // 2 minutes, so this keeps chips and score strips current.
-            while !Task.isCancelled {
-                liveScores = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
-            }
+            // Keep the SHARED live-score cache warm while this tab is on screen — the
+            // matchup tabs and the cards both read LiveScoreCache.shared now (it owns
+            // the dedup + its own 90s refresh loop), so this page no longer keeps its
+            // own snapshot that could disagree with the cards.
+            LiveScoreCache.shared.startIfNeeded()
         }
         .onChange(of: sport) { _ in page = 0 }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
@@ -16260,7 +16309,7 @@ struct PicksCarouselView: View {
             TabView(selection: $page) {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
-                                   gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
+                                   gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
                                    edges: Array(sportConnections.prefix(8)), onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
@@ -16273,7 +16322,7 @@ struct PicksCarouselView: View {
                                       // side/total pick there, only the HR bets. On Yesterday,
                                       // prefer yesterday's (graded) pick for a series matchup.
                                       entries: sport == "MLB HR" ? [] : store.gamePicksForMatchup(g.matchup, preferYesterday: pickDay == .yesterday),
-                                      gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
+                                      gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
                                       edges: edges(for: g), onTapProp: { selectedProp = $0 })
                             .padding(.bottom, 130)
                     }
@@ -16371,8 +16420,14 @@ struct PicksCarouselView: View {
             .contentShape(Rectangle())
         } primaryAction: {
             withAnimation(.easeInOut(duration: 0.25)) {
-                pickDay = (pickDay == .today ? .yesterday : .today)
-                page = 0
+                if page != 0 {
+                    // On a matchup tab — tap the day chip to return to THIS day's
+                    // overview (page 0), keeping the day (Today stays Today).
+                    page = 0
+                } else {
+                    // Already on the day tab — flip Today <-> Yesterday.
+                    pickDay = (pickDay == .today ? .yesterday : .today)
+                }
             }
         }
         .id(0)
@@ -16410,7 +16465,12 @@ struct PicksCarouselView: View {
 
     /// Live-score row for a matchup (poller snapshots, abbr-matched).
     func liveScore(forMatchup matchup: String) -> LiveScore? {
-        liveScores.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
+        // Read the SHARED cache's deduped lookup (a live/scheduled row wins over a
+        // bogus duplicate "final") — the exact source the pick cards read. This is
+        // what keeps the matchup TAB and the CARD from disagreeing: the tab used to
+        // grab `liveScores.first` (no dedup) and showed a stale "FINAL 5-3" while the
+        // card showed the real "LIVE 0-0" for the same game.
+        LiveScoreCache.shared.status(forMatchup: matchup)
     }
 
     private func statusLine(for g: (matchup: String, time: String, props: [PropPick])) -> (text: String, color: Color)? {
@@ -16578,7 +16638,7 @@ struct PicksTodayPage: View {
     @ViewBuilder private var topSinglePick: some View {
         let gp = topGamePick
         let prop = topProps.first
-        let gameFresh = gp.map { !$0.isYesterday } ?? false
+        let gameFresh = gp.map { !$0.isYesterday && gamePickResult($0.pick) == nil } ?? false
         let propFresh = prop.map { resultForProp($0) == nil } ?? false
         // Prefer a fresh pick over a stamped one; within the same tier, higher
         // confidence wins. A graded yesterday card shows only if nothing fresh exists.
@@ -16592,7 +16652,7 @@ struct PicksTodayPage: View {
         if showGame, let gp {
             freePickEyebrow   // the Today page is the free showcase — labelled for every sport
             FlippablePickCard(pick: gp.pick,
-                              gameResult: gp.isYesterday ? gamePickResult(gp.pick) : nil,
+                              gameResult: gamePickResult(gp.pick),
                               showSportBadge: true)
                 .padding(.horizontal, 10)
         } else if let only = prop {
@@ -16622,6 +16682,22 @@ struct PicksGamePage: View {
         // The slip scales — show up to 5, strongest first.
         Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
     }
+
+    /// World Cup games swap the plain GAME INTEL edges for the WC game-intel dashboard.
+    private var isWorldCup: Bool {
+        if (group.props.first?.effectiveLeague ?? "").uppercased() == "WC" { return true }
+        if (entries.first?.pick.league ?? "").uppercased() == "WC" { return true }
+        return edges.contains { $0.league == .wc }
+    }
+    /// The confirmed-XI edge for this WC match (carries the formation + lineup).
+    private var wcXIEdge: Signal? { edges.first { $0.confirmedXI != nil } }
+    /// MLB games swap the flat GAME INTEL list for the modular MLB dashboard.
+    private var isMLB: Bool {
+        if (group.props.first?.effectiveLeague ?? "").uppercased() == "MLB" { return true }
+        if (entries.first?.pick.league ?? "").uppercased() == "MLB" { return true }
+        return edges.contains { $0.league == .mlb }
+    }
+
     /// "Blue Jays @ Red Sox" — mascot-short matchup name for the white page header.
     /// Keeps two-word mascots whole and WC nations intact (never the bare last word).
     private var matchupTitle: String {
@@ -16638,30 +16714,35 @@ struct PicksGamePage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // The matchup name leads the page in white (user call, Jun 16). The start
-            // time was dropped from this header — it now lives in the nav-bar tab above
-            // — but the white matchup title stays so the page still names the game.
-            Text(matchupTitle)
-                .font(.system(size: 22, weight: .heavy)).tracking(0.3)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-            if let ls = heroScore, ls.isLive || ls.isFinal {
-                LiveScoreStrip(score: ls).padding(.horizontal, 16)
-            }
-
-            if !entries.isEmpty {
-                // World Cup ships two plays per match (a SIDE and a TOTAL) — render
-                // every game pick for this matchup, not just the first. Single-pick
-                // sports (MLB/NBA/NHL) still show exactly one card.
-                VStack(spacing: 10) {
-                    ForEach(Array(entries.enumerated()), id: \.offset) { _, e in
-                        FlippablePickCard(pick: e.pick,
-                                          gameResult: e.isYesterday ? gamePickResult(e.pick) : nil,
-                                          showSportBadge: false,
-                                          liveInSlot: false)
+            // The page leads STRAIGHT with Gary's pick (user call, Jun 18). The
+            // matchup name + live score already live on the nav-bar tab above and
+            // on each pick card's own slot (liveInSlot below), so we no longer
+            // repeat a white title + LiveScoreStrip header here — the user selects
+            // the game and sees the pick first, then scrolls to the intel.
+            if entries.count + topProps.count > 0 {
+                // All of this matchup's plays ride ONE horizontal carousel — game
+                // pick(s) first (World Cup ships two: a SIDE and a TOTAL), then the
+                // prop cards, strongest first. Swipe one at a time, a sliver of the
+                // next peeking — the exact same full-size carousel as Home's Top
+                // Plays (cardW = screen − 44). The pick cards are FULL SIZE and
+                // unchanged — this only replaces the old vertical list.
+                let cardW = UIScreen.main.bounds.width - 44   // a sliver of the next card peeks
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(Array(entries.enumerated()), id: \.offset) { _, e in
+                            FlippablePickCard(pick: e.pick,
+                                              gameResult: gamePickResult(e.pick),
+                                              showSportBadge: false,
+                                              liveInSlot: true)
+                                .frame(width: cardW)
+                        }
+                        ForEach(topProps) { p in
+                            FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true, liveInSlot: true)
+                                .frame(width: cardW)
+                        }
                     }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 10)
             } else if !(heroScore?.isLive ?? false) && !(heroScore?.isFinal ?? false) {
                 // Look-ahead placeholder in the pick's slot — the game's on the
                 // board, Gary's pick lands ~90 min out, and the intel below is
@@ -16692,22 +16773,25 @@ struct PicksGamePage: View {
                 .padding(.horizontal, 10)
             }
 
-            if topProps.count == 1, let only = topProps.first {
-                // A single prop wears the full locked card (Home's design).
-                FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true, liveInSlot: false)
-                    .padding(.horizontal, 10)
-            } else if !topProps.isEmpty {
-                VStack(spacing: 10) {
-                    ForEach(topProps) { p in
-                        FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true, liveInSlot: false)
-                    }
-                }
-                .padding(.horizontal, 10)
-            }
             PlayerIntelSection(matchup: group.matchup)
-            EdgesSection(title: "GAME INTEL", edges: edges)
+            if isWorldCup {
+                // World Cup: the plain GAME INTEL edges become the WC game-intel
+                // dashboard (Starting XI pitch · The Read), with the existing intel
+                // rows folded in beneath it.
+                WCGameIntelView(matchup: group.matchup,
+                                confirmedXI: wcXIEdge?.confirmedXI,
+                                read: wcXIEdge ?? edges.first,
+                                edges: edges,
+                                showHeader: false)
+            } else if isMLB {
+                // MLB: the flat GAME INTEL list becomes the modular dashboard —
+                // a baseball-field anchor + Pitching / Bats / Park & Weather.
+                MLBGameIntelView(matchup: group.matchup, edges: edges, showHeader: false)
+            } else {
+                EdgesSection(title: "GAME INTEL", edges: edges)
+            }
         }
-        .padding(.top, 8)
+        .padding(.top, 14)
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
     }
 }
@@ -17657,6 +17741,8 @@ struct PropsHubView: View {
     @State private var selectedSignal: Signal? = nil
     /// Player whose full breakdown sheet is open (card-back CTA / board row).
     @State private var breakdownSignal: Signal? = nil
+    /// Tapped WC match → opens the full WC game-intel dashboard (Starting XI etc.).
+    @State private var wcIntel: Signal? = nil
     @State private var searchText: String = ""
     @FocusState private var searchFocused: Bool
     /// Selected lane in the PLAYER EDGES tab strip; nil = first non-empty lane.
@@ -17786,7 +17872,13 @@ struct PropsHubView: View {
     private func reloadIfStale() async {
         guard didLoad else { return }
         let expired = loadedAt.map { Date().timeIntervalSince($0) > 1800 } ?? true
-        if loadedDate != SupabaseAPI.todayEST() || expired || fetchErrored {
+        // If the board is empty, refetch the moment the tab becomes visible. A
+        // transient non-2xx at launch makes fetchInsightConnections return [] WITHOUT
+        // throwing, so fetchErrored stays false and the old guard never retried —
+        // leaving the Hub stuck empty even though today's edges exist. (The morning
+        // void isn't empty: it carries yesterday's graded board in ydaySignals.)
+        let emptyBoard = fetched.isEmpty && ydaySignals.isEmpty
+        if loadedDate != SupabaseAPI.todayEST() || expired || fetchErrored || emptyBoard {
             await load()
         }
     }
@@ -17831,6 +17923,10 @@ struct PropsHubView: View {
     }
 
     private var leagueSignals: [Signal] { source.filter { $0.league == sel } }
+    /// WC matches that carry a confirmed-XI edge — one Game Intel card each.
+    private var wcIntelSignals: [Signal] { source.filter { $0.league == .wc && $0.confirmedXI != nil } }
+    /// Every fetched WC edge for one matchup — the full set handed to the dashboard.
+    private func wcEdges(for game: String) -> [Signal] { source.filter { $0.league == .wc && $0.game == game } }
 
     /// FEATURED picks the highest-relevance signals but caps each kind at 2 so
     /// the strip mixes lanes instead of showing six near-identical cards.
@@ -17946,6 +18042,14 @@ struct PropsHubView: View {
                         }
                         .quantPanel().padding(.horizontal, 16)
                     }
+                    // WC GAME INTEL — tap a match → the Starting XI / The Read
+                    // dashboard (WC league toggle only).
+                    if sel == .wc, !wcIntelSignals.isEmpty {
+                        HubSectionHeader(eyebrow: "Game Intel", sub: "Starting XI & the read")
+                            .id("wcIntel")
+                        VStack(spacing: 0) { ForEach(wcIntelSignals) { s in SignalRow(s: s) { _ in wcIntel = s } } }
+                            .quantPanel().padding(.horizontal, 16)
+                    }
                     // REST & FATIGUE — schedule spots and bullpen workload
                     if !items(.situational).isEmpty {
                         HubSectionHeader(eyebrow: "Rest & Fatigue", sub: "Schedule spots & workload")
@@ -18024,6 +18128,18 @@ struct PropsHubView: View {
         }
         .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+        .fullScreenCover(item: $wcIntel) { s in
+            ZStack(alignment: .top) {
+                GaryColors.darkBg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    WCGameIntelView(matchup: s.game,
+                                    confirmedXI: s.confirmedXI,
+                                    read: s,
+                                    edges: wcEdges(for: s.game),
+                                    onClose: { wcIntel = nil })
+                }
+            }
+        }
         .onChange(of: pendingScrollAnchor) { anchor in
             guard let anchor else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {

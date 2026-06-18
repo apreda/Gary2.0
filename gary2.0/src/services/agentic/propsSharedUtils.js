@@ -122,6 +122,35 @@ export function applyPropsPerGameConstraint(picks, gameId) {
     return { constrainedPicks: [], droppedPicks: [], garySpecials: [] };
   }
 
+  // HR RULE (user, Jun 18): AT MOST ONE home-run prop per game. HR props are
+  // lottery-style, so the dedicated MLB HR lane should surface a single best HR
+  // threat per matchup — never stack two on the same game. Skim HR off the top,
+  // keep the highest-confidence one per game, then run the normal 2-per-game
+  // logic on the rest. (HR props only reach this lane — the regular MLB slate
+  // excludes them — so this is effectively the MLB HR lane's per-game cap.)
+  const hrConstrained = [];
+  const hrDropped = [];
+  {
+    const hrByGame = {};
+    const rest = [];
+    for (const pick of picks) {
+      const isHr = (pick.prop || '').toLowerCase().includes('home_run')
+        || (pick.prop_type || '').toLowerCase().includes('home_run');
+      const mu = (pick.matchup || '').toLowerCase();
+      if (isHr && mu) { (hrByGame[mu] = hrByGame[mu] || []).push(pick); }
+      else { rest.push(pick); }
+    }
+    for (const mu of Object.keys(hrByGame)) {
+      const g = hrByGame[mu].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+      hrConstrained.push(g[0]);
+      if (g.length > 1) {
+        hrDropped.push(...g.slice(1));
+        console.log(`[Props Constraint] 🏠 1-HR-per-game: kept ${g[0].player} ${g[0].prop} (${Math.round((g[0].confidence || 0) * 100)}%), dropped ${g.length - 1} other HR pick(s) for ${mu}`);
+      }
+    }
+    picks = rest;  // the 2-per-game logic below now only sees non-HR picks
+  }
+
   // Group picks by GAME (using matchup field) — NOT by team
   const picksByGame = {};
 
@@ -221,8 +250,14 @@ export function applyPropsPerGameConstraint(picks, gameId) {
     }
   }
 
+  // Fold the capped HR pick(s) back in — exactly one per game, kept separate
+  // from the 2-per-game count so the single HR threat never crowds out a
+  // regular prop (and in the HR-only lane this is simply the whole output).
+  constrainedPicks.push(...hrConstrained);
+  droppedPicks.push(...hrDropped);
+
   if (droppedPicks.length > 0) {
-    console.log(`[Props Constraint] Applied 2-per-game constraint: ${constrainedPicks.length} kept, ${droppedPicks.length} dropped, ${garySpecials.length} Gary Specials`);
+    console.log(`[Props Constraint] Applied per-game constraint: ${constrainedPicks.length} kept, ${droppedPicks.length} dropped, ${garySpecials.length} Gary Specials`);
   }
 
   return { constrainedPicks, droppedPicks, garySpecials };
