@@ -16,9 +16,9 @@ struct AccessView: View {
             VStack(spacing: 20) {
                 Spacer(minLength: 20)
                 
-                // Logo - no glow, matches home page
+                // Sign-up hero — the full gold-bear portrait (user pick, Jun 18).
                 VStack(spacing: 0) {
-                    Image(GaryBrand.mark)
+                    Image("GarySignupHero")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 260, height: 260)

@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "gary-signup-hero.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
