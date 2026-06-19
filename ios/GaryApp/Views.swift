@@ -12149,17 +12149,8 @@ struct CompactPickRow: View {
             : awayIsPicked ? "@ \(homeName)"
             : "\(awayName) @ \(homeName)"
         var parts = [opponent]
-        if displayResult != nil {
-            if let finalScore, !finalScore.isEmpty {
-                parts.append(finalScore)
-            } else if let ls = liveFinal, let a = ls.away_score, let h = ls.home_score {
-                parts.append("\(a)–\(h)")
-            } else {
-                parts.append("FINAL")
-            }
-        } else if let live = liveStatus, live.isLive || live.isFinal {
-            // The footer strip carries the live/final state.
-        }
+        // The final score + LIVE/FINAL state now ride the FOOTER strip on every card
+        // (user call, Jun 18) — meta keeps just the matchup; odds render after it.
         // Start time moved to the eyebrow row (frontTime); meta keeps matchup + odds.
         // Odds render separately in the sport's accent color (see body) — not appended here.
         return parts.joined(separator: " · ")
@@ -12212,7 +12203,16 @@ struct CompactPickRow: View {
     /// Footer live line — "LIVE · SD 4 · PHI 6 · COVERING": teams + score + Gary's
     /// live standing, colored green/red by `liveToneColor`.
     private var liveFooterText: String? {
-        guard displayResult == nil, let ls = liveStatus else { return nil }
+        // Graded/settled card: show the FINAL SCORE in the footer (user call, Jun 18
+        // — "FINAL · CAN 3 · QAT 1" beside the CASHED stamp), from the live board
+        // first, then the stored final score; bare "FINAL" only when neither carries
+        // a score. This is the one place the final state lives on every card now.
+        if displayResult != nil {
+            if let ls = liveFinal, ls.away_score != nil, ls.home_score != nil { return liveSlotText(ls, label: "FINAL") }
+            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(fs)" }
+            return "FINAL"
+        }
+        guard let ls = liveStatus else { return nil }
         if ls.isLive { return liveLineRich(ls, label: "LIVE") }
         if ls.isFinal { return liveLineRich(ls, label: "FINAL") }
         return nil
