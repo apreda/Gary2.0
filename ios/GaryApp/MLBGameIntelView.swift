@@ -40,6 +40,7 @@ private struct MLBFielder: Identifiable {
     var hr = false                   // HR park edge tonight
     var plat = false                 // favourable platoon vs the starter
     var sp = false
+    var fillIn = false               // fill-in starter (a regular is resting/out) — Contested
     // numbers (revealed on flip)
     var ord = 0, wrc = 0
     var xwoba = "", vR = "", vL = "", form = ""
@@ -212,7 +213,7 @@ struct MLBGameIntelView: View {
             guard let pos = f.pos, let c = Self.posCoord[pos] else { continue }
             out.append(MLBFielder(num: f.order ?? 0, name: Self.surname(f.name ?? ""), pos: pos, dx: c.0, dy: c.1,
                 heat: f.heat ?? "steady", bats: f.bats ?? "", hr: f.hrEdge ?? false, plat: f.plat ?? false,
-                ord: f.order ?? 0, vR: f.ops ?? ""))
+                fillIn: f.fillIn ?? false, ord: f.order ?? 0, vR: f.ops ?? ""))
         }
         if let p = h.pitcher, let c = Self.posCoord["P"] {
             out.append(MLBFielder(num: 0, name: Self.surname(p.name ?? ""), pos: "P", dx: c.0, dy: c.1, heat: "steady", bats: "", sp: true))
@@ -287,11 +288,14 @@ struct MLBGameIntelView: View {
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(GaryColors.warmWhite.opacity(0.09)))
             }
             .frame(height: 452)
-            HStack(spacing: 14) {
-                legendDot(MLBI.hot, "Hot cap"); legendDot(MLBI.cold, "Cold cap")
-                legendDot(MLBI.gold, "HR edge"); legendDot(MLBI.plat, "Platoon")
+            HStack(spacing: 11) {
+                legendDot(MLBI.hot, "Hot"); legendDot(MLBI.cold, "Cold")
+                legendDot(MLBI.gold, "HR"); legendDot(MLBI.plat, "Platoon")
+                HStack(spacing: 4) {
+                    Circle().stroke(MLBI.gold, style: StrokeStyle(lineWidth: 1.5, dash: [2, 1.5])).frame(width: 9, height: 9)
+                    Text("Fill-in").font(GaryFonts.mono(9)).foregroundStyle(MLBI.ink4)
+                }
                 Spacer()
-                Text(shownTeam == nil ? "Lineups post pre-game" : "Tap a player").font(GaryFonts.mono(9)).foregroundStyle(MLBI.ink4)
             }.padding(.horizontal, 4)
         }
         .padding(.horizontal, 14).padding(.top, 12)
@@ -369,6 +373,11 @@ struct MLBGameIntelView: View {
         let cap = heatColor(f.heat)
         return VStack(spacing: 1) {
             ZStack {
+                // Contested — a fill-in starter (the usual regular is resting/out): a dashed gold ring.
+                if f.fillIn {
+                    Circle().stroke(MLBI.gold, style: StrokeStyle(lineWidth: 2, dash: [3.5, 2.5]))
+                        .frame(width: 52, height: 52).offset(y: -7)
+                }
                 // jersey
                 MLBJerseyShape().fill(jersey).frame(width: 40, height: 38)
                     .overlay(MLBJerseyShape().stroke(.black.opacity(0.35), lineWidth: 0.8).frame(width: 40, height: 38))

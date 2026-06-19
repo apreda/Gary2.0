@@ -57,7 +57,7 @@ struct WCGameIntelView: View {
     var showHeader: Bool = true
     var onClose: (() -> Void)? = nil
 
-    private enum XIState: String, CaseIterable { case projected = "Projected", contested = "Contested", confirmed = "Confirmed" }
+    private enum XIState: String, CaseIterable { case projected = "Projected", confirmed = "Confirmed" }
     @State private var state: XIState = .projected
 
     private var awayName: String { matchup.components(separatedBy: " @ ").first ?? "Away" }
@@ -140,8 +140,8 @@ struct WCGameIntelView: View {
                     if s != XIState.allCases.last { Spacer() }
                 }
             }
-            // Contested → name the game-time doubt(s) driving it (e.g. Pulisic's calf).
-            if state == .contested, let d = confirmedXI?.doubts, !d.isEmpty {
+            // Pre-confirmation → name any game-time doubt(s) in the projected XI (e.g. Pulisic's calf).
+            if state == .projected, let d = confirmedXI?.doubts, !d.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(WCI.gold)
                     Text("\(d.joined(separator: ", ")) — game-time decision")

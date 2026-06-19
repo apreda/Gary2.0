@@ -826,7 +826,7 @@ enum SupabaseAPI {
     struct MLBLineupPitcher: Decodable { let name: String?; let hand: String?; let playerId: String? }
     struct MLBLineupFielder: Decodable {
         let playerId: String?; let name: String?; let pos: String?; let order: Int?
-        let bats: String?; let ops: String?; let heat: String?; let hrEdge: Bool?; let plat: Bool?
+        let bats: String?; let ops: String?; let heat: String?; let hrEdge: Bool?; let plat: Bool?; let fillIn: Bool?
     }
 
     // MARK: - Weekly NFL Picks

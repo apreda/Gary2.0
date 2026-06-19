@@ -74,21 +74,28 @@ async function main() {
       let statById = {};
       if (allIds.length) {
         const stats = await bdl.getMlbPlayerSeasonStats({ season, playerIds: allIds });
-        for (const s of stats) { const id = s.player?.id; if (id != null) statById[id] = { ops: s.batting_ops, avg: s.batting_avg, hr: s.batting_hr }; }
+        for (const s of stats) { const id = s.player?.id; if (id != null) statById[id] = { ops: s.batting_ops, avg: s.batting_avg, hr: s.batting_hr, gp: s.batting_gp ?? 0 }; }
       }
 
       const pitcherObj = (t) => t?.pitcher ? { name: t.pitcher.name, hand: handOf(t.pitcher.batsThrows), playerId: String(t.pitcher.playerId ?? '') } : null;
 
       const buildTeam = (t, ownPitcher, facingPitcher) => {
         if (!t?.batters?.length) return null;
+        // "Who might sit / might play" (the Contested signal for MLB): flag a starter who's
+        // appeared in FAR fewer games than the team's everyday regulars — i.e. a fill-in, so
+        // the usual starter is resting/out. Conservative (only clear backups, ≥30 team games)
+        // so a platoon regular is never mislabelled. iOS rings these on the field.
+        const teamGames = Math.max(0, ...t.batters.map((b) => statById[b.playerId]?.gp ?? 0));
         const fielders = t.batters.map((b) => {
           const f = flagsFor(b.playerId, b.name);
           const st = statById[b.playerId] || {};
+          const gp = st.gp ?? 0;
+          const fillIn = teamGames >= 30 && gp > 0 && gp < 0.45 * teamGames;
           return {
             playerId: String(b.playerId ?? ''), name: b.name, pos: b.position,
             order: b.battingOrder, bats: batsOf(b.batsThrows),
             ops: st.ops != null ? Number(st.ops).toFixed(3) : null, seasonHr: st.hr ?? null,
-            heat: f.heat, hrEdge: f.hrEdge, plat: f.plat,
+            heat: f.heat, hrEdge: f.hrEdge, plat: f.plat, fillIn,
           };
         });
         return { team: t.teamName, pitcher: ownPitcher, facingPitcher, fielders };
