@@ -126,11 +126,15 @@ struct MLBGameIntelView: View {
     @State private var selected: MLBFielder? = nil
     @State private var showWeather = false
     @State private var realHome: SupabaseAPI.MLBTeamLineup? = nil
+    @State private var realAway: SupabaseAPI.MLBTeamLineup? = nil
+    @State private var homeUp = true
     @State private var lineupLoaded = false
 
     private var awayName: String { matchup.components(separatedBy: " @ ").first ?? "Away" }
     private var homeName: String { matchup.components(separatedBy: " @ ").last ?? "Home" }
     private var ballpark: Ballpark? { MLBParks.park(forTeam: homeName) ?? MLBParks.all["brewers"] }
+    /// The team whose lineup is on the field — both bat at the home park (home/away toggle).
+    private var shownTeam: SupabaseAPI.MLBTeamLineup? { homeUp ? realHome : realAway }
 
     private func module(_ kinds: Set<SignalKind>) -> [Signal] { edges.filter { kinds.contains($0.kind) } }
     private var pitchingEdges: [Signal] { module([.starterForm, .firstInning, .runningGame]) }
@@ -180,6 +184,7 @@ struct MLBGameIntelView: View {
         if let row = await SupabaseAPI.fetchMlbFieldLineup(date: SupabaseAPI.todayEST(), homeTeam: abbr) {
             await MainActor.run {
                 realHome = row.payload.home
+                realAway = row.payload.away
                 // Real status from the builder — BDL posts the confirmed sheet pre-game.
                 state = (row.status == "confirmed") ? .confirmed : .projected
             }
@@ -197,11 +202,11 @@ struct MLBGameIntelView: View {
     }
 
     /// The opposing starter the home batters face (real), for the read + the flip label.
-    private var facingPitcherName: String { realHome?.facingPitcher?.name.map(Self.surname) ?? "the SP" }
+    private var facingPitcherName: String { shownTeam?.facingPitcher?.name.map(Self.surname) ?? "the SP" }
 
     /// Real lineup mapped onto the field — empty (placeholder) until it posts. Never mock.
     private var displayLineup: [MLBFielder] {
-        guard let h = realHome else { return [] }
+        guard let h = shownTeam else { return [] }
         var out: [MLBFielder] = []
         for f in h.fielders {
             guard let pos = f.pos, let c = Self.posCoord[pos] else { continue }
@@ -254,6 +259,8 @@ struct MLBGameIntelView: View {
 
     private var fieldCard: some View {
         VStack(spacing: 8) {
+            // Home/away toggle — both lineups bat at the home park (user ask).
+            if realHome != nil && realAway != nil { teamToggle }
             GeometryReader { geo in
                 let t = fieldT(geo.size)
                 ZStack {
@@ -284,7 +291,7 @@ struct MLBGameIntelView: View {
                 legendDot(MLBI.hot, "Hot cap"); legendDot(MLBI.cold, "Cold cap")
                 legendDot(MLBI.gold, "HR edge"); legendDot(MLBI.plat, "Platoon")
                 Spacer()
-                Text(realHome == nil ? "Lineups post pre-game" : "Tap a player").font(GaryFonts.mono(9)).foregroundStyle(MLBI.ink4)
+                Text(shownTeam == nil ? "Lineups post pre-game" : "Tap a player").font(GaryFonts.mono(9)).foregroundStyle(MLBI.ink4)
             }.padding(.horizontal, 4)
         }
         .padding(.horizontal, 14).padding(.top, 12)
@@ -292,6 +299,24 @@ struct MLBGameIntelView: View {
 
     private func legendDot(_ c: Color, _ t: String) -> some View {
         HStack(spacing: 4) { Circle().fill(c).frame(width: 8, height: 8); Text(t).font(GaryFonts.mono(9)).foregroundStyle(MLBI.ink4) }
+    }
+
+    // Away / Home lineup switch — the road team bats at the home park too.
+    private var teamToggle: some View {
+        HStack(spacing: 0) {
+            ForEach([false, true], id: \.self) { isHome in
+                Button { withAnimation(.easeInOut(duration: 0.18)) { homeUp = isHome } } label: {
+                    Text(Formatters.shortTeamName(isHome ? homeName : awayName, league: "MLB").uppercased())
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                        .foregroundStyle(homeUp == isHome ? GaryColors.cardBg : MLBI.ink2)
+                        .padding(.vertical, 6).frame(maxWidth: .infinity)
+                        .background(homeUp == isHome ? MLBI.gold : Color.clear)
+                }.buttonStyle(.plain)
+            }
+        }
+        .frame(width: 200)
+        .background(MLBI.panel).clipShape(Capsule())
+        .overlay(Capsule().stroke(MLBI.line, lineWidth: 1))
     }
 
     private func drawField(_ ctx: GraphicsContext, _ t: FieldT) {
