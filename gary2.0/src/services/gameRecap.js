@@ -102,11 +102,13 @@ function buildPrompt({ pick, result, evidence }) {
     `listed in the evidence — otherwise the bullet is just "Matt Olson 2 HR". ` +
     `Other examples: "Burns 7 K over 5.1 IP"; "Over 9.5 cashed by 1.5 runs" (only if the total ` +
     `line is the bet above). Never invent a price, a line, or a stat.\n` +
-    `- A player-prop bullet (shots, saves, goals, assists, tackles, passes, K's, HR) may carry a ` +
-    `price ONLY if that exact player's prop price is printed in the evidence above. Soccer / World ` +
-    `Cup games here have NO prop prices — so for those, every bullet is a plain stat line ` +
-    `("Harry Kane 7 shots", "Livaković 7 saves"), NEVER "(over 4 at +115)". Do not attach a market ` +
-    `that is not in the evidence.\n\n` +
+    `- A player-prop bullet (shots, saves, goals, assists, tackles, K's, HR) may carry a ` +
+    `price ONLY if that exact player's prop price is printed in the evidence above. ` +
+    `SOCCER / WORLD CUP: there is NO per-player box score for these games, so do NOT write any ` +
+    `individual player stat line (no "X 7 shots", no "Y 5 saves", no "Z 1 goal") — you would be ` +
+    `inventing the number. A World Cup bullet must be a TEAM / result fact taken straight from the ` +
+    `evidence ("Switzerland 4, Bosnia & Herzegovina 1", "Switzerland win the group opener"). ` +
+    `Never invent a player's stat line or a market that is not in the evidence.\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
     `{"headline":"...","recap":"...","bullets":["...","..."]}`
   );
@@ -192,6 +194,34 @@ export function sanitizeBulletPrices(bullet, evidence) {
   return out.replace(/\s{2,}/g, ' ').replace(/\s+([.,;)])/g, '$1').trim();
 }
 
+const SOCCER_STAT = /\b(\d+)\s+(saves?|shots?|goals?|assists?|tackles?|interceptions?|clearances?|blocks?|passes?|key\s+passes?|chances?|crosses?|dribbles?)\b/i;
+
+/**
+ * Deterministic ground-truth enforcement for SOCCER / World Cup recap bullets —
+ * the sibling of sanitizeBulletPrices, but for STAT COUNTS. BDL FIFA returns NO
+ * per-player box score, so an individual player-stat line in a WC recap is the
+ * model inventing a number (verified live: "Nikola Vasilj 1 save" and "Dan Ndoye
+ * 2 shots" shipped on a match whose grading flagged those exact stats as NO DATA).
+ * For WC games a stat-count bullet survives ONLY if the evidence literally backs
+ * the number next to the stat (e.g. a graded team-shots prop "shots ... 14"); a
+ * score/result line ("Switzerland 4, Bosnia 1") carries no stat keyword and is
+ * always kept. NOT a heuristic detector that blocks a pick — it only removes an
+ * unverifiable stat line from recap text. Non-soccer leagues have real box scores,
+ * so they always pass.
+ */
+export function keepRecapBullet(bullet, evidence, league) {
+  const lg = String(league || '').toUpperCase();
+  const isSoccer = lg === 'WC' || lg.includes('SOCCER') || lg.includes('WORLD CUP');
+  if (!isSoccer) return true;
+  const m = String(bullet || '').match(SOCCER_STAT);
+  if (!m) return true; // score / outcome line — nothing to verify
+  const num = m[1];
+  const stem = m[2].toLowerCase().slice(0, 4); // save/shot/goal/assi/tack/pass…
+  const ev = String(evidence || '').toLowerCase();
+  const re = new RegExp(`\\b${num}\\b[^\\n]{0,40}${stem}|${stem}[^\\n]{0,40}\\b${num}\\b`, 'i');
+  return re.test(ev);
+}
+
 /**
  * Generate the betting recap for one graded game pick. ONE Flash call, low
  * temperature, evidence only — no tools, no search, no fabrication.
@@ -248,6 +278,7 @@ export async function generateRecap({ pick, result, evidence }) {
     ? parsed.bullets
         .map((b) => String(b).trim())
         .map((b) => sanitizeBulletPrices(b, evidence)) // strip any price the evidence can't source
+        .filter((b) => keepRecapBullet(b, evidence, pick.league)) // drop unverifiable WC player-stat lines
         .filter(Boolean)
         .map((b) => (b.length > MAX_BULLET_CHARS ? b.slice(0, MAX_BULLET_CHARS).trimEnd() : b))
         .slice(0, MAX_BULLETS)

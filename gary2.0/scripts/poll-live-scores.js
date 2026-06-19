@@ -306,6 +306,26 @@ async function run() {
   });
   console.log(`✅ live_scores: ${stamped.length} game(s) for ${targetDate} (${live} live, ${final} final).`);
 
+  // Phantom-row cleanup: a prior poll (or a bad source frame) can leave a DUPLICATE
+  // game_id for the same matchup — live: a bogus "BAL 5 · SEA 3" lingered beside the
+  // real "BAL 0 · SEA 3" final, and the app deduped to the phantom. For EACH league
+  // we actually fetched this poll, drop today's rows whose game_id isn't in the slate
+  // we just wrote. Per-league so a failed/empty league fetch never deletes its valid
+  // rows (we only ever delete within a league that produced games).
+  const slateByLeague = {};
+  for (const r of stamped) { (slateByLeague[r.league] ||= new Set()).add(String(r.game_id)); }
+  for (const [lg, ids] of Object.entries(slateByLeague)) {
+    const keep = [...ids].filter(Boolean);
+    if (!keep.length) continue;
+    try {
+      await axios({
+        method: 'DELETE',
+        url: `${REST_URL}?date=eq.${targetDate}&league=eq.${encodeURIComponent(lg)}&game_id=not.in.(${keep.join(',')})`,
+        headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, Prefer: 'return=minimal' },
+      });
+    } catch (e) { console.warn(`[live_scores] phantom-row cleanup (${lg}) failed: ${e?.message || e}`); }
+  }
+
   // Grade any game that JUST went final — picks/props/insights now, not at 6:45am.
   if (prevFinalIds) {
     const newlyFinal = stamped.filter(

@@ -5018,12 +5018,29 @@ const ballDontLieService = {
           if (!teams[abbr]) teams[abbr] = { batters: [], pitcher: null, teamName: entry.team?.display_name || entry.team?.name };
 
           if (entry.is_probable_pitcher) {
-            teams[abbr].pitcher = {
+            const cand = {
               name: entry.player?.full_name || `${entry.player?.first_name} ${entry.player?.last_name}`,
               position: entry.position,
               batsThrows: entry.player?.bats_throws || '',
               playerId: entry.player?.id
             };
+            const prior = teams[abbr].pitcher;
+            if (teams[abbr]._pitcherConflict) {
+              // already poisoned by an earlier conflict — stays null
+            } else if (prior && prior.playerId != null && cand.playerId != null
+                       && String(prior.playerId) !== String(cand.playerId)) {
+              // BDL handed us TWO different probable starters for one team (a stale +
+              // an updated projection). We can't tell which is real, so REFUSE to
+              // guess — null the pitcher so lineup-derived lanes (owned / platoonEdge /
+              // starterForm / player intel) skip this side rather than pin a career
+              // H2H or form read on the WRONG arm (live: "Henderson off George Kirby"
+              // surfaced when Bryan Woo was the actual Mariners starter).
+              console.warn(`[BDL] ⚠️ ${abbr} has conflicting probable starters (${prior.name} vs ${cand.name}) for game ${gameId} — nulling pitcher, won't guess`);
+              teams[abbr].pitcher = null;
+              teams[abbr]._pitcherConflict = true;
+            } else {
+              teams[abbr].pitcher = cand;
+            }
           } else if (entry.batting_order != null) {
             teams[abbr].batters.push({
               name: entry.player?.full_name || `${entry.player?.first_name} ${entry.player?.last_name}`,
