@@ -4,7 +4,7 @@
  */
 import { supabase, supabaseAdmin, storeDailyPicks } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { getESTDate } from '../utils/dateUtils.js';
+import { getESTDate, toESTDate } from '../utils/dateUtils.js';
 
 // Storage lock to prevent concurrent writes
 let isStoringPicks = false;
@@ -806,9 +806,9 @@ export async function storePickContext(pick, context) {
     return { success: false, reason: 'no context' };
   }
   try {
-    const dateStr = (pick.commence_time
-      ? new Date(pick.commence_time).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10));
+    // ET calendar date — a late ET game (e.g. 8:30pm ET) carries TOMORROW's UTC date,
+    // so the raw UTC slice would file it on the wrong slate day. Always the ET day.
+    const dateStr = pick.commence_time ? toESTDate(pick.commence_time) : getESTDate();
     const row = {
       pick_id: pick.pick_id,
       date: dateStr,
