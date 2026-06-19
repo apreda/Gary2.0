@@ -97,25 +97,31 @@ async function rowsForMatch(match, season) {
   const home = match?.home_team, away = match?.away_team;
   if (matchId == null || !home?.id || !away?.id) return [];
 
-  const lineups = await safe(() => wc.getMatchLineups(matchId), []);
-  if (!lineups || lineups.length === 0) return []; // not posted yet → fail closed
-
-  const h = readSide(lineups, home.id, home.name);
-  const a = readSide(lineups, away.id, away.name);
-  if (!h || !a) return [];
   const label = `${away.name} @ ${home.name}`;
+  const lineups = await safe(() => wc.getMatchLineups(matchId), []);
+  let h = lineups.length ? readSide(lineups, home.id, home.name) : null;
+  let a = lineups.length ? readSide(lineups, away.id, away.name) : null;
 
-  // Gather the best candidate signal for each side, then emit the notable ones
-  // (up to 2 per match — one per team — so a "DR Congo contain + Portugal keeper
-  // change" game surfaces both, while a flat game emits nothing).
-  const cands = [];
-  for (const [side, opp] of [[h, a], [a, h]]) {
-    const c = await bestSignal(side, opp, matchId, season);
-    if (c) cands.push(c);
+  // Confirmed sheets land ~90 min before kickoff; BDL exposes a PREDICTED XI hours
+  // earlier, so a sheet is "confirmed" only INSIDE that window — otherwise it's a
+  // projection (real names, not the manager's final call). Time-to-kickoff, not
+  // "does a sheet exist", is the honest determinant — this is the 8am/3pm bug.
+  const kickoff = match?.datetime ? new Date(match.datetime).getTime() : null;
+  const inConfirmWindow = kickoff != null && (kickoff - Date.now()) <= 95 * 60 * 1000;
+  let status = (h && a && inConfirmWindow) ? 'confirmed' : 'projected';
+
+  // No confirmed sheet yet → PROJECT from each side's previous-match XI (the SAME
+  // fetch the rotation signal already does, so NO extra API calls — this rides the
+  // existing per-game insight pass that runs alongside the picks). Openers have no
+  // prior XI → fail closed, and the iOS field shows its "Projected" placeholder.
+  if (!h || !a) {
+    h = await previousXI(home.id, home.name, matchId, season);
+    a = await previousXI(away.id, away.name, matchId, season);
+    if (!h || !a) return [];
+    status = 'projected';
   }
-  cands.sort((x, y) => y.score - x.score);
 
-  // Structured team sheets for the iOS "Confirmed XI" card (formation + the 11).
+  // Structured team sheets for the iOS field card (formation + the 11) + the status.
   const sheet = (side, teamName) => ({
     team: teamName,
     formation: side.formation,
@@ -123,13 +129,32 @@ async function rowsForMatch(match, season) {
       .map((s) => ({ n: s.player?.name, p: s.position, num: s.shirt_number ?? null }))
       .filter((p) => p.n),
   });
-  const meta = { kind: 'confirmedXI', home: sheet(h, home.name), away: sheet(a, away.name) };
+  const meta = { kind: 'confirmedXI', status, home: sheet(h, home.name), away: sheet(a, away.name) };
 
+  // A projection isn't a real selection → carry the sheet so the field renders real
+  // names, but make NO situational claim. The shape/rotation/keeper/benched reads
+  // fire ONLY on the confirmed XI.
+  if (status === 'projected') {
+    return [makeRow({
+      category: 'situational',
+      headline: `${home.name} v ${away.name}: projected XI`,
+      value: 'PROJECTED',
+      detail: `Likely lineups from each side's last match — confirmed sheets post ~2h before kickoff.`,
+      game: label, game_id: matchId, tone: TONES.EDGE, relevance_score: 45, meta,
+    })];
+  }
+
+  // Best candidate signal per side, up to 2 per match (one per team).
+  const cands = [];
+  for (const [side, opp] of [[h, a], [a, h]]) {
+    const c = await bestSignal(side, opp, matchId, season);
+    if (c) cands.push(c);
+  }
+  cands.sort((x, y) => y.score - x.score);
   return cands.slice(0, 2).map((c) => makeRow({
     category: 'situational',
     headline: c.headline, value: c.value, detail: c.detail,
-    game: label, game_id: matchId, tone: c.tone, relevance_score: c.score,
-    meta,
+    game: label, game_id: matchId, tone: c.tone, relevance_score: c.score, meta,
   }));
 }
 
@@ -157,7 +182,7 @@ async function bestSignal(side, opp, matchId, season) {
   }
 
   // 2 + 3) CHANGES vs the previous match XI (rotation, keeper change) — match-day 2+
-  const prev = await previousXI(side.teamId, matchId, season);
+  const prev = await previousXI(side.teamId, side.teamName, matchId, season);
   if (prev) {
     const dropped = prev.names.filter((n) => !inXI(n, side.names));
     if (dropped.length >= 4) {
@@ -199,19 +224,16 @@ async function bestSignal(side, opp, matchId, season) {
 
 // The team's most recent COMPLETED WC match before `matchId`, with its starting XI +
 // keeper. null for openers (no prior match).
-async function previousXI(teamId, matchId, season) {
+async function previousXI(teamId, teamName, matchId, season) {
   const matches = await safe(() => wc.getMatches({ teamIds: [teamId], seasons: [season] }), []);
   const prior = (matches || [])
     .filter((m) => m?.status === 'completed' && m?.id !== matchId && m?.datetime)
     .sort((x, y) => new Date(y.datetime) - new Date(x.datetime))[0];
   if (!prior) return null;
   const lu = await safe(() => wc.getMatchLineups(prior.id), []);
-  const starters = (lu || []).filter((l) => l.team_id === teamId && l.is_starter);
-  if (starters.length < 11) return null;
-  return {
-    names: starters.map((s) => s.player?.name).filter(Boolean),
-    keeper: starters.find((s) => s.position === 'G')?.player?.name || null,
-  };
+  // Full sheet (formation + 11 + names + keeper), or null if <11 — drives BOTH the
+  // rotation/keeper diff and the pre-kickoff projected XI for the field.
+  return readSide(lu, teamId, teamName);
 }
 
 // { name, goals } if the side's clear cycle goal leader (>= 4 goals) is NOT in the XI.

@@ -2922,7 +2922,7 @@ struct HomeView: View {
            let score = g.final_score?.split(separator: "-"), score.count == 2 {
             let parts = best.key.components(separatedBy: " @ ")
             if parts.count == 2 {
-                title = "\(shortTeam(parts[0])) \(score[0]) · \(shortTeam(parts[1])) \(score[1])"
+                title = "\(Formatters.shortTeamName(parts[0])) \(score[0]) · \(Formatters.shortTeamName(parts[1])) \(score[1])"
             }
         }
         let rows = best.value.prefix(5).map { p -> HomePropBoxSection.Row in
@@ -3279,17 +3279,16 @@ struct HomeView: View {
         let settledProps = props.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let days = settledGames.compactMap { $0.game_date } + settledProps.compactMap { $0.game_date }
         guard !days.isEmpty else { return (nil, nil, [], nil, 0, 0, nil, (0, 0, 0)) }
-        // Anchor on the date with the MOST graded results — that's the real slate
-        // Gary picked. A sporting night spills its late games (west-coast finishes,
-        // World Cup night kickoffs) into the NEXT UTC date, so count the anchor AND
-        // its rollover day together. This fixes the "always 1-0" record (which used
-        // days.max() and so counted only the 1–2 latest spillover games) and
-        // gracefully skips a missed/empty day (e.g. an outage) instead of showing
-        // its lone straggler.
-        var counts: [String: Int] = [:]
-        for d in days { counts[d, default: 0] += 1 }
-        let anchor = counts.max { a, b in a.value != b.value ? a.value < b.value : a.key < b.key }!.key
-        let nightSet: Set<String> = [anchor, SupabaseAPI.dayAfter(anchor)]
+        // "Last night" = the most recent COMPLETED EST slate day. game_date already carries
+        // the ET slate day a game STARTED on — a late west-coast game that finishes after
+        // midnight UTC still keeps its ET day (verified Jun 18: Angels@Athletics graded
+        // 10:34 UTC Jun 19, yet game_date = 2026-06-18). So we take exactly ONE day, no UTC-
+        // rollover merge. Exclude TODAY so this morning's early games (a WC dawn kickoff)
+        // never leak into yesterday's recap; an empty/off day falls back to the prior slate.
+        let today = SupabaseAPI.todayEST()
+        let prior = Set(days).filter { $0 < today }
+        guard let anchor = prior.max() else { return (nil, nil, [], nil, 0, 0, nil, (0, 0, 0)) }
+        let nightSet: Set<String> = [anchor]
         let nightGames = settledGames.filter { nightSet.contains($0.game_date ?? "") }
         let nightProps = settledProps.filter { nightSet.contains($0.game_date ?? "") }
 
@@ -10756,13 +10755,43 @@ struct BillfoldView: View {
         if !rword.isEmpty { recap.append("Graded \(rword)") }
         if let s = r.final_score, !s.isEmpty { recap.append("final \(s)") }
         if let pt = r.pick_text, !pt.isEmpty { recap.append(pt) }
+        let league = r.effectiveLeague ?? r.league ?? ""
         return GaryPick.from(dict: [
-            "pick": r.pick_text ?? r.matchup ?? "",
-            "league": r.effectiveLeague ?? r.league ?? "",
+            "pick": Self.withTotalUnit(r.pick_text ?? r.matchup ?? "", league: league),
+            "league": league,
             "homeTeam": home,
             "awayTeam": away,
             "rationale": recap.isEmpty ? "Settled pick." : recap.joined(separator: " \u{00B7} ")
         ])
+    }
+
+    /// The scoring unit for a totals (Over/Under) pick, by sport — so "Over 2.5" reads
+    /// "Over 2.5 Goals" (WC/NHL), "Over 8.5 Runs" (MLB), "Over 210.5 Points" (NBA/NFL/NCAAB).
+    private static func totalUnit(_ league: String) -> String {
+        switch league.uppercased() {
+        case "WC", "SOCCER", "MLS", "EPL", "UCL", "NHL": return "Goals"
+        case "MLB": return "Runs"
+        default: return "Points"
+        }
+    }
+
+    /// Insert the scoring unit into a totals pick, after the number and before any odds.
+    /// Leaves ML/spread picks and already-unit'd totals untouched.
+    static func withTotalUnit(_ pickText: String, league: String) -> String {
+        let lower = pickText.lowercased()
+        guard lower.hasPrefix("over ") || lower.hasPrefix("under ") else { return pickText }
+        if ["goal", "run", "point", "pts"].contains(where: { lower.contains($0) }) { return pickText }
+        let unit = totalUnit(league)
+        let pattern = #"^([Oo]ver|[Uu]nder)\s+(\d+(?:\.\d+)?)(\s+[+-]\d+)?$"#
+        if let re = try? NSRegularExpression(pattern: pattern),
+           let m = re.firstMatch(in: pickText, range: NSRange(pickText.startIndex..., in: pickText)) {
+            let ns = pickText as NSString
+            let side = ns.substring(with: m.range(at: 1))
+            let num = ns.substring(with: m.range(at: 2))
+            let odds = m.range(at: 3).location != NSNotFound ? ns.substring(with: m.range(at: 3)) : ""
+            return "\(side) \(num) \(unit)\(odds)"
+        }
+        return "\(pickText) \(unit)"
     }
 
     private func propCardView(_ result: PropResult) -> some View {
@@ -15804,21 +15833,84 @@ struct EdgesSection: View {
     let title: String
     let edges: [Signal]
     var note: String = "More intel drops closer to game time."
+    /// TODAY'S EDGES opts in: a category tab bar so the user can jump to a lane
+    /// (Situational, Platoon Edge…) instead of scrolling the mixed feed. Off by
+    /// default, so per-game GAME INTEL keeps its plain list.
+    var tabbed: Bool = false
+    @State private var selectedKind: SignalKind? = nil   // nil = ALL
+
+    /// Unique categories present, in first-appearance (feed) order.
+    private var kinds: [SignalKind] {
+        var seen = Set<SignalKind>(); var out: [SignalKind] = []
+        for e in edges where !seen.contains(e.kind) { seen.insert(e.kind); out.append(e.kind) }
+        return out
+    }
+    /// No "ALL" tab (user call) — the feed opens on the FIRST lane present and
+    /// selectedKind only changes on a tap, so the default tracks whatever leads
+    /// the feed (Streak today).
+    private var activeKind: SignalKind? {
+        if let k = selectedKind, kinds.contains(k) { return k }
+        return kinds.first
+    }
+    private var shown: [Signal] {
+        guard let k = activeKind else { return edges }
+        return edges.filter { $0.kind == k }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                .foregroundStyle(.white.opacity(0.4))
-                .padding(.horizontal, 16).padding(.top, 4)
+            // Title hidden when the category tabs are shown — redundant (user call).
+            if !tabbed {
+                Text(title)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.4))
+                    .padding(.horizontal, 16).padding(.top, 4)
+            }
             if edges.isEmpty {
                 Text(note)
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
                     .padding(.horizontal, 16).padding(.vertical, 8)
             } else {
-                VStack(spacing: 0) { ForEach(edges) { SignalRow(s: $0) } }
+                if tabbed && kinds.count > 1 { categoryTabBar }
+                VStack(spacing: 0) { ForEach(shown) { SignalRow(s: $0) } }
                     .padding(.horizontal, 16)
             }
         }
+    }
+
+    /// Same mono font + icon + tint as the row category labels; gold underline
+    /// marks the active filter (mirrors the matchup tab bar above the feed).
+    private var categoryTabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 22) {
+                ForEach(kinds, id: \.self) { categoryTab($0) }
+                // Scroll affordance — there are more lanes off the right edge.
+                if kinds.count > 2 {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.25))
+                        .padding(.bottom, 9)
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 2)
+        }
+    }
+
+    @ViewBuilder
+    private func categoryTab(_ kind: SignalKind) -> some View {
+        let active = activeKind == kind
+        Button { withAnimation(.easeInOut(duration: 0.15)) { selectedKind = kind } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: kind.icon).font(.system(size: 11, weight: .bold))
+                Text(kind.chip).font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
+            }
+            .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
+            .padding(.bottom, 8)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 2)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -16343,7 +16435,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
-                                   edges: Array(sportConnections.prefix(8)), onTapProp: { selectedProp = $0 })
+                                   edges: sportConnections, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .refreshable { await store.refresh() }
@@ -16627,7 +16719,11 @@ struct PicksCarouselView: View {
     /// and NBA abbreviations, so either league's edges attach to their game.
     private func edges(for g: (matchup: String, time: String, props: [PropPick])) -> [Signal] {
         let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
-        return connections.filter { abbrGameMatches($0.game, matchup: hay) }
+        // WC edges (the confirmed/projected XI lane) label the game with FULL nation
+        // names ("Australia @ USA"), which abbrGameMatches (built for abbrev games like
+        // "CHW @ DET") can't resolve — so ALSO match on the last-word matchup key.
+        let key = Self.matchupKey(g.matchup)
+        return connections.filter { abbrGameMatches($0.game, matchup: hay) || Self.matchupKey($0.game) == key }
     }
 
     /// Today-page edges respect the sport filter — an NBA tab must never
@@ -16661,7 +16757,7 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
-            EdgesSection(title: "TODAY'S EDGES", edges: edges)
+            EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
         }
     }
 
@@ -17977,6 +18073,7 @@ struct PropsHubView: View {
     }
 
     var body: some View {
+        GeometryReader { geo in
         ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
@@ -18143,6 +18240,9 @@ struct PropsHubView: View {
             }
             .padding(.top, 8)
             .padding(.bottom, 120)
+            // Floor the content at the viewport height so an empty/under-filled Hub can't be
+            // rubber-banded around freely (the "whole page drags off the tracks" bug).
+            .frame(minHeight: geo.size.height, alignment: .top)
             .task { if !didLoad { await load() } }   // load() consumes any pending deep link
         }
         // Let the search keyboard collapse: drag the list, return key, or clear.
@@ -18179,6 +18279,7 @@ struct PropsHubView: View {
                 withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
                 pendingScrollAnchor = nil
             }
+        }
         }
         }
     }
@@ -19231,9 +19332,8 @@ struct SignalRow: View {
                         if !s.detail.isEmpty {
                             Text(s.detail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
                         }
-                        if !s.spark.isEmpty {
-                            MiniBarChart(values: s.spark, line: s.lineVal, tint: s.kind.tint, height: 20).padding(.top, 2)
-                        }
+                        // Spark mini-bar removed on the Picks edge rows (user call — the
+                        // little 2-bar block read as ambiguous).
                     }
                     Spacer(minLength: 6)
                     if !s.value.isEmpty {

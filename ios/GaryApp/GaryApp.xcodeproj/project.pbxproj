@@ -43,6 +43,7 @@
 		AE0D2ABFE580A80F52F775DE /* GaryChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E402E6D99BBF5DF1B0ED9E77 /* GaryChatViewModel.swift */; };
 		B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */ = {isa = PBXBuildFile; fileRef = 4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */; };
 		B313EC36BDDDB18E9F687643 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D1E52AFB4EED7E97F55C36 /* Views.swift */; };
+		C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */; };
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
 		CAF9190DE725143E36BFCD16 /* ci_post_clone.sh in Resources */ = {isa = PBXBuildFile; fileRef = 32B85EDA7E4476C638F6B871 /* ci_post_clone.sh */; };
 		D35C7F1C42547FDB46926826 /* Inter-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7A8B915EBAD81C09AA4018C5 /* Inter-Bold.ttf */; };
@@ -88,6 +89,7 @@
 		7A8B915EBAD81C09AA4018C5 /* Inter-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Bold.ttf"; sourceTree = "<group>"; };
 		7B4D200DBCE9B8531DE37A41 /* Inter-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Regular.ttf"; sourceTree = "<group>"; };
 		7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SairaCondensed-Bold.ttf"; sourceTree = "<group>"; };
+		A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBBallparks.swift; sourceTree = "<group>"; };
 		A6B153703E9F452BFFC5A392 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B24536929674F3304E9497C4 /* ChangelogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogView.swift; sourceTree = "<group>"; };
 		C0DAD9374914257AC6D8B7EC /* MLBGameIntelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBGameIntelView.swift; sourceTree = "<group>"; };
@@ -153,6 +155,7 @@
 				423887686C6839DEC44C0DEA /* GoogleService-Info.plist */,
 				00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */,
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
+				A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */,
 				C0DAD9374914257AC6D8B7EC /* MLBGameIntelView.swift */,
 				ECE32BA2E5208CC9E994A26A /* Models.swift */,
 				FBB94BA05B70C7412D0F1576 /* PrivacyInfo.xcprivacy */,
@@ -332,6 +335,7 @@
 				3F2B427469774FD90FFA1825 /* GaryOrbShaders.metal in Sources */,
 				938E9EAC2F9A822E539E753B /* GaryOrbView.swift in Sources */,
 				70B734B97C884B1080B175B9 /* GaryVoiceService.swift in Sources */,
+				C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */,
 				0B397BC2A4AF390C22016E57 /* MLBGameIntelView.swift in Sources */,
 				5A432D05492831EB727B31A7 /* Models.swift in Sources */,
 				8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */,

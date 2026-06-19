@@ -95,6 +95,7 @@ struct SwapMeta: Decodable {
     // Confirmed-XI payload (kind == "confirmedXI"): both teams' team sheets.
     let home: TeamSheet?
     let away: TeamSheet?
+    let status: String?      // "projected" (pre-kickoff, from last match) | "confirmed"
 }
 
 /// One team's confirmed starting XI (WC Confirmed XI lane).

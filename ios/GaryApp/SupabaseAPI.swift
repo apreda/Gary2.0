@@ -803,6 +803,32 @@ enum SupabaseAPI {
         }
     }
 
+    /// The per-game MLB field lineup (real players + positions + opposing starter),
+    /// built daily by run-mlb-field-lineups.js into mlb_field_lineups. Matched by the
+    /// home team's BDL abbreviation. Returns nil before lineups post (~2-3h pre-game).
+    static func fetchMlbFieldLineup(date: String, homeTeam: String) async -> MLBFieldLineupRow? {
+        let url = buildURL(table: "mlb_field_lineups", query: [
+            URLQueryItem(name: "select", value: "game,home_team,away_team,payload"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "home_team", value: "eq.\(homeTeam)")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([MLBFieldLineupRow].self, from: data) else { return nil }
+        return rows.first
+    }
+
+    struct MLBFieldLineupRow: Decodable { let game: String?; let home_team: String?; let away_team: String?; let payload: MLBFieldPayload }
+    struct MLBFieldPayload: Decodable { let home: MLBTeamLineup?; let away: MLBTeamLineup? }
+    struct MLBTeamLineup: Decodable {
+        let team: String?; let pitcher: MLBLineupPitcher?; let facingPitcher: MLBLineupPitcher?; let fielders: [MLBLineupFielder]
+    }
+    struct MLBLineupPitcher: Decodable { let name: String?; let hand: String?; let playerId: String? }
+    struct MLBLineupFielder: Decodable {
+        let playerId: String?; let name: String?; let pos: String?; let order: Int?
+        let bats: String?; let ops: String?; let heat: String?; let hrEdge: Bool?; let plat: Bool?
+    }
+
     // MARK: - Weekly NFL Picks
     
     /// Fetch NFL picks for the current week

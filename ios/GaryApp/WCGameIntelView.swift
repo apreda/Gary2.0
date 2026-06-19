@@ -70,7 +70,7 @@ struct WCGameIntelView: View {
                 return XIPlayer(num: m.num ?? 0, name: Self.surname(n), pos: (m.p ?? "M").uppercased())
             }
         }
-        return sample
+        return []   // no real XI yet → empty pitch + a Projected placeholder, NEVER mock players (user call, Jun 19)
     }
     private var homePlayers: [XIPlayer] { players(from: confirmedXI?.home, sample: Self.homeSample) }
     private var awayPlayers: [XIPlayer] { players(from: confirmedXI?.away, sample: Self.awaySample) }
@@ -86,7 +86,8 @@ struct WCGameIntelView: View {
             if showHeader { header }
             stateTabs
             pitchCard
-            theRead
+            // THE READ removed (Jun 19, founder) — redundant with the MORE INTEL modules
+            // below; the dashboard already carries the read.
             // Source Consensus card removed (Jun 18) — it had NO backend lane, so it
             // only rendered hardcoded sample desks ("Almoez Ali · 3 START / 2 BENCH"),
             // i.e. fake data. Restore with real data when the desk-lineup feed exists;
@@ -95,7 +96,7 @@ struct WCGameIntelView: View {
                 EdgesSection(title: "MORE INTEL", edges: edges).padding(.top, 16)
             }
         }
-        .padding(.vertical, 14)
+        .padding(.top, showHeader ? 14 : 0).padding(.bottom, 14)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .topTrailing) {
             if let onClose {
@@ -107,6 +108,8 @@ struct WCGameIntelView: View {
                 .padding(.trailing, 14).padding(.top, 12)
             }
         }
+        // No confirmed XI yet → open on the Projected tab, not a false "Confirmed".
+        .onAppear { state = (confirmedXI?.status == "confirmed") ? .confirmed : .projected }
     }
 
     private var header: some View {
@@ -136,7 +139,7 @@ struct WCGameIntelView: View {
                 if s != XIState.allCases.last { Spacer() }
             }
         }
-        .padding(.horizontal, 22).padding(.top, 14)
+        .padding(.horizontal, 22).padding(.top, showHeader ? 14 : 2)
     }
 
     private var pitchCard: some View {
@@ -145,10 +148,16 @@ struct WCGameIntelView: View {
                 .frame(height: 560)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08)))
-            if !hasRealXI {
-                Text("Sample XIs — confirmed sheets post ~60 min before kickoff")
-                    .font(GaryFonts.mono(9.5)).foregroundStyle(WCI.ink4)
-            }
+                .overlay {
+                    if !hasRealXI {
+                        VStack(spacing: 6) {
+                            Text("PROJECTED").font(GaryFonts.mono(13, bold: true)).tracking(2.5).foregroundStyle(WCI.gold)
+                            Text("Confirmed XI posts ~60 min before kickoff").font(GaryFonts.mono(10)).foregroundStyle(WCI.ink3)
+                        }
+                        .padding(.horizontal, 22).padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.5)))
+                    }
+                }
         }
         .padding(.horizontal, 14).padding(.top, 13)
     }
