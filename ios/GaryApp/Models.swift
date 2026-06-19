@@ -95,7 +95,23 @@ struct SwapMeta: Decodable {
     // Confirmed-XI payload (kind == "confirmedXI"): both teams' team sheets.
     let home: TeamSheet?
     let away: TeamSheet?
-    let status: String?      // "projected" (pre-kickoff, from last match) | "confirmed"
+    let status: String?      // "projected" | "contested" (GTD doubt) | "confirmed"
+    let doubts: [String]?    // projected starters with an active injury doubt (Contested)
+    // Regression payload (kind == "regression_pitcher"): the enriched pitcher
+    // read that powers the Regression Board's rich row + expanded detail.
+    let day: String?         // "tonight" | "tomorrow" (tomorrow = projected starter look-ahead)
+    let direction: String?   // "overperforming" (due to regress) | "underperforming" (due to bounce back)
+    let era: Double?
+    let xera: Double?
+    let gap: Double?
+    let whip: Double?
+    let k9: Double?
+    let opp_ba: String?      // opponent batting avg ".261"
+    let opp_xba: String?     // opponent expected BA ".269"
+    let hard_hit: Double?    // hard-hit% allowed
+    let barrel: Double?      // barrel% allowed
+    let opp: String?         // opponent abbreviation faced
+    let verdict: String?     // one-line conviction read (Hub voice)
 }
 
 /// One team's confirmed starting XI (WC Confirmed XI lane).

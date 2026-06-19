@@ -808,7 +808,7 @@ enum SupabaseAPI {
     /// home team's BDL abbreviation. Returns nil before lineups post (~2-3h pre-game).
     static func fetchMlbFieldLineup(date: String, homeTeam: String) async -> MLBFieldLineupRow? {
         let url = buildURL(table: "mlb_field_lineups", query: [
-            URLQueryItem(name: "select", value: "game,home_team,away_team,payload"),
+            URLQueryItem(name: "select", value: "game,home_team,away_team,status,payload"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "home_team", value: "eq.\(homeTeam)")
         ])
@@ -818,7 +818,7 @@ enum SupabaseAPI {
         return rows.first
     }
 
-    struct MLBFieldLineupRow: Decodable { let game: String?; let home_team: String?; let away_team: String?; let payload: MLBFieldPayload }
+    struct MLBFieldLineupRow: Decodable { let game: String?; let home_team: String?; let away_team: String?; let status: String?; let payload: MLBFieldPayload }
     struct MLBFieldPayload: Decodable { let home: MLBTeamLineup?; let away: MLBTeamLineup? }
     struct MLBTeamLineup: Decodable {
         let team: String?; let pitcher: MLBLineupPitcher?; let facingPitcher: MLBLineupPitcher?; let fielders: [MLBLineupFielder]

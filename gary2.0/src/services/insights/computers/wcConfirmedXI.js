@@ -121,6 +121,22 @@ async function rowsForMatch(match, season) {
     status = 'projected';
   }
 
+  // Contested = a projected starter is carrying an active injury doubt — a game-time
+  // decision (Pulisic's calf is the canonical case). The projection is real but
+  // UNCERTAIN. Driven by apiFootball injuries (cached 2h, already imported). Only
+  // meaningful pre-confirmation; if the injuries feed is empty it stays 'projected'
+  // (fails safe — never fabricates a doubt).
+  let doubts = [];
+  if (status === 'projected') {
+    const inj = [
+      ...(await safe(() => apiFootball.getInjuries(home.name), [])),
+      ...(await safe(() => apiFootball.getInjuries(away.name), [])),
+    ];
+    const xiNames = [...h.names, ...a.names];
+    doubts = [...new Set(inj.map((i) => i?.player).filter((p) => p && inXI(p, xiNames)))];
+    if (doubts.length) status = 'contested';
+  }
+
   // Structured team sheets for the iOS field card (formation + the 11) + the status.
   const sheet = (side, teamName) => ({
     team: teamName,
@@ -130,17 +146,23 @@ async function rowsForMatch(match, season) {
       .filter((p) => p.n),
   });
   const meta = { kind: 'confirmedXI', status, home: sheet(h, home.name), away: sheet(a, away.name) };
+  if (doubts.length) meta.doubts = doubts;
 
   // A projection isn't a real selection → carry the sheet so the field renders real
   // names, but make NO situational claim. The shape/rotation/keeper/benched reads
   // fire ONLY on the confirmed XI.
-  if (status === 'projected') {
+  if (status !== 'confirmed') {
+    const contested = status === 'contested';
     return [makeRow({
       category: 'situational',
-      headline: `${home.name} v ${away.name}: projected XI`,
-      value: 'PROJECTED',
-      detail: `Likely lineups from each side's last match — confirmed sheets post ~2h before kickoff.`,
-      game: label, game_id: matchId, tone: TONES.EDGE, relevance_score: 45, meta,
+      headline: contested
+        ? `${home.name} v ${away.name}: lineup in doubt`
+        : `${home.name} v ${away.name}: projected XI`,
+      value: contested ? 'CONTESTED' : 'PROJECTED',
+      detail: contested
+        ? `Projected XI — but ${doubts.map(lastName).join(', ')} ${doubts.length > 1 ? 'are' : 'is'} a game-time call. Confirmed sheet posts ~2h before kickoff.`
+        : `Likely lineups from each side's last match — confirmed sheets post ~2h before kickoff.`,
+      game: label, game_id: matchId, tone: TONES.EDGE, relevance_score: contested ? 52 : 45, meta,
     })];
   }
 

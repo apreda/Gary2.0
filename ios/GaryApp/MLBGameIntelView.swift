@@ -122,7 +122,7 @@ struct MLBGameIntelView: View {
     var onClose: (() -> Void)? = nil
 
     private enum LineupState: String, CaseIterable { case projected = "Projected", confirmed = "Confirmed" }
-    @State private var state: LineupState = .confirmed
+    @State private var state: LineupState = .projected
     @State private var selected: MLBFielder? = nil
     @State private var showWeather = false
     @State private var realHome: SupabaseAPI.MLBTeamLineup? = nil
@@ -178,7 +178,11 @@ struct MLBGameIntelView: View {
         let n = homeName.lowercased()
         guard let abbr = mlbTeamKeywords.first(where: { $0.value.contains { n.contains($0) } })?.key else { return }
         if let row = await SupabaseAPI.fetchMlbFieldLineup(date: SupabaseAPI.todayEST(), homeTeam: abbr) {
-            await MainActor.run { realHome = row.payload.home }
+            await MainActor.run {
+                realHome = row.payload.home
+                // Real status from the builder — BDL posts the confirmed sheet pre-game.
+                state = (row.status == "confirmed") ? .confirmed : .projected
+            }
         }
     }
 
@@ -195,9 +199,9 @@ struct MLBGameIntelView: View {
     /// The opposing starter the home batters face (real), for the read + the flip label.
     private var facingPitcherName: String { realHome?.facingPitcher?.name.map(Self.surname) ?? "the SP" }
 
-    /// Real lineup mapped onto the field, else the labelled sample.
+    /// Real lineup mapped onto the field — empty (placeholder) until it posts. Never mock.
     private var displayLineup: [MLBFielder] {
-        guard let h = realHome else { return Self.lineup }
+        guard let h = realHome else { return [] }
         var out: [MLBFielder] = []
         for f in h.fielders {
             guard let pos = f.pos, let c = Self.posCoord[pos] else { continue }
@@ -260,6 +264,16 @@ struct MLBGameIntelView: View {
                             else { Button { selected = f } label: { token(f) }.buttonStyle(.plain) }
                         }
                         .position(t.map(f.dx, f.dy))
+                    }
+                    if displayLineup.isEmpty {
+                        VStack(spacing: 6) {
+                            Text("LINEUP PENDING")
+                                .font(GaryFonts.mono(14, bold: true)).tracking(3).foregroundStyle(MLBI.gold)
+                            Text("Posts ~2–3h before first pitch")
+                                .font(GaryFonts.mono(10)).foregroundStyle(MLBI.ink3)
+                        }
+                        .padding(.vertical, 18).padding(.horizontal, 26)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(GaryColors.cardBg.opacity(0.82)))
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

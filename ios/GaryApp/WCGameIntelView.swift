@@ -58,7 +58,7 @@ struct WCGameIntelView: View {
     var onClose: (() -> Void)? = nil
 
     private enum XIState: String, CaseIterable { case projected = "Projected", contested = "Contested", confirmed = "Confirmed" }
-    @State private var state: XIState = .confirmed
+    @State private var state: XIState = .projected
 
     private var awayName: String { matchup.components(separatedBy: " @ ").first ?? "Away" }
     private var homeName: String { matchup.components(separatedBy: " @ ").last ?? "Home" }
@@ -108,8 +108,8 @@ struct WCGameIntelView: View {
                 .padding(.trailing, 14).padding(.top, 12)
             }
         }
-        // No confirmed XI yet → open on the Projected tab, not a false "Confirmed".
-        .onAppear { state = (confirmedXI?.status == "confirmed") ? .confirmed : .projected }
+        // Open on the real status tab — Projected / Contested (injury doubt) / Confirmed.
+        .onAppear { state = XIState(rawValue: (confirmedXI?.status ?? "").capitalized) ?? .projected }
     }
 
     private var header: some View {
@@ -128,15 +128,25 @@ struct WCGameIntelView: View {
     }
 
     private var stateTabs: some View {
-        HStack {
-            ForEach(XIState.allCases, id: \.self) { s in
-                Button { withAnimation(.easeInOut(duration: 0.2)) { state = s } } label: {
-                    Text(s.rawValue)
-                        .font(GaryFonts.text(16, state == s ? .bold : .medium))
-                        .foregroundStyle(state == s ? WCI.ink : WCI.ink4)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                ForEach(XIState.allCases, id: \.self) { s in
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { state = s } } label: {
+                        Text(s.rawValue)
+                            .font(GaryFonts.text(16, state == s ? .bold : .medium))
+                            .foregroundStyle(state == s ? WCI.ink : WCI.ink4)
+                    }
+                    .buttonStyle(.plain)
+                    if s != XIState.allCases.last { Spacer() }
                 }
-                .buttonStyle(.plain)
-                if s != XIState.allCases.last { Spacer() }
+            }
+            // Contested → name the game-time doubt(s) driving it (e.g. Pulisic's calf).
+            if state == .contested, let d = confirmedXI?.doubts, !d.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(WCI.gold)
+                    Text("\(d.joined(separator: ", ")) — game-time decision")
+                        .font(GaryFonts.mono(10.5)).foregroundStyle(WCI.ink2).lineLimit(1).minimumScaleFactor(0.8)
+                }
             }
         }
         .padding(.horizontal, 22).padding(.top, showHeader ? 14 : 2)
