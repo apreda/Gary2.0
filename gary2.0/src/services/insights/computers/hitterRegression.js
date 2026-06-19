@@ -215,22 +215,9 @@ async function hitterRegressionForGame(game, { bdl, xByName, gameLabel, stats })
  * e.g. "Bryce Harper's .310 AVG hides a .240 xBA".
  */
 function buildHeadline(c, overperforming) {
-  const ba = pct3(c.ba);
-  const xba = pct3(c.estBa);
-  if (overperforming) {
-    const variants = [
-      `${c.name}'s ${ba} AVG hides a ${xba} xBA`,
-      `${c.name} is hitting ${ba}, but his xBA is ${xba}`,
-      `${c.name}'s ${ba} average outruns a ${xba} expected`,
-    ];
-    return pickVariant(variants, c.playerId);
-  }
-  const variants = [
-    `${c.name}'s ${ba} AVG masks a ${xba} xBA`,
-    `${c.name} is hitting ${ba} with a ${xba} expected`,
-    `${c.name}'s ${xba} xBA outruns a ${ba} average`,
-  ];
-  return pickVariant(variants, c.playerId);
+  // Factual "Name: stat" — the REGRESSION chip + the value carry the read, and
+  // the leading "Name:" keeps the board's name column clean (no truncation).
+  return `${c.name}: ${pct3(c.ba)} AVG vs ${pct3(c.estBa)} xBA`;
 }
 
 /**

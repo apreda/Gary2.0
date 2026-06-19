@@ -158,8 +158,8 @@ async function coldForGame(game, { season, bdl, gameLabel, stats }) {
 
     const handWord = c.pitcherHand === 'L' ? 'LHP' : 'RHP';
     const headline = c.pitcherName
-      ? `${c.name} cold (${pct3(c.recentOps)} OPS, ${shortWindow(c.recentLabel)}) — draws ${handWord} ${c.pitcherName}`
-      : `${c.name} has gone cold: ${pct3(c.recentOps)} OPS in ${c.recentLabel}`;
+      ? `${c.name}: ${pct3(c.recentOps)} OPS in ${shortWindow(c.recentLabel)} — draws ${handWord} ${c.pitcherName}`
+      : `${c.name}: ${pct3(c.recentOps)} OPS in ${c.recentLabel}`;
 
     return makeRow({
       category: 'coolingOff',

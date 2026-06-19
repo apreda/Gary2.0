@@ -138,9 +138,7 @@ async function starterFormForGame(game, { season, bdl, gameLabel, stats }) {
     const reWhip = round(recentWhip, 2).toFixed(2);
     const ipDisp = round(ip, 1);
 
-    const headline = hot
-      ? `${name} is dealing: ${reEra} ERA over his last ${WINDOW_STARTS} starts`
-      : `${name} is getting hit: ${reEra} ERA over his last ${WINDOW_STARTS} starts`;
+    const headline = `${name}: ${reEra} ERA over his last ${WINDOW_STARTS} starts`;
 
     const whipClause = seasonWhip != null
       ? ` with a ${reWhip} WHIP (${round(seasonWhip, 2).toFixed(2)} season)`

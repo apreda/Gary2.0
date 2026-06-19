@@ -159,10 +159,8 @@ async function ownedForGame(game, { bdl, season, gameLabel }) {
     }
 
     const headline = c.kind === 'hitter'
-      ? (formState === 'hot'
-        ? `${c.batterName} owns ${c.pitcherName} (${pct3(c.avg)}) — and he's hot`
-        : `${c.batterName} is ${c.line} (${pct3(c.avg)}) off ${c.pitcherName}`)
-      : `${c.pitcherName} has held ${c.batterName} to ${c.line} with ${c.k} K`;
+      ? `${c.batterName} vs ${c.pitcherName}: ${pct3(c.avg)}`
+      : `${c.pitcherName} vs ${c.batterName}: ${c.line}, ${c.k} K`;
 
     return makeRow({
       category: 'owned',

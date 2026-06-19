@@ -3786,7 +3786,7 @@ struct HomeCashesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Biggest cashes", sub: "Last night's winners, by price")
+            HubSectionHeader(eyebrow: "Biggest cashes", sub: "")
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     Button(action: onOpenBillfold) {
@@ -4056,16 +4056,11 @@ private struct HomeStatusDot: View {
 struct HomeLiveEmpty: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Live", sub: "When Gary's games tip off")
+            HubSectionHeader(eyebrow: "Live", sub: "")
             VStack(spacing: 6) {
                 Text("No games live yet")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
-                Text("The tape and live takeover light up here once tonight's games are in progress.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28).padding(.horizontal, 24)
@@ -18980,7 +18975,7 @@ struct RegressionBoard: View {
                         .font(GaryFonts.mono(12, bold: true))
                         .foregroundStyle(.white.opacity(0.3)).frame(width: 18)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(boardName(s)).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                        Text(boardName(s)).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6)
                         Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45))
                     }
                     Spacer(minLength: 6)

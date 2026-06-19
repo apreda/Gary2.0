@@ -184,7 +184,7 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats }) {
     const propLine = totalBasesOrHitsLine(propsByPlayer, c.playerId);
     return makeRow({
       category: 'heatCheck',
-      headline: `${c.name} is scorching: ${pct3(c.recentOps)} OPS in ${c.recentLabel}`,
+      headline: `${c.name}: ${pct3(c.recentOps)} OPS in ${c.recentLabel}`,
       detail: buildDetail(c, propLine),
       game: label,
       value: pct3(c.recentOps),
