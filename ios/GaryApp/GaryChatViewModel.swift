@@ -40,19 +40,21 @@ final class GaryChatViewModel: ObservableObject {
         Task { @MainActor [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
-                self.amplitude = self.voice.amplitude
-                self.isListening = self.voice.isListening
-                // Update orb state from voice activity
-                if self.voice.isListening {
-                    self.orbState = .listening
-                } else if self.voice.isSpeaking {
-                    self.orbState = .speaking
-                } else if self.isWaitingForReply {
-                    self.orbState = .thinking
-                } else {
-                    self.orbState = .idle
-                }
-                try? await Task.sleep(nanoseconds: 60_000_000) // ~16fps polling
+                // Publish ONLY on change. @Published fires objectWillChange on every
+                // assignment — even same-value — so blindly mirroring voice state at
+                // 16fps re-rendered every observer 16×/sec while idle (amplitude 0,
+                // not listening). Diffing keeps the orb animation smooth when active
+                // and dead silent when nothing is happening.
+                let amp = self.voice.amplitude
+                if amp != self.amplitude { self.amplitude = amp }
+                let lis = self.voice.isListening
+                if lis != self.isListening { self.isListening = lis }
+                let newState: GaryOrbState = self.voice.isListening ? .listening
+                    : self.voice.isSpeaking ? .speaking
+                    : self.isWaitingForReply ? .thinking
+                    : .idle
+                if newState != self.orbState { self.orbState = newState }
+                try? await Task.sleep(nanoseconds: 60_000_000) // ~16fps poll, but renders only on change
             }
         }
     }

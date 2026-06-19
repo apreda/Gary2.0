@@ -12210,6 +12210,7 @@ struct CompactPickRow: View {
         if displayResult != nil {
             if let ls = liveFinal, ls.away_score != nil, ls.home_score != nil { return liveSlotText(ls, label: "FINAL") }
             if let fs = finalScore, !fs.isEmpty { return "FINAL · \(fs)" }
+            if let g = liveCache.gradedScore(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")") { return "FINAL · \(g)" }
             return "FINAL"
         }
         guard let ls = liveStatus else { return nil }
@@ -15169,10 +15170,28 @@ struct PropCardSlate: View {
 // One app-wide fetch loop for live_scores so the pick/prop cards can show
 // LIVE / FINAL in their time slot wherever they appear (Home, Picks, Winners).
 // Consumers call startIfNeeded() (idempotent) and look up by matchup.
-@MainActor
+/// Stable key for a matchup ("Away @ Home" / "Away vs Home"), strip-to-alphanumerics
+/// per side — identical logic to PropsSlateStore.gpKey, hoisted to top level so the
+/// SINGLETON LiveScoreCache (and every card that reads it) can resolve the graded
+/// final scores the store pushes in. Keep in sync with gpKey/gpTeamKey.
+func gradedMatchupKey(_ matchup: String?) -> String? {
+    guard let matchup else { return nil }
+    func teamKey(_ v: String) -> String { v.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined() }
+    for sep in [" @ ", " vs ", " v "] {
+        let p = matchup.components(separatedBy: sep)
+        if p.count == 2 { let a = teamKey(p[0]), h = teamKey(p[1]); if !a.isEmpty && !h.isEmpty { return "\(a)@\(h)" } }
+    }
+    return nil
+}
+
 final class LiveScoreCache: ObservableObject {
     static let shared = LiveScoreCache()
     @Published private(set) var scores: [LiveScore] = []
+    /// Settled final scores ("3-1") keyed by gradedMatchupKey, pushed by
+    /// PropsSlateStore from game_results (today + yesterday). Cards fall back to
+    /// this when the live board has no score for a graded matchup — e.g. a WC
+    /// final the poller never carried, or any Yesterday-tab card.
+    @Published var gradedFinals: [String: String] = [:]
     private var started = false
 
     func startIfNeeded() {
@@ -15196,6 +15215,13 @@ final class LiveScoreCache: ObservableObject {
         // live row wins; otherwise scheduled beats final — a true final
         // never coexists with a scheduled row for the same game.
         return matches.first { $0.isLive } ?? matches.first { !$0.isFinal } ?? matches.first
+    }
+
+    /// Settled final score string ("3-1") for a matchup, from game_results (today
+    /// + yesterday). The card uses this only after the live board comes up empty.
+    func gradedScore(forMatchup matchup: String) -> String? {
+        guard let k = gradedMatchupKey(matchup), let s = gradedFinals[k], !s.isEmpty else { return nil }
+        return s
     }
 }
 
@@ -15391,6 +15417,7 @@ final class PropsSlateStore: ObservableObject {
                 if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = s }
             } else if r.game_date == date {
                 todayMap[k] = outcome.lowercased()
+                if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = s }
             }
         }
 
@@ -15405,6 +15432,12 @@ final class PropsSlateStore: ObservableObject {
             yesterdayGamePicksAll = yPicksAll
         }
         if !todayMap.isEmpty || todayGameResults.isEmpty { todayGameResults = todayMap }
+        // Settled finals (today + yesterday) → shared live cache, so EVERY card can
+        // show the final score in its footer even when the live board never carried
+        // it (WC finals) or it's a Yesterday-tab card. Keep-last-good on empty.
+        if !scoreMap.isEmpty || LiveScoreCache.shared.gradedFinals.isEmpty {
+            LiveScoreCache.shared.gradedFinals = scoreMap
+        }
     }
 
     /// Yesterday's settled final score ("6-8") for a matchup, or nil if not graded.
