@@ -260,8 +260,6 @@ struct MLBGameIntelView: View {
 
     private var fieldCard: some View {
         VStack(spacing: 8) {
-            // Home/away toggle — both lineups bat at the home park (user ask).
-            if realHome != nil && realAway != nil { teamToggle }
             GeometryReader { geo in
                 let t = fieldT(geo.size)
                 ZStack {
@@ -283,6 +281,10 @@ struct MLBGameIntelView: View {
                         .padding(.vertical, 18).padding(.horizontal, 26)
                         .background(RoundedRectangle(cornerRadius: 14).fill(GaryColors.cardBg.opacity(0.82)))
                     }
+                }
+                // Team toggle floats at the top of the field, above center field (user ask).
+                .overlay(alignment: .top) {
+                    if realHome != nil && realAway != nil { teamToggle.padding(.top, 12) }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(GaryColors.warmWhite.opacity(0.09)))
@@ -307,20 +309,17 @@ struct MLBGameIntelView: View {
 
     // Away / Home lineup switch — the road team bats at the home park too.
     private var teamToggle: some View {
-        HStack(spacing: 0) {
+        // No bubble — the gold/dim font color alone marks the selected side (user ask).
+        HStack(spacing: 16) {
             ForEach([false, true], id: \.self) { isHome in
                 Button { withAnimation(.easeInOut(duration: 0.18)) { homeUp = isHome } } label: {
                     Text(Formatters.shortTeamName(isHome ? homeName : awayName, league: "MLB").uppercased())
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
-                        .foregroundStyle(homeUp == isHome ? GaryColors.cardBg : MLBI.ink2)
-                        .padding(.vertical, 6).frame(maxWidth: .infinity)
-                        .background(homeUp == isHome ? MLBI.gold : Color.clear)
+                        .font(GaryFonts.mono(12, bold: true)).tracking(1.6)
+                        .foregroundStyle(homeUp == isHome ? MLBI.gold : MLBI.ink4)
+                        .shadow(color: .black.opacity(0.7), radius: 3, y: 1)
                 }.buttonStyle(.plain)
             }
         }
-        .frame(width: 200)
-        .background(MLBI.panel).clipShape(Capsule())
-        .overlay(Capsule().stroke(MLBI.line, lineWidth: 1))
     }
 
     private func drawField(_ ctx: GraphicsContext, _ t: FieldT) {
