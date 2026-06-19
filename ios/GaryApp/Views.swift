@@ -12186,7 +12186,7 @@ struct CompactPickRow: View {
         let opponent = homeIsPicked ? "vs \(awayName)"
             : awayIsPicked ? "@ \(homeName)"
             : "\(awayName) @ \(homeName)"
-        var parts = [opponent]
+        let parts = [opponent]
         // The final score + LIVE/FINAL state now ride the FOOTER strip on every card
         // (user call, Jun 18) — meta keeps just the matchup; odds render after it.
         // Start time moved to the eyebrow row (frontTime); meta keeps matchup + odds.
