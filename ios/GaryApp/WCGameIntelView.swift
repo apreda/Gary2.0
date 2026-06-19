@@ -23,8 +23,11 @@ private enum WCI {
     static let hair = Color.white.opacity(0.10)
     static let pitch = Color(hex: "#243229")
     static let pitch2 = Color(hex: "#293A2F")
-    static let gkKit = Color(hex: "#3FBF8F")     // keepers — a distinct teal-green
-    static let neutralKit = Color(hex: "#5B6CB8")
+    // Keepers wear their own kit — distinct from both teams AND from each other
+    // (real-soccer style): home keeper amber, away keeper teal.
+    static let gkHome: (fill: Color, text: Color) = (Color(hex: "#F2A93B"), Color(hex: "#16130E"))
+    static let gkAway: (fill: Color, text: Color) = (Color(hex: "#33BFA6"), Color.white)
+    static let neutralKit = "#5B6CB8"            // fallback hex for an unlisted nation
 }
 
 private struct XIPlayer: Identifiable {
@@ -78,8 +81,24 @@ struct WCGameIntelView: View {
     private var awayFormation: String { confirmedXI?.away?.formation ?? "4-4-2" }
     private var hasRealXI: Bool { (confirmedXI?.home?.xi?.isEmpty == false) || (confirmedXI?.away?.xi?.isEmpty == false) }
 
-    private var homeKit: (fill: Color, text: Color) { Self.kit(homeName) }
-    private var awayKit: (fill: Color, text: Color) { Self.kit(awayName) }
+    // Resolved together so a colour clash (both nations similar) flips the HOME
+    // side to white-with-a-hint while the away side keeps its colour.
+    private var kits: (home: (fill: Color, text: Color), away: (fill: Color, text: Color)) {
+        Self.resolvedKits(home: homeName, away: awayName)
+    }
+    private var homeKit: (fill: Color, text: Color) { kits.home }
+    private var awayKit: (fill: Color, text: Color) { kits.away }
+
+    /// Pitch rows top→bottom for each side, driven by the real formation string
+    /// ("4-2-3-1" → 4/2/3/1) with a role-stack fallback when counts don't match.
+    private var awayRows: [[XIPlayer]] {
+        let gk = awayPlayers.filter { $0.pos == "G" }
+        return ([gk] + Self.formationLines(awayPlayers, awayFormation)).filter { !$0.isEmpty }
+    }
+    private var homeRows: [[XIPlayer]] {
+        let gk = homePlayers.filter { $0.pos == "G" }
+        return (Array(Self.formationLines(homePlayers, homeFormation).reversed()) + [gk]).filter { !$0.isEmpty }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -190,14 +209,14 @@ struct WCGameIntelView: View {
                     .position(x: g.size.width / 2, y: g.size.height / 2)
             }
             VStack(spacing: 0) {
-                lineRow(awayPlayers.filter { $0.pos == "G" }, kit: awayKit)
-                lineRow(awayPlayers.filter { $0.pos == "D" }, kit: awayKit)
-                lineRow(awayPlayers.filter { $0.pos == "M" }, kit: awayKit)
-                lineRow(awayPlayers.filter { $0.pos == "F" }, kit: awayKit)
-                lineRow(homePlayers.filter { $0.pos == "F" }, kit: homeKit)
-                lineRow(homePlayers.filter { $0.pos == "M" }, kit: homeKit)
-                lineRow(homePlayers.filter { $0.pos == "D" }, kit: homeKit)
-                lineRow(homePlayers.filter { $0.pos == "G" }, kit: homeKit)
+                // Away attacks downward: keeper on top, real formation lines back→front.
+                ForEach(Array(awayRows.enumerated()), id: \.offset) { _, row in
+                    lineRow(row, kit: awayKit, gk: WCI.gkAway)
+                }
+                // Home attacks upward: formation lines front→back, keeper on the bottom.
+                ForEach(Array(homeRows.enumerated()), id: \.offset) { _, row in
+                    lineRow(row, kit: homeKit, gk: WCI.gkHome)
+                }
             }
             .padding(.vertical, 12).padding(.horizontal, 4)
             VStack {
@@ -221,21 +240,21 @@ struct WCGameIntelView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder private func lineRow(_ men: [XIPlayer], kit: (fill: Color, text: Color)) -> some View {
+    @ViewBuilder private func lineRow(_ men: [XIPlayer], kit: (fill: Color, text: Color), gk: (fill: Color, text: Color)) -> some View {
         if men.isEmpty {
             Color.clear.frame(maxWidth: .infinity).frame(height: 0)
         } else {
             HStack(spacing: 0) {
-                ForEach(men) { m in jersey(m, kit: kit).frame(maxWidth: .infinity) }
+                ForEach(men) { m in jersey(m, kit: kit, gk: gk).frame(maxWidth: .infinity) }
             }
             .frame(maxHeight: .infinity)
         }
     }
 
-    private func jersey(_ m: XIPlayer, kit: (fill: Color, text: Color)) -> some View {
+    private func jersey(_ m: XIPlayer, kit: (fill: Color, text: Color), gk: (fill: Color, text: Color)) -> some View {
         let contested = m.contested && state != .confirmed
-        let fill = m.pos == "G" ? WCI.gkKit : kit.fill
-        let textColor = m.pos == "G" ? Color.white : kit.text
+        let fill = m.pos == "G" ? gk.fill : kit.fill
+        let textColor = m.pos == "G" ? gk.text : kit.text
         return VStack(spacing: 3) {
             ZStack {
                 JerseyShape().fill(fill)
@@ -289,27 +308,98 @@ struct WCGameIntelView: View {
         return last.count >= 3 ? String(last) : full
     }
 
-    /// National-team primary kit colour (fill) + a readable number/text colour for it.
-    private static func kit(_ team: String) -> (fill: Color, text: Color) {
+    /// Split a "4-2-3-1"-style string into line counts. nil if unparseable.
+    private static func parseFormation(_ f: String?) -> [Int]? {
+        guard let f = f?.trimmingCharacters(in: .whitespacesAndNewlines), !f.isEmpty else { return nil }
+        let nums = f.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        return nums.count >= 2 ? nums : nil
+    }
+
+    /// Outfield players grouped into the team's real formation lines (back→front).
+    /// Uses the formation string + XI order; falls back to D/M/F role-stacking when
+    /// the counts don't add up (e.g. partial/odd data).
+    private static func formationLines(_ players: [XIPlayer], _ formation: String) -> [[XIPlayer]] {
+        let outfield = players.filter { $0.pos != "G" }
+        if let counts = parseFormation(formation), !counts.isEmpty, counts.reduce(0, +) == outfield.count {
+            var rows: [[XIPlayer]] = []
+            var i = 0
+            for c in counts { rows.append(Array(outfield[i..<(i + c)])); i += c }
+            return rows
+        }
+        return [outfield.filter { $0.pos == "D" },
+                outfield.filter { $0.pos == "M" },
+                outfield.filter { $0.pos == "F" }].filter { !$0.isEmpty }
+    }
+
+    /// National-team primary home kit colour as hex (comprehensive WC map).
+    private static func kitHex(_ team: String) -> String {
         let t = team.lowercased()
         let map: [(String, String)] = [
-            ("qatar", "#8A1538"), ("czech", "#D7141A"), ("south africa", "#0E8A4E"),
-            ("canada", "#C8102E"), ("united states", "#1B3A8B"), ("usa", "#1B3A8B"),
-            ("mexico", "#0B6E4F"), ("brazil", "#1E7A3C"), ("argentina", "#5FA9DD"),
-            ("france", "#1B2A6B"), ("spain", "#C60B1E"), ("england", "#1A2A55"),
-            ("germany", "#2A2A2A"), ("portugal", "#7A1F2B"), ("netherlands", "#E06B00"),
-            ("belgium", "#C8102E"), ("croatia", "#D7141A"), ("uruguay", "#4AA9E0"),
-            ("switzerland", "#D52B1E"), ("bosnia", "#1B458F"), ("japan", "#1B2A6B"),
-            ("senegal", "#1E8A45"), ("uzbekistan", "#2E7D55"), ("colombia", "#1B3A8B"),
-            ("dr congo", "#1B7A3D"), ("congo", "#1B7A3D"), ("saudi", "#0A6B3B"),
-            ("cape verde", "#1B3A8B"), ("korea", "#C8102E"), ("australia", "#0E8A4E"),
-            ("morocco", "#C1272D"), ("ghana", "#C8102E"), ("nigeria", "#0E8A4E"),
-            ("italy", "#1B2A6B"), ("ecuador", "#1B3A8B"), ("poland", "#C8102E")
+            // CONMEBOL
+            ("brazil", "#FFD400"), ("argentina", "#79A8DA"), ("uruguay", "#58A6D6"),
+            ("paraguay", "#D7141A"), ("colombia", "#FCD116"), ("ecuador", "#FFD100"),
+            ("peru", "#D7141A"), ("chile", "#1B3A8B"), ("venezuela", "#7A1F2B"),
+            ("bolivia", "#1E7A3C"),
+            // CONCACAF
+            ("united states", "#1A2B5E"), ("usa", "#1A2B5E"), ("mexico", "#057A55"),
+            ("canada", "#D80621"), ("costa rica", "#C8102E"), ("panama", "#C8102E"),
+            ("honduras", "#1B3A8B"), ("jamaica", "#F4C430"), ("haiti", "#1B2A8B"),
+            // UEFA
+            ("france", "#1A2A6C"), ("spain", "#C60B1E"), ("england", "#1A2A55"),
+            ("germany", "#2B2B2B"), ("portugal", "#C8102E"), ("netherlands", "#EC6B1E"),
+            ("belgium", "#C8102E"), ("croatia", "#C8102E"), ("italy", "#1B3DA8"),
+            ("switzerland", "#D52B1E"), ("türkiye", "#E30A17"), ("turkiye", "#E30A17"),
+            ("turkey", "#E30A17"), ("poland", "#C8102E"), ("denmark", "#C60C30"),
+            ("norway", "#BA0C2F"), ("sweden", "#F7D117"), ("scotland", "#0B4DA1"),
+            ("wales", "#C8102E"), ("austria", "#C8102E"), ("serbia", "#C6363C"),
+            ("ukraine", "#FFD500"),
+            // AFC
+            ("japan", "#0B2265"), ("south korea", "#C8102E"), ("korea", "#C8102E"),
+            ("saudi", "#0A6B3B"), ("iran", "#1E7A3C"), ("australia", "#F4C430"),
+            ("iraq", "#1E7A3C"), ("uzbekistan", "#1E8A55"), ("qatar", "#8A1538"),
+            ("jordan", "#C8102E"),
+            // CAF
+            ("morocco", "#C1272D"), ("senegal", "#1E8A45"), ("tunisia", "#E70013"),
+            ("algeria", "#1B7A3D"), ("egypt", "#C8102E"), ("ghana", "#CE1126"),
+            ("nigeria", "#0E8A4E"), ("cameroon", "#1B7A3D"), ("ivory", "#EC6B1E"),
+            ("côte", "#EC6B1E"), ("mali", "#1E8A45"), ("south africa", "#0E8A4E"),
+            ("dr congo", "#1B7A3D"), ("congo", "#1B7A3D"), ("cape verde", "#1B3A8B"),
+            // OFC
+            ("new zealand", "#E6E6E6"),
         ]
-        let hex = map.first { t.contains($0.0) }?.1
-        let fill = hex.map { Color(hex: $0) } ?? WCI.neutralKit
-        let text = (hex.map { isLight($0) } ?? false) ? Color(hex: "#1A1A1A") : Color.white
-        return (fill, text)
+        return map.first { t.contains($0.0) }?.1 ?? WCI.neutralKit
+    }
+
+    /// (fill, readable number/text colour) from a hex.
+    private static func kitFrom(_ hex: String) -> (fill: Color, text: Color) {
+        (Color(hex: hex), isLight(hex) ? Color(hex: "#16130E") : Color.white)
+    }
+
+    /// Resolve both sides. If the two nations' colours are too close, flip the
+    /// HOME team to white-with-a-hint-of-its-colour (real-soccer change strip);
+    /// the away team keeps its colour.
+    private static func resolvedKits(home: String, away: String) -> (home: (fill: Color, text: Color), away: (fill: Color, text: Color)) {
+        let homeHex = kitHex(home)
+        let awayHex = kitHex(away)
+        let homeFinal = colorDistance(homeHex, awayHex) < 115 ? whiteHintHex(homeHex) : homeHex
+        return (kitFrom(homeFinal), kitFrom(awayHex))
+    }
+
+    private static func rgb(_ hex: String) -> (Double, Double, Double) {
+        let h = hex.replacingOccurrences(of: "#", with: "")
+        guard h.count == 6, let v = Int(h, radix: 16) else { return (90, 90, 90) }
+        return (Double((v >> 16) & 0xff), Double((v >> 8) & 0xff), Double(v & 0xff))
+    }
+    private static func colorDistance(_ a: String, _ b: String) -> Double {
+        let (r1, g1, b1) = rgb(a)
+        let (r2, g2, b2) = rgb(b)
+        return (((r1 - r2) * (r1 - r2)) + ((g1 - g2) * (g1 - g2)) + ((b1 - b2) * (b1 - b2))).squareRoot()
+    }
+    /// ~82% white + 18% the team colour → a near-white change strip with a hint.
+    private static func whiteHintHex(_ hex: String) -> String {
+        let (r, g, b) = rgb(hex)
+        let mix: (Double) -> Int = { c in Int((255 * 0.82 + c * 0.18).rounded()) }
+        return String(format: "#%02X%02X%02X", mix(r), mix(g), mix(b))
     }
 
     private static func isLight(_ hex: String) -> Bool {
