@@ -257,21 +257,28 @@ async function lineupsSummary(ctx = {}) {
   };
 }
 
-// WC_INJURIES — reported squad injuries/unavailability (API-Football). Feeds lag,
-// so this is a STARTING point: Gary should still confirm late team news via
+// WC_INJURIES — reported squad injuries/unavailability (BDL FIFA player_injuries —
+// API-Football has NO national-team injuries, it returns empty). Status is OUT / GTD /
+// SUS with the injury type. Feeds lag, so Gary should still confirm late team news via
 // grounding, and never read "no rows" as a guaranteed clean bill of health.
 async function injuriesSummary(ctx = {}) {
   const sides = [ctx.homeTeam || 'Home', ctx.awayTeam || 'Away'];
+  const all = await wc.getInjuries({}).catch(() => []);
   const out = [];
   for (const name of sides) {
-    const rows = await apiFootball.getInjuries(name).catch(() => []);
-    if (!rows || !rows.length) {
+    const n = String(name).toLowerCase().trim();
+    const rows = (all || []).filter((r) => {
+      const tn = (r?.team?.name || '').toLowerCase();
+      const ab = (r?.team?.abbreviation || '').toLowerCase();
+      return n && (tn === n || ab === n || tn.includes(n) || n.includes(tn));
+    });
+    if (!rows.length) {
       out.push(`${name}: no injuries listed by the feed — verify late team news via grounding (do NOT assume a clean bill of health).`);
     } else {
-      out.push(`${name}: ${rows.slice(0, 10).map(r => (r.reason ? `${r.player} (${r.reason})` : r.player)).join('; ')}`);
+      out.push(`${name}: ${rows.slice(0, 12).map(r => `${r.player?.name} (${r.status}${r.injury_type ? ', ' + r.injury_type : ''})`).join('; ')}`);
     }
   }
-  return { homeValue: out[0], awayValue: out[1], comparison: 'Reported injuries/unavailability — feeds lag; confirm late news with grounding', source: 'API-Football' };
+  return { homeValue: out[0], awayValue: out[1], comparison: 'Reported injuries/unavailability (BDL FIFA — OUT/GTD/SUS); feeds lag, confirm late news with grounding', source: 'BDL FIFA' };
 }
 
 // WC_RECENT_INTL_FORM — last internationals (qualifiers + friendlies), result by
