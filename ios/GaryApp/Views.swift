@@ -2284,7 +2284,7 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.13), value: animateIn)
         }
         if !cashRows.isEmpty || worstBeat != nil {
-            HomeHitsSection(cash: cashRows.first, beat: worstBeat, graded: lastNightGraded) {
+            HomeHitsSection(cashes: Array(cashRows.prefix(2)), beat: worstBeat, graded: lastNightGraded) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
@@ -3305,7 +3305,7 @@ struct HomeView: View {
                                     title: Self.gameCashTitle(g),
                                     sub: Formatters.splitPickAndOdds(g.pick_text).0,
                                     units: unitsDelta(odds: o, result: "won"),
-                                    odds: Self.oddsLabel(o)))
+                                    odds: Self.oddsLabel(o), league: g.league))
             }
         }
         for p in nightProps {
@@ -3321,10 +3321,14 @@ struct HomeView: View {
                                     title: Formatters.propResultTitle(p),
                                     sub: actual.isEmpty ? (p.matchup ?? "") : "\(actual) \(unit) on the night",
                                     units: unitsDelta(odds: o, result: "won"),
-                                    odds: Self.oddsLabel(o)))
+                                    odds: Self.oddsLabel(o), league: p.league))
             }
         }
         cashes.sort { $0.units > $1.units }
+        // Sport variety — keep the biggest cash PER league so one hot sport can't
+        // sweep the whole Hits & heartbreakers rail (user ask).
+        var seenLeagues = Set<String>()
+        cashes = cashes.filter { seenLeagues.insert($0.league ?? "?").inserted }
         let graded = nightGames.count + nightProps.count
         // ONE ledger for the scorecard: record, net, and best cash all count
         // the same set (games + props) — three cells, one truth.
@@ -3346,7 +3350,7 @@ struct HomeView: View {
                     title: Self.gameCashTitle(g),
                     sub: Formatters.splitPickAndOdds(g.pick_text).0,
                     units: unitsDelta(odds: o, result: "lost"),
-                    odds: Self.oddsLabel(o))
+                    odds: Self.oddsLabel(o), league: g.league)
             }
 
         // The marquee — the priority league leads (a Finals game outranks
@@ -3774,6 +3778,7 @@ struct HomeCashesSection: View {
         let sub: String
         let units: Double        // sort key (flat stakes)
         let odds: String         // display — bettors speak odds, not units
+        var league: String? = nil  // sport-variety key for Hits & heartbreakers
     }
     let rows: [Row]
     let graded: Int
@@ -3835,7 +3840,7 @@ struct HomeCashesSection: View {
 /// bettor opens for. One accent per card — the odds value carries the colour;
 /// no left bar, no glow (anti-slop).
 struct HomeHitsSection: View {
-    let cash: HomeCashesSection.Row?
+    let cashes: [HomeCashesSection.Row]
     let beat: HomeCashesSection.Row?
     let graded: Int
     let onOpenBillfold: () -> Void
@@ -3847,8 +3852,12 @@ struct HomeHitsSection: View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "Hits & heartbreakers", sub: "")
             VStack(spacing: 0) {
-                if let cash { rowView(tag: "BIGGEST CASH", row: cash, accent: won) }
-                if cash != nil && beat != nil {
+                // Up to 2 cashes from different sports + the worst beat (sport variety).
+                ForEach(Array(cashes.enumerated()), id: \.element.id) { i, cash in
+                    if i > 0 { Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14) }
+                    rowView(tag: i == 0 ? "BIGGEST CASH" : "\((cash.league ?? "").uppercased()) CASH", row: cash, accent: won)
+                }
+                if !cashes.isEmpty && beat != nil {
                     Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                 }
                 if let beat { rowView(tag: "WORST BEAT", row: beat, accent: lost) }

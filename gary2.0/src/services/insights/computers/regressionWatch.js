@@ -27,9 +27,10 @@
 // Defensive: every field is existence-checked; missing -> skip that signal.
 
 import {
-  makeRow, TONES, scoreFromEdge, round, pct3, nameKey,
+  makeRow, TONES, scoreFromEdge, round, pct3, nameKey, shiftDateStr,
 } from '../shared.js';
-import { getPitcherXStats } from '../../baseballSavantService.js';
+import { getPitcherXStats, getPitcherStatcastProfiles } from '../../baseballSavantService.js';
+import { getMlbSchedule } from '../../mlbStatsApiService.js';
 
 // (A) one-run record tunables.
 const MIN_ONE_RUN_GAMES = 12;     // need a real one-run sample
@@ -41,6 +42,10 @@ const MIN_XERA_PA = 80;           // batters faced — xERA is unstable on a tin
 const MAX_TEAM_ROWS = 6;          // cap one-run rows per slate
 const REL_ONE_RUN_SCALE = 120;
 const REL_XERA_SCALE = 18;
+// (C) tomorrow's projected starters — a look-ahead board. Slightly looser gap
+// (informational, never graded) and its own per-slate cap.
+const MIN_TOMORROW_GAP = 0.80;
+const MAX_TOMORROW_ROWS = 8;
 
 export async function computeRegressionWatch(ctx) {
   const { games, season, bdl, helpers } = ctx;
@@ -71,13 +76,34 @@ export async function computeRegressionWatch(ctx) {
     rows.push(...oneRunRows.slice(0, MAX_TEAM_ROWS));
   }
 
-  // --- Signal B: starter ERA vs xERA gap (per game) ---
+  // Pitcher contact-quality profile (barrel% / hard-hit% allowed) — the "why"
+  // behind an ERA-xERA gap. Whole-league CSV, cached 24h; keyed by MLBAM
+  // player_id (the same id the Savant xStats row carries, so the join is exact).
+  let statcastById = new Map();
+  try {
+    statcastById = indexStatcastById(await getPitcherStatcastProfiles(season));
+  } catch (err) {
+    console.error('[regressionWatch] savant statcast profiles error:', err?.message || err);
+  }
+  // Full-name -> abbreviation, harvested from the standings we already pulled, so
+  // tomorrow's MLB-Stats-API probables (which carry only the long team name) get
+  // compact "PIT @ COL" labels like the rest of the board.
+  const teamAbbrByName = teamAbbrFromStandings(standings);
+
+  // --- Signal B: tonight's starter ERA vs xERA gap (per game) ---
   for (const game of games) {
     try {
-      rows.push(...(await xeraForGame(game, { season, bdl, xByName, gameLabel: helpers.gameLabel })));
+      rows.push(...(await xeraForGame(game, { season, bdl, xByName, statcastById, gameLabel: helpers.gameLabel })));
     } catch (err) {
       console.error('[regressionWatch] xERA game error:', err?.message || err);
     }
+  }
+
+  // --- Signal C: TOMORROW's projected starters (look-ahead, never graded) ---
+  try {
+    rows.push(...(await tomorrowRegression(ctx, xByName, statcastById, teamAbbrByName)));
+  } catch (err) {
+    console.error('[regressionWatch] tomorrow regression error:', err?.message || err);
   }
 
   return rows;
@@ -186,7 +212,7 @@ function parseWL(v) {
 
 /* --------------------------- Signal B helpers --------------------------- */
 
-async function xeraForGame(game, { season, bdl, xByName, gameLabel }) {
+async function xeraForGame(game, { season, bdl, xByName, statcastById, gameLabel }) {
   const gameId = game?.id;
   if (gameId == null) return [];
   const label = gameLabel(game);
@@ -194,13 +220,15 @@ async function xeraForGame(game, { season, bdl, xByName, gameLabel }) {
   const lineups = await bdl.getMlbLineups(gameId);
   if (!lineups || typeof lineups !== 'object') return [];
 
+  const homeAbbr = game?.home_team?.abbreviation;
+  const visAbbr = game?.visitor_team?.abbreviation;
   const starters = [
-    { entry: lineups[game?.home_team?.abbreviation], teamId: game?.home_team?.id },
-    { entry: lineups[game?.visitor_team?.abbreviation], teamId: game?.visitor_team?.id },
+    { entry: lineups[homeAbbr], teamId: game?.home_team?.id, oppName: visAbbr || game?.visitor_team?.name },
+    { entry: lineups[visAbbr], teamId: game?.visitor_team?.id, oppName: homeAbbr || game?.home_team?.name },
   ];
 
   const out = [];
-  for (const { entry, teamId } of starters) {
+  for (const { entry, teamId, oppName } of starters) {
     const pitcher = entry?.pitcher;
     const name = pitcher?.name;
     if (!name) continue;
@@ -233,6 +261,14 @@ async function xeraForGame(game, { season, bdl, xByName, gameLabel }) {
         ? ` Opponents hit ${pct3(oppBa)} off him vs a ${pct3(oppXba)} expected (xBA).`
         : '';
 
+    // Real, optional peripherals: WHIP / K9 (BDL season stats, by lineup id) and
+    // barrel% / hard-hit% (Savant statcast, by name). Each is existence-checked;
+    // a missing source simply isn't shown — never fabricated.
+    const { whip, k9 } = await fetchPitcherRates(bdl, season, pitcher?.playerId);
+    const sc = statcastById.get(String(x.player_id));
+    const hardHit = firstFinite(sc?.ev95percent, sc?.ev95Percent);
+    const barrel = firstFinite(sc?.brl_percent, sc?.brlPercent);
+
     out.push(
       makeRow({
         category: 'regressionWatch',
@@ -253,10 +289,199 @@ async function xeraForGame(game, { season, bdl, xByName, gameLabel }) {
         player_id: pitcher?.playerId != null ? pitcher.playerId : undefined,
         team_id: teamId,
         game_id: gameId,
+        meta: pitcherRegressionMeta({
+          day: 'tonight', era, xera, gap, overperforming,
+          oppBa, oppXba, whip, k9, hardHit, barrel, oppName,
+        }),
       }),
     );
   }
   return out;
+}
+
+/** WHIP + K/9 for a pitcher from BDL season stats. Defensive; NaN when absent. */
+async function fetchPitcherRates(bdl, season, playerId) {
+  if (playerId == null) return { whip: NaN, k9: NaN };
+  try {
+    const rows = await bdl.getMlbPlayerSeasonStats({ season, playerIds: [playerId] });
+    const r = Array.isArray(rows)
+      ? (rows.find((row) => String(row?.player?.id ?? row?.player_id) === String(playerId)) || rows[0])
+      : null;
+    return { whip: Number(r?.pitching_whip), k9: Number(r?.pitching_k_per_9) };
+  } catch (err) {
+    console.error('[regressionWatch] season-rate error:', err?.message || err);
+    return { whip: NaN, k9: NaN };
+  }
+}
+
+/** First finite number among the candidates, else NaN. */
+function firstFinite(...vals) {
+  for (const v of vals) {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return NaN;
+}
+
+/**
+ * Structured regression payload for the iOS board's rich pitcher row + detail.
+ * Only real, existence-checked fields are attached (no fabrication). `day` is
+ * 'tonight' | 'tomorrow'; `direction` drives the iOS up/down read + colour.
+ */
+function pitcherRegressionMeta({ day, era, xera, gap, overperforming, oppBa, oppXba, whip, k9, hardHit, barrel, oppName }) {
+  const m = { kind: 'regression_pitcher', day };
+  if (Number.isFinite(era)) m.era = round(era, 2);
+  if (Number.isFinite(xera)) m.xera = round(xera, 2);
+  if (Number.isFinite(gap)) m.gap = round(Math.abs(gap), 2);
+  m.direction = overperforming ? 'overperforming' : 'underperforming';
+  if (Number.isFinite(oppBa)) m.opp_ba = pct3(oppBa);
+  if (Number.isFinite(oppXba)) m.opp_xba = pct3(oppXba);
+  if (Number.isFinite(whip)) m.whip = round(whip, 2);
+  if (Number.isFinite(k9)) m.k9 = round(k9, 1);
+  if (Number.isFinite(hardHit)) m.hard_hit = round(hardHit, 1);
+  if (Number.isFinite(barrel)) m.barrel = round(barrel, 1);
+  if (oppName) m.opp = oppName;
+  m.verdict = pitcherVerdict({ overperforming, gap, xera, oppBa, oppXba, oppName });
+  return m;
+}
+
+/** One-line, data-forward conviction read in the Hub's existing voice. */
+function pitcherVerdict({ overperforming, gap, xera, oppBa, oppXba, oppName }) {
+  const opp = oppName || 'the opposing bats';
+  if (overperforming) {
+    if (Number.isFinite(oppBa) && Number.isFinite(oppXba)) {
+      return `Soft-contact luck — ${pct3(oppBa)} opp avg vs ${pct3(oppXba)} expected. ${opp} can collect.`;
+    }
+    return `ERA flatters him by ${round(Math.abs(gap), 2)} runs — contact says regression vs ${opp}.`;
+  }
+  if (Number.isFinite(xera)) {
+    return `Better than his ERA reads — ${round(xera, 2)} xERA. Buy-low spot vs ${opp}.`;
+  }
+  return `His expected ERA says the runs aren't on him — buy-low vs ${opp}.`;
+}
+
+/**
+ * TOMORROW's projected starters (look-ahead). Probable pitchers from the MLB
+ * Stats API schedule, joined to Savant ERA/xERA by name. Never graded (no
+ * player_id / game_id) — it is a planning board, not a settled edge.
+ */
+async function tomorrowRegression({ date, season }, xByName, statcastById, teamAbbrByName) {
+  const out = [];
+  let games = [];
+  try {
+    games = (await getMlbSchedule(shiftDateStr(date, 1))) || [];
+  } catch (err) {
+    console.error('[regressionWatch] tomorrow schedule error:', err?.message || err);
+    return [];
+  }
+
+  for (const g of games) {
+    const away = g?.teams?.away;
+    const home = g?.teams?.home;
+    if (!away?.team?.name || !home?.team?.name) continue;
+    const awayAbbr = abbrFor(away.team.name, away.team.abbreviation, teamAbbrByName);
+    const homeAbbr = abbrFor(home.team.name, home.team.abbreviation, teamAbbrByName);
+    const label = `${awayAbbr} @ ${homeAbbr}`;
+
+    const probs = [
+      { p: away?.probablePitcher, oppName: homeAbbr },
+      { p: home?.probablePitcher, oppName: awayAbbr },
+    ];
+    for (const { p, oppName } of probs) {
+      const name = p?.fullName;
+      if (!name) continue;
+
+      const x = xByName.get(nameKey(name)) || xByName.get(lastNameKey(name));
+      if (!x) continue;
+      const era = Number(x.era);
+      const xera = Number(x.xera);
+      if (!Number.isFinite(era) || !Number.isFinite(xera)) continue;
+
+      const gap = Number.isFinite(Number(x.era_minus_xera_diff))
+        ? Number(x.era_minus_xera_diff)
+        : era - xera;
+      const pa = Number(x.pa);
+      if (Number.isFinite(pa) && pa < MIN_XERA_PA) continue;
+      if (Math.abs(gap) < MIN_TOMORROW_GAP || Math.abs(gap) > MAX_ERA_XERA_GAP) continue;
+
+      const overperforming = gap < 0;
+      const oppBa = Number(x.ba);
+      const oppXba = Number(x.est_ba);
+      const sc = statcastById.get(String(x.player_id));
+      const hardHit = firstFinite(sc?.ev95percent, sc?.ev95Percent);
+      const barrel = firstFinite(sc?.brl_percent, sc?.brlPercent);
+      const baBit =
+        Number.isFinite(oppBa) && Number.isFinite(oppXba)
+          ? ` Opponents hit ${pct3(oppBa)} vs ${pct3(oppXba)} expected.`
+          : '';
+
+      out.push(
+        makeRow({
+          category: 'regression_tomorrow',
+          headline: `${name}: ${round(era, 2)} ERA vs ${round(xera, 2)} xERA`,
+          detail:
+            `Projected to start tomorrow vs ${oppName}. A ${round(era, 2)} ERA against a ` +
+            `${round(xera, 2)} expected ERA (${round(Math.abs(gap), 2)} run gap) — ` +
+            `${overperforming ? 'running hot, due to regress' : 'unlucky, due to bounce back'}.` +
+            baBit,
+          game: label,
+          value: `${round(xera, 2)}`,
+          tone: overperforming ? TONES.CAUTION : TONES.EDGE,
+          spark: [round(era, 2), round(xera, 2)],
+          relevance_score: scoreFromEdge(gap, { scale: REL_XERA_SCALE, base: 42 }),
+          meta: pitcherRegressionMeta({
+            day: 'tomorrow', era, xera, gap, overperforming,
+            oppBa, oppXba, hardHit, barrel, oppName,
+          }),
+        }),
+      );
+    }
+  }
+  return out.sort((a, b) => b.relevance_score - a.relevance_score).slice(0, MAX_TOMORROW_ROWS);
+}
+
+/** Index Savant statcast profile rows by MLBAM player_id (string). */
+function indexStatcastById(rows) {
+  const map = new Map();
+  const arr = Array.isArray(rows) ? rows : (rows && typeof rows === 'object' ? Object.values(rows) : []);
+  for (const r of arr) {
+    const id = r?.player_id;
+    if (id == null) continue;
+    map.set(String(id), r);
+  }
+  return map;
+}
+
+/**
+ * Build a team-name -> abbreviation map from BDL standings rows. BDL exposes
+ * `display_name` ("Cleveland Guardians") + nickname `name` ("Guardians") +
+ * `location` — the MLB Stats API schedule sends the full display name, so we
+ * key on every variant we can form.
+ */
+function teamAbbrFromStandings(standings) {
+  const map = new Map();
+  for (const row of standings || []) {
+    const t = row?.team;
+    if (!t?.abbreviation) continue;
+    const variants = [
+      t.display_name,
+      t.full_name,
+      t.name,
+      t.location && t.name ? `${t.location} ${t.name}` : null,
+    ];
+    for (const nm of variants) if (nm) map.set(teamKey(nm), t.abbreviation);
+  }
+  return map;
+}
+
+function teamKey(s) {
+  return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Resolve a long team name to its abbreviation, with graceful fallbacks. */
+function abbrFor(name, providedAbbr, map) {
+  if (providedAbbr) return providedAbbr;
+  return (map && map.get(teamKey(name))) || name;
 }
 
 /**

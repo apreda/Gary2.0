@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Hub — Redesign Mock</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root{
+    --bg:#15120c;            /* warm near-black */
+    --bg2:#1c1810;
+    --panel:rgba(246,241,231,0.045);
+    --panel2:rgba(246,241,231,0.07);
+    --edge:rgba(246,241,231,0.11);
+    --ink:#f3eee3;
+    --dim:rgba(243,238,227,0.56);
+    --faint:rgba(243,238,227,0.32);
+    --gold:#cda349;
+    --gold-bright:#e4be63;
+    --green:#9cc88a;
+    --red:#cf6b5b;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+    --sans:'Outfit',-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{
+    background:#0c0a07;
+    font-family:var(--sans);
+    color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;
+    padding:28px 16px 80px;min-height:100vh;
+  }
+  .pagehead{max-width:760px;text-align:center;margin-bottom:18px;}
+  .pagehead h1{font-size:20px;font-weight:700;letter-spacing:-.2px;}
+  .pagehead p{color:var(--faint);font-size:13px;margin-top:6px;line-height:1.5;}
+  .pagehead .real{color:var(--gold);font-family:var(--mono);font-size:11px;}
+
+  /* top layout toggle */
+  .switch{display:flex;gap:6px;background:#0c0a07;border:1px solid var(--edge);
+    border-radius:999px;padding:5px;margin-bottom:22px;}
+  .switch button{
+    font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.5px;
+    color:var(--dim);background:transparent;border:0;border-radius:999px;
+    padding:9px 16px;cursor:pointer;transition:.15s;white-space:nowrap;}
+  .switch button.on{background:var(--gold);color:#1a1409;}
+  .switch button:not(.on):hover{color:var(--ink);}
+
+  /* phone frame */
+  .phone{
+    width:392px;height:812px;background:var(--bg);
+    border:9px solid #000;border-radius:46px;overflow:hidden;position:relative;
+    box-shadow:0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(246,241,231,.05);
+  }
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:26px;background:#000;border-radius:0 0 18px 18px;z-index:50;}
+  .screen{position:absolute;inset:0;overflow-y:auto;display:none;}
+  .screen.on{display:block;}
+  .screen::-webkit-scrollbar{width:0;}
+
+  .pad{padding:0 16px;}
+  .hubhead{padding:44px 16px 10px;display:flex;align-items:flex-end;justify-content:space-between;}
+  .hubhead .t{font-size:26px;font-weight:800;letter-spacing:-.5px;}
+  .hubhead .rec{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--gold);letter-spacing:.6px;text-align:right;line-height:1.4;}
+  .hubhead .rec small{display:block;color:var(--faint);font-weight:500;letter-spacing:.4px;}
+
+  .league{display:flex;gap:16px;padding:2px 16px 8px;}
+  .league span{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.8px;color:var(--faint);padding-bottom:4px;}
+  .league span.on{color:var(--ink);border-bottom:2px solid var(--gold);}
+
+  .search{margin:6px 16px 4px;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:10px 12px;}
+  .search input{flex:1;background:transparent;border:0;color:var(--ink);font-family:var(--mono);font-size:12.5px;outline:none;}
+  .search .mag{color:var(--faint);font-size:13px;}
+
+  /* section header (eyebrow + sub) — VERBATIM copy from app */
+  .sec{margin:22px 16px 10px;}
+  .sec .eye{font-size:16px;font-weight:700;letter-spacing:-.2px;display:flex;align-items:center;gap:8px;}
+  .sec .eye::before{content:"";width:7px;height:7px;background:var(--gold);border-radius:1.5px;transform:rotate(45deg);}
+  .sec .sub{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:4px;letter-spacing:.2px;}
+
+  /* lane sub-tab strip (verbatim lane names) */
+  .lanes{display:flex;gap:18px;overflow-x:auto;padding:0 16px 2px;margin-bottom:8px;}
+  .lanes::-webkit-scrollbar{height:0;}
+  .lanes span{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--faint);white-space:nowrap;padding:6px 0;cursor:pointer;}
+  .lanes span.on{color:var(--gold);}
+
+  /* horizontal card scroller */
+  .scroller{display:flex;gap:10px;overflow-x:auto;padding:0 16px 4px;}
+  .scroller::-webkit-scrollbar{height:0;}
+  .ecard{flex:0 0 200px;background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;min-height:150px;}
+  .ecard .top{display:flex;justify-content:space-between;align-items:center;}
+  .ecard .chip{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:1px;color:var(--faint);display:flex;align-items:center;gap:5px;}
+  .ecard .chip .dot{width:6px;height:6px;border-radius:50%;}
+  .ecard .game{font-family:var(--mono);font-size:9px;color:var(--faint);}
+  .ecard .hl{font-size:14.5px;font-weight:600;line-height:1.3;flex:1;}
+  .ecard .bot{display:flex;justify-content:space-between;align-items:flex-end;}
+  .ecard .spark{display:flex;gap:2px;align-items:flex-end;height:22px;}
+  .ecard .spark i{width:5px;background:var(--faint);border-radius:1px;display:block;}
+  .ecard .val{font-family:var(--mono);font-size:21px;font-weight:700;}
+  .ecard .flip{font-family:var(--mono);font-size:8.5px;color:var(--faint);letter-spacing:.5px;}
+  .good{color:var(--green);} .bad{color:var(--red);} .neu{color:var(--ink);}
+  .bg-good{background:var(--green);} .bg-bad{background:var(--red);} .bg-neu{background:var(--faint);}
+
+  /* row-stack panel */
+  .panel{margin:0 16px;background:var(--panel);border:1px solid var(--edge);border-radius:16px;overflow:hidden;}
+  .row{padding:12px 14px;border-bottom:1px solid rgba(246,241,231,.06);}
+  .row:last-child{border-bottom:0;}
+  .row .rtop{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+  .row .chip{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.2px;color:var(--faint);}
+  .row .game{font-family:var(--mono);font-size:9px;color:var(--faint);}
+  .row .body{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .row .hl{font-size:15px;font-weight:500;line-height:1.32;}
+  .row .det{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:3px;line-height:1.4;}
+  .row .val{font-family:var(--mono);font-size:19px;font-weight:700;white-space:nowrap;}
+  .row .vbadge{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:1px;padding:3px 7px;border:1px solid;border-radius:999px;white-space:nowrap;}
+  .row .chev{color:var(--faint);font-size:12px;margin-left:2px;}
+
+  /* leaderboard (regression board) */
+  .lb .lbrow{display:flex;align-items:center;gap:11px;padding:9px 14px;border-bottom:1px solid rgba(246,241,231,.05);}
+  .lb .lbrow:last-child{border-bottom:0;}
+  .lb .rk{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--faint);width:16px;}
+  .lb .nm{font-size:14px;font-weight:600;}
+  .lb .gm{font-family:var(--mono);font-size:9px;color:var(--faint);}
+  .lb .gap{flex:1;display:flex;gap:3px;align-items:center;justify-content:flex-end;}
+  .lb .gap i{height:7px;border-radius:2px;display:block;}
+  .lb .lv{font-family:var(--mono);font-size:15px;font-weight:700;width:50px;text-align:right;}
+
+  /* night/receipt table */
+  .tbl .trow{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid rgba(246,241,231,.05);}
+  .tbl .trow:last-child{border-bottom:0;}
+  .tbl .pl{font-family:var(--mono);font-size:12px;font-weight:700;width:96px;}
+  .tbl .tm{font-family:var(--mono);font-size:10.5px;font-weight:700;width:42px;}
+  .tbl .st{font-family:var(--mono);font-size:11.5px;font-weight:700;flex:1;text-align:right;color:var(--ink);}
+  .tbl .mk{font-size:11px;font-weight:700;width:20px;text-align:center;}
+
+  /* sticky filter for Redesign A */
+  .filter{position:sticky;top:0;z-index:40;background:linear-gradient(var(--bg) 72%,rgba(21,18,12,0));
+    display:flex;gap:8px;padding:8px 16px 12px;overflow-x:auto;}
+  .filter::-webkit-scrollbar{height:0;}
+  .filter button{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.6px;
+    color:var(--dim);background:var(--panel);border:1px solid var(--edge);border-radius:999px;
+    padding:8px 15px;cursor:pointer;white-space:nowrap;transition:.15s;}
+  .filter button.on{background:var(--gold);color:#1a1409;border-color:var(--gold);}
+
+  .pane{display:none;} .pane.on{display:block;}
+
+  /* digest accordion for Redesign B */
+  .acc{margin:8px 16px;border:1px solid var(--edge);border-radius:14px;overflow:hidden;background:var(--panel);}
+  .acc .ahead{display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;}
+  .acc .ahead .ico{width:7px;height:7px;background:var(--gold);border-radius:1.5px;transform:rotate(45deg);flex:none;}
+  .acc .ahead .txt{flex:1;}
+  .acc .ahead .e{font-size:14.5px;font-weight:700;}
+  .acc .ahead .s{font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:2px;}
+  .acc .ahead .ct{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--gold);}
+  .acc .ahead .cv{color:var(--faint);font-size:13px;transition:.2s;}
+  .acc.open .ahead .cv{transform:rotate(90deg);}
+  .acc .abody{display:none;border-top:1px solid rgba(246,241,231,.07);}
+  .acc.open .abody{display:block;}
+  .acc .abody .row{border-bottom:1px solid rgba(246,241,231,.05);}
+
+  .note{margin:18px 16px 30px;padding:13px 14px;border:1px dashed rgba(205,163,73,.4);border-radius:12px;
+    font-family:var(--mono);font-size:10.5px;color:var(--dim);line-height:1.6;}
+  .note b{color:var(--gold);font-weight:700;}
+  .scrolltag{font-family:var(--mono);font-size:9px;color:var(--red);text-align:center;padding:10px;letter-spacing:.5px;}
+  .spacer{height:60px;}
+</style>
+</head>
+<body>
+  <div class="pagehead">
+    <h1>The Hub — redesign mock</h1>
+    <p>Same copy, eyebrows & lane names as the live app — <b>structure only</b>. Flip between the three layouts.<br>
+    Numbers are <span class="real">today's real data (Jun 19, 25 MLB rows)</span>. Scroll inside the phone to feel the length.</p>
+  </div>
+
+  <div class="switch">
+    <button class="on" onclick="show('cur',this)">CURRENT (today)</button>
+    <button onclick="show('a',this)">REDESIGN A · Lead + Filter</button>
+    <button onclick="show('b',this)">REDESIGN B · Digest</button>
+  </div>
+
+  <div class="phone">
+    <div class="notch"></div>
+
+    <!-- ============ CURRENT ============ -->
+    <div class="screen on" id="cur">
+      <div class="hubhead"><div class="t">The Hub</div><div class="rec">22 OF 47 HIT<small>YESTERDAY</small></div></div>
+      <div class="league"><span class="on">MLB</span><span>WC</span></div>
+      <div class="search"><span class="mag">⌕</span><input placeholder="Search players, teams, edges" disabled></div>
+      <div id="curBody"></div>
+      <div class="scrolltag">↑ you scrolled through ~11 stacked sections + 4 hidden sub-tab strips ↑</div>
+      <div class="spacer"></div>
+    </div>
+
+    <!-- ============ REDESIGN A ============ -->
+    <div class="screen" id="a">
+      <div class="hubhead"><div class="t">The Hub</div><div class="rec">22 OF 47 HIT<small>YESTERDAY</small></div></div>
+      <div class="league"><span class="on">MLB</span><span>WC</span></div>
+      <div class="filter">
+        <button class="on" onclick="paneA('tonight',this)">TONIGHT</button>
+        <button onclick="paneA('players',this)">PLAYER EDGES</button>
+        <button onclick="paneA('matchups',this)">MATCHUPS</button>
+        <button onclick="paneA('night',this)">LAST NIGHT</button>
+      </div>
+      <div id="aBody"></div>
+      <div class="note"><b>Redesign A.</b> One sticky filter swaps the body — you see ONE group at a time, never an 11-section scroll. "TONIGHT" is the answer screen (your Featured strip, kept). Every other section still exists, just one tap away. The few sharpest reads appear in BOTH Tonight and their home lane — the cross-placement you wanted.</div>
+      <div class="spacer"></div>
+    </div>
+
+    <!-- ============ REDESIGN B ============ -->
+    <div class="screen" id="b">
+      <div class="hubhead"><div class="t">The Hub</div><div class="rec">22 OF 47 HIT<small>YESTERDAY</small></div></div>
+      <div class="league"><span class="on">MLB</span><span>WC</span></div>
+      <div class="search"><span class="mag">⌕</span><input placeholder="Search players, teams, edges" disabled></div>
+      <div style="margin:14px 16px 6px;font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.5px;">FEATURED · Tonight's sharpest reads</div>
+      <div class="scroller" id="bFeatured"></div>
+      <div id="bBody"></div>
+      <div class="note"><b>Redesign B.</b> Everything fits on ~1.5 screens. Featured stays open at top; every other section collapses to a one-line summary + count — tap to expand inline. No hidden horizontal tabs, no guessing what's below. Same sections, same names.</div>
+      <div class="spacer"></div>
+    </div>
+  </div>
+
+<script>
+/* ---------- today's real data (baked) ---------- */
+const F = [ // Featured / "Tonight's sharpest reads"
+  {chip:'HEAT CHECK', t:'good', game:'ATH @ HOU', hl:'Zack Gelof is scorching: 1.110 OPS in Last 15 Days', val:'1.110', spark:[6,9,7,12,15,18]},
+  {chip:'STARTER FORM', t:'bad', game:'SF @ CLE', hl:'Landen Roupp is getting hit: 8.16 ERA over his last 3 starts', val:'8.16', spark:[4,7,6,11,9,14]},
+  {chip:'STREAK', t:'good', game:'MIA @ PIT', hl:'MIA have won 5 straight', val:'W5', spark:[]},
+  {chip:'PLATOON EDGE', t:'good', game:'LAA @ ATH', hl:'Nick Kurtz (bats L) hits 2nd against Ryan Johnson (RHP)', val:'1.070', spark:[8,11,9,13,12,16]},
+  {chip:'PLATOON EDGE', t:'good', game:'LAA @ ATH', hl:'Jo Adell (bats R) hits 3rd against Gage Jump (LHP)', val:'.863', spark:[7,9,8,11,10,12]},
+  {chip:'REST & FATIGUE', t:'bad', game:'CHW @ TEX', hl:"CHW's bullpen has covered 16 innings over the last 3 games", val:'16', spark:[]},
+];
+const PLAYER = { // Player Edges lanes (verbatim lane names)
+  'PLATOON':[
+    {chip:'PLATOON EDGE',t:'good',game:'LAA @ ATH',hl:'Nick Kurtz (bats L) hits 2nd against Ryan Johnson (RHP)',val:'1.070',det:'.496 OPS edge vs RHP this year (188 PA)'},
+    {chip:'PLATOON EDGE',t:'good',game:'LAA @ ATH',hl:'Jo Adell (bats R) hits 3rd against Gage Jump (LHP)',val:'.863',det:'.863 OPS vs LHP — his stronger side'},
+  ],
+  'HEAT CHECK':[
+    {chip:'HEAT CHECK',t:'good',game:'ATH @ HOU',hl:'Zack Gelof is scorching: 1.110 OPS in Last 15 Days',val:'1.110',det:'9-for-22, 4 XBH over the window'},
+    {chip:'HEAT CHECK',t:'good',game:'NYM @ ATL',hl:'Brandon Nimmo is locked in: .402 OBP in Last 15 Days',val:'.402',det:'reached base in 12 of last 14'},
+  ],
+  'BALLPARK':[
+    {chip:'BALLPARK',t:'bad',game:'COL @ SD',hl:'Kyle Freeland in this park: 6.40 ERA at Petco',val:'6.40',det:'allows .312 opp avg away from Coors'},
+    {chip:'BALLPARK',t:'good',game:'CHC @ CIN',hl:'Hunter Greene at Great American: 2.71 ERA at home',val:'2.71',det:'.198 opp avg in his home park'},
+    {chip:'BALLPARK',t:'bad',game:'BAL @ LAD',hl:'Dean Kremer on the road: 5.88 ERA away',val:'5.88',det:'home/road split widening'},
+  ],
+  'COOLING':[
+    {chip:'COOLING OFF',t:'bad',game:'TOR @ BOS',hl:'Bo Bichette has gone cold: .180 in Last 15 Days',val:'.180',det:'draws RHP — his weaker side'},
+  ],
+  'STARTERS':[
+    {chip:'STARTER FORM',t:'bad',game:'SF @ CLE',hl:'Landen Roupp is getting hit: 8.16 ERA over his last 3 starts',val:'8.16',det:'14 ER over last 15.1 IP'},
+    {chip:'STARTER FORM',t:'good',game:'PHI @ MIA',hl:'Cristopher Sánchez rolling: 1.93 ERA over his last 3',val:'1.93',det:'21 K, 3 BB in the span'},
+    {chip:'STARTER FORM',t:'good',game:'SEA @ MIN',hl:'Bryan Woo steady: 2.40 ERA over his last 3 starts',val:'2.40',det:'6.1 IP avg, low walks'},
+  ],
+};
+const REG = [ // Regression Board (ERA vs xERA gap)
+  {nm:'Landen Roupp',game:'SF @ CLE',era:5.91,xera:3.40,t:'good'},
+  {nm:'Dean Kremer',game:'BAL @ LAD',era:4.86,xera:3.62,t:'good'},
+  {nm:'Bailey Ober',game:'SEA @ MIN',era:4.20,xera:3.31,t:'good'},
+  {nm:'Kyle Freeland',game:'COL @ SD',era:5.40,xera:4.55,t:'good'},
+];
+const COND = { // The Conditions lanes
+  'FIRST INNING':[{chip:'FIRST INNING',t:'good',game:'NYM @ ATL',hl:'NRFI spot: both starters scoreless in 1st in 70%+ of starts',val:'NRFI',det:'Senga & Schwellenbach combine for low 1st-inning damage'}],
+};
+const REST = [ // Rest & Fatigue (7 rows today)
+  {chip:'SITUATIONAL',t:'bad',game:'CHW @ TEX',hl:"CHW's bullpen has covered 16 innings over the last 3 games",val:'16',det:'thin pen into a high-total spot'},
+  {chip:'SITUATIONAL',t:'bad',game:'WSH @ PHI',hl:'WSH playing their 7th game in 7 days',val:'7/7',det:'no off-day since last Thursday'},
+  {chip:'SITUATIONAL',t:'good',game:'SD @ ARI',hl:'SD comes in on full rest after Monday off',val:'+1',det:'rotation lined up, pen rested'},
+];
+const STREAK = [
+  {bdg:'W5',t:'good',sub:'Miami Marlins',det:'outscored foes 28-12 in the run',next:'AT PIT · 6:40 PM ET'},
+  {bdg:'L4',t:'bad',sub:'Chicago White Sox',det:'dropped 4 straight on the road',next:'AT TEX · 8:05 PM ET'},
+];
+const NIGHT = [ // Last Night board
+  {pl:'SOTO',tm:'NYM',st:'2 HR, 5 RBI',mk:'✓'},
+  {pl:'JUDGE',tm:'NYY',st:'3-for-4, HR',mk:'✓'},
+  {pl:'WITT JR.',tm:'KC',st:'2-for-5, 2B',mk:'–'},
+  {pl:'DE LA CRUZ',tm:'CIN',st:'0-for-4, 2 K',mk:'✗'},
+];
+const RECEIPTS = [
+  {chip:'HR THREAT',t:'good',hl:'Juan Soto to homer',det:'2 HR — 2-for-4, 8 TB, 1 BB',res:'HIT'},
+  {chip:'PLATOON EDGE',t:'good',hl:'Riley Greene vs LHP',det:'2-for-3, 3 TB',res:'HIT'},
+  {chip:'COOLING OFF',t:'bad',hl:'Player X stays quiet',det:'2-for-4 — broke the slump',res:'MISS'},
+  {chip:'STARTER FORM',t:'neu',hl:'Pitcher Y bounce-back',det:'3 ER, 5 IP — line landed on the number',res:'PUSH'},
+];
+
+/* ---------- render helpers ---------- */
+const tclass = t => t==='good'?'good':t==='bad'?'bad':'neu';
+const bgclass = t => t==='good'?'bg-good':t==='bad'?'bg-bad':'bg-neu';
+function sparkHTML(s,t){ if(!s||!s.length) return ''; const m=Math.max(...s);
+  return '<div class="spark">'+s.map(v=>`<i class="${bgclass(t)}" style="height:${Math.round(4+18*v/m)}px;opacity:.8"></i>`).join('')+'</div>'; }
+function card(d){
+  const isNum=/[0-9]/.test(d.val);
+  return `<div class="ecard">
+    <div class="top"><div class="chip"><span class="dot ${bgclass(d.t)}"></span>${d.chip}</div><div class="game">${d.game}</div></div>
+    <div class="hl">${d.hl}</div>
+    <div class="bot">${sparkHTML(d.spark,d.t)}<div class="val ${tclass(d.t)}">${d.val||''}</div></div>
+    <div class="flip">tap for full breakdown ⤵</div>
+  </div>`;
+}
+function row(d){
+  const isNum=/[0-9]/.test(d.val||'');
+  const valHTML = d.val ? (isNum?`<div class="val ${tclass(d.t)}">${d.val}</div>`
+    :`<div class="vbadge ${tclass(d.t)}" style="border-color:currentColor">${d.val}</div>`) : '';
+  return `<div class="row">
+    <div class="rtop"><div class="chip">${d.chip}</div><div class="game">${d.game}</div></div>
+    <div class="body"><div><div class="hl">${d.hl}</div>${d.det?`<div class="det">${d.det}</div>`:''}</div>
+    <div style="display:flex;align-items:center;gap:6px">${valHTML}<span class="chev">›</span></div></div>
+  </div>`;
+}
+function panel(rows){return `<div class="panel">${rows.map(row).join('')}</div>`;}
+function head(eye,sub){return `<div class="sec"><div class="eye">${eye}</div><div class="sub">${sub}</div></div>`;}
+function lanesStrip(names){return `<div class="lanes">${names.map((n,i)=>`<span class="${i===0?'on':''}">${n}</span>`).join('')}</div>`;}
+function scroller(items){return `<div class="scroller">${items.map(card).join('')}</div>`;}
+function regBoard(){
+  const mx=Math.max(...REG.map(r=>r.era));
+  return `<div class="panel lb">`+REG.map((r,i)=>`
+    <div class="lbrow"><div class="rk">${i+1}</div>
+      <div style="flex:0 0 auto"><div class="nm">${r.nm}</div><div class="gm">${r.game}</div></div>
+      <div class="gap"><i class="bg-bad" style="width:${Math.round(60*r.era/mx)}px"></i><i class="bg-good" style="width:${Math.round(60*r.xera/mx)}px"></i></div>
+      <div class="lv good">${r.era.toFixed(2)}</div></div>`).join('')+`</div>`;
+}
+function nightTbl(rows){return `<div class="panel tbl">`+rows.map(r=>`
+  <div class="trow"><div class="pl">${r.pl}</div><div class="tm" style="color:var(--gold)">${r.tm}</div>
+  <div class="st">${r.st}</div><div class="mk ${r.mk==='✓'?'good':r.mk==='✗'?'bad':'neu'}">${r.mk}</div></div>`).join('')+`</div>`;}
+function receiptTbl(){return `<div class="panel">`+RECEIPTS.map(r=>`
+  <div class="row"><div class="rtop"><div class="chip">${r.chip}</div>
+    <div class="vbadge ${r.res==='HIT'?'good':r.res==='PUSH'?'neu':'bad'}" style="border-color:currentColor;color:${r.res==='HIT'?'var(--green)':r.res==='PUSH'?'var(--gold)':'var(--red)'}">${r.res}</div></div>
+  <div class="hl" style="font-size:14px">${r.hl}</div><div class="det">${r.det}</div></div>`).join('')+`</div>`;}
+
+/* ---------- CURRENT: the long stack ---------- */
+document.getElementById('curBody').innerHTML =
+  head("Featured","Tonight's sharpest reads") + scroller(F) +
+  head("Regression Board","Biggest ERA vs xERA gaps tonight") + regBoard() +
+  head("Gary Home Run Threats","Who Gary has going deep today") + `<div class="panel"><div class="row"><div class="det" style="padding:4px 0">Fills in midday once lineups post — empty at 7 AM.</div></div></div>` +
+  head("Player Edges","Handedness matchups tonight") + lanesStrip(['PLATOON','HEAT CHECK','BALLPARK','COOLING','STARTERS']) + scroller(PLAYER['PLATOON']) +
+  head("Owned","Head-to-head history that pops") + `<div class="panel"><div class="row"><div class="det" style="padding:4px 0">Fills in midday once lineups post.</div></div></div>` +
+  head("The Beneficiary","Who absorbs the missing volume") + `<div class="panel"><div class="row"><div class="det" style="padding:4px 0">Fills in midday once lineups post.</div></div></div>` +
+  head("Rest &amp; Fatigue","Schedule spots &amp; workload") + panel(REST) +
+  head("The Conditions","NRFI &amp; YRFI reads on tonight's slate") + lanesStrip(['FIRST INNING','RUN GAME','PARK &amp; WEATHER']) + panel(COND['FIRST INNING']) +
+  head("Streaks","Live runs · who has one on the line tonight") + `<div class="panel">`+STREAK.map(s=>`<div class="row"><div class="body"><div><div class="hl">${s.sub}</div><div class="det">${s.det}</div></div><div style="text-align:right"><div class="val ${tclass(s.t)}" style="font-size:15px">${s.bdg}</div><div class="game" style="color:var(--gold)">${s.next} ›</div></div></div></div>`).join('')+`</div>` +
+  head("Last Night","4 stat lines · Gary's mark where he had it") + lanesStrip(['HR','2+ HITS','K SHOW','GEMS','RBI','SPEED']) + nightTbl(NIGHT) +
+  head("More Edges","Other angles tonight") + panel([{chip:'SITUATIONAL',t:'neu',game:'LgWide',hl:'Other unmapped angles land here',det:'catch-all'}]);
+
+/* ---------- REDESIGN A: panes ---------- */
+const A = {
+  tonight: head("Featured","Tonight's sharpest reads") + scroller(F)
+    + head("Streaks","Live runs · who has one on the line tonight")
+    + `<div class="panel">`+STREAK.map(s=>`<div class="row"><div class="body"><div><div class="hl">${s.sub}</div><div class="det">${s.det}</div></div><div style="text-align:right"><div class="val ${tclass(s.t)}" style="font-size:15px">${s.bdg}</div><div class="game" style="color:var(--gold)">${s.next} ›</div></div></div></div>`).join('')+`</div>`,
+  players: head("Player Edges","Handedness matchups tonight") + lanesStrip(['PLATOON','HEAT CHECK','BALLPARK','COOLING','STARTERS']) + scroller(PLAYER['PLATOON'])
+    + head("Gary Home Run Threats","Who Gary has going deep today") + `<div class="panel"><div class="row"><div class="det" style="padding:4px 0">Fills in midday once lineups post.</div></div></div>`
+    + head("Owned","Head-to-head history that pops") + `<div class="panel"><div class="row"><div class="det" style="padding:4px 0">Fills in midday once lineups post.</div></div></div>`,
+  matchups: head("Regression Board","Biggest ERA vs xERA gaps tonight") + regBoard()
+    + head("The Conditions","NRFI &amp; YRFI reads on tonight's slate") + lanesStrip(['FIRST INNING','RUN GAME','PARK &amp; WEATHER']) + panel(COND['FIRST INNING'])
+    + head("Rest &amp; Fatigue","Schedule spots &amp; workload") + panel(REST),
+  night: head("Last Night","4 stat lines · Gary's mark where he had it") + lanesStrip(['HR','2+ HITS','K SHOW','GEMS','RBI','SPEED']) + nightTbl(NIGHT)
+    + head("Yesterday · Graded","The receipts — 22 hit · 25 miss · 11 push") + receiptTbl(),
+};
+function paneA(k,btn){document.getElementById('aBody').innerHTML=A[k];
+  document.querySelectorAll('#a .filter button').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
+  document.getElementById('a').scrollTo({top:0});}
+document.getElementById('aBody').innerHTML=A.tonight;
+
+/* ---------- REDESIGN B: digest accordions ---------- */
+document.getElementById('bFeatured').innerHTML = F.map(card).join('');
+function acc(eye,sub,count,inner,open){
+  return `<div class="acc ${open?'open':''}"><div class="ahead" onclick="this.parentNode.classList.toggle('open')">
+    <span class="ico"></span><div class="txt"><div class="e">${eye}</div><div class="s">${sub}</div></div>
+    <div class="ct">${count}</div><div class="cv">›</div></div>
+    <div class="abody">${inner}</div></div>`;
+}
+document.getElementById('bBody').innerHTML =
+  acc("Regression Board","Biggest ERA vs xERA gaps tonight","4",regBoard(),false) +
+  acc("Player Edges","Platoon · Heat · Ballpark · Cooling · Starters","8",lanesStrip(['PLATOON','HEAT CHECK','BALLPARK','COOLING','STARTERS'])+scroller(PLAYER['PLATOON']),false) +
+  acc("Rest &amp; Fatigue","Schedule spots &amp; workload","7",panel(REST),false) +
+  acc("The Conditions","NRFI &amp; YRFI reads on tonight's slate","1",panel(COND['FIRST INNING']),false) +
+  acc("Streaks","Live runs · who has one on the line tonight","2",`<div class="panel" style="margin:0;border:0;border-radius:0">`+STREAK.map(s=>`<div class="row"><div class="body"><div><div class="hl">${s.sub}</div><div class="det">${s.det}</div></div><div style="text-align:right"><div class="val ${tclass(s.t)}" style="font-size:15px">${s.bdg}</div><div class="game" style="color:var(--gold)">${s.next} ›</div></div></div></div>`).join('')+`</div>`,false) +
+  acc("Last Night","Gary's mark where he had it","4",nightTbl(NIGHT),false) +
+  acc("Yesterday · Graded","22 hit · 25 miss · 11 push","58",receiptTbl(),false);
+
+/* ---------- screen switch ---------- */
+function show(id,btn){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.switch button').forEach(b=>b.classList.remove('on')); btn.classList.add('on');}
+</script>
+</body>
+</html>
