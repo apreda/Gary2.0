@@ -79,10 +79,20 @@ function readSide(lineups, teamId, teamName) {
 export async function computeWcConfirmedXI(ctx) {
   const games = Array.isArray(ctx?.games) ? ctx.games : [];
   const season = Number(ctx?.season) || DEFAULT_SEASON;
+  // Real WC injury snapshot (BDL): norm(name) -> status (OUT / GTD / SUS). Fetched once for
+  // the whole slate, cached. OUT drops a regular from the projection; GTD/SUS in the XI
+  // flags Contested. Empty feed → no doubts (fails safe, never fabricates).
+  const injRows = await safe(() => wc.getInjuries({ seasons: [season] }), []);
+  const injStatus = new Map();
+  for (const r of injRows || []) {
+    const nm = r?.player?.name;
+    if (nm && r?.status) injStatus.set(norm(nm), String(r.status).toUpperCase());
+  }
+  console.log(`[wcConfirmedXI] ${injStatus.size} injury statuses loaded`);
   const rows = [];
   for (const match of games) {
     try {
-      const r = await rowsForMatch(match, season);
+      const r = await rowsForMatch(match, season, injStatus);
       rows.push(...r);
     } catch (e) {
       console.error('[wcConfirmedXI] match error:', e?.message || e);
@@ -92,51 +102,48 @@ export async function computeWcConfirmedXI(ctx) {
   return rows;
 }
 
-async function rowsForMatch(match, season) {
+async function rowsForMatch(match, season, injStatus = new Map()) {
   const matchId = match?.id;
   const home = match?.home_team, away = match?.away_team;
   if (matchId == null || !home?.id || !away?.id) return [];
 
   const label = `${away.name} @ ${home.name}`;
   const lineups = await safe(() => wc.getMatchLineups(matchId), []);
-  let h = lineups.length ? readSide(lineups, home.id, home.name) : null;
-  let a = lineups.length ? readSide(lineups, away.id, away.name) : null;
+  const sheetH = lineups.length ? readSide(lineups, home.id, home.name) : null;
+  const sheetA = lineups.length ? readSide(lineups, away.id, away.name) : null;
 
   // Confirmed sheets land ~90 min before kickoff; BDL exposes a PREDICTED XI hours
-  // earlier, so a sheet is "confirmed" only INSIDE that window — otherwise it's a
-  // projection (real names, not the manager's final call). Time-to-kickoff, not
-  // "does a sheet exist", is the honest determinant — this is the 8am/3pm bug.
+  // earlier. INSIDE that window the sheet is the manager's real call — trust it. OUTSIDE
+  // it, BDL's "sheet" is just the last lineup, so OUR multi-match regulars projection is
+  // better: it keeps a rested/returning starter (Pulisic's calf) that BDL's single-match
+  // sheet would drop. Time-to-kickoff, not "does a sheet exist", is the honest determinant.
   const kickoff = match?.datetime ? new Date(match.datetime).getTime() : null;
   const inConfirmWindow = kickoff != null && (kickoff - Date.now()) <= 95 * 60 * 1000;
-  let status = (h && a && inConfirmWindow) ? 'confirmed' : 'projected';
-
-  // No confirmed sheet yet → PROJECT from each side's previous-match XI (the SAME
-  // fetch the rotation signal already does, so NO extra API calls — this rides the
-  // existing per-game insight pass that runs alongside the picks). Openers have no
-  // prior XI → fail closed, and the iOS field shows its "Projected" placeholder.
-  if (!h || !a) {
-    h = await previousXI(home.id, home.name, matchId, season);
-    a = await previousXI(away.id, away.name, matchId, season);
+  let h, a, status;
+  if (sheetH && sheetA && inConfirmWindow) {
+    h = sheetH; a = sheetA; status = 'confirmed';
+  } else {
+    // Pre-confirmation: our regulars projection, BDL's sheet only as the fallback. Openers
+    // with no history and no sheet fail closed (the iOS field shows its placeholder).
+    h = (await previousXI(home.id, home.name, matchId, season, injStatus)) || sheetH;
+    a = (await previousXI(away.id, away.name, matchId, season, injStatus)) || sheetA;
+    status = 'projected';
     if (!h || !a) {
       console.log(`[wcConfirmedXI] ${label}: no projection — ${[!h ? home.name : null, !a ? away.name : null].filter(Boolean).join(' & ')} has no usable previous-match XI`);
       return [];
     }
-    status = 'projected';
   }
 
-  // Contested = a projected starter is carrying an active injury doubt — a game-time
-  // decision (Pulisic's calf is the canonical case). The projection is real but
-  // UNCERTAIN. Driven by apiFootball injuries (cached 2h, already imported). Only
-  // meaningful pre-confirmation; if the injuries feed is empty it stays 'projected'
-  // (fails safe — never fabricates a doubt).
+  // Contested = a projected starter carries an active GTD (game-time decision) flag in
+  // BDL's WC injury feed. The projection is real but UNCERTAIN. OUT/suspended players were
+  // already dropped from the projection (previousXI), so only a GTD survives to flag here.
+  // Empty feed → stays 'projected' (fails safe — never fabricates a doubt).
   let doubts = [];
   if (status === 'projected') {
-    const inj = [
-      ...(await safe(() => apiFootball.getInjuries(home.name), [])),
-      ...(await safe(() => apiFootball.getInjuries(away.name), [])),
-    ];
-    const xiNames = [...h.names, ...a.names];
-    doubts = [...new Set(inj.map((i) => i?.player).filter((p) => p && inXI(p, xiNames)))];
+    const xi = [...h.starters, ...a.starters];
+    doubts = [...new Set(xi
+      .map((s) => s.player?.name)
+      .filter((nm) => nm && /GTD|DOUBT|QUESTION/.test(injStatus.get(norm(nm)) || '')))];
     if (doubts.length) status = 'contested';
   }
 
@@ -249,16 +256,52 @@ async function bestSignal(side, opp, matchId, season) {
 
 // The team's most recent COMPLETED WC match before `matchId`, with its starting XI +
 // keeper. null for openers (no prior match).
-async function previousXI(teamId, teamName, matchId, season) {
+async function previousXI(teamId, teamName, matchId, season, injStatus = new Map()) {
   const matches = await safe(() => wc.getMatches({ teamIds: [teamId], seasons: [season] }), []);
   const prior = (matches || [])
     .filter((m) => m?.status === 'completed' && m?.id !== matchId && m?.datetime)
-    .sort((x, y) => new Date(y.datetime) - new Date(x.datetime))[0];
-  if (!prior) return null;
-  const lu = await safe(() => wc.getMatchLineups(prior.id), []);
-  // Full sheet (formation + 11 + names + keeper), or null if <11 — drives BOTH the
-  // rotation/keeper diff and the pre-kickoff projected XI for the field.
-  return readSide(lu, teamId, teamName);
+    .sort((x, y) => new Date(y.datetime) - new Date(x.datetime))
+    .slice(0, 4); // up to the last 4 completed matches
+  if (!prior.length) return null;
+
+  // Read each recent match's XI for this side (most-recent first).
+  const sides = [];
+  for (const m of prior) {
+    const s = readSide(await safe(() => wc.getMatchLineups(m.id), []), teamId, teamName);
+    if (s) sides.push(s);
+  }
+  if (!sides.length) return null;
+  const base = sides[0]; // most recent anchors the formation
+  if (sides.length === 1) return base;
+
+  // Project the REGULARS, not just the last XI — rank players by how many recent matches
+  // they started (ties to recency), DROP anyone ruled OUT/suspended in the BDL injury feed
+  // (so an injured regular's backup correctly takes the slot — Pulisic OUT, his replacement
+  // in), keep the top 11. Each keeps their most-recent shirt + position. Mirrors how the
+  // projection sites build a "likely XI" without ever showing a player who can't play.
+  const w = sides.length;
+  const agg = new Map(); // id -> { entry (most-recent), starts, weight }
+  sides.forEach((s, i) => {
+    for (const st of s.starters) {
+      const id = st.player?.id ?? st.player?.name;
+      if (id == null) continue;
+      const cur = agg.get(id);
+      if (cur) { cur.starts += 1; cur.weight += (w - i); }
+      else agg.set(id, { entry: st, starts: 1, weight: w - i }); // first sight = most recent
+    }
+  });
+  const starters = [...agg.values()]
+    .filter((r) => !/^(OUT|SUS)/.test(injStatus.get(norm(r.entry.player?.name || '')) || ''))
+    .sort((x, y) => (y.starts - x.starts) || (y.weight - x.weight))
+    .slice(0, 11)
+    .map((r) => r.entry);
+  if (starters.length < 11) return base; // not enough healthy signal → fall back to the last XI
+  return {
+    teamId, teamName, starters,
+    formation: base.formation, defenders: base.defenders, forwards: base.forwards,
+    names: starters.map((s) => s.player?.name).filter(Boolean),
+    keeper: starters.find((s) => s.position === 'G')?.player?.name || base.keeper,
+  };
 }
 
 // { name, goals } if the side's clear cycle goal leader (>= 4 goals) is NOT in the XI.

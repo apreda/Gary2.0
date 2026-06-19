@@ -110,6 +110,19 @@ export async function getMatches({ seasons = [DEFAULT_SEASON], teamIds, matchIds
   return data;
 }
 
+// Current WC injury snapshot — [{ player, team, status: 'OUT'|'GTD'|'SUS', injury_type }].
+// Real data (BDL FIFA), so the projection can drop OUT players and flag GTD as Contested.
+export async function getInjuries({ seasons = [DEFAULT_SEASON], teamIds } = {}) {
+  const params = { seasons, per_page: 100 };
+  if (teamIds) params.team_ids = teamIds;
+  const key = `injuries_${JSON.stringify(params)}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await fifaFetch('/player_injuries', params, { paginate: true });
+  setCache(key, data, TTL_FAST);
+  return data;
+}
+
 /**
  * 90-minute regulation score (EXCLUDES extra time).
  * No-ET matches: home_score/away_score IS the 90' result — use it directly.
@@ -520,6 +533,7 @@ export default {
   getOdds,
   getFutures,
   getRosters,
+  getInjuries,
   getPlayers,
   getMatchLineups,
   getMatchEvents,
