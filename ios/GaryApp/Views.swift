@@ -16892,27 +16892,27 @@ struct PicksGamePage: View {
                 // live now. Only for an UPCOMING game (a live/final game shows its
                 // score on the LiveScoreStrip above; "drops ~90 min before" copy
                 // would be wrong once the game has started).
-                HStack(spacing: 11) {
-                    Image(systemName: "clock.badge")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(GaryColors.gold.opacity(0.7))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("GARY'S PICK")
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.6)
-                            .foregroundStyle(GaryColors.gold)
-                        Text("Drops ~90 min before game time — the read's below.")
-                            .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.5))
-                            .lineLimit(1).minimumScaleFactor(0.8)
+                // No pick yet → a blurred MOCK pick card so the layout always reads
+                // (paywall-style, like the Winners page). Redaction bars (never fake
+                // content), unveils ~90 min before; later this same blur gates by plan.
+                ZStack {
+                    VStack(alignment: .leading, spacing: 12) {
+                        RoundedRectangle(cornerRadius: 4).fill(GaryColors.gold.opacity(0.5)).frame(width: 92, height: 11)
+                        RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.55)).frame(width: 210, height: 24)
+                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.3)).frame(width: 150, height: 13)
                     }
-                    Spacer(minLength: 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.04)))
+                    .blur(radius: 5)
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(GaryColors.gold.opacity(0.18), lineWidth: 1))
+                    VStack(spacing: 6) {
+                        Image(systemName: "lock.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(GaryColors.gold)
+                        Text("UNVEILS ~90 MIN BEFORE").font(GaryFonts.mono(10.5, bold: true)).tracking(1.2).foregroundStyle(.white.opacity(0.88))
+                        Text("The read's below").font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+                    }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.03))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(GaryColors.gold.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
-                )
                 .padding(.horizontal, 10)
             }
 
