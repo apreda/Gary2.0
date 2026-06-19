@@ -18889,21 +18889,36 @@ struct FeatureEdgeCard: View {
 struct RegressionBoard: View {
     let signals: [Signal]
     let onTap: (Signal) -> Void
-    @State private var showTomorrow = false
+    @State private var tab: RegTab? = nil
     @State private var expandedID: UUID? = nil
 
-    private var tonightRows: [Signal] { signals.filter { $0.reg?.day != "tomorrow" } }
+    private enum RegTab: Hashable { case pitchers, hitters, tomorrow }
+
+    // Pitchers (ERA→xERA, carry reg meta → expandable) vs hitters (BA→xBA, no
+    // reg meta) vs tomorrow's projected starters (pitchers, look-ahead).
+    private var pitcherRows: [Signal] { signals.filter { $0.reg?.day == "tonight" } }
     private var tomorrowRows: [Signal] { signals.filter { $0.reg?.day == "tomorrow" } }
-    /// Default to tonight; fall back to tomorrow when the slate hasn't posted yet.
-    private var onTomorrow: Bool {
-        if tonightRows.isEmpty && !tomorrowRows.isEmpty { return true }
-        return showTomorrow && !tomorrowRows.isEmpty
+    private var hitterRows: [Signal] { signals.filter { $0.reg == nil } }
+
+    private func rowsFor(_ t: RegTab) -> [Signal] {
+        switch t {
+        case .pitchers: return pitcherRows
+        case .hitters:  return hitterRows
+        case .tomorrow: return tomorrowRows
+        }
     }
-    private var rows: [Signal] { Array((onTomorrow ? tomorrowRows : tonightRows).prefix(8)) }
+    private var availableTabs: [RegTab] {
+        [RegTab.pitchers, .hitters, .tomorrow].filter { !rowsFor($0).isEmpty }
+    }
+    private var activeTab: RegTab {
+        if let t = tab, availableTabs.contains(t) { return t }
+        return availableTabs.first ?? .pitchers
+    }
+    private var rows: [Signal] { Array(rowsFor(activeTab).prefix(8)) }
 
     var body: some View {
         VStack(spacing: 0) {
-            if !tomorrowRows.isEmpty { dayToggle }
+            if availableTabs.count >= 2 { tabStrip }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, s in
                 regRow(i, s)
                 if i < rows.count - 1 {
@@ -18914,18 +18929,26 @@ struct RegressionBoard: View {
         .quantPanel().padding(.horizontal, 14)
     }
 
-    // TONIGHT / TOMORROW selector — the Hub's mono, gold-when-active grammar.
-    // Only shown when tomorrow's projected starters exist.
-    private var dayToggle: some View {
+    // PITCHERS / HITTERS / TOMORROW selector — plain mono labels, gold when
+    // active, NO capsule: the font + colour carry which one you're on.
+    private var tabStrip: some View {
         HStack(spacing: 18) {
-            dayTab("TONIGHT", tonightRows.count, active: !onTomorrow) { showTomorrow = false; expandedID = nil }
-            dayTab("TOMORROW", tomorrowRows.count, active: onTomorrow) { showTomorrow = true; expandedID = nil }
+            ForEach(availableTabs, id: \.self) { t in
+                regTab(tabLabel(t), rowsFor(t).count, active: t == activeTab) { tab = t; expandedID = nil }
+            }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14).padding(.top, 11).padding(.bottom, 4)
         .overlay(Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1), alignment: .bottom)
     }
-    private func dayTab(_ title: String, _ count: Int, active: Bool, _ act: @escaping () -> Void) -> some View {
+    private func tabLabel(_ t: RegTab) -> String {
+        switch t {
+        case .pitchers: return "PITCHERS"
+        case .hitters:  return "HITTERS"
+        case .tomorrow: return "TOMORROW"
+        }
+    }
+    private func regTab(_ title: String, _ count: Int, active: Bool, _ act: @escaping () -> Void) -> some View {
         Button { withAnimation(.easeInOut(duration: 0.15)) { act() } } label: {
             HStack(spacing: 5) {
                 Text(title).font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
