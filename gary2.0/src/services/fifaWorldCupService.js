@@ -185,7 +185,15 @@ export function resolveTeam(nameOrCode, teams) {
 /** Keep matches whose UTC calendar date equals dateStr (YYYY-MM-DD). */
 export function filterMatchesByDate(matches, dateStr) {
   if (!Array.isArray(matches)) return [];
-  return matches.filter(m => typeof m.datetime === 'string' && m.datetime.slice(0, 10) === dateStr);
+  // dateStr is the EST slate day. WC datetimes are UTC, so an 8:30pm ET game lands on the
+  // NEXT UTC day — comparing the raw UTC slice drops late ET-evening games (Haiti@Brazil)
+  // and wrongly pulls in early-UTC games that are really the prior ET night. Match on the
+  // ET calendar date instead so the WC slate aligns with the rest of the app.
+  const etDate = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  };
+  return matches.filter(m => typeof m.datetime === 'string' && etDate(m.datetime) === dateStr);
 }
 
 /**

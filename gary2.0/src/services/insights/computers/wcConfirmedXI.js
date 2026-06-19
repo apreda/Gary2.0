@@ -117,7 +117,10 @@ async function rowsForMatch(match, season) {
   if (!h || !a) {
     h = await previousXI(home.id, home.name, matchId, season);
     a = await previousXI(away.id, away.name, matchId, season);
-    if (!h || !a) return [];
+    if (!h || !a) {
+      console.log(`[wcConfirmedXI] ${label}: no projection — ${[!h ? home.name : null, !a ? away.name : null].filter(Boolean).join(' & ')} has no usable previous-match XI`);
+      return [];
+    }
     status = 'projected';
   }
 
