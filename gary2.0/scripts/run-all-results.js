@@ -998,13 +998,11 @@ async function processPropBets(date) {
       const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
       if (handled.has(key)) continue; handled.add(key);
 
-      // Check if result already exists before processing
-      const { data: exist } = await supabase.from('prop_results').select('id').eq('player_name', name).eq('prop_type', type).eq('game_date', row.date).maybeSingle();
-      if (exist) {
-        console.log(`  ⏩ Skipping ${sport}: ${name} ${type} (Already exists)`);
-        continue;
-      }
-
+      // RE-GRADE every run (no early skip). The prop grader has no finality gate, so an
+      // early run can read an IN-PROGRESS box score and mark a player 0-for; that result
+      // must be CORRECTED once the box score is final (Jun 18: Juan Soto HR graded 0
+      // mid-game and stuck "lost" despite his 2 HR final, because the old code skipped any
+      // already-graded prop). The existing-row path below now UPDATEs instead of skipping.
       let actual = null;
       let source = 'none';
       if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
@@ -1038,7 +1036,18 @@ async function processPropBets(date) {
           console.error(`  ❌ DEDUP CHECK FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${dedupErr.message}`);
           propInsertFailed = true;
         } else if (exist) {
+          // Row exists from an earlier (possibly mid-game) grade — RE-GRADE and UPDATE to
+          // the current box-score value so a premature miss self-corrects once the game is
+          // final, instead of being skipped forever (the Jun 18 Soto-HR bug).
           propAlreadyExists = true;
+          const { error: updErr } = await supabase.from('prop_results')
+            .update({ actual_value: actual, result: res, pick_text: `${name} ${bet} ${line} ${type}`,
+                      odds: p.odds != null ? String(p.odds) : null, updated_at: new Date().toISOString() })
+            .eq('id', exist.id);
+          if (updErr) {
+            console.error(`  ❌ UPDATE FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${updErr.message}`);
+            propInsertFailed = true;
+          }
         } else {
           const { error: insertErr } = await supabase.from('prop_results').insert({
             prop_pick_id: row.id, game_date: row.date, player_name: name,
