@@ -15230,7 +15230,10 @@ final class LiveScoreCache: ObservableObject {
     func startIfNeeded() {
         guard !started else { return }
         started = true
-        Task { [weak self] in
+        // @MainActor: the poller publishes `scores` (a @Published) on the main
+        // thread — the network await still suspends off-main, only the assignment
+        // resumes on main. (Fixes "Publishing changes from background threads".)
+        Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 self.scores = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
