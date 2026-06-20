@@ -414,7 +414,7 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 2. A TOTAL play — Over or Under the match-goals line.
 Use only markets the odds actually show, and report the EXACT odds for each play.
 
-FAVORITE DISCIPLINE (side play): when one team is a heavy moneyline favorite, the short ML price pays little and carries little value to investigate. The Asian handicap is a separately priced market on the same match — weigh the favorite laying goals (e.g. -1.5) against the underdog receiving them (+1.5), and take whichever side of the handicap your evidence supports. Do not default to a big favorite's moneyline just because they are likely to win; investigate which side of the handicap is the bet.`
+FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heavier than -200) is NOT offered to you — when a favorite is that short you will see no moneyline price for them in the RAW ODDS VALUES, so backing their bare moneyline is not an available pick. On those matches your side is the Asian handicap (weigh the favorite laying goals, e.g. -1.5, against the underdog receiving them, +1.5), the underdog's moneyline, or the Draw — take whichever side your evidence supports. Only moneylines priced -200 or shorter, and any plus-money side, are on the table.`
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);

@@ -234,6 +234,30 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const stage = game.soccer_stage || 'Group Stage';
   const groupLabel = game.soccer_group ? ` (${game.soccer_group})` : '';
   const ml = game.soccer_three_way_ml;
+  // Heavy-favorite discipline (founder rule): a 3-way ML leg priced heavier than
+  // -200 is never shown to Gary. He is told to bet only the EXACT odds listed, so
+  // omitting the favorite's price makes a -900-style moneyline unpickable AT THE
+  // SOURCE — the option never enters his menu, rather than being reacted to after a
+  // bad pick. Draw + underdog legs always remain, and the favorite's strength stays
+  // legible via the Asian handicap line and the prices that ARE shown. -200 itself
+  // stays pickable (drop only when strictly heavier than -200).
+  const mlLine = (() => {
+    if (!ml) return '3-way moneyline: pending';
+    const num = (o) => Number(String(o).replace(/[+\s]/g, ''));
+    const legs = [
+      { label: homeTeam, odds: ml.home },
+      { label: 'Draw', odds: ml.draw },
+      { label: awayTeam, odds: ml.away },
+    ].filter((l) => l.odds != null && Number.isFinite(num(l.odds)));
+    const offered = legs.filter((l) => num(l.odds) >= -200);
+    const dropped = legs.filter((l) => num(l.odds) < -200);
+    if (!offered.length) return '3-way moneyline: pending';
+    let line = `3-way moneyline: ${offered.map((l) => `${l.label} ${l.odds}`).join(' / ')}`;
+    if (dropped.length) {
+      line += `\n  (${dropped.map((l) => l.label).join(' & ')} ML not offered — favorite too short to bet, heavier than -200; take the Asian handicap or a value side, never the bare favorite.)`;
+    }
+    return line;
+  })();
   const groupRows = standings
     .filter(s => game.soccer_group ? s.group?.name === game.soccer_group : (s.team?.id === homeId || s.team?.id === awayId))
     .map(s => `${s.position}. ${s.team?.name} — ${s.points}pts (${s.won}-${s.drawn}-${s.lost}, GD ${s.goal_difference})`);
@@ -255,7 +279,7 @@ export async function buildSoccerScoutReport(game, options = {}) {
       ? `\n### HEAD TO HEAD (recent meetings)\n${h2h.meetings.map(m => `${m.date}: ${m.home} ${m.score} ${m.away} (${m.league})`).join('\n')}`
       : '',
     `\n### RAW ODDS VALUES (use these EXACT numbers — never approximate odds)`,
-    ml ? `3-way moneyline: ${homeTeam} ${ml.home} / Draw ${ml.draw} / ${awayTeam} ${ml.away}` : '3-way moneyline: pending',
+    mlLine,
     game.soccer_spread && Math.abs(Number(game.soccer_spread.homeValue)) <= 4.5
       ? `Asian handicap (main line): ${homeTeam} ${game.soccer_spread.homeValue} @ ${game.soccer_spread.homeOdds} / ${awayTeam} ${game.soccer_spread.awayValue} @ ${game.soccer_spread.awayOdds}`
       : 'Asian handicap: NOT AVAILABLE — do not pick or cite a handicap line',
