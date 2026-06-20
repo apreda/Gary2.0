@@ -1,10 +1,15 @@
 name: Daily Results Check
 
-# Runs at 4am EST (9:00 UTC standard time, 8:00 UTC during DST)
-# Adjust cron if daylight saving time matters
+# Cloud grader (laptop-independent) — posts the overnight slate's results early,
+# even when the local laptop scheduler is asleep/dead. run-all-results.js targets
+# UTC-yesterday and re-grades + UPDATEs every run, so it's idempotent and a too-early
+# run self-corrects on the next pass. Cron is UTC and drifts 1h across DST:
+#   06:00 UTC = 2am EDT (summer) / 1am EST (winter)
+#   13:00 UTC = 9am EDT (summer) / 8am EST (winter)
 on:
   schedule:
-    - cron: '0 9 * * *'  # 4am EST (standard time)
+    - cron: '0 6 * * *'   # ~2am ET — overnight results post before the user wakes
+    - cron: '0 13 * * *'  # ~9am ET — catch-up / re-grade for late West-Coast finishers
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
