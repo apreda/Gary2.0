@@ -761,7 +761,14 @@ async function processGenericGames(table, date, leagueFilter = null) {
         }
         if (soccerResult == null) continue;
         hs = reg.home; vs = reg.away;
-        const wcDate = (wcMatch.datetime || '').slice(0, 10);
+        // File the result on the ET slate day, NOT the raw UTC date. A late-evening
+        // ET kickoff (e.g. 8:30pm ET) carries the NEXT UTC calendar day (00:30Z), so a
+        // raw `.slice(0,10)` of the UTC datetime files the result one day ahead and
+        // orphans it from the pick's slate — the Picks page matches results strictly by
+        // slate date (game_date), so a misfiled day shows no W/L on that game. Every
+        // other sport gets this ET correction via normalizeToETDate inside the
+        // `if (matchedGame)` block below; WC never sets matchedGame, so apply it here.
+        const wcDate = normalizeToETDate({ datetime: wcMatch.datetime });
         if (wcDate) gameDate = wcDate;
       } else if (table === 'weekly_nfl_picks') {
         const dateObj = new Date(date);
