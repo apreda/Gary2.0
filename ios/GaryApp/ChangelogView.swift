@@ -60,7 +60,9 @@ let changelogEntries: [ChangelogEntry] = [
         changes: [
             "Pick cards are cleaner everywhere: odds in the sport's color, handicaps and totals formatted right, and the same card size on every page",
             "Pick cards show the live score while the game is in play",
-            "World Cup picks read clean and show the stadium on the back of the card",
+            "World Cup lineups show real kit colors and the true formation on the pitch, with the stadium on the back of the card",
+            "The Hub reads like a digest now: tap a section to open it, tap a player for the full breakdown",
+            "Regression Board adds tomorrow's projected starters, plus deeper reads on tonight's arms — ERA vs xERA, hard-hit and barrel rates, and the verdict",
             "Your daily recap now reflects how the night actually went",
             "Gary won't post a pick on a game he can't truly read. No real data, no pick.",
             "Cleaner Tonight page with your free pick leading, plus refreshed Gary branding"
