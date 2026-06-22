@@ -3601,21 +3601,18 @@ struct HomeMarqueeHero: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                             .padding(.top, 8)
                     } else {
-                        // Fill the open space between the byline and the bullets, truncating
-                        // to EXACTLY what fits the fixed-height card. A fixed line count
-                        // can't win on a fixed card with variable headlines — it clipped the
-                        // headline on long stories and left a gap on short ones. Lines =
-                        // available height / line-height, so it always fills and never spills.
-                        GeometryReader { geo in
-                            Text(recap)
-                                .font(GaryFonts.text(12.5))
-                                .foregroundStyle(.white.opacity(0.82))
-                                .lineSpacing(2)
-                                .lineLimit(max(2, min(12, Int(geo.size.height / 17))))
-                                .truncationMode(.tail)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        }
-                        .padding(.top, 8)
+                        // A short, fixed recap (3 lines) so the bullets sit right beneath it —
+                        // the old greedy fill stretched to the card height and left an unnatural
+                        // gap above the bullets. The full recap is one tap away via MORE.
+                        Text(recap)
+                            .font(GaryFonts.text(12.5))
+                            .foregroundStyle(.white.opacity(0.82))
+                            .lineSpacing(2)
+                            .lineLimit(3)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(.top, 8)
                     }
                 }
                 if !story.bullets.isEmpty {
@@ -3673,17 +3670,17 @@ struct HomeMarqueeHero: View {
 
     /// The night's stat lines — gold tick + mono, the data voice.
     private var bulletList: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(story.bullets.prefix(3)), id: \.self) { (b: String) in
-                HStack(alignment: .center, spacing: 8) {
+                HStack(alignment: .center, spacing: 9) {
                     Rectangle()
-                        .fill(GaryColors.gold.opacity(0.75))
-                        .frame(width: 8, height: 1.5)
+                        .fill(GaryColors.gold.opacity(0.8))
+                        .frame(width: 10, height: 1.5)
                     Text(b)
-                        .font(GaryFonts.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.95))
+                        .font(GaryFonts.mono(13))
+                        .foregroundStyle(.white.opacity(0.96))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.88)
                 }
             }
         }
@@ -5579,6 +5576,8 @@ struct PremiumPicksView: View {
     // Dev/QA all-access preview — overrides entitlements while testing.
     @AppStorage("isPremiumUnlocked") private var isPremium: Bool = false
     @AppStorage("selectedTab") private var selectedTab: Int = 0
+    /// Observe the live-score cache so cards flip to live/final without a relaunch.
+    @ObservedObject private var liveCache = LiveScoreCache.shared
 
     @State private var loading = true
     // Per-sport shelves: each sport shows TODAY's pick if it has one, else its last graded result.
@@ -16486,6 +16485,10 @@ enum PicksDay { case today, yesterday }
 struct PicksCarouselView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = PropsSlateStore()
+    /// Observe the live-score cache so the board re-renders the moment a game goes
+    /// live or final. It was read via .shared without observing, so a running app
+    /// kept showing the scheduled time ("1:00 PM ET") until the user relaunched.
+    @ObservedObject private var liveCache = LiveScoreCache.shared
     /// Today vs Yesterday — the day dropdown (user call, Jun 17) replaces the old
     /// mixed matchup row + per-tab "YESTERDAY" tags. Today shows upcoming-first
     /// matchups; Yesterday shows that day's matchups + picks with CASHED/LOST tags.
