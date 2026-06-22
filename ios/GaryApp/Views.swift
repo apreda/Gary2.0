@@ -15532,9 +15532,11 @@ final class PropsSlateStore: ObservableObject {
         return showingYesterdayResults && !sportsWithFreshProps.contains(sport)
     }
 
-    /// `forYesterday`: the Yesterday tab matches yesterday's results; the Today tab
-    /// matches today's (live-graded) results, so a finished game's prop shows its
-    /// CASHED/LOST the moment it grades — not just the morning after.
+    /// Resolve a prop's W/L by the prop's OWN slate day (see `gamePickResult` for
+    /// the full rationale) — a finished prop shows CASHED/LOST the moment it grades,
+    /// and a Today-tab fallback (today's slate empty → yesterday's props shown) still
+    /// finds its grade instead of missing it. Strict per-day: never borrows the other
+    /// day's result. `forYesterday` is only a fallback for props with no commence time.
     func resultForProp(_ prop: PropPick, forYesterday: Bool = true) -> String? {
         let player = (prop.player ?? "").lowercased()
         let propType = normalizePropType(prop.prop ?? "")
@@ -15542,7 +15544,12 @@ final class PropsSlateStore: ObservableObject {
         let line = normalizeLine(prop.line ?? "")
         let matchup = normalizeMatchup(prop.matchup ?? "")
         let key = makeResultKey(player: player, propType: propType, line: line, matchup: matchup)
-        // STRICT per-day (see gamePickResult) — never borrow the other day's result.
+        if let iso = prop.commence_time, let d = parseISO8601(iso) {
+            let etDay = Self.estDayFmt.string(from: d)
+            if etDay == SupabaseAPI.todayEST() { return todayPropResults[key] }
+            if etDay == SupabaseAPI.yesterdayEST() { return yesterdayResultsMap[key] }
+            return nil
+        }
         return forYesterday ? yesterdayResultsMap[key] : todayPropResults[key]
     }
 
@@ -15583,16 +15590,35 @@ final class PropsSlateStore: ObservableObject {
         }
     }
 
-    /// `forYesterday`: Yesterday tab → yesterday's results; Today tab → today's
-    /// live-graded results, so a finished game's pick shows CASHED/LOST immediately.
+    /// EST "yyyy-MM-dd" of a pick's commence time — its slate day.
+    private static let estDayFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    /// Resolve a game pick's W/L by the pick's OWN slate day, not the tab it's
+    /// shown on. The old code keyed off a `forYesterday` flag and assumed "Today
+    /// tab ⇒ today's picks" — but when today's slate is empty the Today tab falls
+    /// back to showing yesterday's picks, so the flag said `.today` while the pick
+    /// was yesterday's, and the lookup hit the empty `todayGameResults` → no tag.
+    /// Keying off `commence_time` keeps the strict per-day match (a pick only ever
+    /// reads its OWN day's map, never borrowing the other day's same-matchup result
+    /// that could stamp a live game). `forYesterday` is now only a fallback hint for
+    /// picks with no usable commence time.
     func gamePickResult(_ pick: GaryPick, forYesterday: Bool = true) -> String? {
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
         let key = "\(away)@\(home)"
-        // STRICT per-day — no cross-day fallback. Each tab's picks already match its
-        // own day (Today shows today's entries, Yesterday shows yesterday's), so a
-        // today pick with no today result is simply ungraded — it must NOT borrow a
-        // same-matchup series result from the other day (that stamped a live game).
+        if let iso = pick.commence_time, let d = parseISO8601(iso) {
+            let etDay = Self.estDayFmt.string(from: d)
+            if etDay == SupabaseAPI.todayEST() { return todayGameResults[key] }
+            if etDay == SupabaseAPI.yesterdayEST() { return gameResultsMap[key] }
+            return nil   // older than the two days we loaded — not in either map
+        }
         return forYesterday ? gameResultsMap[key] : todayGameResults[key]
     }
 
