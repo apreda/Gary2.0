@@ -5604,6 +5604,18 @@ struct PremiumPicksView: View {
     private var hasContent: Bool {
         gameShelves.contains { !$0.picks.isEmpty } || propShelves.contains { !$0.props.isEmpty }
     }
+    /// Fresh = a pick for TODAY (settled == false, non-empty). Yesterday's
+    /// last-result fallback (settled == true) and empty slate placeholders don't count.
+    private var todayHasFreshPicks: Bool {
+        gameShelves.contains { !$0.settled && !$0.picks.isEmpty }
+        || propShelves.contains { !$0.settled && !$0.props.isEmpty }
+    }
+    /// On TODAY with nothing fresh yet, show the "board drops soon" state (blurred
+    /// placeholder cards) instead of yesterday's results — those live under the date
+    /// menu's Yesterday. A chosen past date always renders its own graded board.
+    private var isTodayComingSoon: Bool {
+        selectedDate == nil && !todayHasFreshPicks
+    }
 
     var body: some View {
         ZStack {
@@ -5619,6 +5631,8 @@ struct PremiumPicksView: View {
                         if loading {
                             HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
                                 .padding(.top, 80)
+                        } else if isTodayComingSoon {
+                            comingSoonState
                         } else if !hasContent {
                             emptyState
                         } else {
@@ -5781,6 +5795,58 @@ struct PremiumPicksView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
+    }
+
+    /// TODAY, before Gary's board posts: the same card shapes the user will see
+    /// once picks drop — lightly blurred under a "drops soon" message. The date
+    /// menu in the header still opens Yesterday + past dates for graded picks.
+    private var comingSoonState: some View {
+        VStack(spacing: 22) {
+            VStack(spacing: 10) {
+                Image(systemName: "clock.badge")
+                    .font(.system(size: 34)).foregroundStyle(GaryColors.gold.opacity(0.7))
+                Text("Tonight's board drops soon")
+                    .font(GaryFonts.text(18, .semibold)).foregroundStyle(.white.opacity(0.92))
+                Text("It's still early — Gary posts his picks a few hours before the games start. Pull to refresh, or open the date menu up top for last night's results.")
+                    .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.5))
+                    .multilineTextAlignment(.center).lineSpacing(2)
+            }
+            .padding(.horizontal, 30)
+            VStack(spacing: 14) {
+                comingSoonCard
+                comingSoonCard
+                comingSoonCard
+            }
+            .padding(.horizontal, 16)
+            .blur(radius: 3).opacity(0.6).allowsHitTesting(false)   // the "slight blur"
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 36).padding(.bottom, 130)
+    }
+
+    /// A pick-card silhouette — same footprint as a real Winners card, no data.
+    private var comingSoonCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("GARY'S PICK")
+                    .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
+                    .foregroundStyle(GaryColors.gold.opacity(0.5))
+                Spacer()
+                Circle().fill(.white.opacity(0.06)).frame(width: 34, height: 34)
+            }
+            Spacer().frame(height: 20)
+            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.10)).frame(width: 210, height: 26)
+            Spacer().frame(height: 10)
+            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.06)).frame(width: 150, height: 15)
+            Spacer().frame(height: 20)
+            Rectangle().fill(.white.opacity(0.05)).frame(height: 1)
+            Spacer().frame(height: 14)
+            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.05)).frame(width: 80, height: 12)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.035)))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.06), lineWidth: 1))
     }
 
     // MARK: - Content
