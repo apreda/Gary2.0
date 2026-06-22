@@ -892,7 +892,22 @@ async function processGenericGames(table, date, leagueFilter = null) {
           console.error(`  ❌ DEDUP CHECK FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${dedupErr.message}`);
           insertFailed = true;
         } else if (exist) {
+          // Row exists from an earlier (possibly mid-game or glitched-"final") grade —
+          // RE-GRADE and UPDATE to the current result/score so a wrong early grade
+          // self-corrects once the game truly settles, instead of being skipped
+          // forever. The game path was still insert-once; this mirrors the prop
+          // grader's re-grade fix (the Jun 18 Soto-HR bug). For an already-correct
+          // row the update writes the same values — a harmless no-op.
           alreadyExists = true;
+          const { error: updErr } = await supabase
+            .from(targetTable)
+            .update({ result: res, final_score: `${vs}-${hs}`,
+                      is_winners_pick: isWinnersPick, updated_at: new Date().toISOString() })
+            .eq('id', exist.id);
+          if (updErr) {
+            console.error(`  ❌ UPDATE FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${updErr.message}`);
+            insertFailed = true;
+          }
         } else {
           const { error: insertErr } = await supabase.from(targetTable).insert(insertPayload);
           if (insertErr) {
