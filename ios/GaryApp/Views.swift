@@ -5797,56 +5797,84 @@ struct PremiumPicksView: View {
         .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
     }
 
-    /// TODAY, before Gary's board posts: the same card shapes the user will see
-    /// once picks drop — lightly blurred under a "drops soon" message. The date
-    /// menu in the header still opens Yesterday + past dates for graded picks.
+    /// TODAY, before Gary's board posts: real-looking pick cards with ONLY the
+    /// pick fields (the call, the matchup, the time) blurred — the card chrome,
+    /// eyebrow, Gary mark and affordances stay SHARP so the design reads through.
+    /// The "drops soon" message floats centered in the foreground; the cards sit
+    /// behind it, and the date menu in the header still opens past graded days.
     private var comingSoonState: some View {
-        VStack(spacing: 22) {
-            VStack(spacing: 10) {
-                Image(systemName: "clock.badge")
-                    .font(.system(size: 34)).foregroundStyle(GaryColors.gold.opacity(0.7))
-                Text("Tonight's board drops soon")
-                    .font(GaryFonts.text(18, .semibold)).foregroundStyle(.white.opacity(0.92))
-                Text("It's still early — Gary posts his picks a few hours before the games start. Pull to refresh, or open the date menu up top for last night's results.")
-                    .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.5))
-                    .multilineTextAlignment(.center).lineSpacing(2)
-            }
-            .padding(.horizontal, 30)
-            VStack(spacing: 14) {
-                comingSoonCard
-                comingSoonCard
-                comingSoonCard
-            }
-            .padding(.horizontal, 16)
-            .blur(radius: 3).opacity(0.6).allowsHitTesting(false)   // the "slight blur"
+        VStack(spacing: 14) {
+            comingSoonCard
+            comingSoonCard
+            comingSoonCard
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 36).padding(.bottom, 130)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 120)
+        .opacity(0.85)                       // recede a touch behind the message
+        .allowsHitTesting(false)
+        .overlay(alignment: .center) {
+            comingSoonMessage.padding(.horizontal, 30)
+        }
     }
 
-    /// A pick-card silhouette — same footprint as a real Winners card, no data.
+    /// The foreground "drops soon" card — readable over the pick cards behind it.
+    private var comingSoonMessage: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "clock.badge")
+                .font(.system(size: 30)).foregroundStyle(GaryColors.gold)
+            Text("Tonight's board drops soon")
+                .font(GaryFonts.text(18, .semibold)).foregroundStyle(.white)
+            Text("It's still early — Gary posts his picks a few hours before the games start. Pull to refresh, or use the date menu up top for past days' results.")
+                .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center).lineSpacing(2)
+        }
+        .padding(.vertical, 22).padding(.horizontal, 22)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.82)))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(GaryColors.gold.opacity(0.15), lineWidth: 1))
+        .shadow(color: .black.opacity(0.5), radius: 22, y: 10)
+    }
+
+    /// A pick card with the design intact — eyebrow, Gary mark, divider and
+    /// affordances stay SHARP; only the call, matchup and time blur (the data
+    /// that isn't posted yet). Same footprint as a real Winners card.
     private var comingSoonCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            // Eyebrow + Gary mark — sharp chrome
+            HStack(alignment: .top) {
                 Text("GARY'S PICK")
                     .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
-                    .foregroundStyle(GaryColors.gold.opacity(0.5))
+                    .foregroundStyle(GaryColors.gold)
                 Spacer()
-                Circle().fill(.white.opacity(0.06)).frame(width: 34, height: 34)
+                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 36, height: 36)
             }
-            Spacer().frame(height: 20)
-            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.10)).frame(width: 210, height: 26)
-            Spacer().frame(height: 10)
-            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.06)).frame(width: 150, height: 15)
-            Spacer().frame(height: 20)
-            Rectangle().fill(.white.opacity(0.05)).frame(height: 1)
-            Spacer().frame(height: 14)
-            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.05)).frame(width: 80, height: 12)
+            // The call — blurred
+            VStack(alignment: .leading, spacing: 8) {
+                RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.18)).frame(width: 188, height: 22)
+                RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.18)).frame(width: 128, height: 22)
+            }
+            .blur(radius: 4).padding(.top, 16)
+            // Matchup · odds — blurred; share affordance sharp
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.13)).frame(width: 172, height: 13).blur(radius: 3.5)
+                Spacer()
+                Image(systemName: "square.and.arrow.up").font(.system(size: 15)).foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(.top, 16)
+            // Divider — sharp
+            Rectangle().fill(.white.opacity(0.08)).frame(height: 1).padding(.top, 14)
+            // Time + chevron — time blurred, chevron sharp
+            HStack {
+                RoundedRectangle(cornerRadius: 4).fill(GaryColors.gold.opacity(0.55)).frame(width: 70, height: 12).blur(radius: 3)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(.top, 13)
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.035)))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.06), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08), lineWidth: 1))
     }
 
     // MARK: - Content
