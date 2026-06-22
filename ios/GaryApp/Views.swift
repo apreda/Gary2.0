@@ -5449,6 +5449,28 @@ enum GaryPricing {
 // signed-in auth user — or the anonymous install when nobody's signed in.
 // The storefront tail sells locked boards; PaywallPanel sells All-Access.
 
+/// Normalized identity of a game pick WITHIN its matchup — the pick text minus
+/// any trailing American-odds token — so multiple picks on ONE game don't collide
+/// on a matchup-only result key. (The WC side-+-total feature ships two picks per
+/// match: e.g. "Egypt ML -175" AND "Under 2.5 -125". A matchup-only map kept only
+/// the last-written one, so the Under read the ML's result → a LOST pick showed
+/// CASHED.) `GameResult.pick_text` is written from the pick's own `.pick` — verified
+/// byte-identical across daily_picks and game_results — so the same normalization
+/// on the result (build) side and the pick (lookup) side aligns them. Odds are the
+/// volatile part; the side/total/line is the stable identity that disambiguates.
+func garyGamePickSig(_ pickText: String?) -> String {
+    var s = (pickText ?? "").lowercased()
+    s = s.replacingOccurrences(of: #"\s*[+-]\d{2,}\s*$"#, with: "", options: .regularExpression)
+    return s.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// A game-result map key that disambiguates multiple picks on one matchup. Build
+/// side passes the result's matchup key + `pick_text`; lookup side passes the
+/// pick's matchup key + `.pick`. Both resolve to the same string.
+func garyGameResultKey(matchupKey: String, pickText: String?) -> String {
+    "\(matchupKey)|\(garyGamePickSig(pickText))"
+}
+
 struct PremiumPicksView: View {
     // Dev/QA all-access preview — overrides entitlements while testing.
     @AppStorage("isPremiumUnlocked") private var isPremium: Bool = false
@@ -6363,11 +6385,13 @@ struct PremiumPicksView: View {
         }
     }
 
-    /// W/L for a settled (last-result) game pick, matched by normalized teams.
+    /// W/L for a settled (last-result) game pick, matched by normalized teams AND
+    /// the pick's own signature — so a game's side and total (the WC two-pick) read
+    /// their OWN result instead of colliding on a matchup-only key.
     private func gamePickResult(_ pick: GaryPick) -> String? {
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
-        return gameResultsMap["\(away)@\(home)"]
+        return gameResultsMap[garyGameResultKey(matchupKey: "\(away)@\(home)", pickText: pick.pick)]
     }
     private func gpTeamKey(_ value: String?) -> String {
         (value ?? "").lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
@@ -6439,7 +6463,7 @@ struct PremiumPicksView: View {
         var rMap: [String: String] = [:]
         for r in results where r.game_date == date {
             guard let k = gpKey(from: r.matchup), let o = r.result else { continue }
-            rMap[k] = o.lowercased()
+            rMap[garyGameResultKey(matchupKey: k, pickText: r.pick_text)] = o.lowercased()
         }
         var pMap: [String: String] = [:]
         for r in propResults where r.game_date == date {
@@ -6533,7 +6557,7 @@ struct PremiumPicksView: View {
         var rMap: [String: String] = [:]
         for r in results.filter({ $0.game_date == yesterday }) {
             guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
-            rMap[k] = outcome.lowercased()
+            rMap[garyGameResultKey(matchupKey: k, pickText: r.pick_text)] = outcome.lowercased()
         }
 
         let todayByLeague = Dictionary(grouping: todayGame, by: { leagueKey($0) })
@@ -8921,7 +8945,7 @@ struct GaryPropsView: View {
                 let results = (try? await SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)) ?? []
                 for r in results.filter({ $0.game_date == yesterday }) {
                     guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
-                    resultsMap[k] = outcome.lowercased()
+                    resultsMap[garyGameResultKey(matchupKey: k, pickText: r.pick_text)] = outcome.lowercased()
                 }
             }
         }
@@ -8951,11 +8975,13 @@ struct GaryPropsView: View {
         }
     }
 
-    /// W/L for a settled (yesterday) game pick, matched by normalized teams.
+    /// W/L for a settled (yesterday) game pick, matched by normalized teams AND the
+    /// pick's own signature — so a game's side and total don't collide on a
+    /// matchup-only key (the WC two-pick bug).
     private func gamePickResult(_ pick: GaryPick) -> String? {
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
-        return gameResultsMap["\(away)@\(home)"]
+        return gameResultsMap[garyGameResultKey(matchupKey: "\(away)@\(home)", pickText: pick.pick)]
     }
 
     private func gpTeamKey(_ value: String?) -> String {
@@ -15448,11 +15474,12 @@ final class PropsSlateStore: ObservableObject {
         let results = (try? await SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)) ?? []
         for r in results {
             guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
+            let rk = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
             if r.game_date == yesterday {
-                resultsMap[k] = outcome.lowercased()
+                resultsMap[rk] = outcome.lowercased()
                 if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = s }
             } else if r.game_date == date {
-                todayMap[k] = outcome.lowercased()
+                todayMap[rk] = outcome.lowercased()
                 if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = s }
             }
         }
@@ -15612,7 +15639,9 @@ final class PropsSlateStore: ObservableObject {
     func gamePickResult(_ pick: GaryPick, forYesterday: Bool = true) -> String? {
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
-        let key = "\(away)@\(home)"
+        // Disambiguate by the pick's own signature so a game's side and total (the
+        // WC two-pick) read their OWN result, not whichever was written last.
+        let key = garyGameResultKey(matchupKey: "\(away)@\(home)", pickText: pick.pick)
         if let iso = pick.commence_time, let d = parseISO8601(iso) {
             let etDay = Self.estDayFmt.string(from: d)
             if etDay == SupabaseAPI.todayEST() { return todayGameResults[key] }
