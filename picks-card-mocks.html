@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Picks page — bigger game-pick card mocks</title>
+<style>
+  :root{
+    --bg:#0b0a0a; --panel:#181616; --panel2:#141212; --line:rgba(255,255,255,.08);
+    --gold:#E0B33A; --gold-dim:#C9A227; --teal:#33BFA6; --txt:#f4f2ee;
+    --mut:rgba(255,255,255,.45); --mut2:rgba(255,255,255,.30);
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:#070707;color:var(--txt);
+    font-family:"Outfit","Hanken Grotesk",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
+  h1{font-size:20px;font-weight:700;margin:0 0 4px;padding:24px 24px 0;}
+  .sub{color:var(--mut);font-size:13px;padding:0 24px 18px;max-width:900px;line-height:1.5;}
+  .row{display:flex;gap:22px;padding:8px 24px 60px;overflow-x:auto;align-items:flex-start;}
+  .col{flex:0 0 auto;}
+  .cap{font-size:12px;color:var(--gold);font-weight:700;letter-spacing:.4px;margin:0 0 4px 2px;text-transform:uppercase;}
+  .cap small{display:block;color:var(--mut);font-weight:400;letter-spacing:0;text-transform:none;margin-top:2px;font-size:11px;}
+
+  /* phone */
+  .phone{width:300px;border-radius:34px;background:linear-gradient(180deg,#100f0e,#070707);
+    border:1px solid rgba(255,255,255,.07);padding:14px 0 0;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.5);}
+  .notch{width:96px;height:20px;background:#000;border-radius:0 0 14px 14px;margin:-14px auto 8px;}
+  .pad{padding:0 16px;}
+
+  /* page header */
+  .ph{display:flex;align-items:baseline;gap:9px;padding:6px 16px 0;}
+  .ph .title{font-size:22px;font-weight:800;color:var(--gold);letter-spacing:1px;}
+  .ph .date{font-size:12px;color:var(--mut);} .ph .dots{margin-left:auto;color:var(--mut);}
+  .dash{height:1px;margin:12px 16px 0;background:repeating-linear-gradient(90deg,var(--line) 0 6px,transparent 6px 12px);}
+
+  /* sport chips */
+  .chips{display:flex;gap:18px;padding:14px 16px 4px;font-size:12px;font-weight:700;letter-spacing:.8px;}
+  .chips .on{color:var(--gold);} .chips .off{color:var(--mut2);}
+
+  /* matchup tabs */
+  .mtabs{display:flex;gap:24px;padding:10px 16px 0;}
+  .mtab{font-size:14px;font-weight:800;letter-spacing:.5px;white-space:nowrap;}
+  .mtab.on{color:var(--txt);} .mtab.off{color:var(--mut2);}
+  .mtab .t{display:block;font-size:9px;font-weight:700;letter-spacing:.8px;color:var(--mut2);margin-top:5px;}
+  .mtab.on .t{color:var(--gold);}
+  .uline{height:2px;border-radius:2px;background:var(--gold);width:150px;margin:7px 16px 0;}
+
+  /* PICK CARD */
+  .card{margin:16px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;position:relative;}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:1px;color:var(--gold);}
+  .bear{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,#e9c558,#9c7b16);opacity:.92;}
+  .pick{color:#fff;font-weight:800;line-height:1.02;letter-spacing:-.5px;}
+  .meta{display:flex;align-items:center;gap:7px;font-size:13px;margin-top:14px;}
+  .meta .lg{color:var(--teal);font-weight:700;font-size:12px;letter-spacing:.5px;}
+  .meta .vs{color:var(--mut);} .meta .odds{color:var(--gold);font-weight:700;}
+  .meta .share{margin-left:auto;color:var(--mut);}
+  .cdiv{height:1px;background:var(--line);margin:14px 0 0;}
+  .ctime{display:flex;align-items:center;margin-top:12px;}
+  .ctime .t{color:var(--gold);font-weight:700;font-size:13px;letter-spacing:.5px;}
+  .ctime .chev{margin-left:auto;color:var(--mut);}
+  .chip{display:inline-flex;align-items:center;padding:3px 11px;border-radius:9px;
+    border:1px solid rgba(224,179,58,.45);background:rgba(224,179,58,.12);color:var(--gold);
+    font-weight:800;letter-spacing:-.5px;}
+
+  /* below the card — page context */
+  .below{padding:4px 16px 18px;}
+  .seg{display:flex;gap:22px;align-items:center;font-weight:800;font-size:15px;}
+  .seg .on{color:var(--txt);} .seg .off{color:var(--mut2);}
+  .seg .wind{margin-left:auto;font-size:11px;color:var(--gold);border:1px solid var(--line);
+    border-radius:14px;padding:5px 10px;font-weight:700;}
+  .field{margin-top:12px;height:96px;border-radius:14px;border:1px solid var(--line);
+    background:radial-gradient(120% 80% at 50% 0,rgba(45,90,39,.32),rgba(20,18,18,.2));
+    display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:11px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+  <h1>Picks page — bigger game-pick card (5 versions)</h1>
+  <p class="sub">Same page, five treatments of the <b>game</b> pick card (props keep today's size — only short game calls go big).
+  V1 is today's card for reference. Scroll →. Pick: <b>Austria +1.5</b> @ Argentina · −120, WC, 1:00 PM ET.</p>
+
+  <div class="row">
+
+    <!-- ============ V1: CURRENT (baseline) ============ -->
+    <div class="col">
+      <div class="cap">V1 · Current<small>today's card — for reference</small></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="ph"><span class="title">PICKS</span><span class="date mono">Monday, June 22</span><span class="dots">···</span></div>
+        <div class="dash"></div>
+        <div class="chips mono"><span class="on">ALL</span><span class="off">WC</span><span class="off">MLB</span></div>
+        <div class="mtabs"><div class="mtab on">AUSTRIA @ ARGENTINA<span class="t mono">MONDAY 1:00 PM ET</span></div><div class="mtab off">IRAQ @ FRANCE<span class="t mono">5:00 PM</span></div></div>
+        <div class="uline"></div>
+        <div class="card">
+          <div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:30px;margin-top:18px;">AUSTRIA<br>+1.5</div>
+          <div class="meta mono"><span class="lg">WC</span><span class="vs">@ Argentina ·</span><span class="odds">−120</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div>
+          <div class="ctime"><span class="t mono">1:00 PM ET</span><span class="chev">›</span></div>
+        </div>
+        <div class="below">
+          <div class="seg">PROJECTED <span class="off">Confirmed</span><span class="wind mono">⩜ 12 RC</span></div>
+          <div class="field mono">LINEUP PENDING</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ V2: BIGGER, STACKED ============ -->
+    <div class="col">
+      <div class="cap">V2 · Bigger, stacked<small>same layout, much larger call</small></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="ph"><span class="title">PICKS</span><span class="date mono">Monday, June 22</span><span class="dots">···</span></div>
+        <div class="dash"></div>
+        <div class="chips mono"><span class="on">ALL</span><span class="off">WC</span><span class="off">MLB</span></div>
+        <div class="mtabs"><div class="mtab on">AUSTRIA @ ARGENTINA<span class="t mono">MONDAY 1:00 PM ET</span></div><div class="mtab off">IRAQ @ FRANCE<span class="t mono">5:00 PM</span></div></div>
+        <div class="uline"></div>
+        <div class="card">
+          <div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:46px;margin-top:18px;">AUSTRIA<br>+1.5</div>
+          <div class="meta mono"><span class="lg">WC</span><span class="vs">@ Argentina ·</span><span class="odds">−120</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div>
+          <div class="ctime"><span class="t mono">1:00 PM ET</span><span class="chev">›</span></div>
+        </div>
+        <div class="below">
+          <div class="seg">PROJECTED <span class="off">Confirmed</span><span class="wind mono">⩜ 12 RC</span></div>
+          <div class="field mono">LINEUP PENDING</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ V3: BIGGER, INLINE ============ -->
+    <div class="col">
+      <div class="cap">V3 · Bigger, inline<small>+1.5 next to AUSTRIA, one line</small></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="ph"><span class="title">PICKS</span><span class="date mono">Monday, June 22</span><span class="dots">···</span></div>
+        <div class="dash"></div>
+        <div class="chips mono"><span class="on">ALL</span><span class="off">WC</span><span class="off">MLB</span></div>
+        <div class="mtabs"><div class="mtab on">AUSTRIA @ ARGENTINA<span class="t mono">MONDAY 1:00 PM ET</span></div><div class="mtab off">IRAQ @ FRANCE<span class="t mono">5:00 PM</span></div></div>
+        <div class="uline"></div>
+        <div class="card">
+          <div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:40px;margin-top:20px;">AUSTRIA <span style="color:var(--gold)">+1.5</span></div>
+          <div class="meta mono"><span class="lg">WC</span><span class="vs">@ Argentina ·</span><span class="odds">−120</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div>
+          <div class="ctime"><span class="t mono">1:00 PM ET</span><span class="chev">›</span></div>
+        </div>
+        <div class="below">
+          <div class="seg">PROJECTED <span class="off">Confirmed</span><span class="wind mono">⩜ 12 RC</span></div>
+          <div class="field mono">LINEUP PENDING</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ V4: BIGGER, INLINE, COMPACT CARD ============ -->
+    <div class="col">
+      <div class="cap">V4 · Inline, compact card<small>shorter card, tighter spacing</small></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="ph"><span class="title">PICKS</span><span class="date mono">Monday, June 22</span><span class="dots">···</span></div>
+        <div class="dash"></div>
+        <div class="chips mono"><span class="on">ALL</span><span class="off">WC</span><span class="off">MLB</span></div>
+        <div class="mtabs"><div class="mtab on">AUSTRIA @ ARGENTINA<span class="t mono">MONDAY 1:00 PM ET</span></div><div class="mtab off">IRAQ @ FRANCE<span class="t mono">5:00 PM</span></div></div>
+        <div class="uline"></div>
+        <div class="card" style="padding:15px 18px;">
+          <div class="eyebrow mono">GARY'S PICK</div><div class="bear" style="width:30px;height:30px;"></div>
+          <div class="pick" style="font-size:38px;margin-top:12px;">AUSTRIA <span style="color:var(--gold)">+1.5</span></div>
+          <div class="meta mono" style="margin-top:10px;"><span class="lg">WC</span><span class="vs">@ Argentina ·</span><span class="odds">−120</span><span class="share">⤴</span><span class="t mono" style="color:var(--gold);margin-left:10px;">· 1:00 ET</span></div>
+        </div>
+        <div class="below" style="padding-top:8px;">
+          <div class="seg">PROJECTED <span class="off">Confirmed</span><span class="wind mono">⩜ 12 RC</span></div>
+          <div class="field mono" style="height:128px;">LINEUP PENDING</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ V5: BIGGER, INLINE, +1.5 AS ACCENT CHIP ============ -->
+    <div class="col">
+      <div class="cap">V5 · Inline + call chip<small>+1.5 in a gold chip, narrower feel</small></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="ph"><span class="title">PICKS</span><span class="date mono">Monday, June 22</span><span class="dots">···</span></div>
+        <div class="dash"></div>
+        <div class="chips mono"><span class="on">ALL</span><span class="off">WC</span><span class="off">MLB</span></div>
+        <div class="mtabs"><div class="mtab on">AUSTRIA @ ARGENTINA<span class="t mono">MONDAY 1:00 PM ET</span></div><div class="mtab off">IRAQ @ FRANCE<span class="t mono">5:00 PM</span></div></div>
+        <div class="uline"></div>
+        <div class="card" style="margin:16px 28px;">
+          <div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:38px;margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">AUSTRIA <span class="chip mono" style="font-size:22px;">+1.5</span></div>
+          <div class="meta mono"><span class="lg">WC</span><span class="vs">@ Argentina ·</span><span class="odds">−120</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div>
+          <div class="ctime"><span class="t mono">1:00 PM ET</span><span class="chev">›</span></div>
+        </div>
+        <div class="below">
+          <div class="seg">PROJECTED <span class="off">Confirmed</span><span class="wind mono">⩜ 12 RC</span></div>
+          <div class="field mono">LINEUP PENDING</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
