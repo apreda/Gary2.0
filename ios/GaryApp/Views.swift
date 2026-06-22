@@ -16213,17 +16213,29 @@ struct PicksCarouselView: View {
     /// Every league with content: today's props/picks plus the per-sport
     /// yesterday recaps (a sport with no picks today shows its results —
     /// the same rule the rest of the app follows).
+    /// 2.16: Home-run bets live in The Hub's Home Run Threats lane now, so the
+    /// Picks page no longer carries an MLB HR tab or any HR pick cards. A prop is
+    /// an HR bet by its TYPE, not its league label — matching the prop name also
+    /// drops genuine HR props that arrive tagged plain "MLB", while leaving non-HR
+    /// props mislabeled "MLB HR" upstream to keep routing to the MLB tab.
+    private func isHomeRunProp(_ p: PropPick) -> Bool {
+        let t = (p.prop ?? "").lowercased()
+        return t.contains("home_run") || t.contains("home run")
+    }
     private var sports: [String] {
-        var s = Set(store.slateProps.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
+        var s = Set(store.slateProps.filter { !isHomeRunProp($0) }.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
         s.formUnion(store.gamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
         s.formUnion(store.yesterdayGamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
         // Today's slate leagues too — so a sport with games tonight but no picks
         // yet still gets a filter chip (matches the look-ahead matchups below).
         s.formUnion(store.slate.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
-        // Display priority — WC leads, then MLB, then MLB HR (user call Jun 13
-        // 2026: the World Cup outranks MLB while it's on, so it sits closest to
-        // ALL). Anything else falls back to alphabetical.
-        let priority: [String: Int] = ["WC": 0, "MLB": 1, "MLB HR": 2]
+        // The MLB HR lane is retired — guarantee no HR chip even if a non-HR prop
+        // arrives mislabeled "MLB HR" (its card already routes to MLB via propSportKey).
+        s.remove("MLB HR")
+        // Display priority — WC leads, then MLB (user call Jun 13 2026: the World
+        // Cup outranks MLB while it's on, so it sits closest to ALL). Anything
+        // else falls back to alphabetical.
+        let priority: [String: Int] = ["WC": 0, "MLB": 1]
         return ["ALL"] + s.sorted { a, b in
             let ra = priority[a] ?? 50, rb = priority[b] ?? 50
             return ra == rb ? a < b : ra < rb
@@ -16242,7 +16254,8 @@ struct PicksCarouselView: View {
         return key
     }
     private var filteredProps: [PropPick] {
-        sport == "ALL" ? store.slateProps : store.slateProps.filter { propSportKey($0) == sport }
+        let base = store.slateProps.filter { !isHomeRunProp($0) }   // HR retired from Picks
+        return sport == "ALL" ? base : base.filter { propSportKey($0) == sport }
     }
     /// TODAY's matchup rail uses today's FRESH props only. store.allProps is
     /// already freshness-filtered to games at/after the start of today (EST);
@@ -16251,13 +16264,13 @@ struct PicksCarouselView: View {
     /// today's matchup tabs or yesterday's games leak into TODAY (the
     /// "Jays @ Sox · WEDNESDAY 6:45 PM" bug under a sport with no props yet).
     private var filteredTodayProps: [PropPick] {
-        let today = store.allProps.filter { !$0.isTDPick }
+        let today = store.allProps.filter { !$0.isTDPick && !isHomeRunProp($0) }   // HR retired from Picks
         return sport == "ALL" ? today : today.filter { propSportKey($0) == sport }
     }
     /// Yesterday's own props (sport-scoped, no TD picks) — the source for the
     /// Yesterday matchup row so every settled game shows, not just slate leftovers.
     private var filteredYesterdayProps: [PropPick] {
-        let yp = store.yesterdayPropsAll.filter { !$0.isTDPick }   // ungated: all of yesterday
+        let yp = store.yesterdayPropsAll.filter { !$0.isTDPick && !isHomeRunProp($0) }   // ungated: all of yesterday, HR retired
         return sport == "ALL" ? yp : yp.filter { propSportKey($0) == sport }
     }
     private var games: [(matchup: String, time: String, props: [PropPick])] {
