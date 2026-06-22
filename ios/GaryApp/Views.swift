@@ -3792,10 +3792,10 @@ struct HomeMarqueeHero: View {
             HStack(spacing: 6) {
                 Text(lead)
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(GaryColors.gold.opacity(0.82))
                 Text(pick)
                     .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(.white.opacity(0.95))
+                    .foregroundStyle(GaryColors.gold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 8)
