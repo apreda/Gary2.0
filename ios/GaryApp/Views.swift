@@ -3601,18 +3601,20 @@ struct HomeMarqueeHero: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                             .padding(.top, 8)
                     } else {
-                        // A short, fixed recap (3 lines) so the bullets sit right beneath it —
-                        // the old greedy fill stretched to the card height and left an unnatural
-                        // gap above the bullets. The full recap is one tap away via MORE.
-                        Text(recap)
-                            .font(GaryFonts.text(12.5))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineSpacing(2)
-                            .lineLimit(3)
-                            .truncationMode(.tail)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(.top, 8)
+                        // Adaptive: the recap fills ONLY the space left after the headline,
+                        // the bullets and the receipt stub, truncating to exactly what fits —
+                        // so "Gary Cashed" at the bottom is NEVER clipped, even on a long
+                        // 3-line headline. Full recap is one tap away via MORE.
+                        GeometryReader { geo in
+                            Text(recap)
+                                .font(GaryFonts.text(12.5))
+                                .foregroundStyle(.white.opacity(0.82))
+                                .lineSpacing(2)
+                                .lineLimit(max(1, Int(geo.size.height / 17)))
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        }
+                        .padding(.top, 8)
                     }
                 }
                 if !story.bullets.isEmpty {
