@@ -80,6 +80,29 @@ function log(msg) {
   } catch {}
 }
 
+// A 24/7 daemon must SURVIVE transient network blips. Waking from sleep often
+// hits the network before DNS is ready — `getaddrinfo ENOTFOUND ...supabase.co`
+// — and on Jun 21 2026 exactly that crashed the scheduler mid-morning (main()'s
+// .catch exited the process), zeroing the whole day's picks until a manual
+// restart. These handlers log and KEEP RUNNING for transient errors so a blip in
+// one tick can't kill the process; the next scheduled tick re-fetches. A truly
+// unexpected error still exits(1) for a clean watchdog restart with fresh state.
+const TRANSIENT_NET = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENETDOWN|ENETUNREACH|EHOSTUNREACH|socket hang up|fetch failed|network|getaddrinfo/i;
+process.on('unhandledRejection', (reason) => {
+  const msg = reason?.message || String(reason);
+  log(`⚠️ unhandledRejection (non-fatal — scheduler stays up): ${msg}`);
+});
+process.on('uncaughtException', (err) => {
+  const msg = err?.message || String(err);
+  if (TRANSIENT_NET.test(msg)) {
+    log(`⚠️ Transient network error (non-fatal — scheduler stays up, next tick retries): ${msg}`);
+    return;
+  }
+  log(`🔥 uncaughtException — exiting(1) for a clean watchdog restart: ${msg}`);
+  console.error(err);
+  process.exit(1);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // BDL: FETCH GAMES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -631,8 +654,30 @@ async function main() {
   }
 }
 
-main().catch(e => {
-  log(`💀 Scheduler crashed: ${e.message}`);
-  console.error(e);
-  process.exit(1);
-});
+// Supervise main()'s loop. A transient network error (DNS not ready after wake,
+// a BDL/Supabase blip) should NOT end the scheduler — restart its loop in-process
+// after a short backoff so it self-heals without waiting on the watchdog. Only a
+// genuine non-transient fault exits(1), and the watchdog then restarts a fresh
+// process. This is the fix for Jun 21 2026, when a single `getaddrinfo ENOTFOUND`
+// killed the scheduler for the whole morning and zeroed the day's picks.
+async function supervise() {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await main();
+      log('Scheduler main() returned — exiting cleanly.');
+      return;
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (TRANSIENT_NET.test(msg)) {
+        const waitMs = Math.min(15000 * attempt, 60000);
+        log(`⚠️ Transient network error — restarting the scheduler loop in ${Math.round(waitMs / 1000)}s (NOT exiting; common right after a wake): ${msg}`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      log(`💀 Scheduler crashed (non-transient): ${msg} — exiting(1) for a clean watchdog restart`);
+      console.error(e);
+      process.exit(1);
+    }
+  }
+}
+supervise();
