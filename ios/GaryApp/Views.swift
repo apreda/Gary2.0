@@ -1762,7 +1762,7 @@ struct HomeView: View {
     // ESPN-for-bettors layer: the Wire, market pulse, prop box, live tape.
     @State private var wireItems: [SupabaseAPI.WireItem] = []
     @State private var pulseRows: [SupabaseAPI.MarketPulseRow] = []
-    @State private var propBox: HomePropBoxSection.Box? = nil
+    @State private var propBoxGames: [HomePropBoxSection.GameOption] = []
     /// League-wide who-did-what from last night (night_highlights) — feeds
     /// the Prop Box HR / 2+ HITS / K SHOW tabs.
     @State private var nightHighlights: [NightHighlightRow] = []
@@ -2008,7 +2008,7 @@ struct HomeView: View {
                         pulse = await SupabaseAPI.fetchMarketPulse(date: pulseBack)
                     }
                     pulseRows = pulse
-                    propBox = Self.buildPropBox(props: recentPropResults, games: recentGameResults)
+                    propBoxGames = Self.buildPropBoxGames(props: recentPropResults, games: recentGameResults)
 
                     // ⑤ Door counts — live games + edges posted tonight.
                     let liveRows = await liveFetch
@@ -2872,10 +2872,11 @@ struct HomeView: View {
     /// result attached only where he actually had the position.
     private var propBoxTabs: [HomePropBoxSection.Tab] {
         var tabs: [HomePropBoxSection.Tab] = []
-        if let box = propBox {
+        if let first = propBoxGames.first {
             tabs.append(HomePropBoxSection.Tab(
-                label: "THE BOX", title: box.title, status: box.status,
-                cols: ("PLAYER", "LINE", "RESULT"), rows: box.rows))
+                label: "THE BOX", title: first.label, status: first.status,
+                cols: ("PLAYER", "LINE", "RESULT"), rows: first.rows,
+                gameOptions: propBoxGames))
         }
         let cats: [(key: String, label: String, noun: String)] = [
             ("hr", "HR", "homered"),
@@ -2908,34 +2909,52 @@ struct HomeView: View {
         return tabs
     }
 
-    static func buildPropBox(props: [PropResult], games: [GameResult]) -> HomePropBoxSection.Box? {
+    /// THE BOX's game dropdown: an "ALL" option (Gary's 2 best winners + 2 best
+    /// losers from last night's graded props), then one option per game Gary had
+    /// props in — densest first, the game's final score as the label.
+    static func buildPropBoxGames(props: [PropResult], games: [GameResult]) -> [HomePropBoxSection.GameOption] {
         let graded = props.filter { ["won", "lost", "push"].contains($0.result ?? "") }
-        guard let latest = graded.compactMap({ $0.game_date }).max() else { return nil }
-        let day = graded.filter { $0.game_date == latest && ($0.matchup?.isEmpty == false) }
-        let byGame = Dictionary(grouping: day) { $0.matchup ?? "" }
-        guard let best = byGame.max(by: { $0.value.count < $1.value.count }),
-              best.value.count >= 2 else { return nil }
+        guard let latest = graded.compactMap({ $0.game_date }).max() else { return [] }
+        let day = graded.filter { $0.game_date == latest }
+        guard !day.isEmpty else { return [] }
 
-        // Title carries the final score when the grader knows it.
-        var title = best.key
-        if let g = games.first(where: { $0.game_date == latest && ($0.matchup ?? "") == best.key }),
-           let score = g.final_score?.split(separator: "-"), score.count == 2 {
-            let parts = best.key.components(separatedBy: " @ ")
-            if parts.count == 2 {
-                title = "\(Formatters.shortTeamName(parts[0])) \(score[0]) · \(Formatters.shortTeamName(parts[1])) \(score[1])"
-            }
-        }
-        let rows = best.value.prefix(5).map { p -> HomePropBoxSection.Row in
+        func row(_ p: PropResult) -> HomePropBoxSection.Row {
             let unit = Self.propUnit(p.prop_type)
             let dir = (p.bet ?? "").lowercased().hasPrefix("u") ? "U" : "O"
             return HomePropBoxSection.Row(
                 player: NightBoard.shortPlayer(p.player_name).uppercased(),
                 line: "\(dir) \(Self.trimNum(p.line_value?.value ?? "—")) \(unit)",
                 actual: "\(Self.trimNum(p.actual_value?.value ?? "—")) \(unit)",
-                state: p.result
-            )
+                state: p.result)
         }
-        return HomePropBoxSection.Box(title: title, status: "FINAL", rows: Array(rows))
+
+        var options: [HomePropBoxSection.GameOption] = []
+
+        // ALL — Gary's two highest-confidence winners and two highest-confidence losers.
+        let byConf = day.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
+        let allRows = Array(byConf.filter { $0.result == "won" }.prefix(2).map(row))
+                    + Array(byConf.filter { $0.result == "lost" }.prefix(2).map(row))
+        if !allRows.isEmpty {
+            options.append(.init(label: "ALL", status: "LAST NIGHT", rows: allRows))
+        }
+
+        // One option per game Gary had props in — densest first.
+        let byGame = Dictionary(grouping: day.filter { $0.matchup?.isEmpty == false }) { $0.matchup ?? "" }
+        let ordered = byGame.sorted {
+            $0.value.count != $1.value.count ? $0.value.count > $1.value.count : $0.key < $1.key
+        }
+        for (matchup, gprops) in ordered {
+            var label = matchup
+            if let g = games.first(where: { $0.game_date == latest && ($0.matchup ?? "") == matchup }),
+               let score = g.final_score?.split(separator: "-"), score.count == 2 {
+                let parts = matchup.components(separatedBy: " @ ")
+                if parts.count == 2 {
+                    label = "\(Formatters.shortTeamName(parts[0])) \(score[0]) · \(Formatters.shortTeamName(parts[1])) \(score[1])"
+                }
+            }
+            options.append(.init(label: label, status: "FINAL", rows: Array(gprops.prefix(5).map(row))))
+        }
+        return options
     }
 
     /// Box-score unit for a prop type — "total_bases" → "TB".
@@ -4697,11 +4716,6 @@ struct HomePropBoxSection: View {
         /// legibility the small grey mono couldn't.
         var tint: Color? = nil
     }
-    struct Box {
-        let title: String
-        let status: String
-        let rows: [Row]
-    }
     /// One read on the night (THE BOX / HR / 2+ HITS / K SHOW).
     struct Tab {
         let label: String
@@ -4709,17 +4723,21 @@ struct HomePropBoxSection: View {
         let status: String
         let cols: (String, String, String)
         let rows: [Row]
+        /// THE BOX only: a game picker (ALL = 2 winners + 2 losers, then one entry
+        /// per game Gary had props in). nil on the night-board tabs.
+        var gameOptions: [GameOption]? = nil
+    }
+    /// One choice in THE BOX's game dropdown.
+    struct GameOption: Identifiable {
+        let id = UUID()
+        let label: String     // "ALL" or "Angels 9 · Athletics 7"
+        let status: String    // "LAST NIGHT" (ALL) or "FINAL" (a game)
+        let rows: [Row]
     }
     let tabs: [Tab]
     let onOpen: () -> Void
     @State private var selectedTab = 0
-
-    /// Single-box convenience — existing call sites unchanged.
-    init(box: Box, onOpen: @escaping () -> Void) {
-        self.tabs = [Tab(label: "", title: box.title, status: box.status,
-                         cols: ("PLAYER", "LINE", "RESULT"), rows: box.rows)]
-        self.onOpen = onOpen
-    }
+    @State private var selectedGame = 0
 
     init(tabs: [Tab], onOpen: @escaping () -> Void) {
         self.tabs = tabs
@@ -4753,34 +4771,76 @@ struct HomePropBoxSection: View {
         VStack(alignment: .leading, spacing: 6) {
             HubSectionHeader(eyebrow: "Prop box", sub: "")
             if tabs.count > 1 { tabStrip.padding(.horizontal, 16) }
-            Button(action: onOpen) {
-                VStack(spacing: 0) {
-                    HStack {
-                        Text(tab.title)
-                            .font(GaryFonts.mono(13, bold: true))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        Spacer()
-                        Text(tab.status)
-                            .font(GaryFonts.mono(9, bold: true)).tracking(1.4)
-                            .foregroundStyle(.white.opacity(0.35))
+            VStack(spacing: 0) {
+                titleRow   // game dropdown on THE BOX, static label elsewhere
+                Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                gridHeader
+                Button(action: onOpen) {
+                    VStack(spacing: 0) {
+                        ForEach(currentRows) { row in
+                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                            boxRow(row)
+                        }
                     }
-                    .padding(.vertical, 11).padding(.horizontal, 14)
-                    Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-                    gridHeader
-                    ForEach(tab.rows) { row in
-                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
-                        boxRow(row)
-                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .background(Color(hex: "#181616"))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
             .padding(.horizontal, 16)
         }
+    }
+
+    /// The title line — a game DROPDOWN for THE BOX (default ALL → 2 winners + 2
+    /// losers; pick a game for its props), a static label on the other tabs.
+    @ViewBuilder private var titleRow: some View {
+        HStack {
+            if let opts = tab.gameOptions, !opts.isEmpty {
+                let sel = opts[min(selectedGame, opts.count - 1)]
+                Menu {
+                    ForEach(Array(opts.enumerated()), id: \.offset) { i, o in
+                        Button(o.label) { selectedGame = i }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(sel.label)
+                            .font(GaryFonts.mono(13, bold: true))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(GaryColors.gold.opacity(0.85))
+                    }
+                }
+            } else {
+                Text(tab.title)
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            Spacer()
+            Text(currentStatus)
+                .font(GaryFonts.mono(9, bold: true)).tracking(1.4)
+                .foregroundStyle(.white.opacity(0.35))
+        }
+        .padding(.vertical, 11).padding(.horizontal, 14)
+    }
+
+    /// Rows + status follow the selected game on THE BOX, the tab otherwise.
+    private var currentRows: [Row] {
+        if let opts = tab.gameOptions, !opts.isEmpty {
+            return opts[min(selectedGame, opts.count - 1)].rows
+        }
+        return tab.rows
+    }
+    private var currentStatus: String {
+        if let opts = tab.gameOptions, !opts.isEmpty {
+            return opts[min(selectedGame, opts.count - 1)].status
+        }
+        return tab.status
     }
 
     private var gridHeader: some View {
