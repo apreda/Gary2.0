@@ -3518,6 +3518,11 @@ struct HomeMarqueeHero: View {
     /// bottom edge on every slide — the section below never jumps.
     var fillsHeight: Bool = false
     let onTap: () -> Void
+    /// Carousel expand: when a toggle is provided, the card shows a MORE/LESS
+    /// affordance and tapping it expands the full recap inline — the carousel
+    /// grows the card and pauses auto-advance — instead of flipping/navigating.
+    var isExpanded: Bool = false
+    var onToggleExpand: (() -> Void)? = nil
 
     @State private var flipped = false
     @State private var frontH: CGFloat = 0
@@ -3560,7 +3565,9 @@ struct HomeMarqueeHero: View {
         .padding(.horizontal, 16)
         .contentShape(Rectangle())
         .onTapGesture {
-            if canFlip {
+            if let toggle = onToggleExpand {
+                toggle()                              // grow/collapse the recap inline
+            } else if canFlip {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped.toggle() }
             } else {
                 onTap()
@@ -3584,24 +3591,46 @@ struct HomeMarqueeHero: View {
                     .padding(.trailing, 40)
                     .padding(.bottom, 9)
                 if let recap = story.recap, !recap.isEmpty {
-                    // Fill the open space between the byline and the bullets, truncating
-                    // to EXACTLY what fits the fixed-height card. A fixed line count
-                    // can't win on a fixed card with variable headlines — it clipped the
-                    // headline on long stories and left a gap on short ones. Lines =
-                    // available height / line-height, so it always fills and never spills.
-                    GeometryReader { geo in
+                    if isExpanded {
+                        // Expanded: the whole recap, no truncation — the carousel grows.
                         Text(recap)
-                            .font(GaryFonts.text(13))
+                            .font(GaryFonts.text(12.5))
                             .foregroundStyle(.white.opacity(0.82))
                             .lineSpacing(2)
-                            .lineLimit(max(2, min(12, Int(geo.size.height / 17))))
-                            .truncationMode(.tail)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(.top, 8)
+                    } else {
+                        // Fill the open space between the byline and the bullets, truncating
+                        // to EXACTLY what fits the fixed-height card. A fixed line count
+                        // can't win on a fixed card with variable headlines — it clipped the
+                        // headline on long stories and left a gap on short ones. Lines =
+                        // available height / line-height, so it always fills and never spills.
+                        GeometryReader { geo in
+                            Text(recap)
+                                .font(GaryFonts.text(12.5))
+                                .foregroundStyle(.white.opacity(0.82))
+                                .lineSpacing(2)
+                                .lineLimit(max(2, min(12, Int(geo.size.height / 17))))
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        }
+                        .padding(.top, 8)
                     }
-                    .padding(.top, 8)
                 }
                 if !story.bullets.isEmpty {
                     bulletList.padding(.top, 10)
+                }
+                if onToggleExpand != nil, story.recap?.isEmpty == false {
+                    HStack(spacing: 4) {
+                        Text(isExpanded ? "LESS" : "MORE")
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
+                    .foregroundStyle(GaryColors.gold.opacity(0.65))
+                    .padding(.top, 8)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
@@ -4152,49 +4181,64 @@ struct HomeHeadlinesCarousel: View {
     @State private var page = 0
     @State private var progress: Double = 0   // 0..1 within the active slide
     @State private var paused = false
+    @State private var expanded = false       // the active card's recap is open inline
     private let slideSeconds: Double = 6
     private let tick = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
+
+    private func toggleExpand() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) { expanded.toggle() }
+    }
 
     var body: some View {
         VStack(spacing: 8) {
             // A whisper-quiet position cue — tiny dots, the active one gold. No pause
             // control and no fill bar (the carousel auto-advances and swipes), which
-            // reclaims the crowded top (user call, Jun 17).
-            HStack(spacing: 5) {
-                ForEach(stories.indices, id: \.self) { i in
-                    Circle()
-                        .fill(i == page ? GaryColors.gold.opacity(0.95) : Color.white.opacity(0.18))
-                        .frame(width: i == page ? 5 : 4, height: i == page ? 5 : 4)
-                }
-            }
-            .frame(height: 6)
-            .padding(.horizontal, 18)
-
-            ZStack {
-                TabView(selection: $page) {
-                    ForEach(Array(stories.enumerated()), id: \.offset) { i, s in
-                        HomeMarqueeHero(story: s, flipEnabled: false, fillsHeight: true, onTap: onTap)
-                            .tag(i)
+            // reclaims the crowded top (user call, Jun 17). Hidden while a card is open.
+            if !expanded {
+                HStack(spacing: 5) {
+                    ForEach(stories.indices, id: \.self) { i in
+                        Circle()
+                            .fill(i == page ? GaryColors.gold.opacity(0.95) : Color.white.opacity(0.18))
+                            .frame(width: i == page ? 5 : 4, height: i == page ? 5 : 4)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-
-                // Prev/next chevrons — quiet, story-player idiom.
-                HStack {
-                    Button { step(-1) } label: { chevron("chevron.left") }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Previous headline")
-                    Spacer()
-                    Button { step(1) } label: { chevron("chevron.right") }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Next headline")
-                }
-                .padding(.horizontal, 20)
+                .frame(height: 6)
+                .padding(.horizontal, 18)
             }
-            .frame(height: 282)
+
+            if expanded {
+                // The active card grown to its full recap — auto-advance is paused.
+                HomeMarqueeHero(story: stories[min(page, stories.count - 1)],
+                                flipEnabled: false, fillsHeight: false, onTap: onTap,
+                                isExpanded: true, onToggleExpand: toggleExpand)
+            } else {
+                ZStack {
+                    TabView(selection: $page) {
+                        ForEach(Array(stories.enumerated()), id: \.offset) { i, s in
+                            HomeMarqueeHero(story: s, flipEnabled: false, fillsHeight: true, onTap: onTap,
+                                            isExpanded: false, onToggleExpand: toggleExpand)
+                                .tag(i)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+
+                    // Prev/next chevrons — quiet, story-player idiom.
+                    HStack {
+                        Button { step(-1) } label: { chevron("chevron.left") }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Previous headline")
+                        Spacer()
+                        Button { step(1) } label: { chevron("chevron.right") }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Next headline")
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .frame(height: 282)
+            }
         }
         .onReceive(tick) { _ in
-            guard !paused, stories.count > 1 else { return }
+            guard !paused, !expanded, stories.count > 1 else { return }   // freeze while a recap is open
             progress += 0.05 / slideSeconds
             if progress >= 1 {
                 progress = 0
@@ -5551,6 +5595,8 @@ struct PremiumPicksView: View {
     /// date (≤60 days back) loads that day's picks, all settled with CASHED/LOST
     /// stamps + flip-backs — the deep transparency surface for Gary's track record.
     @State private var selectedDate: String? = nil
+    /// Coming-soon popup: dismissed → collapses to a compact top strip, cards stay.
+    @State private var comingSoonDismissed = false
 
     // Per-sport entitlements, granted by the Stripe webhook and keyed to the
     // auth user (or this install when signed out). isPremium stays as the
@@ -5863,23 +5909,30 @@ struct PremiumPicksView: View {
     /// The "drops soon" message floats centered in the foreground; the cards sit
     /// behind it, and the date menu in the header still opens past graded days.
     private var comingSoonState: some View {
-        VStack(spacing: 14) {
-            comingSoonCard
-            comingSoonCard
-            comingSoonCard
+        VStack(spacing: 0) {
+            if comingSoonDismissed { comingSoonStrip.padding(.horizontal, 16).padding(.bottom, 4) }
+            VStack(spacing: 14) {
+                comingSoonCard
+                comingSoonCard
+                comingSoonCard
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, comingSoonDismissed ? 6 : 16)
+            .padding(.bottom, 120)
+            .opacity(comingSoonDismissed ? 1 : 0.9)
+            .allowsHitTesting(false)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 120)
-        .opacity(0.85)                       // recede a touch behind the message
-        .allowsHitTesting(false)
         .overlay(alignment: .center) {
-            comingSoonMessage.padding(.horizontal, 30)
+            if !comingSoonDismissed {
+                comingSoonPopup.padding(.horizontal, 30)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
         }
     }
 
-    /// The foreground "drops soon" card — readable over the pick cards behind it.
-    private var comingSoonMessage: some View {
+    /// The dismissible "drops soon" pop-up — readable over the cards behind it.
+    /// Tapping the X collapses it to `comingSoonStrip` so the cards open up.
+    private var comingSoonPopup: some View {
         VStack(spacing: 10) {
             Image(systemName: "clock.badge")
                 .font(.system(size: 30)).foregroundStyle(GaryColors.gold)
@@ -5889,10 +5942,37 @@ struct PremiumPicksView: View {
                 .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.7))
                 .multilineTextAlignment(.center).lineSpacing(2)
         }
-        .padding(.vertical, 22).padding(.horizontal, 22)
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.82)))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(GaryColors.gold.opacity(0.15), lineWidth: 1))
-        .shadow(color: .black.opacity(0.5), radius: 22, y: 10)
+        .padding(.vertical, 24).padding(.horizontal, 22)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.9)))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(GaryColors.gold.opacity(0.18), lineWidth: 1))
+        .overlay(alignment: .topTrailing) {
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { comingSoonDismissed = true }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(8)
+                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .padding(10)
+            }
+            .buttonStyle(.plain)
+        }
+        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+    }
+
+    /// The collapsed reminder — one compact strip at the top once dismissed.
+    private var comingSoonStrip: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "clock.badge").font(.system(size: 13)).foregroundStyle(GaryColors.gold)
+            Text("Tonight's board drops soon — Gary posts a few hours before games. Date menu up top has past results.")
+                .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10).padding(.horizontal, 13)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.gold.opacity(0.12), lineWidth: 1))
     }
 
     /// A pick card with the design intact — eyebrow, Gary mark, divider and
