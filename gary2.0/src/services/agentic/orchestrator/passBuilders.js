@@ -445,10 +445,10 @@ Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
 \`\`\`json
 {
   "side_pick": "[Team] [ML / Draw / -1.5 / +0.5 ...] [odds]",
-  "side_rationale": "Gary's Take\\n\\n[2-4 sentences: why this side, drawn from your read above]",
+  "side_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this SIDE — write it the same way you do for every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs that lead with what carries the pick, name the strongest argument against it and why you took it anyway; drawn from your read above]",
   "side_confidence": 0.XX,
   "total_pick": "[Over/Under] [goals] [odds]",
-  "total_rationale": "Gary's Take\\n\\n[2-4 sentences: why this total, drawn from your read above]",
+  "total_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this TOTAL — same depth as every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs that lead with what carries the pick, name the strongest argument against it and why you took it anyway; drawn from your read above]",
   "total_confidence": 0.XX
 }
 \`\`\`
@@ -959,7 +959,7 @@ Use only markets present in the scout report odds, and transcribe the exact odds
 <instructions>
 Investigate BOTH teams across the soccer factors (form, attack/xG, defense, set pieces, availability/injuries/suspensions, group/tournament context, fatigue/rest/travel, weather/altitude). Report findings with specific numbers — do not state what any factor means for the pick.
 
-Before finishing, include three short cases (2-3 sentences each), grounded only in what you investigated:
+Before finishing, include three cases (2-3 full PARAGRAPHS each — actually EXPLAIN each one and tell the story of the matchup, the way you would for any other sport; not a couple of sentences), grounded only in what you investigated:
 Case for ${homeTeam} winning tonight
 Case for a Draw
 Case for ${awayTeam} winning tonight
