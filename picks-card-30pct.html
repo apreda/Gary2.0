@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Game pick card — +30% font on spread / run line / goal line</title>
+<style>
+  :root{--bg:#0b0a0a;--panel:#181616;--line:rgba(255,255,255,.08);--gold:#E0B33A;--teal:#33BFA6;--mut:rgba(255,255,255,.45);}
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:#070707;color:#f4f2ee;font-family:"Outfit",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
+  h1{font-size:20px;font-weight:700;margin:0;padding:24px 24px 4px;}
+  .sub{color:var(--mut);font-size:13px;padding:0 24px 16px;}
+  .grid{display:flex;gap:30px;padding:8px 24px 50px;align-items:flex-start;}
+  .colhead{font-size:13px;font-weight:800;letter-spacing:.4px;margin:0 0 12px 4px;}
+  .colhead.now{color:var(--mut);} .colhead.big{color:var(--gold);}
+  .stack{display:flex;flex-direction:column;gap:16px;width:360px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;position:relative;}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:1px;color:var(--gold);}
+  .bear{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#e9c558,#9c7b16);opacity:.92;}
+  .pick{color:#fff;font-weight:800;line-height:1.04;letter-spacing:-.5px;margin-top:16px;}
+  .meta{display:flex;align-items:center;gap:7px;font-size:13px;margin-top:14px;}
+  .meta .lg{color:var(--teal);font-weight:700;font-size:12px;} .meta .vs{color:var(--mut);} .meta .odds{color:var(--gold);font-weight:700;} .meta .share{margin-left:auto;color:var(--mut);}
+  .cdiv{height:1px;background:var(--line);margin:14px 0 0;}
+  .ctime{display:flex;align-items:center;margin-top:12px;} .ctime .t{color:var(--gold);font-weight:700;font-size:13px;} .ctime .chev{margin-left:auto;color:var(--mut);}
+  .tag{font-size:11px;color:var(--mut);margin-top:6px;letter-spacing:.5px;}
+</style></head><body>
+  <h1>Game pick card — +30% font on the number-based calls</h1>
+  <p class="sub">Left = today's size. Right = the call (spread / run line / goal line) <b>30% larger</b>. Same card otherwise. Only these number picks go big — full-sentence calls ("UNDER 2.5 TOTAL GOALS") stay today's size, props unchanged.</p>
+  <div class="grid">
+    <div>
+      <div class="colhead now">CURRENT</div>
+      <div class="stack">
+        <div class="card"><div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:34px;">AUSTRIA +1.5</div>
+          <div class="meta mono"><span class="lg">WC</span><span class="vs">@ Argentina ·</span><span class="odds">−120</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div><div class="ctime"><span class="t mono">1:00 PM ET</span><span class="chev">›</span></div>
+          <div class="tag mono">spread / handicap</div></div>
+        <div class="card"><div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:34px;">DODGERS −1.5</div>
+          <div class="meta mono"><span class="lg" style="color:#4E9C44">MLB</span><span class="vs">vs Orioles ·</span><span class="odds">−110</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div><div class="ctime"><span class="t mono">FINAL · 12-3</span><span class="chev">›</span></div>
+          <div class="tag mono">run line</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="colhead big">+30%</div>
+      <div class="stack">
+        <div class="card"><div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:44px;">AUSTRIA +1.5</div>
+          <div class="meta mono"><span class="lg">WC</span><span class="vs">@ Argentina ·</span><span class="odds">−120</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div><div class="ctime"><span class="t mono">1:00 PM ET</span><span class="chev">›</span></div>
+          <div class="tag mono">spread / handicap</div></div>
+        <div class="card"><div class="eyebrow mono">GARY'S PICK</div><div class="bear"></div>
+          <div class="pick" style="font-size:44px;">DODGERS −1.5</div>
+          <div class="meta mono"><span class="lg" style="color:#4E9C44">MLB</span><span class="vs">vs Orioles ·</span><span class="odds">−110</span><span class="share">⤴</span></div>
+          <div class="cdiv"></div><div class="ctime"><span class="t mono">FINAL · 12-3</span><span class="chev">›</span></div>
+          <div class="tag mono">run line</div></div>
+      </div>
+    </div>
+  </div>
+</body></html>

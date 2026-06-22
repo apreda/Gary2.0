@@ -53,6 +53,21 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.16",
+        date: "June 2026",
+        type: .update,
+        title: "Gary 2.16 — Live scores that keep up, a steadier Hub",
+        changes: [
+            "Live scores update on their own while you watch — no need to close and reopen the app",
+            "The Hub holds one set of reads for the whole day — picks don't change on you between visits",
+            "World Cup picks read with the full setup and reasoning every other sport gets",
+            "Prop box on Home: pick any game, or see Gary's two best winners and two best losers from last night",
+            "Headline cards: tap to open the full recap, with bigger, easier-to-read bullets",
+            "Games with two picks (a side and a total) now show the right result on each",
+            "Home Run picks live in the Hub now, not a separate Picks tab"
+        ]
+    ),
+    ChangelogEntry(
         version: "2.15",
         date: "June 2026",
         type: .update,
