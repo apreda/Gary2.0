@@ -77,6 +77,10 @@ function getArgValue(flag) {
 }
 
 const dryRun = args.includes('--dry-run');
+// Manual force-refresh: wipe the day's rows first, then regenerate from scratch.
+// The scheduled runs are additive-freeze (no churn); --reset is the escape hatch
+// for rebuilding a lane by hand. NOT used by the cron path.
+const resetDay = args.includes('--reset');
 const dateArg = getArgValue('--date');
 const leagueArg = getArgValue('--league');
 
@@ -167,8 +171,8 @@ const restHeaders = {
 };
 
 /**
- * Delete the day's existing rows for a league so the run is idempotent
- * (replaces stale connections that the generator no longer produces).
+ * Delete the day's existing rows for a league. ONLY used by --reset (manual
+ * force-refresh) — the scheduled write is additive-freeze and never deletes.
  */
 async function deleteDayRows(date, league) {
   await axios({
@@ -183,9 +187,9 @@ async function deleteDayRows(date, league) {
 }
 
 /**
- * Insert the day's freshly-computed rows. Idempotency comes from deleteDayRows()
- * running first. Sanitizes via JSON round-trip to strip functions/circular refs
- * (same defensive pattern as storeDailyPicks).
+ * Insert connection rows. The caller passes only the cards not already posted
+ * for the day (additive-freeze), so this never duplicates. Sanitizes via JSON
+ * round-trip to strip functions/circular refs (same pattern as storeDailyPicks).
  */
 async function insertRows(rows) {
   const sanitized = JSON.parse(JSON.stringify(rows));
@@ -195,6 +199,41 @@ async function insertRows(rows) {
     data: sanitized,
     headers: { ...restHeaders, Prefer: 'return=minimal' },
   });
+}
+
+/**
+ * Stable identity of a connection within a day+league — the ENTITY it describes,
+ * so a re-run never replaces or duplicates an already-posted card. Entity cards
+ * (a player in a game, a team) key on their ids; id-less lanes (group/tournament)
+ * key on the headline. Keying on the entity (not the value/headline) means a card
+ * is frozen even if a later run would recompute its number slightly differently —
+ * the morning's card stays put, no churn.
+ */
+function rowKey(r) {
+  const hasEntity = r.player_id || r.team_id || r.game_id;
+  return hasEntity
+    ? `${r.category}|${r.player_id || ''}|${r.team_id || ''}|${r.game_id || ''}`
+    : `${r.category}|${r.headline}`;
+}
+
+/**
+ * Keys already stored for (date, league). The write is ADDITIVE: a lane fills in
+ * as its data lands across the day's runs (HR / lineup-dependent lanes wait on
+ * the pick runs), but a card that's already posted is FROZEN. Stops the "Hub
+ * picks were all different 4 hours later" churn.
+ */
+async function existingKeys(date, league) {
+  const { data } = await axios.get(REST_URL, {
+    headers: restHeaders,
+    params: {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+      select: 'category,headline,player_id,team_id,game_id',
+    },
+  });
+  const set = new Set();
+  for (const r of data || []) set.add(rowKey(r));
+  return set;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,10 +366,16 @@ async function run() {
     }
 
     try {
-      // Idempotency: clear the day's rows for this league, then upsert fresh.
-      await deleteDayRows(targetDate, league);
-      await insertRows(rows);
-      console.log(`   ✅ Stored ${rows.length} row(s) for ${league} (${targetDate}).`);
+      // FIRST-WRITE-WINS per card: keep what's already posted for the day, add
+      // only the cards not there yet. A lane fills in as its data lands across the
+      // day's runs (HR / lineup-dependent lanes wait on the pick runs) but nothing
+      // the user already saw is replaced — no intra-day churn. Grading updates the
+      // result field separately. (Was DELETE-then-INSERT, which churned the board.)
+      if (resetDay) await deleteDayRows(targetDate, league);   // manual force-refresh only
+      const seen = await existingKeys(targetDate, league);
+      const fresh = rows.filter((r) => !seen.has(rowKey(r)));
+      if (fresh.length) await insertRows(fresh);
+      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${rows.length - fresh.length} already posted (frozen).`);
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });
