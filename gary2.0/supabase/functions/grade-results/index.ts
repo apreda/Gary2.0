@@ -157,7 +157,8 @@ Deno.serve(async () => {
   ]);
 
   for (const date of dates) {
-    const rows = await sbGet("daily_picks", `date=eq.${date}&select=date,picks`);
+    const rows = await sbGet("daily_picks", `date=eq.${date}&select=id,date,picks`);
+    const rowId = rows[0]?.id ?? null;            // game_results.pick_id is NOT NULL (the daily_picks row UUID)
     const picks: any[] = rows[0]?.picks ?? [];
     if (!picks.length) continue;
 
@@ -203,7 +204,7 @@ Deno.serve(async () => {
 
       if (result == null || hScore == null || vScore == null) { stats.skipped++; continue; }
       const outcome = await writeResult({
-        pick_id: null, game_date: date, league, result,
+        pick_id: rowId, game_date: date, league, result,
         final_score: `${vScore}-${hScore}`, pick_text: pick.pick,
         matchup: `${pick.awayTeam} @ ${pick.homeTeam}`, is_winners_pick: isWinner(pick),
       });
