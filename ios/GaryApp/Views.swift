@@ -12436,6 +12436,14 @@ struct CompactPickRow: View {
             : "\(pickedShort.uppercased())\n\(bet.uppercased())"
     }
 
+    /// Spread / run line / Asian-handicap calls — the short "+1.5 / −1.5" picks —
+    /// read 30% larger (user call, Jun 22); moneylines, totals and longer calls
+    /// keep the uniform size. minimumScaleFactor(0.5) still reins in a long team.
+    private var heroFontSize: CGFloat {
+        let t = (pick.type ?? "").lowercased()
+        return (t == "spread" || t == "asian_handicap") ? 52 : 40
+    }
+
     /// Meta slot after the league token — opponent + time/live/final + odds.
     /// State-aware: live games show the live line, settled show the score.
     private var metaLine: String {
@@ -12538,7 +12546,7 @@ struct CompactPickRow: View {
                 }
 
                 Text(heroLines)
-                    .font(GaryFonts.display(40))
+                    .font(GaryFonts.display(heroFontSize))
                     .foregroundStyle(.white)
                     .lineSpacing(0)
                     .lineLimit(2)
