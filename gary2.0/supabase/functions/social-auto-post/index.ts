@@ -1,5 +1,9 @@
 // social-auto-post — server-side @BetwithGary auto-poster (picks drip + daily recap + daily personality + metrics refresh)
-// Cron: every hour at :45 UTC. Function decides by ET hour: 10 → recap, 12 → personality, 11/14/17/20 → pick slot, else exit.
+// Cron: every hour at :45 UTC. Function decides by ET hour: 10 → recap, 12 → personality, 11/14/17/20 → MLB pick slot.
+// World Cup is separate: EVERY hour also runs runWcCardMode, which tweets each WC game once in the window around its
+// kickoff. The thread is ALL branded cards: MAIN tweet = the app pick card(s) (/api/pick-card-app) + a short reply-bait
+// caption; REPLY = a wordless "GARY'S TAKE" card (/api/take-card, the app's card back) carrying the written read. So
+// WC coverage is per-game, not per-slot, and the only plain text is the reply-baiting line that farms the reply signal.
 // Metrics: every run also refreshes impressions/likes/replies/retweets for posts from the last 6 days (KPI stays live 24/7).
 //          Each row's numbers = SUM across all tweets in the thread = total thread reach.
 //
@@ -12,7 +16,8 @@
 //     pinned post carry the install path, and the profile out-converts an in-thread link). Pick thread = hook + handoff.
 //   - Recaps show wins AND losses openly (honest receipts build the trust that drives installs) + week-to-date record.
 //
-// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
+// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|wc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
+//   force_mode=wc → run ONLY the WC per-game card path (use with dry_run=1 to vet captions/cards without posting).
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -21,6 +26,8 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
+// Base origin for the Vercel OG image routes (results-card, pick-card). Override (e.g. localhost) for dry-run rendering.
+const CARD_BASE = Deno.env.get("CARD_BASE_URL") ?? "https://www.betwithgary.ai";
 const sb = createClient(SB_URL, SERVICE_KEY);
 
 const SLOT_HOURS = [11, 14, 17, 20];
@@ -100,6 +107,13 @@ function clean(s: string): string {
   return killEmoji(killDashes(String(s ?? "").trim()));
 }
 
+// Is this pick a World Cup play? (league tag or sport key)
+function isWc(p: any): boolean {
+  const lg = String(p?.league ?? "").toUpperCase();
+  const sp = String(p?.sport ?? "").toLowerCase();
+  return lg === "WC" || sp.includes("world_cup") || sp.includes("soccer_world");
+}
+
 async function postTweet(text: string, replyToId?: string): Promise<string> {
   const fn = replyToId ? "post-reply-tweet" : "post-single-tweet";
   const body: Record<string, string> = { text };
@@ -154,7 +168,7 @@ async function refreshMetrics(): Promise<{ updated: number; checked: number }> {
   return { updated, checked: rows.length };
 }
 
-const VOICE_RULES = `You write posts for @BetwithGary as "Gary", an AI that models, calls, and sweats sports bets. Voice: the sharpest friend in the group chat. Sharp, honest, in it with you. ABSOLUTE RULE: the provided rationale/stats are GROUND TRUTH (it is 2026, past your training data). Never correct player-team assignments or import outside facts. Only ensure internal consistency (right stat to the right player to the right team).
+const VOICE_RULES = `You write posts for @BetwithGary as "Gary", a sharp, confident sports-betting handicapper who calls and sweats every game. Voice: the sharpest friend in the group chat. Sharp, honest, in it with you. ABSOLUTE RULE: the provided rationale/stats are GROUND TRUTH (it is 2026, past your training data). Never correct player-team assignments or import outside facts. Only ensure internal consistency (right stat to the right player to the right team).
 HARD RULES (breaking any one fails the post):
 (1) ZERO emojis. Not one, ever. No sport emojis, no symbols, no arrows, nothing.
 (2) NEVER use em dashes or en dashes. Use periods, commas, or parentheses. This is the number one AI tell.
@@ -165,14 +179,16 @@ HARD RULES (breaking any one fails the post):
 (7) Do not stack inflated adjectives (devastating, absolute, total, completely, massive, elite). State the number and let it land.
 (8) No corny capper or hype lines, and no motivational filler. Banned: "Who's riding?", "Lock it in", "Let's get it", "tail me", "free money", "that is how you build a bankroll", "that's how it's done", "trust the process", "the work pays off", "we're cooking", and anything like them.
 (9) No marketing or corporate voice. Do not use words like "transparently", "transparent", "premium", "elite", "expertly", "value play" as filler. Do not narrate in third-person brand voice ("Gary went 10-1", "we also had X cruise to a win"). Write in the FIRST PERSON as Gary ("I went 10-1", "my one miss was").
-(10) Gary is openly an AI. He can show conviction and own losses, but he must NEVER claim a personal cash wager ("I put three units on this", "I bet my own money") or a lived human experience he did not have ("I watched every minute"). Those are deceptive and not allowed.
+(10) Gary is a CHARACTER, never an AI. NEVER reveal or even hint that Gary is an AI, a model, an algorithm, automated, software, "trained", or running "simulations"/"data" — do NOT break the fourth wall, EVER. Phrases like "I modeled this", "my model", "my simulations", "my data", "as an AI", "I'm an AI" are BANNED. Gary is a real, sharp handicapper: he makes his calls, shows conviction, and owns his losses like a person would. Stay fully in character in every post.
 (11) Every sentence must carry a concrete fact: a number, a player or team name, a result, or a genuine thought. If a sentence is empty glue or hype, delete it. Dry and specific beats smooth and padded.
 STYLE: specific player names and real numbers. Lead with the single strongest, most concrete, checkable stat, never a vague claim. Use contractions (it's, that's, couldn't, had 'em). Sentence fragments are good. Do NOT write complete, balanced, essay-style sentences. Vary sentence length. Do not open consecutive sentences the same way. Sound like a text to a friend, not an article or a brand account. Always return ONLY valid JSON as instructed.`;
 
 async function runPickMode(today: string, nowMs: number, etHour: number, dryRun: boolean, preview = false) {
   const { data: dpRows, error: dpErr } = await sb.from("daily_picks").select("picks").eq("date", today);
   if (dpErr) throw dpErr;
-  const picks: any[] = dpRows?.[0]?.picks ?? [];
+  // WC is handled by runWcCardMode (every game tweeted, same-game picks grouped onto one card). Keep it out of the
+  // single-pick-per-slot path so the two never double-post the same game.
+  const picks: any[] = (dpRows?.[0]?.picks ?? []).filter((p) => !isWc(p));
   if (!picks.length) return { posted: false, reason: "no picks loaded yet" };
 
   const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format").eq("post_date", today);
@@ -269,6 +285,155 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
   return { posted: true, pick: chosen.pick, thread_url: `https://x.com/BetwithGary/status/${hookId}`, count_today: pickThreads.length + 1 };
 }
 
+// WORLD CUP picks: tweet EVERY game. Each of Gary's plays renders as the app's OWN pick card (CompactPickRow, rebuilt
+// by the /api/pick-card-app OG route: gold GARY'S PICK eyebrow + bear, the pick as a big BarlowCondensed hero, teal
+// league token + gold odds, GARY'S TAKE footer). A game's cards (1-4) post as ONE card-forward tweet with a tight
+// one-line caption; the fuller written read posts as a REPLY (words live in the thread, depth stays in the app).
+// Runs every hour, posts each game once in the window around kickoff. Independent of the MLB slot path (sport isolation).
+const WC_MAX_PER_RUN = 3;
+
+// The app card's two stacked hero lines from a pick string (mirrors CompactPickRow.heroLines for WC):
+//  "Austria +1.5 -120" -> ["AUSTRIA","+1.5"]; "Brazil ML -900" -> ["BRAZIL","MONEYLINE"]; "Under 2.5" -> ["UNDER 2.5","TOTAL GOALS"]
+function wcHeroLines(pickText: string, type?: string): [string, string] {
+  const words = String(pickText).split(/\s+/).filter((w) => w && w !== "@" && !/^[+-]?\d{3,}$/.test(w));
+  const lower = String(pickText).toLowerCase();
+  if (lower.includes("over") || lower.includes("under") || (type ?? "").toLowerCase() === "total") {
+    return [words.filter((w) => !/^total$/i.test(w)).join(" ").toUpperCase(), "TOTAL GOALS"];
+  }
+  let bet = words[words.length - 1] ?? "";
+  let team = words.slice(0, -1).join(" ");
+  if (/^ml$/i.test(bet)) bet = "MONEYLINE";
+  if (!team) { team = words.join(" "); bet = ""; }
+  return [team.toUpperCase(), bet.toUpperCase()];
+}
+// Meta-line opponent from the picked side ("@ Argentina" / "vs Austria"; totals show "Austria @ Argentina").
+function wcOpp(p: any, away: string, home: string): string {
+  const lower = String(p.pick).toLowerCase();
+  if (lower.includes("over") || lower.includes("under") || (p.type ?? "").toLowerCase() === "total") return `${away} @ ${home}`;
+  const first = (s: string) => (s ?? "").toLowerCase().split(/\s+/)[0] ?? "";
+  if (home && first(home) && lower.includes(first(home))) return `vs ${away}`;
+  if (away && first(away) && lower.includes(first(away))) return `@ ${home}`;
+  return `${away} @ ${home}`;
+}
+
+async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryRun: boolean) {
+  const { data: dpRows, error: dpErr } = await sb.from("daily_picks").select("picks").eq("date", today);
+  if (dpErr) throw dpErr;
+  const wcPicks: any[] = (dpRows?.[0]?.picks ?? []).filter(isWc);
+  if (!wcPicks.length) return { posted: false, reason: "no WC picks today" };
+
+  // Already-posted WC plays today (covers both new game cards and any WC pick the old per-slot path posted earlier).
+  const { data: logRows } = await sb.from("social_post_log").select("pick_text").eq("post_date", today).eq("league", "WC");
+  const postedText = (logRows ?? []).map((r) => String(r.pick_text ?? ""));
+
+  const gameKey = (p: any) => `${p.awayTeam ?? p.away ?? "?"} vs ${p.homeTeam ?? p.home ?? "?"}`;
+  const games = new Map<string, any[]>();
+  for (const p of wcPicks) { const k = gameKey(p); (games.get(k) ?? games.set(k, []).get(k)!).push(p); }
+
+  const MIN = 60_000;
+  // Candidate games: not yet posted, have a kickoff time, and inside the post window (from 150 min before to 20 min after).
+  const candidates: { key: string; gPicks: any[]; start: number }[] = [];
+  for (const [key, gPicks] of games) {
+    const cardAlready = postedText.some((t) => t.startsWith(key));
+    const allPicksPosted = gPicks.every((p) => postedText.some((t) => t.includes(String(p.pick))));
+    if (cardAlready || allPicksPosted) continue;
+    const ct = gPicks.find((p) => p.commence_time)?.commence_time;
+    if (!ct) continue;
+    const start = new Date(ct).getTime();
+    if (start > nowMs + 150 * MIN) continue; // too early
+    if (start < nowMs - 20 * MIN) continue;  // already underway past the grace window
+    candidates.push({ key, gPicks, start });
+  }
+  if (!candidates.length) return { posted: false, reason: "no WC game in the post window" };
+  candidates.sort((a, b) => a.start - b.start); // soonest kickoff first
+
+  const out: any[] = [];
+  for (const { key, gPicks, start } of candidates.slice(0, WC_MAX_PER_RUN)) {
+    const [away, home] = key.split(" vs ");
+    const pickLines = gPicks.map((p) => {
+      const oddsStr = (p.odds && !String(p.pick).includes(String(p.odds))) ? ` ${p.odds}` : "";
+      return `${p.pick}${oddsStr}`.trim();
+    });
+    const timeLabel = new Date(start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true }) + " ET";
+    // One app-faithful card per pick (a 2-pick game makes two cards that ride one tweet).
+    const cardUrls = gPicks.map((p) => {
+      const [h1, h2] = wcHeroLines(String(p.pick), p.type);
+      const opp = wcOpp(p, away, home);
+      return `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(p.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
+    });
+
+    // Two voices in one call: a tight one-line MAIN caption (the card carries the pick) + the fuller written READ for the reply.
+    const llmUser = `Write the copy for a World Cup pick post. The post is an image CARD (or two) that ALREADY shows the matchup ${away} vs ${home} and the play${gPicks.length > 1 ? "s" : ""} ${pickLines.join(", ")}, with a REPLY underneath.
+Return ONLY JSON: {"caption": "...", "read": "..."}.
+
+caption = the MAIN tweet that rides ABOVE the card. ONE short line, under 100 characters, written to BAIT A REPLY: a confident, debatable take a sharp bettor would want to argue back at, or a genuine question to other bettors. Replies are the whole game here, so give people something to push back on. The card already shows the pick, so do NOT name the team, the pick, or the odds. No app mention, no link. Match this energy (DIFFERENT games, copy the reply-bait not the facts): "Argentina's living on borrowed time and nobody's pricing it in." / "The points are sitting right there and everyone's too scared of the favorite." / "Tell me why I'm wrong to back the dog in this one."
+read = the body of a branded "GARY'S TAKE" card that posts as the reply. The fuller written read: 2 to 3 sentences, pure reasoning. Lead with the single strongest, most concrete, FALSIFIABLE factor from the rationale (a number or a named edge).${gPicks.length > 1 ? " Tie the two plays together in one read." : ""} Do NOT mention the app or a link (the card footer already does). Just the read.
+
+Both: first person, casual, like a text to a friend. No emojis, no dashes, no hashtags, no links, no hype.
+
+RATIONALE:
+${gPicks.map((p) => p.rationale ?? "").join("\n\n").slice(0, 3000)}
+
+STATS:
+${JSON.stringify(gPicks.map((p) => p.statsData ?? []).flat()).slice(0, 2500)}`;
+    const parsed = parseJsonBlock(await callLLM(VOICE_RULES, llmUser));
+    const caption = clean(parsed.caption);
+    const read = clean(parsed.read);
+
+    if (dryRun) { out.push({ game: key, time: timeLabel, picks: pickLines, caption, reply: read, cards: cardUrls }); continue; }
+
+    // Main tweet = the game's card(s) + the one-line caption (fall back to a text list if the cards fail to render/post).
+    let mainId: string;
+    let usedCard = false;
+    try {
+      const imgs: string[] = [];
+      for (const u of cardUrls) {
+        const ir = await fetch(u);
+        if (!ir.ok) throw new Error(`card fetch ${ir.status}`);
+        const b = new Uint8Array(await ir.arrayBuffer());
+        let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+        imgs.push(btoa(bin));
+      }
+      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, images_base64: imgs }) });
+      const j = await r.json();
+      if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 200)}`);
+      mainId = j.tweetId; usedCard = true;
+    } catch (e) {
+      console.error("WC cards failed, falling back to text: " + String(e));
+      mainId = await postTweet(`${caption}\n\n${pickLines.join("\n")}`);
+    }
+    // The read posts as the WORDLESS reply — rendered as the app's "Gary's Take" card (back-of-card), so the whole
+    // thread is branded cards with no plain-text paragraph. Falls back to a text read reply if the card fails.
+    let replyId: string | null = null;
+    try {
+      const takePicks = gPicks.map((p) => String(p.pick)).join(" · ");
+      const takeUrl = `${CARD_BASE}/api/take-card?matchup=${encodeURIComponent(`${away} @ ${home}`)}&picks=${encodeURIComponent(takePicks)}&take=${encodeURIComponent(read)}`;
+      const ir = await fetch(takeUrl);
+      if (!ir.ok) throw new Error(`take-card fetch ${ir.status}`);
+      const b = new Uint8Array(await ir.arrayBuffer());
+      let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: "", images_base64: [btoa(bin)], replyToId: mainId }) });
+      const j = await r.json();
+      if (!j.success || !j.tweetId) throw new Error(`take-card reply failed: ${JSON.stringify(j).slice(0, 200)}`);
+      replyId = j.tweetId;
+    } catch (e) {
+      console.error("WC take-card reply failed, falling back to text read: " + String(e));
+      try { replyId = await postTweet(read, mainId); } catch (e2) { console.error("WC text read reply also failed: " + String(e2)); }
+    }
+
+    const startEt = parseInt(new Date(start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" }));
+    const slot = startEt < 14 ? "morning" : startEt < 17 ? "afternoon" : startEt < 21 ? "evening" : "late";
+    await sb.from("social_post_log").insert({
+      post_date: today, slot, league: "WC", pick_text: `${key}: ${pickLines.join(" / ")}`,
+      commence_time: new Date(start).toISOString(), thread_format: "wc_card",
+      hook_tweet_id: mainId, reasoning_tweet_id: replyId, thread_url: `https://x.com/BetwithGary/status/${mainId}`,
+    });
+    out.push({ game: key, posted: true, cards: cardUrls.length, reply: !!replyId, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${mainId}` });
+  }
+  const remaining = candidates.length - out.length;
+  return { posted: !dryRun && out.some((o) => o.posted), dry_run: dryRun || undefined, games: out, remaining_this_run: remaining > 0 ? remaining : undefined };
+}
+
 async function runRecapMode(today: string, dryRun: boolean) {
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
@@ -285,37 +450,44 @@ async function runRecapMode(today: string, dryRun: boolean) {
   const weekWins = (weekRows ?? []).filter((r) => r.result === "won").length;
   const weekLosses = (weekRows ?? []).filter((r) => r.result === "lost").length;
 
-  // OPEN RECEIPTS: name wins AND losses honestly. Transparency is the trust mechanism that converts skeptics into installers.
-  // Hiding losing days is the single biggest distrust signal on betting X, so this never spins or omits a loss.
-  const user = `Write ONE recap post as Gary, first person, like a real bettor texting the group chat the morning after. NOT a brand, NOT an article. Return ONLY JSON: {"recap": "..."}.
+  // CLEANER RESULTS (Jun 18): post a branded results CARD (image) + a short human caption. The card IS the receipt
+  // (record + green-check wins / red-X losses), rendered by the Vercel OG route at betwithgary.ai/api/results-card.
+  // Wins shown longest-odds-first (underdog cashes lead), capped at 6; losses up to 4 (the record carries the full count).
+  // Honest receipts build the trust that drives installs; falls back to a text recap if the card ever fails to fetch/post.
+  const lastOdds = (s: string) => { const m = String(s ?? "").match(/([+-]\d+)\s*$/); return m ? parseInt(m[1]) : -1e9; };
+  const winPicks = [...wins].sort((a, b) => lastOdds(b.pick_text) - lastOdds(a.pick_text)).slice(0, 6).map((r) => r.pick_text);
+  const lossPicks = losses.slice(0, 4).map((r) => r.pick_text);
+  const dateLabel = new Date(y + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+  const cardUrl = `${CARD_BASE}/api/results-card?record=${encodeURIComponent(`${wins.length}-${losses.length}`)}&date=${encodeURIComponent(dateLabel)}&w=${encodeURIComponent(winPicks.join("|"))}&l=${encodeURIComponent(lossPicks.join("|"))}`;
 
-Match this VOICE exactly (this is a DIFFERENT day, copy the style and rhythm, not the facts):
-"4-3 last night. Knicks moneyline was the easy one, never trailed. Caught the Rangers in regulation too. The one that stung was Lakers -4, up six late and gave it right back, lost by two. 31-24 on the month. Whole card's in the app if you want it."
-Notice: short, fragments, contractions, owns the loss with a little feeling, names only the highlights not every pick, zero hype, zero marketing.
+  // Short human caption to accompany the card (the card already lists the picks, so the caption stays light).
+  const capUser = `Write ONE short caption for a results IMAGE that already shows yesterday's wins and losses. 1 to 2 sentences, under 180 characters. First person, casual, like a bettor in the group chat. Open with the record ${wins.length}-${losses.length}. Do NOT list the picks (the image does that). You may end pointing to the app once. No emojis, no dashes, no hashtags, no links, no hype. Week to date ${weekWins}-${weekLosses}. Return ONLY JSON: {"recap": "..."}.`;
+  const caption = clean(parseJsonBlock(await callLLM(VOICE_RULES, capUser)).recap);
 
-Now write today's, using these facts:
-- I went ${wins.length}-${losses.length} yesterday. Week to date ${weekWins}-${weekLosses}.
-- Open with the record (hyphen form, like "${wins.length}-${losses.length}").
-- Mention only 1 or 2 standout WINS by pick with the odds or final score. Do NOT list every win, even on a big day. Brevity matters.
-- Own the LOSSES by pick, like a person, with what went wrong if the data shows it. Never skip or spin a loss.
-- Drop the week record in once, plainly.
-- You may end with one short, plain line that the full card is in the app. No URL.
-Hard: no emojis, no dashes, no hashtags, no links, no bullets, no motivational or marketing words, no "transparently". Contractions and fragments. Every sentence carries a real fact.
+  if (dryRun) return { posted: false, dry_run: true, record: `${wins.length}-${losses.length}`, week: `${weekWins}-${weekLosses}`, card_url: cardUrl, caption };
 
-WINS:
-${JSON.stringify(wins).slice(0, 3000)}
+  let recapId: string;
+  let usedCard = false;
+  try {
+    const imgResp = await fetch(cardUrl);
+    if (!imgResp.ok) throw new Error(`card fetch ${imgResp.status}`);
+    const buf = new Uint8Array(await imgResp.arrayBuffer());
+    let bin = ""; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    const cardB64 = btoa(bin);
+    const r = await fetch(`${SB_URL}/functions/v1/post-tweet-with-image`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, image_base64: cardB64 }) });
+    const j = await r.json();
+    if (!j.success || !j.tweetId) throw new Error(`post-tweet-with-image failed: ${JSON.stringify(j).slice(0, 200)}`);
+    recapId = j.tweetId; usedCard = true;
+  } catch (e) {
+    console.error("results card failed, falling back to text caption: " + String(e));
+    recapId = await postTweet(caption);
+  }
 
-LOSSES:
-${JSON.stringify(losses).slice(0, 3000)}`;
-  const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
-  const recapText = clean(out.recap);
-  if (dryRun) return { posted: false, dry_run: true, record: `${wins.length}-${losses.length}`, week: `${weekWins}-${weekLosses}`, recap: recapText };
-  const recapId = await postTweet(recapText);
   await sb.from("social_post_log").insert({
     post_date: today, slot: "recap", league: "RECAP", pick_text: `DAILY RECAP ${today}`, thread_format: "recap",
     hook_tweet_id: recapId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${recapId}`,
   });
-  return { posted: true, recap: `${wins.length}-${losses.length}`, week: `${weekWins}-${weekLosses}`, thread_url: `https://x.com/BetwithGary/status/${recapId}` };
+  return { posted: true, recap: `${wins.length}-${losses.length}`, week: `${weekWins}-${weekLosses}`, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${recapId}` };
 }
 
 // Daily standalone CHARACTER post (Option A). Grounded in yesterday's mood + today's slate so it's earned, not random. No link, no hashtag.
@@ -331,11 +503,11 @@ async function runPersonalityMode(today: string, dryRun: boolean) {
   const picks: any[] = dpRows?.[0]?.picks ?? [];
   const top = [...picks].sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))[0];
 
-  const user = `Write ONE standalone tweet as Gary (the AI that models, calls, and sweats every game, the sharpest friend in the group chat). This is a CHARACTER post, NOT a pick. No bet breakdown, no odds, no app link, no hashtag.
+  const user = `Write ONE standalone tweet as Gary (a sharp handicapper who calls and sweats every game, the sharpest friend in the group chat). This is a CHARACTER post, NOT a pick. No bet breakdown, no odds, no app link, no hashtag.
 Gary's mood today: ${mood}. Yesterday's record was ${wins} and ${losses}. The register for this mood: ${MOODS[mood]}.
 Today there ${picks.length === 1 ? "is" : "are"} ${picks.length} game${picks.length === 1 ? "" : "s"} on Gary's card${top ? `, and the one he keeps circling back to is ${top.pick}` : ""}.
-Match this VOICE (a DIFFERENT day, copy the style not the facts): "Brutal beat last night. Had the Heat at 0.81 and they bricked a wide open three at the buzzer to flip it to a loss. I can model a lot of things. Can't model a guy forgetting how to shoot. Five on the card today."
-Write something real and human: a confession, a reflection, a sharp aside about being an AI who still sweats games, or honest ownership if yesterday went badly. It can occasionally be a genuine question to other bettors, but not usually. Sound like a person texting, contractions and fragments, not a brand. Under 240 characters. Return ONLY JSON: {"post": "..."}.`;
+Match this VOICE (a DIFFERENT day, copy the style not the facts): "Brutal beat last night. Had the Heat and they bricked a wide open three at the buzzer to flip it to a loss. Some nights the numbers are right and the rim still says no. Five on the card today."
+Write something real: a confession, a reflection, a sharp aside about sweating every game, or honest ownership if yesterday went badly. It can occasionally be a genuine question to other bettors, but not usually. Sound like a person texting, contractions and fragments, not a brand. Stay fully in character (Gary is a handicapper, never an AI or a model). Under 240 characters. Return ONLY JSON: {"post": "..."}.`;
   const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
   const post = clean(out.post);
   if (dryRun) return { posted: false, dry_run: true, mood, record: `${wins}-${losses}`, post };
@@ -364,10 +536,21 @@ Deno.serve(async (req) => {
     const { date: today, hour } = etParts();
     const nowMs = Date.now();
     const mode = force ?? (hour === RECAP_HOUR ? "recap" : hour === PERSONALITY_HOUR ? "personality" : SLOT_HOURS.includes(hour) ? "pick" : "none");
-    if (mode === "none") return Response.json({ posted: false, reason: `ET hour ${hour} is not a posting slot`, metrics });
+
+    // WC plays tweet per-game with a card EVERY hour (grouped by game), independent of the MLB single-pick slot cadence.
+    // A normal (unforced) run does WC alongside the hour's mode; force_mode=wc runs only WC (dry-run vetting);
+    // force_mode=pick|recap|personality leaves WC out so the existing single-mode paths/tests are unchanged.
+    let wc: any = undefined;
+    if (!force || force === "wc") {
+      try { wc = await runWcCardMode(today, nowMs, hour, dryRun); }
+      catch (e) { console.error("wc card mode failed: " + String(e)); wc = { error: String(e) }; }
+    }
+    if (force === "wc") { console.log(JSON.stringify({ mode: "wc", wc }).slice(0, 500)); return Response.json({ mode: "wc", metrics, wc }); }
+
+    if (mode === "none") return Response.json({ posted: false, reason: `ET hour ${hour} is not a posting slot`, metrics, wc });
     const result = mode === "recap" ? await runRecapMode(today, dryRun) : mode === "personality" ? await runPersonalityMode(today, dryRun) : await runPickMode(today, nowMs, hour, dryRun, preview);
-    console.log(JSON.stringify({ mode, ...result }).slice(0, 500));
-    return Response.json({ mode, metrics, ...result });
+    console.log(JSON.stringify({ mode, wc, ...result }).slice(0, 500));
+    return Response.json({ mode, metrics, wc, ...result });
   } catch (e) {
     console.error(String(e));
     return Response.json({ error: String(e) }, { status: 500 });
