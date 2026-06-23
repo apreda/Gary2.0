@@ -17110,11 +17110,11 @@ struct PicksTodayPage: View {
             FlippablePickCard(pick: gp.pick,
                               gameResult: gamePickResult(gp.pick),
                               showSportBadge: true)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 22)   // match the per-game cards (screen−44) so eyebrow + time line up across the Picks tab
         } else if let only = prop {
             freePickEyebrow   // free showcase label on the prop too, for every sport
             FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 22)   // same width as the per-game prop cards
         }
     }
 

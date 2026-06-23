@@ -29,14 +29,9 @@ echo "[$(date)] Starting insight connections run..."
 node run-insight-connections.js "$@"
 echo "[$(date)] Insight connections complete."
 
-# MLB field lineups — per-game fielders (name, position, order, bats, season OPS) +
-# the opposing probable, for the iOS ballpark field view. Reads the FRESH
-# insight_connections above for hot/cold/HR/platoon flags, so it runs AFTER insights.
-# Idempotent per day; refreshes 4x as lineups firm up. Non-fatal: a failure here must
-# NOT fail the insights job above.
-echo "[$(date)] Starting MLB field lineups run..."
-node run-mlb-field-lineups.js "$@" || echo "[$(date)] MLB field lineups run failed (non-fatal)"
-echo "[$(date)] MLB field lineups complete."
+# MLB field lineups moved to the CLOUD (Supabase edge fn `mlb-field-lineups`, pg_cron
+# every 30 min — see supabase/functions/mlb-field-lineups). Removed from this laptop
+# run to avoid a redundant delete+insert that briefly flickered the iOS field view.
 
 # Generate "The Wire" betting-angle news items for the Home page. Idempotent per
 # day+league. Non-fatal: a Wire failure must NOT fail the insights job above.
