@@ -1,0 +1,77 @@
+name: MLB Game Picks
+
+# Cloud pick generation for MLB (laptop-independent). Runs the SAME pick script the
+# laptop scheduler runs — node scripts/run-agentic-picks.js --mlb — just on GitHub's
+# runners, so you can generate today's MLB picks from anywhere (the Actions tab works
+# from a phone) when your laptop is off.
+#
+# MANUAL by design (matches the NBA/NHL/NFL workflows): the schedule is left commented
+# out on purpose. The laptop scheduler picks each game at T-90 with the freshest lineups
+# and odds; an always-on cloud cron could fire earlier with staler data and — because
+# picks dedup per game (gameAlreadyHasPick) — LOCK IN the weaker pick before the laptop's
+# better-timed one. Trigger this manually as a backstop, or uncomment the cron below to
+# accept that tradeoff for full hands-off operation.
+on:
+  # schedule:
+  #   - cron: '0 14 * * *'   # ~10 AM ET — only enable if you want fully automatic cloud picks
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max games to analyze (0 = all)'
+        required: false
+        default: '0'
+      force:
+        description: 'Force re-run existing picks'
+        required: false
+        default: 'false'
+
+env:
+  TZ: America/New_York
+
+# Never let two pick runs cancel each other mid-analysis
+concurrency:
+  group: mlb-game-picks
+  cancel-in-progress: false
+
+jobs:
+  generate-picks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: gary2.0/package-lock.json
+
+      - name: Install dependencies
+        working-directory: gary2.0
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate MLB Game Picks
+        working-directory: gary2.0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+        run: |
+          ARGS="--mlb"
+          if [ "${{ github.event.inputs.limit }}" != "0" ] && [ -n "${{ github.event.inputs.limit }}" ]; then
+            ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
+          fi
+          if [ "${{ github.event.inputs.force }}" == "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          echo "Running: node scripts/run-agentic-picks.js $ARGS"
+          node scripts/run-agentic-picks.js $ARGS
+
+      - name: Summary
+        if: always()
+        run: echo "MLB Game Picks completed at $(date)"

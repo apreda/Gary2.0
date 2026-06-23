@@ -1,0 +1,54 @@
+name: MLB Props
+
+# Cloud prop generation for MLB (laptop-independent). Runs the SAME script the laptop
+# uses — node scripts/run-agentic-mlb-props.js --store=1 — on GitHub's runners, so MLB
+# props can be generated from anywhere when the laptop is off. Pick logic is untouched.
+#
+# MANUAL by design (matches nba-props / nhl-props): schedule left commented so a cloud
+# run never races the laptop's better-timed props (props dedup, so the first run wins).
+# Trigger as a backstop, or uncomment the cron to automate.
+on:
+  # schedule:
+  #   - cron: '0 15 * * *'   # ~11 AM ET — only enable for fully automatic cloud props
+  workflow_dispatch:
+
+env:
+  TZ: America/New_York
+
+concurrency:
+  group: mlb-props
+  cancel-in-progress: false
+
+jobs:
+  generate-props:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: gary2.0/package-lock.json
+
+      - name: Install dependencies
+        working-directory: gary2.0
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate MLB Props
+        working-directory: gary2.0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+        run: node scripts/run-agentic-mlb-props.js --store=1
+
+      - name: Summary
+        if: always()
+        run: echo "MLB Props completed at $(date)"
