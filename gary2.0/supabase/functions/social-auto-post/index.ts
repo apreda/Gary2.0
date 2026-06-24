@@ -1,9 +1,9 @@
 // social-auto-post — server-side @BetwithGary auto-poster (picks drip + daily recap + daily personality + metrics refresh)
 // Cron: every hour at :45 UTC. Function decides by ET hour: 10 → recap, 12 → personality, 11/14/17/20 → MLB pick slot.
 // World Cup is separate: EVERY hour also runs runWcCardMode, which tweets each WC game once in the window around its
-// kickoff. The thread is ALL branded cards: MAIN tweet = the app pick card(s) (/api/pick-card-app) + a short reply-bait
-// caption; REPLY = a wordless "GARY'S TAKE" card (/api/take-card, the app's card back) carrying the written read. So
-// WC coverage is per-game, not per-slot, and the only plain text is the reply-baiting line that farms the reply signal.
+// kickoff. The whole thread is Gary's REAL rationale, his actual words, NO LLM: the FIRST sentence is the MAIN caption
+// above the app pick card(s) (/api/pick-card-app); the rest threads as the plain-text REPLY, ending with a link-in-bio
+// pointer (no image). So WC coverage is per-game, not per-slot. (The /api/take-card route is no longer used here.)
 // Metrics: every run also refreshes impressions/likes/replies/retweets for posts from the last 6 days (KPI stays live 24/7).
 //          Each row's numbers = SUM across all tweets in the thread = total thread reach.
 //
@@ -288,7 +288,7 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
 // WORLD CUP picks: tweet EVERY game. Each of Gary's plays renders as the app's OWN pick card (CompactPickRow, rebuilt
 // by the /api/pick-card-app OG route: gold GARY'S PICK eyebrow + bear, the pick as a big BarlowCondensed hero, teal
 // league token + gold odds, GARY'S TAKE footer). A game's cards (1-4) post as ONE card-forward tweet with a tight
-// one-line caption; the fuller written read posts as a REPLY (words live in the thread, depth stays in the app).
+// caption = the first sentence of Gary's REAL rationale; the REPLY threads the rest of it + a link-in-bio app pointer.
 // Runs every hour, posts each game once in the window around kickoff. Independent of the MLB slot path (sport isolation).
 const WC_MAX_PER_RUN = 3;
 
@@ -314,6 +314,47 @@ function wcOpp(p: any, away: string, home: string): string {
   if (home && first(home) && lower.includes(first(home))) return `vs ${away}`;
   if (away && first(away) && lower.includes(first(away))) return `@ ${home}`;
   return `${away} @ ${home}`;
+}
+
+// Split text into sentences (on a terminator followed by whitespace, so decimals like "1.63" never break).
+function splitSentences(text: string): string[] {
+  return String(text).split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+}
+// Split text into tweet-sized chunks (<= max chars), packing WHOLE SENTENCES so each tweet ends cleanly; hard
+// word-splits any single sentence longer than max.
+function splitTweets(text: string, max = 270): string[] {
+  const out: string[] = [];
+  let cur = "";
+  const flush = () => { if (cur) { out.push(cur); cur = ""; } };
+  for (const s of splitSentences(text)) {
+    if (s.length > max) {
+      flush();
+      let w = "";
+      for (const word of s.split(/\s+/)) {
+        if ((w ? w + " " + word : word).length <= max) w = w ? w + " " + word : word;
+        else { if (w) out.push(w); w = word; }
+      }
+      cur = w; // remainder carries to pack with the next sentence
+    } else if (!cur) cur = s;
+    else if ((cur + " " + s).length <= max) cur += " " + s;
+    else { flush(); cur = s; }
+  }
+  flush();
+  return out;
+}
+// Build the WC thread PURELY from Gary's REAL rationale — his actual words, NO LLM and no guesswork. The FIRST sentence
+// is the MAIN caption (above the card); the remaining sentences thread as the reply, ending with a link-in-bio pointer.
+// Uses the highest-confidence play's stored rationale ("Gary's Take" header stripped, emoji/dashes killed). Verbatim.
+function buildWcThread(gPicks: any[]): { caption: string; replyChunks: string[] } {
+  const top = [...gPicks].sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))[0];
+  const sentences = splitSentences(clean(String(top?.rationale ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").trim()));
+  const caption = sentences.length ? (sentences[0].length <= 280 ? sentences[0] : (splitTweets(sentences[0], 270)[0] ?? "")) : "";
+  const rest = sentences.slice(1).join(" ");
+  const chunks = rest ? splitTweets(rest, 270) : [];
+  const handoff = "Full breakdown's in the app. Link in bio.";
+  if (chunks.length && chunks[chunks.length - 1].length + 2 + handoff.length <= 278) chunks[chunks.length - 1] += `\n\n${handoff}`;
+  else chunks.push(handoff);
+  return { caption, replyChunks: chunks };
 }
 
 async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryRun: boolean) {
@@ -362,25 +403,11 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
       return `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(p.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
     });
 
-    // Two voices in one call: a tight one-line MAIN caption (the card carries the pick) + the fuller written READ for the reply.
-    const llmUser = `Write the copy for a World Cup pick post. The post is an image CARD (or two) that ALREADY shows the matchup ${away} vs ${home} and the play${gPicks.length > 1 ? "s" : ""} ${pickLines.join(", ")}, with a REPLY underneath.
-Return ONLY JSON: {"caption": "...", "read": "..."}.
+    // The ENTIRE thread is Gary's REAL rationale — his actual words, NO LLM, no guesswork (accurate + on-app-tone):
+    // the first sentence is the MAIN caption above the card, the rest threads as the reply + link in bio.
+    const { caption, replyChunks } = buildWcThread(gPicks);
 
-caption = the MAIN tweet that rides ABOVE the card. ONE short line, under 100 characters, written to BAIT A REPLY: a confident, debatable take a sharp bettor would want to argue back at, or a genuine question to other bettors. Replies are the whole game here, so give people something to push back on. The card already shows the pick, so do NOT name the team, the pick, or the odds. No app mention, no link. Match this energy (DIFFERENT games, copy the reply-bait not the facts): "Argentina's living on borrowed time and nobody's pricing it in." / "The points are sitting right there and everyone's too scared of the favorite." / "Tell me why I'm wrong to back the dog in this one."
-read = the body of a branded "GARY'S TAKE" card that posts as the reply. The fuller written read: 2 to 3 sentences, pure reasoning. Lead with the single strongest, most concrete, FALSIFIABLE factor from the rationale (a number or a named edge).${gPicks.length > 1 ? " Tie the two plays together in one read." : ""} Do NOT mention the app or a link (the card footer already does). Just the read.
-
-Both: first person, casual, like a text to a friend. No emojis, no dashes, no hashtags, no links, no hype.
-
-RATIONALE:
-${gPicks.map((p) => p.rationale ?? "").join("\n\n").slice(0, 3000)}
-
-STATS:
-${JSON.stringify(gPicks.map((p) => p.statsData ?? []).flat()).slice(0, 2500)}`;
-    const parsed = parseJsonBlock(await callLLM(VOICE_RULES, llmUser));
-    const caption = clean(parsed.caption);
-    const read = clean(parsed.read);
-
-    if (dryRun) { out.push({ game: key, time: timeLabel, picks: pickLines, caption, reply: read, cards: cardUrls }); continue; }
+    if (dryRun) { out.push({ game: key, time: timeLabel, picks: pickLines, caption, reply_thread: replyChunks, cards: cardUrls }); continue; }
 
     // Main tweet = the game's card(s) + the one-line caption (fall back to a text list if the cards fail to render/post).
     let mainId: string;
@@ -402,33 +429,25 @@ ${JSON.stringify(gPicks.map((p) => p.statsData ?? []).flat()).slice(0, 2500)}`;
       console.error("WC cards failed, falling back to text: " + String(e));
       mainId = await postTweet(`${caption}\n\n${pickLines.join("\n")}`);
     }
-    // The read posts as the WORDLESS reply — rendered as the app's "Gary's Take" card (back-of-card), so the whole
-    // thread is branded cards with no plain-text paragraph. Falls back to a text read reply if the card fails.
-    let replyId: string | null = null;
-    try {
-      const takePicks = gPicks.map((p) => String(p.pick)).join(" · ");
-      const takeUrl = `${CARD_BASE}/api/take-card?matchup=${encodeURIComponent(`${away} @ ${home}`)}&picks=${encodeURIComponent(takePicks)}&take=${encodeURIComponent(read)}`;
-      const ir = await fetch(takeUrl);
-      if (!ir.ok) throw new Error(`take-card fetch ${ir.status}`);
-      const b = new Uint8Array(await ir.arrayBuffer());
-      let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
-      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: "", images_base64: [btoa(bin)], replyToId: mainId }) });
-      const j = await r.json();
-      if (!j.success || !j.tweetId) throw new Error(`take-card reply failed: ${JSON.stringify(j).slice(0, 200)}`);
-      replyId = j.tweetId;
-    } catch (e) {
-      console.error("WC take-card reply failed, falling back to text read: " + String(e));
-      try { replyId = await postTweet(read, mainId); } catch (e2) { console.error("WC text read reply also failed: " + String(e2)); }
+    // The reply is Gary's FULL real rationale as a plain-text THREAD (his brain = the value that sells the app), each
+    // tweet chained under the last, ending with the link-in-bio pointer. Best-effort per chunk (stop on first failure).
+    const replyIds: string[] = [];
+    let prev = mainId;
+    for (const chunk of replyChunks) {
+      try { prev = await postTweet(chunk, prev); replyIds.push(prev); }
+      catch (e) { console.error("WC rationale reply chunk failed: " + String(e)); break; }
     }
+    const replyId = replyIds[0] ?? null;          // first reply (metrics: reasoning)
+    const ctaId = replyIds.length > 1 ? replyIds[replyIds.length - 1] : null; // last reply / link-in-bio (metrics: cta)
 
     const startEt = parseInt(new Date(start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" }));
     const slot = startEt < 14 ? "morning" : startEt < 17 ? "afternoon" : startEt < 21 ? "evening" : "late";
     await sb.from("social_post_log").insert({
       post_date: today, slot, league: "WC", pick_text: `${key}: ${pickLines.join(" / ")}`,
       commence_time: new Date(start).toISOString(), thread_format: "wc_card",
-      hook_tweet_id: mainId, reasoning_tweet_id: replyId, thread_url: `https://x.com/BetwithGary/status/${mainId}`,
+      hook_tweet_id: mainId, reasoning_tweet_id: replyId, cta_tweet_id: ctaId, thread_url: `https://x.com/BetwithGary/status/${mainId}`,
     });
-    out.push({ game: key, posted: true, cards: cardUrls.length, reply: !!replyId, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${mainId}` });
+    out.push({ game: key, posted: true, cards: cardUrls.length, reply_tweets: replyIds.length, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${mainId}` });
   }
   const remaining = candidates.length - out.length;
   return { posted: !dryRun && out.some((o) => o.posted), dry_run: dryRun || undefined, games: out, remaining_this_run: remaining > 0 ? remaining : undefined };
