@@ -9,6 +9,7 @@
  * each pick in role + form + price, never the price alone.
  */
 import * as apiFootball from '../apiFootballService.js';
+import * as wc from '../fifaWorldCupService.js';   // confirmed-XI guard for prop candidates
 
 const impliedProb = (odds) => {
   const n = Number(odds);
@@ -35,7 +36,42 @@ export async function buildWcPropsAgenticContext(game, playerProps, options = {}
       impliedUnder: impliedProb(p.under_odds),
     });
   }
-  const propCandidates = [...byPlayer.values()];
+  let propCandidates = [...byPlayer.values()];
+
+  // CONFIRMED-XI GUARD (technical): once the lineup is posted, only offer props on confirmed
+  // STARTERS. A benched player with odds posted (Dan Ndoye, named to the bench while Manzambi
+  // started, vs Switzerland) was entering the candidate pool purely because a price existed —
+  // and got picked as an anytime-goalscorer. The confirmed XI (is_starter) is authoritative;
+  // drop anyone not in it. Fallbacks: XI not posted yet (early pick) OR a name mismatch that
+  // would drop everyone -> keep all candidates so we never zero out the slate.
+  try {
+    const matchId = game.id ?? game.soccer_match_id ?? game.gameId;
+    const lineups = matchId != null ? (await wc.getMatchLineups([matchId]).catch(() => [])) : [];
+    const starters = (lineups || []).filter((l) => l.is_starter && l.player?.name);
+    const byTeam = {};
+    for (const s of starters) byTeam[s.team_id] = (byTeam[s.team_id] || 0) + 1;
+    const xiConfirmed = Object.values(byTeam).some((n) => n >= 11); // a team lists 11 = XI is in
+    if (xiConfirmed) {
+      const starterKeys = new Set();
+      for (const s of starters) {
+        const nm = s.player.name.toLowerCase().trim();
+        starterKeys.add(nm); starterKeys.add(lastName(nm));
+      }
+      const filtered = propCandidates.filter((c) => {
+        const nm = (c.player || '').toLowerCase().trim();
+        return starterKeys.has(nm) || starterKeys.has(lastName(nm));
+      });
+      if (filtered.length) {
+        const dropped = propCandidates.length - filtered.length;
+        if (dropped > 0) console.log(`[WC props] confirmed XI: dropped ${dropped} non-starter(s) (e.g. benched players) from prop candidates`);
+        propCandidates = filtered;
+      } else {
+        console.warn('[WC props] confirmed XI present but no prop player matched a starter — keeping all candidates (name-format mismatch?)');
+      }
+    }
+  } catch (e) {
+    console.warn(`[WC props] confirmed-XI filter skipped: ${e.message}`);
+  }
 
   // Grounding: recent international stats per squad + team recent form.
   const [homeSquad, awaySquad, homeForm, awayForm] = await Promise.all([
