@@ -658,7 +658,7 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isSoccer ? `**TWO PLAYS REQUIRED (World Cup):** Output BOTH a SIDE play (3-WAY MONEYLINE Home/Draw/Away — settles on 90 minutes — OR an ASIAN HANDICAP team ±0.5/1.0/1.5/2.0) and a TOTAL play (Over/Under match goals). Report the EXACT odds for each. For the side, when a team is a heavy ML favorite weigh the handicap (favorite -1.5 vs underdog +1.5) instead of defaulting to the short moneyline.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
+${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isSoccer ? `**TWO PLAYS REQUIRED (World Cup):** Output BOTH a SIDE play (3-WAY MONEYLINE Home/Draw/Away — settles on 90 minutes — OR an ASIAN HANDICAP team ±0.5/1.0/1.5/2.0) and a TOTAL play (Over/Under match goals). Report the EXACT odds for each.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
