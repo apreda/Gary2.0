@@ -239,7 +239,9 @@ export async function buildSoccerScoutReport(game, options = {}) {
   // omitting the favorite's price makes a -900-style moneyline unpickable AT THE
   // SOURCE — the option never enters his menu, rather than being reacted to after a
   // bad pick. Draw + underdog legs always remain, and the favorite's strength stays
-  // legible via the Asian handicap line and the prices that ARE shown. -200 itself
+  // legible via the FULL Asian-handicap ladder (every goal line, below) and the prices
+  // that ARE shown — so Gary backs a heavy favorite at a fair price on the goal line his
+  // read supports, rather than being funneled to the underdog or the draw. -200 itself
   // stays pickable (drop only when strictly heavier than -200).
   const mlLine = (() => {
     if (!ml) return '3-way moneyline: pending';
@@ -254,7 +256,7 @@ export async function buildSoccerScoutReport(game, options = {}) {
     if (!offered.length) return '3-way moneyline: pending';
     let line = `3-way moneyline: ${offered.map((l) => `${l.label} ${l.odds}`).join(' / ')}`;
     if (dropped.length) {
-      line += `\n  (${dropped.map((l) => l.label).join(' & ')} ML not offered — favorite too short to bet, heavier than -200; take the Asian handicap or a value side, never the bare favorite.)`;
+      line += `\n  (${dropped.map((l) => l.label).join(' & ')} ML not offered — priced heavier than -200, so the bare moneyline isn't on the menu for them. This is a structural constraint on the available prices, not a directional hint: back them via the Asian-handicap ladder below at whichever goal line your read supports, or take whichever side your analysis favors.)`;
     }
     return line;
   })();
@@ -280,9 +282,21 @@ export async function buildSoccerScoutReport(game, options = {}) {
       : '',
     `\n### RAW ODDS VALUES (use these EXACT numbers — never approximate odds)`,
     mlLine,
-    game.soccer_spread && Math.abs(Number(game.soccer_spread.homeValue)) <= 4.5
-      ? `Asian handicap (main line): ${homeTeam} ${game.soccer_spread.homeValue} @ ${game.soccer_spread.homeOdds} / ${awayTeam} ${game.soccer_spread.awayValue} @ ${game.soccer_spread.awayOdds}`
-      : 'Asian handicap: NOT AVAILABLE — do not pick or cite a handicap line',
+    (() => {
+      const fmt = (v) => (Number(v) > 0 ? `+${v}` : `${v}`);
+      const ladder = Array.isArray(game.soccer_spread_ladder) ? game.soccer_spread_ladder : [];
+      if (ladder.length) {
+        // The FULL handicap ladder — so Gary can shop the favorite/underdog across goal
+        // lines for the price his read supports, not just one elected main line.
+        const rungs = ladder.map((l) =>
+          `  ${homeTeam} ${fmt(l.homeValue)} @ ${l.homeOdds} / ${awayTeam} ${fmt(l.awayValue)} @ ${l.awayOdds}`);
+        return `Asian handicap lines (pick ANY goal line that fits your read — this is how you back the favorite or the underdog at a price you like):\n${rungs.join('\n')}`;
+      }
+      if (game.soccer_spread && Math.abs(Number(game.soccer_spread.homeValue)) <= 4.5) {
+        return `Asian handicap (main line): ${homeTeam} ${fmt(game.soccer_spread.homeValue)} @ ${game.soccer_spread.homeOdds} / ${awayTeam} ${fmt(game.soccer_spread.awayValue)} @ ${game.soccer_spread.awayOdds}`;
+      }
+      return 'Asian handicap: NOT AVAILABLE — do not pick or cite a handicap line';
+    })(),
     // Sanity floor (defense-in-depth behind extractMainTotal): a real match-goals
     // main line lives ~1.0-5.0. Anything outside is a ladder extreme — never feed
     // it to Gary, so he can't pick an absurd "Under 10".

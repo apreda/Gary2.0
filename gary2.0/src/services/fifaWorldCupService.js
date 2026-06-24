@@ -253,6 +253,7 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
       awayValue: row.spread_away_value ?? null,
       awayOdds: cleanOdds(row.spread_away_odds),
     } : extractMainSpread(row.markets, ml),
+    spreadLadder: extractSpreadLadder(row.markets, ml),
     total: flatTotalOk ? {
       line: row.total_value,
       over: cleanOdds(row.total_over_odds),
@@ -363,6 +364,38 @@ function extractMainSpread(markets, ml = null) {
   }
   half.sort((a, b) => juiceGap(a.homeOdds, a.awayOdds) - juiceGap(b.homeOdds, b.awayOdds));
   return half[0];
+}
+
+// The favorite's FULL clean half-goal handicap ladder (every realistic rung, not just
+// the elected main line) so Gary can shop the favorite/underdog across goal lines —
+// -0.5 / -1.5 / -2.5 ... — for the price his read supports, the natural way to back a
+// heavy favorite whose bare ML is too short, instead of being funneled to the underdog
+// or the draw. Same filters as extractMainSpread (realistic <=4.5, ML-sign-consistent,
+// clean half-goal) MINUS the single-line magnitude election. Sorted by |handicap| asc.
+function extractSpreadLadder(markets, ml = null) {
+  const lines = [];
+  for (const mkt of (markets || [])) {
+    if (mkt.type !== 'spread' || mkt.period !== 'match' || mkt.scope !== 'match') continue;
+    const home = (mkt.outcomes || []).find(o => o.side === 'home' || o.type === 'home');
+    const away = (mkt.outcomes || []).find(o => o.side === 'away' || o.type === 'away');
+    const value = parseFloat(home?.handicap ?? home?.line_value);
+    if (!home || !away || !Number.isFinite(value)) continue;
+    const homeOdds = cleanOdds(home.american_odds);
+    const awayOdds = cleanOdds(away.american_odds);
+    if (homeOdds == null || awayOdds == null) continue;
+    lines.push({ homeValue: value, homeOdds, awayValue: parseFloat(away.handicap ?? away.line_value), awayOdds });
+  }
+  let realistic = lines.filter(l => Math.abs(l.homeValue) <= 4.5);
+  if (ml && ml.home != null && ml.away != null) {
+    const homeFav = Number(ml.home) < Number(ml.away);
+    const consistent = realistic.filter(l => homeFav ? l.homeValue <= 0 : l.homeValue >= 0);
+    if (consistent.length) realistic = consistent; // favorite must be GIVING goals
+  }
+  const half = realistic.filter(l => isHalfGoalLine(l.homeValue));
+  if (half.length === 0) return null;
+  const seen = new Map();
+  for (const l of half) if (!seen.has(l.homeValue)) seen.set(l.homeValue, l); // one rung per line
+  return [...seen.values()].sort((a, b) => Math.abs(a.homeValue) - Math.abs(b.homeValue));
 }
 
 function extractMainTotal(markets) {
@@ -515,6 +548,7 @@ export function formatMatchForPipeline(match, consensus = null) {
     soccer_group: match.group?.name ?? null,
     soccer_three_way_ml: consensus?.moneyline ?? null,
     soccer_spread: consensus?.spread ?? null,
+    soccer_spread_ladder: consensus?.spreadLadder ?? null,
     soccer_total: consensus?.total ?? null,
     description: `FIFA World Cup — ${match.stage?.name ?? ''}${match.group ? ` (${match.group.name})` : ''}`.trim(),
     _raw: match,
