@@ -315,14 +315,31 @@ function extractMainSpread(markets, ml = null) {
   const lines = [];
   for (const mkt of (markets || [])) {
     if (mkt.type !== 'spread' || mkt.period !== 'match' || mkt.scope !== 'match') continue;
-    const home = (mkt.outcomes || []).find(o => o.side === 'home' || o.type === 'home');
-    const away = (mkt.outcomes || []).find(o => o.side === 'away' || o.type === 'away');
-    const value = parseFloat(home?.handicap ?? home?.line_value);
-    if (!home || !away || !Number.isFinite(value)) continue;
-    const homeOdds = cleanOdds(home.american_odds);
-    const awayOdds = cleanOdds(away.american_odds);
-    if (homeOdds == null || awayOdds == null) continue; // can't balance-score a sentinel line
-    lines.push({ homeValue: value, homeOdds, awayValue: parseFloat(away.handicap ?? away.line_value), awayOdds });
+    // Skip corners/bookings/cards handicaps mistyped as a match spread (e.g. key
+    // "spread_match_match_asian_handicap_corners") — only the real match spread counts.
+    const k = String(mkt.key ?? mkt.name ?? '').toLowerCase();
+    if (/corner|booking|card|foul|offside/.test(k)) continue;
+    // BDL packs the WHOLE Asian-handicap ladder into each market's outcomes[] (one market =
+    // many home/away rungs). Read EVERY rung — pairing each home line to its mirror away line
+    // by handicap magnitude — instead of .find()'ing only the FIRST pair, which dropped the
+    // real main line (e.g. Morocco -1.5) and made extractMainSpread return null, so the scout
+    // printed "Asian handicap: NOT AVAILABLE" and funnelled Gary to the Draw on heavy favorites.
+    const outs = mkt.outcomes || [];
+    const homes = outs.filter(o => o.side === 'home' || o.type === 'home');
+    const aways = outs.filter(o => o.side === 'away' || o.type === 'away');
+    for (const home of homes) {
+      const value = parseFloat(home.handicap ?? home.line_value);
+      if (!Number.isFinite(value)) continue;
+      const away = aways.find(a => {
+        const av = parseFloat(a.handicap ?? a.line_value);
+        return Number.isFinite(av) && Math.abs(av + value) < 1e-6; // away mirrors home (-value)
+      });
+      if (!away) continue;
+      const homeOdds = cleanOdds(home.american_odds);
+      const awayOdds = cleanOdds(away.american_odds);
+      if (homeOdds == null || awayOdds == null) continue; // can't balance-score a sentinel line
+      lines.push({ homeValue: value, homeOdds, awayValue: parseFloat(away.handicap ?? away.line_value), awayOdds });
+    }
   }
   if (lines.length === 0) return null;
   // Balanced juice alone can crown a ladder EXTREME as the "main" line. Real soccer
