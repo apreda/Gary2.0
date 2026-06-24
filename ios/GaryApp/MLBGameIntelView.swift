@@ -538,7 +538,7 @@ struct PlayerCardCarousel: View {
 
                 TabView(selection: $index) {
                     ForEach(Array(players.enumerated()), id: \.offset) { i, pl in
-                        PlayerCardV4(player: pl).tag(i).padding(.horizontal, 6)
+                        CarouselCard(player: pl).tag(i).padding(.horizontal, 6)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -557,15 +557,39 @@ struct PlayerCardCarousel: View {
     }
 }
 
-private struct PlayerCardV4: View {
+// Carousel page — fetches one player's pack, then renders the shared v4 card.
+private struct CarouselCard: View {
     let player: CarouselPlayer
     @State private var pack: PlayerInsightPack? = nil
     @State private var loading = true
+    var body: some View {
+        PlayerCardV4(name: player.name, heat: player.heat, game: player.game, pack: pack, loading: loading)
+            .task(id: player.id) {
+                loading = true
+                pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: player.id)
+                loading = false
+            }
+    }
+}
+
+// The optional "why this surfaced" hero the Hub passes (the lane verdict); nil in the carousel.
+struct PlayerCardV4Edge { let eyebrow: String; let title: String; let body: String }
+
+// Pure v4 renderer — SHARED by the lineup carousel (CarouselCard fetches) and the Hub player
+// breakdown (PlayerInsightSheet passes its pack + an edge). One card design across both.
+struct PlayerCardV4: View {
+    let name: String
+    var heat: String = ""
+    var game: String = ""
+    let pack: PlayerInsightPack?
+    var loading: Bool = false
+    var edge: PlayerCardV4Edge? = nil
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 header
+                if let e = edge { edgeHero(e) }
                 if loading {
                     ProgressView().tint(PCV4.gold).frame(maxWidth: .infinity).padding(.vertical, 46)
                 } else if let p = pack {
@@ -582,25 +606,38 @@ private struct PlayerCardV4: View {
                 .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(PCV4.line, lineWidth: 1))
                 .shadow(color: .black.opacity(0.55), radius: 24, y: 10)
         )
-        .task(id: player.id) {
-            loading = true
-            pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: player.id)
-            loading = false
+    }
+
+    // THE EDGE — the Hub's "why this player surfaced" lane verdict, in v4 style.
+    @ViewBuilder private func edgeHero(_ e: PlayerCardV4Edge) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(e.eyebrow.uppercased()).font(GaryFonts.mono(9.5, bold: true)).tracking(1.4).foregroundStyle(PCV4.gold)
+            Text(e.title).font(GaryFonts.display(18)).foregroundStyle(PCV4.ink).fixedSize(horizontal: false, vertical: true)
+            if !e.body.isEmpty {
+                Text(e.body).font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(PCV4.gold.opacity(0.07))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(PCV4.line, lineWidth: 1)))
+        .padding(.horizontal, 18).padding(.bottom, 4)
     }
 
     // MARK: header
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(player.game.uppercased())
-                .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+            if !game.isEmpty {
+                Text(game.uppercased())
+                    .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+            }
             HStack(alignment: .top) {
-                Text(pack?.name ?? player.name)
+                Text(pack?.name ?? name)
                     .font(GaryFonts.display(38)).foregroundStyle(PCV4.ink).lineLimit(2).minimumScaleFactor(0.7)
                 Spacer()
-                if player.heat == "hot" {
+                if heat == "hot" {
                     chip("▲ HOT")
-                } else if player.heat == "cold" {
+                } else if heat == "cold" {
                     chip("▼ COLD")
                 }
             }

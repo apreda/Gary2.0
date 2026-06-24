@@ -98,15 +98,6 @@ export async function computeGaryHrThreats(ctx) {
     /^MLB/i.test(p.sport || 'MLB')
   );
 
-  // Headline verbs rotate deterministically by player name — re-runs stay
-  // stable for the same player, but the board mixes its phrasing.
-  const HR_VERBS = ['to go deep', 'to leave the yard', 'to homer', 'for a home run', 'to clear a fence'];
-  const hrVerb = (name) => {
-    let h = 0;
-    for (const ch of String(name)) h = (h + ch.charCodeAt(0)) % 997;
-    return HR_VERBS[h % HR_VERBS.length];
-  };
-
   for (const p of hrPicks) {
     const detail = twoSentences(p.rationale);
     if (!p.player || !detail) continue; // fail closed — never emit an empty card
@@ -123,7 +114,7 @@ export async function computeGaryHrThreats(ctx) {
     const playerId = await resolvePlayerId(playerTeamId, p.player);
     rows.push(makeRow({
       category: 'garyHrThreats',
-      headline: `${p.player} ${hrVerb(p.player)}`,
+      headline: p.player,   // name only — the "Home Run Threats" section header already says the rest
       detail,
       game: p.matchup || '',
       value: fmtOdds(p.odds),

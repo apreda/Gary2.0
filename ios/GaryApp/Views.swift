@@ -12511,8 +12511,8 @@ struct CompactPickRow: View {
         // a score. This is the one place the final state lives on every card now.
         if displayResult != nil {
             if let ls = liveFinal, ls.away_score != nil, ls.home_score != nil { return liveSlotText(ls, label: "FINAL") }
-            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(fs)" }
-            if let g = liveCache.gradedScore(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")") { return "FINAL · \(g)" }
+            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(finalScoreLine(matchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")", raw: fs))" }
+            if let g = liveCache.gradedScore(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")") { return "FINAL · \(finalScoreLine(matchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")", raw: g))" }
             return "FINAL"
         }
         guard let ls = liveStatus else { return nil }
@@ -16307,9 +16307,40 @@ func liveSlotText(_ ls: LiveScore, label: String) -> String {
 /// `detail` (match minute "67'" / "Q3 4:12" / period); MLB adds outs + base
 /// runners. e.g. "LIVE · URU 0 · KSA 1 · 67'" or
 /// "LIVE · SD 4 · PHI 6 · BOT 7 · 2 OUT · 1B·3B".
+/// Standard team abbreviation from a name via the league keyword maps. Global so any card
+/// footer can label a settled score ("CHC 10 · NYM 3", not a bare "10-3" that hides who won).
+func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
+    let lower = name.lowercased()
+    let maps: [[String: [String]]]
+    switch (league ?? "").uppercased() {
+    case "MLB": maps = [mlbTeamKeywords]
+    case "NBA": maps = [nbaTeamKeywords]
+    case "NHL": maps = [nhlTeamKeywords]
+    case "WC": maps = [wcTeamKeywords]
+    default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords]
+    }
+    for map in maps {
+        for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
+    }
+    let last = lower.split(separator: " ").last.map(String.init) ?? lower
+    return String(last.prefix(3)).uppercased()
+}
+
+/// A settled score WITH team labels ("CHC 10 · NYM 3") from a matchup + a raw "10-3".
+/// Falls back to the raw score if it can't parse. Global — shared by every card footer.
+func finalScoreLine(matchup: String, raw: String, league: String? = nil) -> String {
+    let parts = raw.components(separatedBy: CharacterSet(charactersIn: "-\u{2013}")).map { $0.trimmingCharacters(in: .whitespaces) }
+    let teams = matchup.components(separatedBy: " @ ")
+    guard parts.count == 2, teams.count == 2 else { return raw }
+    return "\(teamAbbrevFromName(teams[0], league: league)) \(parts[0]) \u{00B7} \(teamAbbrevFromName(teams[1], league: league)) \(parts[1])"
+}
+
 func liveLineRich(_ ls: LiveScore, label: String) -> String {
     var bits: [String] = [label]
-    if let sl = ls.scoreLine { bits.append(sl) }
+    // FINAL gets team labels so a settled score says who scored what.
+    if label == "FINAL", let a = ls.away_score, let h = ls.home_score, let aw = ls.away_abbr, let hm = ls.home_abbr {
+        bits.append("\(aw) \(a) \u{00B7} \(hm) \(h)")
+    } else if let sl = ls.scoreLine { bits.append(sl) }
     else if let a = ls.away_score, let h = ls.home_score { bits.append("\(a)–\(h)") }
     guard label == "LIVE" else { return bits.joined(separator: " · ") }
     if let det = ls.detail, !det.isEmpty, det != "LIVE", det != "FINAL" { bits.append(det) }
@@ -16941,7 +16972,7 @@ struct PicksCarouselView: View {
                 return ("▶ LIVE\(score)\(det)", GaryColors.gold)
             }
             if ls.isFinal, let score = ls.scoreLine {
-                return ("FINAL · \(score)", .white.opacity(0.35))
+                return ("FINAL · \(formatFinalScore(g.matchup, score))", .white.opacity(0.35))
             }
         }
         // Pre-game: the start time (restored, user call Jun 16) lives here in the
@@ -16973,12 +17004,7 @@ struct PicksCarouselView: View {
     /// "6-8" + "Rockies @ Cubs" -> "COL 6 · CHC 8". final_score is away-home,
     /// matching the matchup's "Away @ Home" order.
     private func formatFinalScore(_ matchup: String, _ raw: String) -> String {
-        let parts = raw.components(separatedBy: CharacterSet(charactersIn: "-\u{2013}"))
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-        let teams = matchup.components(separatedBy: " @ ")
-        guard parts.count == 2, teams.count == 2 else { return raw }
-        let lg = gameLeague((matchup: matchup, time: "", props: []))
-        return "\(teamAbbrev(teams[0], league: lg)) \(parts[0]) \u{00B7} \(teamAbbrev(teams[1], league: lg)) \(parts[1])"
+        finalScoreLine(matchup: matchup, raw: raw, league: gameLeague((matchup: matchup, time: "", props: [])))
     }
 
     private var emptyState: some View {
@@ -20134,7 +20160,7 @@ struct CompactPropRow: View {
                ls.isFinal, ls.away_score != nil, ls.home_score != nil {
                 return liveLineRich(ls, label: "FINAL")
             }
-            if let g = liveCache.gradedScore(forMatchup: prop.matchup ?? "") { return "FINAL · \(g)" }
+            if let g = liveCache.gradedScore(forMatchup: prop.matchup ?? "") { return "FINAL · \(finalScoreLine(matchup: prop.matchup ?? "", raw: g))" }
             return "FINAL"
         }
         guard let ls = liveStatus else { return nil }
