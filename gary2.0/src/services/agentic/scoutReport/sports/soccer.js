@@ -256,7 +256,14 @@ export async function buildSoccerScoutReport(game, options = {}) {
     if (!offered.length) return '3-way moneyline: pending';
     let line = `3-way moneyline: ${offered.map((l) => `${l.label} ${l.odds}`).join(' / ')}`;
     if (dropped.length) {
-      line += `\n  (${dropped.map((l) => l.label).join(' & ')} ML not offered — priced heavier than -200, so the bare moneyline isn't on the menu for them. This is a structural constraint on the available prices, not a directional hint: back them via the standard Asian-handicap line below, or take whichever side your analysis favors.)`;
+      // Only point Gary to the handicap if one was actually elected — never promise a line the
+      // section below prints as "NOT AVAILABLE" (that self-contradiction funnelled him to the
+      // Draw). With the ladder-harvest fix a handicap is essentially always present; this is a net.
+      const hasHandicap = game.soccer_spread && Math.abs(Number(game.soccer_spread.homeValue)) <= 4.5;
+      const route = hasHandicap
+        ? 'back them via the standard Asian-handicap line below, or take whichever side your analysis favors'
+        : 'no standard handicap is listed for this match either, so there is no standard way to back them on the side — a no-side play (lean on the total) is fine; do NOT default to the Draw or the underdog';
+      line += `\n  (${dropped.map((l) => l.label).join(' & ')} ML not offered — priced heavier than -200, so the bare moneyline isn't on the menu for them. This is a structural constraint on the available prices, not a directional hint: ${route}.)`;
     }
     return line;
   })();
