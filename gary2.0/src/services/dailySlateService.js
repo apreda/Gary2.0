@@ -195,8 +195,26 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
     return { date: etDateStr, total: 0, byLeague };
   }
 
+  // De-dupe on the conflict key BEFORE the upsert. A doubleheader (same matchup, two game
+  // times on one ET date) produces two rows with an identical (date, league, away_team,
+  // home_team) key; PostgREST merge-duplicates then throws "ON CONFLICT DO UPDATE command
+  // cannot affect row a second time" (a 500) and sinks the WHOLE slate — that's the
+  // 2026-06-24 outage (3 MLB doubleheaders). Keep the earliest kickoff per matchup.
+  const dedupedRows = Object.values(
+    rows.slice()
+      .sort((a, b) => new Date(a.commence_time || 0) - new Date(b.commence_time || 0))
+      .reduce((acc, r) => {
+        const k = `${r.date}|${r.league}|${r.away_team}|${r.home_team}`;
+        if (!acc[k]) acc[k] = r;   // first (earliest) wins
+        return acc;
+      }, {}),
+  );
+  if (dedupedRows.length < rows.length) {
+    console.log(`[DailySlate] De-duped ${rows.length - dedupedRows.length} doubleheader row(s) on the conflict key (kept earliest kickoff)`);
+  }
+
   // Idempotent upsert (PostgREST merge-duplicates on the unique key).
-  const sanitized = JSON.parse(JSON.stringify(rows));
+  const sanitized = JSON.parse(JSON.stringify(dedupedRows));
   await axios({
     method: 'POST',
     url: `${supabaseUrl}/rest/v1/${TABLE}`,
@@ -211,6 +229,6 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
   });
 
   const summary = Object.entries(byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
-  console.log(`[DailySlate] ✅ Upserted ${rows.length} game(s) for ${etDateStr} (${summary})`);
-  return { date: etDateStr, total: rows.length, byLeague };
+  console.log(`[DailySlate] ✅ Upserted ${dedupedRows.length} game(s) for ${etDateStr} (${summary})`);
+  return { date: etDateStr, total: dedupedRows.length, byLeague };
 }
