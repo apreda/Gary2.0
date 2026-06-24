@@ -17106,24 +17106,16 @@ struct PicksTodayPage: View {
         }()
 
         if showGame, let gp {
-            freePickEyebrow   // the Today page is the free showcase — labelled for every sport
             FlippablePickCard(pick: gp.pick,
                               gameResult: gamePickResult(gp.pick),
                               showSportBadge: true)
                 .padding(.horizontal, 22)   // match the per-game cards (screen−44) so eyebrow + time line up across the Picks tab
         } else if let only = prop {
-            freePickEyebrow   // free showcase label on the prop too, for every sport
             FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
                 .padding(.horizontal, 22)   // same width as the per-game prop cards
         }
     }
 
-    private var freePickEyebrow: some View {
-        Text("FREE PICK")
-            .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-            .foregroundStyle(GaryColors.gold.opacity(0.9))
-            .padding(.horizontal, 16).padding(.top, 8)
-    }
 }
 
 struct PicksGamePage: View {

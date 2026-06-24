@@ -410,11 +410,11 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
     : isSoccer
     ? `**TWO PLAYS REQUIRED (World Cup):** Output BOTH of these for this match — they are stored and shown as two separate cards:
-1. A SIDE play — EITHER the 3-WAY MONEYLINE (Home win / Draw / Away win — three separately priced outcomes, settles on 90 minutes) OR an ASIAN HANDICAP at any goal line the odds show (team ±0.5 / 1.0 / 1.5 / 2.0 / 2.5 goals).
+1. A SIDE play — EITHER the 3-WAY MONEYLINE (Home win / Draw / Away win — three separately priced outcomes, settles on 90 minutes) OR the ASIAN HANDICAP (the single standard goal line shown in the odds — e.g. a team -1.5 / the other +1.5; pick a SIDE on THAT line, never an alt line).
 2. A TOTAL play — Over or Under the match-goals line.
 Use only markets the odds actually show, and report the EXACT odds for each play.
 
-FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heavier than -200) is NOT offered to you — when a favorite is that short you will see no moneyline price for them in the RAW ODDS VALUES, so backing their bare moneyline is not an available pick. This is a structural constraint on the available prices, NOT a directional hint. The Asian-handicap ladder is shown so you can still back that favorite at the goal line your read supports (-0.5, -1.5, -2.5 ...), or take the underdog's moneyline, or the Draw — choose the side and the line your own analysis of this match supports.`
+FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heavier than -200) is NOT offered to you — when a favorite is that short you will see no moneyline price for them in the RAW ODDS VALUES, so backing their bare moneyline is not an available pick. This is a structural constraint on the available prices, NOT a directional hint. The standard Asian handicap is still shown, so you can back that favorite at the goal line (e.g. -1.5), take the underdog's moneyline, or take the Draw — choose whichever side your own analysis of this match supports.`
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
@@ -952,7 +952,7 @@ ${scoutReport}
 This is a 3-way soccer match. Pick from whichever markets the scout report shows odds for:
 **Moneyline (3-way):** ${homeTeam} to win, Draw, or ${awayTeam} to win — three separately priced outcomes (settles on 90 minutes).
 **Totals (O/U goals):** Over/Under total match goals, when a line is shown.
-**Asian Handicap:** team ±0.5/1.0/1.5/2.0/2.5 goals — pick any goal line the scout report shows.
+**Asian Handicap:** the single standard goal line the scout report shows (a team -1.5 / the other +1.5, etc.) — pick a side on that line, never an alt line.
 Use only markets present in the scout report odds, and transcribe the exact odds.
 </bet_type_menu>
 
