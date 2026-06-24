@@ -20113,22 +20113,11 @@ struct CompactPropRow: View {
         return player.isEmpty ? bet : "\(player)\n\(bet)"
     }
 
-    /// Matchup context for the meta row — team (+ FINAL score when settled).
-    /// Time and odds render SEPARATELY (time in the footer, odds in gold) to
-    /// match the game card exactly.
+    /// Matchup context for the meta row — just the team now. The FINAL score + situation
+    /// moved to the footer (game-card parity), so the meta row stays "Rangers · +130"
+    /// rather than carrying the result. Time and odds render SEPARATELY.
     private var metaLine: String {
-        var parts: [String] = []
-        let team = Formatters.shortTeamName(prop.team, league: prop.effectiveLeague)
-        if !team.isEmpty { parts.append(team) }
-        if resolvedResult != nil {
-            if let ls = liveCache.status(forMatchup: prop.matchup ?? ""),
-               ls.isFinal, let s = ls.scoreLine {
-                parts.append("FINAL · \(s)")
-            } else {
-                parts.append("FINAL")
-            }
-        }
-        return parts.joined(separator: " · ")
+        return Formatters.shortTeamName(prop.team, league: prop.effectiveLeague)
     }
 
     /// Odds rendered separately in sport-gold in the meta row (game card parity).
@@ -20146,7 +20135,17 @@ struct CompactPropRow: View {
     /// Footer live line — teams + score + situation (minute / outs+bases),
     /// IDENTICAL to the game card via the shared formatter.
     private var liveFooterText: String? {
-        guard resolvedResult == nil, let ls = liveStatus else { return nil }
+        // Settled — the FINAL score with team names rides the footer's left corner, exactly
+        // like the game card (the prop's own CASHED/LOST stamp sits separately in the corner).
+        if resolvedResult != nil {
+            if let ls = liveCache.status(forMatchup: prop.matchup ?? ""),
+               ls.isFinal, ls.away_score != nil, ls.home_score != nil {
+                return liveLineRich(ls, label: "FINAL")
+            }
+            if let g = liveCache.gradedScore(forMatchup: prop.matchup ?? "") { return "FINAL · \(g)" }
+            return "FINAL"
+        }
+        guard let ls = liveStatus else { return nil }
         if ls.isLive { return liveLineRich(ls, label: "LIVE") }
         if ls.isFinal { return liveLineRich(ls, label: "FINAL") }
         return nil

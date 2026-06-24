@@ -965,6 +965,11 @@ async function processPropBets(date) {
   const mlbGames = (await Promise.all(dates.map(d => fetchGames('MLB', d)))).flat();
   const mlbStats = await fetchMLBStats([...new Set(mlbGames.map(g => g.id).filter(Boolean))]);
   const nflStats = await fetchNFLStats([...new Set(nflGames.map(g => g.id))]);
+  // FINALITY GATE source (props): the set of MLB games that are FINAL. A prop whose game
+  // isn't final must NOT be graded — an in-progress/unstarted game returns 0/partial stats
+  // and settles the player prematurely (today's live game graded "0 TB -> LOST" before first
+  // pitch). WC is gated on 'completed' below; this mirrors the cloud grade-props gate.
+  const mlbFinalIds = new Set(mlbGames.filter(g => String(g.status || '').toUpperCase().includes('FINAL')).map(g => String(g.id)));
 
   console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats`);
 
@@ -974,10 +979,12 @@ async function processPropBets(date) {
   let wcStats = [];
   const wcNameToId = {};
   const wcShotsByPlayer = {};
+  const wcCompletedIds = new Set();   // FINALITY GATE: only completed WC matches are gradeable
   try {
     const wcMatches = (await Promise.all(dates.map(d => fifaWorldCup.getMatchesForDate(d)))).flat()
       .filter(m => m.status === 'completed');
     const wcIds = [...new Set(wcMatches.map(m => m.id).filter(Boolean))];
+    wcIds.forEach(id => wcCompletedIds.add(String(id)));
     if (wcIds.length) {
       wcStats = await fifaWorldCup.getPlayerMatchStats(wcIds);
       const lineups = await fifaWorldCup.getMatchLineups(wcIds);
@@ -998,6 +1005,7 @@ async function processPropBets(date) {
 
   const stats = { w: 0, l: 0 };
   const handled = new Set();
+  let skippedNotFinal = 0;
 
   for (const row of rows) {
     const picks = typeof row.props === 'string' ? JSON.parse(row.props) : (row.props || row.picks || []);
@@ -1016,6 +1024,14 @@ async function processPropBets(date) {
       // line), so it's allowed through the line guard below.
       const isAnytimeGoal = dataSport === 'WC' && /anytime|goalscorer|to score/i.test(type);
       if (!name || !type || (line === undefined && !isAnytimeGoal)) continue;
+
+      // FINALITY GATE (props) — never grade a prop whose game isn't final. An in-progress or
+      // unstarted game returns 0/partial stats and settles the player prematurely (a live MLB
+      // game graded "0 total bases -> LOST" before first pitch). Skip -> the prop stays pending
+      // and grades correctly once the game is final. WC = completed match; MLB = the fetched
+      // game's FINAL status. Props with no game_id fall through (legacy).
+      if (dataSport === 'MLB' && p.game_id != null && !mlbFinalIds.has(String(p.game_id))) { skippedNotFinal++; continue; }
+      if (dataSport === 'WC' && p.game_id != null && !wcCompletedIds.has(String(p.game_id))) { skippedNotFinal++; continue; }
 
       const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
       if (handled.has(key)) continue; handled.add(key);
@@ -1099,6 +1115,7 @@ async function processPropBets(date) {
       }
     }
   }
+  if (skippedNotFinal) console.log(`  ⏳ Props finality gate: skipped ${skippedNotFinal} pick(s) whose game isn't final yet (will grade once final).`);
   return stats;
 }
 
