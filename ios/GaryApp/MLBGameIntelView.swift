@@ -34,6 +34,7 @@ private enum MLBI {
 private struct MLBFielder: Identifiable {
     let id = UUID()
     let num: Int, name: String, pos: String
+    var playerId = ""                // player_id for the insight-card fetch (carousel)
     let dx: CGFloat, dy: CGFloat
     let heat: String                 // hot / cold / steady
     let bats: String                 // L / R / S
@@ -171,7 +172,16 @@ struct MLBGameIntelView: View {
                 }.padding(.trailing, 14).padding(.top, 12)
             }
         }
-        .sheet(item: $selected) { f in MLBFielderFlip(f: f, jersey: ballpark?.jersey ?? .blue, jerseyText: ballpark?.text ?? .white, facing: facingPitcherName, edges: playerEdges(f.name)).presentationDetents([.medium, .large]) }
+        .fullScreenCover(item: $selected) { f in
+            // Centered popup carousel — swipe through the team's lineup like a pack of cards.
+            // .presentationBackground(.clear) lets the dimmed page show through (iOS 16.4+).
+            let carousel = PlayerCardCarousel(
+                players: displayLineup.map { CarouselPlayer(id: $0.playerId, name: $0.name, heat: $0.heat, game: matchup.uppercased()) },
+                index: displayLineup.firstIndex(where: { $0.name == f.name }) ?? 0,
+                onClose: { selected = nil }
+            )
+            if #available(iOS 16.4, *) { carousel.presentationBackground(.clear) } else { carousel }
+        }
         .sheet(isPresented: $showWeather) { weatherSheet.presentationDetents([.medium]) }
         .task { await loadRealLineup() }
     }
@@ -211,12 +221,12 @@ struct MLBGameIntelView: View {
         var out: [MLBFielder] = []
         for f in h.fielders {
             guard let pos = f.pos, let c = Self.posCoord[pos] else { continue }
-            out.append(MLBFielder(num: f.order ?? 0, name: Self.surname(f.name ?? ""), pos: pos, dx: c.0, dy: c.1,
+            out.append(MLBFielder(num: f.order ?? 0, name: Self.surname(f.name ?? ""), pos: pos, playerId: f.playerId ?? "", dx: c.0, dy: c.1,
                 heat: f.heat ?? "steady", bats: f.bats ?? "", hr: f.hrEdge ?? false, plat: f.plat ?? false,
                 fillIn: f.fillIn ?? false, ord: f.order ?? 0, vR: f.ops ?? ""))
         }
         if let p = h.pitcher, let c = Self.posCoord["P"] {
-            out.append(MLBFielder(num: 0, name: Self.surname(p.name ?? ""), pos: "P", dx: c.0, dy: c.1, heat: "steady", bats: "", sp: true))
+            out.append(MLBFielder(num: 0, name: Self.surname(p.name ?? ""), pos: "P", playerId: p.playerId ?? "", dx: c.0, dy: c.1, heat: "steady", bats: "", sp: true))
         }
         return out
     }
@@ -604,3 +614,277 @@ private struct MLBFielderFlip: View {
     }
 }
 
+
+// Player card (v4 — readable black/white/gold) shown as a CENTERED POPUP CAROUSEL.
+// Tap a fielder on the lineup field → this opens over the team's lineup; swipe left/
+// right to flip through each player like a pack of baseball cards, or tap the dim
+// backdrop / the X to exit and pick another. Renders the rich player_insight_cards
+// pack (fetched per player by id), with a lean header fallback before it posts.
+// No flip animation — it just shows the info.
+
+private enum PCV4 {
+    static let bg   = Color(hex: "#1B160E")
+    static let ink  = Color(hex: "#F7F2E8")   // primary — bright cream
+    static let mut  = Color(hex: "#CFC6B2")   // secondary — readable warm cream (no cold grey)
+    static let mut2 = Color(hex: "#A99E89")   // small labels
+    static let gold = Color(hex: "#ECC256")   // strength / highlight
+    static let bad  = Color(hex: "#E2D9C6")   // "weak" values stay readable, just not gold
+    static let line = Color(hex: "#ECC256").opacity(0.16)
+    static let barbg = Color.white.opacity(0.08)
+}
+
+/// One card in the carousel.
+struct CarouselPlayer: Identifiable {
+    let id: String        // player_id (for the player_insight_cards fetch)
+    let name: String
+    let heat: String      // hot / cold / steady (from the field card)
+    let game: String      // "CUBS @ METS" context line
+}
+
+struct PlayerCardCarousel: View {
+    let players: [CarouselPlayer]
+    @State var index: Int
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.74).ignoresSafeArea()
+                .onTapGesture { onClose() }
+
+            VStack(spacing: 10) {
+                HStack {
+                    Text("\(index + 1) / \(players.count)")
+                        .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+                    Spacer()
+                    Button { onClose() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28)).foregroundStyle(.white.opacity(0.55))
+                    }.buttonStyle(.plain)
+                }
+                .padding(.horizontal, 26)
+
+                TabView(selection: $index) {
+                    ForEach(Array(players.enumerated()), id: \.offset) { i, pl in
+                        PlayerCardV4(player: pl).tag(i).padding(.horizontal, 6)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(maxHeight: 680)
+
+                HStack(spacing: 6) {
+                    ForEach(players.indices, id: \.self) { i in
+                        Circle().fill(i == index ? PCV4.gold : Color.white.opacity(0.22))
+                            .frame(width: 6, height: 6)
+                    }
+                }
+            }
+            .padding(.vertical, 30)
+        }
+        .transition(.opacity)
+    }
+}
+
+private struct PlayerCardV4: View {
+    let player: CarouselPlayer
+    @State private var pack: PlayerInsightPack? = nil
+    @State private var loading = true
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                if loading {
+                    ProgressView().tint(PCV4.gold).frame(maxWidth: .infinity).padding(.vertical, 46)
+                } else if let p = pack {
+                    sections(p)
+                } else {
+                    Text("Full breakdown posts with the day's edge refresh.")
+                        .font(GaryFonts.text(13)).foregroundStyle(PCV4.mut2)
+                        .padding(.horizontal, 24).padding(.vertical, 26)
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(PCV4.bg)
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(PCV4.line, lineWidth: 1))
+                .shadow(color: .black.opacity(0.55), radius: 24, y: 10)
+        )
+        .task(id: player.id) {
+            loading = true
+            pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: player.id)
+            loading = false
+        }
+    }
+
+    // MARK: header
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(player.game.uppercased())
+                .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+            HStack(alignment: .top) {
+                Text(pack?.name ?? player.name)
+                    .font(GaryFonts.display(38)).foregroundStyle(PCV4.ink).lineLimit(2).minimumScaleFactor(0.7)
+                Spacer()
+                if player.heat == "hot" {
+                    chip("▲ HOT")
+                } else if player.heat == "cold" {
+                    chip("▼ COLD")
+                }
+            }
+            if let id = identityLine {
+                Text(id).font(GaryFonts.text(13, .medium)).foregroundStyle(PCV4.mut)
+            }
+        }
+        .padding(.horizontal, 26).padding(.top, 24).padding(.bottom, 18)
+    }
+    private func chip(_ t: String) -> some View {
+        Text(t).font(GaryFonts.mono(10.5, bold: true))
+            .foregroundStyle(Color(hex: "#1B1407"))
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(PCV4.gold))
+    }
+    private var identityLine: String? {
+        guard let p = pack else { return nil }
+        var bits: [String] = []
+        if let pos = p.position { bits.append(pos) }
+        if let h = p.hand { bits.append(p.type == "pitcher" ? "Throws \(h)" : "Bats \(h)") }
+        if let t = p.team { bits.append(t) }
+        return bits.isEmpty ? nil : bits.joined(separator: "  ·  ")
+    }
+
+    // MARK: sections
+    @ViewBuilder private func sections(_ p: PlayerInsightPack) -> some View {
+        if let read = readBullets(p), !read.isEmpty {
+            section("The read") { VStack(alignment: .leading, spacing: 11) { ForEach(read.indices, id: \.self) { readRow(read[$0]) } } }
+        }
+        if let pm = p.pitchMatchup, !pm.isEmpty {
+            section(p.type == "pitcher" ? "His arsenal" : "What he'll see") { matchupTable(pm) }
+        }
+        if let sp = p.splits, !sp.isEmpty {
+            section("Splits") { VStack(alignment: .leading, spacing: 14) { ForEach(sp.indices, id: \.self) { splitRow(sp[$0]) } } }
+        }
+        if let fr = p.formRows, !fr.isEmpty {
+            section("Recent") { formGrid(fr, headline: p.form) }
+        }
+        if let pr = p.props, !pr.isEmpty {
+            section("The angle") { VStack(spacing: 0) { ForEach(pr.indices, id: \.self) { propRow(pr[$0]) } } }
+        }
+    }
+
+    private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Text(cap.uppercased()).font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+                .foregroundStyle(PCV4.gold).opacity(0.92)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 26).padding(.vertical, 20)
+        .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
+    }
+
+    // strengths (+) / weaknesses (−)
+    private func readBullets(_ p: PlayerInsightPack) -> [(Bool, String)]? {
+        var out: [(Bool, String)] = []
+        (p.strengths ?? []).prefix(2).forEach { out.append((true, $0)) }
+        (p.weaknesses ?? []).prefix(2).forEach { out.append((false, $0)) }
+        return out.isEmpty ? nil : out
+    }
+    private func readRow(_ row: (Bool, String)) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(row.0 ? "+" : "–").font(GaryFonts.mono(13, bold: true))
+                .foregroundStyle(row.0 ? PCV4.gold : PCV4.mut2).frame(width: 14)
+            Text(row.1).font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // pitch matchup table: PITCH | MIX | HE HITS
+    private func matchupTable(_ rows: [PlayerInsightPack.PitchRow]) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("PITCH").font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2)
+                Spacer()
+                Text("MIX").font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2).frame(width: 54, alignment: .trailing)
+                Text("HE HITS").font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2).frame(width: 64, alignment: .trailing)
+            }
+            .padding(.bottom, 6)
+            ForEach(rows.indices, id: \.self) { i in
+                let r = rows[i]
+                HStack {
+                    Text(r.pitch ?? "—").font(GaryFonts.display(16)).foregroundStyle(PCV4.ink)
+                    Spacer()
+                    Text(r.usagePct != nil ? "\(Int(r.usagePct!.rounded()))%" : "—")
+                        .font(GaryFonts.mono(13)).foregroundStyle(PCV4.mut).frame(width: 54, alignment: .trailing)
+                    Text(hits(r)).font(GaryFonts.display(r.grade == "thin" ? 13 : 19))
+                        .foregroundStyle(hitsColor(r.grade)).frame(width: 64, alignment: .trailing)
+                }
+                .padding(.vertical, 12)
+                .overlay(i == 0 ? nil : Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1), alignment: .top)
+            }
+        }
+    }
+    private func hits(_ r: PlayerInsightPack.PitchRow) -> String {
+        if r.grade == "thin" { return "thin" }
+        return r.ba ?? "—"
+    }
+    private func hitsColor(_ grade: String?) -> Color {
+        switch grade {
+        case "strong": return PCV4.gold
+        case "thin":   return PCV4.mut2
+        default:       return PCV4.bad   // weak / neutral — readable cream, de-emphasized
+        }
+    }
+
+    // split row: vs RHP / vs LHP with a bar
+    private func splitRow(_ s: PlayerInsightPack.LabeledStat) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(s.label ?? "").font(GaryFonts.text(13, .bold)).foregroundStyle(PCV4.ink)
+                Spacer()
+                if let d = s.detail { Text(d).font(GaryFonts.mono(11)).foregroundStyle(PCV4.mut2) }
+            }
+            Text(s.value ?? "").font(GaryFonts.text(13)).foregroundStyle(PCV4.mut)
+        }
+    }
+
+    // recent: 3-up grid + headline
+    private func formGrid(_ rows: [PlayerInsightPack.LabeledStat], headline: PlayerInsightPack.LabeledStat?) -> some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                ForEach(rows.prefix(3).indices, id: \.self) { i in
+                    let r = rows[i]
+                    VStack(spacing: 6) {
+                        Text((r.label ?? "").uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
+                        Text(r.value ?? "—").font(GaryFonts.display(20)).foregroundStyle(PCV4.ink)
+                        if let d = r.detail { Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut).lineLimit(1).minimumScaleFactor(0.7) }
+                    }.frame(maxWidth: .infinity)
+                }
+            }
+            if let h = headline, let v = h.value {
+                HStack {
+                    Text((h.label ?? "FORM").uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
+                    Text(v).font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.gold)
+                    Spacer()
+                    if let d = h.detail { Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut2) }
+                }
+                .padding(.top, 12).overlay(Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1), alignment: .top)
+            }
+        }
+    }
+
+    // prop row: label / line — rate
+    private func propRow(_ p: PlayerInsightPack.PropLine) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(p.label ?? "").font(GaryFonts.text(13, .medium)).foregroundStyle(PCV4.ink)
+                Text([p.line, p.odds].compactMap { $0 }.joined(separator: "  ·  "))
+                    .font(GaryFonts.mono(11)).foregroundStyle(PCV4.mut2)
+            }
+            Spacer()
+            if let rate = p.rate {
+                Text(rate).font(GaryFonts.display(16)).foregroundStyle(PCV4.mut)
+            }
+        }
+        .padding(.vertical, 11)
+    }
+}
