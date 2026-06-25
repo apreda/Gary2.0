@@ -36,6 +36,7 @@ private struct XIPlayer: Identifiable {
     let name: String
     let pos: String          // G / D / M / F
     var contested: Bool = false
+    var pid: String? = nil   // BDL player id (String) for the tapped-jersey → PlayerCardV4 fetch; nil = projected / no posted sheet → non-tappable
 }
 
 private struct JerseyShape: Shape {
@@ -62,6 +63,7 @@ struct WCGameIntelView: View {
 
     private enum XIState: String, CaseIterable { case projected = "Projected", confirmed = "Confirmed" }
     @State private var state: XIState = .projected
+    @State private var selected: XIPlayer? = nil   // tapped jersey → PlayerCardV4 carousel
 
     private var awayName: String { matchup.components(separatedBy: " @ ").first ?? "Away" }
     private var homeName: String { matchup.components(separatedBy: " @ ").last ?? "Home" }
@@ -70,13 +72,17 @@ struct WCGameIntelView: View {
         if let xi = sheet?.xi, !xi.isEmpty {
             return xi.compactMap { m in
                 guard let n = m.n else { return nil }
-                return XIPlayer(num: m.num ?? 0, name: Self.surname(n), pos: (m.p ?? "M").uppercased())
+                return XIPlayer(num: m.num ?? 0, name: Self.surname(n), pos: (m.p ?? "M").uppercased(),
+                                pid: m.id.map(String.init))
             }
         }
         return []   // no real XI yet → empty pitch + a Projected placeholder, NEVER mock players (user call, Jun 19)
     }
     private var homePlayers: [XIPlayer] { players(from: confirmedXI?.home, sample: Self.homeSample) }
     private var awayPlayers: [XIPlayer] { players(from: confirmedXI?.away, sample: Self.awaySample) }
+    /// Both sides' players that carry a real BDL id — the swipe-through deck for the
+    /// PlayerCardV4 carousel (home XI first, then away). Mirrors MLB's displayLineup.
+    private var cardDeck: [XIPlayer] { (homePlayers + awayPlayers).filter { $0.pid != nil } }
     private var homeFormation: String { confirmedXI?.home?.formation ?? "4-3-3" }
     private var awayFormation: String { confirmedXI?.away?.formation ?? "4-4-2" }
     private var hasRealXI: Bool { (confirmedXI?.home?.xi?.isEmpty == false) || (confirmedXI?.away?.xi?.isEmpty == false) }
@@ -129,6 +135,16 @@ struct WCGameIntelView: View {
         }
         // Open on the real status tab — Projected / Contested (injury doubt) / Confirmed.
         .onAppear { state = XIState(rawValue: (confirmedXI?.status ?? "").capitalized) ?? .projected }
+        // Tap a confirmed-XI jersey → the SHARED PlayerCardV4 carousel over the match XI.
+        // Same component + fetch as the MLB fielder tap (reused, not forked).
+        .fullScreenCover(item: $selected) { tapped in
+            let carousel = PlayerCardCarousel(
+                players: cardDeck.map { CarouselPlayer(id: $0.pid ?? "", name: $0.name, heat: "", game: matchup.uppercased()) },
+                index: cardDeck.firstIndex(where: { $0.pid == tapped.pid }) ?? 0,
+                onClose: { selected = nil }
+            )
+            if #available(iOS 16.4, *) { carousel.presentationBackground(.clear) } else { carousel }
+        }
     }
 
     private var header: some View {
@@ -245,7 +261,17 @@ struct WCGameIntelView: View {
             Color.clear.frame(maxWidth: .infinity).frame(height: 0)
         } else {
             HStack(spacing: 0) {
-                ForEach(men) { m in jersey(m, kit: kit, gk: gk).frame(maxWidth: .infinity) }
+                ForEach(men) { m in
+                    Group {
+                        // Real posted XI → tap opens the player card. Projected / no id → static jersey (never mock, no crash).
+                        if m.pid != nil {
+                            Button { selected = m } label: { jersey(m, kit: kit, gk: gk) }.buttonStyle(.plain)
+                        } else {
+                            jersey(m, kit: kit, gk: gk)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
             }
             .frame(maxHeight: .infinity)
         }

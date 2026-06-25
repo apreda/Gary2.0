@@ -309,7 +309,6 @@ struct MLBGameIntelView: View {
                     if realHome != nil && realAway != nil { teamToggle.padding(.top, 12) }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(GaryColors.warmWhite.opacity(0.09)))
             }
             .frame(height: 452)
             HStack(spacing: 11) {
@@ -346,7 +345,8 @@ struct MLBGameIntelView: View {
 
     private func drawField(_ ctx: GraphicsContext, _ t: FieldT) {
         guard let bp = ballpark else { return }
-        ctx.fill(Path(CGRect(x: 0, y: 0, width: 10000, height: 10000)), with: .color(GaryColors.cardBg))
+        // No base fill — the corners stay transparent so the field blends into the page
+        // background instead of reading as its own container (founder ask).
         var grass = Path(); grass.move(to: t.map(bp.homePlate))
         bp.wall.forEach { grass.addLine(to: t.map($0)) }; grass.closeSubpath()
         ctx.fill(grass, with: .color(MLBI.grass))
@@ -671,9 +671,11 @@ struct PlayerCardV4: View {
     }
     private var identityLine: String? {
         guard let p = pack else { return nil }
+        // Soccer packs (type "outfield" / "keeper") have no platoon hand → position + team only.
+        let isSoccer = p.type == "outfield" || p.type == "keeper"
         var bits: [String] = []
         if let pos = p.position { bits.append(pos) }
-        if let h = p.hand { bits.append(p.type == "pitcher" ? "Throws \(h)" : "Bats \(h)") }
+        if !isSoccer, let h = p.hand { bits.append(p.type == "pitcher" ? "Throws \(h)" : "Bats \(h)") }
         if let t = p.team { bits.append(t) }
         return bits.isEmpty ? nil : bits.joined(separator: "  ·  ")
     }
@@ -723,7 +725,10 @@ struct PlayerCardV4: View {
             section("The angle") { VStack(spacing: 0) { ForEach(pr.indices, id: \.self) { propRow(pr[$0]) } } }
         }
         // Matchup table tails the card (user call) — it reads long, so it sits at the very bottom.
-        if let pm = p.pitchMatchup, !pm.isEmpty {
+        // Baseball-only (pitch arsenal / what-he'll-see). Soccer packs (outfield/keeper) never
+        // carry pitchMatchup, but branch on type so a soccer card can never show a baseball label.
+        let isSoccer = p.type == "outfield" || p.type == "keeper"
+        if !isSoccer, let pm = p.pitchMatchup, !pm.isEmpty {
             section(p.type == "pitcher" ? "His arsenal" : "What he'll see") { matchupTable(pm) }
         }
     }

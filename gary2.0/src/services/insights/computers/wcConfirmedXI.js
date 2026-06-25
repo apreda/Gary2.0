@@ -152,7 +152,7 @@ async function rowsForMatch(match, season, injStatus = new Map()) {
     team: teamName,
     formation: side.formation,
     xi: side.starters
-      .map((s) => ({ n: s.player?.name, p: s.position, num: s.shirt_number ?? null }))
+      .map((s) => ({ n: s.player?.name, p: s.position, num: s.shirt_number ?? null, id: s.player?.id ?? null }))
       .filter((p) => p.n),
   });
   const meta = { kind: 'confirmedXI', status, home: sheet(h, home.name), away: sheet(a, away.name) };

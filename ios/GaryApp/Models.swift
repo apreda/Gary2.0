@@ -132,6 +132,7 @@ struct XIMan: Decodable {
     let n: String?           // player name
     let p: String?           // position: G / D / M / F
     let num: Int?            // shirt number
+    let id: Int?             // BDL player id — drives the tapped jersey → PlayerCardV4 fetch (Optional: old rows decode without it)
 }
 
 // MARK: - Live Scores (2-minute poller snapshots)
@@ -190,7 +191,7 @@ struct PlayerInsightPack: Decodable {
     struct SeasonLine: Decodable { let line1: String?; let line2: String? }
     struct PropLine: Decodable { let label: String?; let line: String?; let odds: String?; let rate: String? }
 
-    let type: String?          // "hitter" | "pitcher"
+    let type: String?          // MLB: "hitter" | "pitcher"  ·  WC: "outfield" | "keeper"
     let name: String?
     let team: String?
     let position: String?
