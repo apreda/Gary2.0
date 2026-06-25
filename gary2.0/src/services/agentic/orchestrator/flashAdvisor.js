@@ -1,4 +1,4 @@
-import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
+import { createGeminiSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
@@ -96,6 +96,24 @@ function renderStructuredBriefing(payload) {
     blocks.push(lines.join('\n'));
   }
   return blocks.join('\n\n').trim();
+}
+
+/**
+ * Render compact prior-factor findings to carry forward into each factor's fresh
+ * chat (Lever 1). Mirrors the directBriefing field resolution so prose-wrapped
+ * findings carry too. Per-field caps keep the carry-forward block small across all
+ * factors; the FULL text still lives in _accumulatedFactors for the final briefing.
+ */
+function renderFindingsSoFar(accumulated) {
+  if (!accumulated || accumulated.length === 0) return '';
+  const blocks = accumulated.map(f => {
+    const name = f.factor || f.name || f.title || 'Unknown';
+    const finding = String(f.keyFinding || f.key_finding || f.finding || '').slice(0, 260);
+    const numbers = String(f.numbers || f.stats || '').slice(0, 260);
+    const context = String(f.context || f.sample_context || '').slice(0, 220);
+    return `**${name}**\nKey finding: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
+  });
+  return '## FINDINGS SO FAR (prior factor conclusions — build on these; do NOT re-investigate unless needed)\n\n' + blocks.join('\n\n');
 }
 
 
@@ -288,8 +306,9 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     let groundingCalls = 0;
     const calledTokens = [];
 
-    // Step 1: Send the scout report to Flash as context
-    await sendToSessionWithRetry(briefingSession, briefingPrompt, { isFunctionResponse: false });
+    // Step 1: (Lever 1) The scout report is NO LONGER sent once globally. It now
+    // seeds each factor's fresh chat via resetSessionChat (below), so prior factors'
+    // raw tool-result blobs are not re-billed on every later factor.
 
     // Step 2: Get the factor list for this sport
     const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
@@ -308,6 +327,18 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       const factorPrompt = factorTokens.length > 0
         ? `Investigate factor: ${factorName} now and write your findings.`
         : `Analyze factor: ${factorName} using the data already in the scout report and write your findings.`;
+
+      // Lever 1: reset the chat for this factor (reusing the cached model) so prior
+      // factors' raw tool-result blobs are no longer re-sent every turn. Seed with the
+      // scout report + compact findings-so-far so each factor still investigates with
+      // full context + all prior CONCLUSIONS. resetSessionChat re-attaches the system
+      // prompt inline if the session is not cache-backed (never a naked chat).
+      const _findingsSoFar = renderFindingsSoFar(_accumulatedFactors);
+      const _seedUserText = _findingsSoFar ? `${briefingPrompt}\n\n---\n\n${_findingsSoFar}` : briefingPrompt;
+      resetSessionChat(briefingSession, [
+        { role: 'user', parts: [{ text: _seedUserText }] },
+        { role: 'model', parts: [{ text: 'Understood. I have the scout report and all prior findings. Tell me the next factor to investigate and I will return exactly one JSON object.' }] }
+      ]);
 
       // Flash investigates this factor — may take multiple iterations for tool calls
       let currentMessage = factorPrompt;

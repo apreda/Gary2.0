@@ -159,8 +159,30 @@ export async function createGeminiSession(options = {}) {
     modelName: validatedModel,
     thinkingLevel,
     cachedContentName, // exposed so callers can delete cache manually if desired
-    _costTracker
+    _costTracker,
+    _systemPrompt: systemPrompt, // for resetSessionChat to re-seed inline when not cached
+    _usingCache: usingCache      // whether the cache actually attached (vs inline system prompt)
   };
+}
+
+/**
+ * Replace a session's chat with a fresh one seeded with `seedHistory`, reusing the
+ * SAME cached model (no new cache, no network call). Used to drop accumulated raw
+ * tool-result history between research factors (Lever 1) WITHOUT losing Gary's
+ * system prompt: when the session is cache-backed the systemInstruction lives in the
+ * cache; when it is NOT (cache create/attach failed), we re-attach the system prompt
+ * inline so a per-factor chat is never a naked session.
+ *
+ * @param {Object} session - Session from createGeminiSession (mutated in place: session.chat)
+ * @param {Array} seedHistory - Gemini chat history turns to seed the new chat with
+ * @returns {Object} the same session (chat swapped)
+ */
+export function resetSessionChat(session, seedHistory = []) {
+  const systemInstruction = session._usingCache
+    ? undefined
+    : (session._systemPrompt ? { parts: [{ text: session._systemPrompt }] } : undefined);
+  session.chat = session.model.startChat({ history: seedHistory, systemInstruction });
+  return session;
 }
 
 /**
