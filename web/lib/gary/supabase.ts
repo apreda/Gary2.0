@@ -36,3 +36,23 @@ export async function restAll<T>(path: string, opts: { revalidate?: number } = {
   }
   return out;
 }
+
+/**
+ * One PostgREST INSERT (single row). Uncached — writes must never hit the fetch cache.
+ * `Prefer: return=minimal` so PostgREST returns nothing, which means insert-only RLS
+ * (no SELECT policy) is enough. Used by the /get redirect to log a click with the anon key.
+ */
+export async function restInsert(table: string, row: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${ANON_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(row),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`PostgREST insert ${res.status}: ${table}`);
+}
