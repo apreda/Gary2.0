@@ -665,7 +665,20 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     gradedProps,
   });
 
-  const recap = await generateRecap({ pick, result, evidence });
+  // recapGradedPick runs on RE-grades too (its game_recaps dedup above makes it a no-op
+  // once a recap exists), so a re-run of any day backfills missing recaps — including days
+  // the cloud grader graded without recapping. The one thing that silently dropped a recap
+  // on 2026-06-24 was a transient Gemini "Request aborted" throw, so retry generateRecap
+  // once before giving up.
+  let recap = null;
+  for (let attempt = 1; attempt <= 2 && !recap; attempt++) {
+    try {
+      recap = await generateRecap({ pick, result, evidence });
+    } catch (e) {
+      console.warn(`  ⚠️ Recap gen attempt ${attempt} failed for ${matchup}: ${e.message}`);
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
   if (!recap) {
     console.warn(`  ⚠️ Recap produced nothing for ${league} ${matchup}`);
     return;
