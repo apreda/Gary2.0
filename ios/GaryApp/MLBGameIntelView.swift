@@ -587,7 +587,7 @@ struct PlayerCardV4: View {
                 } else if let p = pack {
                     sections(p)
                 } else {
-                    Text("Full breakdown posts with the day's edge refresh.")
+                    Text("Full breakdown posts once this player's lineup is confirmed.")
                         .font(GaryFonts.text(13)).foregroundStyle(PCV4.mut2)
                         .padding(.horizontal, 24).padding(.vertical, 26)
                 }

@@ -94,10 +94,31 @@ export async function buildPlayerInsightCards({ date, league, connections, games
     return [];
   }
 
-  // Distinct player ids among the day's player-backed MLB rows.
-  const playerIds = distinctPlayerIds(connections);
+  // Per-game memoized lineups + props (reused for the candidate union AND the per-player loop).
+  const lineupMemo = new Map();
+  const propsMemo = new Map();
+  const getLineups = (gameId) => memoLineups(bdl, lineupMemo, gameId);
+  const getProps = (gameId) => memoProps(bdl, propsMemo, gameId);
+
+  // Candidate set = edge-flagged players (connections) UNION every player in the day's posted
+  // lineups — so a card exists for what the field view makes tappable, not just the edge subset.
+  // (Projected-only players whose sheet isn't posted yet still won't locate; that's the field's
+  // projected fallback, a separate pass. Posted-lineup players all get at least a stats card.)
+  const lineupIds = new Set();
+  for (const game of slate) {
+    const lu = await getLineups(game?.id);
+    if (!lu || typeof lu !== 'object') continue;
+    for (const abbr of Object.keys(lu)) {
+      const side = lu[abbr];
+      if (side?.pitcher?.playerId != null) lineupIds.add(String(side.pitcher.playerId));
+      for (const b of (Array.isArray(side?.batters) ? side.batters : [])) {
+        if (b?.playerId != null) lineupIds.add(String(b.playerId));
+      }
+    }
+  }
+  const playerIds = [...new Set([...distinctPlayerIds(connections).map(String), ...lineupIds])];
   if (!playerIds.length) {
-    console.log('[playerInsightCards] no player-backed connections — nothing to build.');
+    console.log('[playerInsightCards] no players in connections or lineups — nothing to build.');
     return [];
   }
 
@@ -109,12 +130,6 @@ export async function buildPlayerInsightCards({ date, league, connections, games
   const seasonById = indexSeasonByPlayerId(seasonRows);
   const batterX = indexXByName(await safeCall(() => getBatterXStats(season), []));
   const pitcherX = indexXByName(await safeCall(() => getPitcherXStats(season), []));
-
-  // Per-game memoized lineups + props (avoid re-fetching for co-located players).
-  const lineupMemo = new Map();
-  const propsMemo = new Map();
-  const getLineups = (gameId) => memoLineups(bdl, lineupMemo, gameId);
-  const getProps = (gameId) => memoProps(bdl, propsMemo, gameId);
 
   const packs = [];
   const stats = { examined: 0, hitter: 0, pitcher: 0, skipped: 0 };
@@ -568,7 +583,9 @@ function hitterBvp(pvpRows, oppPitcherId, oppPitcherName) {
 }
 
 function hitterProps(propRows, playerId) {
-  return formatProps(propRows, playerId, ['total_bases', 'hits', 'home_runs', 'runs_batted_in', 'rbi']);
+  // All trackable by RATE_STAT_HITTER (each gets an X/10 over rate). hits_runs_rbis (R+H+RBI)
+  // replaces walks, which has no hitter game-log extractor and shipped rate-less.
+  return formatProps(propRows, playerId, ['total_bases', 'hits_runs_rbis', 'hits', 'home_runs', 'runs_batted_in', 'rbi', 'runs']);
 }
 
 /**
@@ -895,9 +912,13 @@ function lowerIsBetterVerdict(actual, expected, gap) {
  * and the priority prop types passed. Returns [{label, line, odds}].
  */
 function formatProps(propRows, playerId, priorityTypes) {
-  const rows = (Array.isArray(propRows) ? propRows : []).filter(
-    (r) => String(r?.player_id) === String(playerId),
-  );
+  // Only props whose type we can compute an X/10 over rate for are eligible — an untrackable
+  // type (e.g. hitter walks, no game-log extractor) must never reach a card rate-less. The
+  // priority list IS the trackable set for both callers (hitterProps + pitcherProps).
+  const allowed = new Set(priorityTypes);
+  const rows = (Array.isArray(propRows) ? propRows : [])
+    .filter((r) => String(r?.player_id) === String(playerId))
+    .filter((r) => allowed.has(String(r?.prop_type || '').toLowerCase()));
   if (!rows.length) return [];
 
   const ranked = [...rows].sort((a, b) => {
@@ -1089,6 +1110,8 @@ function propLabel(propType) {
     home_runs: 'Home runs',
     runs_batted_in: 'RBIs',
     rbi: 'RBIs',
+    runs: 'Runs',
+    hits_runs_rbis: 'Hits + Runs + RBIs',
     strikeouts: 'Strikeouts',
     outs: 'Outs',
     earned_runs: 'Earned runs',
