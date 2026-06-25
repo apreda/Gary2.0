@@ -333,6 +333,18 @@ export async function runAgenticPropsCli({
               console.log(`🏠 HR-only OUTPUT filter: dropped ${beforeHR - result.picks.length} non-HR pick(s) the orchestrator emitted`);
             }
           }
+          // (A) NO-STATS GATE: drop any pick whose player is NOT a validated stat candidate
+          // (no real provider stats this run). Mirrors the game-pick countRealStats HARD FAIL
+          // — stops a prop shipping on model-knowledge when a player/provider is ungrounded
+          // (the WC "provider dark" + invented-player class). validatedPlayerNames is the
+          // candidate pool that passed upstream stat validation.
+          {
+            const beforeStats = result.picks.length;
+            result.picks = result.picks.filter(p => validatedPlayerNames.has((p.player || '').toLowerCase()));
+            const droppedNoStats = beforeStats - result.picks.length;
+            if (droppedNoStats > 0) console.warn(`[Props CLI] 🛑 No-stats gate: dropped ${droppedNoStats} pick(s) for players with no validated stats (${matchup})`);
+          }
+
           result.picks = result.picks.map(pick => {
             // Extract line from prop string if embedded (e.g. "player_points 25.5")
             let prop = pick.prop || '';
@@ -361,8 +373,23 @@ export async function runAgenticPropsCli({
             let displayProp = prop.replace(/^player_/i, '');
             if (line) displayProp = `${displayProp} ${line}`;
 
+            // (C) ODDS RECONCILIATION: store the PROVIDER (BDL) price, not the model's
+            // free-text odds (which flow straight into the stored card + the units/ROI math).
+            // Match player + prop_type + line + side; null when no book line matches → the
+            // pick is dropped below as unverified. Never trust the model's number.
+            const _side = (pick.bet || pick.direction || '').toLowerCase();
+            const _over = _side === 'over' || _side === 'yes';
+            const _oddsRow = playerProps.find(pp =>
+              (pp.player || '').toLowerCase() === (pick.player || '').toLowerCase() &&
+              (pp.prop_type || '').toLowerCase() === prop.toLowerCase() &&
+              (line == null || Number(pp.line) === Number(line))
+            );
+            const _providerOdds = _oddsRow ? (_over ? _oddsRow.over_odds : _oddsRow.under_odds) : null;
+
             return {
               ...pick,
+              odds: _providerOdds != null ? String(_providerOdds) : (pick.odds != null ? String(pick.odds) : null),
+              _oddsUnverified: _providerOdds == null,
               prop: displayProp,
               line: line != null ? String(line) : null,
               // HR picks route to the "MLB HR" lane even though they came from the
@@ -378,6 +405,24 @@ export async function runAgenticPropsCli({
               confidence: pick.confidence || null
             };
           });
+
+          // (C) ODDS RECONCILIATION VISIBILITY: matched picks now carry the real BDL price
+          // (set in the map above). Picks with NO matching BDL line keep the model's odds but
+          // are FLAGGED _oddsUnverified — surfaced here, NOT dropped, to avoid over-rejecting
+          // on a prop_type/line formatting mismatch. (Flip to a hard drop once live runs
+          // confirm the unverified rate is low.) Only the truly price-less (odds == null,
+          // model + BDL both missing — the rare ~1/768 case) is dropped.
+          {
+            const beforeOdds = result.picks.length;
+            result.picks = result.picks.filter(p => {
+              if (p.odds == null) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} — no price at all (model + BDL both missing)`); return false; }
+              return true;
+            });
+            const droppedOdds = beforeOdds - result.picks.length;
+            if (droppedOdds > 0) console.log(`[Props CLI] Odds gate dropped ${droppedOdds} price-less pick(s)`);
+            const unverifiedOdds = result.picks.filter(p => p._oddsUnverified).length;
+            if (unverifiedOdds > 0) console.warn(`[Props CLI] ⚠️ ${unverifiedOdds} pick(s) kept MODEL odds — no BDL line matched (flagged _oddsUnverified for review)`);
+          }
 
           // Apply 2-per-game cap + Gary Specials correlation for every sport.
           // Previously this only ran for NBA/NHL — MLB and NFL bypassed the cap
