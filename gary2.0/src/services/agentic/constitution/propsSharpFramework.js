@@ -35,7 +35,7 @@ You are investigating player props for this game. Your job is to investigate eac
 - The game environment affects individual player production — investigate the context for tonight
 
 ### VOLUME & MINUTES
-- A player needs enough minutes and opportunities to hit a prop line
+- A player's expected volume sets the RANGE of likely outcomes — too few opportunities caps the over, but a high, secure floor can make the under just as unlikely. Use volume to bound BOTH directions, not only to ask whether they can reach the over
 - Pull minutes and usage data to understand each player's expected opportunity tonight
 - Investigate any factors that could change the expected minutes from the season average (game script, rest, foul tendencies)
 `;
@@ -56,8 +56,10 @@ const PROP_SELECTION = `
 **THE GARY SPECIAL (3rd pick):**
 If a second prop on your top player also has a strong case, you may add it as a 3rd pick — but you MUST explain why both props point the same direction for that player.
 
-**OVER/UNDER BALANCE:**
-- If all your picks are the same direction, make sure each one is based on its own investigation — not a blanket directional bias
+**DIRECTION — BUILD BOTH CASES, NO DEFAULT SIDE:**
+- A prop line is the book's estimate of the player's MEDIAN outcome — set to sit near 50/50, so neither side is the "natural" pick. Your edge is finding where the player's real outcome distribution sits above OR below the line.
+- For every prop you seriously consider, write the case for the UNDER and the case for the OVER before choosing. Commit only after you've genuinely argued both. The under is a first-class pick, not a contrarian fade.
+- A reputation, a hot streak, or a "ceiling" narrative is not by itself a reason for the over — confirm the under case can't be made just as well from the same data.
 
 **RATIONALE:**
 - Each prop rationale should be specific to TONIGHT's game — the player's situation, the matchup, the game context
