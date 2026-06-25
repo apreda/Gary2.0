@@ -285,10 +285,11 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
   return { posted: true, pick: chosen.pick, thread_url: `https://x.com/BetwithGary/status/${hookId}`, count_today: pickThreads.length + 1 };
 }
 
-// WORLD CUP picks: tweet EVERY game. Each of Gary's plays renders as the app's OWN pick card (CompactPickRow, rebuilt
+// WORLD CUP picks: tweet EVERY game. Gary's chosen play renders as the app's OWN pick card (CompactPickRow, rebuilt
 // by the /api/pick-card-app OG route: gold GARY'S PICK eyebrow + bear, the pick as a big BarlowCondensed hero, teal
-// league token + gold odds, GARY'S TAKE footer). A game's cards (1-4) post as ONE card-forward tweet with a tight
-// caption = the first sentence of Gary's REAL rationale; the REPLY threads the rest of it + a link-in-bio app pointer.
+// league token + gold odds, GARY'S TAKE footer). ONE GAME pick per game posts as ONE card on ONE tweet — X crops
+// multi-image tweets (a side+total game showed two half-cut cards), so we feature a single play; props get their own
+// tweet later. The tight caption = the first sentence of Gary's REAL rationale; the REPLY threads the rest + link in bio.
 // Runs every hour, posts each game once in the window around kickoff. Independent of the MLB slot path (sport isolation).
 const WC_MAX_PER_RUN = 3;
 
@@ -357,6 +358,26 @@ function buildWcThread(gPicks: any[]): { caption: string; replyChunks: string[] 
   return { caption, replyChunks: chunks };
 }
 
+// A GAME pick is a side/total (moneyline, total, spread, handicap) — NOT a player prop. Player props carry a player
+// name or a prop-style type; everything else is a game-level bet. Props are excluded from the per-game card tweet.
+function isGamePick(p: any): boolean {
+  if (p?.player || p?.playerName || p?.prop_type) return false;
+  const t = String(p?.type ?? "").toLowerCase();
+  const propish = ["prop", "anytime", "goalscorer", "scorer", "shots", "shot", "passes", "saves", "assist", "tackle", "card", "player"];
+  return !propish.some((x) => t.includes(x));
+}
+// Pick ONE play to feature for a game's single card: game picks only, highest confidence (ties -> the side over the total).
+function chooseGamePick(gPicks: any[]): any | null {
+  const games = gPicks.filter(isGamePick);
+  if (!games.length) return null;
+  const isSide = (p: any) => { const t = String(p?.type ?? "").toLowerCase(); return t.includes("money") || t === "ml" || t.includes("spread") || t.includes("handicap"); };
+  return [...games].sort((a, b) => {
+    const c = parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0);
+    if (Math.abs(c) > 1e-9) return c;
+    return (isSide(b) ? 1 : 0) - (isSide(a) ? 1 : 0);
+  })[0];
+}
+
 async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryRun: boolean) {
   const { data: dpRows, error: dpErr } = await sb.from("daily_picks").select("picks").eq("date", today);
   if (dpErr) throw dpErr;
@@ -391,43 +412,39 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
   const out: any[] = [];
   for (const { key, gPicks, start } of candidates.slice(0, WC_MAX_PER_RUN)) {
     const [away, home] = key.split(" vs ");
-    const pickLines = gPicks.map((p) => {
-      const oddsStr = (p.odds && !String(p.pick).includes(String(p.odds))) ? ` ${p.odds}` : "";
-      return `${p.pick}${oddsStr}`.trim();
-    });
+    // ONE pick per game -> ONE image (X crops multi-image tweets). Feature a single GAME pick, no props.
+    const chosen = chooseGamePick(gPicks);
+    if (!chosen) { out.push({ game: key, skipped: "no game pick (props only)" }); continue; }
+    const oddsStr = (chosen.odds && !String(chosen.pick).includes(String(chosen.odds))) ? ` ${chosen.odds}` : "";
+    const pickLine = `${chosen.pick}${oddsStr}`.trim();
     const timeLabel = new Date(start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true }) + " ET";
-    // One app-faithful card per pick (a 2-pick game makes two cards that ride one tweet).
-    const cardUrls = gPicks.map((p) => {
-      const [h1, h2] = wcHeroLines(String(p.pick), p.type);
-      const opp = wcOpp(p, away, home);
-      return `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(p.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
-    });
+    // One app-faithful card for the chosen pick.
+    const [h1, h2] = wcHeroLines(String(chosen.pick), chosen.type);
+    const opp = wcOpp(chosen, away, home);
+    const cardUrl = `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(chosen.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
 
-    // The ENTIRE thread is Gary's REAL rationale — his actual words, NO LLM, no guesswork (accurate + on-app-tone):
+    // The ENTIRE thread is Gary's REAL rationale for the chosen pick — his actual words, NO LLM, no guesswork:
     // the first sentence is the MAIN caption above the card, the rest threads as the reply + link in bio.
-    const { caption, replyChunks } = buildWcThread(gPicks);
+    const { caption, replyChunks } = buildWcThread([chosen]);
 
-    if (dryRun) { out.push({ game: key, time: timeLabel, picks: pickLines, caption, reply_thread: replyChunks, cards: cardUrls }); continue; }
+    if (dryRun) { out.push({ game: key, time: timeLabel, pick: pickLine, caption, reply_thread: replyChunks, card: cardUrl }); continue; }
 
     // Main tweet = the game's card(s) + the one-line caption (fall back to a text list if the cards fail to render/post).
     let mainId: string;
     let usedCard = false;
     try {
-      const imgs: string[] = [];
-      for (const u of cardUrls) {
-        const ir = await fetch(u);
-        if (!ir.ok) throw new Error(`card fetch ${ir.status}`);
-        const b = new Uint8Array(await ir.arrayBuffer());
-        let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
-        imgs.push(btoa(bin));
-      }
-      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, images_base64: imgs }) });
+      const ir = await fetch(cardUrl);
+      if (!ir.ok) throw new Error(`card fetch ${ir.status}`);
+      const b = new Uint8Array(await ir.arrayBuffer());
+      let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+      const img = btoa(bin);
+      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, images_base64: [img] }) });
       const j = await r.json();
       if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 200)}`);
       mainId = j.tweetId; usedCard = true;
     } catch (e) {
-      console.error("WC cards failed, falling back to text: " + String(e));
-      mainId = await postTweet(`${caption}\n\n${pickLines.join("\n")}`);
+      console.error("WC card failed, falling back to text: " + String(e));
+      mainId = await postTweet(`${caption}\n\n${pickLine}`);
     }
     // The reply is Gary's FULL real rationale as a plain-text THREAD (his brain = the value that sells the app), each
     // tweet chained under the last, ending with the link-in-bio pointer. Best-effort per chunk (stop on first failure).
@@ -443,11 +460,11 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
     const startEt = parseInt(new Date(start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" }));
     const slot = startEt < 14 ? "morning" : startEt < 17 ? "afternoon" : startEt < 21 ? "evening" : "late";
     await sb.from("social_post_log").insert({
-      post_date: today, slot, league: "WC", pick_text: `${key}: ${pickLines.join(" / ")}`,
+      post_date: today, slot, league: "WC", pick_text: `${key}: ${pickLine}`,
       commence_time: new Date(start).toISOString(), thread_format: "wc_card",
       hook_tweet_id: mainId, reasoning_tweet_id: replyId, cta_tweet_id: ctaId, thread_url: `https://x.com/BetwithGary/status/${mainId}`,
     });
-    out.push({ game: key, posted: true, cards: cardUrls.length, reply_tweets: replyIds.length, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${mainId}` });
+    out.push({ game: key, posted: true, pick: pickLine, reply_tweets: replyIds.length, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${mainId}` });
   }
   const remaining = candidates.length - out.length;
   return { posted: !dryRun && out.some((o) => o.posted), dry_run: dryRun || undefined, games: out, remaining_this_run: remaining > 0 ? remaining : undefined };
