@@ -1,4 +1,37 @@
 import SwiftUI
+import StoreKit
+
+/// Gating for the App Store review prompt. We only ask right after a pick CASHES — the highest
+/// positive-sentiment moment — at most once per app version, and only after the user has opened
+/// the app a few times. Apple separately throttles requestReview to ~3 prompts/365 days, so this
+/// can never nag, even though winning cards appear all over the app.
+enum ReviewPrompt {
+    private static let sessionsKey = "reviewPromptSessionCount"
+    private static let lastVersionKey = "reviewPromptLastVersion"
+    private static var askedThisLaunch = false
+
+    private static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    /// Count an app activation. Call when scenePhase becomes .active.
+    static func noteSession() {
+        let d = UserDefaults.standard
+        d.set(d.integer(forKey: sessionsKey) + 1, forKey: sessionsKey)
+    }
+
+    /// Returns true at most ONCE per app version: only after >= 3 sessions, and only for the first
+    /// winning card seen this launch. When true, the caller fires requestReview() itself.
+    static func shouldRequestAfterWin() -> Bool {
+        guard !askedThisLaunch else { return false }
+        let d = UserDefaults.standard
+        guard d.string(forKey: lastVersionKey) != appVersion else { return false }
+        guard d.integer(forKey: sessionsKey) >= 3 else { return false }
+        askedThisLaunch = true
+        d.set(appVersion, forKey: lastVersionKey)
+        return true
+    }
+}
 
 // Shared state for pick detail overlay visibility
 class PickDetailState: ObservableObject {
@@ -108,6 +141,7 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
+            ReviewPrompt.noteSession()
             Task(priority: .utility) {
                 await BillfoldSnapshotStore.shared.prewarmIfNeeded()
             }
