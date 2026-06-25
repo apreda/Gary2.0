@@ -662,9 +662,6 @@ struct PlayerCardV4: View {
         if let read = readBullets(p), !read.isEmpty {
             section("The read") { VStack(alignment: .leading, spacing: 11) { ForEach(read.indices, id: \.self) { readRow(read[$0]) } } }
         }
-        if let pm = p.pitchMatchup, !pm.isEmpty {
-            section(p.type == "pitcher" ? "His arsenal" : "What he'll see") { matchupTable(pm) }
-        }
         if let sp = p.splits, !sp.isEmpty {
             section("Splits") { VStack(alignment: .leading, spacing: 14) { ForEach(sp.indices, id: \.self) { splitRow(sp[$0]) } } }
         }
@@ -703,6 +700,10 @@ struct PlayerCardV4: View {
         }
         if let pr = p.props, !pr.isEmpty {
             section("The angle") { VStack(spacing: 0) { ForEach(pr.indices, id: \.self) { propRow(pr[$0]) } } }
+        }
+        // Matchup table tails the card (user call) — it reads long, so it sits at the very bottom.
+        if let pm = p.pitchMatchup, !pm.isEmpty {
+            section(p.type == "pitcher" ? "His arsenal" : "What he'll see") { matchupTable(pm) }
         }
     }
 
