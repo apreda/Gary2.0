@@ -66,6 +66,7 @@ export async function createGeminiSession(options = {}) {
   // if cache creation fails — never blocks pick generation.
   // ═══════════════════════════════════════════════════════════════════════════
   let cachedContentName = null;
+  let cacheObject = null;
   if (enableCache && systemPrompt && systemPrompt.length >= MIN_CACHE_CHAR_THRESHOLD) {
     try {
       const apiKey = process.env.GEMINI_API_KEY;
@@ -80,23 +81,32 @@ export async function createGeminiSession(options = {}) {
         cacheRequest.tools = geminiTools;
       }
       const cache = await cacheManager.create(cacheRequest);
+      cacheObject = cache;
       cachedContentName = cache.name;
       console.log(`[Session] 💾 Cache created (${systemPrompt.length} char system prompt, TTL ${CACHE_TTL_SECONDS}): ${cachedContentName}`);
     } catch (e) {
       console.warn(`[Session] ⚠️ Cache creation failed (${e.message}) — proceeding without cache`);
+      cacheObject = null;
       cachedContentName = null;
     }
   }
 
-  // Create the model — cached path uses cachedContent for systemInstruction;
-  // tools must STILL be passed at model level even when cached (SDK quirk:
-  // cached tools are stored but not auto-activated without explicit tools param).
-  const model = cachedContentName
-    ? genAI.getGenerativeModel(
+  // Create the model. When a cache was created, build the model FROM the cache
+  // OBJECT via getGenerativeModelFromCachedContent — this is what actually
+  // attaches the cache (systemInstruction + tools are sourced from the cache),
+  // so the stable prefix bills at the cached rate.
+  // DO NOT pass the cache *name string* to getGenerativeModel({ cachedContent }):
+  // the SDK reads `cachedContent?.name`, which is `undefined` on a string, so the
+  // cache silently never attaches AND — because startChat below then sends
+  // systemInstruction: undefined assuming the cache supplies it — the system
+  // prompt gets dropped entirely. (That was the latent bug this replaces.)
+  let model = null;
+  let usingCache = false;
+  if (cacheObject) {
+    try {
+      model = genAI.getGenerativeModelFromCachedContent(
+        cacheObject,
         {
-          model: validatedModel,
-          cachedContent: cachedContentName,
-          tools: geminiTools.length > 0 ? geminiTools : undefined,
           safetySettings: GEMINI_SAFETY_SETTINGS,
           // Gemini 3.x: temperature / topP / topK omitted per Google's May 2026
           // migration guide — the model is optimized for its own defaults.
@@ -109,27 +119,39 @@ export async function createGeminiSession(options = {}) {
           }
         },
         { apiVersion: 'v1beta' }
-      )
-    : genAI.getGenerativeModel({
-        model: validatedModel,
-        tools: geminiTools.length > 0 ? geminiTools : undefined,
-        safetySettings: GEMINI_SAFETY_SETTINGS,
-        generationConfig: {
-          maxOutputTokens,
-          thinkingConfig: {
-            includeThoughts: true,
-            thinkingLevel: thinkingLevel
-          }
+      );
+      usingCache = true;
+    } catch (e) {
+      console.warn(`[Session] ⚠️ Cache attach failed (${e.message}) — proceeding without cache (system prompt sent inline)`);
+      model = null;
+      usingCache = false;
+    }
+  }
+  if (!model) {
+    model = genAI.getGenerativeModel({
+      model: validatedModel,
+      tools: geminiTools.length > 0 ? geminiTools : undefined,
+      safetySettings: GEMINI_SAFETY_SETTINGS,
+      generationConfig: {
+        maxOutputTokens,
+        thinkingConfig: {
+          includeThoughts: true,
+          thinkingLevel: thinkingLevel
         }
-      });
+      }
+    });
+  }
 
-  // Start the chat session — when cached, system instruction is already in cache
+  // Start the chat session. When the cache is attached, systemInstruction + tools
+  // already live in the cache, so pass undefined here. When NOT cached (no cache,
+  // or attach failed), send the system prompt inline so Gary always gets his
+  // full playbook — never a naked session.
   const chat = model.startChat({
     history: [],
-    systemInstruction: cachedContentName ? undefined : (systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined)
+    systemInstruction: usingCache ? undefined : (systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined)
   });
 
-  console.log(`[Session] Created ${validatedModel} session (thinkingLevel: ${thinkingLevel}, tools: ${functionDeclarations.length}, cached: ${cachedContentName ? 'yes' : 'no'})`);
+  console.log(`[Session] Created ${validatedModel} session (thinkingLevel: ${thinkingLevel}, tools: ${functionDeclarations.length}, cached: ${usingCache ? 'yes' : 'no'})`);
 
   return {
     chat,
@@ -243,7 +265,8 @@ export async function sendToSession(session, message, options = {}) {
     const usage = {
       prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
       completion_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-      total_tokens: response.usageMetadata?.totalTokenCount || 0
+      total_tokens: response.usageMetadata?.totalTokenCount || 0,
+      cached_tokens: response.usageMetadata?.cachedContentTokenCount || 0
     };
 
     // Feed cost tracker if attached to session
@@ -251,7 +274,7 @@ export async function sendToSession(session, message, options = {}) {
       session._costTracker.addUsage(session.modelName, usage);
     }
 
-    console.log(`[Session] Response in ${duration}ms (tokens: ${usage.total_tokens})`);
+    console.log(`[Session] Response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens})`);
     
     return {
       content: toolCalls ? null : textParts.join(''),
