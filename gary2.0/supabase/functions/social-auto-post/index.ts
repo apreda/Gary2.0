@@ -343,19 +343,44 @@ function splitTweets(text: string, max = 270): string[] {
   flush();
   return out;
 }
-// Build the WC thread PURELY from Gary's REAL rationale — his actual words, NO LLM and no guesswork. The FIRST sentence
-// is the MAIN caption (above the card); the remaining sentences thread as the reply, ending with a link-in-bio pointer.
-// Uses the highest-confidence play's stored rationale ("Gary's Take" header stripped, emoji/dashes killed). Verbatim.
-function buildWcThread(gPicks: any[]): { caption: string; replyChunks: string[] } {
-  const top = [...gPicks].sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))[0];
-  const sentences = splitSentences(clean(String(top?.rationale ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").trim()));
-  const caption = sentences.length ? (sentences[0].length <= 280 ? sentences[0] : (splitTweets(sentences[0], 270)[0] ?? "")) : "";
-  const rest = sentences.slice(1).join(" ");
-  const chunks = rest ? splitTweets(rest, 270) : [];
+// The REPLY under the WC card = Gary's FULL real rationale (his actual words, NO LLM), threaded, ending with a
+// link-in-bio pointer. The depth that sells the app. (The caption above the card is a punchy hook — see wcCaption.)
+function wcRationaleReply(chosen: any): string[] {
+  const sentences = splitSentences(clean(String(chosen?.rationale ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").trim()));
+  const full = sentences.join(" ");
+  const chunks = full ? splitTweets(full, 270) : [];
   const handoff = "Full breakdown's in the app. Link in bio.";
   if (chunks.length && chunks[chunks.length - 1].length + 2 + handoff.length <= 278) chunks[chunks.length - 1] += `\n\n${handoff}`;
   else chunks.push(handoff);
-  return { caption, replyChunks: chunks };
+  return chunks;
+}
+
+// Punchy WC caption ABOVE the card: a useful, checkable fact + the key stat + a casual stance, pulled from Gary's
+// REAL rationale (ground truth) — same human voice as the MLB hooks, with scene-setting banned. The rationale always
+// opens with theater ("sets the stage…"), so the first sentence makes a weak caption; this surfaces the useful part
+// instead. Falls back to the rationale's first sentence if the model ever fails, so the tweet always has a caption.
+async function wcCaption(chosen: any, away: string, home: string): Promise<string> {
+  const rationale = String(chosen?.rationale ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").trim();
+  const firstSentence = () => { const s = splitSentences(clean(rationale)); return s.length ? (s[0].length <= 280 ? s[0] : (splitTweets(s[0], 270)[0] ?? "")) : ""; };
+  if (!rationale) return firstSentence();
+  try {
+    const user = `Write the X caption that goes ABOVE Gary's pick CARD for a World Cup bet. The card already shows the pick, matchup, and odds, so DO NOT restate the pick or a "teams . odds" line. Hook the reader with REAL, USEFUL info about THIS game and WHY it is the play, the way a sharp bettor texts a friend.
+Return ONLY JSON: {"angle":"...","edge":"..."}.
+PICK: ${chosen.pick} | ${away} at ${home} | World Cup
+Match this VOICE (a DIFFERENT sport, copy the style not the facts):
+ANGLE example: "Oakland's lineup is thin today with Zack Gelof on the IL and Jacob Wilson scratched right before first pitch."
+EDGE example: "A's starter Jeffrey Springs has surrendered 21 home runs in 16 starts. I'll take the Giants on the moneyline."
+ANGLE: ONE sentence. The single most useful, specific, checkable fact about THIS game (an injury, a qualification or motivation situation, a tactical reality, a recent result). Lead with the FACT. ABSOLUTELY NO scene-setting about the stadium, city, skyline, "sets the stage", "showdown", "clash", or "chess match". Under 150 characters.
+EDGE: ONE sentence. The single strongest checkable STAT or number from the rationale, then a short casual stance on the play (for example "I'm on the under." or "Give me Ecuador plus the half."). Do NOT restate the odds.
+RATIONALE (ground truth, pull the real facts from here):
+${rationale.slice(0, 4000)}`;
+    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
+    const caption = [clean(out.angle), clean(out.edge)].filter(Boolean).join("\n\n");
+    return caption || firstSentence();
+  } catch (e) {
+    console.error("wcCaption LLM failed, using first sentence: " + String(e));
+    return firstSentence();
+  }
 }
 
 // A GAME pick is a side/total (moneyline, total, spread, handicap) — NOT a player prop. Player props carry a player
@@ -423,9 +448,11 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
     const opp = wcOpp(chosen, away, home);
     const cardUrl = `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(chosen.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
 
-    // The ENTIRE thread is Gary's REAL rationale for the chosen pick — his actual words, NO LLM, no guesswork:
-    // the first sentence is the MAIN caption above the card, the rest threads as the reply + link in bio.
-    const { caption, replyChunks } = buildWcThread([chosen]);
+    // Caption above the card = a punchy useful-fact + why hook (wcCaption, LLM, same human voice as the MLB tweets,
+    // no scene-setting). The reply threads Gary's FULL real rationale (his words, the depth). Caption falls back to the
+    // rationale's first sentence if the LLM ever fails.
+    const caption = await wcCaption(chosen, away, home);
+    const replyChunks = wcRationaleReply(chosen);
 
     if (dryRun) { out.push({ game: key, time: timeLabel, pick: pickLine, caption, reply_thread: replyChunks, card: cardUrl }); continue; }
 
@@ -471,6 +498,11 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
 }
 
 async function runRecapMode(today: string, dryRun: boolean) {
+  // DISABLED Jun 25 2026: the daily results card moved to the LOCAL results-card job
+  // (gary2.0/results-card/post-daily.cjs via launchd com.gary2.results-card at 11am ET) — 7 rotating
+  // founder-picked designs + $100/pick P/L. Early-return prevents a duplicate 10am recap. To revert to
+  // the cloud recap, delete this line.
+  if (!dryRun) return { posted: false, reason: "recap moved to local results-card job (11am)" };
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
   const y = yesterdayOf(today);
