@@ -486,7 +486,7 @@ struct MLBGameIntelView: View {
 // No flip animation — it just shows the info.
 
 private enum PCV4 {
-    static let bg   = Color(hex: "#0C0A06")   // near-black (warm) — matches the Picks page
+    static let bg   = Color(hex: "#121214")   // matte black — matches the game pick cards (GaryColors.cardBg)
     static let ink  = Color(hex: "#F7F2E8")   // primary — bright cream
     static let mut  = Color(hex: "#CFC6B2")   // secondary — readable warm cream (no cold grey)
     static let mut2 = Color(hex: "#A99E89")   // small labels
