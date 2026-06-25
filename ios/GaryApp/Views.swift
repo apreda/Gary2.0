@@ -4525,8 +4525,6 @@ struct HomeGarysForm: View {
 /// favorites, dog flat-stake units. Data only, no commentary.
 struct HomeMarketPulseStrip: View {
     let rows: [SupabaseAPI.MarketPulseRow]
-    private var favW: Int { rows.reduce(0) { $0 + ($1.fav_wins ?? 0) } }
-    private var favL: Int { rows.reduce(0) { $0 + ($1.fav_losses ?? 0) } }
     private var oversW: Int { rows.reduce(0) { $0 + ($1.overs_wins ?? 0) } }
     private var oversL: Int { rows.reduce(0) { $0 + ($1.overs_losses ?? 0) } }
     private var games: Int { rows.reduce(0) { $0 + ($1.games_counted ?? 0) } }
@@ -4538,15 +4536,18 @@ struct HomeMarketPulseStrip: View {
         }
     }
 
-    // Records, not units — how the whole slate broke last night, ALL sports combined
-    // (favorites vs dogs, overs vs unders). Not Gary's picks; the market itself.
+    // Records, not units — how the whole slate broke, ALL sports combined: how many
+    // overs vs unders hit + the game count. Not Gary's picks; the market itself.
+    // (Favorites record dropped on purpose: the odds feed only keeps the SETTLED
+    // post-game line, so a favorite read off it is circular — overs/unders + games
+    // are the metrics we can stand behind. See market-pulse builder notes.)
     var body: some View {
         HStack {
-            stat("FAVES \(favW)–\(favL)", "FAVE / DOG")
+            stat("\(oversW)", "OVERS HIT")
             Spacer()
-            stat("OVERS \(oversW)–\(oversL)", "OVER / UNDER")
+            stat("\(oversL)", "UNDERS HIT")
             Spacer()
-            stat("\(games) GAMES", "ALL SPORTS")
+            stat("\(games)", "GAMES · ALL SPORTS")
         }
         .padding(.vertical, 12).padding(.horizontal, 14)
         .quantPanel()
