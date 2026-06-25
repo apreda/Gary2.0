@@ -16178,6 +16178,8 @@ struct EdgesSection: View {
         guard let k = activeKind else { return edges }
         return edges.filter { $0.kind == k }
     }
+    // WC tags its venue/stadium intel as .ballpark; label it "VENUE" for soccer, not "Ballpark".
+    private var isWC: Bool { edges.first?.league == .wc }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -16224,7 +16226,7 @@ struct EdgesSection: View {
         Button { withAnimation(.easeInOut(duration: 0.15)) { selectedKind = kind } } label: {
             HStack(spacing: 6) {
                 Image(systemName: kind.icon).font(.system(size: 11, weight: .bold))
-                Text(kind.chip).font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
+                Text((kind == .ballpark && isWC) ? "VENUE" : kind.chip).font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
             }
             .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
             .padding(.bottom, 8)
@@ -18677,7 +18679,7 @@ struct PropsHubView: View {
         switch k {
         case .platoon: return "PLATOON"
         case .hot: return "HEAT CHECK"
-        case .ballpark: return "BALLPARK"
+        case .ballpark: return sel == .wc ? "VENUE" : "BALLPARK"
         case .cold: return "COOLING"
         case .starterForm: return "STARTERS"
         default: return k.chip
@@ -19648,7 +19650,7 @@ struct SignalRow: View {
         Button { onTap?(s.game) } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text(s.kind.chip).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(GaryColors.gold)
+                    Text((s.kind == .ballpark && s.league == .wc) ? "VENUE" : s.kind.chip).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(GaryColors.gold)
                     Spacer()
                     Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                 }
