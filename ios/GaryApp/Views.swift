@@ -12270,6 +12270,10 @@ struct CompactPickRow: View {
         CGFloat(max(0.18, min(1.0, pick.confidence ?? 0.72)))
     }
     private var resolvedResult: String? {
+        // Doubleheader guard: gameResult is MATCHUP-keyed, so a pick whose game shares a matchup
+        // with another (a doubleheader) can borrow the OTHER game's graded result. If THIS pick's
+        // own game (by game_id) is still live, suppress it so the card shows live, not a false FINAL.
+        if let gid = pick.game_id, liveCache.status(forGameId: gid)?.isLive == true { return nil }
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
         return result
     }
@@ -12313,7 +12317,7 @@ struct CompactPickRow: View {
     @State private var shareItem: PickShareItem? = nil
     private var liveStatus: LiveScore? {
         guard liveInSlot, resolvedResult == nil else { return nil }
-        return liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+        return liveCache.status(forGameId: pick.game_id) ?? liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
     }
 
     /// FINAL board for this matchup with no stored grade yet — feeds the
@@ -12322,7 +12326,7 @@ struct CompactPickRow: View {
     /// business everywhere, score-in-slot chrome is not.
     private var liveFinal: LiveScore? {
         guard resolvedResult == nil else { return nil }
-        let ls = liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+        let ls = liveCache.status(forGameId: pick.game_id) ?? liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
         return (ls?.isFinal == true) ? ls : nil
     }
     private var liveGraded: String? {
@@ -15520,6 +15524,14 @@ final class LiveScoreCache: ObservableObject {
         // live row wins; otherwise scheduled beats final — a true final
         // never coexists with a scheduled row for the same game.
         return matches.first { $0.isLive } ?? matches.first { !$0.isFinal } ?? matches.first
+    }
+
+    /// Live score for an EXACT game by its game_id — disambiguates doubleheaders (two games
+    /// share one matchup string), where status(forMatchup:) is ambiguous. nil if not found.
+    func status(forGameId gameId: Int?) -> LiveScore? {
+        guard let gid = gameId else { return nil }
+        let s = String(gid)
+        return scores.first { $0.game_id == s }
     }
 
     /// Settled final score string ("3-1") for a matchup, from game_results (today
@@ -19769,6 +19781,9 @@ struct CompactPropRow: View {
     }
     // MARK: - Result Stamp Properties
     private var resolvedResult: String? {
+        // Doubleheader guard: suppress the matchup-keyed graded result when THIS prop's game
+        // (by game_id) is still live — else it borrows the other doubleheader game's result.
+        if let gid = prop.game_id, liveCache.status(forGameId: gid)?.isLive == true { return nil }
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
         return result
     }

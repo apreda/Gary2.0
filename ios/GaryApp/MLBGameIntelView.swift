@@ -363,17 +363,7 @@ struct MLBGameIntelView: View {
         }
         let m = t.map(125, 176)
         ctx.fill(Path(ellipseIn: CGRect(x: m.x - 5, y: m.y - 5, width: 10, height: 10)), with: .color(MLBI.base))
-        // wind arrow
-        let a0 = t.map(Self.weather.windFrom), a1 = t.map(Self.weather.windTo)
-        var arrow = Path(); arrow.move(to: a0); arrow.addLine(to: a1)
-        ctx.stroke(arrow, with: .color(MLBI.hot), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-        let ang = atan2(a1.y - a0.y, a1.x - a0.x)
-        var head = Path()
-        head.move(to: a1)
-        head.addLine(to: CGPoint(x: a1.x - 9 * cos(ang - .pi / 7), y: a1.y - 9 * sin(ang - .pi / 7)))
-        head.addLine(to: CGPoint(x: a1.x - 9 * cos(ang + .pi / 7), y: a1.y - 9 * sin(ang + .pi / 7)))
-        head.closeSubpath()
-        ctx.fill(head, with: .color(MLBI.hot))
+        // (wind-direction arrow removed — founder call; the carry-zone glow + wind chip stay)
     }
 
     private func token(_ f: MLBFielder) -> some View {
@@ -496,7 +486,7 @@ struct MLBGameIntelView: View {
 // No flip animation — it just shows the info.
 
 private enum PCV4 {
-    static let bg   = Color(hex: "#1B160E")
+    static let bg   = Color(hex: "#0C0A06")   // near-black (warm) — matches the Picks page
     static let ink  = Color(hex: "#F7F2E8")   // primary — bright cream
     static let mut  = Color(hex: "#CFC6B2")   // secondary — readable warm cream (no cold grey)
     static let mut2 = Color(hex: "#A99E89")   // small labels
@@ -765,7 +755,7 @@ struct PlayerCardV4: View {
                     let r = rows[i]
                     VStack(spacing: 6) {
                         Text((r.label ?? "").uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
-                        Text(r.value ?? "—").font(GaryFonts.display(20)).foregroundStyle(PCV4.ink)
+                        Text((r.value ?? "—").components(separatedBy: " (").first ?? "—").font(GaryFonts.display(20)).foregroundStyle(PCV4.ink)
                         if let d = r.detail { Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut).lineLimit(1).minimumScaleFactor(0.7) }
                     }.frame(maxWidth: .infinity)
                 }

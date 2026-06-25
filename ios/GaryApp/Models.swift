@@ -300,6 +300,7 @@ struct SportsbookOdds: Codable, Identifiable {
 
 struct GaryPick: Identifiable, Codable {
     let pick_id: String?
+    var game_id: Int? = nil   // per-game id — disambiguates doubleheaders (same matchup, two games)
     let pick: String?
     let rationale: String?
     let league: String?
@@ -1179,6 +1180,7 @@ struct PlayerInjury: Codable {
 
 struct PropPick: Identifiable, Codable {
     let player: String?
+    var game_id: Int? = nil   // per-game id — disambiguates doubleheaders
     let team: String?
     let prop: String?
     let bet: String?
