@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>d14 — Position Cards</title>
+<style>
+  :root{
+    --navy:#0a2240;
+    --navy-2:#102d52;
+    --gold:#b6922e;
+    --gold-2:#d8b54a;
+    --cream:#f4ead1;
+    --grass:#3f7a44;
+    --grass-2:#356b3b;
+    --dirt:#b9824e;
+    --dirt-2:#a6713f;
+    --chalk:#f2f3ee;
+    --ink:#0c1a2c;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    background:#10151c;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;align-items:flex-start;
+    min-height:100vh;padding:28px 0;
+  }
+  .phone{
+    width:430px;
+    min-height:920px;
+    background:linear-gradient(180deg,#0a2240 0%, #0c1a2c 38%, #0c1623 100%);
+    border-radius:46px;
+    overflow:hidden;
+    position:relative;
+    box-shadow:0 30px 80px rgba(0,0,0,.6), 0 0 0 11px #1c2530, 0 0 0 13px #2c3744;
+    color:#fff;
+  }
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:30px;background:#000;border-radius:0 0 18px 18px;z-index:50;
+  }
+
+  /* ---------- HEADER ---------- */
+  .top{
+    padding:46px 22px 14px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .league-tag{
+    font-size:10px;letter-spacing:.22em;font-weight:800;color:var(--gold-2);
+    text-transform:uppercase;
+  }
+  .topright{
+    font-size:10px;letter-spacing:.16em;color:#7e93ad;text-transform:uppercase;font-weight:700;
+  }
+  .matchup{
+    padding:0 22px 14px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .mlogo{
+    width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-weight:900;font-size:14px;letter-spacing:.02em;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);
+  }
+  .mlogo.away{background:#0c2340;color:#e6e0c8;border:1.5px solid #2b4straddle;border:1.5px solid #2b4straddle;}
+  .mlogo.away{background:#11233b;color:#d9d2b6;border:1.5px solid #25405f;}
+  .mlogo.home{background:linear-gradient(150deg,#102d52,#0a2240);color:var(--gold-2);border:1.5px solid var(--gold);}
+  .mtext{flex:1;}
+  .mteams{font-size:17px;font-weight:800;letter-spacing:-.01em;}
+  .mteams .at{color:#6f86a1;font-weight:600;margin:0 5px;font-size:14px;}
+  .msub{font-size:11px;color:#8ea0b8;margin-top:3px;font-weight:600;}
+  .msub b{color:var(--gold-2);font-weight:800;}
+
+  /* ---------- FIELD ---------- */
+  .field-wrap{
+    margin:6px 16px 0;
+    border-radius:24px;
+    overflow:hidden;
+    position:relative;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.05), 0 12px 30px rgba(0,0,0,.4);
+    background:#0b3b2e;
+  }
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1.06;
+    background:
+      radial-gradient(120% 90% at 50% 100%, #4a8a4f 0%, #3f7a44 42%, #356b3b 72%, #2c5a32 100%);
+    overflow:hidden;
+  }
+  /* mowed stripes */
+  .stripes{position:absolute;inset:0;opacity:.5;}
+  .stripes span{
+    position:absolute;top:-20%;left:50%;
+    width:46px;height:150%;
+    transform-origin:bottom center;
+    background:rgba(255,255,255,.05);
+  }
+  /* outfield warning track */
+  .track{
+    position:absolute;left:-6%;right:-6%;top:-6%;height:46%;
+    border-radius:50%/100%;
+    background:radial-gradient(120% 120% at 50% 100%, transparent 60%, var(--dirt) 61%, var(--dirt-2) 100%);
+    border-bottom:none;
+  }
+  .wall{
+    position:absolute;left:4%;right:4%;top:5%;height:7px;
+    border-radius:40px 40px 0 0/40px;
+    background:linear-gradient(90deg,#0a2240,#163a64,#0a2240);
+    box-shadow:0 2px 0 rgba(0,0,0,.25);
+  }
+  /* infield dirt */
+  .infield{
+    position:absolute;bottom:6%;left:50%;transform:translateX(-50%) rotate(45deg);
+    width:50%;aspect-ratio:1/1;
+    background:radial-gradient(120% 120% at 50% 50%, var(--dirt) 0%, var(--dirt-2) 100%);
+    border-radius:14%;
+    box-shadow:inset 0 0 22px rgba(0,0,0,.18);
+  }
+  /* infield grass cut-in */
+  .infield-grass{
+    position:absolute;bottom:11.5%;left:50%;transform:translateX(-50%) rotate(45deg);
+    width:34%;aspect-ratio:1/1;
+    background:linear-gradient(150deg,#4a8a4f,#3f7a44);
+    border-radius:18%;
+    box-shadow:inset 0 0 16px rgba(0,0,0,.12);
+  }
+  /* base lines (chalk) */
+  .baseline{
+    position:absolute;bottom:7.5%;left:50%;width:3px;height:30%;
+    background:rgba(255,255,255,.85);transform-origin:bottom center;border-radius:2px;
+  }
+  .baseline.l{transform:translateX(-50%) rotate(-45deg);}
+  .baseline.r{transform:translateX(-50%) rotate(45deg);}
+  /* bases */
+  .base{position:absolute;width:11px;height:11px;background:#f6f6f0;transform:rotate(45deg);
+    box-shadow:0 1px 3px rgba(0,0,0,.4);border-radius:2px;}
+  .base.home{bottom:6.3%;left:50%;margin-left:-5.5px;background:#fff;}
+  .base.first{bottom:24%;left:67%;}
+  .base.second{bottom:42%;left:50%;margin-left:-5.5px;}
+  .base.third{bottom:24%;left:33%;}
+  .mound{
+    position:absolute;bottom:25%;left:50%;transform:translate(-50%,50%);
+    width:34px;height:34px;border-radius:50%;
+    background:radial-gradient(circle,#c98b54,#a6713f);
+    box-shadow:inset 0 0 6px rgba(0,0,0,.25);
+  }
+
+  /* ---------- PLAYER PINS ---------- */
+  .pin{
+    position:absolute;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    cursor:pointer;z-index:6;transition:transform .15s ease;
+  }
+  .pin:active{transform:translate(-50%,-50%) scale(.94);}
+  .puck{
+    width:34px;height:34px;border-radius:50%;
+    background:linear-gradient(150deg,#13345d,#0a2240);
+    border:2px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:900;font-size:13px;color:var(--gold-2);
+    box-shadow:0 4px 10px rgba(0,0,0,.45);
+    position:relative;
+  }
+  .puck .pos{
+    position:absolute;top:-7px;right:-9px;
+    background:var(--gold);color:#0a2240;font-size:8px;font-weight:900;
+    padding:1px 4px;border-radius:6px;letter-spacing:.02em;
+    box-shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  .pin.active .puck{
+    border-color:#fff;background:linear-gradient(150deg,var(--gold-2),var(--gold));
+    color:#0a2240;transform:scale(1.12);box-shadow:0 0 0 4px rgba(216,181,74,.3),0 6px 14px rgba(0,0,0,.5);
+  }
+  .pin .nm{
+    font-size:9px;font-weight:800;color:#fff;
+    background:rgba(8,18,32,.78);padding:2px 6px;border-radius:7px;
+    white-space:nowrap;backdrop-filter:blur(2px);
+    box-shadow:0 1px 4px rgba(0,0,0,.4);letter-spacing:.01em;
+  }
+  .pin.active .nm{background:var(--gold);color:#0a2240;}
+
+  /* ---------- CARD RAIL ---------- */
+  .rail-head{
+    padding:18px 22px 8px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .rail-title{font-size:13px;font-weight:800;letter-spacing:.04em;}
+  .rail-title b{color:var(--gold-2);}
+  .swipehint{font-size:10px;color:#7e93ad;letter-spacing:.1em;text-transform:uppercase;font-weight:700;display:flex;align-items:center;gap:5px;}
+  .swipehint .arrow{animation:nudge 1.6s infinite;}
+  @keyframes nudge{0%,100%{transform:translateX(0);}50%{transform:translateX(4px);}}
+
+  .rail{
+    display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+    padding:6px 22px 18px;scroll-behavior:smooth;
+    -webkit-overflow-scrolling:touch;
+  }
+  .rail::-webkit-scrollbar{display:none;}
+  .pcard{
+    flex:0 0 268px;scroll-snap-align:center;
+    background:linear-gradient(165deg,#13294a 0%, #0d1f3a 100%);
+    border:1px solid rgba(216,181,74,.22);
+    border-radius:22px;padding:18px 18px 16px;
+    position:relative;overflow:hidden;
+    box-shadow:0 10px 26px rgba(0,0,0,.4);
+    transition:border-color .2s,transform .2s;
+  }
+  .pcard.is-active{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 14px 30px rgba(0,0,0,.5);}
+  .pcard::before{
+    content:"";position:absolute;top:-40px;right:-40px;
+    width:150px;height:150px;border-radius:50%;
+    background:radial-gradient(circle,rgba(216,181,74,.16),transparent 70%);
+  }
+  .pc-top{display:flex;align-items:flex-start;justify-content:space-between;position:relative;}
+  .pc-pos{
+    font-size:11px;font-weight:900;letter-spacing:.12em;color:var(--gold-2);
+    background:rgba(216,181,74,.12);border:1px solid rgba(216,181,74,.35);
+    padding:4px 9px;border-radius:8px;text-transform:uppercase;
+  }
+  .pc-num{
+    font-family:"Georgia",serif;font-size:46px;font-weight:900;line-height:.9;
+    color:rgba(255,255,255,.1);position:absolute;top:-4px;right:0;
+  }
+  .pc-name{font-size:21px;font-weight:900;letter-spacing:-.02em;margin-top:24px;position:relative;}
+  .pc-meta{font-size:11px;color:#8ea0b8;margin-top:3px;font-weight:600;position:relative;}
+  .pc-stats{
+    display:flex;gap:8px;margin-top:14px;position:relative;
+  }
+  .stat{
+    flex:1;background:rgba(255,255,255,.04);border-radius:10px;padding:8px 6px;text-align:center;
+    border:1px solid rgba(255,255,255,.05);
+  }
+  .stat .v{font-size:15px;font-weight:900;color:var(--gold-2);}
+  .stat .k{font-size:8px;letter-spacing:.1em;color:#7e93ad;text-transform:uppercase;margin-top:2px;font-weight:700;}
+  .pc-foot{
+    margin-top:14px;display:flex;align-items:center;gap:7px;position:relative;
+    font-size:10px;color:#9fb0c6;font-weight:700;
+  }
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);}
+
+  /* ---------- BATTING ORDER ---------- */
+  .lineup{
+    margin:6px 22px 28px;
+    background:rgba(8,18,32,.5);
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:20px;padding:16px 16px 10px;
+  }
+  .lu-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .lu-title{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#cdd8e6;}
+  .lu-vs{font-size:10px;color:#8ea0b8;font-weight:700;}
+  .lu-vs b{color:var(--gold-2);}
+  .lurow{
+    display:flex;align-items:center;gap:11px;padding:8px 6px;
+    border-bottom:1px solid rgba(255,255,255,.05);
+    cursor:pointer;border-radius:8px;transition:background .15s;
+  }
+  .lurow:last-child{border-bottom:none;}
+  .lurow:active{background:rgba(216,181,74,.08);}
+  .lurow.active{background:rgba(216,181,74,.12);}
+  .luord{
+    width:22px;height:22px;border-radius:6px;flex:none;
+    background:linear-gradient(150deg,#13345d,#0a2240);border:1px solid var(--gold);
+    color:var(--gold-2);font-weight:900;font-size:11px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .luname{flex:1;font-size:13px;font-weight:800;}
+  .luname .pos{color:#7e93ad;font-weight:700;font-size:11px;margin-left:6px;}
+  .lunum{font-size:11px;color:#8ea0b8;font-weight:800;}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="notch"></div>
+
+    <div class="top">
+      <div class="league-tag">MLB · Starting Nine</div>
+      <div class="topright">7:10 PM ET · American Family Field</div>
+    </div>
+
+    <div class="matchup">
+      <div class="mlogo away">CLE</div>
+      <div class="mlogo home">MIL</div>
+      <div class="mtext">
+        <div class="mteams">Guardians <span class="at">@</span> Brewers</div>
+        <div class="msub">Brewers defense · vs RHP <b>Tanner Bibee #28</b></div>
+      </div>
+    </div>
+
+    <!-- FIELD -->
+    <div class="field-wrap">
+      <div class="field" id="field">
+        <div class="stripes">
+          <span style="transform:rotate(-40deg);"></span>
+          <span style="transform:rotate(-26deg);"></span>
+          <span style="transform:rotate(-13deg);"></span>
+          <span style="transform:rotate(0deg);"></span>
+          <span style="transform:rotate(13deg);"></span>
+          <span style="transform:rotate(26deg);"></span>
+          <span style="transform:rotate(40deg);"></span>
+        </div>
+        <div class="track"></div>
+        <div class="wall"></div>
+        <div class="infield"></div>
+        <div class="infield-grass"></div>
+        <div class="baseline l"></div>
+        <div class="baseline r"></div>
+        <div class="mound"></div>
+        <div class="base home"></div>
+        <div class="base first"></div>
+        <div class="base second"></div>
+        <div class="base third"></div>
+
+        <!-- 9 fielders -->
+        <div class="pin" data-idx="0" style="left:50%;top:62%;">
+          <div class="puck">51<span class="pos">P</span></div><div class="nm">Peralta</div>
+        </div>
+        <div class="pin" data-idx="1" style="left:50%;top:90%;">
+          <div class="puck">24<span class="pos">C</span></div><div class="nm">Contreras</div>
+        </div>
+        <div class="pin" data-idx="2" style="left:71%;top:68%;">
+          <div class="puck">12<span class="pos">1B</span></div><div class="nm">Hoskins</div>
+        </div>
+        <div class="pin" data-idx="3" style="left:66%;top:50%;">
+          <div class="puck">0<span class="pos">2B</span></div><div class="nm">Turang</div>
+        </div>
+        <div class="pin" data-idx="4" style="left:34%;top:50%;">
+          <div class="puck">27<span class="pos">SS</span></div><div class="nm">Adames</div>
+        </div>
+        <div class="pin" data-idx="5" style="left:29%;top:68%;">
+          <div class="puck">3<span class="pos">3B</span></div><div class="nm">Ortiz</div>
+        </div>
+        <div class="pin" data-idx="6" style="left:22%;top:26%;">
+          <div class="puck">5<span class="pos">LF</span></div><div class="nm">Mitchell</div>
+        </div>
+        <div class="pin" data-idx="7" style="left:50%;top:16%;">
+          <div class="puck">11<span class="pos">CF</span></div><div class="nm">Chourio</div>
+        </div>
+        <div class="pin" data-idx="8" style="left:78%;top:26%;">
+          <div class="puck">10<span class="pos">RF</span></div><div class="nm">Frelick</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD RAIL -->
+    <div class="rail-head">
+      <div class="rail-title">Position <b>Cards</b></div>
+      <div class="swipehint">Swipe <span class="arrow">→</span></div>
+    </div>
+    <div class="rail" id="rail"></div>
+
+    <!-- BATTING ORDER -->
+    <div class="lineup">
+      <div class="lu-head">
+        <div class="lu-title">Batting Order</div>
+        <div class="lu-vs">vs <b>Bibee</b> · RHP</div>
+      </div>
+      <div id="lineup"></div>
+    </div>
+  </div>
+
+<script>
+  // index aligns with .pin data-idx
+  const players = [
+    {pos:"P",  num:51, name:"Freddy Peralta",     meta:"RHP · Starter",       s:[["3.21","ERA"],["11.2","K/9"],["1.04","WHIP"]], foot:"Owns the mound — sets the table"},
+    {pos:"C",  num:24, name:"William Contreras",  meta:"Catcher · Bats R",    s:[[".281","AVG"],["19","HR"],[".842","OPS"]], foot:"Frames behind the plate"},
+    {pos:"1B", num:12, name:"Rhys Hoskins",       meta:"First Base · Bats R",  s:[[".248","AVG"],["22","HR"],[".792","OPS"]], foot:"Anchors lower-right corner"},
+    {pos:"2B", num:0,  name:"Brice Turang",       meta:"Second Base · Bats L", s:[[".262","AVG"],["31","SB"],["+9","DRS"]], foot:"Right of the bag, leadoff"},
+    {pos:"SS", num:27, name:"Willy Adames",       meta:"Shortstop · Bats R",   s:[[".251","AVG"],["24","HR"],["+6","DRS"]], foot:"Patrols left of second"},
+    {pos:"3B", num:3,  name:"Joey Ortiz",         meta:"Third Base · Bats R",  s:[[".239","AVG"],["11","HR"],["+11","DRS"]], foot:"Guards the hot corner"},
+    {pos:"LF", num:5,  name:"Garrett Mitchell",   meta:"Left Field · Bats L",  s:[[".255","AVG"],["18","SB"],[".768","OPS"]], foot:"Upper-left grass"},
+    {pos:"CF", num:11, name:"Jackson Chourio",    meta:"Center Field · Bats R",s:[[".275","AVG"],["21","HR"],["22","SB"]], foot:"Deepest point, top center"},
+    {pos:"RF", num:10, name:"Sal Frelick",        meta:"Right Field · Bats L", s:[[".271","AVG"],["+12","DRS"],[".745","OPS"]], foot:"Cannon in right"}
+  ];
+
+  // batting order -> reference into players by position
+  const order = [
+    {n:1, pos:"2B", name:"Turang",    num:0},
+    {n:2, pos:"RF", name:"Frelick",   num:10},
+    {n:3, pos:"CF", name:"Chourio",   num:11},
+    {n:4, pos:"C",  name:"Contreras", num:24},
+    {n:5, pos:"1B", name:"Hoskins",   num:12},
+    {n:6, pos:"DH", name:"Yelich",    num:22},
+    {n:7, pos:"3B", name:"Ortiz",     num:3},
+    {n:8, pos:"LF", name:"Mitchell",  num:5},
+    {n:9, pos:"SS", name:"Adames",    num:27}
+  ];
+
+  const rail = document.getElementById('rail');
+  const pins = [...document.querySelectorAll('.pin')];
+  const cards = [];
+
+  players.forEach((p,i)=>{
+    const c = document.createElement('div');
+    c.className = 'pcard';
+    c.dataset.idx = i;
+    c.innerHTML = `
+      <div class="pc-top">
+        <div class="pc-pos">${p.pos}</div>
+        <div class="pc-num">${p.num}</div>
+      </div>
+      <div class="pc-name">${p.name}</div>
+      <div class="pc-meta">${p.meta}</div>
+      <div class="pc-stats">
+        ${p.s.map(([v,k])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('')}
+      </div>
+      <div class="pc-foot"><span class="dot"></span>${p.foot}</div>
+    `;
+    c.addEventListener('click',()=>setActive(i,true));
+    rail.appendChild(c);
+    cards.push(c);
+  });
+
+  pins.forEach((pin)=>{
+    pin.addEventListener('click',()=>setActive(+pin.dataset.idx,true));
+  });
+
+  const lineup = document.getElementById('lineup');
+  order.forEach(o=>{
+    const idx = players.findIndex(p=>p.pos===o.pos);
+    const row = document.createElement('div');
+    row.className = 'lurow';
+    if(idx>=0) row.dataset.idx = idx;
+    row.innerHTML = `
+      <div class="luord">${o.n}</div>
+      <div class="luname">${o.name}<span class="pos">${o.pos}</span></div>
+      <div class="lunum">#${o.num}</div>
+    `;
+    if(idx>=0) row.addEventListener('click',()=>setActive(idx,true));
+    lineup.appendChild(row);
+  });
+  const luRows = [...document.querySelectorAll('.lurow')];
+
+  function setActive(i, scroll){
+    pins.forEach(p=>p.classList.toggle('active', +p.dataset.idx===i));
+    cards.forEach(c=>c.classList.toggle('is-active', +c.dataset.idx===i));
+    luRows.forEach(r=>r.classList.toggle('active', +r.dataset.idx===i));
+    if(scroll && cards[i]){
+      cards[i].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+    }
+  }
+
+  // sync active card to scroll position
+  let st;
+  rail.addEventListener('scroll',()=>{
+    clearTimeout(st);
+    st = setTimeout(()=>{
+      const mid = rail.scrollLeft + rail.clientWidth/2;
+      let best=0, bd=1e9;
+      cards.forEach((c,i)=>{
+        const cx = c.offsetLeft + c.offsetWidth/2;
+        const d = Math.abs(cx-mid);
+        if(d<bd){bd=d;best=i;}
+      });
+      setActive(best,false);
+    },70);
+  });
+
+  setActive(0,false);
+</script>
+</body>
+</html>

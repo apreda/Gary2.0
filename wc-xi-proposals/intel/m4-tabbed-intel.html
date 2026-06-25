@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WC Game Intel — m4 Tabbed</title>
+<!-- m4 · Tabbed Intel — pitch stays; intel is ONE module at a time (READ/CONSENSUS/PROPS). Fewest words on screen. By hand. -->
+<style>
+  :root{
+    --cream:#F6F1E7;--panel:#FBF7EF;--cream2:#EFE6D6;--ink:#211C15;--ink2:#574B39;--ink3:#8C7E66;--hair:rgba(120,100,60,.18);
+    --gold:#B5862F;--gold-deep:#7E5C18;--green:#2E7D55;--amber:#E08A2B;
+    --pitch:#2E3D34;--pitch2:#33433A;--pline:rgba(232,237,228,.30);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#d9cfbc;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;padding:22px 12px 60px;min-height:100vh}
+  .phone{width:412px;max-width:100%;background:var(--cream);border-radius:30px;overflow:hidden;border:1px solid var(--hair);box-shadow:0 10px 30px rgba(40,30,12,.16)}
+  .cap{font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:10.5px;font-family:var(--mono);color:var(--ink2)}
+  .eyebrow{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--gold);font-weight:700}
+  .hdr{padding:8px 16px 12px;display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--hair)}
+  .match .t{font-size:20px;font-weight:800;letter-spacing:-.01em}.match .v{font-size:13px;color:var(--ink3);font-weight:600;margin:0 2px}
+  .subline{margin-top:3px;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+  .statebtn{margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:700;padding:4px 9px;border-radius:6px;border:1px solid var(--hair);cursor:pointer;background:#F3E2C9;color:#875012}
+  .statebtn.conf{background:#D6EADE;color:#1c5638}
+  .pitchwrap{margin:12px 16px 0;border-radius:12px;overflow:hidden;border:1px solid rgba(0,0,0,.08)}
+  .pitch{position:relative;width:100%;aspect-ratio:1.02;background:repeating-linear-gradient(0deg,var(--pitch) 0 9.09%,var(--pitch2) 9.09% 18.18%)}
+  .mk{position:absolute;border:1px solid var(--pline)}.mk.frame{inset:3%;border-radius:3px}.mk.half{left:3%;right:3%;top:50%;height:0;border-width:1px 0 0 0}
+  .mk.circle{left:50%;top:50%;width:28%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}.mk.boxT{left:27%;right:27%;top:3%;height:11%;border-top:0}.mk.boxB{left:27%;right:27%;bottom:3%;height:11%;border-bottom:0}
+  .pl{position:absolute;transform:translate(-50%,-50%);width:60px;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .disc{width:28px;height:28px;border-radius:50%;background:#F4EFE3;border:1px solid rgba(20,30,22,.22);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:11px;color:#2E3D34}
+  .pn{font-size:9px;font-weight:700;color:#fff;line-height:1.05;text-align:center}.pp{font-family:var(--mono);font-size:7px;color:rgba(255,255,255,.6)}
+  .pl.cx .disc{border:1.5px dashed var(--amber)}.pl.cx .flag{position:absolute;top:-11px;background:var(--amber);color:#fff;font-family:var(--mono);font-size:7px;font-weight:700;padding:1px 4px;border-radius:4px;white-space:nowrap}
+  .state-confirmed .pl.cx .disc{border:1.5px solid var(--green)}.state-confirmed .pl.cx .flag{background:var(--green)}
+
+  /* module tabs */
+  .tabs{display:flex;margin:14px 16px 0;border:1px solid var(--hair);border-radius:9px;overflow:hidden}
+  .tabs button{flex:1;border:0;background:var(--panel);padding:8px 4px;font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--ink2);font-weight:700;cursor:pointer;border-left:1px solid var(--hair)}
+  .tabs button:first-child{border-left:0}.tabs button.on{background:var(--ink);color:var(--cream)}
+  .panel{padding:15px 16px 6px;min-height:150px}
+  .panel.hide{display:none}
+
+  .read-line{font-size:14px;line-height:1.42;margin:0 0 7px}.read-line .ov{color:var(--gold-deep);font-weight:800}
+  .read-hinge{font-size:12.5px;color:var(--ink2);margin:0}.read-hinge b{color:var(--ink)}
+  .take{display:flex;align-items:center;gap:9px;margin-top:13px;background:var(--ink);border-radius:9px;padding:10px 12px}
+  .take .lbl{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--gold-deep);font-weight:700}.take .pick{font-size:13.5px;font-weight:800;color:var(--cream)}.take .meta{margin-left:auto;font-family:var(--mono);font-size:9px;color:rgba(246,241,231,.55)}
+  .cons-top{display:flex;align-items:center;gap:10px;margin-bottom:11px}.cons-pct{font-family:var(--mono);font-size:24px;font-weight:800;line-height:1}.cons-pct small{font-size:9.5px;color:var(--ink3);font-weight:600;display:block}
+  .cons-grade{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--ink2);background:var(--cream2);padding:4px 9px;border-radius:6px}
+  .desks{display:flex;flex-wrap:wrap;gap:6px}.desk{font-family:var(--mono);font-size:9.5px;border:1px solid var(--hair);border-radius:6px;padding:5px 8px;display:flex;gap:6px;background:var(--panel)}
+  .desk .v{font-weight:700}.desk .v.s{color:var(--green)}.desk .v.b{color:var(--amber)}
+  .cons-note{margin-top:11px;font-size:11.5px;color:var(--ink3)}.cons-note b{color:var(--ink2)}
+  .prop{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--hair)}.prop:first-of-type{border-top:0}
+  .prop .num{width:23px;height:23px;border-radius:50%;background:var(--cream2);font-family:var(--mono);font-weight:700;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--ink2);flex:0 0 auto}
+  .prop .who{font-size:13px;font-weight:700}.prop .mkt{font-family:var(--mono);font-size:9.5px;color:var(--ink3);margin-top:1px}
+  .prop .odds{margin-left:auto;font-family:var(--mono);font-size:13.5px;font-weight:800;color:var(--gold-deep)}
+  .prop .tag{font-family:var(--mono);font-size:7.5px;font-weight:700;padding:2px 5px;border-radius:4px;margin-left:9px}
+  .tag.if{background:#F3E2C9;color:#875012}.tag.proj{background:var(--cream2);color:var(--ink3)}.tag.lean{background:#D6EADE;color:#1c5638}
+  .foot{padding:11px 16px 16px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase;text-align:center}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span class="cap">Gary · Hub</span></div>
+  <div class="hdr">
+    <div>
+      <div class="eyebrow">WORLD CUP · GAME INTEL</div>
+      <div class="match"><span class="t">Canada</span><span class="v">v</span><span class="t">Qatar</span></div>
+      <div class="subline">GROUP B · BC PLACE · 6:00 PM ET</div>
+    </div>
+    <button class="statebtn" id="statebtn">PROJECTED</button>
+  </div>
+  <div class="pitchwrap"><div class="pitch" id="pitch"><div class="mk frame"></div><div class="mk half"></div><div class="mk circle"></div><div class="mk boxT"></div><div class="mk boxB"></div></div></div>
+
+  <div class="tabs" id="tabs"><button data-t="read" class="on">THE READ</button><button data-t="cons">CONSENSUS</button><button data-t="props">PROPS</button></div>
+
+  <div class="panel" id="p-read">
+    <p class="read-line">Front three wants the ball — leans Qatar <span class="ov">OVER</span>.</p>
+    <p class="read-hinge">Hinges on one name: <b>Almoez Ali.</b> Check Consensus.</p>
+    <div class="take"><span class="lbl">GARY'S TAKE</span><span class="pick">Qatar team-total OVER</span><span class="meta">soft · firms at KO</span></div>
+  </div>
+  <div class="panel hide" id="p-cons">
+    <div class="cons-top"><div class="cons-pct">82%<small>5 desks agree</small></div><div class="cons-grade">PROJ. 9/11</div></div>
+    <div class="desks"><div class="desk">The Athletic <span class="v s">START</span></div><div class="desk">ESPN <span class="v s">START</span></div><div class="desk">Sports Mole <span class="v s">START</span></div><div class="desk">RotoWire <span class="v b">BENCH</span></div><div class="desk">bet365 <span class="v b">BENCH</span></div></div>
+    <div class="cons-note">Split is one name: <b>Almoez Ali · 3 start / 2 bench.</b></div>
+  </div>
+  <div class="panel hide" id="p-props">
+    <div class="prop"><div class="num">19</div><div><div class="who">Almoez Ali</div><div class="mkt">Anytime scorer</div></div><span class="odds">+180</span><span class="tag if">IF STARTS</span></div>
+    <div class="prop"><div class="num">11</div><div><div class="who">Afif</div><div class="mkt">Shots on target · O1.5</div></div><span class="odds">+135</span><span class="tag proj">PROJ</span></div>
+    <div class="prop"><div class="num">∅</div><div><div class="who">Qatar team total</div><div class="mkt">Goals · O1.5</div></div><span class="odds">−115</span><span class="tag lean">LEAN</span></div>
+  </div>
+  <div class="foot">Gary · Quant Terminal</div>
+</div>
+<script>
+const XI=[{y:90,m:[{n:1,nm:'Barsham',p:'GK'}]},{y:71,m:[{n:2,nm:'Pedro Miguel',p:'RB'},{n:15,nm:'Khoukhi',p:'CB'},{n:5,nm:'Hassan',p:'CB'},{n:3,nm:'Homam',p:'LB'}]},{y:50,m:[{n:12,nm:'Madibo',p:'CM'},{n:8,nm:'Hatim',p:'CM'},{n:23,nm:'Boudiaf',p:'CM'}]},{y:27,m:[{n:11,nm:'Afif',p:'LW'},{n:19,nm:'Almoez Ali',p:'ST',cx:true},{n:10,nm:'Edmilson Jr.',p:'RW'}]}];
+const pitch=document.getElementById('pitch');const states=['projected','contested','confirmed'];let si=0;
+function draw(){const state=states[si];[...pitch.querySelectorAll('.pl')].forEach(e=>e.remove());XI.forEach(l=>{const n=l.m.length;l.m.forEach((m,i)=>{const x=(i+1)/(n+1)*100;const el=document.createElement('div');el.className='pl'+(m.cx?' cx':'');el.style.left=x+'%';el.style.top=l.y+'%';const flag=m.cx?`<span class="flag">${state==='confirmed'?'✓ STARTS':'3/5 START'}</span>`:'';el.innerHTML=`${flag}<div class="disc">${m.n}</div><div class="pn">${m.nm}</div><div class="pp">${m.p}</div>`;pitch.appendChild(el);});});}
+function render(){const state=states[si];pitch.className='pitch state-'+state;draw();const b=document.getElementById('statebtn');const conf=state==='confirmed';b.className='statebtn'+(conf?' conf':'');b.textContent=state.toUpperCase();}
+document.getElementById('statebtn').onclick=()=>{si=(si+1)%3;render();};
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');['read','cons','props'].forEach(t=>document.getElementById('p-'+t).classList.toggle('hide',t!==b.dataset.t));});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infield Close-up — Brewers Defense</title>
+<style>
+  :root{
+    --navy:#12284C;       /* Brewers navy */
+    --navy2:#0B1B36;
+    --gold:#FFC52F;       /* Brewers gold */
+    --gold-deep:#B98B1E;
+    --grass:#3E7C3A;
+    --grass-deep:#2C5A29;
+    --grass-mow:#4B8E45;
+    --dirt:#B07A3F;
+    --dirt-deep:#9A6633;
+    --chalk:#F4F1E6;
+    --ink:#0A1428;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  html,body{background:#1a1d22;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{display:flex;justify-content:center;align-items:flex-start;padding:28px 16px 60px;min-height:100vh}
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    width:430px;
+    background:var(--navy2);
+    border-radius:42px;
+    padding:14px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 2px #2a2f38;
+    position:relative;
+  }
+  .screen{
+    background:var(--navy);
+    border-radius:30px;
+    overflow:hidden;
+    position:relative;
+  }
+  .notch{
+    position:absolute;top:18px;left:50%;transform:translateX(-50%);
+    width:124px;height:30px;background:#000;border-radius:18px;z-index:60;
+  }
+
+  /* ---------- header ---------- */
+  .hdr{
+    padding:26px 18px 14px;
+    background:linear-gradient(180deg,#0B1B36 0%, #12284C 100%);
+    color:#fff;position:relative;
+  }
+  .hdr .kicker{
+    font-size:10.5px;letter-spacing:2.4px;font-weight:800;color:var(--gold);
+    text-transform:uppercase;margin-bottom:6px;
+  }
+  .matchup{display:flex;align-items:center;gap:10px}
+  .matchup .team{font-size:20px;font-weight:800;letter-spacing:.2px}
+  .matchup .at{font-size:12px;color:#9FB0CC;font-weight:700;margin:0 1px}
+  .matchup .home{color:var(--gold)}
+  .subline{
+    display:flex;gap:14px;margin-top:8px;font-size:11px;color:#A9B8D4;font-weight:600;
+    align-items:center;flex-wrap:wrap;
+  }
+  .subline .dot{width:4px;height:4px;border-radius:50%;background:#3C5482}
+  .pill{
+    background:rgba(255,197,47,.12);border:1px solid rgba(255,197,47,.35);
+    color:var(--gold);padding:3px 8px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.4px;
+  }
+
+  /* ---------- field stage ---------- */
+  .stage{
+    position:relative;
+    width:100%;
+    height:560px;
+    background:radial-gradient(120% 90% at 50% 100%, #14305c 0%, #0d2347 60%, #091c3b 100%);
+    overflow:hidden;
+  }
+
+  /* the field is an SVG-ish layered build. Outfield compressed up top, infield big. */
+  .field-svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* fielder chips */
+  .fielder{
+    position:absolute;transform:translate(-50%,-50%);
+    z-index:20;width:78px;text-align:center;
+    transition:transform .15s ease;
+    cursor:default;
+  }
+  .fielder:hover{transform:translate(-50%,-50%) scale(1.06);z-index:40}
+  .puck{
+    width:46px;height:46px;border-radius:50%;margin:0 auto 5px;
+    background:linear-gradient(160deg,#16335f,#0a1c3a);
+    border:2px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--gold);font-weight:900;font-size:17px;
+    box-shadow:0 6px 14px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.12);
+    position:relative;
+  }
+  .puck .pos{
+    position:absolute;top:-7px;right:-9px;
+    background:var(--gold);color:var(--navy);
+    font-size:8.5px;font-weight:900;letter-spacing:.3px;
+    padding:1.5px 5px;border-radius:9px;
+    box-shadow:0 2px 5px rgba(0,0,0,.4);
+  }
+  /* outfielders smaller (compressed) */
+  .fielder.of{width:64px}
+  .fielder.of .puck{width:36px;height:36px;font-size:13px;border-width:1.5px}
+  .fielder.of .name{font-size:9.5px}
+  .fielder.of .pos{font-size:7.5px;padding:1px 4px}
+
+  .name{
+    font-size:11px;font-weight:800;color:#fff;line-height:1.05;
+    text-shadow:0 1px 4px rgba(0,0,0,.7);
+  }
+  .name small{display:block;font-size:8.5px;font-weight:700;color:#A9B8D4;margin-top:1px}
+
+  /* the pitcher gets a glow ring */
+  .fielder.pitcher .puck{
+    background:linear-gradient(160deg,#1d3f72,#0c2247);
+    box-shadow:0 0 0 4px rgba(255,197,47,.18),0 8px 18px rgba(0,0,0,.5);
+    width:50px;height:50px;font-size:18px;
+  }
+
+  /* zoom label up top */
+  .zoom-tag{
+    position:absolute;top:12px;left:14px;z-index:30;
+    background:rgba(8,18,38,.7);border:1px solid rgba(255,197,47,.3);
+    color:var(--gold);font-size:9.5px;font-weight:800;letter-spacing:1.2px;
+    padding:5px 9px;border-radius:8px;text-transform:uppercase;backdrop-filter:blur(4px);
+  }
+  .outfield-band{
+    position:absolute;top:14px;right:14px;z-index:30;
+    font-size:9px;color:#7E93B8;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;
+  }
+
+  /* ---------- batting order rail ---------- */
+  .lineup{
+    background:linear-gradient(180deg,#0B1B36,#0a1730);
+    padding:14px 14px 18px;
+  }
+  .lineup h3{
+    color:#fff;font-size:12px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
+    margin-bottom:10px;display:flex;align-items:center;gap:8px;
+  }
+  .lineup h3 .bar{width:18px;height:2px;background:var(--gold);display:inline-block;border-radius:2px}
+  .lineup h3 .vs{margin-left:auto;font-size:9.5px;color:#8AA0C4;font-weight:700;letter-spacing:.4px}
+  .order{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .bat{
+    background:linear-gradient(160deg,#13294e,#0e2042);
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:11px;padding:8px 9px;display:flex;align-items:center;gap:8px;
+    position:relative;overflow:hidden;
+  }
+  .bat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);opacity:.55}
+  .bat .num{
+    width:20px;height:20px;border-radius:50%;background:var(--gold);color:var(--navy);
+    font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .bat .who{line-height:1.15;min-width:0}
+  .bat .who b{font-size:11px;color:#fff;font-weight:800;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bat .who span{font-size:8.5px;color:#90A4C7;font-weight:700;letter-spacing:.5px}
+
+  /* footer note */
+  .foot{
+    text-align:center;color:#5E739A;font-size:9px;letter-spacing:.6px;
+    padding:10px 0 16px;background:#0a1730;
+  }
+  .foot b{color:var(--gold)}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screen">
+
+      <!-- HEADER -->
+      <div class="hdr">
+        <div class="kicker">Starting Defense · On the Field</div>
+        <div class="matchup">
+          <span class="team">CLE</span>
+          <span class="at">@</span>
+          <span class="team home">MIL</span>
+        </div>
+        <div class="subline">
+          <span>Guardians @ Brewers</span>
+          <span class="dot"></span>
+          <span>American Family Field</span>
+          <span class="pill">vs Bibee #28 RHP</span>
+        </div>
+      </div>
+
+      <!-- FIELD STAGE -->
+      <div class="stage">
+        <div class="zoom-tag">◎ Infield Close-up</div>
+        <div class="outfield-band">— outfield —</div>
+
+        <!-- FIELD ARTWORK -->
+        <svg class="field-svg" viewBox="0 0 430 560" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#2C5A29"/>
+              <stop offset="0.45" stop-color="#3E7C3A"/>
+              <stop offset="1" stop-color="#326A2F"/>
+            </linearGradient>
+            <radialGradient id="dirtG" cx="50%" cy="78%" r="70%">
+              <stop offset="0" stop-color="#C0884A"/>
+              <stop offset="1" stop-color="#9A6633"/>
+            </radialGradient>
+            <linearGradient id="warn" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#A8733B"/>
+              <stop offset="1" stop-color="#8E5E2E"/>
+            </linearGradient>
+          </defs>
+
+          <!-- base grass -->
+          <rect x="0" y="0" width="430" height="560" fill="url(#grass)"/>
+
+          <!-- compressed outfield band (top ~26%) with mow stripes -->
+          <g opacity="0.5">
+            <rect x="0" y="0"   width="430" height="20" fill="#4B8E45"/>
+            <rect x="0" y="40"  width="430" height="20" fill="#4B8E45"/>
+            <rect x="0" y="80"  width="430" height="20" fill="#4B8E45"/>
+            <rect x="0" y="120" width="430" height="18" fill="#4B8E45"/>
+          </g>
+          <!-- warning track arc separating compressed OF -->
+          <path d="M -40 150 Q 215 70 470 150 L 470 138 Q 215 56 -40 138 Z" fill="url(#warn)" opacity="0.85"/>
+
+          <!-- outfield wall line -->
+          <path d="M -40 138 Q 215 56 470 138" fill="none" stroke="#0d2347" stroke-width="6" opacity="0.55"/>
+
+          <!-- radial mow fan for the big infield half -->
+          <g opacity="0.16">
+            <path d="M215 520 L 20 150 L 90 150 Z" fill="#fff"/>
+            <path d="M215 520 L 150 150 L 215 150 Z" fill="#fff"/>
+            <path d="M215 520 L 280 150 L 345 150 Z" fill="#fff"/>
+          </g>
+
+          <!-- INFIELD DIRT (big skin) -->
+          <!-- diamond skin: home plate bottom-center, expanded -->
+          <path d="M215 510
+                   L 95 350
+                   L 215 215
+                   L 335 350 Z"
+                fill="url(#dirtG)"/>
+          <!-- grass cutout inside diamond (the infield grass square) -->
+          <path d="M215 470
+                   L 140 358
+                   L 215 270
+                   L 290 358 Z"
+                fill="url(#grass)" opacity="0.92"/>
+
+          <!-- pitcher's mound -->
+          <circle cx="215" cy="368" r="30" fill="url(#dirtG)"/>
+          <ellipse cx="215" cy="368" rx="13" ry="11" fill="#C99A5E"/>
+          <rect x="208" y="365" width="14" height="4" rx="1.5" fill="#F4F1E6"/>
+
+          <!-- base paths (chalk) -->
+          <path d="M215 510 L 95 350" stroke="#EFE9D6" stroke-width="3" opacity="0.7"/>
+          <path d="M215 510 L 335 350" stroke="#EFE9D6" stroke-width="3" opacity="0.7"/>
+
+          <!-- bases -->
+          <!-- home -->
+          <path d="M215 504 l 7 6 l -7 7 l -7 -7 Z" fill="#F4F1E6"/>
+          <!-- 1B (right) -->
+          <rect x="328" y="343" width="14" height="14" rx="2" fill="#F4F1E6" transform="rotate(45 335 350)"/>
+          <!-- 3B (left) -->
+          <rect x="88" y="343" width="14" height="14" rx="2" fill="#F4F1E6" transform="rotate(45 95 350)"/>
+          <!-- 2B (top of diamond) -->
+          <rect x="208" y="208" width="14" height="14" rx="2" fill="#F4F1E6" transform="rotate(45 215 215)"/>
+
+          <!-- batter's boxes -->
+          <rect x="186" y="500" width="13" height="22" rx="2" fill="none" stroke="#EFE9D6" stroke-width="2" opacity="0.6"/>
+          <rect x="231" y="500" width="13" height="22" rx="2" fill="none" stroke="#EFE9D6" stroke-width="2" opacity="0.6"/>
+          <!-- batter's box dirt -->
+          <ellipse cx="215" cy="510" rx="42" ry="22" fill="url(#dirtG)" opacity="0.9"/>
+          <path d="M215 504 l 7 6 l -7 7 l -7 -7 Z" fill="#F4F1E6"/>
+        </svg>
+
+        <!-- ====== FIELDERS ====== -->
+
+        <!-- OUTFIELD (compressed, top) -->
+        <div class="fielder of" style="left:20%;top:18%">
+          <div class="puck">5<span class="pos">LF</span></div>
+          <div class="name">Mitchell<small>G. Mitchell</small></div>
+        </div>
+        <div class="fielder of" style="left:50%;top:11%">
+          <div class="puck">11<span class="pos">CF</span></div>
+          <div class="name">Chourio<small>J. Chourio</small></div>
+        </div>
+        <div class="fielder of" style="left:80%;top:18%">
+          <div class="puck">10<span class="pos">RF</span></div>
+          <div class="name">Frelick<small>S. Frelick</small></div>
+        </div>
+
+        <!-- INFIELD (big) -->
+        <!-- SS upper-left infield (left of 2B) -->
+        <div class="fielder" style="left:35%;top:43%">
+          <div class="puck">27<span class="pos">SS</span></div>
+          <div class="name">Adames<small>W. Adames</small></div>
+        </div>
+        <!-- 2B upper-right infield (right of 2B) -->
+        <div class="fielder" style="left:65%;top:43%">
+          <div class="puck">0<span class="pos">2B</span></div>
+          <div class="name">Turang<small>B. Turang</small></div>
+        </div>
+        <!-- Pitcher mound center -->
+        <div class="fielder pitcher" style="left:50%;top:60%">
+          <div class="puck">51<span class="pos">P</span></div>
+          <div class="name">Peralta<small>F. Peralta</small></div>
+        </div>
+        <!-- 3B lower-left -->
+        <div class="fielder" style="left:24%;top:60%">
+          <div class="puck">3<span class="pos">3B</span></div>
+          <div class="name">Ortiz<small>J. Ortiz</small></div>
+        </div>
+        <!-- 1B lower-right -->
+        <div class="fielder" style="left:76%;top:60%">
+          <div class="puck">12<span class="pos">1B</span></div>
+          <div class="name">Hoskins<small>R. Hoskins</small></div>
+        </div>
+        <!-- Catcher behind home -->
+        <div class="fielder" style="left:50%;top:93.5%">
+          <div class="puck">24<span class="pos">C</span></div>
+          <div class="name">Contreras<small>W. Contreras</small></div>
+        </div>
+
+      </div>
+
+      <!-- BATTING ORDER RAIL -->
+      <div class="lineup">
+        <h3><span class="bar"></span>Batting Order <span class="vs">Brewers · 1–9</span></h3>
+        <div class="order">
+          <div class="bat"><div class="num">1</div><div class="who"><b>Turang</b><span>2B</span></div></div>
+          <div class="bat"><div class="num">2</div><div class="who"><b>Frelick</b><span>RF</span></div></div>
+          <div class="bat"><div class="num">3</div><div class="who"><b>Chourio</b><span>CF</span></div></div>
+          <div class="bat"><div class="num">4</div><div class="who"><b>Contreras</b><span>C</span></div></div>
+          <div class="bat"><div class="num">5</div><div class="who"><b>Hoskins</b><span>1B</span></div></div>
+          <div class="bat"><div class="num">6</div><div class="who"><b>Yelich</b><span>DH · #22</span></div></div>
+          <div class="bat"><div class="num">7</div><div class="who"><b>Ortiz</b><span>3B</span></div></div>
+          <div class="bat"><div class="num">8</div><div class="who"><b>Mitchell</b><span>LF</span></div></div>
+          <div class="bat"><div class="num">9</div><div class="who"><b>Adames</b><span>SS</span></div></div>
+        </div>
+      </div>
+
+      <div class="foot">Zoomed on the diamond · <b>P · C · 1B · 2B · SS · 3B</b> in close-up</div>
+
+    </div>
+  </div>
+</body>
+</html>

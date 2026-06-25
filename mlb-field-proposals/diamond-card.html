@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLB Lineup — classic diamond card</title>
+<!--
+  The classic lineup-card diamond (like the WBC / fWAR-diamond references): a clean
+  rotated-square field, the 9 fielders spread evenly around it, the starting pitcher in
+  the CENTER, one advanced stat + HOT/COLD per spot. No overlap. Dark + Gary gold.
+  Split toggle (Season · vs RHP · vs Bibee), Projected/Confirmed, tap a spot for the
+  full card (batting-order spot + splits + BvP).
+-->
+<style>
+  :root{
+    --bg:#0C120F;--ink:#F2F4F1;--ink2:rgba(242,244,241,.64);--ink3:rgba(242,244,241,.4);
+    --gold:#C9A227;--navy:#0C2340;--brewersGold:#FFC52F;
+    --grass:#1f4a30;--grass2:#245236;--dirt:#9a4f33;--dirtEdge:#7a3c26;--lineW:rgba(255,255,255,.55);
+    --hot:#E8643C;--cold:#54A9E8;--panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.1);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#05080a;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;padding:20px 10px 60px;min-height:100vh}
+  .phone{width:430px;max-width:100%;background:radial-gradient(120% 55% at 50% 0%,#11201a,var(--bg));border-radius:30px;overflow:hidden;border:1px solid var(--line)}
+  .statusbar{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:600;font-family:var(--mono);color:var(--ink2)}
+  .head{padding:6px 18px 2px}
+  .head .lg{font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+  .head .mt{margin-top:5px;font-size:24px;font-weight:800;letter-spacing:-.02em}.head .mt .at{color:var(--ink3);font-weight:600;font-size:15px;margin:0 4px}
+  .head .park{margin-top:3px;font-size:12px;font-weight:600;color:var(--ink2)}
+  .toggles{display:flex;align-items:center;gap:14px;margin:12px 22px 0}
+  .toggles .t{font-size:14px;font-weight:500;color:var(--ink3);cursor:pointer}.toggles .t.on{font-weight:800;color:var(--ink)}
+  .splits{display:flex;gap:5px;margin:10px 16px 0;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:4px}
+  .splits button{flex:1;border:0;background:transparent;padding:8px 4px;border-radius:8px;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--ink2);cursor:pointer}
+  .splits button.on{background:var(--ink);color:#0C120F}
+
+  .fieldwrap{position:relative;margin:12px 12px 0;height:470px}
+  .fieldwrap svg{position:absolute;inset:0;width:100%;height:100%}
+  .pl{position:absolute;transform:translate(-50%,-50%);width:84px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;z-index:2}
+  .pl .disc{position:relative;width:30px;height:30px;border-radius:50%;background:var(--navy);color:var(--brewersGold);font-family:var(--mono);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.25);box-shadow:0 3px 8px rgba(0,0,0,.5)}
+  .pl .flame{position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;border:2px solid var(--bg)}
+  .pl .nm{font-size:11px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85);line-height:1.05}
+  .pl .ps{font-family:var(--mono);font-size:9.5px;font-weight:800;color:var(--gold);text-shadow:0 1px 2px rgba(0,0,0,.8)}
+  .pl.sp .disc{background:#2a1830;color:#fff}
+  .pl.dh{opacity:.85}.pl.dh .disc{background:#23303a}
+  .pl.proj .disc{border-style:dashed}
+  .pl.proj .ptag{position:absolute;bottom:-11px;font-family:var(--mono);font-size:7px;font-weight:800;color:var(--gold);background:rgba(201,162,39,.16);padding:1px 4px;border-radius:4px}
+
+  .legend{display:flex;gap:14px;justify-content:center;margin:4px 0 0;font-family:var(--mono);font-size:9.5px;color:var(--ink3)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:9px;height:9px;border-radius:50%}
+  .statlbl{text-align:center;font-family:var(--mono);font-size:9.5px;color:var(--ink3);margin-top:6px;letter-spacing:.04em}
+  .foot{text-align:center;font-family:var(--mono);font-size:9px;color:var(--ink3);padding:16px;letter-spacing:.08em;text-transform:uppercase}
+
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:.2s;z-index:40}.scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,103%);width:430px;max-width:100%;background:#101713;border-radius:22px 22px 0 0;border-top:1px solid var(--line);padding:8px 18px 28px;z-index:41;transition:transform .25s cubic-bezier(.3,.9,.3,1)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:11px}
+  .sh-no{width:42px;height:42px;border-radius:50%;background:var(--navy);color:var(--brewersGold);font-family:var(--mono);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .sh-nm{font-size:18px;font-weight:800}.sh-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:1px}
+  .sh-tag{margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:800;padding:5px 9px;border-radius:8px}
+  .ord{margin-top:13px;display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--ink2);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+  .ord b{color:var(--gold);font-size:13px}
+  .sh-sec{margin-top:14px}.sh-l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--gold);font-weight:800;text-transform:uppercase;margin-bottom:8px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center}
+  .cell .v{font-family:var(--mono);font-size:17px;font-weight:800}.cell .k{font-family:var(--mono);font-size:8px;letter-spacing:.05em;color:var(--ink3);margin-top:3px}
+  .splitrow{display:flex;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.splitrow:first-child{border-top:0}.splitrow .k{color:var(--ink2)}.splitrow .v{margin-left:auto;font-family:var(--mono);font-weight:800}
+  .bvp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;font-size:13px;line-height:1.5}.bvp b{color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span>Gary · MLB</span></div>
+  <div class="head">
+    <div class="lg">MLB · Game Intel</div>
+    <div class="mt">Cleveland <span class="at">@</span> Milwaukee</div>
+    <div class="park">American Family Field · Roof closed · 7:10 PM · vs Tanner Bibee (RHP)</div>
+  </div>
+  <div class="toggles"><span class="t" data-state="projected">Projected</span><span class="t on" data-state="confirmed">Confirmed</span></div>
+  <div class="splits" id="splits"><button data-split="season">SEASON</button><button data-split="hand" class="on">vs RHP</button><button data-split="bvp">vs BIBEE</button></div>
+
+  <div class="fieldwrap" id="fieldwrap">
+    <svg viewBox="0 0 430 470" preserveAspectRatio="none">
+      <!-- FLAT, high-contrast field — balanced green diamond + a bold RED infield + a
+           green infield-grass diamond, crisp white lines. No gradients/noise. -->
+      <polygon points="215,25 420,235 215,445 10,235" fill="#4E843E"/>
+      <polygon points="215,230 325,330 215,430 105,330" fill="#BE3A2C"/>
+      <polygon points="215,262 293,330 215,398 137,330" fill="#4E843E"/>
+      <polygon points="215,262 293,330 215,398 137,330" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="2"/>
+      <line x1="215" y1="398" x2="10" y2="235" stroke="rgba(255,255,255,.6)" stroke-width="1.6"/>
+      <line x1="215" y1="398" x2="420" y2="235" stroke="rgba(255,255,255,.6)" stroke-width="1.6"/>
+      <circle cx="215" cy="342" r="9" fill="#9a4f33"/><circle cx="215" cy="342" r="2.2" fill="rgba(255,255,255,.8)"/>
+      <rect x="289" y="326" width="8" height="8" transform="rotate(45 293 330)" fill="#fff"/>
+      <rect x="211" y="258" width="8" height="8" transform="rotate(45 215 262)" fill="#fff"/>
+      <rect x="133" y="326" width="8" height="8" transform="rotate(45 137 330)" fill="#fff"/>
+      <path d="M209,395 l12,0 l0,4 l-6,5 l-6,-5 z" fill="#fff"/>
+    </svg>
+    <!-- spots injected -->
+  </div>
+  <div class="legend"><span><i style="background:var(--hot)"></i>Hot L15</span><span><i style="background:var(--cold)"></i>Cold</span><span><i style="background:#7a8a80"></i>Steady</span></div>
+  <div class="statlbl" id="statlbl">SHOWING · OPS vs RHP</div>
+  <div class="foot">Pitching · Bats · Park &amp; Weather modules continue below</div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+// x,y = % of fieldwrap. Spread cleanly around the diamond, no overlap. SP center, DH at base.
+const P=[
+  {n:11,nm:'Chourio',pos:'CF',x:50,y:14,heat:'hot',ord:3,wrc:122,xwoba:'.358',vR:'.880',vL:'.910',bvp:{ab:7,h:3,hr:1,ops:'1.140'},form:'1.060'},
+  {n:5,nm:'Mitchell',pos:'LF',x:22,y:33,heat:'hot',ord:8,wrc:105,xwoba:'.330',vR:'.800',vL:'.690',bvp:{ab:4,h:2,hr:0,ops:'1.000'},form:'.940',proj:true},
+  {n:10,nm:'Frelick',pos:'RF',x:78,y:33,heat:'cold',ord:2,wrc:92,xwoba:'.305',vR:'.740',vL:'.700',bvp:{ab:9,h:2,hr:0,ops:'.560'},form:'.610'},
+  {n:27,nm:'Adames',pos:'SS',x:40,y:50,heat:'hot',ord:9,wrc:118,xwoba:'.350',vR:'.860',vL:'.900',bvp:{ab:13,h:5,hr:1,ops:'.980'},form:'1.020'},
+  {n:0,nm:'Turang',pos:'2B',x:60,y:50,heat:'cold',ord:1,wrc:95,xwoba:'.300',vR:'.720',vL:'.760',bvp:{ab:6,h:1,hr:0,ops:'.500'},form:'.540'},
+  {n:3,nm:'Ortiz',pos:'3B',x:31,y:65,heat:'steady',ord:7,wrc:88,xwoba:'.298',vR:'.700',vL:'.770',bvp:{ab:5,h:1,hr:0,ops:'.560'},form:'.690'},
+  {n:12,nm:'Hoskins',pos:'1B',x:69,y:65,heat:'steady',ord:5,wrc:112,xwoba:'.345',vR:'.840',vL:'.910',bvp:{ab:8,h:2,hr:0,ops:'.625'},form:'.760'},
+  {n:51,nm:'Peralta',pos:'SP',x:50,y:72,heat:'steady',sp:true,line:'2.90 ERA · 2.71 xERA · 31% K'},
+  {n:24,nm:'Contreras',pos:'C',x:50,y:85,heat:'hot',ord:4,wrc:130,xwoba:'.372',vR:'.910',vL:'.840',bvp:{ab:11,h:4,hr:1,ops:'1.090'},form:'1.180'},
+  {n:22,nm:'Yelich',pos:'DH',x:27,y:94,heat:'hot',ord:6,dh:true,wrc:135,xwoba:'.380',vR:'.930',vL:'.880',bvp:{ab:10,h:4,hr:2,ops:'1.210'},form:'1.150'},
+];
+const heatColor=h=>h==='hot'?'var(--hot)':h==='cold'?'var(--cold)':'#7a8a80';
+let split='hand',state='confirmed';
+function statFor(p){ if(p.sp) return ''; if(split==='season')return p.xwoba; if(split==='hand')return p.vR; return p.bvp.h+'-'+p.bvp.ab; }
+function statLbl(){ return split==='season'?'SHOWING · xwOBA (season)':split==='hand'?'SHOWING · OPS vs RHP':'SHOWING · vs Bibee (H-AB)'; }
+function render(){
+  const w=document.getElementById('fieldwrap'); [...w.querySelectorAll('.pl')].forEach(e=>e.remove());
+  P.forEach(p=>{
+    const el=document.createElement('div');
+    el.className='pl'+(p.sp?' sp':'')+(p.dh?' dh':'')+(p.proj&&state==='projected'?' proj':'');
+    el.style.left=p.x+'%'; el.style.top=p.y+'%';
+    const flame=p.sp?'':`<span class="flame" style="background:${heatColor(p.heat)}"></span>`;
+    const ptag=(p.proj&&state==='projected')?'<span class="ptag">PLATOON ?</span>':'';
+    el.innerHTML=`<div class="disc">${flame}${p.n}</div><div class="nm">${p.nm}</div>
+      <div class="ps">${p.pos}${p.sp?'':' · '+statFor(p)}</div>${ptag}`;
+    el.onclick=()=>openSheet(p); w.appendChild(el);
+  });
+  document.getElementById('statlbl').textContent=statLbl();
+}
+function openSheet(p){
+  if(p.sp) return;
+  const sheet=document.getElementById('sheet');
+  const tag=p.heat==='hot'?'<span class="sh-tag" style="background:rgba(232,100,60,.18);color:#E8643C">HOT · L15</span>'
+          :p.heat==='cold'?'<span class="sh-tag" style="background:rgba(84,169,232,.18);color:#54A9E8">COLD · L15</span>':'';
+  sheet.innerHTML=`<div class="grab"></div>
+    <div class="sh-head"><div class="sh-no">${p.n}</div>
+      <div><div class="sh-nm">${p.nm}</div><div class="sh-sub">Brewers · ${p.pos} · ${p.form} OPS L15</div></div>${tag}</div>
+    <div class="ord">Bats <b>${p.ord}${p.ord===1?'st':p.ord===2?'nd':p.ord===3?'rd':'th'}</b> in the order</div>
+    <div class="sh-sec"><div class="sh-l">The numbers</div><div class="grid3">
+      <div class="cell"><div class="v">${p.wrc}</div><div class="k">wRC+</div></div>
+      <div class="cell"><div class="v">${p.xwoba}</div><div class="k">xwOBA</div></div>
+      <div class="cell"><div class="v" style="color:${heatColor(p.heat)}">${p.form}</div><div class="k">L15 OPS</div></div></div></div>
+    <div class="sh-sec"><div class="sh-l">Platoon splits</div>
+      <div class="splitrow"><span class="k">vs RHP</span><span class="v">${p.vR}</span></div>
+      <div class="splitrow"><span class="k">vs LHP</span><span class="v">${p.vL}</span></div></div>
+    <div class="sh-sec"><div class="sh-l">vs Tanner Bibee (career)</div>
+      <div class="bvp">${p.bvp.h}-for-${p.bvp.ab}${p.bvp.hr?`, <b>${p.bvp.hr} HR</b>`:''} · <b>${p.bvp.ops} OPS</b> — the read against tonight's arm.</div></div>`;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){document.getElementById('sheet').classList.remove('show');document.getElementById('scrim').classList.remove('show');}
+document.querySelectorAll('#splits button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#splits button').forEach(x=>x.classList.remove('on'));b.classList.add('on');split=b.dataset.split;render();});
+document.querySelectorAll('.toggles .t').forEach(b=>b.onclick=()=>{document.querySelectorAll('.toggles .t').forEach(x=>x.classList.remove('on'));b.classList.add('on');state=b.dataset.state;render();});
+render();
+</script>
+</body>
+</html>

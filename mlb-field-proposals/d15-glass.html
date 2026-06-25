@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vapor Glass — Brewers Lineup</title>
+<style>
+  :root{
+    --navy:#0a2240;
+    --navy-deep:#06182e;
+    --gold:#ffcf57;
+    --gold-soft:#f5d27e;
+    --glass:rgba(255,255,255,0.14);
+    --glass-strong:rgba(255,255,255,0.22);
+    --stroke:rgba(255,255,255,0.35);
+    --ink:#0c1a30;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  html,body{
+    background:#1b2433;
+    min-height:100%;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
+    display:flex;justify-content:center;align-items:flex-start;
+    padding:28px 0;
+  }
+  .phone{
+    width:430px;
+    min-height:920px;
+    border-radius:46px;
+    position:relative;
+    overflow:hidden;
+    background:
+      radial-gradient(120% 80% at 50% -10%, #5b73c9 0%, #3b4f9e 28%, #1d2c63 60%, #0a1538 100%);
+    box-shadow:0 40px 90px rgba(0,0,0,0.55), inset 0 0 0 1.5px rgba(255,255,255,0.08);
+  }
+  /* luminous atmospheric blobs */
+  .aura{position:absolute;border-radius:50%;filter:blur(60px);opacity:0.55;pointer-events:none;}
+  .aura.a1{width:340px;height:340px;left:-90px;top:60px;background:#7b8ff0;}
+  .aura.a2{width:300px;height:300px;right:-100px;top:300px;background:#9ad7c4;opacity:0.42;}
+  .aura.a3{width:380px;height:380px;left:20px;bottom:-120px;background:#ffcf57;opacity:0.22;}
+
+  .scrim{position:relative;z-index:2;padding:0 0 30px;}
+
+  /* ---- top bar ---- */
+  .statusbar{
+    height:54px;display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 26px 8px;color:rgba(255,255,255,0.9);font-size:14px;font-weight:600;letter-spacing:.3px;
+  }
+  .header{
+    margin:6px 18px 0;
+    padding:16px 18px;
+    border-radius:24px;
+    background:var(--glass);
+    border:1px solid var(--stroke);
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    box-shadow:0 8px 30px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.4);
+  }
+  .matchup{display:flex;align-items:center;justify-content:space-between;}
+  .team{display:flex;flex-direction:column;gap:2px;}
+  .team .abbr{font-size:22px;font-weight:800;color:#fff;letter-spacing:.5px;}
+  .team .name{font-size:11px;color:rgba(255,255,255,0.7);font-weight:500;}
+  .team.away{text-align:left;}
+  .team.home{text-align:right;align-items:flex-end;}
+  .vs{
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .vs .at{
+    font-size:13px;font-weight:700;color:var(--ink);
+    background:var(--gold);border-radius:999px;padding:4px 12px;
+    box-shadow:0 4px 12px rgba(255,207,87,0.4);
+  }
+  .vs .start{font-size:10px;color:rgba(255,255,255,0.65);font-weight:600;letter-spacing:.4px;}
+  .home .abbr{color:var(--gold-soft);}
+
+  .subhead{
+    margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,0.18);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .subhead .lbl{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,0.7);font-weight:700;}
+  .subhead .opp{font-size:11px;color:rgba(255,255,255,0.78);font-weight:500;}
+  .subhead .opp b{color:#fff;}
+
+  /* ---- field ---- */
+  .fieldwrap{
+    margin:18px 14px 0;
+    border-radius:30px;
+    padding:14px 10px 10px;
+    background:var(--glass);
+    border:1px solid var(--stroke);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    box-shadow:0 14px 40px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.35);
+  }
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1.18;
+    border-radius:22px;
+    overflow:hidden;
+    background:
+      radial-gradient(130% 95% at 50% 6%, rgba(120,200,150,0.55) 0%, rgba(70,160,110,0.45) 30%, rgba(40,120,90,0.35) 55%, rgba(20,80,70,0.25) 100%);
+    box-shadow:inset 0 0 60px rgba(0,0,0,0.35), inset 0 2px 0 rgba(255,255,255,0.25);
+  }
+  /* mowed grass arcs */
+  .field::before{
+    content:"";position:absolute;inset:0;
+    background:repeating-radial-gradient(circle at 50% 102%,
+      rgba(255,255,255,0.05) 0 26px, rgba(0,0,0,0.04) 26px 52px);
+    mix-blend-mode:overlay;opacity:.7;
+  }
+  /* outfield warning track */
+  .track{
+    position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+    width:160%;height:130%;border-radius:50%;
+    top:-22%;
+    background:radial-gradient(circle at 50% 100%, transparent 0 60%, rgba(196,138,84,0.55) 60% 67%, transparent 67%);
+    filter:blur(.4px);
+  }
+  /* infield dirt diamond */
+  .dirt{
+    position:absolute;left:50%;bottom:9%;transform:translateX(-50%) rotate(45deg);
+    width:54%;height:46%;
+    background:linear-gradient(160deg, rgba(190,128,78,0.92), rgba(150,96,58,0.92));
+    border-radius:10px;
+    box-shadow:inset 0 0 18px rgba(0,0,0,0.28);
+  }
+  /* infield grass inset */
+  .infgrass{
+    position:absolute;left:50%;bottom:13.5%;transform:translateX(-50%) rotate(45deg);
+    width:36%;height:30%;
+    background:linear-gradient(160deg, rgba(110,190,140,0.85), rgba(70,150,105,0.85));
+    border-radius:8px;
+  }
+  /* base paths lines */
+  .baselines{position:absolute;left:50%;bottom:9%;transform:translateX(-50%) rotate(45deg);
+    width:54%;height:46%;border:2px solid rgba(255,255,255,0.5);border-radius:10px;}
+  .base{position:absolute;width:10px;height:10px;background:#fff;transform:rotate(45deg);
+    box-shadow:0 0 6px rgba(0,0,0,0.3);border-radius:2px;}
+  .base.home{left:50%;bottom:7.5%;transform:translateX(-50%) rotate(45deg);width:12px;height:12px;background:#fff;}
+  .base.first{right:23%;bottom:30%;}
+  .base.second{left:50%;transform:translateX(-50%) rotate(45deg);bottom:53%;}
+  .base.third{left:23%;bottom:30%;}
+  .mound{position:absolute;left:50%;bottom:33%;transform:translate(-50%,50%);
+    width:34px;height:34px;border-radius:50%;
+    background:radial-gradient(circle,rgba(190,128,78,0.95),rgba(150,96,58,0.9));
+    box-shadow:inset 0 0 8px rgba(0,0,0,0.3);}
+
+  /* ---- player glass chips ---- */
+  .player{
+    position:absolute;transform:translate(-50%,-50%);
+    z-index:5;width:74px;text-align:center;
+    animation:floaty 6s ease-in-out infinite;
+  }
+  @keyframes floaty{0%,100%{transform:translate(-50%,-50%);}50%{transform:translate(-50%,calc(-50% - 3px));}}
+  .chip{
+    background:var(--glass-strong);
+    border:1px solid var(--stroke);
+    border-radius:16px;
+    padding:6px 4px 5px;
+    backdrop-filter:blur(10px) saturate(160%);
+    -webkit-backdrop-filter:blur(10px) saturate(160%);
+    box-shadow:0 6px 16px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.5);
+    position:relative;
+  }
+  .num{
+    position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+    width:26px;height:26px;border-radius:50%;
+    background:linear-gradient(160deg,var(--gold),var(--gold-soft));
+    color:var(--ink);font-size:12px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.6);
+    border:1.5px solid rgba(255,255,255,0.7);
+  }
+  .pos{
+    margin-top:9px;font-size:9px;font-weight:800;letter-spacing:.8px;
+    color:var(--navy);background:rgba(255,255,255,0.85);
+    display:inline-block;padding:1px 6px;border-radius:6px;
+  }
+  .pname{
+    margin-top:3px;font-size:10.5px;font-weight:700;color:#fff;line-height:1.05;
+    text-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  /* pitcher gets a navy tint */
+  .player.p .chip{background:linear-gradient(160deg, rgba(40,70,130,0.55), rgba(20,40,90,0.5));}
+  .player.p .pos{background:var(--gold);color:var(--navy);}
+
+  /* ---- batting order rail ---- */
+  .order{
+    margin:18px 18px 0;
+    padding:14px 16px 16px;
+    border-radius:24px;
+    background:var(--glass);
+    border:1px solid var(--stroke);
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    box-shadow:0 10px 30px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.38);
+  }
+  .order h3{
+    font-size:11px;letter-spacing:1.8px;text-transform:uppercase;
+    color:var(--gold-soft);font-weight:800;margin-bottom:11px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .order h3::after{content:"";flex:1;height:1px;background:rgba(255,255,255,0.2);}
+  .lineup{display:flex;flex-direction:column;gap:6px;}
+  .row{
+    display:flex;align-items:center;gap:11px;
+    padding:7px 10px;border-radius:13px;
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(255,255,255,0.12);
+  }
+  .row .ord{
+    width:22px;height:22px;border-radius:7px;flex:none;
+    background:linear-gradient(160deg,rgba(255,207,87,0.9),rgba(245,210,126,0.85));
+    color:var(--ink);font-size:11px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.5);
+  }
+  .row .rname{font-size:13px;color:#fff;font-weight:600;flex:1;}
+  .row .rnum{font-size:11px;color:rgba(255,255,255,0.55);font-weight:600;}
+  .row .rpos{
+    font-size:9.5px;font-weight:800;letter-spacing:.6px;
+    color:var(--navy);background:rgba(255,255,255,0.82);
+    padding:2px 7px;border-radius:6px;
+  }
+  .footer{
+    text-align:center;margin-top:16px;font-size:10px;letter-spacing:1.4px;
+    color:rgba(255,255,255,0.4);text-transform:uppercase;font-weight:600;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="aura a1"></div>
+    <div class="aura a2"></div>
+    <div class="aura a3"></div>
+
+    <div class="scrim">
+      <div class="statusbar"><span>9:41</span><span>Starting Nine</span></div>
+
+      <!-- header glass -->
+      <div class="header">
+        <div class="matchup">
+          <div class="team away">
+            <span class="abbr">CLE</span>
+            <span class="name">Cleveland Guardians</span>
+          </div>
+          <div class="vs">
+            <span class="at">@</span>
+            <span class="start">7:10 PM ET</span>
+          </div>
+          <div class="team home">
+            <span class="abbr">MIL</span>
+            <span class="name">Milwaukee Brewers</span>
+          </div>
+        </div>
+        <div class="subhead">
+          <span class="lbl">On the Field · MIL</span>
+          <span class="opp">vs <b>Tanner Bibee</b> #28 · RHP</span>
+        </div>
+      </div>
+
+      <!-- field glass -->
+      <div class="fieldwrap">
+        <div class="field">
+          <div class="track"></div>
+          <div class="dirt"></div>
+          <div class="infgrass"></div>
+          <div class="baselines">
+            <div class="base first"></div>
+            <div class="base second"></div>
+            <div class="base third"></div>
+          </div>
+          <div class="base home"></div>
+          <div class="mound"></div>
+
+          <!-- OUTFIELD (top) -->
+          <div class="player" style="left:22%;top:18%;">
+            <div class="chip"><div class="num">5</div><div class="pos">LF</div><div class="pname">Mitchell</div></div>
+          </div>
+          <div class="player" style="left:50%;top:9%;">
+            <div class="chip"><div class="num">11</div><div class="pos">CF</div><div class="pname">Chourio</div></div>
+          </div>
+          <div class="player" style="left:78%;top:18%;">
+            <div class="chip"><div class="num">10</div><div class="pos">RF</div><div class="pname">Frelick</div></div>
+          </div>
+
+          <!-- INFIELD -->
+          <div class="player" style="left:31%;top:46%;">
+            <div class="chip"><div class="num">27</div><div class="pos">SS</div><div class="pname">Adames</div></div>
+          </div>
+          <div class="player" style="left:69%;top:46%;">
+            <div class="chip"><div class="num">0</div><div class="pos">2B</div><div class="pname">Turang</div></div>
+          </div>
+          <div class="player" style="left:23%;top:64%;">
+            <div class="chip"><div class="num">3</div><div class="pos">3B</div><div class="pname">Ortiz</div></div>
+          </div>
+          <div class="player" style="left:77%;top:64%;">
+            <div class="chip"><div class="num">12</div><div class="pos">1B</div><div class="pname">Hoskins</div></div>
+          </div>
+
+          <!-- PITCHER -->
+          <div class="player p" style="left:50%;top:58%;">
+            <div class="chip"><div class="num">51</div><div class="pos">P</div><div class="pname">Peralta</div></div>
+          </div>
+
+          <!-- CATCHER -->
+          <div class="player" style="left:50%;top:88%;">
+            <div class="chip"><div class="num">24</div><div class="pos">C</div><div class="pname">Contreras</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- batting order rail -->
+      <div class="order">
+        <h3>Batting Order</h3>
+        <div class="lineup">
+          <div class="row"><span class="ord">1</span><span class="rname">Brice Turang</span><span class="rnum">#0</span><span class="rpos">2B</span></div>
+          <div class="row"><span class="ord">2</span><span class="rname">Sal Frelick</span><span class="rnum">#10</span><span class="rpos">RF</span></div>
+          <div class="row"><span class="ord">3</span><span class="rname">Jackson Chourio</span><span class="rnum">#11</span><span class="rpos">CF</span></div>
+          <div class="row"><span class="ord">4</span><span class="rname">William Contreras</span><span class="rnum">#24</span><span class="rpos">C</span></div>
+          <div class="row"><span class="ord">5</span><span class="rname">Rhys Hoskins</span><span class="rnum">#12</span><span class="rpos">1B</span></div>
+          <div class="row"><span class="ord">6</span><span class="rname">Christian Yelich</span><span class="rnum">#22</span><span class="rpos">DH</span></div>
+          <div class="row"><span class="ord">7</span><span class="rname">Joey Ortiz</span><span class="rnum">#3</span><span class="rpos">3B</span></div>
+          <div class="row"><span class="ord">8</span><span class="rname">Garrett Mitchell</span><span class="rnum">#5</span><span class="rpos">LF</span></div>
+          <div class="row"><span class="ord">9</span><span class="rname">Willy Adames</span><span class="rnum">#27</span><span class="rpos">SS</span></div>
+        </div>
+        <div class="footer">Vapor Glass · Brewers Starting Nine</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

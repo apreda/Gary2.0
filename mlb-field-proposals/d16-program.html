@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchday Program — Brewers vs Guardians</title>
+<style>
+  :root{
+    --navy:#0a2351;
+    --navy2:#13315c;
+    --gold:#b6922e;
+    --gold-bright:#d8b34a;
+    --cream:#f4ecd8;
+    --paper:#f7f1e1;
+    --ink:#1c1810;
+    --grass:#3f6b3a;
+    --grass-lt:#4f8044;
+    --dirt:#b08850;
+    --dirt-dk:#9a7240;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    background:#241f17;
+    font-family:Georgia,'Times New Roman',serif;
+    display:flex;justify-content:center;
+    padding:26px 0;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* ---- PHONE FRAME ---- */
+  .phone{
+    width:430px;
+    background:var(--paper);
+    border-radius:40px;
+    overflow:hidden;
+    box-shadow:0 30px 70px rgba(0,0,0,.55), 0 0 0 11px #0e0c08, 0 0 0 13px #2a2418;
+    position:relative;
+  }
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:30px;background:#0e0c08;
+    border-radius:0 0 20px 20px;z-index:60;
+  }
+  .scroll{
+    height:912px;overflow-y:auto;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.012) 0 2px, transparent 2px 4px),
+      var(--paper);
+    position:relative;
+  }
+  .scroll::-webkit-scrollbar{width:0;}
+  /* paper grain texture overlay */
+  .scroll::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+    background-image:radial-gradient(rgba(120,90,40,.05) 1px, transparent 1px);
+    background-size:5px 5px;mix-blend-mode:multiply;
+  }
+
+  /* ---- MASTHEAD ---- */
+  .masthead{
+    background:var(--navy);
+    color:var(--cream);
+    padding:46px 26px 20px;
+    position:relative;
+    border-bottom:5px double var(--gold);
+  }
+  .mh-top{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'Courier New',monospace;
+    font-size:9.5px;letter-spacing:3px;text-transform:uppercase;
+    color:var(--gold-bright);opacity:.92;
+    border-bottom:1px solid rgba(182,146,46,.4);
+    padding-bottom:8px;margin-bottom:14px;
+  }
+  .kicker{
+    text-align:center;font-family:'Courier New',monospace;
+    font-size:10px;letter-spacing:5px;text-transform:uppercase;
+    color:var(--gold-bright);margin-bottom:6px;
+  }
+  .title{
+    font-size:42px;line-height:.92;text-align:center;
+    font-weight:bold;letter-spacing:-1px;
+    text-shadow:0 2px 0 rgba(0,0,0,.3);
+  }
+  .title em{font-style:italic;color:var(--gold-bright);}
+  .subtitle{
+    text-align:center;margin-top:12px;font-style:italic;
+    font-size:14px;color:#cdd6e6;letter-spacing:.3px;
+  }
+  .issue-line{
+    text-align:center;margin-top:14px;
+    font-family:'Courier New',monospace;font-size:9px;
+    letter-spacing:2px;color:var(--gold);text-transform:uppercase;
+  }
+
+  /* ---- MATCHUP STRIP ---- */
+  .matchup{
+    display:flex;align-items:stretch;
+    background:var(--cream);
+    border-bottom:2px solid var(--navy);
+    position:relative;z-index:2;
+  }
+  .team-block{flex:1;padding:14px 16px;text-align:center;}
+  .team-block.away{border-right:1px solid rgba(10,35,81,.25);}
+  .tb-role{
+    font-family:'Courier New',monospace;font-size:8px;
+    letter-spacing:2px;text-transform:uppercase;color:#8a7a55;
+  }
+  .tb-name{
+    font-size:19px;font-weight:bold;color:var(--navy);
+    margin-top:3px;line-height:1;
+  }
+  .tb-sub{font-size:10px;font-style:italic;color:#6b5d3e;margin-top:4px;}
+  .vs-badge{
+    align-self:center;width:42px;height:42px;border-radius:50%;
+    background:var(--navy);color:var(--gold-bright);
+    display:flex;align-items:center;justify-content:center;
+    font-style:italic;font-weight:bold;font-size:15px;
+    border:2px solid var(--gold);flex:none;margin:0 -2px;z-index:3;
+    box-shadow:0 2px 6px rgba(0,0,0,.3);
+  }
+
+  /* ---- SECTION HEADER (ornamental) ---- */
+  .sec-head{
+    text-align:center;padding:20px 0 6px;position:relative;z-index:2;
+  }
+  .sec-head .orn{
+    color:var(--gold);font-size:13px;letter-spacing:6px;
+  }
+  .sec-head h2{
+    font-size:22px;color:var(--navy);font-weight:bold;
+    letter-spacing:.5px;margin:2px 0;
+  }
+  .sec-head .sub{
+    font-style:italic;font-size:11px;color:#6b5d3e;
+  }
+
+  /* ---- HERO FIELD ILLUSTRATION ---- */
+  .field-wrap{
+    margin:6px 18px 14px;
+    position:relative;z-index:2;
+    border:2px solid var(--navy);
+    box-shadow:6px 6px 0 rgba(10,35,81,.12);
+    background:#2c4a2a;
+  }
+  .field-cap{
+    background:var(--navy);color:var(--cream);
+    font-family:'Courier New',monospace;font-size:8.5px;
+    letter-spacing:2px;text-transform:uppercase;text-align:center;
+    padding:5px;border-bottom:1px solid var(--gold);
+  }
+  svg.field{display:block;width:100%;height:auto;}
+
+  .pos-tag{
+    font-family:'Courier New',monospace;
+    font-weight:bold;
+  }
+  .plate{font-family:Georgia,serif;}
+
+  /* fielder chips drawn in HTML over svg via foreignObject-free approach:
+     we overlay absolutely-positioned chips */
+  .field-stage{position:relative;}
+  .chip{
+    position:absolute;transform:translate(-50%,-50%);
+    text-align:center;width:84px;
+  }
+  .chip .dot{
+    width:30px;height:30px;border-radius:50%;
+    background:var(--cream);
+    border:2px solid var(--navy);
+    color:var(--navy);font-family:'Courier New',monospace;
+    font-weight:bold;font-size:12px;
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto;
+    box-shadow:0 2px 4px rgba(0,0,0,.4);
+  }
+  .chip.pitch .dot{background:var(--gold-bright);border-color:var(--navy);}
+  .chip .nm{
+    margin-top:3px;
+    background:rgba(10,35,81,.92);
+    color:var(--cream);
+    font-size:8.5px;font-weight:bold;font-family:'Helvetica Neue',Arial,sans-serif;
+    letter-spacing:.2px;
+    padding:1px 4px;border-radius:2px;
+    display:inline-block;line-height:1.25;
+    box-shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+  .chip .nm b{color:var(--gold-bright);}
+
+  /* ---- TWO-COLUMN ORDER (magazine columns) ---- */
+  .columns{
+    margin:4px 20px 10px;
+    position:relative;z-index:2;
+  }
+  .col-head{
+    text-align:center;border-top:2px solid var(--navy);
+    border-bottom:1px solid var(--navy);padding:8px 0 7px;margin-bottom:12px;
+  }
+  .col-head .t{
+    font-size:17px;font-weight:bold;color:var(--navy);letter-spacing:1px;
+  }
+  .col-head .d{
+    font-family:'Courier New',monospace;font-size:8px;letter-spacing:2px;
+    color:#8a7a55;text-transform:uppercase;margin-top:2px;
+  }
+  .col-grid{
+    column-count:2;column-gap:22px;
+    column-rule:1px solid rgba(10,35,81,.3);
+  }
+  .order-item{
+    break-inside:avoid;
+    display:flex;align-items:baseline;gap:8px;
+    padding:7px 0;
+    border-bottom:1px dotted rgba(10,35,81,.35);
+  }
+  .order-item .num{
+    font-size:21px;font-style:italic;font-weight:bold;
+    color:var(--gold);width:24px;flex:none;line-height:1;
+    text-align:center;
+  }
+  .order-item .body{flex:1;}
+  .order-item .pn{
+    font-size:13.5px;font-weight:bold;color:var(--ink);line-height:1.05;
+  }
+  .order-item .meta{
+    font-family:'Courier New',monospace;font-size:8.5px;letter-spacing:1px;
+    color:#7a6a45;text-transform:uppercase;margin-top:2px;
+  }
+  .order-item .meta .p{color:var(--navy);font-weight:bold;}
+
+  /* ---- BENCH / PROBABLE FOOTER ---- */
+  .probable{
+    margin:8px 20px 0;background:var(--cream);
+    border:1px solid var(--navy);
+    position:relative;z-index:2;
+    display:flex;align-items:center;gap:12px;
+    padding:12px 16px;
+  }
+  .probable .glyph{
+    width:40px;height:40px;border-radius:50%;
+    border:2px solid var(--navy);color:var(--navy);
+    font-family:'Courier New',monospace;font-weight:bold;font-size:13px;
+    display:flex;align-items:center;justify-content:center;flex:none;
+    background:var(--paper);
+  }
+  .probable .info .lab{
+    font-family:'Courier New',monospace;font-size:8px;letter-spacing:2px;
+    text-transform:uppercase;color:#8a7a55;
+  }
+  .probable .info .v{font-size:14px;font-weight:bold;color:var(--navy);margin-top:1px;}
+  .probable .info .v span{font-style:italic;font-weight:normal;color:#6b5d3e;font-size:11px;}
+
+  /* ---- COLOPHON ---- */
+  .colophon{
+    margin:18px 0 0;padding:18px 26px 30px;
+    background:var(--navy);color:#aebbd2;
+    border-top:5px double var(--gold);
+    text-align:center;position:relative;z-index:2;
+  }
+  .colophon .lockup{
+    font-style:italic;font-size:14px;color:var(--gold-bright);margin-bottom:6px;
+  }
+  .colophon p{
+    font-family:'Courier New',monospace;font-size:8px;letter-spacing:2px;
+    text-transform:uppercase;line-height:1.9;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="scroll">
+
+      <!-- MASTHEAD -->
+      <header class="masthead">
+        <div class="mh-top">
+          <span>No. 67</span>
+          <span>Official Programme</span>
+          <span>$5</span>
+        </div>
+        <div class="kicker">The Matchday Programme</div>
+        <div class="title">On the <em>Field</em></div>
+        <div class="subtitle">The Starting Nine, set in their positions</div>
+        <div class="issue-line">American Family Field · 7:10 PM CT · June 18</div>
+      </header>
+
+      <!-- MATCHUP STRIP -->
+      <div class="matchup">
+        <div class="team-block away">
+          <div class="tb-role">Visitors</div>
+          <div class="tb-name">Guardians</div>
+          <div class="tb-sub">Cleveland</div>
+        </div>
+        <div class="vs-badge">vs</div>
+        <div class="team-block">
+          <div class="tb-role">Home · Defending</div>
+          <div class="tb-name">Brewers</div>
+          <div class="tb-sub">Milwaukee</div>
+        </div>
+      </div>
+
+      <!-- SECTION HEADER -->
+      <div class="sec-head">
+        <div class="orn">✦ ❖ ✦</div>
+        <h2>The Defensive Alignment</h2>
+        <div class="sub">Milwaukee takes the diamond</div>
+      </div>
+
+      <!-- HERO FIELD ILLUSTRATION -->
+      <div class="field-wrap">
+        <div class="field-cap">Plate I — As they stand at first pitch</div>
+        <div class="field-stage">
+          <svg class="field" viewBox="0 0 400 460" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <radialGradient id="grass" cx="50%" cy="20%" r="95%">
+                <stop offset="0%" stop-color="#56885044"/>
+                <stop offset="0%" stop-color="#4f8044"/>
+                <stop offset="100%" stop-color="#365e31"/>
+              </radialGradient>
+              <linearGradient id="dirt" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#bb9258"/>
+                <stop offset="100%" stop-color="#9c7842"/>
+              </linearGradient>
+            </defs>
+
+            <!-- outfield grass field (fan shape) -->
+            <path d="M200 430 L8 200 A 270 270 0 0 1 392 200 Z" fill="url(#grass)"/>
+            <!-- mowing stripes (radial wedges) -->
+            <g opacity="0.10">
+              <path d="M200 430 L40 215 A250 250 0 0 1 95 165 Z" fill="#ffffff"/>
+              <path d="M200 430 L150 130 A250 250 0 0 1 205 122 Z" fill="#ffffff"/>
+              <path d="M200 430 L305 165 A250 250 0 0 1 360 215 Z" fill="#ffffff"/>
+            </g>
+            <!-- outfield wall arc -->
+            <path d="M22 205 A250 250 0 0 1 378 205" fill="none" stroke="#2c4a26" stroke-width="6" opacity="0.55"/>
+            <!-- warning track -->
+            <path d="M30 210 A240 240 0 0 1 370 210" fill="none" stroke="#a9824c" stroke-width="9" opacity="0.45"/>
+
+            <!-- infield dirt diamond -->
+            <path d="M200 412 L312 300 L200 188 L88 300 Z" fill="url(#dirt)"/>
+            <!-- infield grass -->
+            <path d="M200 388 L286 302 L200 216 L114 302 Z" fill="#4a7b40"/>
+            <!-- base paths -->
+            <path d="M200 412 L312 300 L200 188 L88 300 Z" fill="none" stroke="#f0e4cf" stroke-width="3"/>
+            <!-- pitcher's mound -->
+            <circle cx="200" cy="300" r="22" fill="#b58c52"/>
+            <rect x="196" y="296" width="8" height="3" fill="#f0e4cf"/>
+            <!-- foul lines -->
+            <path d="M200 412 L40 252" stroke="#f0e4cf" stroke-width="2.5" opacity="0.85"/>
+            <path d="M200 412 L360 252" stroke="#f0e4cf" stroke-width="2.5" opacity="0.85"/>
+            <!-- bases -->
+            <rect x="195" y="407" width="11" height="11" transform="rotate(45 200 412)" fill="#f4ecd8" stroke="#0a2351" stroke-width="1"/><!--home-->
+            <rect x="307" y="295" width="10" height="10" transform="rotate(45 312 300)" fill="#f4ecd8" stroke="#0a2351" stroke-width="1"/><!--1st-->
+            <rect x="195" y="183" width="10" height="10" transform="rotate(45 200 188)" fill="#f4ecd8" stroke="#0a2351" stroke-width="1"/><!--2nd-->
+            <rect x="83" y="295" width="10" height="10" transform="rotate(45 88 300)" fill="#f4ecd8" stroke="#0a2351" stroke-width="1"/><!--3rd-->
+            <!-- home plate (pentagon) -->
+            <polygon points="200,406 207,412 204,419 196,419 193,412" fill="#f4ecd8" stroke="#0a2351" stroke-width="1.2"/>
+            <!-- batter's boxes -->
+            <rect x="172" y="403" width="12" height="20" fill="none" stroke="#f0e4cf" stroke-width="1.6" opacity="0.7"/>
+            <rect x="216" y="403" width="12" height="20" fill="none" stroke="#f0e4cf" stroke-width="1.6" opacity="0.7"/>
+          </svg>
+
+          <!-- FIELDER CHIPS (percent-positioned over the field) -->
+          <!-- Outfield -->
+          <div class="chip" style="left:23%;top:30%;"><div class="dot">5</div><div class="nm">LF · <b>Mitchell</b></div></div>
+          <div class="chip" style="left:50%;top:20%;"><div class="dot">11</div><div class="nm">CF · <b>Chourio</b></div></div>
+          <div class="chip" style="left:77%;top:30%;"><div class="dot">10</div><div class="nm">RF · <b>Frelick</b></div></div>
+          <!-- Infield -->
+          <div class="chip" style="left:36%;top:50%;"><div class="dot">27</div><div class="nm">SS · <b>Adames</b></div></div>
+          <div class="chip" style="left:64%;top:50%;"><div class="dot">0</div><div class="nm">2B · <b>Turang</b></div></div>
+          <div class="chip" style="left:26%;top:62%;"><div class="dot">3</div><div class="nm">3B · <b>Ortiz</b></div></div>
+          <div class="chip" style="left:74%;top:62%;"><div class="dot">12</div><div class="nm">1B · <b>Hoskins</b></div></div>
+          <!-- Pitcher -->
+          <div class="chip pitch" style="left:50%;top:65%;"><div class="dot">51</div><div class="nm">P · <b>Peralta</b></div></div>
+          <!-- Catcher -->
+          <div class="chip" style="left:50%;top:91%;"><div class="dot">24</div><div class="nm">C · <b>Contreras</b></div></div>
+        </div>
+      </div>
+
+      <!-- TWO-COLUMN BATTING ORDER -->
+      <div class="columns">
+        <div class="col-head">
+          <div class="t">The Card · Batting Order</div>
+          <div class="d">Milwaukee Brewers · 1 through 9</div>
+        </div>
+        <div class="col-grid">
+          <div class="order-item"><div class="num">1</div><div class="body"><div class="pn">Brice Turang</div><div class="meta"><span class="p">2B</span> · No. 0</div></div></div>
+          <div class="order-item"><div class="num">2</div><div class="body"><div class="pn">Sal Frelick</div><div class="meta"><span class="p">RF</span> · No. 10</div></div></div>
+          <div class="order-item"><div class="num">3</div><div class="body"><div class="pn">Jackson Chourio</div><div class="meta"><span class="p">CF</span> · No. 11</div></div></div>
+          <div class="order-item"><div class="num">4</div><div class="body"><div class="pn">Wm. Contreras</div><div class="meta"><span class="p">C</span> · No. 24</div></div></div>
+          <div class="order-item"><div class="num">5</div><div class="body"><div class="pn">Rhys Hoskins</div><div class="meta"><span class="p">1B</span> · No. 12</div></div></div>
+          <div class="order-item"><div class="num">6</div><div class="body"><div class="pn">Christian Yelich</div><div class="meta"><span class="p">DH</span> · No. 22</div></div></div>
+          <div class="order-item"><div class="num">7</div><div class="body"><div class="pn">Joey Ortiz</div><div class="meta"><span class="p">3B</span> · No. 3</div></div></div>
+          <div class="order-item"><div class="num">8</div><div class="body"><div class="pn">Garrett Mitchell</div><div class="meta"><span class="p">LF</span> · No. 5</div></div></div>
+          <div class="order-item"><div class="num">9</div><div class="body"><div class="pn">Willy Adames</div><div class="meta"><span class="p">SS</span> · No. 27</div></div></div>
+        </div>
+      </div>
+
+      <!-- PROBABLE OPPONENT -->
+      <div class="probable">
+        <div class="glyph">28</div>
+        <div class="info">
+          <div class="lab">On the Bump for Cleveland</div>
+          <div class="v">Tanner Bibee <span>· RHP · Guardians</span></div>
+        </div>
+      </div>
+
+      <!-- COLOPHON -->
+      <footer class="colophon">
+        <div class="lockup">— The Matchday Programme —</div>
+        <p>Set in Georgia & Courier · Pressed at the Park</p>
+        <p>Lineups subject to late scratches</p>
+      </footer>
+
+    </div>
+  </div>
+</body>
+</html>

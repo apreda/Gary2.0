@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Player card — v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E1014; --card:#15181E; --raise:#1B1F27; --line:rgba(255,255,255,.07);
+    --ink:#EEF1F5; --mut:#9DA4B0; --mut2:#646B78;
+    --good:#5FD39A; --bad:#FF7A7A; --barbg:rgba(255,255,255,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  body{background:#08090B;display:flex;justify-content:center;padding:36px 16px;
+       font-family:"Hanken Grotesk",system-ui,sans-serif;color:var(--ink);}
+  .num{font-variant-numeric:tabular-nums;}
+  .disp{font-family:"Bricolage Grotesque",sans-serif;}
+  .card{width:384px;background:var(--card);border:1px solid var(--line);border-radius:24px;overflow:hidden;
+        box-shadow:0 24px 70px rgba(0,0,0,.55);}
+
+  /* header */
+  .head{padding:26px 26px 22px;}
+  .ctx{font-size:11px;letter-spacing:.4px;color:var(--mut2);font-weight:600;}
+  .nm{font-size:40px;line-height:.98;font-weight:700;letter-spacing:-.6px;margin-top:8px;}
+  .meta{display:flex;align-items:center;gap:10px;margin-top:12px;}
+  .meta .m{font-size:13px;color:var(--mut);font-weight:500;}
+  .meta .m b{color:var(--ink);font-weight:600;}
+  .chip{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.3px;color:var(--good);
+        background:rgba(95,211,154,.1);border:1px solid rgba(95,211,154,.22);padding:5px 11px;border-radius:999px;}
+
+  /* generic section */
+  .sec{padding:22px 26px;border-top:1px solid var(--line);}
+  .cap{font-size:11px;font-weight:700;letter-spacing:1.6px;color:var(--mut2);text-transform:uppercase;}
+
+  /* matchup */
+  .lede{font-size:14px;line-height:1.5;color:var(--mut);margin:12px 0 18px;}
+  .lede b{color:var(--ink);font-weight:600;}
+  .mrow{display:grid;grid-template-columns:1fr 56px 60px;align-items:center;gap:0 6px;padding:13px 0;border-top:1px solid var(--line);}
+  .mrow:first-of-type{border-top:0;}
+  .mrow .p{font-size:16px;font-weight:600;}
+  .mrow .u{font-size:13px;color:var(--mut2);text-align:right;}
+  .mrow .h{font-size:19px;font-weight:700;text-align:right;letter-spacing:-.3px;}
+  .h.bad{color:var(--bad);} .h.neu{color:var(--mut);}
+  .h.thin{color:var(--mut2);font-size:13px;font-weight:600;}
+  .mhdr{display:grid;grid-template-columns:1fr 56px 60px;gap:0 6px;margin-bottom:4px;}
+  .mhdr span{font-size:10px;letter-spacing:1px;color:var(--mut2);font-weight:600;text-transform:uppercase;}
+  .mhdr span:nth-child(2),.mhdr span:nth-child(3){text-align:right;}
+
+  /* splits */
+  .srow{margin-top:18px;} .srow:first-of-type{margin-top:14px;}
+  .stop{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;}
+  .stop .k{font-size:13px;font-weight:600;color:var(--ink);width:60px;}
+  .stop .v{font-size:24px;font-weight:700;letter-spacing:-.5px;}
+  .stop .v.good{color:var(--good);} .stop .v.bad{color:var(--bad);}
+  .stop .d{margin-left:auto;font-size:12px;color:var(--mut2);}
+  .track{height:6px;border-radius:6px;background:var(--barbg);overflow:hidden;}
+  .track i{display:block;height:100%;border-radius:6px;}
+  .track i.good{background:var(--good);} .track i.bad{background:var(--bad);opacity:.85;}
+
+  /* form */
+  .form{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px;}
+  .form .f{text-align:center;}
+  .form .ft{font-size:10px;letter-spacing:1px;color:var(--mut2);font-weight:600;}
+  .form .fv{font-size:26px;font-weight:700;margin-top:7px;letter-spacing:-.5px;}
+  .form .fv.good{color:var(--good);}
+  .form .fd{font-size:11px;color:var(--mut);margin-top:5px;}
+
+  /* angle */
+  .prop{display:flex;align-items:center;margin-top:15px;}
+  .prop:first-of-type{margin-top:14px;}
+  .prop .pn{font-size:14px;font-weight:600;}
+  .prop .po{font-size:12px;color:var(--mut2);margin-top:2px;}
+  .prop .hr{margin-left:auto;font-size:17px;font-weight:700;color:var(--mut);}
+  .prop .hr b{color:var(--ink);}
+  .take{margin-top:20px;font-size:13.5px;line-height:1.55;color:var(--mut);}
+  .take b{color:var(--ink);font-weight:600;}
+</style></head>
+<body>
+  <div class="card">
+
+    <!-- header -->
+    <div class="head">
+      <div class="ctx">CUBS @ METS · 1:10 PM ET</div>
+      <div class="nm disp">A.J. Ewing</div>
+      <div class="meta">
+        <span class="m">CF</span><span class="m">·</span><span class="m">Bats <b>L</b></span><span class="m">·</span><span class="m">NYM</span>
+        <span class="chip">▲ Hot · L5</span>
+      </div>
+    </div>
+
+    <!-- matchup -->
+    <div class="sec">
+      <div class="cap">What he'll see tonight</div>
+      <div class="lede">The righty's two most-used pitches are <b>Ewing's two weakest</b> — 56% of the mix.</div>
+      <div class="mhdr"><span>Pitch</span><span>Mix</span><span>He hits</span></div>
+      <div class="mrow"><div class="p disp">Sinker</div><div class="u num">39%</div><div class="h bad num">.200</div></div>
+      <div class="mrow"><div class="p disp">4-Seam</div><div class="u num">17%</div><div class="h bad num">.185</div></div>
+      <div class="mrow"><div class="p disp">Cutter</div><div class="u num">17%</div><div class="h thin">thin</div></div>
+    </div>
+
+    <!-- splits -->
+    <div class="sec">
+      <div class="cap">Platoon</div>
+      <div class="srow">
+        <div class="stop"><span class="k">vs RHP</span><span class="v good num disp">.806</span><span class="d num">.301 · 93 AB</span></div>
+        <div class="track"><i class="good" style="width:81%"></i></div>
+      </div>
+      <div class="srow">
+        <div class="stop"><span class="k">vs LHP</span><span class="v bad num disp">.446</span><span class="d num">.147 · 34 AB</span></div>
+        <div class="track"><i class="bad" style="width:45%"></i></div>
+      </div>
+    </div>
+
+    <!-- form -->
+    <div class="sec">
+      <div class="cap">Recent</div>
+      <div class="form">
+        <div class="f"><div class="ft">LAST 5</div><div class="fv good num disp">.333</div><div class="fd num">5-15 · 4 RBI</div></div>
+        <div class="f"><div class="ft">LAST 10</div><div class="fv num disp">.250</div><div class="fd num">1 HR · 6 RBI</div></div>
+        <div class="f"><div class="ft">LAST 15</div><div class="fv num disp">.262</div><div class="fd num">.793 OPS</div></div>
+      </div>
+    </div>
+
+    <!-- angle -->
+    <div class="sec">
+      <div class="cap">The angle</div>
+      <div class="prop"><div><div class="pn">Hits + Runs + RBI</div><div class="po num">Over 1.5</div></div><div class="hr num"><b>4</b>/10</div></div>
+      <div class="prop"><div><div class="pn">Total Bases</div><div class="po num">Over 4.5 · +1100</div></div><div class="hr num"><b>1</b>/10</div></div>
+      <div class="take">Good bat against righties, but he sees his two worst pitches all night. <b>Overs are a tough chase.</b></div>
+    </div>
+
+  </div>
+</body></html>

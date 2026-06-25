@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Picks — swipeable card stack</title>
+<!-- Picks tab matchup page: picks as a swipeable STACK (top pick in front, rest behind) instead of a vertical list.
+     Drag the top card sideways to advance. Gary pick-card grammar: gold game card, silver prop cards. -->
+<style>
+  :root{
+    --cream:#F6F1E7;--panel:#FBF7EF;--cream2:#EFE6D6;--ink:#201A12;--ink2:#4E4334;--ink3:#7C6E58;--ink4:#A89A80;--hair:rgba(120,100,60,.22);
+    --gold:#B5862F;--gold-deep:#7E5C18;--gold-wash:#F3E8CE;--gold-line:#E0CB95;
+    --silver:#8A8C92;--silver-deep:#5E6066;--silver-wash:#ECEDF0;--silver-line:#D3D5DA;
+    --green:#2E7D55;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+    --mono:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#d6ccb8;font-family:var(--sans);color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px 12px 60px;min-height:100vh}
+  .legend{max-width:412px;width:100%;font-size:11.5px;color:#5a5038;line-height:1.5;background:rgba(255,255,255,.5);border:1px solid rgba(120,100,60,.2);border-radius:11px;padding:10px 13px}
+  .legend b{color:#3a3020}
+  .phone{width:412px;max-width:100%;background:var(--cream);border-radius:30px;overflow:hidden;border:1px solid var(--hair);box-shadow:0 12px 34px rgba(40,30,12,.18);padding-bottom:22px}
+  .statusbar{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:600;font-family:var(--mono);color:var(--ink2)}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+
+  /* matchup header */
+  .mhead{padding:6px 20px 4px}
+  .mhead .lg{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--gold);text-transform:uppercase}
+  .mhead .mt{margin-top:5px;font-size:24px;font-weight:800;letter-spacing:-.02em}
+  .mhead .mt .at{color:var(--ink4);font-weight:600;font-size:15px;margin:0 4px}
+  .mhead .sc{margin-top:4px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink3)}
+
+  .count{display:flex;align-items:center;gap:8px;padding:14px 20px 6px}
+  .count .e{font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase}
+  .count .swipe{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--ink4)}
+
+  /* stack */
+  .stage{position:relative;height:268px;margin:2px 20px 0}
+  .card{position:absolute;inset:0;border-radius:18px;padding:18px 18px 16px;border:1px solid var(--hair);
+    background:var(--panel);box-shadow:0 8px 22px rgba(60,46,18,.12);
+    transform-origin:center;touch-action:pan-y;cursor:grab;will-change:transform;
+    display:flex;flex-direction:column}
+  .card.gold{background:linear-gradient(170deg,var(--gold-wash),#FBF4E2);border-color:var(--gold-line)}
+  .card.silver{background:linear-gradient(170deg,var(--silver-wash),#FAFAFB);border-color:var(--silver-line)}
+  .card .top{display:flex;align-items:center;gap:8px}
+  .card.gold .top .e{color:var(--gold-deep)} .card.silver .top .e{color:var(--silver-deep)}
+  .card .top .e{font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+  .card .top .ix{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink4)}
+  .card .subj{margin-top:14px;font-size:13px;font-weight:700;color:var(--ink3)}
+  .card .headline{margin-top:3px;font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.08}
+  .card .take{margin-top:auto;display:flex;align-items:center;gap:9px}
+  .card .takelbl{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink3)}
+  .card .arr{color:var(--ink4)}
+  .chip{margin-top:13px;display:flex;align-items:center;gap:10px;border-radius:12px;padding:13px 15px}
+  .card.gold .chip{background:var(--ink)}
+  .card.silver .chip{background:#34363B}
+  .chip .pk{font-size:16px;font-weight:800;letter-spacing:-.01em}
+  .card.gold .chip .pk{color:var(--gold-wash)} .card.silver .chip .pk{color:var(--silver-wash)}
+  .chip .od{margin-left:auto;font-family:var(--mono);font-size:14px;font-weight:700;color:rgba(255,255,255,.55)}
+
+  .dots{display:flex;justify-content:center;gap:7px;margin-top:16px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ink4);opacity:.4;transition:.2s}
+  .dot.on{opacity:1;background:var(--gold);width:18px;border-radius:4px}
+  .controls{display:flex;justify-content:center;gap:30px;margin-top:14px}
+  .controls button{border:1px solid var(--hair);background:var(--panel);width:42px;height:42px;border-radius:50%;font-size:18px;color:var(--ink2);cursor:pointer}
+</style>
+</head>
+<body>
+<div class="legend"><b>Swipeable pick stack — Picks matchup page (all sports).</b> All a game's picks live in one <b>stack</b>, top pick in front. <b>Drag the top card sideways</b> (or use ‹ ›) to flick to the next — no more long vertical scroll. Gold = game pick, silver = props.</div>
+
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span>Gary · Picks</span></div>
+  <div class="mhead">
+    <div class="lg">MLB · Today</div>
+    <div class="mt">San Diego <span class="at">@</span> Philadelphia</div>
+    <div class="sc">7:05 PM ET · Citizens Bank Park</div>
+  </div>
+
+  <div class="count"><span class="e">Gary's 3 plays</span><span class="swipe">swipe →</span></div>
+
+  <div class="stage" id="stage"></div>
+  <div class="dots" id="dots"></div>
+  <div class="controls"><button id="prev">‹</button><button id="next">›</button></div>
+</div>
+
+<script>
+const CARDS=[
+  {cls:'gold', e:'Game Pick', subj:'Run line', headline:'Phillies cover', pk:'PHILLIES −1.5', od:'−120'},
+  {cls:'silver', e:'Prop', subj:'Bryce Harper', headline:'Over 1.5 total bases', pk:'HARPER OVER 1.5 TB', od:'+105'},
+  {cls:'silver', e:'Prop', subj:'Trea Turner', headline:'Over 0.5 runs scored', pk:'TURNER OVER 0.5 R', od:'−130'},
+];
+const stage=document.getElementById('stage'), dotsEl=document.getElementById('dots');
+let order=CARDS.map((_,i)=>i); // front = order[0]
+function layout(animateOut){
+  stage.innerHTML='';
+  order.forEach((ci,depth)=>{
+    const c=CARDS[ci];
+    const el=document.createElement('div');
+    el.className='card '+c.cls;
+    const scale=1-depth*0.05, ty=depth*16, op=depth>2?0:1-depth*0.12;
+    el.style.zIndex=10-depth;
+    el.style.transform=`translateY(${ty}px) scale(${scale})`;
+    el.style.opacity=op; el.style.transition='transform .28s cubic-bezier(.3,.9,.3,1),opacity .28s';
+    el.innerHTML=`<div class="top"><span class="e">${c.e}</span><span class="ix">${depth===0?(order.indexOf(ci)+1):''}${depth===0?' / '+CARDS.length:''}</span></div>
+      <div class="subj">${c.subj}</div><div class="headline">${c.headline}</div>
+      <div class="take"><span class="takelbl">Gary's Take</span><span class="arr">›</span></div>
+      <div class="chip"><span class="pk">${c.pk}</span><span class="od">${c.od}</span></div>`;
+    if(depth===0) attachDrag(el);
+    stage.appendChild(el);
+  });
+  dotsEl.innerHTML=order.map((_,i)=>`<span class="dot ${i===0?'on':''}"></span>`).slice(0,CARDS.length).join('');
+  // dots reflect current front index in original order
+  const front=order[0];
+  dotsEl.innerHTML=CARDS.map((_,i)=>`<span class="dot ${i===front?'on':''}"></span>`).join('');
+}
+function advance(dir){ // dir 1 = next
+  if(dir>0) order.push(order.shift()); else order.unshift(order.pop());
+  layout();
+}
+function attachDrag(el){
+  let sx=0,drag=false;
+  el.onpointerdown=e=>{drag=true;sx=e.clientX;el.style.transition='none';el.setPointerCapture(e.pointerId);el.style.cursor='grabbing';};
+  el.onpointermove=e=>{if(!drag)return;const dx=e.clientX-sx;el.style.transform=`translateX(${dx}px) rotate(${dx*0.04}deg)`;el.style.opacity=1-Math.min(Math.abs(dx)/300,.5);};
+  el.onpointerup=e=>{if(!drag)return;drag=false;const dx=e.clientX-sx;el.style.cursor='grab';
+    if(Math.abs(dx)>90){el.style.transition='transform .25s,opacity .25s';el.style.transform=`translateX(${dx>0?600:-600}px) rotate(${dx>0?20:-20}deg)`;el.style.opacity=0;setTimeout(()=>advance(1),180);}
+    else{el.style.transition='transform .25s,opacity .25s';el.style.transform='translateY(0) scale(1)';el.style.opacity=1;}};
+}
+document.getElementById('next').onclick=()=>advance(1);
+document.getElementById('prev').onclick=()=>advance(-1);
+layout();
+</script>
+</body>
+</html>

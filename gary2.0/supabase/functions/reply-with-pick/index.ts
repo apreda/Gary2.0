@@ -1,12 +1,8 @@
-// reply-with-pick — LIGHT v1 reply engine (Jun 18 2026). Given a target tweet, reads it, finds which of today's games
-// it is about, and drafts a SHORT in-voice reply that engages the tweet + states Gary's relevant pick + one reason.
-// Human-in-the-loop: ?dry_run=1 composes without posting (preview, then approve). No poller, no list, no queue,
-// no autonomous posting. No app-link / "download" in replies (a reply is a conversation, not an ad).
+// reply-with-pick — LIGHT v1 reply engine (Jun 18 2026). Given a target tweet, reads it (+ its reply_settings), finds
+// which of today's games it is about, and drafts a SHORT in-voice reply that engages the tweet + states Gary's relevant
+// pick + one reason. Human-in-the-loop: ?dry_run=1 composes + reports whether the tweet is repliable (no post).
+// No poller, no list, no queue, no autonomous posting. No app-link / "download" in replies (a reply is a conversation).
 // Body: { tweetId?, pick?, sampleTweetText? }  ·  ?dry_run=1 = compose only.
-//   tweetId         target tweet to read + reply to (required to POST live)
-//   pick            optional: force a specific pick string instead of auto-matching
-//   sampleTweetText optional (dry-run testing): simulate a target tweet's text without a real tweetId
-// Reuses the OAuth 1.0a signer from post-reply-tweet/x-api-probe, daily_picks, Gemini, and post-reply-tweet.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -34,16 +30,17 @@ async function generateOAuthHeader(method: string, url: string, params: Record<s
   o.oauth_signature = sig;
   return "OAuth " + Object.keys(o).sort().map((k) => `${percentEncode(k)}="${percentEncode(o[k])}"`).join(", ");
 }
-async function readTweetText(id: string): Promise<string | null> {
+// Read the target tweet's text AND its reply_settings (so we can tell upfront if a reply is even allowed).
+async function readTweet(id: string): Promise<{ text: string | null; replySettings: string | null }> {
   const ck = (Deno.env.get("X_API_KEY") || "").trim(), cs = (Deno.env.get("X_API_SECRET") || "").trim();
   const at = (Deno.env.get("X_ACCESS_TOKEN") || "").trim(), ats = (Deno.env.get("X_ACCESS_TOKEN_SECRET") || "").trim();
-  const base = `https://api.x.com/2/tweets/${id}`;
-  const qp = { "tweet.fields": "text" };
+  const baseUrl = `https://api.x.com/2/tweets/${id}`;
+  const qp = { "tweet.fields": "text,reply_settings" };
   const qs = Object.keys(qp).sort().map((k) => `${percentEncode(k)}=${percentEncode((qp as any)[k])}`).join("&");
-  const auth = await generateOAuthHeader("GET", base, qp, ck, cs, at, ats);
-  const r = await fetch(`${base}?${qs}`, { headers: { Authorization: auth } });
+  const auth = await generateOAuthHeader("GET", baseUrl, qp, ck, cs, at, ats);
+  const r = await fetch(`${baseUrl}?${qs}`, { headers: { Authorization: auth } });
   const j = await r.json().catch(() => null);
-  return j?.data?.text ?? null;
+  return { text: j?.data?.text ?? null, replySettings: j?.data?.reply_settings ?? null };
 }
 
 function etDate(): string {
@@ -66,7 +63,6 @@ function killDashes(s: string): string { return s.replace(/\s*[—–]\s*/g, ". 
 function killEmoji(s: string): string { return s.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "").replace(/[ \t]{2,}/g, " ").trim(); }
 function clean(s: string): string { return killEmoji(killDashes(String(s ?? "").trim())); }
 
-// Find which of today's picks the tweet is about, by team-name overlap.
 function matchPick(text: string, picks: any[]): any {
   const t = (text || "").toLowerCase();
   let best: any = null, bestScore = 0;
@@ -100,21 +96,24 @@ Deno.serve(async (req: Request) => {
     if (!picks.length) return Response.json({ error: `no picks loaded for ${today}` }, { status: 400 });
 
     let targetText: string | null = sampleTweetText ?? null;
-    if (tweetId && !targetText) targetText = await readTweetText(tweetId);
+    let replySettings: string | null = null;
+    if (tweetId && !targetText) { const tw = await readTweet(tweetId); targetText = tw.text; replySettings = tw.replySettings; }
+    const repliable = !replySettings || replySettings === "everyone";
 
     let chosen: any = null;
     if (pickHint) chosen = picks.find((p) => p.pick === pickHint) ?? { pick: pickHint };
     else if (targetText) chosen = matchPick(targetText, picks);
     if (!chosen && !targetText) chosen = [...picks].sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))[0];
-    if (!chosen) return Response.json({ posted: false, reason: "no pick relevant to this tweet (Gary has no play on that game today)", target_text: targetText, picks_today: picks.map((p) => p.pick) });
+    if (!chosen) return Response.json({ posted: false, reason: "no pick relevant to this tweet (Gary has no play on that game today)", target_text: targetText, reply_settings: replySettings, repliable, picks_today: picks.map((p) => p.pick) });
 
     const oddsStr = (chosen.odds && !String(chosen.pick).includes(String(chosen.odds))) ? ` (${chosen.odds})` : "";
     const pickLine = `${chosen.pick}${oddsStr}`;
     const user = `${targetText ? `They tweeted: "${targetText}"\n\n` : ""}Your play on this game: ${pickLine}. League ${chosen.league ?? ""}. Matchup ${chosen.awayTeam ?? ""} at ${chosen.homeTeam ?? ""}.\nPull ONE reason from this rationale (do not dump it all):\n${(chosen.rationale ?? "").slice(0, 1200)}\n\nWrite the reply now.`;
     const reply = clean(parseJsonBlock(await callLLM(REPLY_VOICE, user)).reply);
 
-    if (dryRun) return Response.json({ dry_run: true, matched_pick: pickLine, target_text: targetText, reply });
+    if (dryRun) return Response.json({ dry_run: true, matched_pick: pickLine, target_text: targetText, reply_settings: replySettings, repliable, reply });
     if (!tweetId) return Response.json({ error: "tweetId required to post a live reply" }, { status: 400 });
+    if (!repliable) return Response.json({ posted: false, reason: `replies are restricted on this tweet (reply_settings=${replySettings}); Gary can't reply here. Pick a tweet with open replies.`, reply_settings: replySettings });
 
     const pr = await fetch(`${SB_URL}/functions/v1/post-reply-tweet`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: reply, replyToId: tweetId }) });
     const pj = await pr.json();

@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLB Field — m2 Broadcast Finish</title>
+<!--
+  m2-broadcast — "Broadcast Finish". Bold TV pre-game graphic energy: dramatic
+  spotlit ballpark, gold-ringed number discs, big confident condensed type, a
+  lower-third headline strip. Same Brewers/Guardians data + accurate fan-shaped
+  field, 9 fielders, HOT/COLD, SEASON·vs RHP·vs Bibee toggle, Projected/Confirmed,
+  tap-a-fielder detail (now carries the batting-order spot; rail removed).
+-->
+<style>
+  :root{
+    --bg:#070B0D;--panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.1);
+    --ink:#F6F8F5;--ink2:rgba(246,248,245,.66);--ink3:rgba(246,248,245,.4);
+    --gold:#F4C430;--goldDeep:#C9971E;--navy:#0A1E38;--brewersGold:#FFD24A;
+    --hot:#FF5A2E;--cold:#3FA9F5;
+    --mono:"Helvetica Neue",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --cond:"Helvetica Neue",Arial Narrow,Impact,system-ui,sans-serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#04070a;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;padding:20px 10px 60px;min-height:100vh}
+  .phone{width:430px;max-width:100%;background:linear-gradient(180deg,#0c1620,#070b0d 60%);border-radius:32px;overflow:hidden;border:1px solid var(--line);box-shadow:0 0 0 1px rgba(244,196,48,.06),0 40px 120px rgba(0,0,0,.6)}
+  .statusbar{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;font-weight:700;font-family:var(--mono);color:var(--ink2)}
+
+  /* BROADCAST HEADER — lower-third energy */
+  .broadcast{position:relative;padding:4px 0 0}
+  .live{display:flex;align-items:center;gap:7px;padding:0 18px}
+  .live .dot{width:8px;height:8px;border-radius:50%;background:#ff2d2d;box-shadow:0 0 0 0 rgba(255,45,45,.6);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,45,45,.55)}70%{box-shadow:0 0 0 7px rgba(255,45,45,0)}100%{box-shadow:0 0 0 0 rgba(255,45,45,0)}}
+  .live .lbl{font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.22em;color:#ff5a5a}
+  .live .net{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--gold)}
+
+  .lowerthird{margin:9px 14px 0;border-radius:14px;overflow:hidden;border:1px solid rgba(244,196,48,.28);background:linear-gradient(135deg,rgba(10,30,56,.92),rgba(7,11,13,.92));box-shadow:0 10px 34px rgba(0,0,0,.5)}
+  .lt-bar{height:5px;background:linear-gradient(90deg,var(--goldDeep),var(--gold),var(--goldDeep))}
+  .lt-body{padding:13px 16px 14px;position:relative}
+  .lt-tag{font-family:var(--mono);font-size:9.5px;font-weight:800;letter-spacing:.2em;color:var(--gold)}
+  .matchup{margin-top:6px;display:flex;align-items:baseline;gap:9px;font-family:var(--cond);font-weight:800;letter-spacing:-.01em;line-height:.92;font-stretch:condensed}
+  .matchup .t{font-size:33px;text-transform:uppercase}
+  .matchup .v{font-size:16px;color:var(--gold);font-weight:800;transform:translateY(-2px)}
+  .matchup .home{color:#fff}.matchup .away{color:var(--ink2)}
+  .lt-meta{margin-top:7px;font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--ink2);letter-spacing:.02em}
+
+  /* opposing pitcher — "ON THE BUMP" graphic */
+  .sp{display:flex;align-items:center;gap:11px;margin:11px 14px 0;background:linear-gradient(120deg,rgba(58,20,40,.6),rgba(7,11,13,.6));border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 14px;position:relative;overflow:hidden}
+  .sp:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--gold),var(--goldDeep))}
+  .sp .disc{width:40px;height:40px;border-radius:50%;background:#3a1428;display:flex;align-items:center;justify-content:center;font-family:var(--cond);font-weight:800;font-size:17px;color:#fff;flex:0 0 auto;box-shadow:0 0 0 2px rgba(244,196,48,.55),0 0 14px rgba(244,196,48,.25)}
+  .sp .who{font-family:var(--cond);font-size:17px;font-weight:800;letter-spacing:-.01em;text-transform:uppercase}
+  .sp .l{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:2px;letter-spacing:.02em}
+  .sp .stack{display:flex;flex-direction:column}.sp .stack .micro{font-family:var(--mono);font-size:8px;letter-spacing:.18em;color:var(--gold);font-weight:800;margin-bottom:1px}
+  .sp .hand{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:800;color:#0a1e38;background:var(--gold);padding:5px 11px;border-radius:8px;letter-spacing:.04em}
+
+  /* state + split toggles */
+  .toggles{display:flex;align-items:center;gap:10px;margin:14px 16px 0}
+  .toggles .t{flex:1;text-align:center;font-family:var(--cond);font-size:15px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--ink3);cursor:pointer;padding:7px 4px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .toggles .t.on{color:#0a1e38;background:linear-gradient(180deg,#fff,#d9e0e6);border-color:#fff}
+  .toggles .t.on[data-state="projected"]{background:linear-gradient(180deg,var(--gold),var(--goldDeep));color:#0a1e38;border-color:var(--gold)}
+  .splits{display:flex;gap:5px;margin:10px 14px 0;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:12px;padding:5px}
+  .splits button{flex:1;border:0;background:transparent;padding:9px 4px;border-radius:9px;font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink2);cursor:pointer;text-transform:uppercase}
+  .splits button.on{background:linear-gradient(180deg,var(--gold),var(--goldDeep));color:#0a1e38;box-shadow:0 2px 10px rgba(244,196,48,.3)}
+
+  /* field */
+  .fieldwrap{position:relative;margin:12px 12px 0;border-radius:18px;overflow:hidden;border:1px solid rgba(244,196,48,.18);box-shadow:0 16px 50px rgba(0,0,0,.55),inset 0 0 60px rgba(0,0,0,.4)}
+  .fieldwrap svg{display:block;width:100%}
+  .fieldwrap:after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:18px;box-shadow:inset 0 0 90px rgba(0,0,0,.55)}
+  .scoreflag{position:absolute;top:10px;left:10px;z-index:3;font-family:var(--mono);font-size:8.5px;font-weight:800;letter-spacing:.2em;color:var(--gold);background:rgba(7,11,13,.7);border:1px solid rgba(244,196,48,.3);padding:5px 9px;border-radius:7px;backdrop-filter:blur(4px)}
+
+  .pl{position:absolute;transform:translate(-50%,-50%);width:84px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;z-index:2}
+  .disc{position:relative;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 35% 28%,#16335a,#0a1e38);display:flex;align-items:center;justify-content:center;
+    font-family:var(--cond);font-weight:800;font-size:21px;color:var(--brewersGold);
+    box-shadow:0 0 0 2.5px var(--gold),0 0 0 4px rgba(7,11,13,.85),0 5px 16px rgba(0,0,0,.6),0 0 18px rgba(244,196,48,.22)}
+  .disc .flame{position:absolute;top:-3px;right:-3px;width:14px;height:14px;border-radius:50%;border:2.5px solid var(--bg);box-shadow:0 0 8px rgba(0,0,0,.6)}
+  .nameplate{display:flex;flex-direction:column;align-items:center;background:linear-gradient(180deg,rgba(7,11,13,.82),rgba(7,11,13,.7));border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:3px 8px 4px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 3px 10px rgba(0,0,0,.5)}
+  .nameplate .nm{font-family:var(--cond);font-size:13px;font-weight:800;letter-spacing:.01em;color:#fff;text-transform:uppercase;line-height:1}
+  .nameplate .row{display:flex;align-items:center;gap:6px;margin-top:2px}
+  .nameplate .pos{font-family:var(--mono);font-size:8px;font-weight:800;color:var(--gold);letter-spacing:.06em}
+  .nameplate .st{font-family:var(--mono);font-size:10px;font-weight:800;color:#fff;letter-spacing:.01em}
+  .pl.proj .disc{box-shadow:0 0 0 2.5px var(--gold),0 0 0 4px rgba(7,11,13,.85),0 5px 16px rgba(0,0,0,.6);background:repeating-linear-gradient(45deg,#0a1e38,#0a1e38 5px,#12294a 5px,#12294a 10px)}
+  .pl.proj .ptag{margin-top:1px;font-family:var(--mono);font-size:7px;font-weight:800;color:#0a1e38;background:var(--gold);padding:1px 5px;border-radius:4px;letter-spacing:.08em}
+
+  .legend{display:flex;gap:16px;justify-content:center;margin:11px 0 0;font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--ink3);letter-spacing:.04em}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .statlbl{text-align:center;font-family:var(--cond);font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-top:9px}
+
+  .foot{text-align:center;font-family:var(--mono);font-size:9px;color:var(--ink3);padding:18px;letter-spacing:.12em;text-transform:uppercase}
+
+  /* sheet */
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:.2s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,103%);width:430px;max-width:100%;background:linear-gradient(180deg,#0d1722,#080d10);border-radius:24px 24px 0 0;
+    border-top:1px solid rgba(244,196,48,.3);padding:0 0 28px;z-index:41;transition:transform .26s cubic-bezier(.3,.9,.3,1);overflow:hidden}
+  .sheet.show{transform:translate(-50%,0)}
+  .sheet-top{height:5px;background:linear-gradient(90deg,var(--goldDeep),var(--gold),var(--goldDeep))}
+  .sheet-pad{padding:8px 18px 0}
+  .grab{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.22);margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:13px}
+  .sh-no{width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 35% 28%,#16335a,#0a1e38);color:var(--brewersGold);font-family:var(--cond);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 0 0 2.5px var(--gold),0 0 16px rgba(244,196,48,.3)}
+  .sh-nm{font-family:var(--cond);font-size:25px;font-weight:800;text-transform:uppercase;letter-spacing:-.01em;line-height:1}
+  .sh-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:3px;letter-spacing:.02em}
+  .sh-tag{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:800;padding:6px 11px;border-radius:8px;letter-spacing:.04em}
+  /* batting order callout */
+  .batspot{display:flex;align-items:center;gap:10px;margin:15px 0 0;background:linear-gradient(120deg,rgba(244,196,48,.14),rgba(244,196,48,.04));border:1px solid rgba(244,196,48,.32);border-radius:12px;padding:11px 14px}
+  .batspot .big{font-family:var(--cond);font-size:30px;font-weight:800;color:var(--gold);line-height:.9}
+  .batspot .ord{font-family:var(--mono);font-size:8px;font-weight:800;color:var(--gold);vertical-align:super;letter-spacing:.04em}
+  .batspot .txt{font-family:var(--cond);font-size:16px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:#fff}
+  .batspot .txt small{display:block;font-family:var(--mono);font-size:9px;font-weight:600;color:var(--ink2);letter-spacing:.06em;text-transform:none;margin-top:2px}
+  .sh-sec{margin-top:17px}.sh-l{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--gold);font-weight:800;text-transform:uppercase;margin-bottom:9px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cell{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 8px;text-align:center}
+  .cell .v{font-family:var(--cond);font-size:23px;font-weight:800;line-height:1}.cell .k{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--ink3);margin-top:4px}
+  .splitrow{display:flex;align-items:center;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+  .splitrow:first-child{border-top:0}.splitrow .k{color:var(--ink2);font-weight:600}.splitrow .v{margin-left:auto;font-family:var(--cond);font-weight:800;font-size:17px}
+  .bvp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font-size:13px;line-height:1.55}
+  .bvp b{color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span>Gary · MLB</span></div>
+
+  <div class="broadcast">
+    <div class="live"><span class="dot"></span><span class="lbl">PRE-GAME</span><span class="net">GARY · MLB INTEL</span></div>
+    <div class="lowerthird">
+      <div class="lt-bar"></div>
+      <div class="lt-body">
+        <div class="lt-tag">PROBABLE LINEUP · STARTING NINE</div>
+        <div class="matchup">
+          <span class="t away">CLE</span><span class="v">@</span><span class="t home">MIL</span>
+        </div>
+        <div class="lt-meta">American Family Field · Roof closed · 7:10 PM CT</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sp">
+    <div class="disc">28</div>
+    <div class="stack">
+      <div class="micro">ON THE BUMP · CLE</div>
+      <div class="who">Tanner Bibee</div>
+      <div class="l">3.41 ERA · 28% K · 1.09 WHIP</div>
+    </div>
+    <div class="hand">RHP</div>
+  </div>
+
+  <div class="toggles">
+    <span class="t" data-state="projected">Projected</span>
+    <span class="t on" data-state="confirmed">Confirmed</span>
+  </div>
+  <div class="splits" id="splits">
+    <button data-split="season">Season</button>
+    <button data-split="hand" class="on">vs RHP</button>
+    <button data-split="bvp">vs Bibee</button>
+  </div>
+
+  <div class="fieldwrap" id="fieldwrap">
+    <div class="scoreflag">TALE OF THE TAPE · LIVE</div>
+    <svg viewBox="0 0 400 440" id="fieldsvg">
+      <defs>
+        <radialGradient id="grass" cx="50%" cy="94%" r="98%">
+          <stop offset="0%" stop-color="#2f6347"/><stop offset="50%" stop-color="#235138"/><stop offset="100%" stop-color="#142d1d"/>
+        </radialGradient>
+        <radialGradient id="spot" cx="50%" cy="78%" r="60%">
+          <stop offset="0%" stop-color="rgba(255,248,210,.16)"/><stop offset="100%" stop-color="rgba(255,248,210,0)"/>
+        </radialGradient>
+        <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1a2630"/><stop offset="100%" stop-color="#0c141a"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="400" height="440" fill="#0a1610"/>
+      <!-- fair territory wedge -->
+      <path d="M200,392 L40,150 Q200,52 360,150 Z" fill="url(#grass)"/>
+      <!-- alternating mowing wedges (radial from home) -->
+      <g opacity="0.6">
+        <path d="M200,392 L40,150 L100,127 Z" fill="#2a5a3d" opacity=".5"/>
+        <path d="M200,392 L165,127 L222,124 Z" fill="#2a5a3d" opacity=".5"/>
+        <path d="M200,392 L290,128 L360,150 Z" fill="#2a5a3d" opacity=".5"/>
+        <path d="M200,392 L122,123 L165,127 Z" fill="#1f4630" opacity=".4"/>
+        <path d="M200,392 L222,124 L290,128 Z" fill="#1f4630" opacity=".4"/>
+      </g>
+      <!-- broadcast spotlight glow -->
+      <path d="M200,392 L40,150 Q200,52 360,150 Z" fill="url(#spot)"/>
+      <!-- curved outfield wall band -->
+      <path d="M40,150 Q200,52 360,150" fill="none" stroke="url(#wall)" stroke-width="12"/>
+      <!-- warning track (dirt) just inside wall -->
+      <path d="M48,158 Q200,66 352,158" fill="none" stroke="#7a4a2a" stroke-width="8" opacity=".9"/>
+      <!-- yellow wall top line -->
+      <path d="M40,150 Q200,52 360,150" fill="none" stroke="rgba(244,196,48,.55)" stroke-width="2"/>
+      <!-- foul lines (chalk, bright for broadcast) -->
+      <line x1="200" y1="392" x2="40" y2="150" stroke="rgba(255,255,255,.7)" stroke-width="2"/>
+      <line x1="200" y1="392" x2="360" y2="150" stroke="rgba(255,255,255,.7)" stroke-width="2"/>
+      <!-- foul poles -->
+      <circle cx="40" cy="150" r="3.4" fill="#ffd34d"/><circle cx="360" cy="150" r="3.4" fill="#ffd34d"/>
+      <!-- infield dirt skin -->
+      <path d="M200,392 L256,336 A 80 80 0 0 0 144,336 Z" fill="#85522e"/>
+      <path d="M200,392 L256,336 A 80 80 0 0 0 144,336 Z" fill="none" stroke="#9a6238" stroke-width="1.5" opacity=".6"/>
+      <!-- infield grass diamond -->
+      <path d="M200,388 L250,338 L200,300 L150,338 Z" fill="#286d49"/>
+      <!-- basepaths -->
+      <path d="M200,388 L250,338 L200,300 L150,338 Z" fill="none" stroke="#9a6238" stroke-width="6"/>
+      <!-- mound -->
+      <circle cx="200" cy="348" r="12" fill="#9a6238"/><circle cx="200" cy="348" r="2.6" fill="rgba(255,255,255,.8)"/>
+      <!-- bases -->
+      <rect x="246" y="334" width="9" height="9" transform="rotate(45 250 338)" fill="#fff"/>
+      <rect x="195.5" y="295.5" width="9" height="9" transform="rotate(45 200 300)" fill="#fff"/>
+      <rect x="145.5" y="333.5" width="9" height="9" transform="rotate(45 150 338)" fill="#fff"/>
+      <!-- home plate -->
+      <path d="M194.5,389 l11,0 l0,4.5 l-5.5,4.5 l-5.5,-4.5 z" fill="#fff"/>
+    </svg>
+    <!-- fielder discs injected by JS -->
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--hot)"></i>HOT (L15)</span>
+    <span><i style="background:var(--cold)"></i>COLD</span>
+    <span><i style="background:#7a8a80"></i>STEADY</span>
+  </div>
+  <div class="statlbl" id="statlbl">SHOWING · OPS vs RHP</div>
+
+  <div class="foot">Pitching · Bats · Park &amp; Weather modules continue below</div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+// pos: field % (x,y). stats per split. bvp = vs Bibee. heat: hot/cold/steady. proj=platoon-uncertain.
+// bat = batting-order spot (lives in the detail card now; rail removed).
+const P = [
+  {n:51,nm:'Peralta',pos:'P',x:50,y:79,heat:'steady',pitcher:true,line:'2.90 ERA · 2.71 xERA · 31% K',season:'2.90',hand:'2.71',bvp:'—'},
+  {n:24,nm:'Contreras',pos:'C',x:50,y:91,heat:'hot',bat:4,wrc:130,xwoba:'.372',vR:'.910',vL:'.840',bvp:{ab:11,h:4,hr:1,ops:'1.090'},form:'1.180 OPS L15'},
+  {n:12,nm:'Hoskins',pos:'1B',x:64,y:76,heat:'steady',bat:5,wrc:112,xwoba:'.345',vR:'.840',vL:'.910',bvp:{ab:8,h:2,hr:0,ops:'.625'},form:'.760 OPS L15'},
+  {n:0,nm:'Turang',pos:'2B',x:57,y:67,heat:'cold',bat:1,wrc:95,xwoba:'.300',vR:'.720',vL:'.760',bvp:{ab:6,h:1,hr:0,ops:'.500'},form:'.540 OPS L15'},
+  {n:27,nm:'Adames',pos:'SS',x:43,y:67,heat:'hot',bat:9,wrc:118,xwoba:'.350',vR:'.860',vL:'.900',bvp:{ab:13,h:5,hr:1,ops:'.980'},form:'1.020 OPS L15'},
+  {n:3,nm:'Ortiz',pos:'3B',x:36,y:76,heat:'steady',bat:7,wrc:88,xwoba:'.298',vR:'.700',vL:'.770',bvp:{ab:5,h:1,hr:0,ops:'.560'},form:'.690 OPS L15'},
+  {n:5,nm:'Mitchell',pos:'LF',x:27,y:41,heat:'hot',bat:8,wrc:105,xwoba:'.330',vR:'.800',vL:'.690',bvp:{ab:4,h:2,hr:0,ops:'1.000'},form:'.940 OPS L15',proj:true},
+  {n:11,nm:'Chourio',pos:'CF',x:50,y:27,heat:'hot',bat:3,wrc:122,xwoba:'.358',vR:'.880',vL:'.910',bvp:{ab:7,h:3,hr:1,ops:'1.140'},form:'1.060 OPS L15'},
+  {n:10,nm:'Frelick',pos:'RF',x:72,y:41,heat:'cold',bat:2,wrc:92,xwoba:'.305',vR:'.740',vL:'.700',bvp:{ab:9,h:2,hr:0,ops:'.560'},form:'.610 OPS L15'},
+];
+const ORD = {1:'1st',2:'2nd',3:'3rd',4:'4th',5:'5th',6:'6th',7:'7th',8:'8th',9:'9th'};
+
+const heatColor = h => h==='hot'?'var(--hot)':h==='cold'?'var(--cold)':'#7a8a80';
+let split='hand', state='confirmed';
+
+function statFor(p){
+  if(p.pitcher) return p[split==='season'?'season':split==='hand'?'hand':'bvp'] || '—';
+  if(split==='season') return p.xwoba;
+  if(split==='hand') return p.vR;          // Bibee is RHP → vs RHP
+  return p.bvp.h+'-'+p.bvp.ab;             // BvP hits-AB
+}
+function statLabel(){
+  return split==='season'?'SHOWING · xwOBA (Season)':split==='hand'?'SHOWING · OPS vs RHP':'SHOWING · vs Bibee (H-AB)';
+}
+function render(){
+  const wrap=document.getElementById('fieldwrap');
+  [...wrap.querySelectorAll('.pl')].forEach(e=>e.remove());
+  P.forEach(p=>{
+    const el=document.createElement('div');
+    el.className='pl'+(p.proj && state==='projected'?' proj':'');
+    el.style.left=p.x+'%'; el.style.top=p.y+'%';
+    const ptag = (p.proj && state==='projected')?'<span class="ptag">PLATOON ?</span>':'';
+    el.innerHTML=`<div class="disc"><span class="flame" style="background:${heatColor(p.heat)}"></span>${p.n}</div>
+      <div class="nameplate"><span class="nm">${p.nm}</span>
+        <span class="row"><span class="pos">${p.pos}</span><span class="st">${statFor(p)}</span></span></div>${ptag}`;
+    el.onclick=()=>openSheet(p);
+    wrap.appendChild(el);
+  });
+  document.getElementById('statlbl').textContent=statLabel();
+}
+function openSheet(p){
+  if(p.pitcher) return;
+  const sheet=document.getElementById('sheet');
+  const tag = p.heat==='hot'?'<span class="sh-tag" style="background:rgba(255,90,46,.18);color:#FF5A2E">HOT · L15</span>'
+            : p.heat==='cold'?'<span class="sh-tag" style="background:rgba(63,169,245,.18);color:#3FA9F5">COLD · L15</span>':'';
+  const ord = ORD[p.bat]||'—';
+  sheet.innerHTML=`<div class="sheet-top"></div><div class="sheet-pad">
+    <div class="grab"></div>
+    <div class="sh-head"><div class="sh-no">${p.n}</div>
+      <div><div class="sh-nm">${p.nm}</div><div class="sh-sub">BREWERS · ${p.pos} · ${p.form}</div></div>${tag}</div>
+    <div class="batspot">
+      <div class="big">${p.bat}<span class="ord">${ord.replace(/[0-9]/g,'')}</span></div>
+      <div class="txt">Bats ${ord}<small>Slot in tonight's order vs Bibee</small></div>
+    </div>
+    <div class="sh-sec"><div class="sh-l">The Numbers</div>
+      <div class="grid3">
+        <div class="cell"><div class="v">${p.wrc}</div><div class="k">wRC+</div></div>
+        <div class="cell"><div class="v">${p.xwoba}</div><div class="k">xwOBA</div></div>
+        <div class="cell"><div class="v" style="color:${heatColor(p.heat)}">${p.form.split(' ')[0]}</div><div class="k">L15 OPS</div></div>
+      </div></div>
+    <div class="sh-sec"><div class="sh-l">Platoon Splits</div>
+      <div class="splitrow"><span class="k">vs RHP</span><span class="v">${p.vR}</span></div>
+      <div class="splitrow"><span class="k">vs LHP</span><span class="v">${p.vL}</span></div></div>
+    <div class="sh-sec"><div class="sh-l">vs Tanner Bibee (career)</div>
+      <div class="bvp">${p.bvp.h}-for-${p.bvp.ab}${p.bvp.hr?`, <b>${p.bvp.hr} HR</b>`:''} · <b>${p.bvp.ops} OPS</b> — small sample, but the read against tonight's arm.</div></div>
+    </div>`;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){document.getElementById('sheet').classList.remove('show');document.getElementById('scrim').classList.remove('show');}
+document.querySelectorAll('#splits button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#splits button').forEach(x=>x.classList.remove('on'));b.classList.add('on');split=b.dataset.split;render();});
+document.querySelectorAll('.toggles .t').forEach(b=>b.onclick=()=>{document.querySelectorAll('.toggles .t').forEach(x=>x.classList.remove('on'));b.classList.add('on');state=b.dataset.state;render();});
+render();
+</script>
+</body>
+</html>

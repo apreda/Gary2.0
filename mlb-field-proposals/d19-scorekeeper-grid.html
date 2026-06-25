@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>d19 · Scorekeeper Positions</title>
+<style>
+  :root{
+    --navy:#0a2351;
+    --navy-2:#12305f;
+    --gold:#ffc52f;
+    --gold-2:#d9a116;
+    --cream:#f4efe2;
+    --grass:#3f7d3a;
+    --grass-2:#356b30;
+    --grass-3:#4c8c46;
+    --dirt:#c79a5e;
+    --dirt-2:#b88646;
+    --chalk:#fbf6ec;
+    --ink:#0a1a33;
+    --paper:#f0e8d4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    background:#1b1f27;
+    min-height:100%;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    padding:26px 0 50px;
+    font-family:'Courier New',ui-monospace,monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    width:430px;
+    background:var(--paper);
+    border-radius:40px;
+    overflow:hidden;
+    box-shadow:0 28px 70px rgba(0,0,0,.55), 0 0 0 10px #0c0e12, 0 0 0 12px #2a2d35;
+    position:relative;
+    color:var(--ink);
+  }
+
+  /* ---------- header: scorebook ledger top ---------- */
+  .topbar{
+    background:var(--navy);
+    color:var(--cream);
+    padding:14px 20px 13px;
+    position:relative;
+    border-bottom:3px solid var(--gold);
+  }
+  .topbar::after{
+    content:"";
+    position:absolute;left:0;right:0;bottom:-3px;height:3px;
+    background:repeating-linear-gradient(90deg,var(--gold) 0 14px,transparent 14px 22px);
+  }
+  .league-row{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;letter-spacing:3px;text-transform:uppercase;
+    color:var(--gold);font-weight:700;
+  }
+  .league-row .sheet{color:#9fb3d6;letter-spacing:2px;}
+  .match{
+    display:flex;align-items:center;justify-content:center;gap:14px;
+    margin-top:9px;
+  }
+  .team{
+    text-align:center;line-height:1.05;
+  }
+  .team .city{font-size:8px;letter-spacing:2px;color:#9fb3d6;text-transform:uppercase;}
+  .team .nick{font-size:17px;font-weight:800;letter-spacing:.5px;font-family:Georgia,serif;}
+  .team.home .nick{color:var(--gold);}
+  .at{
+    font-size:11px;color:#7d93b8;font-weight:700;
+  }
+  .sub-row{
+    margin-top:8px;display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;letter-spacing:1px;color:#bcccdf;text-transform:uppercase;
+  }
+  .pill{
+    background:rgba(255,197,47,.16);
+    border:1px solid rgba(255,197,47,.5);
+    color:var(--gold);
+    padding:2px 8px;border-radius:3px;font-weight:700;letter-spacing:1px;
+  }
+
+  /* ---------- ledger band ---------- */
+  .ledger-band{
+    background:var(--cream);
+    padding:7px 20px;
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+    color:#5d4a2a;border-bottom:1px dashed #c9b88e;
+  }
+  .ledger-band b{color:var(--navy);}
+
+  /* ---------- the field ---------- */
+  .field-wrap{
+    position:relative;
+    background:var(--paper);
+    padding:10px 12px 6px;
+  }
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio:1 / 1.12;
+    border-radius:14px 14px 10px 10px;
+    overflow:hidden;
+    /* outfield grass with mow stripes radiating from home */
+    background:
+      conic-gradient(from 215deg at 50% 96%,
+        var(--grass) 0 11deg, var(--grass-3) 11deg 22deg,
+        var(--grass) 22deg 33deg, var(--grass-3) 33deg 44deg,
+        var(--grass) 44deg 55deg, var(--grass-3) 55deg 66deg,
+        var(--grass) 66deg 77deg, var(--grass-3) 77deg 90deg,
+        var(--grass) 90deg);
+    box-shadow:inset 0 0 0 4px var(--chalk), inset 0 0 30px rgba(0,0,0,.28);
+  }
+  /* warning track arc at the wall */
+  .track{
+    position:absolute;left:50%;bottom:0;
+    width:150%;height:150%;
+    transform:translate(-50%,-2%);
+    border-radius:50%;
+    border:11px solid var(--dirt-2);
+    box-shadow:inset 0 0 0 3px var(--chalk);
+    opacity:.9;
+  }
+  /* outfield grass cut line (curved) just inside infield */
+  .of-arc{
+    position:absolute;left:50%;bottom:3%;
+    width:96%;height:96%;
+    transform:translateX(-50%);
+    border-radius:50%;
+    border:2px dashed rgba(251,246,236,.45);
+    border-bottom:none;
+    clip-path:polygon(0 0,100% 0,100% 62%,0 62%);
+  }
+
+  /* infield dirt (the diamond skin) */
+  .infield{
+    position:absolute;left:50%;bottom:5.5%;
+    width:60%;height:54%;
+    transform:translateX(-50%) ;
+    background:radial-gradient(ellipse at 50% 100%, var(--dirt) 0%, var(--dirt) 60%, var(--dirt-2) 100%);
+    /* a fat home-plate-down diamond shape */
+    clip-path:polygon(50% 0%, 100% 46%, 50% 100%, 0% 46%);
+    box-shadow:inset 0 0 14px rgba(80,50,10,.35);
+  }
+  /* infield grass center */
+  .infield-grass{
+    position:absolute;left:50%;bottom:9%;
+    width:40%;height:36%;
+    transform:translateX(-50%);
+    background:var(--grass-2);
+    clip-path:polygon(50% 0%, 100% 46%, 50% 100%, 0% 46%);
+    box-shadow:inset 0 0 8px rgba(0,0,0,.25);
+  }
+  /* base lines (chalk) — from home up the two foul lines */
+  .foul{
+    position:absolute;bottom:5.5%;left:50%;
+    width:2px;height:96%;
+    background:linear-gradient(to top,var(--chalk),rgba(251,246,236,.25));
+    transform-origin:bottom center;
+  }
+  .foul.l{transform:translateX(-1px) rotate(-45deg);}
+  .foul.r{transform:translateX(-1px) rotate(45deg);}
+
+  /* bases */
+  .base{
+    position:absolute;width:13px;height:13px;background:var(--chalk);
+    border:1px solid #cdbf9a;
+    transform:translate(-50%,50%) rotate(45deg);
+    box-shadow:0 1px 2px rgba(0,0,0,.3);
+    z-index:3;
+  }
+  .base.home{
+    width:14px;height:14px;border-radius:2px 2px 3px 3px;
+    transform:translate(-50%,50%) rotate(0deg);
+    clip-path:polygon(0 0,100% 0,100% 55%,50% 100%,0 55%);
+  }
+  .base.first{left:73%;bottom:24%;}
+  .base.second{left:50%;bottom:43.5%;}
+  .base.third{left:27%;bottom:24%;}
+  .base.home{left:50%;bottom:5.5%;}
+  /* pitching rubber */
+  .rubber{
+    position:absolute;left:50%;bottom:25%;
+    width:14px;height:5px;background:var(--chalk);
+    transform:translate(-50%,50%);
+    border-radius:1px;z-index:3;box-shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+  /* mound */
+  .mound{
+    position:absolute;left:50%;bottom:25%;
+    width:30px;height:30px;border-radius:50%;
+    background:radial-gradient(circle,var(--dirt) 30%,var(--dirt-2) 100%);
+    transform:translate(-50%,50%);z-index:2;
+    box-shadow:inset 0 0 4px rgba(80,50,10,.4);
+  }
+
+  /* ---------- position tokens (scorekeeper numbers) ---------- */
+  .pos{
+    position:absolute;
+    transform:translate(-50%,-50%);
+    z-index:6;
+    text-align:center;
+    width:84px;
+    cursor:default;
+  }
+  .scorenum{
+    width:30px;height:30px;margin:0 auto 3px;
+    border-radius:50%;
+    background:var(--navy);
+    color:var(--gold);
+    border:2px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    font-family:Georgia,serif;font-weight:800;font-size:16px;
+    box-shadow:0 3px 7px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.12);
+    position:relative;
+  }
+  /* small position abbreviation tab on the number disc */
+  .scorenum .abbr{
+    position:absolute;top:-7px;right:-9px;
+    background:var(--gold);color:var(--navy);
+    font-family:'Courier New',monospace;font-weight:800;font-size:7px;
+    letter-spacing:.5px;
+    padding:1px 3px;border-radius:3px;
+    box-shadow:0 1px 2px rgba(0,0,0,.35);
+  }
+  .nameplate{
+    background:var(--cream);
+    border:1px solid #c9b88e;
+    border-left:3px solid var(--gold);
+    border-radius:3px;
+    padding:2px 5px;
+    line-height:1.1;
+    box-shadow:0 2px 4px rgba(0,0,0,.3);
+    display:inline-block;
+  }
+  .nameplate .jersey{
+    font-size:8px;color:var(--gold-2);font-weight:800;
+  }
+  .nameplate .pname{
+    font-size:9.5px;color:var(--ink);font-weight:700;
+    font-family:Georgia,serif;letter-spacing:.2px;white-space:nowrap;
+  }
+
+  /* placements (percentages relative to .field) */
+  .p-cf{left:50%;top:13%;}
+  .p-lf{left:23%;top:25%;}
+  .p-rf{left:77%;top:25%;}
+  .p-ss{left:40%;top:43%;}
+  .p-2b{left:60%;top:43%;}
+  .p-3b{left:26%;top:57%;}
+  .p-1b{left:74%;top:57%;}
+  .p-p {left:50%;top:62%;}
+  .p-c {left:50%;top:86%;}
+
+  /* ---------- legend (the scorebook key) ---------- */
+  .legend{
+    background:var(--cream);
+    margin:8px 12px 0;
+    border:1px solid #cdbf9a;
+    border-radius:8px;
+    overflow:hidden;
+    box-shadow:0 2px 6px rgba(0,0,0,.12);
+  }
+  .legend-head{
+    background:var(--navy);color:var(--gold);
+    font-size:9px;letter-spacing:2px;text-transform:uppercase;font-weight:700;
+    padding:6px 10px;display:flex;justify-content:space-between;
+  }
+  .legend-head span{color:#9fb3d6;}
+  .legend-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);
+    gap:1px;background:#cdbf9a;
+  }
+  .lg-cell{
+    background:var(--cream);
+    padding:5px 7px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .lg-num{
+    width:18px;height:18px;flex:0 0 18px;border-radius:50%;
+    background:var(--navy);color:var(--gold);border:1px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    font-family:Georgia,serif;font-weight:800;font-size:10px;
+  }
+  .lg-txt{line-height:1.05;}
+  .lg-txt .lg-abbr{font-size:9px;font-weight:800;color:var(--navy);letter-spacing:.5px;}
+  .lg-txt .lg-name{font-size:7.5px;color:#6a5b3a;text-transform:uppercase;letter-spacing:.5px;}
+
+  /* ---------- batting order rail ---------- */
+  .order{
+    margin:10px 12px 14px;
+    background:var(--paper);
+    border:1px dashed #c9b88e;
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .order-head{
+    background:var(--gold);
+    color:var(--navy);
+    font-size:9px;letter-spacing:2px;text-transform:uppercase;font-weight:800;
+    padding:6px 12px;display:flex;justify-content:space-between;align-items:center;
+  }
+  .order-head .vs{font-size:8px;font-weight:700;letter-spacing:1px;color:var(--navy-2);}
+  .order-list{display:flex;flex-direction:column;}
+  .ord-row{
+    display:flex;align-items:center;gap:10px;
+    padding:6px 12px;
+    border-bottom:1px solid rgba(201,184,142,.5);
+    background:var(--cream);
+  }
+  .ord-row:nth-child(even){background:#ece2c9;}
+  .ord-row:last-child{border-bottom:none;}
+  .ord-slot{
+    width:18px;height:18px;flex:0 0 18px;
+    background:var(--navy);color:var(--cream);
+    border-radius:3px;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:10px;font-family:Georgia,serif;
+  }
+  .ord-name{font-size:11px;font-weight:700;color:var(--ink);font-family:Georgia,serif;flex:1;}
+  .ord-pos{
+    font-size:8px;font-weight:800;letter-spacing:1px;
+    color:var(--navy);background:rgba(10,35,81,.08);
+    border:1px solid rgba(10,35,81,.2);
+    padding:1px 6px;border-radius:3px;
+  }
+
+  .footer{
+    text-align:center;font-size:8px;letter-spacing:2px;
+    color:#8a7a55;text-transform:uppercase;
+    padding:0 0 14px;
+  }
+  .footer b{color:var(--navy);}
+</style>
+</head>
+<body>
+  <div class="phone">
+
+    <!-- header -->
+    <div class="topbar">
+      <div class="league-row">
+        <span>Major League Baseball</span>
+        <span class="sheet">Scorebook · Sheet 1</span>
+      </div>
+      <div class="match">
+        <div class="team away">
+          <div class="city">Cleveland</div>
+          <div class="nick">GUARDIANS</div>
+        </div>
+        <div class="at">@</div>
+        <div class="team home">
+          <div class="city">Milwaukee</div>
+          <div class="nick">BREWERS</div>
+        </div>
+      </div>
+      <div class="sub-row">
+        <span>Defense · Milwaukee</span>
+        <span class="pill">1–9 Positions</span>
+      </div>
+    </div>
+
+    <div class="ledger-band">
+      <span>Opp Starter · <b>Bibee #28 · RHP</b></span>
+      <span>Today's Card</span>
+    </div>
+
+    <!-- field -->
+    <div class="field-wrap">
+      <div class="field">
+        <div class="track"></div>
+        <div class="of-arc"></div>
+        <div class="infield"></div>
+        <div class="infield-grass"></div>
+        <div class="foul l"></div>
+        <div class="foul r"></div>
+
+        <div class="mound"></div>
+        <div class="rubber"></div>
+
+        <div class="base second"></div>
+        <div class="base first"></div>
+        <div class="base third"></div>
+        <div class="base home"></div>
+
+        <!-- 8 CF -->
+        <div class="pos p-cf">
+          <div class="scorenum">8<span class="abbr">CF</span></div>
+          <div class="nameplate"><span class="jersey">#11</span> <span class="pname">Chourio</span></div>
+        </div>
+        <!-- 7 LF -->
+        <div class="pos p-lf">
+          <div class="scorenum">7<span class="abbr">LF</span></div>
+          <div class="nameplate"><span class="jersey">#5</span> <span class="pname">Mitchell</span></div>
+        </div>
+        <!-- 9 RF -->
+        <div class="pos p-rf">
+          <div class="scorenum">9<span class="abbr">RF</span></div>
+          <div class="nameplate"><span class="jersey">#10</span> <span class="pname">Frelick</span></div>
+        </div>
+        <!-- 6 SS -->
+        <div class="pos p-ss">
+          <div class="scorenum">6<span class="abbr">SS</span></div>
+          <div class="nameplate"><span class="jersey">#27</span> <span class="pname">Adames</span></div>
+        </div>
+        <!-- 4 2B -->
+        <div class="pos p-2b">
+          <div class="scorenum">4<span class="abbr">2B</span></div>
+          <div class="nameplate"><span class="jersey">#0</span> <span class="pname">Turang</span></div>
+        </div>
+        <!-- 5 3B -->
+        <div class="pos p-3b">
+          <div class="scorenum">5<span class="abbr">3B</span></div>
+          <div class="nameplate"><span class="jersey">#3</span> <span class="pname">Ortiz</span></div>
+        </div>
+        <!-- 3 1B -->
+        <div class="pos p-1b">
+          <div class="scorenum">3<span class="abbr">1B</span></div>
+          <div class="nameplate"><span class="jersey">#12</span> <span class="pname">Hoskins</span></div>
+        </div>
+        <!-- 1 P -->
+        <div class="pos p-p">
+          <div class="scorenum">1<span class="abbr">P</span></div>
+          <div class="nameplate"><span class="jersey">#51</span> <span class="pname">Peralta</span></div>
+        </div>
+        <!-- 2 C -->
+        <div class="pos p-c">
+          <div class="scorenum">2<span class="abbr">C</span></div>
+          <div class="nameplate"><span class="jersey">#24</span> <span class="pname">Contreras</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- legend / scorebook key -->
+    <div class="legend">
+      <div class="legend-head">
+        <span>Scoring Key</span>
+        <span>Position Numbers 1–9</span>
+      </div>
+      <div class="legend-grid">
+        <div class="lg-cell"><div class="lg-num">1</div><div class="lg-txt"><div class="lg-abbr">P</div><div class="lg-name">Pitcher</div></div></div>
+        <div class="lg-cell"><div class="lg-num">2</div><div class="lg-txt"><div class="lg-abbr">C</div><div class="lg-name">Catcher</div></div></div>
+        <div class="lg-cell"><div class="lg-num">3</div><div class="lg-txt"><div class="lg-abbr">1B</div><div class="lg-name">First Base</div></div></div>
+        <div class="lg-cell"><div class="lg-num">4</div><div class="lg-txt"><div class="lg-abbr">2B</div><div class="lg-name">Second Base</div></div></div>
+        <div class="lg-cell"><div class="lg-num">5</div><div class="lg-txt"><div class="lg-abbr">3B</div><div class="lg-name">Third Base</div></div></div>
+        <div class="lg-cell"><div class="lg-num">6</div><div class="lg-txt"><div class="lg-abbr">SS</div><div class="lg-name">Shortstop</div></div></div>
+        <div class="lg-cell"><div class="lg-num">7</div><div class="lg-txt"><div class="lg-abbr">LF</div><div class="lg-name">Left Field</div></div></div>
+        <div class="lg-cell"><div class="lg-num">8</div><div class="lg-txt"><div class="lg-abbr">CF</div><div class="lg-name">Center Field</div></div></div>
+        <div class="lg-cell"><div class="lg-num">9</div><div class="lg-txt"><div class="lg-abbr">RF</div><div class="lg-name">Right Field</div></div></div>
+      </div>
+    </div>
+
+    <!-- batting order -->
+    <div class="order">
+      <div class="order-head">
+        <span>Batting Order</span>
+        <span class="vs">vs RHP Bibee</span>
+      </div>
+      <div class="order-list">
+        <div class="ord-row"><div class="ord-slot">1</div><div class="ord-name">Turang</div><div class="ord-pos">2B</div></div>
+        <div class="ord-row"><div class="ord-slot">2</div><div class="ord-name">Frelick</div><div class="ord-pos">RF</div></div>
+        <div class="ord-row"><div class="ord-slot">3</div><div class="ord-name">Chourio</div><div class="ord-pos">CF</div></div>
+        <div class="ord-row"><div class="ord-slot">4</div><div class="ord-name">Contreras</div><div class="ord-pos">C</div></div>
+        <div class="ord-row"><div class="ord-slot">5</div><div class="ord-name">Hoskins</div><div class="ord-pos">1B</div></div>
+        <div class="ord-row"><div class="ord-slot">6</div><div class="ord-name">Yelich <span style="font-size:8px;color:#a08a55;font-weight:600;">#22</span></div><div class="ord-pos">DH</div></div>
+        <div class="ord-row"><div class="ord-slot">7</div><div class="ord-name">Ortiz</div><div class="ord-pos">3B</div></div>
+        <div class="ord-row"><div class="ord-slot">8</div><div class="ord-name">Mitchell</div><div class="ord-pos">LF</div></div>
+        <div class="ord-row"><div class="ord-slot">9</div><div class="ord-name">Adames</div><div class="ord-pos">SS</div></div>
+      </div>
+    </div>
+
+    <div class="footer">Keep score the <b>old way</b> · 6-4-3 double play</div>
+
+  </div>
+</body>
+</html>

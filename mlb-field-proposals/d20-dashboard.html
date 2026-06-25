@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Matchday Dashboard — CLE @ MIL</title>
+<style>
+  :root{
+    --navy:#0a2351;
+    --navy-2:#13315c;
+    --gold:#ffc52f;
+    --gold-deep:#d9a418;
+    --grass:#2f6b3a;
+    --grass-lo:#275c32;
+    --grass-hi:#3a7d46;
+    --dirt:#b07a44;
+    --dirt-lo:#9c693a;
+    --ink:#0b1220;
+    --paper:#f4f6fb;
+    --line:#e4e8f1;
+    --mut:#6b7794;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:#1a1f2b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  body{display:flex;justify-content:center;align-items:flex-start;padding:30px 10px;}
+  .phone{
+    width:430px;max-width:100%;background:var(--paper);
+    border-radius:42px;overflow:hidden;position:relative;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 11px #06080d, 0 0 0 13px #20242e;
+    min-height:920px;
+  }
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:148px;height:30px;background:#06080d;border-radius:0 0 20px 20px;z-index:60;}
+  .scroll{height:920px;overflow-y:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;}
+  .scroll::-webkit-scrollbar{width:0;}
+
+  /* ===== Top status / nav ===== */
+  .statusbar{height:46px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 6px;font-size:13px;font-weight:700;color:var(--ink);}
+  .topnav{
+    position:sticky;top:0;z-index:50;
+    background:linear-gradient(180deg,var(--navy) 0%, var(--navy-2) 100%);
+    padding:10px 18px 14px;color:#fff;
+    box-shadow:0 6px 20px rgba(10,35,81,.35);
+  }
+  .topnav .row{display:flex;align-items:center;justify-content:space-between;}
+  .crumb{display:flex;align-items:center;gap:9px;}
+  .crumb .back{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;}
+  .crumb b{font-size:15px;letter-spacing:.2px;}
+  .crumb small{display:block;font-size:11px;color:#bcd0f4;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-top:1px;}
+  .live-pill{display:flex;align-items:center;gap:6px;background:rgba(255,197,47,.16);border:1px solid rgba(255,197,47,.5);color:var(--gold);font-size:11px;font-weight:800;letter-spacing:.6px;padding:5px 10px;border-radius:999px;text-transform:uppercase;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 0 rgba(255,197,47,.7);animation:pulse 1.8s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,197,47,.6);}70%{box-shadow:0 0 0 7px rgba(255,197,47,0);}100%{box-shadow:0 0 0 0 rgba(255,197,47,0);}}
+
+  /* ===== Scoreline strip ===== */
+  .scoreline{margin-top:12px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:11px 15px;}
+  .team{display:flex;align-items:center;gap:10px;}
+  .badge{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;letter-spacing:.5px;}
+  .badge.cle{background:#0c2340;color:#e31837;border:1px solid #e31837;}
+  .badge.mil{background:var(--gold);color:var(--navy);}
+  .team .tn{font-size:14px;font-weight:800;}
+  .team .tr{font-size:11px;color:#a9c0ea;font-weight:600;}
+  .vs{text-align:center;}
+  .vs .at{font-size:12px;color:#9fb6e0;font-weight:700;letter-spacing:1px;}
+  .vs .tm{font-size:13px;color:#fff;font-weight:800;margin-top:2px;}
+
+  /* ===== Section scaffolding ===== */
+  .pad{padding:0 16px;}
+  .sec-head{display:flex;align-items:center;justify-content:space-between;margin:22px 4px 11px;}
+  .sec-head .t{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:900;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink);}
+  .sec-head .t .bar{width:4px;height:15px;border-radius:2px;background:var(--gold);}
+  .sec-head .meta{font-size:11px;color:var(--mut);font-weight:700;}
+
+  /* ===== HERO: the field module ===== */
+  .field-card{
+    position:relative;border-radius:24px;overflow:hidden;
+    background:linear-gradient(180deg,#0a2351 0%, #0e2a5e 100%);
+    box-shadow:0 18px 40px rgba(10,35,81,.3);
+    border:1px solid rgba(10,35,81,.12);
+  }
+  .field-card .fc-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:13px 16px 11px;color:#fff;
+  }
+  .fc-head .l{display:flex;align-items:center;gap:9px;}
+  .fc-head .glyph{width:26px;height:26px;border-radius:8px;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;}
+  .fc-head .ttl{font-size:13.5px;font-weight:800;letter-spacing:.3px;}
+  .fc-head .sub{font-size:10.5px;color:#a9c0ea;font-weight:600;margin-top:1px;letter-spacing:.4px;text-transform:uppercase;}
+  .fc-head .tag{font-size:10px;font-weight:800;letter-spacing:.7px;color:var(--navy);background:var(--gold);padding:4px 9px;border-radius:999px;text-transform:uppercase;}
+
+  .stadium{position:relative;width:100%;height:392px;background:radial-gradient(120% 95% at 50% 96%, #1a3a72 0%, #0a2351 70%);}
+  .field-svg{position:absolute;inset:0;width:100%;height:100%;}
+
+  .player{position:absolute;transform:translate(-50%,-50%);text-align:center;z-index:5;width:84px;}
+  .pmark{
+    margin:0 auto;width:42px;height:42px;border-radius:50%;
+    background:linear-gradient(160deg,#ffffff,#eef2fa);
+    color:var(--navy);font-size:15px;font-weight:900;
+    display:flex;align-items:center;justify-content:center;
+    border:2.5px solid var(--gold);
+    box-shadow:0 5px 12px rgba(0,0,0,.4), inset 0 1px 2px rgba(255,255,255,.8);
+  }
+  .player.pitcher .pmark{background:linear-gradient(160deg,var(--gold),var(--gold-deep));color:var(--navy);border-color:#fff;width:46px;height:46px;font-size:16px;}
+  .pname{margin-top:5px;font-size:10.5px;font-weight:800;color:#fff;line-height:1.05;text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .ppos{display:inline-block;margin-top:2px;font-size:8.5px;font-weight:900;letter-spacing:.7px;color:var(--navy);background:var(--gold);padding:1.5px 6px;border-radius:6px;text-transform:uppercase;}
+
+  .fc-foot{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 13px;color:#bcd0f4;font-size:10.5px;font-weight:600;}
+  .fc-foot .legend{display:flex;gap:14px;}
+  .fc-foot .legend span{display:flex;align-items:center;gap:5px;}
+  .swatch{width:11px;height:11px;border-radius:50%;}
+
+  /* ===== Batting order rail ===== */
+  .lineup-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 4px;box-shadow:0 6px 18px rgba(20,40,80,.06);}
+  .bat{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line);}
+  .bat:last-child{border-bottom:none;}
+  .bnum{width:26px;height:26px;border-radius:8px;background:var(--navy);color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .bat.lead .bnum{background:var(--gold);color:var(--navy);}
+  .bmain{flex:1;display:flex;flex-direction:column;}
+  .bmain .nm{font-size:13.5px;font-weight:800;color:var(--ink);}
+  .bmain .det{font-size:11px;color:var(--mut);font-weight:600;margin-top:1px;}
+  .bpos{font-size:10px;font-weight:900;letter-spacing:.6px;color:var(--navy);background:#eef1f8;padding:4px 9px;border-radius:7px;text-transform:uppercase;}
+  .bavg{font-size:12px;font-weight:800;color:var(--ink);min-width:42px;text-align:right;font-variant-numeric:tabular-nums;}
+
+  /* ===== Pitching matchup ===== */
+  .pitch-card{display:flex;gap:0;background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 6px 18px rgba(20,40,80,.06);}
+  .pcol{flex:1;padding:16px 14px;}
+  .pcol.home{background:linear-gradient(180deg,var(--navy),var(--navy-2));color:#fff;}
+  .pcol .role{font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:var(--mut);}
+  .pcol.home .role{color:var(--gold);}
+  .pcol .pn{font-size:16px;font-weight:900;margin-top:5px;}
+  .pcol .ph{font-size:11px;font-weight:700;margin-top:2px;color:var(--mut);}
+  .pcol.home .ph{color:#a9c0ea;}
+  .pcol .stats{display:flex;gap:14px;margin-top:12px;}
+  .pstat .v{font-size:15px;font-weight:900;font-variant-numeric:tabular-nums;}
+  .pstat .k{font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--mut);margin-top:1px;}
+  .pcol.home .pstat .k{color:#8fa9d6;}
+  .pdiv{width:1px;background:var(--line);position:relative;}
+  .pdiv::after{content:"VS";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--gold);color:var(--navy);font-size:10px;font-weight:900;padding:3px 6px;border-radius:6px;}
+
+  /* ===== Park module ===== */
+  .park-card{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 6px 18px rgba(20,40,80,.06);}
+  .park-top{display:flex;align-items:center;gap:13px;padding:15px 16px;}
+  .park-ic{width:46px;height:46px;border-radius:13px;background:linear-gradient(160deg,var(--grass-hi),var(--grass-lo));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:inset 0 1px 3px rgba(255,255,255,.25);}
+  .park-top .pi-name{font-size:15px;font-weight:900;color:var(--ink);}
+  .park-top .pi-loc{font-size:11px;color:var(--mut);font-weight:600;margin-top:1px;}
+  .park-grid{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line);}
+  .pcell{padding:13px 10px;text-align:center;border-right:1px solid var(--line);}
+  .pcell:last-child{border-right:none;}
+  .pcell .pv{font-size:15px;font-weight:900;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .pcell .pk{font-size:9.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);margin-top:3px;}
+  .pcell .pv .up{color:var(--gold-deep);}
+
+  /* ===== CTA ===== */
+  .cta{margin:20px 16px 8px;display:flex;gap:11px;}
+  .cta button{flex:1;border:none;border-radius:15px;padding:15px;font-size:13.5px;font-weight:900;letter-spacing:.3px;cursor:pointer;}
+  .cta .ghost{background:#fff;border:1.5px solid var(--line);color:var(--ink);flex:0 0 56px;}
+  .cta .gary{background:linear-gradient(160deg,var(--gold),var(--gold-deep));color:var(--navy);box-shadow:0 8px 20px rgba(217,164,24,.35);}
+
+  .footer-note{text-align:center;font-size:10.5px;color:var(--mut);font-weight:600;padding:14px 24px 30px;}
+  .tabbar{position:sticky;bottom:0;z-index:40;display:flex;background:#fff;border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
+  .tb{flex:1;text-align:center;font-size:9.5px;font-weight:800;color:var(--mut);letter-spacing:.3px;}
+  .tb .ti{font-size:18px;display:block;margin-bottom:2px;}
+  .tb.on{color:var(--navy);}
+  .tb.on .ti{color:var(--gold-deep);}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="scroll">
+
+      <!-- status -->
+      <div class="statusbar">
+        <span>7:41</span>
+        <span>5G · Gary</span>
+      </div>
+
+      <!-- sticky nav -->
+      <div class="topnav">
+        <div class="row">
+          <div class="crumb">
+            <div class="back">‹</div>
+            <div>
+              <b>Matchday</b>
+              <small>Tonight · 8:10 PM ET</small>
+            </div>
+          </div>
+          <div class="live-pill"><span class="dot"></span>Pregame</div>
+        </div>
+
+        <div class="scoreline">
+          <div class="team">
+            <div class="badge cle">CLE</div>
+            <div>
+              <div class="tn">Guardians</div>
+              <div class="tr">41–32 · Away</div>
+            </div>
+          </div>
+          <div class="vs">
+            <div class="at">@</div>
+            <div class="tm">MIL</div>
+          </div>
+          <div class="team" style="flex-direction:row-reverse;text-align:right;">
+            <div class="badge mil">MIL</div>
+            <div>
+              <div class="tn">Brewers</div>
+              <div class="tr">44–29 · Home</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== HERO FIELD MODULE ===== -->
+      <div class="pad">
+        <div class="sec-head">
+          <div class="t"><span class="bar"></span>On the Field</div>
+          <div class="meta">Brewers defense · 9 set</div>
+        </div>
+
+        <div class="field-card">
+          <div class="fc-head">
+            <div class="l">
+              <div class="glyph">⚾</div>
+              <div>
+                <div class="ttl">Brewers Starting Nine</div>
+                <div class="sub">Defensive alignment · Home</div>
+              </div>
+            </div>
+            <div class="tag">Confirmed</div>
+          </div>
+
+          <div class="stadium">
+            <svg class="field-svg" viewBox="0 0 400 392" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <radialGradient id="grass" cx="50%" cy="92%" r="95%">
+                  <stop offset="0%" stop-color="#3a7d46"/>
+                  <stop offset="55%" stop-color="#2f6b3a"/>
+                  <stop offset="100%" stop-color="#235530"/>
+                </radialGradient>
+                <linearGradient id="dirt" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#bb854c"/>
+                  <stop offset="100%" stop-color="#9c693a"/>
+                </linearGradient>
+                <radialGradient id="mound" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#c08b50"/>
+                  <stop offset="100%" stop-color="#a06f3c"/>
+                </radialGradient>
+              </defs>
+
+              <!-- outfield grass fan -->
+              <path d="M200 372 L8 168 A270 270 0 0 1 392 168 Z" fill="url(#grass)"/>
+              <!-- mowing stripes -->
+              <path d="M200 372 L60 224 A210 210 0 0 1 130 178 Z" fill="#357341" opacity=".5"/>
+              <path d="M200 372 L200 152 A210 210 0 0 1 270 178 Z" fill="#357341" opacity=".5"/>
+              <path d="M200 372 L340 224 A210 210 0 0 1 270 178 Z" fill="#357341" opacity=".35"/>
+
+              <!-- outfield warning track / wall arc -->
+              <path d="M8 168 A270 270 0 0 1 392 168" fill="none" stroke="#c79a5f" stroke-width="7" opacity=".55"/>
+              <path d="M22 178 A252 252 0 0 1 378 178" fill="none" stroke="#0a2351" stroke-width="3" opacity=".4"/>
+
+              <!-- infield dirt diamond (skin) -->
+              <path d="M200 348 L96 244 A148 148 0 0 1 304 244 Z" fill="url(#dirt)"/>
+              <!-- infield grass inset -->
+              <path d="M200 318 L132 250 A98 98 0 0 1 268 250 Z" fill="url(#grass)"/>
+
+              <!-- base paths diamond -->
+              <path d="M200 340 L284 256 L200 172 L116 256 Z" fill="none" stroke="#f3e6cf" stroke-width="4"/>
+
+              <!-- bases -->
+              <rect x="194" y="334" width="12" height="12" fill="#fff" transform="rotate(45 200 340)"/>   <!-- home -->
+              <rect x="278" y="250" width="11" height="11" fill="#fff" transform="rotate(45 284 256)"/>   <!-- 1B -->
+              <rect x="194" y="166" width="11" height="11" fill="#fff" transform="rotate(45 200 172)"/>   <!-- 2B -->
+              <rect x="110" y="250" width="11" height="11" fill="#fff" transform="rotate(45 116 256)"/>   <!-- 3B -->
+
+              <!-- pitcher's mound -->
+              <circle cx="200" cy="258" r="20" fill="url(#mound)"/>
+              <rect x="196" y="256" width="8" height="3" fill="#fff" opacity=".9"/>
+
+              <!-- home plate dirt circle -->
+              <circle cx="200" cy="340" r="22" fill="url(#dirt)" opacity=".8"/>
+              <path d="M200 332 l7 6 v8 h-14 v-8 z" fill="#fff"/>
+
+              <!-- foul lines extending -->
+              <line x1="200" y1="340" x2="34" y2="174" stroke="#f3e6cf" stroke-width="2.5" opacity=".75"/>
+              <line x1="200" y1="340" x2="366" y2="174" stroke="#f3e6cf" stroke-width="2.5" opacity=".75"/>
+            </svg>
+
+            <!-- ===== FIELDERS ===== -->
+            <!-- outfield -->
+            <div class="player" style="left:24%;top:24%;">
+              <div class="pmark">5</div>
+              <div class="pname">Mitchell</div>
+              <span class="ppos">LF</span>
+            </div>
+            <div class="player" style="left:50%;top:13%;">
+              <div class="pmark">11</div>
+              <div class="pname">Chourio</div>
+              <span class="ppos">CF</span>
+            </div>
+            <div class="player" style="left:76%;top:24%;">
+              <div class="pmark">10</div>
+              <div class="pname">Frelick</div>
+              <span class="ppos">RF</span>
+            </div>
+
+            <!-- infield -->
+            <div class="player" style="left:37%;top:50%;">
+              <div class="pmark">27</div>
+              <div class="pname">Adames</div>
+              <span class="ppos">SS</span>
+            </div>
+            <div class="player" style="left:64%;top:50%;">
+              <div class="pmark">0</div>
+              <div class="pname">Turang</div>
+              <span class="ppos">2B</span>
+            </div>
+            <div class="player" style="left:24%;top:67%;">
+              <div class="pmark">3</div>
+              <div class="pname">Ortiz</div>
+              <span class="ppos">3B</span>
+            </div>
+            <div class="player" style="left:77%;top:67%;">
+              <div class="pmark">12</div>
+              <div class="pname">Hoskins</div>
+              <span class="ppos">1B</span>
+            </div>
+
+            <!-- pitcher -->
+            <div class="player pitcher" style="left:50%;top:60%;">
+              <div class="pmark">51</div>
+              <div class="pname">Peralta</div>
+              <span class="ppos">P</span>
+            </div>
+
+            <!-- catcher -->
+            <div class="player" style="left:50%;top:90%;">
+              <div class="pmark">24</div>
+              <div class="pname">Contreras</div>
+              <span class="ppos">C</span>
+            </div>
+          </div>
+
+          <div class="fc-foot">
+            <div class="legend">
+              <span><span class="swatch" style="background:var(--gold);"></span>Pitcher</span>
+              <span><span class="swatch" style="background:#fff;"></span>Position</span>
+            </div>
+            <div>Am Family Field · tap a glove for splits</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== BATTING ORDER ===== -->
+      <div class="pad">
+        <div class="sec-head">
+          <div class="t"><span class="bar"></span>Batting Order</div>
+          <div class="meta">vs RHP Bibee</div>
+        </div>
+        <div class="lineup-card">
+          <div class="bat lead">
+            <div class="bnum">1</div>
+            <div class="bmain"><span class="nm">Brice Turang</span><span class="det">L · #0</span></div>
+            <span class="bpos">2B</span><span class="bavg">.281</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">2</div>
+            <div class="bmain"><span class="nm">Sal Frelick</span><span class="det">L · #10</span></div>
+            <span class="bpos">RF</span><span class="bavg">.290</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">3</div>
+            <div class="bmain"><span class="nm">Jackson Chourio</span><span class="det">R · #11</span></div>
+            <span class="bpos">CF</span><span class="bavg">.302</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">4</div>
+            <div class="bmain"><span class="nm">William Contreras</span><span class="det">R · #24</span></div>
+            <span class="bpos">C</span><span class="bavg">.276</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">5</div>
+            <div class="bmain"><span class="nm">Rhys Hoskins</span><span class="det">R · #12</span></div>
+            <span class="bpos">1B</span><span class="bavg">.245</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">6</div>
+            <div class="bmain"><span class="nm">Christian Yelich</span><span class="det">L · #22</span></div>
+            <span class="bpos">DH</span><span class="bavg">.268</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">7</div>
+            <div class="bmain"><span class="nm">Joey Ortiz</span><span class="det">R · #3</span></div>
+            <span class="bpos">3B</span><span class="bavg">.239</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">8</div>
+            <div class="bmain"><span class="nm">Garrett Mitchell</span><span class="det">L · #5</span></div>
+            <span class="bpos">LF</span><span class="bavg">.255</span>
+          </div>
+          <div class="bat">
+            <div class="bnum">9</div>
+            <div class="bmain"><span class="nm">Willy Adames</span><span class="det">R · #27</span></div>
+            <span class="bpos">SS</span><span class="bavg">.251</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PITCHING MATCHUP ===== -->
+      <div class="pad">
+        <div class="sec-head">
+          <div class="t"><span class="bar"></span>Pitching Matchup</div>
+          <div class="meta">Probables</div>
+        </div>
+        <div class="pitch-card">
+          <div class="pcol away">
+            <div class="role">CLE · Away</div>
+            <div class="pn">Tanner Bibee</div>
+            <div class="ph">RHP · #28</div>
+            <div class="stats">
+              <div class="pstat"><div class="v">3.42</div><div class="k">ERA</div></div>
+              <div class="pstat"><div class="v">1.09</div><div class="k">WHIP</div></div>
+              <div class="pstat"><div class="v">98</div><div class="k">K</div></div>
+            </div>
+          </div>
+          <div class="pdiv"></div>
+          <div class="pcol home">
+            <div class="role">MIL · Home</div>
+            <div class="pn">Freddy Peralta</div>
+            <div class="ph">RHP · #51</div>
+            <div class="stats">
+              <div class="pstat"><div class="v">2.91</div><div class="k">ERA</div></div>
+              <div class="pstat"><div class="v">1.02</div><div class="k">WHIP</div></div>
+              <div class="pstat"><div class="v">112</div><div class="k">K</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PARK FACTORS ===== -->
+      <div class="pad">
+        <div class="sec-head">
+          <div class="t"><span class="bar"></span>The Park</div>
+          <div class="meta">2026 factors</div>
+        </div>
+        <div class="park-card">
+          <div class="park-top">
+            <div class="park-ic">🏟️</div>
+            <div>
+              <div class="pi-name">American Family Field</div>
+              <div class="pi-loc">Milwaukee, WI · Roof closed · 72°F</div>
+            </div>
+          </div>
+          <div class="park-grid">
+            <div class="pcell"><div class="pv">101</div><div class="pk">Runs Index</div></div>
+            <div class="pcell"><div class="pv"><span class="up">112</span></div><div class="pk">HR Factor</div></div>
+            <div class="pcell"><div class="pv">8.7</div><div class="pk">O/U Total</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CTA ===== -->
+      <div class="cta">
+        <button class="ghost">☆</button>
+        <button class="gary">See Gary's Pick →</button>
+      </div>
+
+      <div class="footer-note">
+        Lineups confirmed via MLB Stats API · subject to late scratches.
+      </div>
+
+      <!-- tab bar -->
+      <div class="tabbar">
+        <div class="tb on"><span class="ti">⚾</span>Matchday</div>
+        <div class="tb"><span class="ti">📊</span>Props</div>
+        <div class="tb"><span class="ti">🏆</span>Winners</div>
+        <div class="tb"><span class="ti">💰</span>Billfold</div>
+        <div class="tb"><span class="ti">👤</span>You</div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

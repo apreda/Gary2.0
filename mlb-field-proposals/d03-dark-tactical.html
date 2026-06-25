@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>d03 — Dark Tactical Board</title>
+<style>
+  :root{
+    --navy:#0a1830;
+    --navy-deep:#050d1c;
+    --gold:#ffc845;
+    --gold-dim:#b88a2a;
+    --line:rgba(120,180,255,.42);
+    --line-soft:rgba(90,140,220,.18);
+    --node:#0e2342;
+    --ink:#cfe0ff;
+    --ink-dim:#6f86b3;
+    --glow:0 0 14px rgba(120,180,255,.55);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{
+    background:#05080f;
+    min-height:100%;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;justify-content:center;align-items:flex-start;
+    padding:26px 0;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- phone frame ---- */
+  .phone{
+    width:430px;
+    background:radial-gradient(140% 90% at 50% 0%, #0a1426 0%, #05080f 60%);
+    border-radius:42px;
+    border:1px solid rgba(120,180,255,.12);
+    box-shadow:0 40px 90px rgba(0,0,0,.7), inset 0 0 0 1px rgba(0,0,0,.6);
+    overflow:hidden;
+    position:relative;
+  }
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:26px;background:#000;border-radius:0 0 18px 18px;z-index:40;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    padding:34px 20px 14px;
+    display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid rgba(120,180,255,.08);
+  }
+  .tb-left{display:flex;flex-direction:column;gap:3px}
+  .tb-tag{
+    font-size:9.5px;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--ink-dim);font-weight:700;
+  }
+  .tb-title{font-size:16px;font-weight:700;letter-spacing:.02em;color:#eaf2ff}
+  .tb-title .at{color:var(--ink-dim);font-weight:500;margin:0 5px}
+  .live-pill{
+    display:flex;align-items:center;gap:6px;
+    font-size:10px;font-weight:800;letter-spacing:.18em;
+    color:var(--gold);
+    border:1px solid rgba(255,200,69,.35);
+    padding:5px 10px;border-radius:20px;
+    background:rgba(255,200,69,.06);
+  }
+  .live-dot{
+    width:6px;height:6px;border-radius:50%;background:var(--gold);
+    box-shadow:0 0 8px var(--gold);animation:pulse 1.6s infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ---- mode strip ---- */
+  .modestrip{
+    display:flex;gap:8px;padding:12px 20px 4px;
+  }
+  .mode{
+    flex:1;text-align:center;font-size:10px;font-weight:700;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-dim);
+    padding:8px 0;border-radius:9px;border:1px solid rgba(120,180,255,.1);
+    background:rgba(120,180,255,.03);cursor:default;
+  }
+  .mode.active{
+    color:#05080f;background:linear-gradient(180deg,#ffd873,#ffbf3a);
+    border-color:transparent;box-shadow:0 4px 14px rgba(255,200,69,.25);
+  }
+
+  /* ---- field ---- */
+  .fieldwrap{
+    padding:16px 16px 8px;
+    position:relative;
+  }
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1.18;
+    border-radius:20px;
+    background:
+      radial-gradient(120% 80% at 50% 8%, rgba(30,70,140,.30) 0%, rgba(8,18,38,0) 55%),
+      radial-gradient(90% 70% at 50% 100%, rgba(255,200,69,.05) 0%, rgba(8,18,38,0) 45%),
+      linear-gradient(180deg,#071126 0%, #040a18 100%);
+    border:1px solid rgba(120,180,255,.14);
+    box-shadow:inset 0 0 60px rgba(0,0,0,.6), 0 10px 30px rgba(0,0,0,.4);
+    overflow:hidden;
+  }
+  /* faint grid scan */
+  .field::before{
+    content:"";position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(120,180,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,180,255,.05) 1px, transparent 1px);
+    background-size:34px 34px;
+    mask:radial-gradient(120% 110% at 50% 25%, #000 30%, transparent 80%);
+  }
+
+  .field svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ---- player nodes ---- */
+  .node{
+    position:absolute;transform:translate(-50%,-50%);
+    text-align:center;z-index:10;width:96px;
+  }
+  .dot{
+    width:34px;height:34px;border-radius:50%;
+    margin:0 auto 5px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:800;color:#eaf2ff;
+    background:radial-gradient(circle at 35% 30%, #173863 0%, #0c1f3c 70%);
+    border:1px solid var(--line);
+    box-shadow:0 0 0 4px rgba(120,180,255,.06), var(--glow);
+    position:relative;
+  }
+  .node.pitch .dot{
+    background:radial-gradient(circle at 35% 30%, #ffd873 0%, #c8941f 75%);
+    color:#0a1224;border-color:rgba(255,200,69,.7);
+    box-shadow:0 0 0 4px rgba(255,200,69,.10), 0 0 16px rgba(255,200,69,.6);
+  }
+  .node .pos{
+    font-size:8px;font-weight:800;letter-spacing:.14em;
+    color:var(--gold);text-transform:uppercase;
+    position:absolute;top:-4px;left:50%;transform:translate(-50%,-100%);
+    background:rgba(5,13,28,.85);padding:1px 5px;border-radius:6px;
+    border:1px solid rgba(255,200,69,.25);white-space:nowrap;
+  }
+  .node .nm{
+    font-size:10px;font-weight:700;color:#dce8ff;
+    text-shadow:0 1px 4px rgba(0,0,0,.9);line-height:1.1;
+  }
+  .node.pitch .pos{color:var(--gold)}
+
+  /* ---- field labels ---- */
+  .flabel{
+    position:absolute;font-size:8px;letter-spacing:.22em;font-weight:700;
+    color:var(--ink-dim);text-transform:uppercase;z-index:5;
+  }
+
+  /* ---- batting order rail ---- */
+  .lineup{
+    padding:10px 16px 6px;
+  }
+  .lineup-head{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:8px;padding:0 4px;
+  }
+  .lineup-head .lh-title{
+    font-size:11px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:#eaf2ff;
+  }
+  .lineup-head .lh-sub{font-size:9px;color:var(--ink-dim);letter-spacing:.1em}
+  .rail{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+  }
+  .bat{
+    display:flex;align-items:center;gap:8px;
+    background:linear-gradient(180deg, rgba(20,40,72,.55), rgba(8,18,38,.55));
+    border:1px solid rgba(120,180,255,.12);
+    border-radius:10px;padding:7px 8px;
+  }
+  .bat .ord{
+    width:18px;height:18px;flex:none;border-radius:5px;
+    background:rgba(255,200,69,.12);border:1px solid rgba(255,200,69,.3);
+    color:var(--gold);font-size:10px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .bat .bn{display:flex;flex-direction:column;line-height:1.15}
+  .bat .bn b{font-size:11px;color:#e6f0ff;font-weight:700}
+  .bat .bn span{font-size:8.5px;color:var(--ink-dim);letter-spacing:.08em;text-transform:uppercase}
+
+  /* ---- context footer ---- */
+  .ctx{
+    margin:6px 16px 18px;padding:11px 14px;
+    display:flex;align-items:center;justify-content:space-between;
+    border-radius:12px;border:1px solid rgba(120,180,255,.12);
+    background:linear-gradient(90deg, rgba(255,200,69,.05), rgba(20,40,72,.35));
+  }
+  .ctx .cl{display:flex;flex-direction:column;gap:2px}
+  .ctx .cl .k{font-size:8px;letter-spacing:.24em;color:var(--ink-dim);text-transform:uppercase;font-weight:700}
+  .ctx .cl .v{font-size:12px;font-weight:700;color:#eaf2ff}
+  .ctx .cl .v em{color:var(--gold);font-style:normal}
+  .ctx .vs{
+    font-size:9px;letter-spacing:.2em;color:var(--ink-dim);font-weight:800;text-transform:uppercase;
+    border-left:1px solid rgba(120,180,255,.15);padding-left:14px;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="notch"></div>
+
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="tb-left">
+        <div class="tb-tag">Defensive Alignment</div>
+        <div class="tb-title">CLE <span class="at">@</span> MIL</div>
+      </div>
+      <div class="live-pill"><span class="live-dot"></span>BREWERS D</div>
+    </div>
+
+    <!-- MODE STRIP -->
+    <div class="modestrip">
+      <div class="mode active">On the Field</div>
+      <div class="mode">Spray</div>
+      <div class="mode">Shift</div>
+    </div>
+
+    <!-- FIELD -->
+    <div class="fieldwrap">
+      <div class="field">
+        <svg viewBox="0 0 100 118" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#0d2042" stop-opacity="0.55"/>
+              <stop offset="1" stop-color="#06101f" stop-opacity="0.2"/>
+            </linearGradient>
+            <radialGradient id="dirt" cx="50%" cy="58%" r="50%">
+              <stop offset="0" stop-color="#5a3a1c" stop-opacity="0.30"/>
+              <stop offset="1" stop-color="#5a3a1c" stop-opacity="0.0"/>
+            </radialGradient>
+            <filter id="soft"><feGaussianBlur stdDeviation="0.5"/></filter>
+          </defs>
+
+          <!-- outfield arc (grass) -->
+          <path d="M50 92 L8 60 A 58 58 0 0 1 92 60 L50 92 Z"
+                fill="url(#grass)" stroke="none"/>
+          <!-- outfield boundary fence (luminous) -->
+          <path d="M10 58 A 56 56 0 0 1 90 58"
+                fill="none" stroke="var(--line)" stroke-width="0.5"
+                stroke-dasharray="0.5 2" opacity="0.9"/>
+          <!-- warning track -->
+          <path d="M13 60 A 52 52 0 0 1 87 60"
+                fill="none" stroke="var(--line-soft)" stroke-width="2.6" opacity="0.6"/>
+
+          <!-- infield dirt wash -->
+          <circle cx="50" cy="74" r="30" fill="url(#dirt)"/>
+
+          <!-- foul lines -->
+          <line x1="50" y1="92" x2="9.5" y2="51" stroke="var(--line)" stroke-width="0.5" filter="url(#soft)"/>
+          <line x1="50" y1="92" x2="90.5" y2="51" stroke="var(--line)" stroke-width="0.5" filter="url(#soft)"/>
+
+          <!-- infield diamond -->
+          <polygon points="50,92 30,72 50,52 70,72"
+                   fill="rgba(40,80,150,0.10)"
+                   stroke="var(--line)" stroke-width="0.7"/>
+          <!-- base paths inner -->
+          <polygon points="50,89 33,72 50,55 67,72"
+                   fill="none" stroke="var(--line-soft)" stroke-width="0.5"/>
+
+          <!-- bases -->
+          <g fill="#cfe0ff" opacity="0.85">
+            <rect x="48.4" y="90.4" width="3.2" height="3.2" transform="rotate(45 50 92)"/>   <!-- home -->
+            <rect x="68.4" y="70.4" width="2.8" height="2.8" transform="rotate(45 70 72)"/>   <!-- 1B -->
+            <rect x="48.6" y="50.6" width="2.8" height="2.8" transform="rotate(45 50 52)"/>   <!-- 2B -->
+            <rect x="28.6" y="70.6" width="2.8" height="2.8" transform="rotate(45 30 72)"/>   <!-- 3B -->
+          </g>
+
+          <!-- pitcher's mound -->
+          <circle cx="50" cy="73" r="4.4" fill="rgba(255,200,69,0.07)" stroke="var(--line)" stroke-width="0.5"/>
+          <line x1="47.6" y1="73" x2="52.4" y2="73" stroke="rgba(255,200,69,.5)" stroke-width="0.6"/>
+
+          <!-- home plate -->
+          <path d="M48.4 93.6 h3.2 v1.1 l-1.6 1.3 l-1.6 -1.3 Z" fill="#eaf2ff" opacity="0.9"/>
+
+          <!-- batters boxes -->
+          <rect x="43.2" y="91" width="2.6" height="5" fill="none" stroke="var(--line-soft)" stroke-width="0.4"/>
+          <rect x="54.2" y="91" width="2.6" height="5" fill="none" stroke="var(--line-soft)" stroke-width="0.4"/>
+        </svg>
+
+        <!-- field labels -->
+        <span class="flabel" style="top:6%;left:50%;transform:translateX(-50%)">CENTER FIELD</span>
+        <span class="flabel" style="top:30%;left:7%">LEFT</span>
+        <span class="flabel" style="top:30%;right:7%">RIGHT</span>
+
+        <!-- PLAYER NODES -->
+        <!-- CF deep top center -->
+        <div class="node" style="left:50%;top:13%">
+          <div class="pos">CF</div>
+          <div class="dot">11</div>
+          <div class="nm">Chourio</div>
+        </div>
+        <!-- LF upper-left outfield -->
+        <div class="node" style="left:24%;top:27%">
+          <div class="pos">LF</div>
+          <div class="dot">5</div>
+          <div class="nm">Mitchell</div>
+        </div>
+        <!-- RF upper-right outfield -->
+        <div class="node" style="left:76%;top:27%">
+          <div class="pos">RF</div>
+          <div class="dot">10</div>
+          <div class="nm">Frelick</div>
+        </div>
+        <!-- SS upper-left infield -->
+        <div class="node" style="left:37%;top:48%">
+          <div class="pos">SS</div>
+          <div class="dot">27</div>
+          <div class="nm">Adames</div>
+        </div>
+        <!-- 2B upper-right infield -->
+        <div class="node" style="left:63%;top:48%">
+          <div class="pos">2B</div>
+          <div class="dot">0</div>
+          <div class="nm">Turang</div>
+        </div>
+        <!-- 3B lower-left infield -->
+        <div class="node" style="left:27%;top:62%">
+          <div class="pos">3B</div>
+          <div class="dot">3</div>
+          <div class="nm">Ortiz</div>
+        </div>
+        <!-- 1B lower-right infield -->
+        <div class="node" style="left:73%;top:62%">
+          <div class="pos">1B</div>
+          <div class="dot">12</div>
+          <div class="nm">Hoskins</div>
+        </div>
+        <!-- P mound center -->
+        <div class="node pitch" style="left:50%;top:62%">
+          <div class="pos">P</div>
+          <div class="dot">51</div>
+          <div class="nm">Peralta</div>
+        </div>
+        <!-- C behind home -->
+        <div class="node" style="left:50%;top:84%">
+          <div class="pos">C</div>
+          <div class="dot">24</div>
+          <div class="nm">Contreras</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BATTING ORDER -->
+    <div class="lineup">
+      <div class="lineup-head">
+        <span class="lh-title">Batting Order</span>
+        <span class="lh-sub">MILWAUKEE BREWERS</span>
+      </div>
+      <div class="rail">
+        <div class="bat"><span class="ord">1</span><span class="bn"><b>Turang</b><span>2B</span></span></div>
+        <div class="bat"><span class="ord">2</span><span class="bn"><b>Frelick</b><span>RF</span></span></div>
+        <div class="bat"><span class="ord">3</span><span class="bn"><b>Chourio</b><span>CF</span></span></div>
+        <div class="bat"><span class="ord">4</span><span class="bn"><b>Contreras</b><span>C</span></span></div>
+        <div class="bat"><span class="ord">5</span><span class="bn"><b>Hoskins</b><span>1B</span></span></div>
+        <div class="bat"><span class="ord">6</span><span class="bn"><b>Yelich</b><span>DH</span></span></div>
+        <div class="bat"><span class="ord">7</span><span class="bn"><b>Ortiz</b><span>3B</span></span></div>
+        <div class="bat"><span class="ord">8</span><span class="bn"><b>Mitchell</b><span>LF</span></span></div>
+        <div class="bat"><span class="ord">9</span><span class="bn"><b>Adames</b><span>SS</span></span></div>
+      </div>
+    </div>
+
+    <!-- CONTEXT FOOTER -->
+    <div class="ctx">
+      <div class="cl">
+        <span class="k">Opposing Starter</span>
+        <span class="v">Tanner Bibee <em>#28</em></span>
+      </div>
+      <span class="vs">CLE · RHP</span>
+    </div>
+
+  </div>
+</body>
+</html>

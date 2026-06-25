@@ -329,3 +329,28 @@ Ordered by conversion impact per unit of effort. Downloads first, never reach.
 4. **Wire App Store Connect `ct` tags + one CPP, and stand up the weekly X-side scoreboard from existing `get-tweet-metrics` data.** `[manual]` (ASC tags/CPP) — Conversion effect: makes installs and retention attributable per surface and lets profile-clicks/bookmarks be tracked today, so every later format change is judged on downloads instead of impressions.
 
 5. **Flip recaps to fully open receipts** (name wins and losses, running record, point to profile not a buried link). `[edge-function]` — Conversion effect: builds the verifiable trust that makes a free picks-app download feel safe, the documented driver that converts skeptical bettors into installers.
+
+---
+
+## Evidence-Based Algorithm Findings (deep research, Jun 22 2026)
+
+Multi-source, adversarially-verified (21 sources, 25 claims voted, 7 myths killed). Primary sources = X's own code repos (`github.com/twitter/the-algorithm`, `xai-org/x-algorithm`); engagement data = Buffer (52M+ posts, Mar 2026).
+
+**Well-evidenced facts (act on these):**
+- **The feed = a weighted sum of predicted actions.** Published 2023 weights: reply **+13.5**, reply the author replies BACK to **+75** (highest positive signal), profile-click **+12**, repost +1.0, like **+0.5**; report **−369**, show-less/block/mute **−74**. Trust the HIERARCHY (replies ≫ profile-clicks ≫ reposts > likes; reports/links penalized), NOT the exact numbers — the 2026 Grok rewrite withholds current coefficients.
+- **Image-only / wordless posts are NOT penalized as a format** (images 3.40% ≈ text 3.56% median engagement). The real penalty is **EXTERNAL LINKS** (links 2.25%; non-Premium link posts ~0% median since Mar 2025; even Premium links ~0.28% vs text ~0.90%). → Keep the link OUT of the main tweet; bio/pinned/reply are the safe homes.
+- **At ~50 followers, follower count barely matters** — ~50% of For-You candidates are out-of-network, so reach is gated by earning replies/profile-clicks/dwell, not by audience size.
+- **Gambling policy: organic first-party posting is NOT restricted.** X's Feb 2026 ban targets PAID partnerships (companies paying influencers, incl. "tips/handicapping"). @BetwithGary posting its own cards is clear. Paid X Ads = separate licensed-only regime.
+
+**Myths killed (do NOT act on):** "image-only is penalized vs text" (refuted); "more posts/week drives reach/followers" (refuted twice) — high cadence is NOT a growth driver; **consistency + per-post engagement quality is**.
+
+**LOCKED "right ingredients" for @BetwithGary (set the formula, then let time + consistency compound):**
+1. Branded card on the main tweet, **never a link in it**.
+2. A **short, reply-baiting caption** on the main (a confident debatable take or a genuine question) — wordless forfeits the #1 signal; this farms it. (Shipped Jun 22 in the WC `runWcCardMode` caption prompt.)
+3. The read rendered as a **wordless "GARY'S TAKE" card** (the app's card-back, `/api/take-card`) posted as the reply — whole thread is branded cards, no plain-text paragraph (founder choice Jun 22). Falls back to a text read reply if the card fails.
+4. Install **link in bio + pinned** (durable, zero-penalty path; already `betwithgary.ai/get`).
+5. **Gary replies BACK to commenters** = the +75 jackpot — the reply engine (`reply-engine-scan/send`) feeds this; highest-leverage next lever.
+6. **Reply to bigger sports/betting accounts** to borrow their out-of-network reach (critical at this size).
+7. **Consistent daily cadence > volume.** ~5/day is fine; don't crank it.
+
+Open question flagged: the 2026 rewrite added "low-signal"/multimodal rescorers that *might* treat a no-caption AI image card as "low-information" on a quality (not engagement) basis — another reason the short caption (ingredient 2) is cheap insurance, not just reply-bait.

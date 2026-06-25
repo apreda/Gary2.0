@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>d17 · Spray / Heat Field</title>
+<style>
+  :root{
+    --navy:#0a2240;
+    --navy2:#0d2c52;
+    --gold:#ffc857;
+    --gold2:#b6892e;
+    --ink:#06121f;
+    --grass:#1f5e3a;
+    --grass-lo:#19502f;
+    --dirt:#9c5a2c;
+    --line:#f3f5f7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    background:#05101c;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;align-items:flex-start;
+    min-height:100vh;padding:26px 12px;
+  }
+  .phone{
+    width:430px;max-width:100%;
+    background:linear-gradient(180deg,#08182b,#040b15 60%);
+    border-radius:38px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04) inset;
+    overflow:hidden;
+    position:relative;
+  }
+  /* ---- top bar ---- */
+  .status{
+    height:20px;display:flex;justify-content:space-between;align-items:center;
+    padding:0 26px;font-size:12px;color:#cfdcec;font-weight:600;letter-spacing:.3px;
+    padding-top:14px;
+  }
+  .header{
+    padding:14px 20px 12px;
+    background:linear-gradient(180deg,var(--navy),var(--navy2));
+    border-bottom:1px solid rgba(255,200,87,.18);
+  }
+  .matchup{
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .team{display:flex;align-items:center;gap:9px;}
+  .crest{
+    width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
+    font-weight:800;font-size:13px;color:#fff;letter-spacing:-.5px;
+  }
+  .crest.cle{background:linear-gradient(135deg,#0c2340,#e31837);}
+  .crest.mil{background:linear-gradient(135deg,#12284b,#ffc62f);color:#0a2240;}
+  .team .tn{font-size:13px;color:#eaf1f8;font-weight:700;line-height:1.05;}
+  .team .ts{font-size:10px;color:#8fa6c0;font-weight:600;}
+  .at{font-size:11px;color:var(--gold);font-weight:800;letter-spacing:1px;}
+  .subhead{
+    margin-top:10px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .deftag{
+    font-size:10.5px;font-weight:800;letter-spacing:1.3px;color:var(--gold);
+    text-transform:uppercase;
+  }
+  .vs-p{
+    font-size:11px;color:#9fb4cd;font-weight:600;
+  }
+  .vs-p b{color:#eaf1f8;font-weight:700;}
+
+  /* ---- legend ---- */
+  .heatlegend{
+    display:flex;align-items:center;gap:8px;padding:9px 20px 6px;
+    background:#071726;
+  }
+  .heatlegend .lbl{font-size:9.5px;letter-spacing:1px;color:#7f97b1;font-weight:700;text-transform:uppercase;}
+  .heatbar{
+    flex:1;height:7px;border-radius:5px;
+    background:linear-gradient(90deg,#0e3b6e 0%,#1f6fae 22%,#27b3a3 42%,#9bd44a 60%,#ffd33d 76%,#ff7a2f 88%,#e8331f 100%);
+  }
+  .heatlegend .e{font-size:9px;color:#6f86a0;font-weight:600;}
+
+  /* ---- field ---- */
+  .fieldwrap{position:relative;padding:6px 10px 4px;background:#071726;}
+  .field{
+    position:relative;width:100%;height:430px;border-radius:16px;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% 102%, #0d3320 0%, #103d27 40%, #0c2e1d 78%, #08231600 100%),
+      repeating-linear-gradient(98deg,#1c5836 0 26px,#1a5232 26px 52px);
+    box-shadow:0 10px 30px rgba(0,0,0,.45) inset, 0 0 0 1px rgba(255,255,255,.05);
+  }
+  /* warning track */
+  .field::before{
+    content:"";position:absolute;inset:0;border-radius:16px;
+    background:radial-gradient(115% 86% at 50% 118%, transparent 0 70%, rgba(156,90,44,.0) 70%, rgba(156,90,44,.55) 76%, rgba(156,90,44,.0) 82%);
+    pointer-events:none;
+  }
+  /* outfield wall arc */
+  .wall{
+    position:absolute;left:50%;bottom:-46%;transform:translateX(-50%);
+    width:150%;height:150%;border-radius:50%;
+    border:3px solid rgba(8,18,28,.55);
+    box-shadow:0 0 0 6px rgba(255,255,255,.04);
+    pointer-events:none;
+  }
+
+  /* SPRAY HEAT overlay — soft radial blobs tinting the outfield */
+  .heat{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;filter:saturate(1.15);}
+  .blob{position:absolute;border-radius:50%;filter:blur(14px);}
+
+  /* infield dirt + diamond */
+  .infield{
+    position:absolute;left:50%;bottom:8%;transform:translateX(-50%);
+    width:62%;height:42%;
+  }
+  .dirt{
+    position:absolute;inset:0;
+    background:radial-gradient(60% 70% at 50% 64%, #b06a35 0%, #9c5a2c 46%, #804623 72%, #80462300 86%);
+    clip-path:polygon(50% 0%, 100% 64%, 50% 100%, 0% 64%);
+    filter:blur(.3px);opacity:.96;
+  }
+  .diamond{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-46%) rotate(45deg);
+    width:56%;height:56%;
+    border:2.5px solid rgba(243,245,247,.92);
+    background:linear-gradient(135deg, rgba(34,94,58,.85), rgba(26,76,46,.92));
+    border-radius:3px;
+  }
+  .mound{
+    position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);
+    width:46px;height:46px;border-radius:50%;
+    background:radial-gradient(circle,#c2783f,#9c5a2c 70%);
+    box-shadow:0 0 0 2px rgba(255,255,255,.12);
+  }
+  .plate{
+    position:absolute;left:50%;bottom:5.5%;transform:translateX(-50%);
+    width:14px;height:14px;background:var(--line);
+    clip-path:polygon(50% 0,100% 35%,80% 100%,20% 100%,0 35%);
+  }
+  /* foul lines */
+  .foul{position:absolute;left:50%;bottom:6.5%;width:2px;height:62%;background:rgba(243,245,247,.6);transform-origin:bottom center;}
+  .foul.l{transform:translateX(-50%) rotate(-43deg);}
+  .foul.r{transform:translateX(-50%) rotate(43deg);}
+
+  /* fielder tokens */
+  .fielder{
+    position:absolute;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    z-index:6;cursor:default;
+  }
+  .puck{
+    width:34px;height:34px;border-radius:50%;
+    background:linear-gradient(160deg,#12284b,#0a2240);
+    border:2px solid var(--gold);
+    color:#fff;font-weight:800;font-size:14px;
+    display:grid;place-items:center;
+    box-shadow:0 4px 12px rgba(0,0,0,.55), 0 0 0 4px rgba(10,34,64,.35);
+    position:relative;
+  }
+  .puck .pos{
+    position:absolute;top:-7px;left:-7px;
+    background:var(--gold);color:#0a2240;
+    font-size:8px;font-weight:900;letter-spacing:.3px;
+    padding:1.5px 4px;border-radius:6px;
+    box-shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  .tag{
+    font-size:9.5px;font-weight:700;color:#f4f8fc;
+    background:rgba(6,18,31,.78);
+    padding:1.5px 6px;border-radius:7px;
+    white-space:nowrap;letter-spacing:.2px;
+    box-shadow:0 1px 4px rgba(0,0,0,.4);
+    backdrop-filter:blur(2px);
+  }
+  .pitcher .puck{border-color:#fff;}
+
+  /* ---- batting rail ---- */
+  .lineup{
+    padding:14px 16px 20px;
+    background:linear-gradient(180deg,#071726,#040c16);
+  }
+  .lu-head{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;
+  }
+  .lu-head .t{font-size:11px;font-weight:800;letter-spacing:1.4px;color:var(--gold);text-transform:uppercase;}
+  .lu-head .s{font-size:10px;color:#7f97b1;font-weight:600;}
+  .rail{display:flex;flex-direction:column;gap:5px;}
+  .row{
+    display:flex;align-items:center;gap:10px;
+    background:rgba(255,255,255,.025);
+    border:1px solid rgba(255,255,255,.05);
+    border-radius:10px;padding:6px 10px;
+    position:relative;overflow:hidden;
+  }
+  .row::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:linear-gradient(180deg,var(--gold),var(--gold2));
+  }
+  .ordn{
+    width:20px;height:20px;flex:none;border-radius:6px;
+    background:var(--navy);border:1px solid rgba(255,200,87,.35);
+    color:var(--gold);font-weight:800;font-size:11px;
+    display:grid;place-items:center;
+  }
+  .pname{flex:1;font-size:12.5px;color:#eaf1f8;font-weight:700;}
+  .pnum{font-size:11px;color:#7f97b1;font-weight:600;}
+  .ppos{
+    font-size:9.5px;font-weight:800;letter-spacing:.5px;color:#0a2240;
+    background:var(--gold);padding:2px 7px;border-radius:6px;min-width:30px;text-align:center;
+  }
+  .ppos.dh{background:#9fb4cd;}
+  .foot{
+    text-align:center;font-size:9px;color:#5d7390;font-weight:600;
+    letter-spacing:.6px;padding:10px 0 4px;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>SPRAY VIEW · ●●●</span></div>
+
+    <div class="header">
+      <div class="matchup">
+        <div class="team">
+          <div class="crest cle">CLE</div>
+          <div><div class="tn">Guardians</div><div class="ts">Away</div></div>
+        </div>
+        <div class="at">@</div>
+        <div class="team" style="flex-direction:row-reverse;text-align:right;">
+          <div class="crest mil">MIL</div>
+          <div><div class="tn">Brewers</div><div class="ts">Home</div></div>
+        </div>
+      </div>
+      <div class="subhead">
+        <div class="deftag">Brewers · Defensive Alignment</div>
+        <div class="vs-p">vs <b>Bibee</b> RHP #28</div>
+      </div>
+    </div>
+
+    <div class="heatlegend">
+      <span class="lbl">Spray Heat</span>
+      <span class="e">cold</span>
+      <div class="heatbar"></div>
+      <span class="e">hot</span>
+    </div>
+
+    <div class="fieldwrap">
+      <div class="field">
+        <div class="wall"></div>
+
+        <!-- SPRAY HEAT MAP — hitter tendency density tinting the outfield/infield -->
+        <div class="heat" id="heat"></div>
+
+        <!-- foul lines -->
+        <div class="foul l"></div>
+        <div class="foul r"></div>
+
+        <!-- infield dirt + diamond -->
+        <div class="infield">
+          <div class="dirt"></div>
+          <div class="diamond"></div>
+        </div>
+        <div class="mound"></div>
+        <div class="plate"></div>
+
+        <!-- FIELDERS (positions in %: left,top) -->
+        <!-- CF deep top-center -->
+        <div class="fielder" style="left:50%;top:12%;">
+          <div class="puck"><span class="pos">CF</span>11</div>
+          <div class="tag">Chourio</div>
+        </div>
+        <!-- LF upper-left outfield -->
+        <div class="fielder" style="left:24%;top:24%;">
+          <div class="puck"><span class="pos">LF</span>5</div>
+          <div class="tag">Mitchell</div>
+        </div>
+        <!-- RF upper-right outfield -->
+        <div class="fielder" style="left:76%;top:24%;">
+          <div class="puck"><span class="pos">RF</span>10</div>
+          <div class="tag">Frelick</div>
+        </div>
+        <!-- SS left of 2nd, upper-left infield -->
+        <div class="fielder" style="left:39%;top:46%;">
+          <div class="puck"><span class="pos">SS</span>27</div>
+          <div class="tag">Adames</div>
+        </div>
+        <!-- 2B right of 2nd, upper-right infield -->
+        <div class="fielder" style="left:61%;top:46%;">
+          <div class="puck"><span class="pos">2B</span>0</div>
+          <div class="tag">Turang</div>
+        </div>
+        <!-- 3B lower-left infield -->
+        <div class="fielder" style="left:27%;top:64%;">
+          <div class="puck"><span class="pos">3B</span>3</div>
+          <div class="tag">Ortiz</div>
+        </div>
+        <!-- 1B lower-right infield -->
+        <div class="fielder" style="left:73%;top:64%;">
+          <div class="puck"><span class="pos">1B</span>12</div>
+          <div class="tag">Hoskins</div>
+        </div>
+        <!-- P mound center -->
+        <div class="fielder pitcher" style="left:50%;top:56%;">
+          <div class="puck"><span class="pos">P</span>51</div>
+          <div class="tag">Peralta</div>
+        </div>
+        <!-- C behind home -->
+        <div class="fielder" style="left:50%;top:88%;">
+          <div class="puck"><span class="pos">C</span>24</div>
+          <div class="tag">Contreras</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lineup">
+      <div class="lu-head">
+        <div class="t">Batting Order</div>
+        <div class="s">Brewers · 1–9</div>
+      </div>
+      <div class="rail" id="rail"></div>
+      <div class="foot">SPRAY / HEAT FIELD · d17 · GARY 2.0</div>
+    </div>
+  </div>
+
+<script>
+  // ---- spray heat blobs: simulated hitter spray-chart density ----
+  // each: {x%, y%, size, hue} hue from cold(blue) to hot(red)
+  const heatPoints = [
+    {x:50,y:18,s:150,c:'rgba(232,51,31,.50)'},   // hot CF gap
+    {x:38,y:26,s:130,c:'rgba(255,122,47,.42)'},  // LF-center gap
+    {x:64,y:28,s:120,c:'rgba(255,211,61,.40)'},  // RF-center
+    {x:24,y:34,s:100,c:'rgba(155,212,74,.34)'},  // pull LF
+    {x:78,y:36,s:95, c:'rgba(39,179,163,.34)'},  // oppo RF
+    {x:50,y:40,s:90, c:'rgba(255,160,40,.30)'},  // shallow center
+    {x:33,y:52,s:80, c:'rgba(31,111,174,.30)'},  // up the middle left
+    {x:67,y:52,s:80, c:'rgba(31,111,174,.30)'},  // up the middle right
+    {x:50,y:62,s:70, c:'rgba(14,59,110,.26)'},   // infield cold
+  ];
+  const heat = document.getElementById('heat');
+  heatPoints.forEach(p=>{
+    const b=document.createElement('div');
+    b.className='blob';
+    b.style.left=p.x+'%';
+    b.style.top=p.y+'%';
+    b.style.width=p.s+'px';
+    b.style.height=p.s+'px';
+    b.style.transform='translate(-50%,-50%)';
+    b.style.background='radial-gradient(circle,'+p.c+' 0%, transparent 70%)';
+    heat.appendChild(b);
+  });
+
+  // ---- batting order rail ----
+  const order = [
+    {n:1, name:'Turang',    num:'0',  pos:'2B'},
+    {n:2, name:'Frelick',   num:'10', pos:'RF'},
+    {n:3, name:'Chourio',   num:'11', pos:'CF'},
+    {n:4, name:'Contreras', num:'24', pos:'C'},
+    {n:5, name:'Hoskins',   num:'12', pos:'1B'},
+    {n:6, name:'Yelich',    num:'22', pos:'DH'},
+    {n:7, name:'Ortiz',     num:'3',  pos:'3B'},
+    {n:8, name:'Mitchell',  num:'5',  pos:'LF'},
+    {n:9, name:'Adames',    num:'27', pos:'SS'},
+  ];
+  const rail = document.getElementById('rail');
+  order.forEach(o=>{
+    const r=document.createElement('div');
+    r.className='row';
+    r.innerHTML =
+      '<div class="ordn">'+o.n+'</div>'+
+      '<div class="pname">'+o.name+' <span class="pnum">#'+o.num+'</span></div>'+
+      '<div class="ppos'+(o.pos==='DH'?' dh':'')+'">'+o.pos+'</div>';
+    rail.appendChild(r);
+  });
+</script>
+</body>
+</html>

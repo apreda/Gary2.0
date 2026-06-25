@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLB — ballpark, visually encoded</title>
+<!--
+  Realistic ballpark (drawn dynamically, parametrized by each park's real dimensions —
+  GameChanger grid approach + FanGraphs contours). Players presented CLEANLY: info carried
+  by COLOR (hot/cold) and SYMBOLS (HR park-edge, platoon edge) instead of stat text, plus a
+  live WIND/WEATHER layer. Numbers live on tap. Brewers home vs RHP Bibee.
+-->
+<style>
+  :root{
+    --bg:#0B100D;--ink:#F2F4F1;--ink2:rgba(242,244,241,.66);--ink3:rgba(242,244,241,.42);
+    --gold:#C9A227;--navy:#0C2340;--brewGold:#FFC52F;
+    --grass:#3E7A34;--grass2:#357031;--dirt:#A86B3C;--track:#90572F;--wall:#16301C;--stands:#181B20;
+    --hot:#E8643C;--cold:#54A9E8;--steady:#8C9A90;--plat:#39B36B;
+    --panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.1);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#05080a;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;padding:20px 10px 60px;min-height:100vh}
+  .phone{width:430px;max-width:100%;background:radial-gradient(120% 50% at 50% 0%,#10201a,var(--bg));border-radius:30px;overflow:hidden;border:1px solid var(--line)}
+  .statusbar{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:600;font-family:var(--mono);color:var(--ink2)}
+  .head{padding:6px 18px 2px}
+  .head .lg{font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+  .head .top{display:flex;align-items:flex-start;gap:10px}
+  .head .mt{margin-top:5px;font-size:23px;font-weight:800;letter-spacing:-.02em}.head .mt .at{color:var(--ink3);font-weight:600;font-size:14px;margin:0 4px}
+  .head .park{margin-top:3px;font-size:11.5px;font-weight:600;color:var(--ink2)}
+  /* weather chip — tappable */
+  .wx{margin-left:auto;margin-top:6px;display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:7px 10px;cursor:pointer}
+  .wx .t{font-family:var(--mono);font-size:14px;font-weight:800}.wx .w{font-family:var(--mono);font-size:9px;color:var(--hot);font-weight:700;text-align:right;line-height:1.2}
+
+  .fieldwrap{position:relative;margin:12px 12px 0;height:452px}
+  .fieldwrap svg{position:absolute;inset:0;width:100%;height:100%}
+  .pl{position:absolute;transform:translate(-50%,-50%);width:72px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;z-index:2}
+  .tok{position:relative;width:30px;height:30px;border-radius:50%;background:var(--navy);color:var(--brewGold);
+    font-family:var(--mono);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.55)}
+  .tok.hot{box-shadow:0 0 0 2.5px var(--hot),0 0 10px rgba(232,100,60,.55)}
+  .tok.cold{box-shadow:0 0 0 2.5px var(--cold),0 0 9px rgba(84,169,232,.45)}
+  .tok.steady{box-shadow:0 0 0 2px rgba(140,154,144,.5)}
+  .tok.sp{background:#3a2230;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.55)}
+  .badge{position:absolute;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:800;font-size:8px;border:1.5px solid var(--bg)}
+  .badge.hr{top:-5px;right:-6px;background:var(--gold);color:#1a1205}
+  .badge.plat{top:-5px;left:-6px;background:var(--plat);color:#06180e;font-size:9px}
+  .nm{font-size:10px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.95);line-height:1.05}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px 14px;justify-content:center;margin:9px 14px 0;font-family:var(--mono);font-size:9px;color:var(--ink3)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .legend i.hr{background:var(--gold)}.legend i.plat{background:var(--plat)}
+  .foot{text-align:center;font-family:var(--mono);font-size:9px;color:var(--ink3);padding:14px;letter-spacing:.08em;text-transform:uppercase}
+
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:.2s;z-index:40}.scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,103%);width:430px;max-width:100%;background:#0F1612;border-radius:22px 22px 0 0;border-top:1px solid var(--line);padding:8px 18px 28px;z-index:41;transition:transform .25s cubic-bezier(.3,.9,.3,1)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:11px}.sh-no{width:42px;height:42px;border-radius:50%;background:var(--navy);color:var(--brewGold);font-family:var(--mono);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .sh-nm{font-size:18px;font-weight:800}.sh-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:1px}
+  .sh-chips{margin-left:auto;display:flex;gap:6px}.sh-chip{font-family:var(--mono);font-size:9px;font-weight:800;padding:5px 8px;border-radius:8px}
+  .sh-sec{margin-top:14px}.sh-l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--gold);font-weight:800;text-transform:uppercase;margin-bottom:8px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center}.cell .v{font-family:var(--mono);font-size:17px;font-weight:800}.cell .k{font-family:var(--mono);font-size:8px;color:var(--ink3);margin-top:3px}
+  .splitrow{display:flex;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.splitrow:first-child{border-top:0}.splitrow .k{color:var(--ink2)}.splitrow .v{margin-left:auto;font-family:var(--mono);font-weight:800}
+  .bvp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;font-size:13px;line-height:1.5}.bvp b{color:var(--gold)}
+  .wxgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span>Gary · MLB</span></div>
+  <div class="head">
+    <div class="lg">MLB · Game Intel</div>
+    <div class="top">
+      <div>
+        <div class="mt">Cleveland <span class="at">@</span> Milwaukee</div>
+        <div class="park">American Family Field · 342–400–345 · vs Bibee (RHP)</div>
+      </div>
+      <div class="wx" onclick="openWx()"><span class="t">78°</span><span class="w">12 MPH<br>OUT → RC</span></div>
+    </div>
+  </div>
+
+  <div class="fieldwrap" id="fieldwrap">
+    <svg viewBox="0 0 430 452" preserveAspectRatio="none">
+      <defs>
+        <radialGradient id="carry" cx="68%" cy="34%" r="34%"><stop offset="0" stop-color="#E8643C" stop-opacity=".30"/><stop offset="1" stop-color="#E8643C" stop-opacity="0"/></radialGradient>
+      </defs>
+      <path d="M8,222 Q215,-20 422,222 L430,200 Q215,-60 0,200 Z" fill="#181B20"/>
+      <path d="M215,406 L34,212 Q215,44 396,212 Z" fill="#3E7A34"/>
+      <path d="M215,406 L96,278 Q215,170 334,278 Z" fill="#357031" opacity=".55"/>
+      <!-- carry zone (wind out to right-centre) -->
+      <path d="M215,406 L34,212 Q215,44 396,212 Z" fill="url(#carry)"/>
+      <path d="M34,212 Q215,44 396,212" fill="none" stroke="#90572F" stroke-width="10"/>
+      <path d="M34,212 Q215,44 396,212" fill="none" stroke="#16301C" stroke-width="3"/>
+      <line x1="215" y1="406" x2="34" y2="212" stroke="rgba(255,255,255,.6)" stroke-width="1.5"/>
+      <line x1="215" y1="406" x2="396" y2="212" stroke="rgba(255,255,255,.6)" stroke-width="1.5"/>
+      <circle cx="34" cy="212" r="3" fill="#ffd34d"/><circle cx="396" cy="212" r="3" fill="#ffd34d"/>
+      <path d="M215,406 L292,332 A 78 78 0 0 0 138,332 Z" fill="#A86B3C"/>
+      <polygon points="215,394 278,334 215,274 152,334" fill="#3E7A34"/>
+      <polygon points="215,394 278,334 215,274 152,334" fill="none" stroke="#c07e4e" stroke-width="4.5"/>
+      <circle cx="215" cy="346" r="9" fill="#c07e4e"/><circle cx="215" cy="346" r="2.2" fill="rgba(255,255,255,.8)"/>
+      <rect x="274" y="330" width="8" height="8" transform="rotate(45 278 334)" fill="#fff"/>
+      <rect x="211" y="270" width="8" height="8" transform="rotate(45 215 274)" fill="#fff"/>
+      <rect x="148" y="330" width="8" height="8" transform="rotate(45 152 334)" fill="#fff"/>
+      <path d="M209,403 l12,0 l0,4 l-6,5 l-6,-5 z" fill="#fff"/>
+      <!-- WIND arrow: blowing out to right-centre -->
+      <g opacity=".9" onclick="openWx()" style="cursor:pointer">
+        <line x1="250" y1="240" x2="300" y2="160" stroke="#E8643C" stroke-width="3" stroke-linecap="round"/>
+        <path d="M300,160 l-13,4 l4,-13 z" fill="#E8643C"/>
+        <text x="232" y="248" fill="#E8643C" font-family="ui-monospace,Menlo" font-size="11" font-weight="800">12</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--hot)"></i>Hot (L15)</span>
+    <span><i style="background:var(--cold)"></i>Cold</span>
+    <span><i class="hr"></i>HR edge here</span>
+    <span><i class="plat"></i>Platoon edge vs RHP</span>
+    <span><i style="background:var(--hot);opacity:.5"></i>Wind carry zone</span>
+  </div>
+  <div class="foot">Pitching · Bats · Park &amp; Weather modules continue below · tap a fielder for the numbers</div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+const P=[
+  {n:11,nm:'Chourio',pos:'CF',x:50,y:21,heat:'hot',ord:3,bats:'R',hr:true,plat:false,wrc:122,xwoba:'.358',vR:'.880',vL:'.910',bvp:{ab:7,h:3,hr:1,ops:'1.140'},form:'1.060'},
+  {n:5,nm:'Mitchell',pos:'LF',x:22,y:36,heat:'hot',ord:8,bats:'L',hr:false,plat:true,wrc:105,xwoba:'.330',vR:'.800',vL:'.690',bvp:{ab:4,h:2,hr:0,ops:'1.000'},form:'.940'},
+  {n:10,nm:'Frelick',pos:'RF',x:78,y:36,heat:'cold',ord:2,bats:'L',hr:false,plat:true,wrc:92,xwoba:'.305',vR:'.740',vL:'.700',bvp:{ab:9,h:2,hr:0,ops:'.560'},form:'.610'},
+  {n:27,nm:'Adames',pos:'SS',x:39,y:57,heat:'hot',ord:9,bats:'R',hr:true,plat:false,wrc:118,xwoba:'.350',vR:'.860',vL:'.900',bvp:{ab:13,h:5,hr:1,ops:'.980'},form:'1.020'},
+  {n:0,nm:'Turang',pos:'2B',x:61,y:57,heat:'cold',ord:1,bats:'L',hr:false,plat:true,wrc:95,xwoba:'.300',vR:'.720',vL:'.760',bvp:{ab:6,h:1,hr:0,ops:'.500'},form:'.540'},
+  {n:3,nm:'Ortiz',pos:'3B',x:30,y:76,heat:'steady',ord:7,bats:'R',hr:false,plat:false,wrc:88,xwoba:'.298',vR:'.700',vL:'.770',bvp:{ab:5,h:1,hr:0,ops:'.560'},form:'.690'},
+  {n:12,nm:'Hoskins',pos:'1B',x:70,y:76,heat:'steady',ord:5,bats:'R',hr:true,plat:false,wrc:112,xwoba:'.345',vR:'.840',vL:'.910',bvp:{ab:8,h:2,hr:0,ops:'.625'},form:'.760'},
+  {n:51,nm:'Peralta',pos:'SP',x:50,y:77,heat:'steady',sp:true},
+  {n:24,nm:'Contreras',pos:'C',x:50,y:93,heat:'hot',ord:4,bats:'R',hr:true,plat:false,wrc:130,xwoba:'.372',vR:'.910',vL:'.840',bvp:{ab:11,h:4,hr:1,ops:'1.090'},form:'1.180'},
+];
+function render(){
+  const w=document.getElementById('fieldwrap');[...w.querySelectorAll('.pl')].forEach(e=>e.remove());
+  P.forEach(p=>{const el=document.createElement('div');el.className='pl';el.style.left=p.x+'%';el.style.top=p.y+'%';
+    const cls=p.sp?'sp':p.heat;
+    const hr=(!p.sp&&p.hr)?'<span class="badge hr">HR</span>':'';
+    const plat=(!p.sp&&p.plat)?'<span class="badge plat">▲</span>':'';
+    el.innerHTML=`<div class="tok ${cls}">${hr}${plat}${p.n}</div><div class="nm">${p.nm}</div>`;
+    el.onclick=()=>openSheet(p);w.appendChild(el);});
+}
+function openSheet(p){ if(p.sp)return; const sheet=document.getElementById('sheet');
+  const hot=p.heat==='hot'?'<span class="sh-chip" style="background:rgba(232,100,60,.18);color:#E8643C">HOT L15</span>':p.heat==='cold'?'<span class="sh-chip" style="background:rgba(84,169,232,.18);color:#54A9E8">COLD L15</span>':'';
+  const hr=p.hr?'<span class="sh-chip" style="background:rgba(201,162,39,.18);color:#C9A227">HR EDGE</span>':'';
+  const plat=p.plat?'<span class="sh-chip" style="background:rgba(57,179,107,.18);color:#39B36B">PLATOON ▲</span>':'';
+  sheet.innerHTML=`<div class="grab"></div><div class="sh-head"><div class="sh-no">${p.n}</div><div><div class="sh-nm">${p.nm}</div><div class="sh-sub">Brewers · ${p.pos} · bats ${p.bats} · ${p.form} OPS L15</div></div><div class="sh-chips">${hot}${plat}${hr}</div></div>
+    <div class="sh-sec"><div class="sh-l">The numbers</div><div class="grid3"><div class="cell"><div class="v">${p.wrc}</div><div class="k">wRC+</div></div><div class="cell"><div class="v">${p.xwoba}</div><div class="k">xwOBA</div></div><div class="cell"><div class="v" style="color:${p.heat==='hot'?'#E8643C':p.heat==='cold'?'#54A9E8':'#8C9A90'}">${p.form}</div><div class="k">L15 OPS</div></div></div></div>
+    ${p.hr?`<div class="sh-sec"><div class="sh-l">HR edge · American Family Field</div><div class="bvp">Pull-side power into a friendly park, <b>amplified tonight</b> by the 12 mph wind out to right-centre. ${p.bats==='R'?'RHB pull to LF/LC.':'LHB pull to RF/RC — right in the carry zone.'}</div></div>`:''}
+    <div class="sh-sec"><div class="sh-l">Platoon splits</div><div class="splitrow"><span class="k">vs RHP ${p.plat?'<span style="color:#39B36B">▲ edge</span>':''}</span><span class="v">${p.vR}</span></div><div class="splitrow"><span class="k">vs LHP</span><span class="v">${p.vL}</span></div></div>
+    <div class="sh-sec"><div class="sh-l">vs Tanner Bibee (career)</div><div class="bvp">${p.bvp.h}-for-${p.bvp.ab}${p.bvp.hr?`, <b>${p.bvp.hr} HR</b>`:''} · <b>${p.bvp.ops} OPS</b></div></div>`;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show'); }
+function openWx(){ const sheet=document.getElementById('sheet');
+  sheet.innerHTML=`<div class="grab"></div><div class="sh-head"><div class="sh-no" style="background:#23303a;color:#fff">☀</div><div><div class="sh-nm">First-pitch conditions</div><div class="sh-sub">American Family Field · Roof OPEN</div></div><div class="sh-chips"><span class="sh-chip" style="background:rgba(232,100,60,.18);color:#E8643C">HITTER-FRIENDLY</span></div></div>
+    <div class="sh-sec"><div class="sh-l">Tonight</div><div class="wxgrid"><div class="cell"><div class="v">78°</div><div class="k">TEMP</div></div><div class="cell"><div class="v" style="color:#E8643C">12</div><div class="k">MPH OUT → RC</div></div><div class="cell"><div class="v">41%</div><div class="k">HUMIDITY</div></div><div class="cell"><div class="v">29.9</div><div class="k">PRESSURE</div></div></div></div>
+    <div class="sh-sec"><div class="sh-l">The read</div><div class="bvp">Roof's open and the wind is <b>blowing out to right-centre at 12</b> — the orange zone on the field. That lifts carry for the <b>left-handed pull bats</b> (Yelich, Turang, Frelick) and nudges the <b>team total OVER</b> + anytime-HR markets.</div></div>`;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show'); }
+function closeSheet(){document.getElementById('sheet').classList.remove('show');document.getElementById('scrim').classList.remove('show');}
+render();
+</script>
+</body>
+</html>

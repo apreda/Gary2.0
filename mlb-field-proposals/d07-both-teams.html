@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guardians @ Brewers — Both Teams</title>
+<style>
+  :root{
+    --navy:#0a2351;
+    --navy-2:#13315c;
+    --gold:#ffc845;
+    --gold-deep:#d8a020;
+    --grass:#2f6b3a;
+    --grass-2:#3a7d46;
+    --grass-dk:#255430;
+    --dirt:#b9743f;
+    --dirt-2:#c98551;
+    --chalk:#f3efe6;
+    --ink:#0b1622;
+    --guard-red:#e3372e;
+    --guard-navy:#0c2340;
+    --paper:#0e1726;
+    --paper-2:#142036;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:#070b12; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; justify-content:center; align-items:flex-start;
+    min-height:100vh; padding:26px 12px;
+    background:
+      radial-gradient(900px 600px at 50% -10%, #14203a 0%, #070b12 60%);
+    color:#e8edf6;
+  }
+
+  /* ---- phone frame ---- */
+  .phone{
+    width:430px; max-width:100%;
+    background:var(--paper);
+    border-radius:42px;
+    box-shadow:
+      0 0 0 9px #11161f,
+      0 0 0 11px #1d2735,
+      0 32px 70px rgba(0,0,0,.6);
+    overflow:hidden;
+    position:relative;
+  }
+  .notch{
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:150px; height:26px; background:#11161f;
+    border-bottom-left-radius:16px; border-bottom-right-radius:16px;
+    z-index:40;
+  }
+  .statusbar{
+    height:46px; display:flex; align-items:flex-end; justify-content:space-between;
+    padding:0 24px 6px; font-size:13px; font-weight:600; color:#c9d4e6;
+    letter-spacing:.3px;
+  }
+  .statusbar .right{ display:flex; gap:6px; align-items:center; }
+
+  /* ---- header ---- */
+  .header{
+    padding:6px 18px 14px;
+    background:linear-gradient(180deg,var(--paper) 0%, var(--paper-2) 100%);
+    border-bottom:1px solid rgba(255,255,255,.05);
+  }
+  .crumb{
+    font-size:11px; letter-spacing:2.4px; text-transform:uppercase;
+    color:#7c8aa3; font-weight:700; margin-bottom:9px;
+  }
+  .matchline{ display:flex; align-items:center; gap:12px; }
+  .teamchip{
+    display:flex; align-items:center; gap:9px;
+  }
+  .dot{
+    width:34px; height:34px; border-radius:9px; display:flex;
+    align-items:center; justify-content:center; font-weight:800; font-size:13px;
+    letter-spacing:.3px;
+  }
+  .dot.gua{ background:var(--guard-navy); color:#fff; box-shadow:inset 0 0 0 2px var(--guard-red); }
+  .dot.mil{ background:var(--navy); color:var(--gold); box-shadow:inset 0 0 0 2px var(--gold); }
+  .teamchip .tn{ font-size:13px; font-weight:700; line-height:1.05; }
+  .teamchip .ts{ font-size:10px; color:#8694ad; letter-spacing:.4px; }
+  .vs{
+    font-size:11px; font-weight:800; color:#5b6a83;
+    letter-spacing:1px; padding:0 2px;
+  }
+  .gameMeta{
+    margin-top:11px; display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .pill{
+    font-size:10.5px; font-weight:700; letter-spacing:.4px;
+    padding:5px 10px; border-radius:999px;
+    background:rgba(255,255,255,.05); color:#aebbd1;
+    border:1px solid rgba(255,255,255,.06);
+  }
+  .pill.live{ color:#0e1726; background:var(--gold);
+    border-color:transparent; }
+  .pill.live b{ font-weight:800; }
+
+  /* ---- segmented label ---- */
+  .fieldwrap{
+    position:relative;
+    background:
+      radial-gradient(120% 90% at 50% 6%, #0f1b30 0%, #0a1322 70%, #070d18 100%);
+    padding:14px 12px 16px;
+  }
+  .deflabel{
+    display:flex; align-items:center; gap:7px; justify-content:center;
+    font-size:10.5px; font-weight:800; letter-spacing:1.6px;
+    text-transform:uppercase; color:var(--gold);
+    margin-bottom:10px;
+  }
+  .deflabel .bar{ height:1px; width:34px; background:linear-gradient(90deg,transparent,var(--gold-deep)); }
+  .deflabel .bar.r{ background:linear-gradient(270deg,transparent,var(--gold-deep)); }
+
+  /* ---- THE FIELD ---- */
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio: 1 / 1.16;
+    border-radius:18px;
+    overflow:hidden;
+    background:
+      radial-gradient(140% 120% at 50% 100%, var(--grass-2) 0%, var(--grass) 42%, var(--grass-dk) 100%);
+    box-shadow:
+      inset 0 0 0 2px rgba(255,255,255,.05),
+      inset 0 18px 50px rgba(0,0,0,.35),
+      0 14px 30px rgba(0,0,0,.45);
+  }
+  /* mowing stripes radiating from home plate */
+  .field::before{
+    content:""; position:absolute; inset:0;
+    background:
+      repeating-conic-gradient(from 90deg at 50% 112%,
+        rgba(255,255,255,.045) 0deg 7deg,
+        rgba(0,0,0,.05) 7deg 14deg);
+    pointer-events:none;
+  }
+  /* warning track arc */
+  .track{
+    position:absolute; left:-6%; right:-6%; top:-30%;
+    height:150%; border-radius:50%;
+    background:transparent;
+    box-shadow:
+      inset 0 0 0 13px var(--dirt),
+      inset 0 0 0 15px rgba(0,0,0,.18);
+    opacity:.85;
+  }
+  /* outfield wall hint */
+  .wall{
+    position:absolute; left:-8%; right:-8%; top:-34%;
+    height:150%; border-radius:50%;
+    box-shadow: inset 0 0 0 3px rgba(8,20,12,.55);
+  }
+
+  /* infield dirt diamond (rotated square) */
+  .infield{
+    position:absolute;
+    left:50%; bottom:6.5%;
+    width:62%; aspect-ratio:1/1;
+    transform:translateX(-50%) rotate(45deg);
+    background:
+      radial-gradient(120% 120% at 50% 50%, var(--dirt-2) 0%, var(--dirt) 55%, #a4632f 100%);
+    border-radius:10%;
+    box-shadow:
+      inset 0 0 18px rgba(0,0,0,.28),
+      0 6px 14px rgba(0,0,0,.25);
+  }
+  /* infield grass cut-in */
+  .infield::after{
+    content:""; position:absolute; inset:15%;
+    background:radial-gradient(120% 120% at 50% 50%, var(--grass-2), var(--grass));
+    border-radius:8%;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.06);
+  }
+  /* base paths (chalk) */
+  .basepaths{
+    position:absolute; left:50%; bottom:6.5%;
+    width:62%; aspect-ratio:1/1;
+    transform:translateX(-50%) rotate(45deg);
+    border:2px solid rgba(255,255,255,.55);
+    border-radius:9%;
+    pointer-events:none;
+  }
+  /* pitcher mound */
+  .mound{
+    position:absolute; left:50%; top:54%;
+    width:13%; aspect-ratio:1/1; transform:translate(-50%,-50%);
+    background:radial-gradient(circle, var(--dirt-2) 0%, var(--dirt) 70%, transparent 72%);
+    border-radius:50%;
+    z-index:3;
+  }
+  /* bases */
+  .base{
+    position:absolute; width:11px; height:11px; background:#fff;
+    transform:translate(-50%,-50%) rotate(45deg);
+    border-radius:2px; z-index:4;
+    box-shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+  .base.home{ background:#fff; clip-path:polygon(0 0,100% 0,100% 60%,50% 100%,0 60%); transform:translate(-50%,-50%); border-radius:1px; }
+  .base.b1{ left:50%; bottom:6.5%; }
+  /* base positions computed via separate placement below */
+
+  /* foul lines */
+  .foul{
+    position:absolute; bottom:6.5%; left:50%;
+    width:2px; height:88%;
+    background:linear-gradient(180deg, rgba(255,255,255,.0), rgba(255,255,255,.5));
+    transform-origin:bottom center;
+    z-index:2;
+  }
+  .foul.l{ transform:translateX(-50%) rotate(33deg); }
+  .foul.r{ transform:translateX(-50%) rotate(-33deg); }
+
+  /* ---- player tokens ---- */
+  .player{
+    position:absolute; transform:translate(-50%,-50%);
+    z-index:8; width:78px; text-align:center;
+    animation:pop .5s cubic-bezier(.2,.9,.3,1.3) both;
+  }
+  @keyframes pop{ from{ opacity:0; transform:translate(-50%,-40%) scale(.6);} to{ opacity:1;} }
+  .puck{
+    width:38px; height:38px; margin:0 auto 3px;
+    border-radius:50%;
+    background:linear-gradient(160deg,var(--navy-2),var(--navy));
+    color:var(--gold);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:14px;
+    box-shadow:
+      0 0 0 2px var(--gold),
+      0 6px 12px rgba(0,0,0,.45);
+    position:relative;
+  }
+  .puck .pos{
+    position:absolute; top:-7px; right:-9px;
+    font-size:8.5px; font-weight:800; letter-spacing:.3px;
+    background:var(--gold); color:var(--ink);
+    padding:1px 4px; border-radius:6px;
+    box-shadow:0 2px 4px rgba(0,0,0,.4);
+  }
+  .player .nm{
+    font-size:10px; font-weight:700; color:#f4f7fc;
+    text-shadow:0 1px 3px rgba(0,0,0,.85);
+    line-height:1.05;
+  }
+  .player .nm small{ display:block; font-size:8px; color:#cdd8ea; font-weight:600; letter-spacing:.3px; }
+  /* pitcher styled distinctly */
+  .player.p .puck{
+    background:linear-gradient(160deg,var(--gold),var(--gold-deep));
+    color:var(--navy);
+    box-shadow:0 0 0 2px var(--navy), 0 0 18px rgba(255,200,69,.4), 0 6px 12px rgba(0,0,0,.45);
+  }
+  .player.p .puck .pos{ background:var(--navy); color:var(--gold); }
+
+  /* ---- batting order rail (Guardians) ---- */
+  .lower{
+    background:linear-gradient(180deg,var(--paper-2),var(--paper));
+    padding:14px 14px 20px;
+    border-top:1px solid rgba(255,255,255,.05);
+  }
+  .railhead{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:11px;
+  }
+  .railhead .lh{ display:flex; align-items:center; gap:9px; }
+  .railhead .lh .badge{
+    width:28px; height:28px; border-radius:8px; background:var(--navy);
+    box-shadow:inset 0 0 0 2px var(--gold);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--gold); font-weight:800; font-size:11px;
+  }
+  .railhead .lt{ font-size:12.5px; font-weight:800; letter-spacing:.4px; }
+  .railhead .ls{ font-size:9.5px; color:#7e8ca5; letter-spacing:1.6px; text-transform:uppercase; font-weight:700; }
+  .railhead .pitchchip{
+    font-size:10px; font-weight:700; color:#cdd8ea;
+    background:rgba(227,55,46,.16); border:1px solid rgba(227,55,46,.4);
+    padding:5px 9px; border-radius:8px;
+  }
+  .railhead .pitchchip b{ color:#ff7b73; }
+
+  .order{ display:flex; flex-direction:column; gap:0; }
+  .ord{
+    display:flex; align-items:center; gap:11px;
+    padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.04);
+  }
+  .ord:last-child{ border-bottom:none; }
+  .ord .num{
+    width:22px; height:22px; flex:none; border-radius:6px;
+    background:rgba(255,255,255,.06); color:#aebbd1;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:800;
+  }
+  .ord .nm2{ font-size:12.5px; font-weight:600; color:#eaf0fa; flex:1; }
+  .ord .pos2{
+    font-size:9.5px; font-weight:800; letter-spacing:.5px;
+    color:#0e1726; background:var(--gold);
+    padding:2px 7px; border-radius:5px; min-width:30px; text-align:center;
+  }
+  .ord .pos2.dh{ background:var(--guard-red); color:#fff; }
+
+  .footnote{
+    margin-top:14px; font-size:9.5px; color:#5f6c84;
+    text-align:center; letter-spacing:.4px;
+  }
+
+  /* legend strip */
+  .legend{
+    display:flex; align-items:center; justify-content:center; gap:16px;
+    padding:11px 0 2px; font-size:9.5px; color:#8a97af; font-weight:600;
+  }
+  .legend i{ display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+  .legend .i1{ background:linear-gradient(160deg,var(--navy-2),var(--navy)); box-shadow:0 0 0 1.5px var(--gold); }
+  .legend .i2{ background:linear-gradient(160deg,var(--gold),var(--gold-deep)); box-shadow:0 0 0 1.5px var(--navy); }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="notch"></div>
+
+    <div class="statusbar">
+      <div>9:41</div>
+      <div class="right">
+        <span>5G</span>
+        <span>&#9646;&#9646;&#9646;</span>
+        <span>&#128267;</span>
+      </div>
+    </div>
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="crumb">Starting Lineups</div>
+      <div class="matchline">
+        <div class="teamchip">
+          <div class="dot gua">CLE</div>
+          <div>
+            <div class="tn">Guardians</div>
+            <div class="ts">Away &middot; 38&ndash;31</div>
+          </div>
+        </div>
+        <div class="vs">@</div>
+        <div class="teamchip">
+          <div class="dot mil">MIL</div>
+          <div>
+            <div class="tn">Brewers</div>
+            <div class="ts">Home &middot; 41&ndash;29</div>
+          </div>
+        </div>
+      </div>
+      <div class="gameMeta">
+        <span class="pill live"><b>Today</b> &middot; 8:10 PM ET</span>
+        <span class="pill">American Family Field</span>
+        <span class="pill">Roof Closed</span>
+      </div>
+    </div>
+
+    <!-- FIELD -->
+    <div class="fieldwrap">
+      <div class="deflabel">
+        <span class="bar"></span>
+        Brewers Taking the Field
+        <span class="bar r"></span>
+      </div>
+
+      <div class="field" id="field">
+        <div class="wall"></div>
+        <div class="track"></div>
+
+        <div class="foul l"></div>
+        <div class="foul r"></div>
+
+        <div class="infield"></div>
+        <div class="basepaths"></div>
+        <div class="mound"></div>
+
+        <!-- bases -->
+        <div class="base home" style="left:50%; bottom:6.2%;"></div>
+        <div class="base" style="left:71%; bottom:25%;"></div>   <!-- 1B -->
+        <div class="base" style="left:50%; bottom:43.5%;"></div> <!-- 2B -->
+        <div class="base" style="left:29%; bottom:25%;"></div>   <!-- 3B -->
+
+        <!-- FIELDERS at correct positions -->
+        <!-- CF deep top center -->
+        <div class="player" style="left:50%; top:16%;">
+          <div class="puck">11<span class="pos">CF</span></div>
+          <div class="nm">Chourio<small>Center</small></div>
+        </div>
+        <!-- LF upper left outfield -->
+        <div class="player" style="left:21%; top:27%;">
+          <div class="puck">5<span class="pos">LF</span></div>
+          <div class="nm">Mitchell<small>Left</small></div>
+        </div>
+        <!-- RF upper right outfield -->
+        <div class="player" style="left:79%; top:27%;">
+          <div class="puck">10<span class="pos">RF</span></div>
+          <div class="nm">Frelick<small>Right</small></div>
+        </div>
+        <!-- SS upper-left infield (left of 2nd) -->
+        <div class="player" style="left:38%; top:43%;">
+          <div class="puck">27<span class="pos">SS</span></div>
+          <div class="nm">Adames<small>Short</small></div>
+        </div>
+        <!-- 2B upper-right infield (right of 2nd) -->
+        <div class="player" style="left:62%; top:43%;">
+          <div class="puck">0<span class="pos">2B</span></div>
+          <div class="nm">Turang<small>Second</small></div>
+        </div>
+        <!-- 3B lower-left infield -->
+        <div class="player" style="left:27%; top:60%;">
+          <div class="puck">3<span class="pos">3B</span></div>
+          <div class="nm">Ortiz<small>Third</small></div>
+        </div>
+        <!-- 1B lower-right infield -->
+        <div class="player" style="left:73%; top:60%;">
+          <div class="puck">12<span class="pos">1B</span></div>
+          <div class="nm">Hoskins<small>First</small></div>
+        </div>
+        <!-- P mound center -->
+        <div class="player p" style="left:50%; top:54%;">
+          <div class="puck">51<span class="pos">P</span></div>
+          <div class="nm">Peralta<small>Pitcher</small></div>
+        </div>
+        <!-- C behind home -->
+        <div class="player" style="left:50%; top:80%;">
+          <div class="puck">24<span class="pos">C</span></div>
+          <div class="nm">Contreras<small>Catcher</small></div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><i class="i2"></i>Probable Starter</span>
+        <span><i class="i1"></i>Brewers Fielder</span>
+      </div>
+    </div>
+
+    <!-- BATTING ORDER RAIL (Guardians) -->
+    <div class="lower">
+      <div class="railhead">
+        <div class="lh">
+          <div class="badge">MIL</div>
+          <div>
+            <div class="lt">Brewers Batting Order</div>
+            <div class="ls">vs Tanner Bibee &middot; RHP</div>
+          </div>
+        </div>
+        <div class="pitchchip">Opp SP <b>#28</b></div>
+      </div>
+
+      <div class="order">
+        <div class="ord"><div class="num">1</div><div class="nm2">Brice Turang</div><div class="pos2">2B</div></div>
+        <div class="ord"><div class="num">2</div><div class="nm2">Sal Frelick</div><div class="pos2">RF</div></div>
+        <div class="ord"><div class="num">3</div><div class="nm2">Jackson Chourio</div><div class="pos2">CF</div></div>
+        <div class="ord"><div class="num">4</div><div class="nm2">William Contreras</div><div class="pos2">C</div></div>
+        <div class="ord"><div class="num">5</div><div class="nm2">Rhys Hoskins</div><div class="pos2">1B</div></div>
+        <div class="ord"><div class="num">6</div><div class="nm2">Christian Yelich</div><div class="pos2 dh">DH</div></div>
+        <div class="ord"><div class="num">7</div><div class="nm2">Joey Ortiz</div><div class="pos2">3B</div></div>
+        <div class="ord"><div class="num">8</div><div class="nm2">Garrett Mitchell</div><div class="pos2">LF</div></div>
+        <div class="ord"><div class="num">9</div><div class="nm2">Willy Adames</div><div class="pos2">SS</div></div>
+      </div>
+
+      <div class="footnote">Defense shown on the field &middot; lineup vs the probable RHP &middot; subject to late scratches</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary · WC Starting XI — s04 Sharp Jersey · Warm Chrome</title>
+<!--
+  s04 — SHARP JERSEY · WARM CHROME.
+  Maroon jersey tokens on a deep muted forest pitch, wrapped in FLAT warm Gary chrome.
+  ANTI-BUBBLY: no blurred shadows, no glows, no soft radial gradients, no rounding on UI chrome beyond small radii.
+  FLAT fills · CRISP 1px lines · tight condensed type · MONO numerals. Gold = Gary's voice / one affordance only.
+  States: PROJECTED -> CONTESTED -> CONFIRMED. State toggle + tap-a-player sheet. Self-contained, offline.
+-->
+<style>
+  :root{
+    /* warm Gary chrome — flat */
+    --cream:#F6F1E7; --cream2:#EFE6D6; --panel:#FBF7EF; --hairline:#E0D4BB;
+    --ink:#1F1A13; --ink2:#48402F; --ink3:#8A7C66;
+    --gold:#B5862F; --gold-deep:#7E5C18;
+    /* pitch — deep muted forest */
+    --grass-a:#2E3D34; --grass-b:#33433A; --pline:rgba(232,237,228,.30);
+    /* jersey maroon */
+    --qat:#8E2C3B; --qat-collar:#7A2533;
+    --can:#9E2530; --can-collar:#85202A;
+    --gk:#2C5A52; --gk-collar:#244A44;
+    /* disc */
+    --disc-fill:#F4EFE3; --disc-ring:rgba(20,30,22,.18); --disc-ink:#2E3D34;
+    /* states */
+    --amber:#E08A2B; --green:#3C7A52; --red:#A83B36;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#DED4C0;font-family:var(--sans);color:var(--ink);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px 12px 56px}
+  .cap{font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .legend{max-width:430px;width:100%;font-size:11px;color:#5b5038;line-height:1.5;
+    background:var(--cream);border:1px solid var(--hairline);border-radius:8px;padding:9px 12px}
+  .legend b{color:#3a3020}
+
+  /* phone — flat, small radius */
+  .phone{width:430px;max-width:100%;background:var(--cream);border-radius:18px;overflow:hidden;
+    border:1px solid var(--hairline)}
+  .status{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:11px;
+    font-family:var(--mono);color:var(--ink2)}
+  .nav{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+  .nav .chev{font-size:20px;color:var(--ink2);line-height:1}
+  .nav .ttl{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;color:var(--ink2)}
+  .nav .share{margin-left:auto;font-size:15px;color:var(--ink3)}
+
+  /* match header — flat cream, gold eyebrow */
+  .mhead{padding:6px 16px 12px;border-bottom:1px solid var(--hairline)}
+  .eyebrow0{font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;color:var(--gold);font-weight:700}
+  .teams{font-size:22px;font-weight:800;letter-spacing:-.01em;margin-top:5px}
+  .teams .v{color:var(--ink3);font-weight:600;font-size:14px;margin:0 3px}
+  .form{float:right;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink2);
+    border:1px solid var(--hairline);padding:2px 8px;border-radius:5px;margin-top:2px}
+  .meta{margin-top:4px;font-size:10.5px;color:var(--ink3);font-family:var(--mono);letter-spacing:.04em}
+
+  /* state capsule — flat matte */
+  .statecap{display:flex;align-items:stretch;margin:11px 16px 0;border:1px solid var(--hairline);border-radius:8px;
+    overflow:hidden;background:var(--cream2)}
+  .statecap button{flex:1;border:0;background:transparent;padding:8px 4px;font-family:var(--mono);
+    font-size:10.5px;letter-spacing:.06em;color:var(--ink2);font-weight:700;cursor:pointer;
+    border-right:1px solid var(--hairline)}
+  .statecap button:last-child{border-right:0}
+  .statecap button .sub{display:block;font-size:8px;font-weight:500;color:var(--ink3);margin-top:2px;letter-spacing:.03em}
+  .statecap button.on{background:var(--ink);color:#F1E6CB}
+  .statecap button.on .sub{color:rgba(241,230,203,.6)}
+
+  /* team + status row */
+  .trow{display:flex;align-items:center;gap:7px;margin:9px 16px 0}
+  .tt button{border:1px solid var(--hairline);background:var(--panel);padding:5px 13px;border-radius:5px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--ink2);cursor:pointer;font-weight:700}
+  .tt button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tt .chip{width:11px;height:11px;border-radius:2px;display:inline-block;vertical-align:-1px;margin-right:6px}
+  .stchip{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.05em;
+    padding:4px 9px;border-radius:5px;display:inline-flex;align-items:center;gap:6px}
+  .stchip .d{width:6px;height:6px;border-radius:50%}
+  .stchip.projected{background:#F4E7CF;color:#7c4711}
+  .stchip.projected .d{background:var(--amber)}
+  .stchip.confirmed{background:#D9E8DD;color:#1c5638}
+  .stchip.confirmed .d{background:var(--green)}
+
+  /* pitch — deep muted forest, crisp 1px lines */
+  .pitchwrap{margin:11px 16px 0;border-radius:16px;overflow:hidden;border:1px solid rgba(20,30,22,.35)}
+  .pitch{position:relative;width:100%;aspect-ratio:.72;
+    background:repeating-linear-gradient(0deg,var(--grass-a) 0 9.09%,var(--grass-b) 9.09% 18.18%)}
+  .pitch .mk{position:absolute;border:1px solid var(--pline)}
+  .pitch .frame{inset:3%;border-radius:2px}
+  .pitch .center{left:3%;right:3%;top:50%;height:0;border-width:1px 0 0 0}
+  .pitch .circle{left:50%;top:50%;width:32%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}
+  .pitch .spot{left:50%;top:50%;width:3px;height:3px;border-radius:50%;background:var(--pline);transform:translate(-50%,-50%);border:0}
+  .pitch .boxT{left:24%;right:24%;top:3%;height:13%;border-top:0}
+  .pitch .boxB{left:24%;right:24%;bottom:3%;height:13%;border-bottom:0}
+
+  /* ===== player token ===== */
+  .player{position:absolute;transform:translate(-50%,-50%);width:62px;display:flex;flex-direction:column;
+    align-items:center;gap:3px;cursor:pointer}
+
+  /* DISC token — flat cream circle, 1px ring, no shadow */
+  .disc{width:36px;height:36px;border-radius:50%;background:var(--disc-fill);
+    border:1px solid var(--disc-ring);display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;font-size:13px;color:var(--disc-ink)}
+
+  /* JERSEY token — flat maroon shirt silhouette, white mono number */
+  .kit{position:relative;width:38px;height:36px}
+  .kit .body{position:absolute;left:6px;right:6px;top:6px;bottom:0;background:var(--kit);
+    clip-path:polygon(0 16%,20% 0,80% 0,100% 16%,100% 100%,0 100%)}
+  .kit .slL,.kit .slR{position:absolute;top:5px;width:9px;height:13px;background:var(--kit)}
+  .kit .slL{left:0;clip-path:polygon(0 26%,100% 0,100% 100%,42% 100%)}
+  .kit .slR{right:0;clip-path:polygon(0 0,100% 26%,58% 100%,0 100%)}
+  .kit .collar{position:absolute;left:50%;top:5px;transform:translateX(-50%);width:13px;height:5px;
+    background:var(--kit-collar);clip-path:polygon(0 0,100% 0,72% 100%,28% 100%)}
+  .kit .knum{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;
+    font-family:var(--mono);font-weight:700;font-size:13px;color:#fff}
+
+  .pname{font-size:11px;font-weight:700;color:#fff;line-height:1.04;text-align:center;max-width:64px;letter-spacing:-.01em}
+  .ppos{font-family:var(--mono);font-size:8.5px;letter-spacing:.05em;color:rgba(255,255,255,.62)}
+
+  /* CONTESTED slot — amber pill + crisp dashed amber rounded-rect. NO glow. */
+  .player.contested{z-index:5}
+  .player.contested .tokwrap{position:relative}
+  .player.contested .tokwrap::before{content:"";position:absolute;inset:-6px;border-radius:8px;
+    border:1.5px dashed var(--amber)}
+  .player.contested .flag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);z-index:6;
+    background:var(--amber);color:#fff;font-family:var(--mono);font-size:8px;font-weight:700;
+    padding:2px 6px;border-radius:5px;letter-spacing:.04em;white-space:nowrap}
+  .player.contested .pname{color:#F6DEB5}
+  .state-contested .player:not(.contested){opacity:.42}
+
+  /* CONFIRMED — contested slot resolves: thin solid green rect + tiny tick */
+  .player.resolved .tokwrap::before{content:"";position:absolute;inset:-6px;border-radius:8px;
+    border:1px solid var(--green)}
+  .player.resolved .tick{position:absolute;top:-13px;left:50%;transform:translateX(-50%);z-index:6;
+    background:var(--green);color:#fff;font-family:var(--mono);font-size:8px;font-weight:700;
+    padding:2px 6px;border-radius:5px;letter-spacing:.03em;white-space:nowrap}
+
+  /* token-style toggle (disc / jersey) — tiny mono control, optional */
+  .toks{display:flex;gap:6px;margin:9px 16px 0;align-items:center}
+  .toks .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--ink3)}
+  .toks button{border:1px solid var(--hairline);background:var(--panel);padding:3px 10px;border-radius:5px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--ink2);cursor:pointer;font-weight:700}
+  .toks button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .toks .grade{margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.04em;
+    padding:3px 8px;border-radius:5px;background:var(--cream2);color:var(--ink2);border:1px solid var(--hairline)}
+  .toks .grade.hit{background:#D9E8DD;color:#1c5638;border-color:#bcd7c4}
+
+  /* read card — crisp cream */
+  .read{margin:12px 16px 16px;background:var(--panel);border:1px solid var(--hairline);border-radius:10px;padding:13px 14px}
+  .reye{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--gold);font-weight:700;margin-bottom:9px}
+  .rline{display:flex;gap:9px;padding:8px 0;border-top:1px solid var(--hairline);font-size:12.5px;line-height:1.42;color:var(--ink2)}
+  .rline:first-of-type{border-top:0;padding-top:2px}
+  .rline .k{flex:0 0 auto;width:4px;height:4px;border-radius:50%;margin-top:7px;background:var(--gold)}
+  .rline.hot .k{background:var(--green)} .rline.warn .k{background:var(--amber)} .rline.cold .k{background:var(--red)}
+  .rline b{color:var(--ink)}
+  .hedge{font-family:var(--mono);font-size:9.5px;color:var(--ink3);margin-top:10px;letter-spacing:.02em}
+  .callout{margin-top:11px;border:1px solid var(--amber);border-left-width:3px;border-radius:6px;padding:10px 11px;
+    font-size:12px;color:#6e3f10;line-height:1.44;background:#FBF1E0}
+  .callout b{color:#542d06}
+  .odds{font-family:var(--mono);color:var(--gold-deep);font-weight:700}
+
+  /* bottom sheet — flat */
+  .scrim{position:fixed;inset:0;background:rgba(20,15,8,.42);opacity:0;pointer-events:none;transition:.18s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,102%);width:430px;max-width:100%;
+    background:var(--cream);border-radius:14px 14px 0 0;padding:8px 18px 24px;z-index:41;
+    transition:transform .22s cubic-bezier(.3,.9,.3,1);border:1px solid var(--hairline);border-bottom:0}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:34px;height:3px;border-radius:2px;background:#cdbfa3;margin:6px auto 14px}
+  .sh-head{display:flex;align-items:center;gap:12px}
+  .sh-tok{width:40px;height:38px;position:relative;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  .sh-nm{font-size:17px;font-weight:800}
+  .sh-sub{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.04em;margin-top:2px}
+  .sh-status{margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:700;padding:4px 8px;border-radius:5px;letter-spacing:.04em}
+  .sh-status.contested{background:#F4E7CF;color:#7c4711}
+  .sh-status.confirmed{background:#D9E8DD;color:#1c5638}
+  .sh-sec{margin-top:15px}
+  .sh-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--gold);font-weight:700;margin-bottom:7px}
+  .splitbar{display:flex;height:28px;border-radius:5px;overflow:hidden;font-family:var(--mono);font-size:9.5px;font-weight:700;border:1px solid var(--hairline)}
+  .splitbar .s1{background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center}
+  .splitbar .s2{background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center}
+  .srclist{margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--ink2);line-height:1.6}
+  .srclist .y{color:var(--green)} .srclist .n{color:#b06a18}
+  .bet{background:var(--panel);border:1px solid var(--hairline);border-radius:8px;padding:11px 12px;font-size:12.5px;line-height:1.5;color:var(--ink2)}
+  .bet b{color:var(--ink)}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:2px}
+  .stat{background:var(--panel);border:1px solid var(--hairline);border-radius:6px;padding:9px;text-align:center}
+  .stat .v{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink)}
+  .stat .l{font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--ink3);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <b>s04 · Sharp Jersey · Warm Chrome.</b> Maroon jersey tokens on a deep muted forest pitch, wrapped in flat warm Gary chrome —
+  the jerseys you liked, made crisp. Tap the state capsule: <b>Projected</b> → <b>Contested</b> (Ali's slot gets an amber 3/5 flag +
+  dashed ring) → <b>Confirmed</b> (slot resolves green, reads fire). Tap any token for the split. Toggle <b>QAT/CAN</b> and disc/jersey.
+</div>
+
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="cap">Gary</span></div>
+  <div class="nav">
+    <span class="chev">‹</span>
+    <span class="ttl">STARTING XI</span>
+    <span class="share">⤴</span>
+  </div>
+
+  <div class="mhead">
+    <span class="form" id="formlbl">4-3-3</span>
+    <div class="eyebrow0">STARTING XI</div>
+    <div class="teams">Canada <span class="v">v</span> Qatar</div>
+    <div class="meta">GROUP B · BC PLACE · VANCOUVER · 6:00 PM ET</div>
+  </div>
+
+  <div class="statecap">
+    <button data-state="projected" class="on">PROJECTED<span class="sub">all day · ~6h to KO</span></button>
+    <button data-state="contested">CONTESTED<span class="sub">the debated slot</span></button>
+    <button data-state="confirmed">CONFIRMED<span class="sub">~38m to KO</span></button>
+  </div>
+
+  <div class="trow">
+    <div class="tt">
+      <button data-team="QAT" class="on"><span class="chip" style="background:#8E2C3B"></span>QATAR</button>
+      <button data-team="CAN"><span class="chip" style="background:#9E2530"></span>CANADA</button>
+    </div>
+    <span class="stchip projected" id="stchip"><span class="d"></span>PROJECTED</span>
+  </div>
+
+  <div class="pitchwrap">
+    <div class="pitch" id="pitch">
+      <div class="mk frame"></div>
+      <div class="mk center"></div>
+      <div class="mk circle"></div>
+      <div class="mk spot"></div>
+      <div class="mk boxT"></div>
+      <div class="mk boxB"></div>
+    </div>
+  </div>
+
+  <div class="toks">
+    <span class="lbl">TOKEN</span>
+    <button data-tok="jersey" class="on">JERSEY</button>
+    <button data-tok="disc">DISC</button>
+    <span class="grade" id="grade">TOURN. AVG 9/11</span>
+  </div>
+
+  <div class="read" id="read"></div>
+</div>
+
+<!-- bottom sheet -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ---- kit palettes ---------------------------------------------------- */
+const KITS = {
+  QAT:{c:'#8E2C3B',collar:'#7A2533'},
+  CAN:{c:'#9E2530',collar:'#85202A'},
+};
+const GK_KIT = {c:'#2C5A52',collar:'#244A44'};
+
+/* render a token: flat jersey OR flat disc */
+function tokMarkup(num,kit){
+  if(tok==='disc'){
+    return `<span class="disc">${num}</span>`;
+  }
+  return `<span class="kit" style="--kit:${kit.c};--kit-collar:${kit.collar}">
+      <span class="slL"></span><span class="slR"></span>
+      <span class="body"></span><span class="collar"></span>
+      <span class="knum">${num}</span>
+    </span>`;
+}
+
+/* ---- data ------------------------------------------------------------ */
+const TEAMS = {
+  QAT: {
+    name:'Qatar', formation:'4-3-3',
+    lines:[
+      {y:90, men:[{n:1,nm:'Barsham',pos:'GK'}]},
+      {y:70, men:[{n:2,nm:'Pedro Miguel',pos:'RB'},{n:15,nm:'Khoukhi',pos:'CB'},{n:5,nm:'Hassan',pos:'CB'},{n:3,nm:'Homam',pos:'LB'}]},
+      {y:48, men:[{n:12,nm:'Madibo',pos:'CM'},{n:8,nm:'Hatim',pos:'CM'},{n:23,nm:'Boudiaf',pos:'CM'}]},
+      {y:25, men:[{n:11,nm:'Afif',pos:'LW'},{n:19,nm:'Almoez Ali',pos:'ST',contested:true},{n:10,nm:'Edmilson Jr.',pos:'RW'}]},
+    ],
+    agree:82,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    projRead:[
+      {t:'<b>If this XI holds:</b> the front three of Afif + Ali + Edmilson leans Qatar to push the game — points toward Qatar team-total OVER. Firms up at the confirmed sheet.',cls:'hot'},
+      {t:'<b>Behind 0-1-0 in Group B.</b> Drew the opener — closer to a must-win, which usually means a fuller-strength, attacking sheet.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed: Ali starts.</b> Qatar over / Ali anytime-scorer <span class="odds">+180</span> are live — not hedged.',cls:'hot'},
+      {t:'<b>4-3-3, front three intact.</b> A genuine go-forward selection vs Canada — leans the match OVER and Qatar\'s side of the total.',cls:'hot'},
+    ],
+  },
+  CAN: {
+    name:'Canada', formation:'4-3-3',
+    lines:[
+      {y:90, men:[{n:16,nm:'Crépeau',pos:'GK'}]},
+      {y:70, men:[{n:2,nm:'Johnston',pos:'RB'},{n:4,nm:'Vitória',pos:'CB'},{n:5,nm:'Cornelius',pos:'CB'},{n:3,nm:'Adekugbe',pos:'LB'}]},
+      {y:48, men:[{n:7,nm:'Eustáquio',pos:'CM'},{n:13,nm:'Koné',pos:'CM'},{n:11,nm:'Buchanan',pos:'CM'}]},
+      {y:25, men:[{n:20,nm:'David',pos:'ST'},{n:17,nm:'Larin',pos:'ST'},{n:19,nm:'Davies',pos:'LW'}]},
+    ],
+    agree:91,
+    sources:['The Athletic','ESPN','Sports Mole','RotoWire','bet365'],
+    projRead:[
+      {t:'<b>High source agreement (91%).</b> Settled side — the projected XI is near-locked, so the reads below carry weight even pre-confirmation.',cls:'hot'},
+      {t:'<b>David + Davies pace up top.</b> Canada\'s front line leans the match toward Canada\'s side of the spread.',cls:''},
+    ],
+    confRead:[
+      {t:'<b>Confirmed XI matches the projection.</b> No surprises — the pre-confirmation reads stand.',cls:'hot'},
+      {t:'<b>Full-strength attacking line.</b> David / Larin / Davies all start — Canada to score / -1.5 markets in play.',cls:'hot'},
+    ],
+  },
+};
+
+/* per-player drill-down */
+const READS = {
+  'Almoez Ali':{
+    sub:'Qatar · ST · #19',
+    contested:{split:[60,40,'3 of 5 START','2 BENCH'],
+      sources:'<span class="y">▲ START</span> The Athletic · ESPN · Sports Mole &nbsp; <span class="n">▼ BENCH</span> RotoWire · bet365',
+      bet:'Qatar\'s top scorer (<b>12 in qualifying</b>). The whole match hinges on this slot:<br>• If he <b>starts</b> → Ali anytime-scorer <span class="odds">+180</span>, Qatar team-total OVER more live.<br>• If he\'s <b>benched</b> → fade Qatar\'s over, Canada clean-sheet <span class="odds">+165</span> gains.<br><b>Watch the team sheet at ~T-40 before betting this game.</b>'},
+    stats:[['12','QUAL GOALS'],['60','CAREER'],['1','GP THIS WC']],
+  },
+  'David':{ sub:'Canada · ST · #20',
+    bet:'Canada\'s focal point. With a settled XI around him, <b>David anytime-scorer <span class="odds">+120</span></b> and Canada team-total OVER are the cleaner reads.',
+    stats:[['2','WC GOALS'],['.61','xG/90'],['2','GP THIS WC']] },
+};
+
+/* ---- render ---------------------------------------------------------- */
+let state='projected', team='QAT', tok='jersey';
+
+function render(){
+  const T=TEAMS[team];
+  const kit=KITS[team];
+  document.getElementById('formlbl').textContent=T.formation;
+  const isConf = state==='confirmed';
+
+  // status chip
+  const sc=document.getElementById('stchip');
+  sc.className='stchip '+(isConf?'confirmed':'projected');
+  sc.innerHTML = isConf
+    ? `<span class="d"></span>CONFIRMED · 38m`
+    : `<span class="d"></span>PROJECTED · ${T.agree}%`;
+
+  // self-grade
+  const g=document.getElementById('grade');
+  g.className='grade'+(isConf?' hit':'');
+  g.textContent = isConf ? 'HIT 10/11' : 'TOURN. AVG 9/11';
+
+  // pitch
+  const p=document.getElementById('pitch');
+  p.className='pitch state-'+state;
+  [...p.querySelectorAll('.player')].forEach(e=>e.remove());
+  T.lines.forEach(line=>{
+    const n=line.men.length;
+    line.men.forEach((m,i)=>{
+      const x=(i+1)/(n+1)*100;
+      const contested = m.contested && !isConf;
+      const resolved  = m.contested && isConf;
+      const el=document.createElement('div');
+      let cls='player';
+      if(contested) cls+=' contested';
+      if(resolved)  cls+=' resolved';
+      el.className=cls;
+      el.style.left=x+'%'; el.style.top=line.y+'%';
+      const useKit = m.pos==='GK' ? GK_KIT : kit;
+      el.innerHTML=`
+        ${contested?'<span class="flag">3/5 START</span>':''}
+        ${resolved?'<span class="tick">✓ STARTS</span>':''}
+        <span class="tokwrap">${tokMarkup(m.n,useKit)}</span>
+        <div class="pname">${m.nm}</div><div class="ppos">${m.pos}</div>`;
+      el.onclick=()=>openSheet(m.nm,m.pos,m.n,contested,useKit);
+      p.appendChild(el);
+    });
+  });
+
+  // read card
+  const reads = isConf ? T.confRead : T.projRead;
+  let html = `<div class="reye">${isConf?'THE READ · CONFIRMED':'THE READ · PROJECTED'}</div>`;
+  reads.forEach(r=>{ html+=`<div class="rline ${r.cls}"><span class="k"></span><span>${r.t}</span></div>`; });
+  if(!isConf){
+    html += `<div class="hedge">Soft until confirmed — these firm up when the official sheet posts (~T-40).</div>`;
+  }
+  if(state==='contested' && team==='QAT'){
+    html += `<div class="callout"><b>Contested slot — Almoez Ali.</b> 3 of 5 outlets start Qatar's top scorer; 2 bench him. Qatar's entire over / team-total read swings on it. Tap his shirt for the full split.</div>`;
+  }
+  document.getElementById('read').innerHTML=html;
+}
+
+/* ---- bottom sheet ---------------------------------------------------- */
+function openSheet(name,pos,num,contested,kit){
+  const r=READS[name];
+  const sheet=document.getElementById('sheet');
+  const statusHtml = contested
+    ? `<span class="sh-status contested">CONTESTED</span>`
+    : (state==='confirmed' ? `<span class="sh-status confirmed">CONFIRMED</span>` : '');
+  let body=`<div class="grab"></div>
+    <div class="sh-head">
+      <span class="sh-tok">${tokMarkup(num,kit)}</span>
+      <div><div class="sh-nm">${name}</div><div class="sh-sub">${r?r.sub:team+' · '+pos+' · #'+num}</div></div>
+      ${statusHtml}</div>`;
+
+  if(r && contested && r.contested){
+    const c=r.contested;
+    body+=`<div class="sh-sec"><div class="sh-lbl">SOURCE SPLIT</div>
+      <div class="splitbar"><div class="s1" style="flex:${c.split[0]}">${c.split[2]}</div>
+        <div class="s2" style="flex:${c.split[1]}">${c.split[3]}</div></div>
+      <div class="srclist">${c.sources}</div></div>
+      <div class="sh-sec"><div class="sh-lbl">WHY IT MATTERS</div><div class="bet">${c.bet}</div></div>`;
+  } else if(r){
+    body+=`<div class="sh-sec"><div class="sh-lbl">THE READ</div><div class="bet">${r.bet}</div></div>`;
+  } else {
+    body+=`<div class="sh-sec"><div class="bet">Per-player reads attach here — recent form, matchup vs the opposite number, and any prop angle. (Mock: detailed cards wired for Ali &amp; David.)</div></div>`;
+  }
+  if(r && r.stats){
+    body+=`<div class="sh-sec"><div class="sh-lbl">FORM</div><div class="statgrid">`;
+    r.stats.forEach(s=>{ body+=`<div class="stat"><div class="v">${s[0]}</div><div class="l">${s[1]}</div></div>`; });
+    body+=`</div></div>`;
+  }
+  sheet.innerHTML=body;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
+
+/* ---- wiring ---------------------------------------------------------- */
+document.querySelectorAll('.statecap button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.statecap button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state=b.dataset.state; render();
+});
+document.querySelectorAll('.tt button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tt button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); team=b.dataset.team;
+  if(team==='CAN' && state==='contested'){
+    state='projected';
+    document.querySelectorAll('.statecap button').forEach(x=>x.classList.toggle('on',x.dataset.state==='projected'));
+  }
+  render();
+});
+document.querySelectorAll('.toks button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.toks button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); tok=b.dataset.tok; render();
+});
+render();
+</script>
+</body>
+</html>

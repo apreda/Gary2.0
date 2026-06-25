@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>d04 — Vintage Scorecard</title>
+<style>
+  :root{
+    --navy:#0a2351;
+    --navy-ink:#13294b;
+    --gold:#b6922e;
+    --gold-soft:#cda94b;
+    --paper:#f1e7cf;
+    --paper-2:#e8dcbf;
+    --rule:#9aa39f;
+    --rule-soft:rgba(40,52,40,.28);
+    --pencil:#2b2f2a;
+    --pencil-soft:#3c4138;
+    --grass:#cdd6b6;
+    --grass-2:#c2cda6;
+    --dirt:#d9c39a;
+    --dirt-2:#cfb589;
+    --red:#9c3b2e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#3a3a33;
+    background:
+      radial-gradient(circle at 30% 20%, #4a4a40, #2c2c26 70%);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:24px;
+    font-family:'Courier New',Courier,monospace;
+  }
+
+  /* ---- phone frame ---- */
+  .phone{
+    width:430px;max-width:100%;
+    background:var(--paper);
+    border-radius:30px;
+    overflow:hidden;
+    position:relative;
+    box-shadow:
+      0 30px 70px rgba(0,0,0,.55),
+      0 4px 0 rgba(0,0,0,.4);
+    border:1px solid #000;
+  }
+  /* aged-paper texture + fibers */
+  .phone::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:60;
+    background:
+      radial-gradient(circle at 18% 12%, rgba(120,90,40,.10), transparent 9%),
+      radial-gradient(circle at 82% 30%, rgba(120,90,40,.12), transparent 11%),
+      radial-gradient(circle at 65% 88%, rgba(90,70,30,.14), transparent 14%),
+      radial-gradient(circle at 8% 70%, rgba(120,90,40,.08), transparent 10%);
+    mix-blend-mode:multiply;opacity:.9;
+  }
+  .phone::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:61;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.012) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.012) 0 1px, transparent 1px 3px);
+    box-shadow:inset 0 0 60px rgba(70,50,20,.35), inset 0 0 12px rgba(40,30,10,.4);
+  }
+
+  .screen{position:relative;z-index:2;padding:0 0 14px}
+
+  /* ---- ledger header ---- */
+  .ledger-head{
+    background:var(--navy);
+    color:var(--paper);
+    padding:14px 18px 12px;
+    position:relative;
+    border-bottom:3px double var(--gold);
+  }
+  .ledger-head .stamp{
+    position:absolute;top:10px;right:14px;
+    transform:rotate(8deg);
+    border:2px solid var(--gold-soft);
+    color:var(--gold-soft);
+    font-family:'Courier New',monospace;
+    font-weight:700;letter-spacing:1px;
+    font-size:9px;padding:3px 7px;border-radius:3px;
+    opacity:.85;
+    box-shadow:inset 0 0 0 2px rgba(205,169,75,.25);
+  }
+  .ledger-head h1{
+    font-family:Georgia,'Times New Roman',serif;
+    font-size:11px;letter-spacing:4px;font-weight:700;
+    color:var(--gold-soft);text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .matchline{
+    font-family:Georgia,serif;
+    font-size:20px;font-weight:700;line-height:1.1;
+    color:#fff;
+  }
+  .matchline .at{color:var(--gold-soft);font-style:italic;font-weight:400;padding:0 6px}
+  .subline{
+    margin-top:6px;font-size:10px;letter-spacing:1px;
+    color:rgba(241,231,207,.78);
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  }
+  .subline .dot{opacity:.5}
+
+  /* ---- scorecard body ---- */
+  .card-body{padding:14px 14px 4px}
+
+  .section-tab{
+    display:inline-block;
+    background:var(--navy-ink);
+    color:var(--gold-soft);
+    font-size:9px;letter-spacing:2px;font-weight:700;
+    padding:3px 9px;border-radius:2px 2px 0 0;
+    text-transform:uppercase;
+    margin-bottom:0;
+    transform:translateY(2px);
+  }
+
+  /* ---- the field ---- */
+  .field-wrap{
+    position:relative;
+    background:var(--paper-2);
+    border:2px solid var(--pencil);
+    border-radius:4px;
+    padding:8px;
+    box-shadow:2px 2px 0 rgba(40,40,30,.25);
+  }
+  .field-cap{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    font-size:9px;letter-spacing:1.5px;color:var(--pencil-soft);
+    text-transform:uppercase;margin-bottom:4px;
+  }
+  .field-cap b{font-family:Georgia,serif;font-size:11px;color:var(--navy)}
+
+  .diamond-svg{display:block;width:100%;height:auto}
+
+  /* pencil-look player tags overlaid on the field */
+  .players{position:absolute;inset:8px;pointer-events:none}
+  .pl{
+    position:absolute;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    width:84px;
+  }
+  .pl .glyph{
+    width:26px;height:26px;margin:0 auto 2px;
+    border:1.5px solid var(--pencil);
+    border-radius:50%;
+    background:var(--paper);
+    display:flex;align-items:center;justify-content:center;
+    font-family:Georgia,serif;font-weight:700;font-size:11px;
+    color:var(--navy);
+    box-shadow:1px 1px 0 rgba(40,40,30,.3);
+    position:relative;
+  }
+  .pl .glyph .pos{
+    position:absolute;top:-7px;right:-9px;
+    background:var(--gold);
+    color:var(--navy-ink);
+    font-family:'Courier New',monospace;font-weight:700;
+    font-size:7px;letter-spacing:.3px;
+    padding:1px 3px;border-radius:2px;
+    border:1px solid var(--pencil);
+    line-height:1;
+  }
+  .pl .nm{
+    font-family:'Courier New',monospace;
+    font-size:9px;font-weight:700;color:var(--pencil);
+    letter-spacing:.2px;
+    background:rgba(241,231,207,.82);
+    padding:0 3px;border-radius:2px;
+    display:inline-block;
+    text-shadow:0 1px 0 rgba(255,255,255,.4);
+  }
+  .pl.batter .glyph{border-color:var(--red)}
+  .pl.pitcher .glyph{background:var(--navy);color:var(--gold-soft);border-color:var(--gold)}
+
+  /* ---- batting order ledger ---- */
+  .lineup{
+    margin-top:14px;
+    background:var(--paper);
+    border:2px solid var(--pencil);
+    border-radius:4px;
+    box-shadow:2px 2px 0 rgba(40,40,30,.25);
+    overflow:hidden;
+  }
+  .lineup .lh{
+    background:var(--navy-ink);
+    color:var(--gold-soft);
+    display:flex;justify-content:space-between;align-items:center;
+    padding:6px 10px;
+    font-size:9px;letter-spacing:2px;text-transform:uppercase;font-weight:700;
+  }
+  .lineup .lh em{color:var(--paper);font-style:italic;letter-spacing:.5px;opacity:.8}
+  .row{
+    display:grid;
+    grid-template-columns:26px 1fr 34px;
+    align-items:center;
+    border-bottom:1px solid var(--rule-soft);
+    min-height:30px;
+    padding:0 10px;
+    position:relative;
+  }
+  .row:last-child{border-bottom:none}
+  .row:nth-child(even){background:rgba(180,146,46,.06)}
+  .row .num{
+    font-family:Georgia,serif;font-weight:700;font-size:14px;
+    color:var(--navy);
+    border-right:1.5px solid var(--rule-soft);
+    height:100%;display:flex;align-items:center;
+  }
+  .row .who{
+    padding-left:10px;
+    font-family:'Courier New',monospace;
+    font-size:12px;font-weight:700;color:var(--pencil);
+    display:flex;align-items:baseline;gap:6px;
+  }
+  .row .who .jersey{
+    font-size:9px;color:var(--gold);font-weight:700;
+  }
+  .row .pos{
+    text-align:right;
+    font-family:Georgia,serif;font-style:italic;
+    font-size:11px;color:var(--navy-ink);
+    background:transparent;
+  }
+
+  /* opposing pitcher footer note */
+  .opp-note{
+    margin:12px 4px 2px;
+    display:flex;align-items:center;gap:8px;
+    font-family:'Courier New',monospace;
+    font-size:10px;color:var(--pencil-soft);
+    border-top:1px dashed var(--rule);
+    padding-top:8px;
+  }
+  .opp-note .pin{
+    width:18px;height:18px;flex:none;
+    border:1.5px solid var(--red);border-radius:50%;
+    color:var(--red);font-family:Georgia,serif;font-weight:700;
+    font-size:9px;display:flex;align-items:center;justify-content:center;
+  }
+  .opp-note b{color:var(--navy)}
+
+  .foot{
+    text-align:center;font-size:8px;letter-spacing:2px;
+    color:var(--pencil-soft);opacity:.6;margin-top:10px;
+    text-transform:uppercase;font-family:Georgia,serif;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="screen">
+
+      <!-- HEADER -->
+      <div class="ledger-head">
+        <div class="stamp">SCORED BY GARY</div>
+        <h1>Official Scorecard</h1>
+        <div class="matchline">CLE Guardians <span class="at">at</span> MIL Brewers</div>
+        <div class="subline">
+          <span>DEFENSIVE ALIGNMENT</span>
+          <span class="dot">●</span>
+          <span>HOME · 9 IN THE FIELD</span>
+        </div>
+      </div>
+
+      <div class="card-body">
+
+        <!-- FIELD -->
+        <span class="section-tab">The Diamond</span>
+        <div class="field-wrap">
+          <div class="field-cap">
+            <span>Pos. 1–9 · hand-charted</span>
+            <b>Brewers in the field</b>
+          </div>
+
+          <!-- SVG baseball field (home plate bottom, outfield top) -->
+          <svg class="diamond-svg" viewBox="0 0 360 360" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <defs>
+              <radialGradient id="grass" cx="50%" cy="75%" r="80%">
+                <stop offset="0%" stop-color="#d2dabd"/>
+                <stop offset="100%" stop-color="#bdc99f"/>
+              </radialGradient>
+              <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+                <line x1="0" y1="0" x2="0" y2="7" stroke="rgba(40,52,40,.10)" stroke-width="1"/>
+              </pattern>
+            </defs>
+
+            <!-- outfield fan / fair territory -->
+            <path d="M180 330 L18 110 A230 230 0 0 1 342 110 Z"
+                  fill="url(#grass)" stroke="var(--pencil)" stroke-width="2"/>
+            <path d="M180 330 L18 110 A230 230 0 0 1 342 110 Z"
+                  fill="url(#hatch)"/>
+
+            <!-- outfield arc (warning track) -->
+            <path d="M40 120 A210 210 0 0 1 320 120"
+                  fill="none" stroke="var(--pencil-soft)" stroke-width="2" stroke-dasharray="2 5" opacity=".7"/>
+
+            <!-- foul lines (pencil) -->
+            <line x1="180" y1="312" x2="40" y2="120" stroke="var(--pencil)" stroke-width="1.6" stroke-dasharray="6 4"/>
+            <line x1="180" y1="312" x2="320" y2="120" stroke="var(--pencil)" stroke-width="1.6" stroke-dasharray="6 4"/>
+
+            <!-- infield dirt (skin) -->
+            <path d="M180 300
+                     C 250 280 290 230 290 188
+                     C 290 150 245 120 180 120
+                     C 115 120 70 150 70 188
+                     C 70 230 110 280 180 300 Z"
+                  fill="#d6bd8f" stroke="var(--pencil)" stroke-width="2" opacity=".95"/>
+
+            <!-- infield grass square -->
+            <path d="M180 270 L100 195 L180 130 L260 195 Z"
+                  fill="#c6d1a8" stroke="var(--pencil-soft)" stroke-width="1.4"/>
+
+            <!-- basepaths diamond (chalk) -->
+            <path d="M180 286 L92 195 L180 116 L268 195 Z"
+                  fill="none" stroke="#f4eed8" stroke-width="5" opacity=".9"/>
+            <path d="M180 286 L92 195 L180 116 L268 195 Z"
+                  fill="none" stroke="var(--pencil)" stroke-width="1.2"/>
+
+            <!-- bases -->
+            <g stroke="var(--pencil)" stroke-width="1.4">
+              <rect x="174" y="280" width="12" height="12" fill="#fff" transform="rotate(45 180 286)"/><!-- home-ish -->
+              <rect x="262" y="189" width="11" height="11" fill="#fff" transform="rotate(45 268 195)"/><!-- 1B -->
+              <rect x="174" y="110" width="11" height="11" fill="#fff" transform="rotate(45 180 116)"/><!-- 2B -->
+              <rect x="86" y="189" width="11" height="11" fill="#fff" transform="rotate(45 92 195)"/><!-- 3B -->
+            </g>
+            <!-- home plate (pentagon) -->
+            <polygon points="180,300 188,292 188,283 172,283 172,292"
+                     fill="#fff" stroke="var(--pencil)" stroke-width="1.6"/>
+
+            <!-- pitcher's mound -->
+            <circle cx="180" cy="200" r="20" fill="#d6bd8f" stroke="var(--pencil)" stroke-width="1.6"/>
+            <rect x="174" y="197" width="12" height="4" fill="#fff" stroke="var(--pencil)" stroke-width="1"/>
+
+            <!-- batter's box marks at the plate -->
+            <rect x="158" y="296" width="9" height="16" fill="none" stroke="#f4eed8" stroke-width="1.6" opacity=".8"/>
+            <rect x="193" y="296" width="9" height="16" fill="none" stroke="#f4eed8" stroke-width="1.6" opacity=".8"/>
+
+            <!-- corner labels -->
+            <text x="180" y="22" text-anchor="middle" font-family="Georgia,serif" font-size="9" fill="var(--pencil-soft)" letter-spacing="2">CENTER FIELD</text>
+            <text x="14" y="118" font-family="Georgia,serif" font-size="8" fill="var(--pencil-soft)" letter-spacing="1" transform="rotate(-90 14 118)">LEFT</text>
+            <text x="352" y="118" text-anchor="end" font-family="Georgia,serif" font-size="8" fill="var(--pencil-soft)" letter-spacing="1" transform="rotate(90 352 118)">RIGHT</text>
+          </svg>
+
+          <!-- overlaid hand-charted player tags -->
+          <div class="players">
+            <!-- outfield (top) -->
+            <div class="pl"          style="left:24%; top:21%">
+              <div class="glyph">5<span class="pos">LF</span></div>
+              <span class="nm">Mitchell</span>
+            </div>
+            <div class="pl"          style="left:50%; top:13%">
+              <div class="glyph">11<span class="pos">CF</span></div>
+              <span class="nm">Chourio</span>
+            </div>
+            <div class="pl"          style="left:76%; top:21%">
+              <div class="glyph">10<span class="pos">RF</span></div>
+              <span class="nm">Frelick</span>
+            </div>
+
+            <!-- infield -->
+            <div class="pl"          style="left:33%; top:47%">
+              <div class="glyph">27<span class="pos">SS</span></div>
+              <span class="nm">Adames</span>
+            </div>
+            <div class="pl"          style="left:64%; top:45%">
+              <div class="glyph">0<span class="pos">2B</span></div>
+              <span class="nm">Turang</span>
+            </div>
+            <div class="pl"          style="left:24%; top:63%">
+              <div class="glyph">3<span class="pos">3B</span></div>
+              <span class="nm">Ortiz</span>
+            </div>
+            <div class="pl"          style="left:76%; top:63%">
+              <div class="glyph">12<span class="pos">1B</span></div>
+              <span class="nm">Hoskins</span>
+            </div>
+
+            <!-- pitcher (mound center) -->
+            <div class="pl pitcher"  style="left:50%; top:56%">
+              <div class="glyph">51<span class="pos">P</span></div>
+              <span class="nm">Peralta</span>
+            </div>
+
+            <!-- catcher (behind plate, bottom) -->
+            <div class="pl"          style="left:50%; top:88%">
+              <div class="glyph">24<span class="pos">C</span></div>
+              <span class="nm">Contreras</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- BATTING ORDER LEDGER -->
+        <div class="lineup">
+          <div class="lh"><span>Batting Order</span><em>vs RHP</em></div>
+          <div class="row"><div class="num">1</div><div class="who">Turang <span class="jersey">#0</span></div><div class="pos">2B</div></div>
+          <div class="row"><div class="num">2</div><div class="who">Frelick <span class="jersey">#10</span></div><div class="pos">RF</div></div>
+          <div class="row"><div class="num">3</div><div class="who">Chourio <span class="jersey">#11</span></div><div class="pos">CF</div></div>
+          <div class="row"><div class="num">4</div><div class="who">Contreras <span class="jersey">#24</span></div><div class="pos">C</div></div>
+          <div class="row"><div class="num">5</div><div class="who">Hoskins <span class="jersey">#12</span></div><div class="pos">1B</div></div>
+          <div class="row"><div class="num">6</div><div class="who">Yelich <span class="jersey">#22</span></div><div class="pos">DH</div></div>
+          <div class="row"><div class="num">7</div><div class="who">Ortiz <span class="jersey">#3</span></div><div class="pos">3B</div></div>
+          <div class="row"><div class="num">8</div><div class="who">Mitchell <span class="jersey">#5</span></div><div class="pos">LF</div></div>
+          <div class="row"><div class="num">9</div><div class="who">Adames <span class="jersey">#27</span></div><div class="pos">SS</div></div>
+        </div>
+
+        <!-- OPPOSING PITCHER NOTE -->
+        <div class="opp-note">
+          <span class="pin">P</span>
+          <span>Probable opp. starter — <b>Tanner Bibee #28</b>, Guardians RHP</span>
+        </div>
+
+        <div class="foot">Pencil &amp; paper · Gary 2.0 · keep your card</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

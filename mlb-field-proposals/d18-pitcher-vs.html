@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>d18 — Pitcher vs Lineup</title>
+<style>
+  :root{
+    --navy:#0a2351;
+    --navy2:#13315c;
+    --gold:#b6922e;
+    --gold-lt:#e3c66b;
+    --grass:#3a6b3a;
+    --grass-dk:#2c5530;
+    --dirt:#b5703c;
+    --dirt-dk:#9a5a2c;
+    --chalk:#f4f1e6;
+    --ink:#0c1322;
+    --paper:#0d1626;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    background:#05060b;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;align-items:flex-start;
+    min-height:100vh;padding:28px 12px;
+  }
+  .phone{
+    width:430px;
+    background:linear-gradient(180deg,#0a1424 0%,#0a0f1c 60%,#070b14 100%);
+    border-radius:42px;
+    overflow:hidden;
+    box-shadow:0 40px 90px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04);
+    position:relative;
+    color:#eef2f8;
+  }
+
+  /* ---------- TOP BAR ---------- */
+  .statusbar{
+    height:46px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 26px;font-size:13px;font-weight:600;color:#cfd8e6;letter-spacing:.3px;
+  }
+  .statusbar .dots{display:flex;gap:5px;align-items:center;}
+  .statusbar .dots span{width:5px;height:5px;border-radius:50%;background:#7e8aa0;}
+
+  .header{
+    padding:6px 22px 16px;
+  }
+  .eyebrow{
+    font-size:11px;font-weight:800;letter-spacing:2.4px;text-transform:uppercase;
+    color:var(--gold-lt);display:flex;align-items:center;gap:8px;
+  }
+  .eyebrow::before{content:"";width:18px;height:2px;background:var(--gold);border-radius:2px;}
+  .matchup{
+    margin-top:9px;display:flex;align-items:baseline;gap:10px;
+    font-size:21px;font-weight:800;letter-spacing:-.3px;
+  }
+  .matchup .at{color:#76839b;font-size:14px;font-weight:600;}
+  .matchup .home{color:#fff;}
+  .matchup .away{color:#aeb9cc;}
+
+  /* ---------- DUEL STRIP (the headline) ---------- */
+  .duel{
+    margin:4px 18px 14px;
+    background:linear-gradient(135deg,rgba(10,35,81,.92),rgba(19,49,92,.78));
+    border:1px solid rgba(227,198,107,.28);
+    border-radius:18px;
+    padding:14px 16px;
+    display:flex;align-items:center;gap:12px;
+    position:relative;overflow:hidden;
+  }
+  .duel::after{
+    content:"VS";position:absolute;right:14px;top:50%;transform:translateY(-50%);
+    font-size:44px;font-weight:900;color:rgba(227,198,107,.10);letter-spacing:-2px;
+  }
+  .duel .side{flex:1;min-width:0;}
+  .duel .lbl{font-size:9.5px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#8593ab;}
+  .duel .name{font-size:15px;font-weight:800;color:#fff;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .duel .meta{font-size:10.5px;color:var(--gold-lt);font-weight:600;margin-top:2px;}
+  .duel .arm{
+    width:46px;height:46px;border-radius:13px;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;font-weight:900;color:#0a1424;
+    background:linear-gradient(150deg,var(--gold-lt),var(--gold));
+    box-shadow:0 6px 16px rgba(182,146,46,.4);
+  }
+  .duel .arm.opp{
+    background:linear-gradient(150deg,#3a4a66,#1d2942);color:#dfe6f2;
+    box-shadow:none;border:1px solid rgba(255,255,255,.1);
+  }
+
+  /* ---------- FIELD ---------- */
+  .fieldwrap{
+    margin:0 14px;
+    border-radius:20px;overflow:hidden;
+    position:relative;
+    border:1px solid rgba(255,255,255,.07);
+    box-shadow:inset 0 0 40px rgba(0,0,0,.4);
+  }
+  .field{display:block;width:100%;height:auto;}
+
+  /* player chips overlaid via SVG foreignObject not used — pure SVG below */
+
+  /* ---------- BATTING ORDER RAIL ---------- */
+  .order{
+    margin:16px 16px 8px;
+  }
+  .order-head{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;
+  }
+  .order-head .t{
+    font-size:12px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#c4cee0;
+  }
+  .order-head .sub{font-size:10px;color:#6f7c94;font-weight:600;}
+  .lineup{
+    display:flex;flex-direction:column;gap:1px;
+    background:rgba(255,255,255,.04);border-radius:14px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.06);
+  }
+  .bat{
+    display:flex;align-items:center;gap:11px;padding:8px 13px;
+    background:linear-gradient(90deg,rgba(10,35,81,.0),rgba(10,35,81,.0));
+    position:relative;
+  }
+  .bat:nth-child(odd){background:rgba(255,255,255,.018);}
+  .bat .ord{
+    width:22px;height:22px;border-radius:7px;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:900;color:var(--gold-lt);
+    background:rgba(182,146,46,.14);border:1px solid rgba(227,198,107,.25);
+  }
+  .bat .nm{font-size:13.5px;font-weight:700;color:#eef2f8;flex:1;}
+  .bat .num{font-size:11px;color:#7a8aa6;font-weight:700;font-variant-numeric:tabular-nums;}
+  .bat .pos{
+    font-size:9.5px;font-weight:800;letter-spacing:.6px;color:#0a1424;
+    background:#c7d0de;border-radius:5px;padding:2px 6px;min-width:26px;text-align:center;
+  }
+  .bat .pos.dh{background:rgba(227,198,107,.55);}
+
+  .footer{
+    padding:12px 22px 22px;text-align:center;
+    font-size:10px;color:#5b6885;letter-spacing:.5px;
+  }
+  .footer b{color:var(--gold-lt);font-weight:700;}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="statusbar">
+      <span>9:41</span>
+      <span class="dots"><span></span><span></span><span></span> &#9201;</span>
+    </div>
+
+    <div class="header">
+      <div class="eyebrow">On The Mound · Probable Battery</div>
+      <div class="matchup">
+        <span class="away">Guardians</span>
+        <span class="at">@</span>
+        <span class="home">Brewers</span>
+      </div>
+    </div>
+
+    <!-- THE DUEL: pitcher vs opposing starter -->
+    <div class="duel">
+      <div class="arm">51</div>
+      <div class="side">
+        <div class="lbl">Brewers RHP</div>
+        <div class="name">Freddy Peralta</div>
+        <div class="meta">vs Cleveland order</div>
+      </div>
+      <div class="side" style="text-align:right;">
+        <div class="lbl">Guardians RHP</div>
+        <div class="name">Tanner Bibee</div>
+        <div class="meta">#28 · opposing</div>
+      </div>
+      <div class="arm opp">28</div>
+    </div>
+
+    <!-- FIELD -->
+    <div class="fieldwrap">
+      <svg class="field" viewBox="0 0 400 420" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="grass" cx="50%" cy="38%" r="75%">
+            <stop offset="0%" stop-color="#4d7e49"/>
+            <stop offset="55%" stop-color="#3a6b3a"/>
+            <stop offset="100%" stop-color="#2c5530"/>
+          </radialGradient>
+          <linearGradient id="dirt" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#c07b44"/>
+            <stop offset="100%" stop-color="#9a5a2c"/>
+          </linearGradient>
+          <radialGradient id="mound" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stop-color="#c8854c"/>
+            <stop offset="100%" stop-color="#a4642f"/>
+          </radialGradient>
+          <radialGradient id="spot" cx="50%" cy="40%" r="65%">
+            <stop offset="0%" stop-color="rgba(227,198,107,.55)"/>
+            <stop offset="100%" stop-color="rgba(227,198,107,0)"/>
+          </radialGradient>
+          <filter id="sh" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.45"/>
+          </filter>
+        </defs>
+
+        <!-- outfield grass -->
+        <rect x="0" y="0" width="400" height="420" fill="url(#grass)"/>
+
+        <!-- mowing arcs -->
+        <g opacity="0.10" stroke="#ffffff" fill="none" stroke-width="14">
+          <circle cx="200" cy="300" r="70"/>
+          <circle cx="200" cy="300" r="130"/>
+          <circle cx="200" cy="300" r="190"/>
+          <circle cx="200" cy="300" r="250"/>
+        </g>
+
+        <!-- warning track -->
+        <path d="M 6 240 A 250 250 0 0 1 394 240 L 394 200 A 290 290 0 0 0 6 200 Z"
+              fill="#a4642f" opacity="0.45"/>
+
+        <!-- infield dirt (diamond) -->
+        <!-- home plate ~ (200,360); 1B (290,300); 2B (200,240); 3B (110,300) -->
+        <path d="M 200 252 L 302 312 L 200 372 L 98 312 Z" fill="url(#dirt)"/>
+        <!-- infield grass inside diamond -->
+        <path d="M 200 274 L 282 322 L 200 370 L 118 322 Z" fill="#3f7340"/>
+
+        <!-- base paths chalk -->
+        <g stroke="var(--chalk)" stroke-width="2.2" opacity="0.85" fill="none">
+          <line x1="200" y1="360" x2="302" y2="312"/>
+          <line x1="200" y1="360" x2="98" y2="312"/>
+        </g>
+        <!-- foul lines extending out -->
+        <g stroke="var(--chalk)" stroke-width="2" opacity="0.55" fill="none">
+          <line x1="200" y1="360" x2="372" y2="200"/>
+          <line x1="200" y1="360" x2="28" y2="200"/>
+        </g>
+
+        <!-- bases -->
+        <g fill="#f4f1e6" stroke="#cdbf9a" stroke-width="1">
+          <rect x="294" y="306" width="13" height="13" transform="rotate(45 300 312)"/>
+          <rect x="194" y="234" width="13" height="13" transform="rotate(45 200 240)"/>
+          <rect x="92"  y="306" width="13" height="13" transform="rotate(45 98 312)"/>
+        </g>
+        <!-- home plate -->
+        <path d="M 192 356 L 208 356 L 208 364 L 200 372 L 192 364 Z" fill="#f4f1e6" stroke="#cdbf9a"/>
+
+        <!-- pitcher's mound + spotlight (the focus) -->
+        <circle cx="200" cy="312" r="46" fill="url(#spot)"/>
+        <ellipse cx="200" cy="312" rx="24" ry="20" fill="url(#mound)" stroke="rgba(255,255,255,.18)" stroke-width="1"/>
+        <rect x="194" y="309" width="12" height="3.4" rx="1.5" fill="#f4f1e6"/>
+
+        <!-- ===== FIELDER CHIPS ===== -->
+        <!-- each: dot + number badge, label drawn beside -->
+
+        <!-- helper style via classes -->
+        <style>
+          .chip{filter:url(#sh);}
+          .dot{fill:#0a2351;stroke:#e3c66b;stroke-width:2;}
+          .dotP{fill:#b6922e;stroke:#fff;stroke-width:2.4;}
+          .num{fill:#fff;font-size:12px;font-weight:800;text-anchor:middle;font-family:-apple-system,Arial,sans-serif;}
+          .numP{fill:#0a1424;font-size:12px;font-weight:900;text-anchor:middle;font-family:-apple-system,Arial,sans-serif;}
+          .pname{fill:#fff;font-size:10px;font-weight:700;text-anchor:middle;font-family:-apple-system,Arial,sans-serif;}
+          .ppos{fill:#e3c66b;font-size:8px;font-weight:800;letter-spacing:.5px;text-anchor:middle;font-family:-apple-system,Arial,sans-serif;}
+          .plabel rect{fill:rgba(7,14,26,.72);}
+        </style>
+
+        <!-- CF Chourio — top center deep -->
+        <g class="chip">
+          <circle class="dot" cx="200" cy="58" r="13"/>
+          <text class="num" x="200" y="62">11</text>
+          <g class="plabel"><rect x="166" y="74" width="68" height="24" rx="6"/></g>
+          <text class="ppos" x="200" y="84">CF</text>
+          <text class="pname" x="200" y="94">Chourio</text>
+        </g>
+
+        <!-- LF Mitchell — upper left outfield -->
+        <g class="chip">
+          <circle class="dot" cx="86" cy="120" r="13"/>
+          <text class="num" x="86" y="124">5</text>
+          <g class="plabel"><rect x="54" y="136" width="64" height="24" rx="6"/></g>
+          <text class="ppos" x="86" y="146">LF</text>
+          <text class="pname" x="86" y="156">Mitchell</text>
+        </g>
+
+        <!-- RF Frelick — upper right outfield -->
+        <g class="chip">
+          <circle class="dot" cx="314" cy="120" r="13"/>
+          <text class="num" x="314" y="124">10</text>
+          <g class="plabel"><rect x="284" y="136" width="60" height="24" rx="6"/></g>
+          <text class="ppos" x="314" y="146">RF</text>
+          <text class="pname" x="314" y="156">Frelick</text>
+        </g>
+
+        <!-- SS Adames — left of 2nd, upper-left infield -->
+        <g class="chip">
+          <circle class="dot" cx="158" cy="232" r="13"/>
+          <text class="num" x="158" y="236">27</text>
+          <g class="plabel"><rect x="124" y="200" width="68" height="24" rx="6"/></g>
+          <text class="ppos" x="158" y="210">SS</text>
+          <text class="pname" x="158" y="220">Adames</text>
+        </g>
+
+        <!-- 2B Turang — right of 2nd, upper-right infield -->
+        <g class="chip">
+          <circle class="dot" cx="242" cy="232" r="13"/>
+          <text class="num" x="242" y="236">0</text>
+          <g class="plabel"><rect x="208" y="200" width="66" height="24" rx="6"/></g>
+          <text class="ppos" x="242" y="210">2B</text>
+          <text class="pname" x="242" y="220">Turang</text>
+        </g>
+
+        <!-- 3B Ortiz — lower left infield -->
+        <g class="chip">
+          <circle class="dot" cx="118" cy="312" r="13"/>
+          <text class="num" x="118" y="316">3</text>
+          <g class="plabel"><rect x="44" y="300" width="58" height="24" rx="6"/></g>
+          <text class="ppos" x="73" y="310">3B</text>
+          <text class="pname" x="73" y="320">Ortiz</text>
+        </g>
+
+        <!-- 1B Hoskins — lower right infield -->
+        <g class="chip">
+          <circle class="dot" cx="282" cy="312" r="13"/>
+          <text class="num" x="282" y="316">12</text>
+          <g class="plabel"><rect x="300" y="300" width="64" height="24" rx="6"/></g>
+          <text class="ppos" x="332" y="310">1B</text>
+          <text class="pname" x="332" y="320">Hoskins</text>
+        </g>
+
+        <!-- P Peralta — mound center (GOLD, the star) -->
+        <g class="chip">
+          <circle class="dotP" cx="200" cy="312" r="15"/>
+          <text class="numP" x="200" y="316">51</text>
+        </g>
+        <g class="plabel"><rect x="160" y="328" width="80" height="25" rx="7" fill="rgba(182,146,46,.85)"/></g>
+        <text x="200" y="338" style="fill:#0a1424;font-size:8px;font-weight:800;letter-spacing:.6px;text-anchor:middle;font-family:-apple-system,Arial,sans-serif;">P · ON THE MOUND</text>
+        <text x="200" y="349" style="fill:#0a1424;font-size:10px;font-weight:900;text-anchor:middle;font-family:-apple-system,Arial,sans-serif;">Peralta</text>
+
+        <!-- C Contreras — behind home plate, bottom center -->
+        <g class="chip">
+          <circle class="dot" cx="200" cy="394" r="13"/>
+          <text class="num" x="200" y="398">24</text>
+          <g class="plabel"><rect x="208" y="384" width="78" height="22" rx="6"/></g>
+          <text class="ppos" x="220" y="394">C</text>
+          <text class="pname" x="252" y="394">Contreras</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- BATTING ORDER RAIL -->
+    <div class="order">
+      <div class="order-head">
+        <span class="t">Brewers · Batting Order</span>
+        <span class="sub">1 → 9</span>
+      </div>
+      <div class="lineup">
+        <div class="bat"><span class="ord">1</span><span class="nm">Brice Turang</span><span class="num">#0</span><span class="pos">2B</span></div>
+        <div class="bat"><span class="ord">2</span><span class="nm">Sal Frelick</span><span class="num">#10</span><span class="pos">RF</span></div>
+        <div class="bat"><span class="ord">3</span><span class="nm">Jackson Chourio</span><span class="num">#11</span><span class="pos">CF</span></div>
+        <div class="bat"><span class="ord">4</span><span class="nm">William Contreras</span><span class="num">#24</span><span class="pos">C</span></div>
+        <div class="bat"><span class="ord">5</span><span class="nm">Rhys Hoskins</span><span class="num">#12</span><span class="pos">1B</span></div>
+        <div class="bat"><span class="ord">6</span><span class="nm">Christian Yelich</span><span class="num">#22</span><span class="pos dh">DH</span></div>
+        <div class="bat"><span class="ord">7</span><span class="nm">Joey Ortiz</span><span class="num">#3</span><span class="pos">3B</span></div>
+        <div class="bat"><span class="ord">8</span><span class="nm">Garrett Mitchell</span><span class="num">#5</span><span class="pos">LF</span></div>
+        <div class="bat"><span class="ord">9</span><span class="nm">Willy Adames</span><span class="num">#27</span><span class="pos">SS</span></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Mound is the story — <b>Peralta</b> frames the field, the order is who he faces.
+    </div>
+  </div>
+</body>
+</html>

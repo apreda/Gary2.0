@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Brewers Defense — Aerial Realistic</title>
+<style>
+  :root{
+    --navy:#0a2240;
+    --navy-deep:#06182e;
+    --gold:#ffc52f;
+    --gold-soft:#e6b53a;
+    --ink:#0c1622;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  html,body{
+    background:#0b0f14;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:24px 0;
+    color:#0c1622;
+  }
+
+  /* phone frame */
+  .phone{
+    width:430px;
+    max-width:100vw;
+    background:#0c1622;
+    border-radius:46px;
+    padding:12px;
+    box-shadow:0 40px 90px rgba(0,0,0,.6), inset 0 0 0 2px #1e2a3a;
+    position:relative;
+  }
+  .screen{
+    background:#06121f;
+    border-radius:36px;
+    overflow:hidden;
+    position:relative;
+    height:880px;
+  }
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:30px;background:#0c1622;border-radius:0 0 18px 18px;z-index:60;
+  }
+
+  /* status / header */
+  .topbar{
+    position:relative;z-index:40;
+    padding:46px 20px 14px;
+    background:linear-gradient(180deg,var(--navy-deep),var(--navy));
+    color:#fff;
+  }
+  .kicker{
+    font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--gold);font-weight:700;opacity:.95;
+  }
+  .matchup{
+    display:flex;align-items:baseline;gap:8px;margin-top:6px;
+  }
+  .matchup h1{font-size:21px;font-weight:800;letter-spacing:-.01em;}
+  .matchup .at{font-size:12px;color:#9fb4cc;font-weight:600;}
+  .submeta{
+    margin-top:8px;display:flex;gap:14px;font-size:11px;color:#c3d2e6;
+  }
+  .submeta b{color:#fff;font-weight:700;}
+  .pill{
+    display:inline-flex;align-items:center;gap:5px;
+    background:rgba(255,197,47,.12);border:1px solid rgba(255,197,47,.4);
+    color:var(--gold);padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;
+    letter-spacing:.04em;
+  }
+
+  /* ===== AERIAL FIELD ===== */
+  .fieldwrap{
+    position:relative;
+    background:#0a1a10;
+    padding:6px 0 0;
+  }
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio: 1 / 1.18;
+    overflow:hidden;
+    /* stadium concrete bowl */
+    background:
+      radial-gradient(120% 95% at 50% 8%, #6f7682 0%, #565d68 24%, #3d434d 46%, #2a2f37 70%, #20242b 100%);
+  }
+
+  /* the green playing field is a fan shape that opens toward the outfield (top) */
+  .turf{
+    position:absolute;
+    left:50%;top:88%;
+    width:148%;height:150%;
+    transform:translate(-50%,-100%);
+    /* quarter-circle-ish fan via huge rounded shape clipped */
+    background:
+      radial-gradient(80% 78% at 50% 100%, #3f8b3a 0%, #3a8336 40%, #357c33 60%, #2f7430 80%, #2a6b2c 100%);
+    clip-path: polygon(50% 100%, 0% 22%, 12% 10%, 30% 3%, 50% 0%, 70% 3%, 88% 10%, 100% 22%);
+    box-shadow: inset 0 0 60px rgba(0,0,0,.35);
+  }
+  /* mow stripes on outfield */
+  .stripes{
+    position:absolute;inset:0;
+    background:repeating-conic-gradient(from 0deg at 50% 100%,
+      rgba(255,255,255,.045) 0deg 7deg,
+      rgba(0,0,0,.045) 7deg 14deg);
+    opacity:.9;
+    clip-path:inherit;
+  }
+  /* warning track — dirt arc just inside the wall */
+  .warning{
+    position:absolute;
+    left:50%;top:88%;
+    width:148%;height:150%;
+    transform:translate(-50%,-100%);
+    background:radial-gradient(78% 76% at 50% 100%, transparent 0 72%, #8a5a32 72.4% 80%, transparent 80.5%);
+    clip-path: polygon(50% 100%, 0% 22%, 12% 10%, 30% 3%, 50% 0%, 70% 3%, 88% 10%, 100% 22%);
+    opacity:.92;
+  }
+  /* outfield wall (dark navy ring on warning track edge) */
+  .wall{
+    position:absolute;
+    left:50%;top:88%;
+    width:148%;height:150%;
+    transform:translate(-50%,-100%);
+    background:radial-gradient(78% 76% at 50% 100%, transparent 0 80%, #0a2240 80.3% 82.6%, transparent 83%);
+    clip-path: polygon(50% 100%, 0% 22%, 12% 10%, 30% 3%, 50% 0%, 70% 3%, 88% 10%, 100% 22%);
+  }
+
+  /* infield dirt diamond (skinned infield) */
+  .infield{
+    position:absolute;
+    left:50%;bottom:8.5%;
+    width:46%;height:38%;
+    transform:translate(-50%,0) ;
+    background:radial-gradient(60% 60% at 50% 78%, #b07a44 0%, #a06b38 45%, #936230 75%, #845529 100%);
+    /* diamond rotated square pointing up */
+    clip-path: polygon(50% 0%, 100% 64%, 50% 100%, 0% 64%);
+    box-shadow: inset 0 0 22px rgba(0,0,0,.28);
+  }
+  /* infield grass center (the green inside the basepaths) */
+  .infield-grass{
+    position:absolute;
+    left:50%;bottom:10.5%;
+    width:33%;height:27%;
+    transform:translate(-50%,0);
+    background:linear-gradient(180deg,#3c8a37,#34792f);
+    clip-path: polygon(50% 0%, 100% 64%, 50% 100%, 0% 64%);
+  }
+  /* base paths (thin dirt lines) drawn with the diamond outline */
+  .baselines{
+    position:absolute;
+    left:50%;bottom:8.5%;
+    width:46%;height:38%;
+    transform:translate(-50%,0);
+    pointer-events:none;
+  }
+  .baselines svg{width:100%;height:100%;display:block;}
+
+  /* bases + mound + plate markers */
+  .marker{
+    position:absolute;z-index:8;transform:translate(-50%,-50%);
+  }
+  .base{
+    width:11px;height:11px;background:#f4f1ea;transform:translate(-50%,-50%) rotate(45deg);
+    box-shadow:0 0 0 1px rgba(0,0,0,.25), 0 2px 3px rgba(0,0,0,.4);position:absolute;z-index:8;
+  }
+  .plate{
+    width:13px;height:13px;background:#f4f1ea;position:absolute;z-index:8;
+    transform:translate(-50%,-50%);
+    clip-path:polygon(0 0,100% 0,100% 55%,50% 100%,0 55%);
+    box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  .mound{
+    width:30px;height:30px;border-radius:50%;
+    background:radial-gradient(circle at 50% 40%, #b88450 0%, #a06b38 60%, #8a5a30 100%);
+    position:absolute;z-index:7;transform:translate(-50%,-50%);
+    box-shadow:inset 0 0 6px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.4);
+  }
+  .rubber{
+    width:9px;height:3px;background:#efe9dc;position:absolute;z-index:8;
+    transform:translate(-50%,-50%);border-radius:1px;
+  }
+
+  /* ===== fielders as jersey dots ===== */
+  .fielder{
+    position:absolute;z-index:20;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    width:88px;text-align:center;
+    cursor:default;
+  }
+  .jersey{
+    width:26px;height:26px;border-radius:50%;
+    background:radial-gradient(circle at 38% 30%, #1a3a64 0%, var(--navy) 55%, #061a30 100%);
+    border:2px solid var(--gold);
+    color:#fff;font-weight:800;font-size:11px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 8px rgba(0,0,0,.5), inset 0 1px 1px rgba(255,255,255,.25);
+    position:relative;
+  }
+  .jersey::after{
+    /* drop shadow puddle on grass */
+    content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
+    width:20px;height:6px;border-radius:50%;
+    background:rgba(0,0,0,.32);filter:blur(1.5px);margin-top:1px;
+  }
+  .ftag{
+    background:rgba(6,18,30,.82);
+    border:1px solid rgba(255,197,47,.35);
+    border-radius:6px;padding:2px 6px;
+    line-height:1.15;backdrop-filter:blur(2px);
+  }
+  .ftag .pos{font-size:8.5px;font-weight:800;color:var(--gold);letter-spacing:.08em;}
+  .ftag .nm{font-size:9.5px;font-weight:700;color:#fff;white-space:nowrap;}
+
+  /* batter box silhouette + pitcher orientation tweaks */
+  .pos-P  .jersey{border-color:var(--gold);}
+  .pos-C  .jersey{background:radial-gradient(circle at 38% 30%,#2a4870,#0a2240);}
+
+  /* ===== batting order rail ===== */
+  .lineup{
+    background:linear-gradient(180deg,var(--navy),var(--navy-deep));
+    padding:14px 16px 20px;
+    color:#fff;
+  }
+  .lineup-head{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;
+  }
+  .lineup-head .t{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:800;}
+  .lineup-head .vs{font-size:10px;color:#9fb4cc;}
+  .order{
+    display:grid;grid-template-columns:1fr;gap:5px;
+  }
+  .row{
+    display:flex;align-items:center;gap:10px;
+    background:rgba(255,255,255,.035);
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:9px;padding:6px 9px;
+  }
+  .row .num{
+    width:20px;height:20px;border-radius:50%;
+    background:var(--gold);color:var(--ink);
+    font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .row .pname{font-size:12.5px;font-weight:700;flex:1;}
+  .row .ppos{font-size:10px;color:#9fb4cc;font-weight:700;letter-spacing:.06em;}
+  .row .pjersey{font-size:10px;color:#6c84a0;font-weight:700;width:30px;text-align:right;}
+
+  .footnote{
+    text-align:center;font-size:9.5px;color:#6c84a0;padding:6px 0 0;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="screen">
+      <div class="notch"></div>
+
+      <!-- HEADER -->
+      <div class="topbar">
+        <div class="kicker">Defensive Alignment</div>
+        <div class="matchup">
+          <h1>Milwaukee Brewers</h1>
+          <span class="at">vs CLE</span>
+        </div>
+        <div class="submeta">
+          <span>SP <b>F. Peralta #51</b></span>
+          <span>Opp SP <b>T. Bibee #28</b></span>
+          <span class="pill">● American Family Field</span>
+        </div>
+      </div>
+
+      <!-- FIELD -->
+      <div class="fieldwrap">
+        <div class="field" id="field">
+          <div class="turf"></div>
+          <div class="stripes"></div>
+          <div class="warning"></div>
+          <div class="wall"></div>
+
+          <div class="infield"></div>
+          <div class="infield-grass"></div>
+
+          <!-- base path lines -->
+          <div class="baselines">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+              <polygon points="50,4 96,62 50,96 4,62" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.1"/>
+              <!-- pitcher to plate line subtle -->
+            </svg>
+          </div>
+
+          <!-- markers: positions in % of field -->
+          <!-- home plate bottom center -->
+          <div class="plate" style="left:50%; top:90.5%;"></div>
+          <!-- bases: 1B right, 2B top, 3B left of the diamond -->
+          <div class="base" style="left:61.5%; top:73.5%;"></div> <!-- 1B -->
+          <div class="base" style="left:50%;   top:62%;"></div>   <!-- 2B -->
+          <div class="base" style="left:38.5%; top:73.5%;"></div> <!-- 3B -->
+          <!-- mound -->
+          <div class="mound" style="left:50%; top:78%;"></div>
+          <div class="rubber" style="left:50%; top:78%;"></div>
+
+          <!-- FIELDERS -->
+          <!-- Pitcher -->
+          <div class="fielder pos-P" style="left:50%; top:76%;">
+            <div class="jersey">51</div>
+            <div class="ftag"><div class="pos">P</div><div class="nm">Peralta</div></div>
+          </div>
+          <!-- Catcher -->
+          <div class="fielder pos-C" style="left:50%; top:94%;">
+            <div class="jersey">24</div>
+            <div class="ftag"><div class="pos">C</div><div class="nm">Contreras</div></div>
+          </div>
+          <!-- 1B lower-right infield -->
+          <div class="fielder" style="left:67%; top:71%;">
+            <div class="jersey">12</div>
+            <div class="ftag"><div class="pos">1B</div><div class="nm">Hoskins</div></div>
+          </div>
+          <!-- 2B right of 2nd, upper-right infield -->
+          <div class="fielder" style="left:62%; top:58%;">
+            <div class="jersey">0</div>
+            <div class="ftag"><div class="pos">2B</div><div class="nm">Turang</div></div>
+          </div>
+          <!-- SS left of 2nd, upper-left infield -->
+          <div class="fielder" style="left:38%; top:58%;">
+            <div class="jersey">27</div>
+            <div class="ftag"><div class="pos">SS</div><div class="nm">Adames</div></div>
+          </div>
+          <!-- 3B lower-left infield -->
+          <div class="fielder" style="left:33%; top:71%;">
+            <div class="jersey">3</div>
+            <div class="ftag"><div class="pos">3B</div><div class="nm">Ortiz</div></div>
+          </div>
+          <!-- LF upper-left outfield -->
+          <div class="fielder" style="left:24%; top:30%;">
+            <div class="jersey">5</div>
+            <div class="ftag"><div class="pos">LF</div><div class="nm">Mitchell</div></div>
+          </div>
+          <!-- CF top center deep -->
+          <div class="fielder" style="left:50%; top:18%;">
+            <div class="jersey">11</div>
+            <div class="ftag"><div class="pos">CF</div><div class="nm">Chourio</div></div>
+          </div>
+          <!-- RF upper-right outfield -->
+          <div class="fielder" style="left:76%; top:30%;">
+            <div class="jersey">10</div>
+            <div class="ftag"><div class="pos">RF</div><div class="nm">Frelick</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BATTING ORDER RAIL -->
+      <div class="lineup">
+        <div class="lineup-head">
+          <div class="t">Batting Order</div>
+          <div class="vs">vs RHP Bibee</div>
+        </div>
+        <div class="order" id="order"></div>
+        <div class="footnote">Tap chart not to scale · jersey dots at true defensive spots</div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  var bat = [
+    {n:1, name:"Turang",    pos:"2B", num:"#0"},
+    {n:2, name:"Frelick",   pos:"RF", num:"#10"},
+    {n:3, name:"Chourio",   pos:"CF", num:"#11"},
+    {n:4, name:"Contreras", pos:"C",  num:"#24"},
+    {n:5, name:"Hoskins",   pos:"1B", num:"#12"},
+    {n:6, name:"Yelich",    pos:"DH", num:"#22"},
+    {n:7, name:"Ortiz",     pos:"3B", num:"#3"},
+    {n:8, name:"Mitchell",  pos:"LF", num:"#5"},
+    {n:9, name:"Adames",    pos:"SS", num:"#27"}
+  ];
+  var html = bat.map(function(b){
+    return '<div class="row">'
+      + '<div class="num">'+b.n+'</div>'
+      + '<div class="pname">'+b.name+'</div>'
+      + '<div class="ppos">'+b.pos+'</div>'
+      + '<div class="pjersey">'+b.num+'</div>'
+      + '</div>';
+  }).join('');
+  document.getElementById('order').innerHTML = html;
+</script>
+</body>
+</html>

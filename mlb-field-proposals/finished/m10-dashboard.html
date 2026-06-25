@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>m10 — Field Dashboard</title>
+<!--
+  m10 "Field Dashboard": the accurate American Family Field is the HERO of a single finished
+  page. Below it sit three compact, edge-to-edge data strips — PITCHING / BATS / PARK — that
+  read as one cohesive dashboard, not separate cards. Batting-order rail removed; each player's
+  order spot lives in the tap-a-fielder detail. Keeps Brewers/Guardians data, SEASON/vs RHP/vs
+  Bibee toggle, Projected/Confirmed, HOT/COLD, advanced stats.
+-->
+<style>
+  :root{
+    --bg:#0B0F0D;--bg2:#10171300;--panel:rgba(255,255,255,.045);--panel2:rgba(255,255,255,.025);
+    --line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.055);
+    --ink:#F3F6F2;--ink2:rgba(243,246,242,.64);--ink3:rgba(243,246,242,.38);
+    --gold:#D8AF38;--goldDim:rgba(216,175,56,.16);
+    --navy:#0C2340;--brewersGold:#FFC52F;
+    --hot:#EE6A3A;--cold:#52A6EA;--steady:#7B8C82;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#05080a;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;padding:18px 10px 60px;min-height:100vh}
+  .phone{width:430px;max-width:100%;background:linear-gradient(180deg,#101a14 0%,#0B0F0D 36%,#080B09 100%);border-radius:34px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .statusbar{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;font-weight:600;font-family:var(--mono);color:var(--ink2)}
+  .statusbar .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#3ad17a;margin-right:5px;box-shadow:0 0 6px #3ad17a}
+
+  /* ===== HERO HEADER ===== */
+  .head{padding:4px 20px 0}
+  .kick{display:flex;align-items:center;gap:8px}
+  .kick .lg{font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--gold);text-transform:uppercase}
+  .kick .live{margin-left:auto;font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--ink3);border:1px solid var(--line);border-radius:20px;padding:3px 9px}
+  .matchup{margin-top:7px;display:flex;align-items:baseline;gap:9px}
+  .matchup .t{font-size:25px;font-weight:850;letter-spacing:-.025em;line-height:1}
+  .matchup .at{color:var(--ink3);font-weight:600;font-size:14px}
+  .matchup .home{color:#fff}
+  .park{margin-top:6px;font-size:11.5px;font-weight:600;color:var(--ink2);display:flex;align-items:center;gap:6px}
+  .park .sep{color:var(--ink3)}
+
+  /* opposing pitcher — slim bar inside hero */
+  .spbar{display:flex;align-items:center;gap:10px;margin:12px 20px 0;background:linear-gradient(90deg,rgba(58,34,48,.55),rgba(255,255,255,.03));border:1px solid var(--line);border-radius:13px;padding:9px 12px}
+  .spbar .disc{width:32px;height:32px;border-radius:50%;background:#3a2230;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:800;font-size:12px;color:#fff;flex:0 0 auto;border:1px solid rgba(255,255,255,.14)}
+  .spbar .who{font-size:13px;font-weight:800;line-height:1.1}
+  .spbar .l{font-family:var(--mono);font-size:9.5px;color:var(--ink3);margin-top:2px}
+  .spbar .hand{margin-left:auto;font-family:var(--mono);font-size:10.5px;font-weight:800;color:var(--gold);background:var(--goldDim);border:1px solid rgba(216,175,56,.32);padding:5px 9px;border-radius:8px}
+
+  /* controls row: state pills + split segmented */
+  .ctrl{margin:14px 20px 0}
+  .statepills{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;margin-bottom:10px}
+  .statepills .sp-t{font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.04em;color:var(--ink3);padding:6px 12px;border-radius:7px;cursor:pointer;text-transform:uppercase;transition:.15s}
+  .statepills .sp-t.on{color:#0B0F0D;background:var(--ink)}
+  .splits{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px}
+  .splits button{flex:1;border:0;background:transparent;padding:9px 4px;border-radius:8px;font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.03em;color:var(--ink2);cursor:pointer;transition:.15s}
+  .splits button.on{background:var(--gold);color:#1a1305;box-shadow:0 2px 8px rgba(216,175,56,.3)}
+
+  /* ===== FIELD (the hero) ===== */
+  .fieldwrap{position:relative;margin:14px 16px 0;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:inset 0 0 0 1px rgba(255,255,255,.02),0 14px 34px rgba(0,0,0,.5)}
+  .fieldwrap svg{display:block;width:100%}
+  .fieldtag{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:8.5px;font-weight:800;letter-spacing:.12em;color:rgba(255,255,255,.55);text-transform:uppercase;z-index:3}
+  .statpill{position:absolute;top:9px;right:11px;z-index:3;font-family:var(--mono);font-size:8.5px;font-weight:800;letter-spacing:.06em;color:var(--gold);background:rgba(11,15,13,.7);border:1px solid rgba(216,175,56,.3);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:5px 8px;border-radius:8px}
+
+  .pl{position:absolute;transform:translate(-50%,-50%);width:80px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;z-index:2}
+  .chip{position:relative;display:flex;align-items:center;gap:5px;padding:3px 7px 3px 4px;border-radius:20px;
+    background:rgba(9,13,11,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.24);box-shadow:0 4px 12px rgba(0,0,0,.5)}
+  .chip .no{width:22px;height:22px;border-radius:50%;background:var(--navy);color:var(--brewersGold);font-family:var(--mono);font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .chip .st{font-family:var(--mono);font-size:11px;font-weight:800;color:#fff;min-width:30px;text-align:center}
+  .chip .flame{position:absolute;top:-5px;right:-3px;width:11px;height:11px;border-radius:50%;border:1.5px solid var(--bg);box-shadow:0 0 7px}
+  .nm{font-size:10.5px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85)}
+  .pos{font-family:var(--mono);font-size:8px;font-weight:700;color:rgba(255,255,255,.62);text-shadow:0 1px 2px rgba(0,0,0,.8)}
+  .pl.proj .chip{border-style:dashed;opacity:.93}
+  .pl.proj .ptag{position:absolute;bottom:-12px;font-family:var(--mono);font-size:7px;font-weight:800;color:var(--gold);background:var(--goldDim);padding:1px 4px;border-radius:4px;white-space:nowrap}
+
+  .legend{display:flex;gap:13px;justify-content:center;margin:11px 0 0;font-family:var(--mono);font-size:9px;color:var(--ink3)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+  /* ===== DASHBOARD STRIPS ===== */
+  .strips{margin:16px 16px 0;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:linear-gradient(180deg,var(--panel2),transparent)}
+  .strip{padding:13px 15px;border-top:1px solid var(--line2)}
+  .strip:first-child{border-top:0}
+  .strip-h{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .strip-h .ic{width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  .strip-h .lbl{font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.13em;color:var(--gold);text-transform:uppercase}
+  .strip-h .sub{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.04em}
+
+  /* pitching strip: matchup gauge row */
+  .pmatch{display:flex;align-items:stretch;gap:10px}
+  .pside{flex:1;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:10px}
+  .pside .pn{font-size:12.5px;font-weight:800}.pside .pteam{font-family:var(--mono);font-size:8.5px;color:var(--ink3);letter-spacing:.06em}
+  .pside .pstats{display:flex;gap:10px;margin-top:8px}
+  .pside .ps{flex:1}
+  .pside .ps .pv{font-family:var(--mono);font-size:14px;font-weight:800}
+  .pside .ps .pk{font-family:var(--mono);font-size:7.5px;color:var(--ink3);letter-spacing:.05em;margin-top:2px}
+  .pvs{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:800;color:var(--ink3);width:18px}
+
+  /* bats strip: 9 micro-cells of the active stat */
+  .batgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .bcell{background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:8px 8px 7px;cursor:pointer;position:relative;overflow:hidden;transition:.15s}
+  .bcell:active{transform:scale(.97)}
+  .bcell .bbar{position:absolute;left:0;top:0;bottom:0;width:3px}
+  .bcell .bname{font-size:11px;font-weight:800;display:flex;align-items:center;gap:5px}
+  .bcell .bdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .bcell .bmeta{display:flex;align-items:baseline;justify-content:space-between;margin-top:5px}
+  .bcell .bpos{font-family:var(--mono);font-size:8px;color:var(--ink3)}
+  .bcell .bval{font-family:var(--mono);font-size:13px;font-weight:800}
+
+  /* park strip: weather/factor chips */
+  .parkgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .pkcell{background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:9px 7px;text-align:center}
+  .pkcell .pkv{font-family:var(--mono);font-size:13px;font-weight:800}
+  .pkcell .pkk{font-family:var(--mono);font-size:7.5px;color:var(--ink3);letter-spacing:.04em;margin-top:3px;text-transform:uppercase}
+  .pkcell .pkv.acc{color:var(--gold)}
+
+  .foot{text-align:center;font-family:var(--mono);font-size:9px;color:var(--ink3);padding:18px 16px 20px;letter-spacing:.1em;text-transform:uppercase}
+
+  /* ===== SHEET ===== */
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:.2s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,103%);width:430px;max-width:100%;background:#0E1511;border-radius:24px 24px 0 0;
+    border-top:1px solid var(--line);padding:8px 20px 30px;z-index:41;transition:transform .28s cubic-bezier(.3,.9,.3,1);box-shadow:0 -20px 50px rgba(0,0,0,.5)}
+  .sheet.show{transform:translate(-50%,0)}
+  .grab{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:6px auto 16px}
+  .sh-head{display:flex;align-items:center;gap:12px}
+  .sh-no{width:44px;height:44px;border-radius:50%;background:var(--navy);color:var(--brewersGold);font-family:var(--mono);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+  .sh-nm{font-size:19px;font-weight:850;letter-spacing:-.01em}
+  .sh-sub{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:2px}
+  .sh-tag{margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:800;padding:6px 10px;border-radius:9px;flex:0 0 auto}
+  .sh-order{display:flex;align-items:center;gap:9px;margin-top:14px;background:var(--goldDim);border:1px solid rgba(216,175,56,.3);border-radius:12px;padding:10px 13px}
+  .sh-order .ono{font-family:var(--mono);font-size:20px;font-weight:850;color:var(--gold);line-height:1}
+  .sh-order .otxt{font-size:12.5px;font-weight:700}
+  .sh-order .osub{font-family:var(--mono);font-size:9px;color:var(--ink3);margin-top:2px}
+  .sh-order .ohand{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--ink2);text-align:right}
+  .sh-sec{margin-top:18px}
+  .sh-l{font-family:var(--mono);font-size:9px;letter-spacing:.13em;color:var(--gold);font-weight:800;text-transform:uppercase;margin-bottom:9px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cell{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px;text-align:center}
+  .cell .v{font-family:var(--mono);font-size:18px;font-weight:850}.cell .k{font-family:var(--mono);font-size:8px;letter-spacing:.05em;color:var(--ink3);margin-top:4px}
+  .splitrow{display:flex;align-items:center;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+  .splitrow:first-child{border-top:0}.splitrow .k{color:var(--ink2)}.splitrow .v{margin-left:auto;font-family:var(--mono);font-weight:800}
+  .bvp{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px 14px;font-size:13px;line-height:1.55}
+  .bvp b{color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span><span class="dot"></span>Gary · MLB</span></div>
+
+  <div class="head">
+    <div class="kick">
+      <div class="lg">Lineup Intel</div>
+      <div class="live">FIRST PITCH 7:10</div>
+    </div>
+    <div class="matchup">
+      <span class="t">Cleveland</span><span class="at">@</span><span class="t home">Milwaukee</span>
+    </div>
+    <div class="park">American Family Field <span class="sep">·</span> Roof closed <span class="sep">·</span> 41,900</div>
+  </div>
+
+  <div class="spbar">
+    <div class="disc">28</div>
+    <div><div class="who">Tanner Bibee</div><div class="l">CLE STARTER · 3.41 ERA · 28% K · 1.09 WHIP</div></div>
+    <div class="hand">RHP</div>
+  </div>
+
+  <div class="ctrl">
+    <div class="statepills">
+      <span class="sp-t" data-state="projected">Projected</span>
+      <span class="sp-t on" data-state="confirmed">Confirmed</span>
+    </div>
+    <div class="splits" id="splits">
+      <button data-split="season">SEASON</button>
+      <button data-split="hand" class="on">vs RHP</button>
+      <button data-split="bvp">vs BIBEE</button>
+    </div>
+  </div>
+
+  <div class="fieldwrap" id="fieldwrap">
+    <div class="fieldtag">American Family Field</div>
+    <div class="statpill" id="statpill">OPS · vs RHP</div>
+    <svg viewBox="0 0 400 440" id="fieldsvg">
+      <defs>
+        <radialGradient id="grass" cx="50%" cy="94%" r="98%">
+          <stop offset="0%" stop-color="#2C5A41"/><stop offset="48%" stop-color="#234A33"/><stop offset="100%" stop-color="#16301E"/>
+        </radialGradient>
+        <linearGradient id="dirt" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#86532F"/><stop offset="100%" stop-color="#6F4426"/>
+        </linearGradient>
+        <radialGradient id="vig" cx="50%" cy="60%" r="75%">
+          <stop offset="62%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(0,0,0,.42)"/>
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width="400" height="440" fill="#0a1710"/>
+
+      <!-- fair territory wedge -->
+      <path d="M200,394 L36,146 Q200,46 364,146 Z" fill="url(#grass)"/>
+
+      <!-- mowing stripes: alternating fan wedges from home plate -->
+      <g opacity=".55">
+        <path d="M200,394 L86,222 Q200,150 200,150 Z" fill="#2F6244" opacity=".4"/>
+        <path d="M200,394 L200,150 Q314,222 314,222 Z" fill="#2F6244" opacity=".0"/>
+      </g>
+      <g>
+        <path d="M200,394 L36,146 Q108,98 108,98 L200,394 Z" fill="#27553A" opacity=".30"/>
+        <path d="M200,394 L172,80 Q236,80 236,80 L200,394 Z" fill="#27553A" opacity=".30"/>
+        <path d="M200,394 L300,98 Q364,146 364,146 L200,394 Z" fill="#27553A" opacity=".30"/>
+      </g>
+      <!-- concentric arc stripes for the outfield mow -->
+      <g fill="none" stroke="#2E6044" stroke-width="15" opacity=".26">
+        <path d="M62,180 Q200,86 338,180"/>
+        <path d="M104,218 Q200,150 296,218"/>
+      </g>
+
+      <!-- warning track + outfield wall arc -->
+      <path d="M36,146 Q200,46 364,146" fill="none" stroke="#6B4326" stroke-width="11"/>
+      <path d="M36,146 Q200,46 364,146" fill="none" stroke="#0a2114" stroke-width="3.5"/>
+      <!-- wall yellow line -->
+      <path d="M40,144 Q200,49 360,144" fill="none" stroke="rgba(255,211,77,.5)" stroke-width="1.4"/>
+
+      <!-- foul lines -->
+      <line x1="200" y1="394" x2="36" y2="146" stroke="rgba(255,255,255,.6)" stroke-width="1.8"/>
+      <line x1="200" y1="394" x2="364" y2="146" stroke="rgba(255,255,255,.6)" stroke-width="1.8"/>
+      <!-- foul poles -->
+      <circle cx="36" cy="146" r="3.4" fill="#ffd34d"/><circle cx="364" cy="146" r="3.4" fill="#ffd34d"/>
+
+      <!-- infield dirt skin (arc) -->
+      <path d="M200,394 L262,332 A 88 88 0 0 0 138,332 Z" fill="url(#dirt)"/>
+      <!-- infield grass diamond -->
+      <path d="M200,390 L254,338 L200,298 L146,338 Z" fill="#2A5640"/>
+      <!-- basepaths -->
+      <path d="M200,390 L254,338 L200,298 L146,338 Z" fill="none" stroke="#8A5631" stroke-width="6.5"/>
+      <!-- grass cutout between mound and infield edge -->
+      <circle cx="200" cy="344" r="26" fill="none" stroke="#7A4A2A" stroke-width="0"/>
+
+      <!-- mound -->
+      <circle cx="200" cy="345" r="12" fill="#8A5631"/><circle cx="200" cy="345" r="2.6" fill="rgba(255,255,255,.75)"/>
+      <!-- bases -->
+      <rect x="250" y="334" width="8.5" height="8.5" transform="rotate(45 254 338)" fill="#fff"/>
+      <rect x="196" y="294" width="8.5" height="8.5" transform="rotate(45 200 298)" fill="#fff"/>
+      <rect x="142" y="334" width="8.5" height="8.5" transform="rotate(45 146 338)" fill="#fff"/>
+      <!-- home plate -->
+      <path d="M194.5,391 l11,0 l0,4.5 l-5.5,4 l-5.5,-4 z" fill="#fff"/>
+      <!-- batter's boxes -->
+      <rect x="178" y="388" width="9" height="13" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1"/>
+      <rect x="213" y="388" width="9" height="13" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1"/>
+
+      <!-- vignette -->
+      <rect x="0" y="0" width="400" height="440" fill="url(#vig)"/>
+    </svg>
+    <!-- fielder chips injected by JS -->
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--hot)"></i>Hot (L15)</span>
+    <span><i style="background:var(--cold)"></i>Cold</span>
+    <span><i style="background:var(--steady)"></i>Steady</span>
+    <span style="color:var(--gold)">↑ tap a fielder</span>
+  </div>
+
+  <!-- ===== DASHBOARD STRIPS ===== -->
+  <div class="strips">
+
+    <!-- PITCHING -->
+    <div class="strip">
+      <div class="strip-h">
+        <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#D8AF38" stroke-width="1.6"/><path d="M5.5 6.5 Q12 12 18.5 17.5 M18.5 6.5 Q12 12 5.5 17.5" stroke="#D8AF38" stroke-width="1.2"/></svg></span>
+        <span class="lbl">Pitching</span>
+        <span class="sub">PROBABLES</span>
+      </div>
+      <div class="pmatch">
+        <div class="pside">
+          <div class="pn">T. Bibee <span style="color:var(--ink3);font-weight:600;font-size:10px">RHP</span></div>
+          <div class="pteam">CLEVELAND</div>
+          <div class="pstats">
+            <div class="ps"><div class="pv">3.41</div><div class="pk">ERA</div></div>
+            <div class="ps"><div class="pv">28%</div><div class="pk">K RATE</div></div>
+            <div class="ps"><div class="pv">3.62</div><div class="pk">xFIP</div></div>
+          </div>
+        </div>
+        <div class="pvs">vs</div>
+        <div class="pside">
+          <div class="pn">F. Peralta <span style="color:var(--ink3);font-weight:600;font-size:10px">RHP</span></div>
+          <div class="pteam">MILWAUKEE</div>
+          <div class="pstats">
+            <div class="ps"><div class="pv" style="color:var(--gold)">2.90</div><div class="pk">ERA</div></div>
+            <div class="ps"><div class="pv">31%</div><div class="pk">K RATE</div></div>
+            <div class="ps"><div class="pv">2.71</div><div class="pk">xERA</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BATS -->
+    <div class="strip">
+      <div class="strip-h">
+        <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 21 L9 15 M9 15 L18 6 a3 3 0 0 1 0-4 a3 3 0 0 1 4 0 a3 3 0 0 1 0 4 L13 19" stroke="#D8AF38" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="lbl">Bats</span>
+        <span class="sub" id="batsub">OPS · vs RHP</span>
+      </div>
+      <div class="batgrid" id="batgrid"></div>
+    </div>
+
+    <!-- PARK -->
+    <div class="strip">
+      <div class="strip-h">
+        <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 13 Q12 4 21 13 M3 13 v6 h18 v-6" stroke="#D8AF38" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="lbl">Park &amp; Weather</span>
+        <span class="sub">ROOF CLOSED</span>
+      </div>
+      <div class="parkgrid">
+        <div class="pkcell"><div class="pkv acc">+8%</div><div class="pkk">HR factor</div></div>
+        <div class="pkcell"><div class="pkv">72°</div><div class="pkk">Indoor</div></div>
+        <div class="pkcell"><div class="pkv">0</div><div class="pkk">Wind</div></div>
+        <div class="pkcell"><div class="pkv">101</div><div class="pkk">Run park</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="foot">Field Dashboard · One view · Tap any bat or fielder</div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+// pos: field % (x,y). stats per split. bvp = vs Bibee. heat: hot/cold/steady. proj=platoon-uncertain.
+// ord = batting-order spot (now lives in the detail card, no rail).
+const P = [
+  {n:51,nm:'Peralta',pos:'P',x:50,y:78,heat:'steady',pitcher:true,line:'2.90 ERA · 2.71 xERA · 31% K',season:'2.90',hand:'2.71',bvp:'—'},
+  {n:24,nm:'Contreras',pos:'C',x:50,y:91,heat:'hot',ord:4,wrc:130,xwoba:'.372',vR:'.910',vL:'.840',bvp:{ab:11,h:4,hr:1,ops:'1.090'},form:'1.180 OPS L15'},
+  {n:12,nm:'Hoskins',pos:'1B',x:64,y:75,heat:'steady',ord:5,wrc:112,xwoba:'.345',vR:'.840',vL:'.910',bvp:{ab:8,h:2,hr:0,ops:'.625'},form:'.760 OPS L15'},
+  {n:0,nm:'Turang',pos:'2B',x:57,y:66,heat:'cold',ord:1,wrc:95,xwoba:'.300',vR:'.720',vL:'.760',bvp:{ab:6,h:1,hr:0,ops:'.500'},form:'.540 OPS L15'},
+  {n:27,nm:'Adames',pos:'SS',x:43,y:66,heat:'hot',ord:9,wrc:118,xwoba:'.350',vR:'.860',vL:'.900',bvp:{ab:13,h:5,hr:1,ops:'.980'},form:'1.020 OPS L15'},
+  {n:3,nm:'Ortiz',pos:'3B',x:36,y:75,heat:'steady',ord:7,wrc:88,xwoba:'.298',vR:'.700',vL:'.770',bvp:{ab:5,h:1,hr:0,ops:'.560'},form:'.690 OPS L15'},
+  {n:5,nm:'Mitchell',pos:'LF',x:27,y:40,heat:'hot',ord:8,wrc:105,xwoba:'.330',vR:'.800',vL:'.690',bvp:{ab:4,h:2,hr:0,ops:'1.000'},form:'.940 OPS L15',proj:true},
+  {n:11,nm:'Chourio',pos:'CF',x:50,y:26,heat:'hot',ord:3,wrc:122,xwoba:'.358',vR:'.880',vL:'.910',bvp:{ab:7,h:3,hr:1,ops:'1.140'},form:'1.060 OPS L15'},
+  {n:10,nm:'Frelick',pos:'RF',x:72,y:40,heat:'cold',ord:2,wrc:92,xwoba:'.305',vR:'.740',vL:'.700',bvp:{ab:9,h:2,hr:0,ops:'.560'},form:'.610 OPS L15'},
+];
+// DH (Yelich) not on the field — surfaced only in the bats grid.
+const DH = {n:22,nm:'Yelich',pos:'DH',x:0,y:0,heat:'hot',ord:6,wrc:128,xwoba:'.365',vR:'.930',vL:'.880',bvp:{ab:14,h:5,hr:1,ops:'1.010'},form:'1.090 OPS L15'};
+
+const heatColor = h => h==='hot'?'var(--hot)':h==='cold'?'var(--cold)':'var(--steady)';
+const ord = n => ({1:'1st',2:'2nd',3:'3rd',4:'4th',5:'5th',6:'6th',7:'7th',8:'8th',9:'9th'}[n]||'—');
+let split='hand', state='confirmed';
+
+function statFor(p){
+  if(p.pitcher) return p[split==='season'?'season':split==='hand'?'hand':'bvp'] || '—';
+  if(split==='season') return p.xwoba;
+  if(split==='hand') return p.vR;          // Bibee is RHP → vs RHP
+  return p.bvp.h+'-'+p.bvp.ab;             // BvP hits-AB
+}
+function statTag(){
+  return split==='season'?'xwOBA · SEASON':split==='hand'?'OPS · vs RHP':'H-AB · vs BIBEE';
+}
+
+function render(){
+  const wrap=document.getElementById('fieldwrap');
+  [...wrap.querySelectorAll('.pl')].forEach(e=>e.remove());
+  P.forEach(p=>{
+    const el=document.createElement('div');
+    el.className='pl'+(p.proj && state==='projected'?' proj':'');
+    el.style.left=p.x+'%'; el.style.top=p.y+'%';
+    const ptag = (p.proj && state==='projected')?'<span class="ptag">PLATOON ?</span>':'';
+    el.innerHTML=`<div class="chip"><span class="flame" style="background:${heatColor(p.heat)};box-shadow:0 0 7px ${heatColor(p.heat)}"></span>
+      <span class="no">${p.n}</span><span class="st">${statFor(p)}</span></div>
+      <div class="nm">${p.nm}</div><div class="pos">${p.pos}</div>${ptag}`;
+    el.onclick=()=>openSheet(p);
+    wrap.appendChild(el);
+  });
+  document.getElementById('statpill').textContent=statTag();
+  document.getElementById('batsub').textContent=statTag();
+
+  // BATS strip: lineup-order, every batter incl. DH (sorted by order spot)
+  const bats=[...P.filter(p=>!p.pitcher),DH].sort((a,b)=>a.ord-b.ord);
+  document.getElementById('batgrid').innerHTML=bats.map(p=>{
+    const v = split==='bvp' ? (p.bvp.h+'-'+p.bvp.ab) : split==='season' ? p.xwoba : p.vR;
+    const proj = p.proj && state==='projected';
+    return `<div class="bcell" data-nm="${p.nm}">
+      <span class="bbar" style="background:${heatColor(p.heat)}"></span>
+      <div class="bname"><span class="bdot" style="background:${heatColor(p.heat)}"></span>${p.nm}${proj?' <span style="color:var(--gold);font-size:8px;font-family:var(--mono)">?</span>':''}</div>
+      <div class="bmeta"><span class="bpos">${ord(p.ord)} · ${p.pos}</span><span class="bval">${v}</span></div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.bcell').forEach(c=>{
+    c.onclick=()=>{const nm=c.dataset.nm;const p=bats.find(x=>x.nm===nm);if(p)openSheet(p);};
+  });
+}
+
+function openSheet(p){
+  if(p.pitcher) return;
+  const sheet=document.getElementById('sheet');
+  const tag = p.heat==='hot'?'<span class="sh-tag" style="background:rgba(238,106,58,.18);color:#EE6A3A">HOT · L15</span>'
+            : p.heat==='cold'?'<span class="sh-tag" style="background:rgba(82,166,234,.18);color:#52A6EA">COLD · L15</span>':'';
+  const platoonFlag = (p.proj && state==='projected')
+    ? ` · <span style="color:var(--gold)">platoon-uncertain</span>` : '';
+  sheet.innerHTML=`<div class="grab"></div>
+    <div class="sh-head"><div class="sh-no">${p.n}</div>
+      <div><div class="sh-nm">${p.nm}</div><div class="sh-sub">Brewers · ${p.pos} · ${p.form}</div></div>${tag}</div>
+
+    <div class="sh-order">
+      <div class="ono">${p.ord}</div>
+      <div><div class="otxt">Bats ${ord(p.ord)}</div><div class="osub">IN TONIGHT'S ORDER${platoonFlag}</div></div>
+      <div class="ohand">${state==='confirmed'?'CONFIRMED':'PROJECTED'}<br>${p.pos} · #${p.n}</div>
+    </div>
+
+    <div class="sh-sec"><div class="sh-l">The numbers</div>
+      <div class="grid3">
+        <div class="cell"><div class="v">${p.wrc}</div><div class="k">wRC+</div></div>
+        <div class="cell"><div class="v">${p.xwoba}</div><div class="k">xwOBA</div></div>
+        <div class="cell"><div class="v" style="color:${heatColor(p.heat)}">${p.form.split(' ')[0]}</div><div class="k">L15 OPS</div></div>
+      </div></div>
+
+    <div class="sh-sec"><div class="sh-l">Platoon splits</div>
+      <div class="splitrow"><span class="k">vs RHP</span><span class="v">${p.vR}</span></div>
+      <div class="splitrow"><span class="k">vs LHP</span><span class="v">${p.vL}</span></div></div>
+
+    <div class="sh-sec"><div class="sh-l">vs Tanner Bibee (career)</div>
+      <div class="bvp">${p.bvp.h}-for-${p.bvp.ab}${p.bvp.hr?`, <b>${p.bvp.hr} HR</b>`:''} · <b>${p.bvp.ops} OPS</b> — small sample, but the read against tonight's arm.</div></div>`;
+  sheet.classList.add('show'); document.getElementById('scrim').classList.add('show');
+}
+function closeSheet(){document.getElementById('sheet').classList.remove('show');document.getElementById('scrim').classList.remove('show');}
+
+document.querySelectorAll('#splits button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#splits button').forEach(x=>x.classList.remove('on'));b.classList.add('on');split=b.dataset.split;render();});
+document.querySelectorAll('.statepills .sp-t').forEach(b=>b.onclick=()=>{document.querySelectorAll('.statepills .sp-t').forEach(x=>x.classList.remove('on'));b.classList.add('on');state=b.dataset.state;render();});
+render();
+</script>
+</body>
+</html>

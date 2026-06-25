@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>d12 — Retro LED Scoreboard</title>
+<style>
+  :root{
+    --amber:#ffb000;
+    --amber-dim:#7a5300;
+    --amber-glow:#ffcb52;
+    --red:#ff3b2f;
+    --red-dim:#5e0f0a;
+    --green:#3bff7a;
+    --green-dim:#0c3a1c;
+    --navy:#0a2351;
+    --navy-light:#16356f;
+    --gold:#ffc52f;
+    --board:#080604;
+    --board-2:#0d0a06;
+    --grid:rgba(255,176,0,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    background:#000;
+    min-height:100%;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    font-family:'Courier New',ui-monospace,monospace;
+    padding:24px 0;
+  }
+  /* PHONE FRAME */
+  .phone{
+    width:430px;
+    min-height:880px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, #14100a 0%, #050403 60%, #000 100%);
+    border-radius:46px;
+    border:1px solid #1c1810;
+    box-shadow:0 0 0 10px #0a0805, 0 0 60px rgba(255,176,0,.08), 0 30px 80px rgba(0,0,0,.9);
+    overflow:hidden;
+    position:relative;
+    padding:14px 12px 22px;
+  }
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:26px;background:#000;border-radius:0 0 18px 18px;z-index:40;
+  }
+  /* ===== LED helpers ===== */
+  .led-font{
+    font-family:'Courier New',monospace;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  /* dot-matrix text shimmer */
+  .dm{
+    color:var(--amber);
+    text-shadow:0 0 4px rgba(255,176,0,.85),0 0 12px rgba(255,176,0,.35);
+  }
+  .dm-red{color:var(--red);text-shadow:0 0 5px rgba(255,59,47,.9),0 0 14px rgba(255,59,47,.4);}
+  .dm-green{color:var(--green);text-shadow:0 0 5px rgba(59,255,122,.9),0 0 14px rgba(59,255,122,.35);}
+  .dm-dim{color:#a87f24;text-shadow:0 0 4px rgba(255,176,0,.3);}
+  /* dot-matrix scanline overlay applied to whole board */
+  .scan::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:60;
+    background:
+      repeating-linear-gradient(to bottom, rgba(0,0,0,.30) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(to right, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+    mix-blend-mode:multiply;
+    border-radius:inherit;
+  }
+  .scan::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:61;
+    background:radial-gradient(110% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.55) 100%);
+    border-radius:inherit;
+  }
+
+  /* ===== TOP MARQUEE ===== */
+  .marquee-wrap{
+    position:relative;height:30px;margin:6px 2px 10px;border-radius:7px;
+    background:linear-gradient(180deg,#0c0a06,#060503);
+    border:1px solid #2a1f08;overflow:hidden;
+    box-shadow:inset 0 0 16px rgba(255,176,0,.07);
+  }
+  .marquee{
+    position:absolute;white-space:nowrap;top:50%;transform:translateY(-50%);
+    font-size:13px;will-change:transform;
+    animation:scroll 18s linear infinite;
+  }
+  .marquee span{margin-right:54px;}
+  @keyframes scroll{0%{left:100%;}100%{left:-160%;}}
+
+  /* ===== SCOREBOARD HEADER ===== */
+  .board-head{
+    position:relative;
+    background:linear-gradient(180deg,#0b0905,#070502);
+    border:1px solid #2c2009;
+    border-radius:12px;
+    padding:12px 14px 13px;
+    margin:0 2px 12px;
+    box-shadow:inset 0 0 26px rgba(255,176,0,.06), 0 0 0 3px #060403, 0 0 22px rgba(255,176,0,.06);
+  }
+  .board-head::before{
+    content:"";position:absolute;inset:0;border-radius:12px;pointer-events:none;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
+    opacity:.7;
+  }
+  .stadium-line{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;margin-bottom:9px;position:relative;z-index:2;
+  }
+  .team-row{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:2;}
+  .team-cell{display:flex;align-items:center;gap:9px;}
+  .cap{
+    width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:800;flex-shrink:0;border:1px solid rgba(255,255,255,.12);
+  }
+  .cap.gua{background:linear-gradient(180deg,#9c1b2e,#5e0f1b);color:#ffd7a0;box-shadow:0 0 10px rgba(156,27,46,.4);}
+  .cap.mil{background:linear-gradient(180deg,var(--navy-light),var(--navy));color:var(--gold);box-shadow:0 0 10px rgba(255,197,47,.25);}
+  .team-name{font-size:15px;}
+  .team-sub{font-size:8px;letter-spacing:.12em;}
+  .score-big{font-size:26px;line-height:1;}
+  .vs-mid{font-size:9px;text-align:center;flex:1;}
+
+  /* inning bug / count */
+  .bug{
+    display:flex;gap:7px;justify-content:center;align-items:center;
+    margin-top:10px;position:relative;z-index:2;
+  }
+  .bug .pill{
+    background:#0d0a05;border:1px solid #3a2b0c;border-radius:5px;padding:3px 8px;font-size:9px;
+    box-shadow:inset 0 0 8px rgba(255,176,0,.08);
+  }
+  .bases{display:inline-flex;gap:3px;align-items:center;}
+  .diamond-bug{position:relative;width:24px;height:24px;}
+  .bb{position:absolute;width:8px;height:8px;background:var(--amber-dim);border:1px solid #4a3409;transform:rotate(45deg);}
+  .bb.lit{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+  .bb.b2{top:0;left:8px;}
+  .bb.b3{top:8px;left:0;}
+  .bb.b1{top:8px;left:16px;}
+  .bb.bh{top:16px;left:8px;background:#1a1206;}
+
+  /* ===== FIELD (LED pixel diamond) ===== */
+  .field-wrap{
+    position:relative;
+    margin:0 2px 12px;
+    border-radius:14px;
+    overflow:hidden;
+    background:var(--board);
+    border:1px solid #241a07;
+    box-shadow:inset 0 0 40px rgba(0,0,0,.8), 0 0 0 3px #060403;
+  }
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1.06;
+    /* pixel grass = dotted dark-green LED field */
+    background:
+      radial-gradient(120% 120% at 50% 8%, rgba(12,58,28,.55) 0%, rgba(6,30,16,.4) 40%, rgba(2,10,6,.2) 70%, transparent 100%),
+      repeating-linear-gradient(to bottom, rgba(20,90,44,.10) 0 1px, transparent 1px 5px),
+      repeating-linear-gradient(to right, rgba(20,90,44,.10) 0 1px, transparent 1px 5px),
+      #050403;
+  }
+  /* outfield arc (pixel fence) */
+  .fence{
+    position:absolute;left:6%;right:6%;top:5%;height:62%;
+    border:0;border-top:2px dotted rgba(255,176,0,.30);
+    border-radius:50%/100% 100% 0 0;
+    box-shadow:0 0 16px rgba(255,176,0,.06) inset;
+  }
+  .fence::after{
+    content:"";position:absolute;inset:6px;
+    border-top:1px dotted rgba(255,176,0,.14);
+    border-radius:50%/100% 100% 0 0;
+  }
+  /* warning track text */
+  .arc-label{
+    position:absolute;top:3%;left:50%;transform:translateX(-50%);
+    font-size:8px;letter-spacing:.3em;z-index:3;
+  }
+  /* infield dirt = amber pixel diamond */
+  .infield{
+    position:absolute;left:50%;bottom:7%;transform:translate(-50%,0);
+    width:54%;height:50%;
+  }
+  .infield .di{
+    position:absolute;left:50%;bottom:0;transform:translate(-50%,0) ;
+    width:100%;height:100%;
+  }
+  .di-shape{
+    position:absolute;left:50%;bottom:6%;transform:translate(-50%,0) rotate(45deg);
+    width:64%;height:64%;
+    background:
+      repeating-linear-gradient(45deg, rgba(255,176,0,.12) 0 2px, transparent 2px 6px),
+      radial-gradient(circle at 50% 50%, rgba(122,83,0,.30), rgba(60,40,0,.12));
+    border:2px dotted rgba(255,176,0,.45);
+    box-shadow:0 0 18px rgba(255,176,0,.08) inset;
+  }
+  /* base path lines from home */
+  .foul{
+    position:absolute;bottom:7%;left:50%;width:2px;height:64%;
+    background:repeating-linear-gradient(to top, rgba(255,176,0,.4) 0 3px, transparent 3px 6px);
+    transform-origin:bottom center;z-index:2;
+  }
+  .foul.l{transform:translateX(-1px) rotate(33deg);}
+  .foul.r{transform:translateX(-1px) rotate(-33deg);}
+
+  /* tiny pixel bases */
+  .pbase{position:absolute;width:9px;height:9px;background:var(--amber);transform:translate(-50%,50%) rotate(45deg);box-shadow:0 0 7px var(--amber);z-index:4;}
+  .pmound{position:absolute;width:26px;height:26px;border:1px dotted rgba(255,176,0,.4);border-radius:50%;transform:translate(-50%,50%);z-index:3;background:radial-gradient(circle,rgba(255,176,0,.10),transparent 70%);}
+
+  /* ===== FIELDERS (LED chips) ===== */
+  .player{
+    position:absolute;transform:translate(-50%,-50%);
+    z-index:10;text-align:center;width:78px;
+    animation:flick 3.6s steps(2,end) infinite;
+  }
+  .player .dot{
+    width:13px;height:13px;border-radius:2px;margin:0 auto 3px;
+    background:var(--amber);
+    box-shadow:0 0 8px var(--amber),0 0 2px #fff;
+    position:relative;
+  }
+  .player.mil .dot{background:var(--gold);box-shadow:0 0 9px var(--gold),0 0 2px #fff;}
+  .player .num{
+    font-size:13px;line-height:1;margin-bottom:1px;
+  }
+  .player .nm{
+    font-size:8.5px;line-height:1.05;white-space:nowrap;
+  }
+  .player .pos{
+    display:inline-block;margin-top:2px;font-size:7px;letter-spacing:.14em;
+    background:#0c0a05;border:1px solid #3a2b0c;border-radius:3px;padding:1px 4px;
+  }
+  @keyframes flick{
+    0%,92%,100%{opacity:1;}
+    94%{opacity:.72;}
+  }
+  /* pitcher highlighted */
+  .player.pitch .dot{background:var(--red);box-shadow:0 0 10px var(--red),0 0 2px #fff;}
+
+  /* ===== BATTING ORDER RAIL ===== */
+  .lineup{
+    margin:0 2px;
+    background:linear-gradient(180deg,#0b0905,#070502);
+    border:1px solid #2c2009;border-radius:12px;
+    padding:11px 12px 12px;position:relative;
+    box-shadow:inset 0 0 24px rgba(255,176,0,.05), 0 0 0 3px #060403;
+  }
+  .lineup::before{
+    content:"";position:absolute;inset:0;border-radius:12px;pointer-events:none;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,.26) 0 1px, transparent 1px 3px);opacity:.7;
+  }
+  .lu-head{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;margin-bottom:9px;position:relative;z-index:2;
+    border-bottom:1px dotted #3a2b0c;padding-bottom:7px;
+  }
+  .lu-grid{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;}
+  .lu-row{
+    display:flex;align-items:center;gap:8px;padding:3px 2px;font-size:11px;
+  }
+  .lu-row .ord{
+    width:16px;height:16px;border-radius:3px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:10px;
+    background:#11100a;border:1px solid #3a2b0c;
+  }
+  .lu-row .ord.lit{background:var(--amber);color:#1a1206;border-color:var(--amber);box-shadow:0 0 7px rgba(255,176,0,.6);text-shadow:none;}
+  .lu-row .lname{flex:1;}
+  .lu-row .lpos{font-size:8px;letter-spacing:.1em;}
+
+  /* opposing starter footer */
+  .opp{
+    margin:11px 2px 4px;display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;padding:9px 12px;border:1px solid #2c2009;border-radius:10px;
+    background:linear-gradient(180deg,#0b0905,#070502);position:relative;
+    box-shadow:inset 0 0 18px rgba(255,176,0,.04);
+  }
+  .opp::before{content:"";position:absolute;inset:0;border-radius:10px;pointer-events:none;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,.26) 0 1px, transparent 1px 3px);opacity:.6;}
+  .opp .l,.opp .r{position:relative;z-index:2;display:flex;align-items:center;gap:7px;}
+
+  .blink{animation:bl 1.1s steps(1,end) infinite;}
+  @keyframes bl{50%{opacity:.25;}}
+</style>
+</head>
+<body>
+  <div class="phone scan">
+    <div class="notch"></div>
+
+    <!-- scrolling marquee -->
+    <div class="marquee-wrap">
+      <div class="marquee led-font dm">
+        <span>★ MILLER PARK · MILWAUKEE WI</span>
+        <span class="dm-red">★ FIRST PITCH 7:10 PM CT</span>
+        <span>★ CLE @ MIL · GAME 73</span>
+        <span class="dm-green">★ PROBABLES: PERALTA vs BIBEE</span>
+        <span>★ WIND 6MPH OUT TO LF · 72°</span>
+      </div>
+    </div>
+
+    <!-- scoreboard header -->
+    <div class="board-head led-font">
+      <div class="stadium-line">
+        <span class="dm-dim">▦ AMERICAN FAMILY FIELD</span>
+        <span class="dm-dim">TUE · JUN 18</span>
+      </div>
+      <div class="team-row">
+        <div class="team-cell">
+          <div class="cap gua">CLE</div>
+          <div>
+            <div class="team-name dm-dim">GUARDIANS</div>
+            <div class="team-sub dm-dim">AWAY · 41-31</div>
+          </div>
+        </div>
+        <div class="vs-mid dm-red blink">● PRE</div>
+        <div class="team-cell" style="flex-direction:row-reverse;text-align:right;">
+          <div class="cap mil">MIL</div>
+          <div>
+            <div class="team-name dm">BREWERS</div>
+            <div class="team-sub dm-dim">HOME · 44-29</div>
+          </div>
+        </div>
+      </div>
+      <div class="bug led-font">
+        <span class="pill dm">▣ 0-0</span>
+        <span class="pill">
+          <span class="bases">
+            <span class="diamond-bug">
+              <i class="bb b2"></i><i class="bb b3"></i><i class="bb b1"></i><i class="bb bh"></i>
+            </span>
+          </span>
+        </span>
+        <span class="pill dm-dim">▼0 ▲0</span>
+        <span class="pill dm-green">DEFENSE: MIL</span>
+      </div>
+    </div>
+
+    <!-- ===== FIELD ===== -->
+    <div class="field-wrap scan">
+      <div class="field">
+        <div class="arc-label led-font dm-dim">— — — OUTFIELD WALL — — —</div>
+        <div class="fence"></div>
+
+        <!-- foul lines -->
+        <div class="foul l"></div>
+        <div class="foul r"></div>
+
+        <!-- infield -->
+        <div class="infield">
+          <div class="di"><div class="di-shape"></div></div>
+        </div>
+
+        <!-- bases / mound / plate (percentages relative to field) -->
+        <div class="pbase" style="left:50%;bottom:9%;"></div>   <!-- home -->
+        <div class="pbase" style="left:65%;bottom:40%;"></div>  <!-- 1B base -->
+        <div class="pbase" style="left:50%;bottom:55%;"></div>  <!-- 2B base -->
+        <div class="pbase" style="left:35%;bottom:40%;"></div>  <!-- 3B base -->
+        <div class="pmound" style="left:50%;bottom:34%;"></div> <!-- mound -->
+
+        <!-- ====== FIELDERS ====== -->
+        <!-- Pitcher (mound center) -->
+        <div class="player mil pitch led-font" style="left:50%;top:55%;">
+          <div class="dot"></div>
+          <div class="num dm-red">51</div>
+          <div class="nm dm">F. PERALTA</div>
+          <div class="pos dm-red">P</div>
+        </div>
+
+        <!-- Catcher (behind home) -->
+        <div class="player mil led-font" style="left:50%;top:90%;">
+          <div class="dot"></div>
+          <div class="num dm">24</div>
+          <div class="nm dm-dim">W. CONTRERAS</div>
+          <div class="pos dm-dim">C</div>
+        </div>
+
+        <!-- 1B lower-right -->
+        <div class="player mil led-font" style="left:73%;top:62%;">
+          <div class="dot"></div>
+          <div class="num dm">12</div>
+          <div class="nm dm-dim">R. HOSKINS</div>
+          <div class="pos dm-dim">1B</div>
+        </div>
+
+        <!-- 2B upper-right infield -->
+        <div class="player mil led-font" style="left:66%;top:44%;">
+          <div class="dot"></div>
+          <div class="num dm">0</div>
+          <div class="nm dm-dim">B. TURANG</div>
+          <div class="pos dm-dim">2B</div>
+        </div>
+
+        <!-- SS upper-left infield -->
+        <div class="player mil led-font" style="left:34%;top:44%;">
+          <div class="dot"></div>
+          <div class="num dm">27</div>
+          <div class="nm dm-dim">W. ADAMES</div>
+          <div class="pos dm-dim">SS</div>
+        </div>
+
+        <!-- 3B lower-left -->
+        <div class="player mil led-font" style="left:27%;top:62%;">
+          <div class="dot"></div>
+          <div class="num dm">3</div>
+          <div class="nm dm-dim">J. ORTIZ</div>
+          <div class="pos dm-dim">3B</div>
+        </div>
+
+        <!-- LF upper-left outfield -->
+        <div class="player mil led-font" style="left:20%;top:24%;">
+          <div class="dot"></div>
+          <div class="num dm">5</div>
+          <div class="nm dm-dim">G. MITCHELL</div>
+          <div class="pos dm-dim">LF</div>
+        </div>
+
+        <!-- CF top center deep -->
+        <div class="player mil led-font" style="left:50%;top:15%;">
+          <div class="dot"></div>
+          <div class="num dm">11</div>
+          <div class="nm dm-dim">J. CHOURIO</div>
+          <div class="pos dm-dim">CF</div>
+        </div>
+
+        <!-- RF upper-right outfield -->
+        <div class="player mil led-font" style="left:80%;top:24%;">
+          <div class="dot"></div>
+          <div class="num dm">10</div>
+          <div class="nm dm-dim">S. FRELICK</div>
+          <div class="pos dm-dim">RF</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BATTING ORDER ===== -->
+    <div class="lineup led-font">
+      <div class="lu-head">
+        <span class="dm">▣ BREWERS BATTING ORDER</span>
+        <span class="dm-dim">vs RHP</span>
+      </div>
+      <div class="lu-grid">
+        <div class="lu-row"><span class="ord lit">1</span><span class="lname dm">TURANG</span><span class="lpos dm-dim">2B</span></div>
+        <div class="lu-row"><span class="ord dm">2</span><span class="lname dm-dim">FRELICK</span><span class="lpos dm-dim">RF</span></div>
+        <div class="lu-row"><span class="ord dm">3</span><span class="lname dm-dim">CHOURIO</span><span class="lpos dm-dim">CF</span></div>
+        <div class="lu-row"><span class="ord dm">4</span><span class="lname dm-dim">CONTRERAS</span><span class="lpos dm-dim">C</span></div>
+        <div class="lu-row"><span class="ord dm">5</span><span class="lname dm-dim">HOSKINS</span><span class="lpos dm-dim">1B</span></div>
+        <div class="lu-row"><span class="ord dm">6</span><span class="lname dm-dim">YELICH</span><span class="lpos dm-dim">DH</span></div>
+        <div class="lu-row"><span class="ord dm">7</span><span class="lname dm-dim">ORTIZ</span><span class="lpos dm-dim">3B</span></div>
+        <div class="lu-row"><span class="ord dm">8</span><span class="lname dm-dim">MITCHELL</span><span class="lpos dm-dim">LF</span></div>
+        <div class="lu-row"><span class="ord dm">9</span><span class="lname dm-dim">ADAMES</span><span class="lpos dm-dim">SS</span></div>
+      </div>
+    </div>
+
+    <!-- opposing starter -->
+    <div class="opp led-font">
+      <div class="l"><span class="dm-dim">▶ ON THE BUMP (CLE)</span></div>
+      <div class="r"><span class="dm-red">#28</span><span class="dm">TANNER BIBEE</span><span class="dm-dim">RHP</span></div>
+    </div>
+  </div>
+</body>
+</html>

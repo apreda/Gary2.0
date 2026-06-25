@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quant Terminal — Brewers Field</title>
+<style>
+  :root{
+    --cream:#F4EFE3;
+    --cream-2:#EDE6D4;
+    --paper:#FBF7EC;
+    --ink:#1C1A14;
+    --ink-soft:#4A463B;
+    --line:#D8CEB6;
+    --navy:#0A2351;
+    --navy-2:#13315C;
+    --gold:#B58A2E;
+    --gold-bright:#D9A934;
+    --grass:#C9D7B0;
+    --grass-2:#BFD0A2;
+    --dirt:#D8B98A;
+    --dirt-2:#CDAA77;
+    --chalk:#F7F2E6;
+    --shadow:0 1px 0 rgba(255,255,255,.5), 0 2px 8px rgba(28,26,20,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #ECE3CE 0%, #DED3B8 60%, #CFC2A2 100%);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:26px 0;
+  }
+  .mono{font-family:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;}
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    width:430px;
+    background:var(--paper);
+    border-radius:46px;
+    padding:13px;
+    box-shadow:
+      0 0 0 2px #C8B98F,
+      0 28px 70px rgba(28,26,20,.40),
+      inset 0 0 0 6px #F8F2E4;
+    position:relative;
+  }
+  .screen{
+    background:var(--cream);
+    border-radius:34px;
+    overflow:hidden;
+    position:relative;
+    height:872px;
+    display:flex;flex-direction:column;
+    border:1px solid #E2D8BF;
+  }
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:26px;background:#0A0A0A;border-radius:0 0 16px 16px;z-index:60;
+  }
+
+  /* ---------- status / header ---------- */
+  .statusbar{
+    height:42px;display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 24px 4px;font-size:12px;font-weight:700;color:var(--ink);
+  }
+  .statusbar .mono{font-size:12px;letter-spacing:.5px;}
+
+  .topbar{
+    padding:6px 20px 14px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--paper),var(--cream));
+  }
+  .eyebrow{
+    font-family:"SF Mono",ui-monospace,monospace;
+    font-size:10px;letter-spacing:3px;font-weight:700;text-transform:uppercase;
+    color:var(--gold);display:flex;align-items:center;gap:8px;
+  }
+  .eyebrow::before{content:"";width:18px;height:2px;background:var(--gold);display:inline-block;}
+  .eyebrow::after{content:"GARY · QUANT TERMINAL";margin-left:auto;color:var(--ink-soft);opacity:.55;letter-spacing:2px;font-size:9px;}
+  .title{
+    margin-top:9px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  }
+  .title h1{
+    font-size:22px;font-weight:600;letter-spacing:-.4px;line-height:1;
+  }
+  .title h1 .at{color:var(--gold);font-style:italic;font-weight:500;padding:0 2px;}
+  .meta-row{
+    margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  }
+  .chip{
+    font-family:"SF Mono",ui-monospace,monospace;
+    font-size:10px;letter-spacing:.6px;text-transform:uppercase;font-weight:600;
+    padding:4px 9px;border-radius:5px;border:1px solid var(--line);
+    background:var(--paper);color:var(--ink-soft);
+  }
+  .chip.live{border-color:#B23A3A;color:#922B2B;}
+  .chip.live::before{content:"";width:6px;height:6px;border-radius:50%;background:#C0392B;display:inline-block;margin-right:6px;vertical-align:middle;}
+  .chip.navy{background:var(--navy);color:#EBE3CF;border-color:var(--navy);}
+  .chip.gold{background:var(--gold);color:#1C1A14;border-color:var(--gold);font-weight:700;}
+
+  /* ---------- field ---------- */
+  .field-wrap{
+    position:relative;
+    padding:14px 16px 8px;
+    background:
+      linear-gradient(180deg, rgba(247,242,230,0) 0%, rgba(237,230,212,.4) 100%);
+  }
+  .field-frame{
+    position:relative;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:var(--paper);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.7);
+    padding:8px;
+  }
+  .field-grid{
+    position:absolute;inset:8px;border-radius:10px;
+    background-image:
+      linear-gradient(rgba(120,110,80,.06) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(120,110,80,.06) 1px,transparent 1px);
+    background-size:26px 26px;
+    pointer-events:none;z-index:5;
+  }
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1.04;
+    border-radius:10px;
+    overflow:hidden;
+    background:
+      radial-gradient(120% 120% at 50% 100%, var(--grass) 0%, var(--grass-2) 55%, #B4C796 100%);
+  }
+  /* mowing stripes */
+  .field::before{
+    content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(
+      98deg,
+      rgba(255,255,255,.05) 0 22px,
+      rgba(20,40,10,.045) 22px 44px);
+    pointer-events:none;
+  }
+  /* outfield warning track arc */
+  .track{
+    position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+    width:128%;height:128%;border-radius:50%;
+    border:11px solid var(--dirt);
+    border-color:var(--dirt) transparent transparent transparent;
+    box-sizing:border-box;opacity:.55;
+  }
+  .outfield-arc{
+    position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+    width:128%;height:128%;border-radius:50%;
+    border:2px solid rgba(247,242,230,.6);
+    border-color:rgba(247,242,230,.6) transparent transparent transparent;
+  }
+  /* infield dirt — diamond */
+  .infield{
+    position:absolute;left:50%;bottom:7.5%;transform:translateX(-50%) rotate(45deg);
+    width:50%;height:50%;
+    background:radial-gradient(120% 120% at 50% 0%, var(--dirt-2), var(--dirt));
+    border-radius:10%;
+    box-shadow:inset 0 0 0 1px rgba(120,80,40,.25);
+  }
+  .infield-grass{
+    position:absolute;left:50%;bottom:11.5%;transform:translateX(-50%) rotate(45deg);
+    width:33%;height:33%;
+    background:radial-gradient(120% 120% at 50% 0%, var(--grass-2), var(--grass));
+    border-radius:8%;
+  }
+  /* base paths chalk */
+  .basepaths{
+    position:absolute;left:50%;bottom:7.5%;transform:translateX(-50%) rotate(45deg);
+    width:50%;height:50%;border:2px solid var(--chalk);border-radius:10%;opacity:.85;
+  }
+  /* bases */
+  .base{position:absolute;width:11px;height:11px;background:var(--chalk);transform:translate(-50%,50%) rotate(45deg);box-shadow:0 0 0 1px rgba(120,80,40,.3);z-index:8;}
+  .base.b1{left:78.5%;bottom:34%;}
+  .base.b2{left:50%;bottom:55%;}
+  .base.b3{left:21.5%;bottom:34%;}
+  .home-plate{
+    position:absolute;left:50%;bottom:9%;transform:translate(-50%,50%);
+    width:14px;height:14px;background:var(--chalk);
+    clip-path:polygon(50% 0,100% 35%,82% 100%,18% 100%,0 35%);
+    box-shadow:0 0 0 1px rgba(120,80,40,.35);z-index:9;
+  }
+  .mound{
+    position:absolute;left:50%;bottom:30.5%;transform:translate(-50%,50%);
+    width:34px;height:34px;border-radius:50%;
+    background:radial-gradient(circle at 50% 40%, var(--dirt-2), var(--dirt));
+    box-shadow:inset 0 0 0 1px rgba(120,80,40,.3);z-index:7;
+  }
+
+  /* ---------- players ---------- */
+  .player{
+    position:absolute;transform:translate(-50%,-50%);
+    z-index:20;text-align:center;width:80px;
+    animation:pop .5s cubic-bezier(.2,.8,.2,1) backwards;
+  }
+  @keyframes pop{from{opacity:0;transform:translate(-50%,-44%) scale(.85);}}
+  .num{
+    font-family:"SF Mono",ui-monospace,monospace;
+    font-weight:700;font-size:16px;line-height:1;
+    width:34px;height:34px;margin:0 auto;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--navy);color:#F3EAD2;
+    border-radius:9px;
+    box-shadow:0 2px 6px rgba(10,35,81,.4), inset 0 1px 0 rgba(255,255,255,.18);
+    border:1.5px solid var(--gold);
+    position:relative;
+  }
+  .player.pitcher .num{background:var(--gold);color:var(--navy);border-color:var(--navy);}
+  .pos{
+    font-family:"SF Mono",ui-monospace,monospace;
+    font-size:8px;font-weight:700;letter-spacing:1px;color:var(--gold);
+    margin-top:4px;text-shadow:0 1px 1px rgba(255,255,255,.5);
+  }
+  .name{
+    font-size:10.5px;font-weight:600;color:var(--ink);
+    margin-top:1px;line-height:1.05;
+    text-shadow:0 1px 2px rgba(247,242,230,.9);
+  }
+
+  /* positions on field (left/bottom %) */
+  .p-P {left:50%; bottom:31%;}
+  .p-C {left:50%; bottom:5.5%;}
+  .p-1B{left:74%; bottom:30%;}
+  .p-2B{left:65%; bottom:46%;}
+  .p-SS{left:35%; bottom:46%;}
+  .p-3B{left:26%; bottom:30%;}
+  .p-LF{left:23%; bottom:68%;}
+  .p-CF{left:50%; bottom:80%;}
+  .p-RF{left:77%; bottom:68%;}
+  .player{top:auto;}
+
+  /* legend over field */
+  .matchup-tag{
+    position:absolute;top:22px;left:24px;z-index:25;
+    font-family:"SF Mono",ui-monospace,monospace;font-size:9px;letter-spacing:1px;
+    color:var(--ink-soft);text-transform:uppercase;font-weight:600;opacity:.7;
+  }
+  .vs-pitch{
+    position:absolute;top:22px;right:24px;z-index:25;text-align:right;
+  }
+  .vs-pitch .l1{font-family:"SF Mono",monospace;font-size:8px;letter-spacing:1px;color:var(--gold);font-weight:700;text-transform:uppercase;}
+  .vs-pitch .l2{font-size:10px;color:var(--ink-soft);font-weight:600;margin-top:1px;}
+
+  /* ---------- batting order rail ---------- */
+  .lower{
+    flex:1;background:var(--paper);border-top:1px solid var(--line);
+    padding:12px 18px 14px;overflow:hidden;display:flex;flex-direction:column;
+  }
+  .lower-head{
+    display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;
+  }
+  .lower-head .eyebrow::after{content:"";display:none;}
+  .lower-head .lh{font-size:13px;font-weight:600;letter-spacing:-.2px;}
+  .lower-head .lh small{font-family:"SF Mono",monospace;font-size:9px;color:var(--ink-soft);letter-spacing:1px;margin-left:6px;opacity:.7;}
+
+  .order{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px 14px;
+  }
+  .bat{
+    display:flex;align-items:center;gap:8px;
+    padding:5px 4px;border-bottom:1px solid rgba(216,206,182,.55);
+  }
+  .bat .ord{
+    font-family:"SF Mono",ui-monospace,monospace;font-weight:700;font-size:13px;
+    color:var(--navy);width:18px;text-align:center;
+    position:relative;
+  }
+  .bat .ord::after{content:"";position:absolute;left:50%;bottom:-2px;transform:translateX(-50%);width:11px;height:2px;background:var(--gold);border-radius:2px;}
+  .bat .bn{flex:1;min-width:0;}
+  .bat .bn .bname{font-size:11.5px;font-weight:600;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bat .bn .bpos{font-family:"SF Mono",monospace;font-size:8.5px;color:var(--ink-soft);letter-spacing:1px;font-weight:600;}
+  .bat .bnum{font-family:"SF Mono",monospace;font-size:9px;color:var(--gold);font-weight:700;}
+
+  .footer{
+    margin-top:auto;padding-top:10px;border-top:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    font-family:"SF Mono",monospace;font-size:9px;letter-spacing:1px;color:var(--ink-soft);text-transform:uppercase;
+  }
+  .footer .dot{width:6px;height:6px;background:var(--gold);border-radius:50%;display:inline-block;margin-right:5px;}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="screen">
+      <div class="notch"></div>
+
+      <!-- status bar -->
+      <div class="statusbar">
+        <span class="mono">9:41</span>
+        <span class="mono">LINEUP · LIVE FEED ▮▮▮</span>
+      </div>
+
+      <!-- header -->
+      <div class="topbar">
+        <div class="eyebrow">Starting Nine</div>
+        <div class="title">
+          <h1>Guardians <span class="at">@</span> Brewers</h1>
+        </div>
+        <div class="meta-row">
+          <span class="chip navy">MIL DEF</span>
+          <span class="chip">AMERICAN FAMILY FIELD</span>
+          <span class="chip live">7:10 PM CT</span>
+        </div>
+      </div>
+
+      <!-- field -->
+      <div class="field-wrap">
+        <div class="field-frame">
+          <div class="field-grid"></div>
+          <div class="field">
+            <div class="track"></div>
+            <div class="outfield-arc"></div>
+            <div class="infield"></div>
+            <div class="basepaths"></div>
+            <div class="infield-grass"></div>
+            <div class="mound"></div>
+            <div class="base b1"></div>
+            <div class="base b2"></div>
+            <div class="base b3"></div>
+            <div class="home-plate"></div>
+
+            <div class="matchup-tag">DEFENSIVE ALIGNMENT</div>
+            <div class="vs-pitch">
+              <div class="l1">OPP STARTER · RHP</div>
+              <div class="l2">#28 T. Bibee</div>
+            </div>
+
+            <!-- fielders -->
+            <div class="player pitcher p-P" style="animation-delay:.02s">
+              <div class="num">51</div><div class="pos">P</div><div class="name">Peralta</div>
+            </div>
+            <div class="player p-C" style="animation-delay:.06s">
+              <div class="num">24</div><div class="pos">C</div><div class="name">Contreras</div>
+            </div>
+            <div class="player p-1B" style="animation-delay:.10s">
+              <div class="num">12</div><div class="pos">1B</div><div class="name">Hoskins</div>
+            </div>
+            <div class="player p-2B" style="animation-delay:.14s">
+              <div class="num">0</div><div class="pos">2B</div><div class="name">Turang</div>
+            </div>
+            <div class="player p-SS" style="animation-delay:.18s">
+              <div class="num">27</div><div class="pos">SS</div><div class="name">Adames</div>
+            </div>
+            <div class="player p-3B" style="animation-delay:.22s">
+              <div class="num">3</div><div class="pos">3B</div><div class="name">Ortiz</div>
+            </div>
+            <div class="player p-LF" style="animation-delay:.26s">
+              <div class="num">5</div><div class="pos">LF</div><div class="name">Mitchell</div>
+            </div>
+            <div class="player p-CF" style="animation-delay:.30s">
+              <div class="num">11</div><div class="pos">CF</div><div class="name">Chourio</div>
+            </div>
+            <div class="player p-RF" style="animation-delay:.34s">
+              <div class="num">10</div><div class="pos">RF</div><div class="name">Frelick</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- batting order -->
+      <div class="lower">
+        <div class="lower-head">
+          <span class="lh">Batting Order <small>1—9 · vs RHP</small></span>
+          <span class="eyebrow" style="font-size:9px">9 HITTERS</span>
+        </div>
+
+        <div class="order">
+          <div class="bat"><span class="ord">1</span><span class="bn"><span class="bname">Turang</span><span class="bpos">2B</span></span><span class="bnum">0</span></div>
+          <div class="bat"><span class="ord">2</span><span class="bn"><span class="bname">Frelick</span><span class="bpos">RF</span></span><span class="bnum">10</span></div>
+          <div class="bat"><span class="ord">3</span><span class="bn"><span class="bname">Chourio</span><span class="bpos">CF</span></span><span class="bnum">11</span></div>
+          <div class="bat"><span class="ord">4</span><span class="bn"><span class="bname">Contreras</span><span class="bpos">C</span></span><span class="bnum">24</span></div>
+          <div class="bat"><span class="ord">5</span><span class="bn"><span class="bname">Hoskins</span><span class="bpos">1B</span></span><span class="bnum">12</span></div>
+          <div class="bat"><span class="ord">6</span><span class="bn"><span class="bname">Yelich</span><span class="bpos">DH</span></span><span class="bnum">22</span></div>
+          <div class="bat"><span class="ord">7</span><span class="bn"><span class="bname">Ortiz</span><span class="bpos">3B</span></span><span class="bnum">3</span></div>
+          <div class="bat"><span class="ord">8</span><span class="bn"><span class="bname">Mitchell</span><span class="bpos">LF</span></span><span class="bnum">5</span></div>
+          <div class="bat"><span class="ord">9</span><span class="bn"><span class="bname">Adames</span><span class="bpos">SS</span></span><span class="bnum">27</span></div>
+        </div>
+
+        <div class="footer">
+          <span><span class="dot"></span>SP · F. Peralta #51 · RHP</span>
+          <span>GARY READ ▸</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

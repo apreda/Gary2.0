@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>d08 — Blueprint</title>
+<style>
+  :root{
+    --navy:#06121f;
+    --navy-2:#0a1b2e;
+    --cyan:#3fd0ff;
+    --cyan-dim:#1f6f93;
+    --cyan-faint:#103244;
+    --grid:#0f2a3d;
+    --gold:#c8a04a;
+    --brew-navy:#13294b;
+    --ink:#9fd6ef;
+    --paper:#cfeeff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{
+    background:#02080e;
+    font-family:"Courier New",ui-monospace,Menlo,Consolas,monospace;
+    display:flex;justify-content:center;align-items:flex-start;
+    min-height:100vh;padding:26px 0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .phone{
+    width:430px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, #0a1b2e 0%, var(--navy) 55%, #030a12 100%);
+    border:1px solid #16364c;
+    border-radius:30px;
+    overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.7), inset 0 0 0 1px rgba(63,208,255,.04);
+    position:relative;
+  }
+  /* faint blueprint grid over whole phone */
+  .phone::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:26px 26px;
+    opacity:.5;
+  }
+  .phone>*{position:relative;z-index:1}
+
+  /* ============ TITLE BLOCK ============ */
+  .titlebar{
+    padding:16px 18px 12px;
+    border-bottom:1px solid #14374c;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    background:linear-gradient(180deg, rgba(63,208,255,.04), transparent);
+  }
+  .tb-left .doc{
+    font-size:9px;letter-spacing:.32em;color:var(--cyan-dim);text-transform:uppercase;
+  }
+  .tb-left .matchup{
+    font-size:18px;letter-spacing:.06em;color:var(--paper);margin-top:5px;font-weight:700;
+  }
+  .tb-left .sub{
+    font-size:9.5px;letter-spacing:.18em;color:var(--ink);margin-top:4px;text-transform:uppercase;opacity:.75;
+  }
+  .stamp{
+    border:1px solid var(--cyan-dim);
+    color:var(--cyan);
+    font-size:8px;letter-spacing:.22em;text-transform:uppercase;
+    padding:6px 8px;text-align:right;line-height:1.5;
+    background:rgba(63,208,255,.04);
+  }
+  .stamp b{color:var(--paper);font-size:9px}
+
+  /* ============ FIELD ============ */
+  .fieldwrap{padding:14px 14px 4px}
+  .fieldcard{
+    position:relative;
+    border:1px solid #173b52;
+    background:
+      radial-gradient(130% 110% at 50% 120%, #0b2236 0%, #061523 60%, #04101b 100%);
+    border-radius:8px;
+    padding:10px 8px 6px;
+    box-shadow:inset 0 0 40px rgba(0,0,0,.5);
+  }
+  .corner{position:absolute;width:14px;height:14px;border-color:var(--cyan-dim);}
+  .corner.tl{top:6px;left:6px;border-left:1px solid;border-top:1px solid}
+  .corner.tr{top:6px;right:6px;border-right:1px solid;border-top:1px solid}
+  .corner.bl{bottom:6px;left:6px;border-left:1px solid;border-bottom:1px solid}
+  .corner.br{bottom:6px;right:6px;border-right:1px solid;border-bottom:1px solid}
+
+  .field{
+    position:relative;
+    width:100%;
+    aspect-ratio:1 / 1.12;
+  }
+  svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+
+  /* fielder markers */
+  .pos{
+    position:absolute;transform:translate(-50%,-50%);
+    text-align:center;width:96px;
+  }
+  .marker{
+    width:30px;height:30px;margin:0 auto;
+    border:1px solid var(--cyan);
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 35%, rgba(63,208,255,.22), rgba(6,18,31,.92));
+    box-shadow:0 0 0 4px rgba(63,208,255,.06), 0 0 14px rgba(63,208,255,.25);
+    position:relative;
+  }
+  .marker::after{
+    content:"";position:absolute;inset:-6px;border:1px dashed var(--cyan-dim);
+    border-radius:50%;opacity:.5;
+  }
+  .marker .num{
+    font-size:12px;font-weight:700;color:var(--paper);letter-spacing:.02em;
+  }
+  .ptag{
+    display:inline-block;margin-top:5px;
+    font-size:8px;letter-spacing:.18em;color:var(--cyan);
+    border:1px solid var(--cyan-dim);background:rgba(6,18,31,.85);
+    padding:1px 4px;border-radius:2px;text-transform:uppercase;
+  }
+  .pname{
+    margin-top:3px;font-size:9.5px;letter-spacing:.04em;color:var(--paper);
+    text-shadow:0 1px 3px #02080e;white-space:nowrap;
+  }
+  /* leader line from marker down to plate origin (decorative dimension) */
+  .pmound .marker{border-color:var(--gold);box-shadow:0 0 0 4px rgba(200,160,74,.08),0 0 16px rgba(200,160,74,.3)}
+  .pmound .marker .num{color:#ffe7ab}
+  .pmound .ptag{color:var(--gold);border-color:#6a5527}
+
+  /* dimension annotations */
+  .dim{
+    position:absolute;font-size:7.5px;letter-spacing:.14em;
+    color:var(--cyan-dim);text-transform:uppercase;
+  }
+
+  /* ============ BATTING ORDER RAIL ============ */
+  .order{
+    padding:12px 16px 18px;
+  }
+  .order-head{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:9px;letter-spacing:.28em;color:var(--cyan-dim);text-transform:uppercase;
+    border-bottom:1px solid #14374c;padding-bottom:7px;margin-bottom:8px;
+  }
+  .order-head .vs{color:var(--ink);opacity:.8}
+  .lineup{list-style:none}
+  .lineup li{
+    display:flex;align-items:center;gap:10px;
+    padding:5px 0;border-bottom:1px dotted #16384e;
+  }
+  .lineup li:last-child{border-bottom:none}
+  .slot{
+    width:18px;height:18px;flex:0 0 18px;
+    border:1px solid var(--cyan-dim);border-radius:2px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px;color:var(--cyan);background:rgba(63,208,255,.05);
+  }
+  .bname{flex:1;font-size:11px;letter-spacing:.03em;color:var(--paper)}
+  .bpos{
+    font-size:8px;letter-spacing:.16em;color:var(--ink);
+    border:1px solid #1c4861;padding:1px 5px;border-radius:2px;text-transform:uppercase;
+    min-width:30px;text-align:center;
+  }
+  .dh .bpos{color:var(--gold);border-color:#5b4a23}
+
+  .footer{
+    padding:0 16px 16px;
+    font-size:7.5px;letter-spacing:.2em;color:var(--cyan-dim);text-transform:uppercase;
+    display:flex;justify-content:space-between;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+
+    <!-- TITLE BLOCK -->
+    <div class="titlebar">
+      <div class="tb-left">
+        <div class="doc">DWG · DEFENSIVE ALIGNMENT</div>
+        <div class="matchup">CLE @ MIL</div>
+        <div class="sub">Brewers · Field Schematic</div>
+      </div>
+      <div class="stamp">
+        SHEET 08 / FIELD<br>
+        SCALE <b>NTS</b><br>
+        REV <b>A</b>
+      </div>
+    </div>
+
+    <!-- FIELD -->
+    <div class="fieldwrap">
+      <div class="fieldcard">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <div class="field" id="field">
+          <svg viewBox="0 0 100 112" preserveAspectRatio="none">
+            <defs>
+              <radialGradient id="grass" cx="50%" cy="100%" r="120%">
+                <stop offset="0%" stop-color="#0d2a3e"/>
+                <stop offset="60%" stop-color="#081d2e"/>
+                <stop offset="100%" stop-color="#040f19"/>
+              </radialGradient>
+              <pattern id="hatch" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="3" stroke="#15405a" stroke-width="0.4"/>
+              </pattern>
+            </defs>
+
+            <!-- outfield fan (foul line to foul line) -->
+            <path d="M50,104 L8,30 A60,60 0 0 1 92,30 Z"
+                  fill="url(#grass)" stroke="#1c5172" stroke-width="0.6"/>
+            <!-- outfield wall arc -->
+            <path d="M8,30 A60,60 0 0 1 92,30"
+                  fill="none" stroke="var(--cyan)" stroke-width="0.7" opacity=".85"/>
+            <!-- concentric range arcs (blueprint contours) -->
+            <path d="M22,46 A40,40 0 0 1 78,46" fill="none" stroke="#19465f" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+            <path d="M31,55 A28,28 0 0 1 69,55" fill="none" stroke="#19465f" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+
+            <!-- foul lines -->
+            <line x1="50" y1="104" x2="8" y2="30" stroke="var(--cyan)" stroke-width="0.5" opacity=".7"/>
+            <line x1="50" y1="104" x2="92" y2="30" stroke="var(--cyan)" stroke-width="0.5" opacity=".7"/>
+
+            <!-- infield dirt diamond (hatched) -->
+            <path d="M50,92 L70,72 L50,52 L30,72 Z" fill="url(#hatch)" stroke="var(--cyan)" stroke-width="0.7"/>
+            <!-- infield grass inner square -->
+            <path d="M50,86 L64,72 L50,58 L36,72 Z" fill="#0a2233" stroke="#1c5172" stroke-width="0.4"/>
+
+            <!-- base path centerlines (dimension dashes) -->
+            <line x1="50" y1="92" x2="70" y2="72" stroke="#2a6f93" stroke-width="0.3" stroke-dasharray="1 1"/>
+            <line x1="70" y1="72" x2="50" y2="52" stroke="#2a6f93" stroke-width="0.3" stroke-dasharray="1 1"/>
+            <line x1="50" y1="52" x2="30" y2="72" stroke="#2a6f93" stroke-width="0.3" stroke-dasharray="1 1"/>
+            <line x1="30" y1="72" x2="50" y2="92" stroke="#2a6f93" stroke-width="0.3" stroke-dasharray="1 1"/>
+
+            <!-- bases -->
+            <rect x="48.5" y="90.5" width="3" height="3" fill="var(--paper)" transform="rotate(45 50 92)"/>
+            <rect x="68.5" y="70.5" width="3" height="3" fill="var(--cyan)" transform="rotate(45 70 72)"/>
+            <rect x="48.5" y="50.5" width="3" height="3" fill="var(--cyan)" transform="rotate(45 50 52)"/>
+            <rect x="28.5" y="70.5" width="3" height="3" fill="var(--cyan)" transform="rotate(45 30 72)"/>
+            <!-- pitcher rubber -->
+            <line x1="47" y1="72" x2="53" y2="72" stroke="var(--gold)" stroke-width="0.9"/>
+            <circle cx="50" cy="72" r="4.5" fill="none" stroke="#3a5b2a00" />
+            <circle cx="50" cy="72" r="4.5" fill="none" stroke="#7a6533" stroke-width="0.3" stroke-dasharray="0.8 0.8"/>
+
+            <!-- home plate -->
+            <path d="M48,94 L52,94 L52,96 L50,98 L48,96 Z" fill="var(--gold)"/>
+
+            <!-- crosshair / origin tick at home -->
+            <line x1="44" y1="96" x2="56" y2="96" stroke="var(--cyan-dim)" stroke-width="0.3"/>
+            <text x="57" y="97" font-size="2.4" fill="#2a6f93" font-family="monospace">0,0</text>
+          </svg>
+
+          <!-- dimension annotations (HTML overlay) -->
+          <div class="dim" style="left:6%;top:23%">≈330 FT</div>
+          <div class="dim" style="right:5%;top:23%">≈330 FT</div>
+          <div class="dim" style="left:50%;top:8%;transform:translateX(-50%)">≈400 FT — CF</div>
+
+          <!-- FIELDERS -->
+          <!-- CF deep top center -->
+          <div class="pos" style="left:50%;top:13%">
+            <div class="marker"><span class="num">11</span></div>
+            <span class="ptag">CF</span>
+            <div class="pname">Chourio</div>
+          </div>
+          <!-- LF upper-left outfield -->
+          <div class="pos" style="left:24%;top:22%">
+            <div class="marker"><span class="num">5</span></div>
+            <span class="ptag">LF</span>
+            <div class="pname">Mitchell</div>
+          </div>
+          <!-- RF upper-right outfield -->
+          <div class="pos" style="left:76%;top:22%">
+            <div class="marker"><span class="num">10</span></div>
+            <span class="ptag">RF</span>
+            <div class="pname">Frelick</div>
+          </div>
+          <!-- SS upper-left infield -->
+          <div class="pos" style="left:38%;top:48%">
+            <div class="marker"><span class="num">27</span></div>
+            <span class="ptag">SS</span>
+            <div class="pname">Adames</div>
+          </div>
+          <!-- 2B upper-right infield -->
+          <div class="pos" style="left:62%;top:48%">
+            <div class="marker"><span class="num">0</span></div>
+            <span class="ptag">2B</span>
+            <div class="pname">Turang</div>
+          </div>
+          <!-- 3B lower-left infield -->
+          <div class="pos" style="left:25%;top:64%">
+            <div class="marker"><span class="num">3</span></div>
+            <span class="ptag">3B</span>
+            <div class="pname">Ortiz</div>
+          </div>
+          <!-- 1B lower-right infield -->
+          <div class="pos" style="left:75%;top:64%">
+            <div class="marker"><span class="num">12</span></div>
+            <span class="ptag">1B</span>
+            <div class="pname">Hoskins</div>
+          </div>
+          <!-- P mound center -->
+          <div class="pos pmound pitcher" style="left:50%;top:64%">
+            <div class="marker"><span class="num">51</span></div>
+            <span class="ptag">P</span>
+            <div class="pname">Peralta</div>
+          </div>
+          <!-- C behind home -->
+          <div class="pos" style="left:50%;top:90%">
+            <div class="marker"><span class="num">24</span></div>
+            <span class="ptag">C</span>
+            <div class="pname">Contreras</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BATTING ORDER RAIL -->
+    <div class="order">
+      <div class="order-head">
+        <span>BATTING ORDER · 1–9</span>
+        <span class="vs">VS BIBEE #28 RHP</span>
+      </div>
+      <ol class="lineup">
+        <li><span class="slot">1</span><span class="bname">Brice Turang</span><span class="bpos">2B</span></li>
+        <li><span class="slot">2</span><span class="bname">Sal Frelick</span><span class="bpos">RF</span></li>
+        <li><span class="slot">3</span><span class="bname">Jackson Chourio</span><span class="bpos">CF</span></li>
+        <li><span class="slot">4</span><span class="bname">William Contreras</span><span class="bpos">C</span></li>
+        <li><span class="slot">5</span><span class="bname">Rhys Hoskins</span><span class="bpos">1B</span></li>
+        <li class="dh"><span class="slot">6</span><span class="bname">Christian Yelich</span><span class="bpos">DH</span></li>
+        <li><span class="slot">7</span><span class="bname">Joey Ortiz</span><span class="bpos">3B</span></li>
+        <li><span class="slot">8</span><span class="bname">Garrett Mitchell</span><span class="bpos">LF</span></li>
+        <li><span class="slot">9</span><span class="bname">Willy Adames</span><span class="bpos">SS</span></li>
+      </ol>
+    </div>
+
+    <div class="footer">
+      <span>MILLER PARK · MIL</span>
+      <span>DRAWN BY GARY · D08-BLUEPRINT</span>
+    </div>
+
+  </div>
+</body>
+</html>

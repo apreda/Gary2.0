@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WC Game Intel — m5 Hub Card</title>
+<!-- m5 · Hub Card — how the intel section lives IN the Hub feed: collapsed one-liners, tap to expand. By hand. -->
+<style>
+  :root{
+    --cream:#F6F1E7;--panel:#FBF7EF;--cream2:#EFE6D6;--ink:#211C15;--ink2:#574B39;--ink3:#8C7E66;--hair:rgba(120,100,60,.18);
+    --gold:#B5862F;--gold-deep:#7E5C18;--green:#2E7D55;--amber:#E08A2B;
+    --pitch:#2E3D34;--pitch2:#33433A;--pline:rgba(232,237,228,.30);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#d9cfbc;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;padding:22px 12px 60px;min-height:100vh}
+  .phone{width:412px;max-width:100%;background:var(--cream);border-radius:30px;overflow:hidden;border:1px solid var(--hair);box-shadow:0 10px 30px rgba(40,30,12,.16)}
+  .cap{font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:10.5px;font-family:var(--mono);color:var(--ink2)}
+  .hubhdr{padding:10px 16px 4px;font-size:20px;font-weight:800}
+  .hubsub{padding:0 16px 8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase}
+  .eyebrow{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--gold);font-weight:700}
+  .feed{padding:4px 14px 20px;display:flex;flex-direction:column;gap:11px}
+
+  /* sibling (faded) hub rows for feed context */
+  .sib{border:1px solid var(--hair);border-radius:13px;background:var(--panel);padding:12px 14px;opacity:.55}
+  .sib .e{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;color:var(--ink3);font-weight:700}
+  .sib .l{font-size:13px;font-weight:700;margin-top:4px}.sib .l b{color:var(--gold-deep)}
+
+  /* the intel card */
+  .card{border:1px solid var(--hair);border-radius:14px;background:var(--cream);overflow:hidden;box-shadow:0 3px 12px rgba(60,45,15,.08)}
+  .chead{display:flex;align-items:center;gap:9px;padding:13px 14px;cursor:pointer}
+  .badge{font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:.08em;color:#875012;background:#F3E2C9;padding:3px 6px;border-radius:5px}
+  .chead .ttl{font-size:15px;font-weight:800}.chead .ttl .v{color:var(--ink3);font-weight:600;font-size:12px;margin:0 3px}
+  .chead .ko{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--ink3)}
+  .chead .chev{font-size:16px;color:var(--ink3);transition:transform .2s}
+  .card.open .chev{transform:rotate(90deg)}
+
+  /* collapsed one-liners */
+  .sums{border-top:1px solid var(--hair)}
+  .sum{display:flex;align-items:center;gap:9px;padding:10px 14px;border-top:1px solid var(--hair);cursor:pointer}
+  .sum:first-child{border-top:0}
+  .sum .k{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--gold);font-weight:700;width:64px;flex:0 0 auto}
+  .sum .t{font-size:12.5px;font-weight:600;color:var(--ink)}.sum .t b{color:var(--gold-deep);font-weight:800}.sum .t .am{color:var(--amber);font-weight:700}
+  .sum .go{margin-left:auto;color:var(--ink3);font-size:14px}
+
+  /* expanded body */
+  .body{display:none;border-top:1px solid var(--hair)}
+  .card.open .body{display:block}
+  .card.open .sums{display:none}
+  .pitchwrap{margin:12px 14px;border-radius:11px;overflow:hidden;border:1px solid rgba(0,0,0,.08)}
+  .pitch{position:relative;width:100%;aspect-ratio:1.05;background:repeating-linear-gradient(0deg,var(--pitch) 0 9.09%,var(--pitch2) 9.09% 18.18%)}
+  .mk{position:absolute;border:1px solid var(--pline)}.mk.frame{inset:3%;border-radius:3px}.mk.half{left:3%;right:3%;top:50%;height:0;border-width:1px 0 0 0}
+  .mk.circle{left:50%;top:50%;width:27%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%}.mk.boxT{left:28%;right:28%;top:3%;height:10%;border-top:0}.mk.boxB{left:28%;right:28%;bottom:3%;height:10%;border-bottom:0}
+  .pl{position:absolute;transform:translate(-50%,-50%);width:56px;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .disc{width:26px;height:26px;border-radius:50%;background:#F4EFE3;border:1px solid rgba(20,30,22,.22);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:10px;color:#2E3D34}
+  .pn{font-size:8.5px;font-weight:700;color:#fff;text-align:center;line-height:1.05}.pp{font-family:var(--mono);font-size:6.5px;color:rgba(255,255,255,.6)}
+  .pl.cx .disc{border:1.5px dashed var(--amber)}.pl.cx .flag{position:absolute;top:-10px;background:var(--amber);color:#fff;font-family:var(--mono);font-size:6.5px;font-weight:700;padding:1px 3px;border-radius:4px;white-space:nowrap}
+  .mod{padding:12px 14px;border-top:1px solid var(--hair)}.mod .eyebrow{margin-bottom:7px}
+  .read-line{font-size:13px;margin:0 0 5px;line-height:1.4}.read-line .ov{color:var(--gold-deep);font-weight:800}
+  .read-hinge{font-size:11.5px;color:var(--ink2);margin:0}.read-hinge b{color:var(--ink)}
+  .desks{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}.desk{font-family:var(--mono);font-size:9px;border:1px solid var(--hair);border-radius:6px;padding:4px 6px;display:flex;gap:5px;background:var(--panel)}
+  .desk .v{font-weight:700}.desk .v.s{color:var(--green)}.desk .v.b{color:var(--amber)}
+  .cpct{font-family:var(--mono);font-size:11px;color:var(--ink2);margin-bottom:7px}.cpct b{color:var(--ink);font-size:14px}
+  .prop{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid var(--hair)}.prop:first-of-type{border-top:0}
+  .prop .num{width:20px;height:20px;border-radius:50%;background:var(--cream2);font-family:var(--mono);font-weight:700;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--ink2);flex:0 0 auto}
+  .prop .who{font-size:12px;font-weight:700}.prop .mkt{font-family:var(--mono);font-size:9px;color:var(--ink3)}
+  .prop .odds{margin-left:auto;font-family:var(--mono);font-size:12.5px;font-weight:800;color:var(--gold-deep)}
+  .prop .tag{font-family:var(--mono);font-size:7px;font-weight:700;padding:2px 5px;border-radius:4px;margin-left:8px}
+  .tag.if{background:#F3E2C9;color:#875012}.tag.proj{background:var(--cream2);color:var(--ink3)}.tag.lean{background:#D6EADE;color:#1c5638}
+  .hint{padding:9px 14px;font-family:var(--mono);font-size:9px;color:var(--ink3);text-align:center;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span class="cap">Gary · Hub</span></div>
+  <div class="hubhdr">The Hub</div>
+  <div class="hubsub">Today's Edges · World Cup</div>
+  <div class="feed">
+
+    <div class="sib"><div class="e">WC · STREAK</div><div class="l">Canada unbeaten in their <b>WC opener</b> — drew Bosnia 1-1</div></div>
+
+    <div class="card open" id="card">
+      <div class="chead" onclick="document.getElementById('card').classList.toggle('open')">
+        <span class="badge">PROJECTED</span>
+        <span class="ttl">Canada<span class="v">v</span>Qatar</span>
+        <span class="ko">6:00 PM</span>
+        <span class="chev">›</span>
+      </div>
+
+      <!-- collapsed one-liners -->
+      <div class="sums">
+        <div class="sum"><span class="k">THE READ</span><span class="t">Qatar team-total <b>OVER</b> — hinges on Ali</span><span class="go">›</span></div>
+        <div class="sum"><span class="k">CONSENSUS</span><span class="t">82% agree · <span class="am">split on Ali 3/2</span></span><span class="go">›</span></div>
+        <div class="sum"><span class="k">PROPS</span><span class="t">Ali <b>+180</b> if starts · +2 more</span><span class="go">›</span></div>
+      </div>
+
+      <!-- expanded -->
+      <div class="body">
+        <div class="pitchwrap"><div class="pitch state-projected" id="pitch"><div class="mk frame"></div><div class="mk half"></div><div class="mk circle"></div><div class="mk boxT"></div><div class="mk boxB"></div></div></div>
+        <div class="mod"><div class="eyebrow">THE READ</div>
+          <p class="read-line">Front three wants the ball — leans Qatar <span class="ov">OVER</span>.</p>
+          <p class="read-hinge">Hinges on one name: <b>Almoez Ali.</b></p>
+        </div>
+        <div class="mod"><div class="eyebrow">SOURCE CONSENSUS</div>
+          <div class="cpct"><b>82%</b> · 5 desks · split on Ali 3/2 · proj 9/11</div>
+          <div class="desks"><div class="desk">Athletic <span class="v s">START</span></div><div class="desk">ESPN <span class="v s">START</span></div><div class="desk">Sports Mole <span class="v s">START</span></div><div class="desk">RotoWire <span class="v b">BENCH</span></div><div class="desk">bet365 <span class="v b">BENCH</span></div></div>
+        </div>
+        <div class="mod"><div class="eyebrow">KEY-PLAYER PROPS</div>
+          <div class="prop"><div class="num">19</div><div><div class="who">Almoez Ali</div><div class="mkt">Anytime scorer</div></div><span class="odds">+180</span><span class="tag if">IF STARTS</span></div>
+          <div class="prop"><div class="num">11</div><div><div class="who">Afif</div><div class="mkt">Shots O1.5</div></div><span class="odds">+135</span><span class="tag proj">PROJ</span></div>
+          <div class="prop"><div class="num">∅</div><div><div class="who">Qatar team total</div><div class="mkt">Goals O1.5</div></div><span class="odds">−115</span><span class="tag lean">LEAN</span></div>
+        </div>
+        <div class="hint">tap the header to collapse · this is one card in the Hub feed</div>
+      </div>
+    </div>
+
+    <div class="sib"><div class="e">WC · VENUE</div><div class="l">BC Place — <b>retractable roof</b>, mild Pacific night</div></div>
+
+  </div>
+</div>
+<script>
+const XI=[{y:90,m:[{n:1,nm:'Barsham',p:'GK'}]},{y:71,m:[{n:2,nm:'P. Miguel',p:'RB'},{n:15,nm:'Khoukhi',p:'CB'},{n:5,nm:'Hassan',p:'CB'},{n:3,nm:'Homam',p:'LB'}]},{y:50,m:[{n:12,nm:'Madibo',p:'CM'},{n:8,nm:'Hatim',p:'CM'},{n:23,nm:'Boudiaf',p:'CM'}]},{y:27,m:[{n:11,nm:'Afif',p:'LW'},{n:19,nm:'Almoez Ali',p:'ST',cx:true},{n:10,nm:'Edmilson',p:'RW'}]}];
+const pitch=document.getElementById('pitch');
+XI.forEach(l=>{const n=l.m.length;l.m.forEach((m,i)=>{const x=(i+1)/(n+1)*100;const el=document.createElement('div');el.className='pl'+(m.cx?' cx':'');el.style.left=x+'%';el.style.top=l.y+'%';el.innerHTML=`${m.cx?'<span class="flag">3/5 START</span>':''}<div class="disc">${m.n}</div><div class="pn">${m.nm}</div><div class="pp">${m.p}</div>`;pitch.appendChild(el);});});
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLB — flip jerseys on the park</title>
+<!--
+  Players are JERSEYS on the field. Tap one -> it lifts and FLIPS to its back, where the
+  stats live, per category (Season / vs RHP / vs Bibee toggle). Info shown WITHOUT
+  words/numbers where possible: form = jersey glow colour, HR edge = gold dot, platoon =
+  green dot, weather = sun + a wind arrow whose length/colour IS the speed/direction.
+  Field contour is a stand-in for the real MLBAM (GeomMLBStadiums) per-park vector.
+-->
+<style>
+  :root{
+    --bg:#0B100D;--ink:#F2F4F1;--ink2:rgba(242,244,241,.66);--ink3:rgba(242,244,241,.42);
+    --gold:#C9A227;--navy:#0C2340;--brewGold:#FFC52F;
+    --grass:#3A7531;--grass2:#327030;--dirt:#A8683A;--track:#8C5530;--wall:#13301A;--stands:#15181D;
+    --hot:#E8643C;--cold:#54A9E8;--steady:#8C9A90;--plat:#39B36B;
+    --panel:rgba(255,255,255,.05);--line:rgba(255,255,255,.1);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#05080a;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;padding:20px 10px 60px;min-height:100vh}
+  .phone{width:430px;max-width:100%;background:radial-gradient(120% 50% at 50% 0%,#10201a,var(--bg));border-radius:30px;overflow:hidden;border:1px solid var(--line);position:relative}
+  .statusbar{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:600;font-family:var(--mono);color:var(--ink2)}
+  .head{padding:6px 18px 2px}
+  .head .lg{font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+  .head .top{display:flex;align-items:flex-start;gap:10px}
+  .head .mt{margin-top:5px;font-size:23px;font-weight:800;letter-spacing:-.02em}.head .mt .at{color:var(--ink3);font-weight:600;font-size:14px;margin:0 4px}
+  .head .park{margin-top:3px;font-size:11.5px;font-weight:600;color:var(--ink2)}
+  /* WEATHER — visual only (sun + wind arrow + roof), tap for numbers */
+  .wx{margin-left:auto;margin-top:4px;display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 11px;cursor:pointer}
+  .sun{width:16px;height:16px;border-radius:50%;background:#FFD45A;box-shadow:0 0 0 2px rgba(255,212,90,.25),0 0 8px rgba(255,212,90,.5)}
+  .roof{font-family:var(--mono);font-size:8px;color:var(--ink3);font-weight:800;text-align:center;line-height:1}
+
+  .fieldwrap{position:relative;margin:12px 12px 0;height:456px}
+  .fieldwrap svg.field{position:absolute;inset:0;width:100%;height:100%}
+  .jr{position:absolute;transform:translate(-50%,-50%);width:54px;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;z-index:2}
+  .jr .shirt{position:relative;width:42px;height:42px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.55))}
+  .jr .glow{position:absolute;inset:-3px;border-radius:50%;z-index:-1}
+  .jr.hot .glow{box-shadow:0 0 14px 3px rgba(232,100,60,.6)}
+  .jr.cold .glow{box-shadow:0 0 12px 2px rgba(84,169,232,.5)}
+  .jr .nm{font-size:9.5px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.95)}
+  .jr .dot{position:absolute;width:11px;height:11px;border-radius:50%;border:1.5px solid var(--bg);top:-1px}
+  .jr .dot.hr{right:-2px;background:var(--gold)}
+  .jr .dot.plat{left:-2px;background:var(--plat)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:9px 13px;justify-content:center;margin:9px 14px 0;font-family:var(--mono);font-size:9px;color:var(--ink3)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .foot{text-align:center;font-family:var(--mono);font-size:9px;color:var(--ink3);padding:14px;letter-spacing:.08em;text-transform:uppercase}
+
+  /* FLIP card overlay */
+  .scrim{position:absolute;inset:0;background:rgba(5,8,10,.66);opacity:0;pointer-events:none;transition:.2s;z-index:30;display:flex;align-items:center;justify-content:center}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .flip{width:230px;height:300px;perspective:1100px;cursor:pointer}
+  .fi{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,.8,.3,1);transform:rotateY(180deg)}
+  .scrim.front .fi{transform:rotateY(0deg)}
+  .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:18px;overflow:hidden;border:1px solid var(--line)}
+  /* FRONT = the jersey */
+  .front{background:radial-gradient(120% 80% at 50% 20%,#13294a,#0a1b34);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+  .front .big{width:150px;height:150px}
+  .front .fnm{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--brewGold);font-weight:800}
+  .front .hint{position:absolute;bottom:12px;font-family:var(--mono);font-size:8.5px;color:rgba(255,255,255,.4)}
+  /* BACK = stats */
+  .back{transform:rotateY(180deg);background:#0F1612;padding:14px}
+  .back .bh{display:flex;align-items:center;gap:9px}
+  .back .bno{width:34px;height:34px;border-radius:50%;background:var(--navy);color:var(--brewGold);font-family:var(--mono);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .back .bnm{font-size:15px;font-weight:800}.back .bsub{font-family:var(--mono);font-size:8.5px;color:var(--ink3)}
+  .seg{display:flex;gap:4px;margin-top:11px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:3px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--ink2);font-family:var(--mono);font-size:8.5px;font-weight:800;padding:6px 2px;border-radius:6px;cursor:pointer}
+  .seg button.on{background:var(--ink);color:#0F1612}
+  .stat{margin-top:12px;text-align:center}
+  .stat .v{font-family:var(--mono);font-size:30px;font-weight:800;line-height:1}
+  .stat .k{font-family:var(--mono);font-size:8.5px;color:var(--ink3);margin-top:4px;letter-spacing:.06em}
+  .bar{height:7px;border-radius:4px;background:rgba(255,255,255,.1);margin:12px 4px 0;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:4px}
+  .barlbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:7.5px;color:var(--ink3);margin:5px 4px 0}
+  .edges{display:flex;gap:6px;justify-content:center;margin-top:14px}
+  .etag{font-family:var(--mono);font-size:8px;font-weight:800;padding:5px 8px;border-radius:7px;display:flex;align-items:center;gap:4px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="statusbar"><span>9:41</span><span>Gary · MLB</span></div>
+  <div class="head">
+    <div class="lg">MLB · Game Intel</div>
+    <div class="top">
+      <div><div class="mt">Cleveland <span class="at">@</span> Milwaukee</div>
+        <div class="park">American Family Field · vs Bibee (RHP)</div></div>
+      <div class="wx" onclick="openWx()">
+        <div class="sun"></div>
+        <svg width="30" height="22" viewBox="0 0 30 22"><line x1="4" y1="17" x2="24" y2="6" stroke="#E8643C" stroke-width="3" stroke-linecap="round"/><path d="M24,6 l-9,1 l4,7 z" fill="#E8643C"/></svg>
+        <div class="roof">ROOF<br>OPEN</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fieldwrap" id="fieldwrap">
+    <svg class="field" viewBox="0 0 430 456" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3F7D35"/><stop offset="1" stop-color="#2E6429"/></linearGradient>
+        <radialGradient id="carry" cx="68%" cy="34%" r="32%"><stop offset="0" stop-color="#E8643C" stop-opacity=".26"/><stop offset="1" stop-color="#E8643C" stop-opacity="0"/></radialGradient>
+      </defs>
+      <path d="M8,224 Q215,-18 422,224 L430,202 Q215,-58 0,202 Z" fill="#15181D"/>
+      <path d="M215,408 L34,214 Q215,46 396,214 Z" fill="url(#g)"/>
+      <g opacity=".5" stroke="#367033" stroke-width="13">
+        <path d="M215,408 L120,300 Q215,210 310,300 Z" fill="none"/>
+        <path d="M215,408 L70,254 Q215,120 360,254 Z" fill="none"/>
+      </g>
+      <path d="M215,408 L34,214 Q215,46 396,214 Z" fill="url(#carry)"/>
+      <path d="M34,214 Q215,46 396,214" fill="none" stroke="#8C5530" stroke-width="9"/>
+      <path d="M34,214 Q215,46 396,214" fill="none" stroke="#13301A" stroke-width="3"/>
+      <line x1="215" y1="408" x2="34" y2="214" stroke="rgba(255,255,255,.55)" stroke-width="1.4"/>
+      <line x1="215" y1="408" x2="396" y2="214" stroke="rgba(255,255,255,.55)" stroke-width="1.4"/>
+      <path d="M215,408 L292,334 A 78 78 0 0 0 138,334 Z" fill="#A8683A"/>
+      <polygon points="215,396 278,336 215,276 152,336" fill="#3A7531"/>
+      <polygon points="215,396 278,336 215,276 152,336" fill="none" stroke="#bd8053" stroke-width="4.5"/>
+      <circle cx="215" cy="348" r="9" fill="#bd8053"/>
+      <rect x="274" y="332" width="8" height="8" transform="rotate(45 278 336)" fill="#fff"/>
+      <rect x="211" y="272" width="8" height="8" transform="rotate(45 215 276)" fill="#fff"/>
+      <rect x="148" y="332" width="8" height="8" transform="rotate(45 152 336)" fill="#fff"/>
+      <path d="M209,405 l12,0 l0,4 l-6,5 l-6,-5 z" fill="#fff"/>
+    </svg>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--hot)"></i>Hot</span><span><i style="background:var(--cold)"></i>Cold</span>
+    <span><i style="background:var(--gold)"></i>HR edge here</span><span><i style="background:var(--plat)"></i>Platoon edge</span>
+    <span><i style="background:var(--hot);opacity:.5"></i>Wind carry</span>
+  </div>
+  <div class="foot">tap a jersey to flip it for the numbers · Pitching / Bats / Park below</div>
+
+  <!-- flip overlay -->
+  <div class="scrim" id="scrim" onclick="closeFlip(event)">
+    <div class="flip" id="flip" onclick="event.stopPropagation()">
+      <div class="fi" id="fi" onclick="toggleFlip()">
+        <div class="face front">
+          <svg class="big" id="bigShirt" viewBox="0 0 100 100"></svg>
+          <div class="fnm" id="fName">—</div>
+          <div class="hint">tap to flip ↻</div>
+        </div>
+        <div class="face back" id="back"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SHIRT = (n, big) => {
+  const sz = big ? 'font-size:34px' : 'font-size:15px';
+  const y = big ? 60 : 38;
+  return `<path d="M30,5 C27,5 25,9 21,9 L9,13 L4,25 L13,28 L15,55 L45,55 L47,28 L56,25 L51,13 L39,9 C35,9 33,5 30,5 Z"
+            transform="${big?'scale(1.6) translate(-1,2)':''}" fill="#0C2340" stroke="#FFC52F" stroke-width="1.2"/>
+          <text x="${big?48:30}" y="${y}" text-anchor="middle" fill="#FFC52F" font-family="ui-monospace,Menlo" font-weight="800" style="${sz}">${n}</text>`;
+};
+const P=[
+  {n:11,nm:'Chourio',pos:'CF',x:50,y:21,heat:'hot',ord:3,bats:'R',hr:true,plat:false,wrc:122,xwoba:'.358',vR:'.880',vL:'.910',bvp:{ab:7,h:3,hr:1,ops:'1.140'},form:'1.060',formPct:.82,vrPct:.74},
+  {n:5,nm:'Mitchell',pos:'LF',x:22,y:36,heat:'hot',ord:8,bats:'L',hr:false,plat:true,wrc:105,xwoba:'.330',vR:'.800',vL:'.690',bvp:{ab:4,h:2,hr:0,ops:'1.000'},form:'.940',formPct:.7,vrPct:.6},
+  {n:10,nm:'Frelick',pos:'RF',x:78,y:36,heat:'cold',ord:2,bats:'L',hr:false,plat:true,wrc:92,xwoba:'.305',vR:'.740',vL:'.700',bvp:{ab:9,h:2,hr:0,ops:'.560'},form:'.610',formPct:.3,vrPct:.5},
+  {n:27,nm:'Adames',pos:'SS',x:39,y:57,heat:'hot',ord:9,bats:'R',hr:true,plat:false,wrc:118,xwoba:'.350',vR:'.860',vL:'.900',bvp:{ab:13,h:5,hr:1,ops:'.980'},form:'1.020',formPct:.78,vrPct:.72},
+  {n:0,nm:'Turang',pos:'2B',x:61,y:57,heat:'cold',ord:1,bats:'L',hr:false,plat:true,wrc:95,xwoba:'.300',vR:'.720',vL:'.760',bvp:{ab:6,h:1,hr:0,ops:'.500'},form:'.540',formPct:.24,vrPct:.46},
+  {n:3,nm:'Ortiz',pos:'3B',x:30,y:76,heat:'steady',ord:7,bats:'R',hr:false,plat:false,wrc:88,xwoba:'.298',vR:'.700',vL:'.770',bvp:{ab:5,h:1,hr:0,ops:'.560'},form:'.690',formPct:.45,vrPct:.44},
+  {n:12,nm:'Hoskins',pos:'1B',x:70,y:76,heat:'steady',ord:5,bats:'R',hr:true,plat:false,wrc:112,xwoba:'.345',vR:'.840',vL:'.910',bvp:{ab:8,h:2,hr:0,ops:'.625'},form:'.760',formPct:.5,vrPct:.7},
+  {n:51,nm:'Peralta',pos:'SP',x:50,y:77,heat:'steady',sp:true},
+  {n:24,nm:'Contreras',pos:'C',x:50,y:93,heat:'hot',ord:4,bats:'R',hr:true,plat:false,wrc:130,xwoba:'.372',vR:'.910',vL:'.840',bvp:{ab:11,h:4,hr:1,ops:'1.090'},form:'1.180',formPct:.92,vrPct:.8},
+];
+const heatHex=h=>h==='hot'?'#E8643C':h==='cold'?'#54A9E8':'#8C9A90';
+let cur=null, cat='hand';
+
+function render(){
+  const w=document.getElementById('fieldwrap');[...w.querySelectorAll('.jr')].forEach(e=>e.remove());
+  P.forEach(p=>{const el=document.createElement('div');el.className='jr'+(p.sp?'':' '+p.heat);el.style.left=p.x+'%';el.style.top=p.y+'%';
+    const hr=(!p.sp&&p.hr)?'<span class="dot hr"></span>':'';
+    const plat=(!p.sp&&p.plat)?'<span class="dot plat"></span>':'';
+    el.innerHTML=`<div class="shirt"><div class="glow"></div><svg viewBox="0 0 60 60">${SHIRT(p.n,false)}</svg>${hr}${plat}</div><div class="nm">${p.nm}</div>`;
+    if(!p.sp) el.onclick=()=>openFlip(p);
+    w.appendChild(el);});
+}
+function openFlip(p){ cur=p; cat='hand';
+  document.getElementById('bigShirt').innerHTML=SHIRT(p.n,true);
+  document.getElementById('fName').textContent=p.nm.toUpperCase();
+  drawBack();
+  const s=document.getElementById('scrim'); s.classList.add('show','front');
+  setTimeout(()=>s.classList.remove('front'),650); // auto-flip to stats
+}
+function toggleFlip(){ document.getElementById('scrim').classList.toggle('front'); }
+function drawBack(){
+  const p=cur; const val=cat==='season'?p.xwoba:cat==='hand'?p.vR:(p.bvp.h+'-'+p.bvp.ab);
+  const key=cat==='season'?'xwOBA · SEASON':cat==='hand'?'OPS · vs RHP':'vs BIBEE (H-AB)';
+  const pct=cat==='season'?(parseFloat(p.xwoba)*2):cat==='hand'?p.vrPct:(p.bvp.h/p.bvp.ab);
+  const edges=`${p.hr?`<span class="etag" style="background:rgba(201,162,39,.18);color:#C9A227">● HR EDGE</span>`:''}${p.plat?`<span class="etag" style="background:rgba(57,179,107,.18);color:#39B36B">● PLATOON</span>`:''}`;
+  document.getElementById('back').innerHTML=`
+    <div class="bh"><div class="bno">${p.n}</div><div><div class="bnm">${p.nm}</div><div class="bsub">${p.pos} · bats ${p.bats} · #${p.ord} in order</div></div></div>
+    <div class="seg"><button data-c="season" class="${cat==='season'?'on':''}">SEASON</button><button data-c="hand" class="${cat==='hand'?'on':''}">vs RHP</button><button data-c="bvp" class="${cat==='bvp'?'on':''}">vs BIBEE</button></div>
+    <div class="stat"><div class="v" style="color:${heatHex(p.heat)}">${val}</div><div class="k">${key}</div></div>
+    <div class="bar"><i style="width:${Math.min(100,Math.round(pct*100))}%;background:${heatHex(p.heat)}"></i></div>
+    <div class="barlbl"><span>cold</span><span>L15 form</span><span>hot</span></div>
+    <div class="edges">${edges||'<span class="etag" style="background:rgba(255,255,255,.06);color:#8C9A90">no special edge</span>'}</div>`;
+  document.querySelectorAll('#back .seg button').forEach(b=>b.onclick=(e)=>{e.stopPropagation();cat=b.dataset.c;drawBack();});
+}
+function closeFlip(e){ document.getElementById('scrim').classList.remove('show','front'); }
+function openWx(){ alert('Weather detail sheet — temp 78°, wind 12 mph out to right-centre, 41% humidity (numbers live here on tap; the field shows it visually).'); }
+render();
+</script>
+</body>
+</html>
