@@ -542,6 +542,7 @@ struct PlayerCardCarousel: View {
                 }
             }
             .padding(.vertical, 30)
+            .offset(y: -34)   // float slightly higher so it reads as centered
         }
         .transition(.opacity)
     }
@@ -593,7 +594,7 @@ struct PlayerCardV4: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous).fill(PCV4.bg)
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(PCV4.line, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(PCV4.gold.opacity(0.5), lineWidth: 1.5))
                 .shadow(color: .black.opacity(0.55), radius: 24, y: 10)
         )
     }
@@ -625,10 +626,13 @@ struct PlayerCardV4: View {
                 Text(pack?.name ?? name)
                     .font(GaryFonts.display(38)).foregroundStyle(PCV4.ink).lineLimit(2).minimumScaleFactor(0.7)
                 Spacer()
-                if heat == "hot" {
-                    chip("▲ HOT")
-                } else if heat == "cold" {
-                    chip("▼ COLD")
+                VStack(alignment: .trailing, spacing: 7) {
+                    Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 30, height: 30).opacity(0.9)
+                    if heat == "hot" {
+                        chip("▲ HOT")
+                    } else if heat == "cold" {
+                        chip("▼ COLD")
+                    }
                 }
             }
             if let id = identityLine {

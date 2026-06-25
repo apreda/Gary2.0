@@ -53,6 +53,17 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.17",
+        date: "June 2026",
+        type: .update,
+        title: "Gary 2.17 — A sharper player card and cleaner World Cup reads",
+        changes: [
+            "Player breakdown cards are redesigned — matte black with a gold edge and Gary's mark, floating front and center",
+            "World Cup game intel now reads \"Venue\" instead of \"Ballpark\"",
+            "Settled cards show the team beside each score, and doubleheaders no longer show the wrong game's result",
+        ]
+    ),
+    ChangelogEntry(
         version: "2.16",
         date: "June 2026",
         type: .update,

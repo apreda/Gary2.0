@@ -58,6 +58,24 @@ async function main() {
     };
   }
 
+  // Projected-lineup fallback: each team's most recent CONFIRMED lineup, reused (with
+  // today's hot/cold/HR/platoon flags refreshed) when today's sheet isn't posted yet — so
+  // EVERY game shows a projected lineup that upgrades to confirmed once BDL posts the sheet.
+  const recentByTeam = {};
+  try {
+    const rr = await axios.get(REST, { headers: H, params: {
+      date: `lt.${dateStr}`, status: 'eq.confirmed', select: 'home_team,away_team,payload',
+      order: 'date.desc', limit: 300 } });
+    for (const row of (rr.data || [])) {
+      for (const side of ['home', 'away']) {
+        const abbr = side === 'home' ? row.home_team : row.away_team;
+        const t = row.payload?.[side];
+        if (abbr && !recentByTeam[abbr] && t?.fielders?.length) recentByTeam[abbr] = { team: t.team, pitcher: t.pitcher, fielders: t.fielders };
+      }
+    }
+    console.log(`[field-lineups] projected fallback ready for ${Object.keys(recentByTeam).length} teams`);
+  } catch (e) { console.warn('[field-lineups] recent-lineup fetch failed (no projected fallback):', e.message); }
+
   const rows = [];
   for (const game of games) {
     try {
@@ -65,9 +83,20 @@ async function main() {
       const awayAbbr = game.away_team?.abbreviation;
       if (!homeAbbr || !awayAbbr) continue;
 
+      // PROJECT a team from its most recent confirmed regulars (today's flags refreshed) —
+      // used when there's no usable confirmed sheet (null OR empty batters).
+      const projTeam = (abbr) => {
+        const rec = recentByTeam[abbr];
+        if (!rec?.fielders?.length) return null;
+        const fielders = rec.fielders.map((b) => {
+          const f = flagsFor(b.playerId, b.name);
+          return { ...b, heat: f.heat, hrEdge: f.hrEdge, plat: f.plat };
+        });
+        return { team: rec.team || abbr, pitcher: rec.pitcher || null, facingPitcher: null, fielders };
+      };
+
       const lineups = await bdl.getMlbLineups(game.id);
-      if (!lineups) { console.log(`  ${awayAbbr} @ ${homeAbbr}: no lineup yet`); continue; }
-      const home = lineups[homeAbbr], away = lineups[awayAbbr];
+      const home = lineups?.[homeAbbr], away = lineups?.[awayAbbr];
 
       const allIds = [];
       [home, away].forEach((t) => t?.batters?.forEach((b) => b.playerId != null && allIds.push(b.playerId)));
@@ -101,26 +130,36 @@ async function main() {
         return { team: t.teamName, pitcher: ownPitcher, facingPitcher, fielders };
       };
 
-      const payload = {
-        // own pitcher = the arm on the mound; facing pitcher = the opposing arm the batters face
+      // own pitcher = the arm on the mound; facing pitcher = the opposing arm the batters face
+      let status = 'confirmed';
+      let payload = {
         home: buildTeam(home, pitcherObj(home), pitcherObj(away)),
         away: buildTeam(away, pitcherObj(away), pitcherObj(home)),
       };
-      if (!payload.home && !payload.away) continue;
+      if (!payload.home && !payload.away) {
+        // No usable confirmed sheet (null or empty batters) → project from recent regulars.
+        status = 'projected';
+        payload = { home: projTeam(homeAbbr), away: projTeam(awayAbbr) };
+      }
+      if (!payload.home && !payload.away) { console.log(`  ${awayAbbr} @ ${homeAbbr}: no lineup + no recent fallback`); continue; }
 
       rows.push({
         date: dateStr, game_id: String(game.id), game: `${awayAbbr} @ ${homeAbbr}`,
-        home_team: homeAbbr, away_team: awayAbbr, status: 'confirmed',
-        payload, generated_by: 'field-lineup-cli',
+        home_team: homeAbbr, away_team: awayAbbr, status,
+        payload, generated_by: status === 'projected' ? 'field-lineup-cli-projected' : 'field-lineup-cli',
       });
-      console.log(`  ${awayAbbr} @ ${homeAbbr}: home ${payload.home?.fielders?.length || 0} / away ${payload.away?.fielders?.length || 0} fielders`);
+      console.log(`  ${awayAbbr} @ ${homeAbbr}: ${status.toUpperCase()} (home ${payload.home?.fielders?.length || 0} / away ${payload.away?.fielders?.length || 0})`);
     } catch (e) { console.error(`  game ${game.id} error:`, e.message); }
   }
 
-  // idempotent write
-  await axios.delete(REST, { headers: { ...H, Prefer: 'return=minimal' }, params: { date: `eq.${dateStr}` } });
+  // Upsert on (date, game_id) — do NOT delete the day first. A later run with fewer games
+  // (the slate shrinks as games finish) must not wipe earlier-built lineups for games no
+  // longer live; each game's row updates in place (projected -> confirmed) or is added.
   if (rows.length) {
-    await axios.post(REST, JSON.parse(JSON.stringify(rows)), { headers: { ...H, Prefer: 'return=minimal' } });
+    await axios.post(REST, JSON.parse(JSON.stringify(rows)), {
+      headers: { ...H, Prefer: 'resolution=merge-duplicates,return=minimal' },
+      params: { on_conflict: 'date,game_id' },
+    });
   }
   console.log(`[field-lineups] ✅ wrote ${rows.length} field-lineup row(s) for ${dateStr}`);
 }
