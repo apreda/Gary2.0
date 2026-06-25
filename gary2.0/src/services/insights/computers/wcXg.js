@@ -1,6 +1,6 @@
 // gary2.0/src/services/insights/computers/wcXg.js
 //
-// LANE: wcXg  (category token emitted: situational — iOS situational/edge lane)
+// LANE: wcXg  (category token emitted: xg_recap — its own iOS "xG Recap" lane)
 // "The result that lied. Once matches are played, the underlying numbers — xG and
 //  possession — often disagree with the scoreline. A side that out-created its
 //  opponent on xG but didn't win is the classic positive-regression bet going
@@ -104,7 +104,7 @@ export async function computeWcXg(ctx) {
 function buildRobberyRow(v) {
   const outcome = v.resultWinner ? `lost to ${v.resultWinner}` : 'were held to a draw';
   return makeRow({
-    category: 'situational',
+    category: 'xg_recap',
     headline: `${v.xgLeader} out-created the field but ${shortOutcome(v)}`,
     detail:
       `${v.xgLeader} won the xG battle ${fmtXg(v.xgLeaderVal)}–${fmtXg(v.xgTrailVal)} yet ${outcome} ${scoreline(v)}. ` +
@@ -120,7 +120,7 @@ function buildRobberyRow(v) {
 function buildDominantRow(v) {
   const wonClause = v.xgLeader === v.resultWinner ? 'and took the result to match' : 'in a tight finish';
   return makeRow({
-    category: 'situational',
+    category: 'xg_recap',
     headline: `${v.xgLeader} created the better chances`,
     detail:
       `${v.xgLeader} led the xG ${fmtXg(v.xgLeaderVal)}–${fmtXg(v.xgTrailVal)} ${wonClause} ${scoreline(v)}.`,
@@ -134,7 +134,7 @@ function buildDominantRow(v) {
 function buildSterileRow(v) {
   const outcome = v.resultWinner ? `lost to ${v.resultWinner}` : 'could only draw';
   return makeRow({
-    category: 'situational',
+    category: 'xg_recap',
     headline: `${v.possLeader} dominated the ball but ${shortOutcome(v)}`,
     detail:
       `${v.possLeader} held ${Math.round(v.possLeaderPct)}% of possession yet ${outcome} ${scoreline(v)} — ` +

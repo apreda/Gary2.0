@@ -75,6 +75,8 @@ import { computeWcXg } from './computers/wcXg.js';
 // Forward-looking xG regression — who's over/under-finishing their chances, applied
 // to today's fixtures (the FORWARD counterpart to wcXg's recap). Silent pre-tournament.
 import { computeWcXgRegression } from './computers/wcXgRegression.js';
+// Group-stage advancement odds — the bookmakers' 'to qualify from group' market per team.
+import { computeWcAdvancementOdds } from './computers/wcAdvancementOdds.js';
 import { computeWcConfirmedXI } from './computers/wcConfirmedXI.js';
 
 /**
@@ -118,6 +120,7 @@ const WC_COMPUTERS = [
   computeWcKnockoutPath,
   computeWcXg,
   computeWcXgRegression,
+  computeWcAdvancementOdds,
   computeWcConfirmedXI, // confirmed-XI shape/availability edges (match-day only — needs posted lineups)
 ];
 
@@ -131,6 +134,7 @@ const WC_PREVIEW_COMPUTERS = [
   computeWcKnockoutPath,
   computeWcXg,
   computeWcXgRegression,
+  computeWcAdvancementOdds,
 ];
 
 const COMPUTERS_BY_LEAGUE = {

@@ -2,6 +2,7 @@ import SwiftUI
 import Charts
 import WebKit
 import SafariServices
+import StoreKit
 
 // MARK: - Shared Formatters (expensive to create — reuse)
 
@@ -12217,6 +12218,9 @@ struct CompactPickRow: View {
     /// App-wide uniform headline-card height — game and prop cards share it.
     static let uniformHeight: CGFloat = 232
 
+    /// System review prompt — fired once per app version right after a pick CASHES (see ReviewPrompt).
+    @Environment(\.requestReview) private var requestReview
+
     private var sport: Sport { Sport.from(league: pick.league) }
     private var accentColor: Color { sport.accentColor }
     /// Accent for the odds chip in the meta line — MLB reads on its grass green,
@@ -12651,7 +12655,13 @@ struct CompactPickRow: View {
                 )
                 .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
         )
-        .onAppear { LiveScoreCache.shared.startIfNeeded() }
+        .onAppear {
+            LiveScoreCache.shared.startIfNeeded()
+            // The user is looking at one of their picks that CASHED — the highest-sentiment moment.
+            // Ask for a review. Heavily gated (once per app version, >=3 sessions) + Apple-throttled
+            // to ~3/365 days, so it can never nag even though winning cards appear all over the app.
+            if displayResult == "won", ReviewPrompt.shouldRequestAfterWin() { requestReview() }
+        }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
 }
@@ -16067,6 +16077,8 @@ enum SignalKind {
     case starterForm, firstInning, runningGame, parkWeather
     // WC forward-looking xG-regression lane (who's over/under-finishing their xG)
     case xgRegression
+    // WC: group advancement odds + xG recap (split out of situational)
+    case advancement, xgRecap
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -16085,6 +16097,8 @@ enum SignalKind {
         case .runningGame: return "figure.run"
         case .parkWeather: return "wind"
         case .xgRegression: return "chart.line.uptrend.xyaxis"
+        case .advancement: return "flag.checkered"
+        case .xgRecap: return "soccerball"
         }
     }
     var tint: Color {
@@ -16116,6 +16130,8 @@ enum SignalKind {
         case .runningGame: return "RUNNING GAME"
         case .parkWeather: return "PARK WEATHER"
         case .xgRegression: return "XG REGRESSION"
+        case .advancement: return "ADVANCEMENT"
+        case .xgRecap: return "XG RECAP"
         }
     }
 }
@@ -17846,6 +17862,8 @@ extension SignalKind {
         case "ballpark", "ballpark shift", "ballpark_shift": return .ballpark
         case "regression", "regression watch", "regression_watch", "regression_tomorrow": return .regression
         case "xg_regression", "xg regression": return .xgRegression
+        case "advancement", "advancement_odds", "advancement odds": return .advancement
+        case "xg_recap", "xg recap": return .xgRecap
         case "tournament", "stakes", "group", "tournament_stakes": return .tournament
         case "gary_hr_threats", "hr_threat", "hr threats": return .hrThreat
         case "streaking": return .streak
@@ -18276,7 +18294,9 @@ struct PropsHubView: View {
 
     private var source: [Signal] { fetched }
 
-    private func items(_ k: SignalKind) -> [Signal] { source.filter { $0.league == sel && $0.kind == k } }
+    // Regular lanes exclude confirmed-XI rows — those surface only in the WC "Game Intel"
+    // section (wcIntelSignals), never doubled into Rest & Fatigue etc.
+    private func items(_ k: SignalKind) -> [Signal] { source.filter { $0.league == sel && $0.kind == k && $0.confirmedXI == nil } }
 
     /// Streaks/Last Night are per-league feeds (MLB-only pipelines today) —
     /// scope them to the toggle so MLB bats never show under NBA/WC.
@@ -18412,6 +18432,8 @@ struct PropsHubView: View {
         case .situational: pendingScrollAnchor = "restFatigue"
         case .tournament: pendingScrollAnchor = "tournament"
         case .xgRegression: pendingScrollAnchor = "xgRegression"
+        case .advancement: pendingScrollAnchor = "advancement"
+        case .xgRecap: pendingScrollAnchor = "xgRecap"
         }
         // Digest: spring the deep-linked section open so its rows are visible
         // the moment we scroll to it.
@@ -18619,8 +18641,24 @@ struct PropsHubView: View {
                         }
                         .id("xgRegression")
                     }
+                    // ADVANCEMENT — "to qualify from group" odds for today's group fixtures (World Cup)
+                    if !items(.advancement).isEmpty {
+                        HubDisclosure(anchor: "advancement", eyebrow: "Advancement", count: items(.advancement).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.advancement)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("advancement")
+                    }
+                    // xG RECAP — the last match day's xG-vs-result story (World Cup)
+                    if !items(.xgRecap).isEmpty {
+                        HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("xgRecap")
+                    }
                     // Anything else → a compact list
-                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression].contains($0.kind) }
+                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression, .advancement, .xgRecap].contains($0.kind) }
                     if !extras.isEmpty {
                         HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: extras.count, openSet: $openSections) {
                             VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
