@@ -193,9 +193,16 @@ function buildOnePack(ctx) {
   const squad = squadByTeam.get(teamId) || {};
   const sstat = lookupSquadStat(squad, name);
   if (!sstat) {
-    // Could not join this starter to the international squad map — LOG it (do not
-    // invent numbers). The card still ships with props / form-rows if available.
-    console.warn(`[wcPlayerInsightCards] squad-join MISS: "${name}" (${meta.name || teamId}) — no intl stat row; season/splits omitted.`);
+    // No international-cycle row (API-Football is thin for some nations, e.g. South
+    // Korea / Qatar). Fall back to a self-aggregated TOURNAMENT-to-date line from this
+    // player's OWN prior WC match stats — labeled "this tournament," NEVER as caps.
+    // (BDL's /rosters 2026 aggregates are all-zero, so those are not usable here.)
+    const tour = tournamentSeasonLine(histByPlayer.get(playerId));
+    if (tour) {
+      payload.season = tour;
+    } else {
+      console.warn(`[wcPlayerInsightCards] squad-join MISS: "${name}" (${meta.name || teamId}) — no intl row + no tournament minutes; season omitted.`);
+    }
   } else {
     const season = seasonDisplay(sstat);
     if (season) payload.season = season;
@@ -237,6 +244,23 @@ function buildOnePack(ctx) {
  * cycle totals; shots are omitted when the source has none (never coerced to 0).
  * e.g. line1 "3 G / 0 A / 9 SH", line2 "4 caps".
  */
+/** Self-aggregated TOURNAMENT-to-date season line from a player's prior WC match
+ *  stat rows — used ONLY when the international squad join misses. Labeled "this
+ *  tournament," never relabeled as caps/cycle. null if no completed minutes yet.
+ *  A null goals/assists/SoT on a played match means did-not-tally (counts as 0). */
+function tournamentSeasonLine(hist) {
+  const rows = asArray(hist).filter((r) => num(r?.minutes_played) != null && num(r.minutes_played) > 0);
+  if (!rows.length) return null;
+  const apps = rows.length;
+  const mins = rows.reduce((sum, r) => sum + (num(r.minutes_played) || 0), 0);
+  const goals = rows.reduce((sum, r) => sum + (num(r.goals) || 0), 0);
+  const assists = rows.reduce((sum, r) => sum + (num(r.assists) || 0), 0);
+  const sot = rows.reduce((sum, r) => sum + (num(r.shots_on_target) || 0), 0);
+  const bits = [`${goals} G`, `${assists} A`];
+  if (sot > 0) bits.push(`${sot} SoT`);
+  return { line1: bits.join(' / '), line2: `${apps} app${apps === 1 ? '' : 's'} · ${mins} min, this tournament` };
+}
+
 function seasonDisplay(s) {
   if (!s) return null;
   const g = num(s.goals);
