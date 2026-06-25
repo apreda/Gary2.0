@@ -72,6 +72,9 @@ import { computeWcKnockoutPath } from './computers/wcKnockoutPath.js';
 // xG / possession recap of the most recent completed match day. Silent ([])
 // pre-tournament; lights up once matches are played.
 import { computeWcXg } from './computers/wcXg.js';
+// Forward-looking xG regression — who's over/under-finishing their chances, applied
+// to today's fixtures (the FORWARD counterpart to wcXg's recap). Silent pre-tournament.
+import { computeWcXgRegression } from './computers/wcXgRegression.js';
 import { computeWcConfirmedXI } from './computers/wcConfirmedXI.js';
 
 /**
@@ -114,6 +117,7 @@ const WC_COMPUTERS = [
   computeWcGroupValue,
   computeWcKnockoutPath,
   computeWcXg,
+  computeWcXgRegression,
   computeWcConfirmedXI, // confirmed-XI shape/availability edges (match-day only — needs posted lineups)
 ];
 
@@ -126,6 +130,7 @@ const WC_PREVIEW_COMPUTERS = [
   computeWcGroupValue,
   computeWcKnockoutPath,
   computeWcXg,
+  computeWcXgRegression,
 ];
 
 const COMPUTERS_BY_LEAGUE = {

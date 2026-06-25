@@ -16065,6 +16065,8 @@ enum SignalKind {
     case streak, h2h, hot, cold, injury, situational, platoon, ballpark, regression, tournament, hrThreat
     // June 10 lanes: starter form, first inning, the running game, park weather
     case starterForm, firstInning, runningGame, parkWeather
+    // WC forward-looking xG-regression lane (who's over/under-finishing their xG)
+    case xgRegression
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -16082,6 +16084,7 @@ enum SignalKind {
         case .firstInning: return "1.circle.fill"
         case .runningGame: return "figure.run"
         case .parkWeather: return "wind"
+        case .xgRegression: return "chart.line.uptrend.xyaxis"
         }
     }
     var tint: Color {
@@ -16112,6 +16115,7 @@ enum SignalKind {
         case .firstInning: return "FIRST INNING"
         case .runningGame: return "RUNNING GAME"
         case .parkWeather: return "PARK WEATHER"
+        case .xgRegression: return "XG REGRESSION"
         }
     }
 }
@@ -17841,6 +17845,7 @@ extension SignalKind {
         case "platoon", "platoon edge", "platoon_edge": return .platoon
         case "ballpark", "ballpark shift", "ballpark_shift": return .ballpark
         case "regression", "regression watch", "regression_watch", "regression_tomorrow": return .regression
+        case "xg_regression", "xg regression": return .xgRegression
         case "tournament", "stakes", "group", "tournament_stakes": return .tournament
         case "gary_hr_threats", "hr_threat", "hr threats": return .hrThreat
         case "streaking": return .streak
@@ -18406,6 +18411,7 @@ struct PropsHubView: View {
         case .injury: pendingScrollAnchor = "beneficiary"
         case .situational: pendingScrollAnchor = "restFatigue"
         case .tournament: pendingScrollAnchor = "tournament"
+        case .xgRegression: pendingScrollAnchor = "xgRegression"
         }
         // Digest: spring the deep-linked section open so its rows are visible
         // the moment we scroll to it.
@@ -18605,8 +18611,16 @@ struct PropsHubView: View {
                         }
                         .id("tournament")
                     }
+                    // xG REGRESSION — who's over/under-finishing their chances (World Cup forward read)
+                    if !items(.xgRegression).isEmpty {
+                        HubDisclosure(anchor: "xgRegression", eyebrow: "xG Regression", count: items(.xgRegression).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.xgRegression)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("xgRegression")
+                    }
                     // Anything else → a compact list
-                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather].contains($0.kind) }
+                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression].contains($0.kind) }
                     if !extras.isEmpty {
                         HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: extras.count, openSet: $openSections) {
                             VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
