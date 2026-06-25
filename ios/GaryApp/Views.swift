@@ -1979,10 +1979,11 @@ struct HomeView: View {
                     gamesNightRecord = gamesNight.record
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
-                    let dayFmt = DateFormatter()
-                    dayFmt.dateFormat = "yyyy-MM-dd"
-                    let todayKey = dayFmt.string(from: Date())
+                    let todayKey = SupabaseAPI.todayEST()
                     if gamesNight.graded > 0, dailyRecapShownDate != todayKey {
+                        // Mark shown for today the MOMENT it appears — so it's truly once/day even
+                        // if the user tabs away without dismissing. Re-open later via the chip.
+                        dailyRecapShownDate = todayKey
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
                             showDailyRecap = true
                         }
@@ -2261,7 +2262,8 @@ struct HomeView: View {
         }
         if !sevenDayForm.isEmpty {
             HomeFormSection(records: sevenDayForm, yesterday: yesterdayRecord,
-                            onYesterday: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 } })
+                            // The "YESTERDAY" box re-opens the once/day recap popup so users can re-check it.
+                            onYesterday: { withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true } })
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
@@ -3406,7 +3408,9 @@ struct HomeView: View {
         if let (away, home, a, h) = Self.scoreParts(r) {
             let winner = a > h ? away : home
             let loser = a > h ? home : away
-            return "\(winner) over the \(loser), \(max(a, h))–\(min(a, h))"
+            // Clubs take "the" (Knicks over the Spurs); national teams don't (Switzerland over Canada).
+            let article = (r.league ?? "").uppercased().contains("WC") ? "" : "the "
+            return "\(winner) over \(article)\(loser), \(max(a, h))–\(min(a, h))"
         }
         let pick = Formatters.splitPickAndOdds(r.pick_text).0
         return cashed ? "\(pick) cashed" : "\(pick) didn't land"
