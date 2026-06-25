@@ -1881,9 +1881,9 @@ struct HomeView: View {
                 DailyRecapOverlay(record: gamesNightRecord,
                                   net: gamesNightNet,
                                   bestOdds: gamesNightBest) {
-                    let dayFmt = DateFormatter()
-                    dayFmt.dateFormat = "yyyy-MM-dd"
-                    dailyRecapShownDate = dayFmt.string(from: Date())
+                    // Match the show-trigger + guard (both use todayEST) so this dismiss write
+                    // can't corrupt the once-per-day state near the EST day boundary.
+                    dailyRecapShownDate = SupabaseAPI.todayEST()
                     withAnimation(.easeOut(duration: 0.2)) { showDailyRecap = false }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
