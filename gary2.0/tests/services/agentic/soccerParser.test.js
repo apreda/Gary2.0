@@ -65,14 +65,26 @@ describe('soccer totals + Asian handicap parsing', () => {
     expect(out.goal_line).toBe(2.5);
   });
 
-  it('detects an Asian handicap from pick text and extracts the handicap', () => {
+  it('detects an Asian handicap from pick text and extracts the handicap (provider-priced)', () => {
+    // A handicap side must carry a PROVIDER-verified price (soccer_spread), else it is
+    // dropped (see rejection test below). Supply the consensus spread market.
     const out = normalizePickFormat(
       { pick: 'Mexico -1.5', odds: 125, rationale: RATIONALE },
-      'Mexico', 'South Africa', 'soccer_world_cup', {}
+      'Mexico', 'South Africa', 'soccer_world_cup',
+      { soccer_spread: { homeValue: -1.5, homeOdds: 125, awayValue: 1.5, awayOdds: -105 } }
     );
     expect(out).not.toBeNull();
     expect(out.type).toBe('asian_handicap');
     expect(out.handicap).toBe(-1.5);
+  });
+
+  it('REJECTS an Asian handicap side with no provider-verified odds (prose-only price)', () => {
+    // No soccer_spread market → the only price would be Gary's prose → drop the leg.
+    const out = normalizePickFormat(
+      { pick: 'Mexico -1.5', odds: 125, rationale: RATIONALE },
+      'Mexico', 'South Africa', 'soccer_world_cup', {}
+    );
+    expect(out).toBeNull();
   });
 
   it('does NOT mistake American odds for a handicap ("Mexico -230" stays moneyline)', () => {

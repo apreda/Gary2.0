@@ -50,7 +50,11 @@ export function buildNumericCorpus(messages) {
     }
   };
   for (const m of (messages || [])) {
-    if (!m || m.role === 'assistant') continue;
+    // Skip the model's own output (assistant) AND grounding/web-search results
+    // (name === fetch_narrative_context): a number that exists ONLY in a Google/Gemini
+    // snippet must NOT "validate" a stat claim — that's the stat-from-search leak. Only
+    // REAL provider tool data (fetch_stats etc.) should ground a numeric claim.
+    if (!m || m.role === 'assistant' || m.name === 'fetch_narrative_context') continue;
     const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '');
     for (const match of text.matchAll(/\d[\d,]*\.\d+|\.\d+|\d[\d,]*/g)) {
       addForms(match[0]);
@@ -152,6 +156,13 @@ export function extractNumericClaims(text) {
   for (const m of text.matchAll(/(\d{1,3}(?:\.\d)?)\s*%[^.]{0,25}possession/gi)) push(m, m[1], 'possession');
   for (const m of text.matchAll(/possession[^.]{0,25}?(\d{1,3}(?:\.\d)?)\s*%/gi)) push(m, m[1], 'possession');
 
+  // Shot/pass/conversion accuracy % (soccer) — same stale-memory class as possession.
+  // A real WC fabrication ("46% shot accuracy", Bosnia 6/24) slipped past because ONLY
+  // the possession regex existed. Require the soccer-DISTINCTIVE phrase (not bare "shot"+%)
+  // so this does NOT fire on NBA/NHL "convert 52% of their shots" / "stopping 92% of shots".
+  for (const m of text.matchAll(/(\d{1,3}(?:\.\d)?)\s*%\s*(?:shot accuracy|shots?\s+on[ -]?target|pass(?:ing)?\s+accuracy|conversion(?:\s+rate)?)/gi)) push(m, m[1], 'soccer-rate');
+  for (const m of text.matchAll(/(?:shot accuracy|shots?\s+on[ -]?target|pass(?:ing)?\s+accuracy|conversion(?:\s+rate)?)[^.]{0,20}?(\d{1,3}(?:\.\d)?)\s*%/gi)) push(m, m[1], 'soccer-rate');
+
   // FIFA/world ranking: "ranked 12th", "FIFA ranking of 64", "#3-ranked"
   for (const m of text.matchAll(/rank(?:ed|ing)?\s*(?:of\s*)?(?:#|No\.?\s*)?(\d{1,3})(?:st|nd|rd|th)?\b/gi)) {
     push(m, m[1], 'ranking');
@@ -198,7 +209,7 @@ export function auditPickRationale(pick, messages) {
   // other sports' windowed-warn behavior is untouched.
   const isSoccer = (Array.isArray(messages) ? messages : [])
     .some(m => typeof m?.content === 'string' && /world\s*cup|fifa|soccer/i.test(m.content));
-  const SOCCER_STRICT = new Set(['xg', 'per-game', 'possession', 'caps', 'ranking']);
+  const SOCCER_STRICT = new Set(['xg', 'per-game', 'possession', 'soccer-rate', 'caps', 'ranking']);
 
   const claims = extractNumericClaims(rationale);
   const unsupported = [];

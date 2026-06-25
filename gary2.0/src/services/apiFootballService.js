@@ -61,12 +61,14 @@ async function afFetch(path, params = {}) {
       throw e;
     }
     if (!res.ok) {
-      // 4xx (incl. 429 rate-limit, 499 plan-limit) are deterministic — retrying the
-      // identical request won't help. Only 5xx is transient.
+      // 429 is a PER-MINUTE rate-limit (a ~30-call parallel scout burst can trip it) — retry
+      // with a longer backoff so a WC team's form/xG isn't zeroed on the storing run. Other
+      // 4xx (incl. 499 plan-limit) stay deterministic; 5xx is transient.
       const err = new Error(`API-Football ${res.status}: ${path}`);
-      if (res.status < 500) throw err;
+      const retryable = res.status === 429 || res.status >= 500;
+      if (!retryable) throw err;
       lastErr = err;
-      if (i < 2) { await sleep(500 * (i + 1)); continue; }
+      if (i < 2) { await sleep((res.status === 429 ? 1500 : 500) * (i + 1)); continue; }
       throw err;
     }
     const json = await res.json();
@@ -84,8 +86,8 @@ async function afFetch(path, params = {}) {
 // on `&` / apostrophes) or read differently than our internal label. Map the problem
 // cases to the API's spelling; everything else falls through to the sanitizer below.
 const TEAM_NAME_ALIASES = {
-  'bosnia & herzegovina': 'Bosnia and Herzegovina',
-  'bosnia and herzegovina': 'Bosnia and Herzegovina',
+  'bosnia & herzegovina': 'Bosnia',
+  'bosnia and herzegovina': 'Bosnia',
   "côte d'ivoire": 'Ivory Coast',
   "cote d'ivoire": 'Ivory Coast',
   'cabo verde': 'Cape Verde',
@@ -110,8 +112,14 @@ export async function resolveNationalTeamId(name) {
   let id = null;
   try {
     const aliased = TEAM_NAME_ALIASES[name.toLowerCase()] || name;
-    // API search rejects non-alphanumerics — strip them for the query, match on names.
-    const query = aliased.replace(/[^a-zA-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    // Transliterate accents FIRST (ü→u, ç→c, ô→o) via NFD decomposition + combining-mark
+    // strip — otherwise the alphanumeric sanitizer below turns "Türkiye"→"T rkiye" and
+    // "Curaçao"→"Cura ao", which API-Football's search returns 0 rows for (silently
+    // un-grounding those WC teams). THEN strip the remaining non-alphanumerics (& /
+    // apostrophes) the search param rejects.
+    const query = aliased
+      .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+      .replace(/[^a-zA-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
     const rows = await afFetch('/teams', { search: query });
     const senior = rows.filter((r) => r.team?.national === true && !isYouthOrWomenTeam(r.team?.name));
     const pool = senior.length ? senior : rows.filter((r) => !isYouthOrWomenTeam(r.team?.name));

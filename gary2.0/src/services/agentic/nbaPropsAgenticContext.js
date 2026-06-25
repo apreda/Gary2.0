@@ -18,6 +18,11 @@
  * 4. Home/Away Splits - Player-specific home/road performance
  */
 import { ballDontLieService } from '../ballDontLieService.js';
+// getNbaPlayerGameLogsBatch lives in the modular players split (bdlPlayers playersMethods),
+// NOT on the monolith ballDontLieService — calling it off the monolith was a silent
+// "is not a function" that zeroed NBA prop recency (L10) data. Call the real impl bound to
+// the monolith, which provides this.getNbaPlayerGameLogs (the single-player fetch it uses).
+import { playersMethods } from '../ballDontLie/bdlPlayers.js';
 import axios from 'axios';
 // Grounding searches use Gemini 3 Flash; main pick pipeline uses 3.1 Pro + Flash (research)
 import { 
@@ -741,7 +746,7 @@ async function fetchPlayerGameLogs(playerIdMap) {
   console.log(`[NBA Props Context] Fetching game logs for ${playerIds.length} players...`);
   
   try {
-    const logsMap = await ballDontLieService.getNbaPlayerGameLogsBatch(playerIds, 10);
+    const logsMap = await playersMethods.getNbaPlayerGameLogsBatch.call(ballDontLieService, playerIds, 10);
     console.log(`[NBA Props Context] ✓ Got game logs for ${Object.keys(logsMap).length} players`);
     return logsMap;
   } catch (e) {

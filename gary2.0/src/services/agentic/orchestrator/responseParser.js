@@ -473,6 +473,16 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       console.warn(`[Orchestrator] ⚽ WC: REJECTING handicap — off-grid / no-market line ${parsed.handicap}`);
       return null;
     }
+    // ODDS-SOURCE GUARD (#4): an Asian-handicap SIDE must carry a PROVIDER-verified price.
+    // If the book had no spread market for this side (mkt?.odds == null), the only price is
+    // Gary's prose — which the locked rule forbids for WC ("odds from the consensus market,
+    // not prose"). Drop the leg rather than ship an invented/borrowed handicap price (the
+    // Qatar "+3.5 @ -900" / borrowed -170 class). The TOTAL leg of the dual pick is separate
+    // and unaffected.
+    if (parsed.type === 'asian_handicap' && (mkt?.odds == null)) {
+      console.warn(`[Orchestrator] ⚽ WC: REJECTING handicap side — no provider-verified odds (price was prose-only, not a consensus market)`);
+      return null;
+    }
     // Rebuild a clean, self-contained pick string from the resolved structured
     // fields. Gary's prose is only a label and arrives malformed (dropped signs,
     // doubled odds, a dangling "@"); the resolved book number is authoritative, and
