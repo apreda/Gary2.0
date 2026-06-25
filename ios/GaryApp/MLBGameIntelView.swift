@@ -152,6 +152,17 @@ struct MLBGameIntelView: View {
         edges.filter { $0.headline.localizedCaseInsensitiveContains(name) }
     }
 
+    // The player's category edge (HR Threat, Heat Check…), built byte-for-byte the way the Hub's
+    // PlayerInsightSheet (hubEdge) does — so a tapped fielder's card matches the Hub card exactly.
+    private static let playerEdgeKinds: Set<SignalKind> = [.hrThreat, .hot, .cold, .platoon, .regression, .h2h, .streak]
+    private func playerEdge(forId pid: String) -> PlayerCardV4Edge? {
+        guard !pid.isEmpty,
+              let s = edges.first(where: { $0.playerId == pid && Self.playerEdgeKinds.contains($0.kind) })
+        else { return nil }
+        let body = (s.reg?.verdict ?? s.detail).trimmingCharacters(in: .whitespaces)
+        return PlayerCardV4Edge(eyebrow: s.kind.chip, title: s.headline, body: body)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if showHeader { header }
@@ -177,7 +188,7 @@ struct MLBGameIntelView: View {
             // Centered popup carousel — swipe through the team's lineup like a pack of cards.
             // .presentationBackground(.clear) lets the dimmed page show through (iOS 16.4+).
             let carousel = PlayerCardCarousel(
-                players: displayLineup.map { CarouselPlayer(id: $0.playerId, name: $0.name, heat: $0.heat, game: matchup.uppercased()) },
+                players: displayLineup.map { CarouselPlayer(id: $0.playerId, name: $0.name, heat: $0.heat, game: matchup.uppercased(), edge: playerEdge(forId: $0.playerId)) },
                 index: displayLineup.firstIndex(where: { $0.name == f.name }) ?? 0,
                 onClose: { selected = nil }
             )
@@ -514,6 +525,7 @@ struct CarouselPlayer: Identifiable {
     let name: String
     let heat: String      // hot / cold / steady (from the field card)
     let game: String      // "CUBS @ METS" context line
+    var edge: PlayerCardV4Edge? = nil   // category edge (HR Threat, Heat Check…) — matches the Hub's hero
 }
 
 struct PlayerCardCarousel: View {
@@ -566,7 +578,7 @@ private struct CarouselCard: View {
     @State private var pack: PlayerInsightPack? = nil
     @State private var loading = true
     var body: some View {
-        PlayerCardV4(name: player.name, heat: player.heat, game: player.game, pack: pack, loading: loading)
+        PlayerCardV4(name: player.name, heat: player.heat, game: player.game, pack: pack, loading: loading, edge: player.edge)
             .task(id: player.id) {
                 loading = true
                 pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: player.id)

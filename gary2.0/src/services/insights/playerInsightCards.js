@@ -282,6 +282,7 @@ async function buildHitterPack(a) {
   // Strengths / weaknesses (deterministic, derived from the above).
   const { strengths, weaknesses } = hitterStrengthsWeaknesses({
     name, platoon, xstats, form, seasonDisplay, bvp, pitchMatchup,
+    oppHand: payload.opponent?.hand,   // today's starter throws R/L — leads THE READ
   });
   if (strengths.length) payload.strengths = strengths;
   if (weaknesses.length) payload.weaknesses = weaknesses;
@@ -594,40 +595,52 @@ function hitterProps(propRows, playerId) {
  * and BvP. Plain copy, no bet instructions.
  */
 function hitterStrengthsWeaknesses(ctx) {
-  const { platoon, xstats, form, seasonDisplay, bvp, pitchMatchup } = ctx;
+  const { platoon, xstats, form, seasonDisplay, bvp, pitchMatchup, oppHand } = ctx;
   const strengths = [];
   const weaknesses = [];
 
-  // Pitch-type signals (only graded rows with a real sample feed s/w).
+  // LEAD with the split vs TODAY's starter's hand — the single most actionable read for this game.
+  const oppSide = oppHand ? platoon.byHand?.[oppHand] : null;
+  if (oppSide?.ops != null) {
+    const handLabel = oppHand === 'L' ? 'lefties' : 'righties';
+    const tail = num(oppSide.ab) != null ? ` (${num(oppSide.ab)} AB)` : '';
+    const line = `${pct3(oppSide.avg)} / ${pct3(oppSide.ops)} OPS vs ${handLabel} this year${tail}`;
+    if (oppSide.ops <= 0.680) weaknesses.push(line); else strengths.push(line);
+  } else {
+    // No known starter hand (reliever / TBD) — fall back to the symmetric >= .150-gap read.
+    const r = platoon.byHand?.R, l = platoon.byHand?.L;
+    if (r?.ops != null && l?.ops != null) {
+      const gap = r.ops - l.ops;
+      if (gap >= 0.150) {
+        strengths.push(`Hits righties hard — ${pct3(r.ops)} OPS vs RHP`);
+        weaknesses.push(`Quieter vs lefties — ${pct3(l.ops)} OPS vs LHP`);
+      } else if (gap <= -0.150) {
+        strengths.push(`Hits lefties hard — ${pct3(l.ops)} OPS vs LHP`);
+        weaknesses.push(`Quieter vs righties — ${pct3(r.ops)} OPS vs RHP`);
+      }
+    }
+  }
+
+  // THEN the pitch edges vs his REAL arsenal, with the usage % tying each to today's starter.
+  // No cap here — pushing strengths AND weaknesses keeps both sides; dedupeCap (3 each) + the
+  // iOS prefix(2)-per-side cap trim the display, and the platoon lead (pushed first) always leads.
   for (const row of pitchMatchup) {
     if (num(row._pa) == null || num(row._pa) < PITCH_MIN_PA_SIGNAL) continue;
+    const usage = num(row.usagePct) != null ? ` (${Math.round(num(row.usagePct))}% of his pitches)` : '';
     if (row.grade === 'strong') {
       const bits = [];
       if (row.ba) bits.push(`${row.ba} BA`);
       if (row.slg) bits.push(`${row.slg} SLG`);
-      strengths.push(`Handles ${row.pitch.toLowerCase()}s${bits.length ? ` — ${bits.join(', ')}` : ''}`);
+      strengths.push(`Handles ${row.pitch.toLowerCase()}s${usage}${bits.length ? ` — ${bits.join(', ')}` : ''}`);
     } else if (row.grade === 'weak') {
       const bits = [];
       if (row.ba) bits.push(`${row.ba} BA`);
       if (row.whiffPct != null) bits.push(`${row.whiffPct}% whiff`);
-      weaknesses.push(`Struggles with ${row.pitch.toLowerCase()}s${bits.length ? ` — ${bits.join(', ')}` : ''}`);
+      weaknesses.push(`Struggles with ${row.pitch.toLowerCase()}s${usage}${bits.length ? ` — ${bits.join(', ')}` : ''}`);
     }
   }
 
-  // Platoon gap (>= .150 OPS between the two sides).
-  const r = platoon.byHand?.R;
-  const l = platoon.byHand?.L;
-  if (r?.ops != null && l?.ops != null) {
-    const gap = r.ops - l.ops;
-    if (gap >= 0.150) {
-      strengths.push(`Hits righties hard — ${pct3(r.ops)} OPS vs RHP`);
-      weaknesses.push(`Quieter vs lefties — ${pct3(l.ops)} OPS vs LHP`);
-    } else if (gap <= -0.150) {
-      strengths.push(`Hits lefties hard — ${pct3(l.ops)} OPS vs LHP`);
-      weaknesses.push(`Quieter vs righties — ${pct3(r.ops)} OPS vs RHP`);
-    }
-  }
-
+  // THEN trailing notes — xstats, form, BvP — fill the remaining slots after the cap.
   // xstats verdicts.
   for (const x of xstats) {
     if (x.verdict === 'underperforming' && x.label === 'AVG vs xBA') {
