@@ -270,3 +270,157 @@ export function pct3(n) {
   const s = v.toFixed(3);
   return s.startsWith('0.') ? s.slice(1) : s.startsWith('-0.') ? `-${s.slice(2)}` : s;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Player Insight Card helpers (shared by the MLB + WC card builders)
+//
+// These were originally local to playerInsightCards.js (MLB). They are pure,
+// sport-agnostic utilities; lifting them here lets the World Cup card builder
+// reuse the EXACT same prop-formatting / rate-attaching / dedupe logic without a
+// copy. The two sport-specific knobs (the prop display LABEL and the MAX cap) are
+// passed in by each caller, so neither sport's output changes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Coerce to a finite Number or null (empty string / null / NaN -> null). */
+export function num(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Normalize a fetcher return (array OR keyed object OR null) to an array. */
+export function asArray(v) {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') return Object.values(v);
+  return [];
+}
+
+/** De-duplicate (case-insensitive) a list of strings and cap its length. */
+export function dedupeCap(arr, cap) {
+  const out = [];
+  const seen = new Set();
+  for (const item of arr) {
+    if (!item) continue;
+    const k = String(item).toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(item);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+/**
+ * Run an async fn, returning a fallback on any throw (never propagates). `tag`
+ * only labels the console.error so a builder's logs stay identifiable.
+ */
+export async function safeCall(fn, fallback, tag = 'insights') {
+  try {
+    const v = await fn();
+    return v == null ? fallback : v;
+  } catch (err) {
+    console.error(`[${tag}] data fetch error:`, err?.message || err);
+    return fallback;
+  }
+}
+
+/** American-odds display: +150 / -120 (passes through non-numeric unchanged). */
+export function formatOdds(odds) {
+  const n = Number(odds);
+  if (!Number.isFinite(n)) return String(odds);
+  return n > 0 ? `+${n}` : String(n);
+}
+
+/**
+ * Rank a prop row's market so a standard over/under is preferred over a
+ * milestone/extreme-odds rung when two rows share a prop type. Sport-agnostic
+ * (MLB milestone HR markets + WC anytime_goal milestone markets both sort last).
+ */
+export function marketRank(r) {
+  const t = String(r?.market?.type || '').toLowerCase();
+  if (t.includes('over') || t.includes('under') || t === 'over_under') return 0;
+  if (t === 'milestone') return 2;
+  return 1;
+}
+
+/**
+ * Format up to `maxProps` posted lines for a player into [{label, line, odds}].
+ *
+ * Generic over sport: `priorityTypes` is BOTH the trackable allow-list (a type
+ * not in it is dropped so a card never ships a rate-less, untrackable prop) and
+ * the display order; `labelFor(propType)` maps the raw type to its card label;
+ * `maxProps` caps the row count. Each entry carries an internal `_type` so
+ * attachPropRates() can join the per-game hit rate, then strips it.
+ *
+ * Defensive: omits a row with neither a line nor odds; dedupes by prop type
+ * (keeping the highest-priority / least-juiced market for that type).
+ *
+ * @param {Array}  propRows       raw prop rows: { player_id, prop_type, line_value, market:{type,odds} }
+ * @param {string|number} playerId
+ * @param {string[]} priorityTypes  trackable types, in display-priority order
+ * @param {object} opts
+ * @param {(t:string)=>string} opts.labelFor  prop_type -> display label
+ * @param {number} opts.maxProps   max rows returned
+ * @returns {Array<{label:string, line?:string, odds?:string, _type:string}>}
+ */
+export function formatProps(propRows, playerId, priorityTypes, { labelFor, maxProps } = {}) {
+  const allowed = new Set(priorityTypes);
+  const rows = (Array.isArray(propRows) ? propRows : [])
+    .filter((r) => String(r?.player_id) === String(playerId))
+    .filter((r) => allowed.has(String(r?.prop_type || '').toLowerCase()));
+  if (!rows.length) return [];
+
+  const ranked = [...rows].sort((a, b) => {
+    const ap = priorityTypes.indexOf(String(a?.prop_type || '').toLowerCase());
+    const bp = priorityTypes.indexOf(String(b?.prop_type || '').toLowerCase());
+    const aw = ap === -1 ? 99 : ap;
+    const bw = bp === -1 ? 99 : bp;
+    if (aw !== bw) return aw - bw;
+    return marketRank(a) - marketRank(b);
+  });
+
+  const out = [];
+  const seen = new Set();
+  for (const r of ranked) {
+    const propType = String(r?.prop_type || '').toLowerCase();
+    if (seen.has(propType)) continue;
+    const line = num(r?.line_value);
+    const entry = { label: labelFor ? labelFor(propType) : propType, _type: propType };
+    if (line != null) entry.line = String(line);
+    const odds = r?.market?.odds;
+    if (odds != null && Number.isFinite(Number(odds))) entry.odds = formatOdds(odds);
+    if (entry.line == null && entry.odds == null) continue;
+    seen.add(propType);
+    out.push(entry);
+    if (out.length >= (maxProps || 4)) break;
+  }
+  return out;
+}
+
+/**
+ * Mutate each prop entry with `rate` — "7/10 over" — counting the games in the
+ * trailing window where the stat finished ABOVE the posted line. Strictly factual
+ * (no lean implied). Strips the internal `_type` either way. A type with no
+ * statMap extractor, or a sub-minRows window, simply gets no rate (fail closed).
+ *
+ * @param {Array}  props    formatProps() output (mutated in place)
+ * @param {Array}  rows     per-game stat rows, oldest -> newest
+ * @param {object} statMap  prop_type -> (row) => Number
+ * @param {object} cfg
+ * @param {number} cfg.window  trailing window size
+ * @param {number} cfg.minRows minimum rows required to publish a rate
+ */
+export function attachPropRates(props, rows, statMap, { window, minRows } = {}) {
+  if (!Array.isArray(props) || !props.length) return;
+  const win = (Array.isArray(rows) ? rows : []).slice(-window);
+  for (const p of props) {
+    const type = p._type;
+    delete p._type;
+    if (win.length < minRows) continue;
+    const statOf = statMap[type];
+    const line = Number(p.line);
+    if (!statOf || !Number.isFinite(line)) continue;
+    const cleared = win.filter((r) => statOf(r) > line).length;
+    p.rate = `${cleared}/${win.length} over`;
+  }
+}

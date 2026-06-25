@@ -29,7 +29,9 @@ import { getESTDate } from './src/utils/dateUtils.js';
 // Import after env is loaded (services read env at module init time)
 const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
 const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
+const { buildWcPlayerInsightCards } = await import('./src/services/insights/wcPlayerInsightCards.js');
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
+const fifaWorldCupService = (await import('./src/services/fifaWorldCupService.js')).default;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -53,9 +55,9 @@ const adminKey = supabaseServiceKey || supabaseAnonKey;
 const TABLE = 'insight_connections';
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 
-// Per-player breakdown packs (the iOS Hub "full breakdown" view). Built only for
-// MLB after the day's insight_connections insert succeeds; failures here are
-// NON-FATAL to the connections run.
+// Per-player breakdown packs (the iOS Hub "full breakdown" view). Built for MLB
+// (hitter/pitcher) and WC (outfield/keeper) after the day's insight_connections
+// insert succeeds; failures here are NON-FATAL to the connections run.
 const CARDS_TABLE = 'player_insight_cards';
 const CARDS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${CARDS_TABLE}` : null;
 
@@ -265,18 +267,25 @@ async function insertCards(rows) {
 }
 
 /**
- * Build the day's per-player breakdown packs (MLB only) and write them with the
+ * Build the day's per-player breakdown packs (MLB + WC) and write them with the
  * same DELETE-then-INSERT idempotency. NON-FATAL: any failure here is caught and
  * warned so it never sinks the connections run. Respects --dry-run (prints the
- * pack count + one sample payload instead of writing).
+ * pack count + one sample payload instead of writing). The row-map + write path
+ * below are league-generic; only the slate fetch + builder dispatch branch.
  */
 async function buildAndStoreCards({ date, league, connections }) {
-  if (league !== 'MLB') return;
+  if (league !== 'MLB' && league !== 'WC') return;
   try {
-    // generateInsightConnections returns gameCount but not the slate itself;
-    // re-fetch it here (getMlbGamesForDate is 5-min cached, so this is cheap).
-    const games = (await ballDontLieService.getMlbGamesForDate(date)) || [];
-    const packs = await buildPlayerInsightCards({ date, league, connections, games });
+    // generateInsightConnections returns the count but not the slate itself;
+    // re-fetch it here (both fetchers are short-TTL cached, so this is cheap).
+    let packs;
+    if (league === 'WC') {
+      const matches = (await fifaWorldCupService.getMatchesForDate(date)) || [];
+      packs = await buildWcPlayerInsightCards({ date, league, connections, matches });
+    } else {
+      const games = (await ballDontLieService.getMlbGamesForDate(date)) || [];
+      packs = await buildPlayerInsightCards({ date, league, connections, games });
+    }
 
     if (!Array.isArray(packs) || packs.length === 0) {
       console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);

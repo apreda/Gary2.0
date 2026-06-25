@@ -37,8 +37,16 @@
 //   * getBatterXStats(season)/getPitcherXStats(season) -> name-joined expected
 //     stats (ba/est_ba/slg/est_slg/woba/est_woba ; era/xera for pitchers)
 
-import { nameKey, pct3, round, parseBatsThrows } from './shared.js';
+import {
+  nameKey, pct3, round, parseBatsThrows,
+  num, asArray, dedupeCap, formatOdds, marketRank,
+  formatProps, attachPropRates, safeCall as safeCallShared,
+} from './shared.js';
 import { getBatterXStats, getPitcherXStats } from '../baseballSavantService.js';
+
+// Thin local binding so every existing safeCall() site keeps the exact
+// '[playerInsightCards]' error prefix while using the shared implementation.
+const safeCall = (fn, fallback) => safeCallShared(fn, fallback, 'playerInsightCards');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tunables
@@ -586,7 +594,7 @@ function hitterBvp(pvpRows, oppPitcherId, oppPitcherName) {
 function hitterProps(propRows, playerId) {
   // All trackable by RATE_STAT_HITTER (each gets an X/10 over rate). hits_runs_rbis (R+H+RBI)
   // replaces walks, which has no hitter game-log extractor and shipped rate-less.
-  return formatProps(propRows, playerId, ['total_bases', 'hits_runs_rbis', 'hits', 'home_runs', 'runs_batted_in', 'rbi', 'runs']);
+  return formatProps(propRows, playerId, ['total_bases', 'hits_runs_rbis', 'hits', 'home_runs', 'runs_batted_in', 'rbi', 'runs'], { labelFor: propLabel, maxProps: MAX_PROPS });
 }
 
 /**
@@ -827,7 +835,7 @@ function gradePitcherPitch(pa, ba, slg, whiff) {
 }
 
 function pitcherProps(propRows, playerId) {
-  return formatProps(propRows, playerId, ['strikeouts', 'outs', 'earned_runs', 'hits_allowed', 'walks']);
+  return formatProps(propRows, playerId, ['strikeouts', 'outs', 'earned_runs', 'hits_allowed', 'walks'], { labelFor: propLabel, maxProps: MAX_PROPS });
 }
 
 function pitcherStrengthsWeaknesses(ctx) {
@@ -918,49 +926,6 @@ function lowerIsBetterVerdict(actual, expected, gap) {
   if (d < -gap) return 'overperforming';
   if (d > gap) return 'underperforming';
   return 'in line';
-}
-
-/**
- * Format up to MAX_PROPS posted lines for a player, preferring over/under markets
- * and the priority prop types passed. Returns [{label, line, odds}].
- */
-function formatProps(propRows, playerId, priorityTypes) {
-  // Only props whose type we can compute an X/10 over rate for are eligible — an untrackable
-  // type (e.g. hitter walks, no game-log extractor) must never reach a card rate-less. The
-  // priority list IS the trackable set for both callers (hitterProps + pitcherProps).
-  const allowed = new Set(priorityTypes);
-  const rows = (Array.isArray(propRows) ? propRows : [])
-    .filter((r) => String(r?.player_id) === String(playerId))
-    .filter((r) => allowed.has(String(r?.prop_type || '').toLowerCase()));
-  if (!rows.length) return [];
-
-  const ranked = [...rows].sort((a, b) => {
-    const ap = priorityTypes.indexOf(String(a?.prop_type || '').toLowerCase());
-    const bp = priorityTypes.indexOf(String(b?.prop_type || '').toLowerCase());
-    const aw = ap === -1 ? 99 : ap;
-    const bw = bp === -1 ? 99 : bp;
-    if (aw !== bw) return aw - bw;
-    // Prefer standard over/under markets over milestone/extreme-odds rows.
-    return marketRank(a) - marketRank(b);
-  });
-
-  const out = [];
-  const seen = new Set();
-  for (const r of ranked) {
-    const propType = String(r?.prop_type || '').toLowerCase();
-    if (seen.has(propType)) continue;
-    const line = num(r?.line_value);
-    // _type is internal — attachPropRates joins on it, then strips it.
-    const entry = { label: propLabel(propType), _type: propType };
-    if (line != null) entry.line = String(line);
-    const odds = r?.market?.odds;
-    if (odds != null && Number.isFinite(Number(odds))) entry.odds = formatOdds(odds);
-    if (entry.line == null && entry.odds == null) continue;
-    seen.add(propType);
-    out.push(entry);
-    if (out.length >= MAX_PROPS) break;
-  }
-  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1089,33 +1054,6 @@ const RATE_STAT_PITCHER = {
   walks: (r) => num(r.p_bb) ?? 0,
 };
 
-/**
- * Mutates each prop entry with `rate` — "7/10 over" — counting the games in
- * the window where the stat finished ABOVE tonight's line. Strictly factual
- * (no lean implied); strips the internal _type either way.
- */
-function attachPropRates(props, rows, statMap, { window, minRows }) {
-  if (!Array.isArray(props) || !props.length) return;
-  const win = rows.slice(-window);
-  for (const p of props) {
-    const type = p._type;
-    delete p._type;
-    if (win.length < minRows) continue;
-    const statOf = statMap[type];
-    const line = Number(p.line);
-    if (!statOf || !Number.isFinite(line)) continue;
-    const cleared = win.filter((r) => statOf(r) > line).length;
-    p.rate = `${cleared}/${win.length} over`;
-  }
-}
-
-function marketRank(r) {
-  const t = String(r?.market?.type || '').toLowerCase();
-  if (t.includes('over') || t.includes('under') || t === 'over_under') return 0;
-  if (t === 'milestone') return 2;
-  return 1;
-}
-
 function propLabel(propType) {
   const map = {
     total_bases: 'Total bases',
@@ -1132,12 +1070,6 @@ function propLabel(propType) {
     walks: 'Walks',
   };
   return map[propType] || propType.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
-}
-
-function formatOdds(odds) {
-  const n = Number(odds);
-  if (!Number.isFinite(n)) return String(odds);
-  return n > 0 ? `+${n}` : String(n);
 }
 
 /** Index a pitch-type ARRAY (or keyed object) by pitch_type code. */
@@ -1264,45 +1196,6 @@ function stripInternal(rows) {
   if (!Array.isArray(rows)) return;
   for (const r of rows) {
     if (r && typeof r === 'object') delete r._pa;
-  }
-}
-
-function dedupeCap(arr, cap) {
-  const out = [];
-  const seen = new Set();
-  for (const item of arr) {
-    if (!item) continue;
-    const k = item.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(item);
-    if (out.length >= cap) break;
-  }
-  return out;
-}
-
-/** Coerce to a finite Number or null. */
-function num(v) {
-  if (v == null || v === '') return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Normalize a BDL pitch-type return (array OR keyed object) to an array. */
-function asArray(v) {
-  if (Array.isArray(v)) return v;
-  if (v && typeof v === 'object') return Object.values(v);
-  return [];
-}
-
-/** Run an async fn, returning a fallback on any throw (never propagates). */
-async function safeCall(fn, fallback) {
-  try {
-    const v = await fn();
-    return v == null ? fallback : v;
-  } catch (err) {
-    console.error('[playerInsightCards] data fetch error:', err?.message || err);
-    return fallback;
   }
 }
 
