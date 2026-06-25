@@ -19507,22 +19507,24 @@ struct PlayerInsightSheet: View {
     @State private var loading = true
 
     var body: some View {
+        // Unified with the lineup carousel — the same v4 card, with the Hub's "why this
+        // surfaced" lane verdict carried in as the edge hero.
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
-                headerView
-                if loading {
-                    ProgressView().tint(GaryColors.gold)
-                        .frame(maxWidth: .infinity).padding(.top, 60)
-                } else if let p = pack {
-                    packView(p)
-                } else {
-                    fallbackView
-                }
-            }
-            .padding(20)
-            .padding(.bottom, 30)
+            PlayerCardV4(
+                name: pack?.name ?? fallbackName,
+                game: (pack?.game ?? signal?.game) ?? "",
+                pack: pack,
+                loading: loading,
+                edge: hubEdge
+            )
+            .padding(16).padding(.top, 6)
         }
         .background(GaryColors.darkBg.ignoresSafeArea())
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill").font(.system(size: 26)).foregroundStyle(.white.opacity(0.4))
+            }.buttonStyle(.plain).padding(.top, 14).padding(.trailing, 16)
+        }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .task {
@@ -19535,28 +19537,13 @@ struct PlayerInsightSheet: View {
         }
     }
 
-    private var headerView: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Player Breakdown")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(GaryColors.sectionSub)
-                Text(pack?.name ?? fallbackName)
-                    .font(GaryFonts.text(27, .bold)).foregroundStyle(.white)
-                HStack(spacing: 6) {
-                    if let meta = identityLine {
-                        Text(meta).font(GaryFonts.mono(11, bold: false))
-                            .foregroundStyle(.white.opacity(0.45))
-                    }
-                }
-            }
-            Spacer()
-            Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.3))
-            }.buttonStyle(.plain)
-        }
-        .padding(.top, 22)
+    // The Hub's "why this player surfaced" lane verdict, rendered as the v4 card's edge hero.
+    private var hubEdge: PlayerCardV4Edge? {
+        guard let s = signal else { return nil }
+        let body = (s.reg?.verdict ?? s.detail).trimmingCharacters(in: .whitespaces)
+        return PlayerCardV4Edge(eyebrow: s.kind.chip, title: s.headline, body: body)
     }
+
 
     private var fallbackName: String {
         if let n = prefetched?.player_name, !n.isEmpty { return n }
@@ -19565,241 +19552,6 @@ struct PlayerInsightSheet: View {
             .trimmingCharacters(in: .whitespaces)
     }
 
-    private var identityLine: String? {
-        guard let p = pack else { return signal?.game.uppercased() }
-        var bits: [String] = []
-        if let t = p.team { bits.append(t.uppercased()) }
-        if let pos = p.position { bits.append(pos) }
-        if let h = p.hand { bits.append(p.type == "pitcher" ? "throws \(h)" : "bats \(h)") }
-        if let g = p.game { bits.append(g.uppercased()) }
-        return bits.isEmpty ? nil : bits.joined(separator: " · ")
-    }
-
-    private var fallbackView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let signal {
-                Text(signal.detail)
-                    .font(.system(size: 15)).foregroundStyle(.white.opacity(0.75)).lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text("The full breakdown for this player isn't available yet — it posts with the day's edge refresh.")
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
-        }
-    }
-
-    /// THE EDGE — leads the profile with the exact connection that surfaced this
-    /// player tonight (the lane's verdict / read), so a bettor sees the angle
-    /// before the raw tables. Only on the Hub path (a triggering signal exists).
-    @ViewBuilder
-    private var edgeHero: some View {
-        if let s = signal {
-            let edge = (s.reg?.verdict ?? s.detail).trimmingCharacters(in: .whitespaces)
-            VStack(alignment: .leading, spacing: 7) {
-                Text(s.kind.chip).font(GaryFonts.mono(9, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
-                Text(s.headline).font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !edge.isEmpty {
-                    Text(edge).font(.system(size: 13)).foregroundStyle(.white.opacity(0.82)).lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(GaryColors.gold.opacity(0.07))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GaryColors.gold.opacity(0.3), lineWidth: 1))
-            )
-        }
-    }
-
-    @ViewBuilder
-    private func packView(_ p: PlayerInsightPack) -> some View {
-        // THE EDGE — why this player surfaced tonight (the connection, up front).
-        edgeHero
-        // Tonight's opponent context
-        if let opp = p.opponent, let oppName = opp.name {
-            insightEyebrow("TONIGHT")
-            Text(p.type == "pitcher" ? "Faces \(oppName)" : "Faces \(oppName)\(opp.hand.map { " (\($0)HP)" } ?? "")")
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
-        }
-
-        // Strengths / weaknesses
-        if let s = p.strengths, !s.isEmpty {
-            insightEyebrow("STRENGTHS")
-            bulletList(s, color: HubPalette.green)
-        }
-        if let w = p.weaknesses, !w.isEmpty {
-            insightEyebrow("WEAKNESSES")
-            bulletList(w, color: HubPalette.red)
-        }
-
-        // Pitch-type matchup vs tonight's starter (the centerpiece)
-        if let rows = p.pitchMatchup, !rows.isEmpty {
-            insightEyebrow(p.type == "pitcher" ? "ARSENAL" : "VS TONIGHT'S ARSENAL")
-            pitchTable(rows, isPitcher: p.type == "pitcher")
-        }
-
-        // Splits + form + BvP + venue
-        if let splits = p.splits, !splits.isEmpty {
-            insightEyebrow("SPLITS")
-            VStack(spacing: 0) { ForEach(Array(splits.enumerated()), id: \.offset) { _, row in labeledRow(row) } }
-                .quantPanel()
-        }
-        if let ladder = p.formRows, !ladder.isEmpty {
-            // The ladder a bettor builds by hand from three game logs:
-            // last game → L5 → L10, with the 15-day window closing it out.
-            insightEyebrow("RECENT FORM")
-            VStack(spacing: 0) {
-                ForEach(Array(ladder.enumerated()), id: \.offset) { _, row in labeledRow(row) }
-                if let form = p.form { labeledRow(form) }
-            }
-            .quantPanel()
-        } else if let form = p.form {
-            insightEyebrow(form.label ?? "RECENT FORM")
-            VStack(spacing: 0) { labeledRow(form, hideLabel: true) }.quantPanel()
-        }
-        if let bvp = p.bvp {
-            insightEyebrow("HEAD-TO-HEAD")
-            VStack(spacing: 0) { labeledRow(bvp) }.quantPanel()
-        }
-        if let venue = p.venue {
-            insightEyebrow("THIS PARK")
-            VStack(spacing: 0) { labeledRow(venue) }.quantPanel()
-        }
-
-        // Statcast truth-check
-        if let xs = p.xstats, !xs.isEmpty {
-            insightEyebrow("STATCAST CHECK")
-            VStack(spacing: 0) { ForEach(Array(xs.enumerated()), id: \.offset) { _, row in xstatRow(row) } }
-                .quantPanel()
-        }
-
-        // Season + tonight's lines
-        if let season = p.season {
-            insightEyebrow("SEASON")
-            VStack(alignment: .leading, spacing: 2) {
-                if let l1 = season.line1 { Text(l1).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.9)) }
-                if let l2 = season.line2 { Text(l2).font(.system(size: 12)).foregroundStyle(.white.opacity(0.5)) }
-            }
-        }
-        if let props = p.props, !props.isEmpty {
-            insightEyebrow("TONIGHT'S LINES")
-            HStack(spacing: 8) {
-                ForEach(Array(props.prefix(4).enumerated()), id: \.offset) { _, pr in
-                    VStack(spacing: 2) {
-                        Text(pr.label ?? "").font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.45))
-                        Text("\(pr.line ?? "")\(pr.odds.map { " (\($0))" } ?? "")")
-                            .font(.system(size: 13, weight: .bold)).foregroundStyle(GaryColors.gold)
-                        // Hit rate vs tonight's line over the recent window —
-                        // factual count, no lean implied.
-                        if let rate = pr.rate {
-                            Text(rate.uppercased())
-                                .font(GaryFonts.mono(7.5, bold: true)).tracking(0.4)
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
-                    .padding(.horizontal, 10).padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
-                }
-            }
-        }
-    }
-
-    private func insightEyebrow(_ t: String) -> some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(GaryColors.gold).frame(width: 6, height: 6).rotationEffect(.degrees(45))
-            Text(t).font(GaryFonts.text(13, .bold)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
-        }
-        .padding(.top, 6)
-    }
-
-    private func bulletList(_ items: [String], color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .top, spacing: 8) {
-                    Circle().fill(color).frame(width: 5, height: 5).padding(.top, 6)
-                    Text(item).font(.system(size: 13.5)).foregroundStyle(.white.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private func labeledRow(_ row: PlayerInsightPack.LabeledStat, hideLabel: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            if !hideLabel, let l = row.label {
-                Text(l).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 1) {
-                if let v = row.value { Text(v).font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.92)) }
-                if let d = row.detail { Text(d).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.4)) }
-            }
-        }
-        .padding(.vertical, 8).padding(.horizontal, 12)
-    }
-
-    private func xstatRow(_ row: PlayerInsightPack.XStatRow) -> some View {
-        let verdictColor: Color = row.verdict == "overperforming" ? HubPalette.red
-            : row.verdict == "underperforming" ? HubPalette.green : Color.white.opacity(0.55)
-        return HStack {
-            Text(row.label ?? "").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-            Spacer()
-            Text("\(row.actual ?? "—") → \(row.expected ?? "—")")
-                .font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.9))
-            if let v = row.verdict {
-                Text(v.uppercased())
-                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.6)
-                    .foregroundStyle(verdictColor)
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .overlay(Capsule().stroke(verdictColor.opacity(0.5), lineWidth: 1))
-            }
-        }
-        .padding(.vertical, 8).padding(.horizontal, 12)
-    }
-
-    /// Pitch | usage | BA | SLG | whiff table with grade tinting.
-    private func pitchTable(_ rows: [PlayerInsightPack.PitchRow], isPitcher: Bool) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("PITCH").frame(maxWidth: .infinity, alignment: .leading)
-                Text("USE%").frame(width: 44, alignment: .trailing)
-                Text("BA").frame(width: 44, alignment: .trailing)
-                Text("SLG").frame(width: 44, alignment: .trailing)
-                Text("WHIFF").frame(width: 48, alignment: .trailing)
-            }
-            .font(GaryFonts.mono(8, bold: true)).tracking(0.5)
-            .foregroundStyle(.white.opacity(0.35))
-            .padding(.horizontal, 12).padding(.vertical, 7)
-
-            ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
-                let tint: Color = r.grade == "strong" ? (isPitcher ? HubPalette.green : HubPalette.green)
-                    : r.grade == "weak" ? HubPalette.red
-                    : r.grade == "thin" ? Color.white.opacity(0.35) : Color.white.opacity(0.75)
-                HStack {
-                    Text(r.pitch ?? "—")
-                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(tint)
-                        .frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
-                    Text(r.usagePct.map { String(format: "%.0f%%", $0) } ?? "—")
-                        .frame(width: 44, alignment: .trailing)
-                    Text(r.ba ?? "—").frame(width: 44, alignment: .trailing)
-                    Text(r.slg ?? "—").frame(width: 44, alignment: .trailing)
-                    Text(r.whiffPct.map { String(format: "%.0f%%", $0) } ?? "—")
-                        .frame(width: 48, alignment: .trailing)
-                }
-                .font(GaryFonts.mono(12, bold: false))
-                .foregroundStyle(.white.opacity(0.8))
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                if i < rows.count - 1 {
-                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 12)
-                }
-            }
-        }
-        .quantPanel()
-    }
 }
 
 /// ESPN-transaction-style injury swap row: the OUT player struck through on

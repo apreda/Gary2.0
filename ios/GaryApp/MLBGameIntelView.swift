@@ -521,7 +521,7 @@ struct PlayerCardCarousel: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.74).ignoresSafeArea()
+            Color.black.opacity(0.55).ignoresSafeArea()
                 .onTapGesture { onClose() }
 
             VStack(spacing: 10) {
@@ -538,11 +538,11 @@ struct PlayerCardCarousel: View {
 
                 TabView(selection: $index) {
                     ForEach(Array(players.enumerated()), id: \.offset) { i, pl in
-                        CarouselCard(player: pl).tag(i).padding(.horizontal, 6)
+                        CarouselCard(player: pl).tag(i).padding(.horizontal, 24)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(maxHeight: 680)
+                .frame(maxHeight: 540)
 
                 HStack(spacing: 6) {
                     ForEach(players.indices, id: \.self) { i in
