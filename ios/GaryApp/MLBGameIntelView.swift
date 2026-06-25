@@ -575,6 +575,7 @@ struct PlayerCardV4: View {
     let pack: PlayerInsightPack?
     var loading: Bool = false
     var edge: PlayerCardV4Edge? = nil
+    @State private var recentExpanded = false   // "Recent" expand toggle (advanced + game stats)
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -668,7 +669,37 @@ struct PlayerCardV4: View {
             section("Splits") { VStack(alignment: .leading, spacing: 14) { ForEach(sp.indices, id: \.self) { splitRow(sp[$0]) } } }
         }
         if let fr = p.formRows, !fr.isEmpty {
-            section("Recent") { formGrid(fr, headline: p.form) }
+            section("Recent") {
+                VStack(alignment: .leading, spacing: 0) {
+                    formGrid(fr, headline: p.form)
+                    let extra = recentExtra(p)
+                    if !extra.isEmpty {
+                        if recentExpanded {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(extra.indices, id: \.self) { i in
+                                    HStack(alignment: .firstTextBaseline) {
+                                        Text(extra[i].0).font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2).lineLimit(1)
+                                        Spacer(minLength: 12)
+                                        Text(extra[i].1).font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.mut)
+                                            .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.trailing)
+                                    }
+                                }
+                            }
+                            .padding(.top, 14)
+                            .transition(.opacity)
+                        }
+                        Button { withAnimation(.easeInOut(duration: 0.2)) { recentExpanded.toggle() } } label: {
+                            HStack(spacing: 5) {
+                                Text(recentExpanded ? "LESS" : "MORE STATS").font(GaryFonts.mono(10, bold: true)).tracking(1.4)
+                                Image(systemName: recentExpanded ? "chevron.up" : "chevron.down").font(.system(size: 8, weight: .bold))
+                            }
+                            .foregroundStyle(PCV4.gold)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 12)
+                    }
+                }
+            }
         }
         if let pr = p.props, !pr.isEmpty {
             section("The angle") { VStack(spacing: 0) { ForEach(pr.indices, id: \.self) { propRow(pr[$0]) } } }
@@ -759,9 +790,10 @@ struct PlayerCardV4: View {
                     let r = rows[i]
                     VStack(spacing: 6) {
                         Text((r.label ?? "").uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
-                        Text((r.value ?? "—").components(separatedBy: " (").first ?? "—").font(GaryFonts.display(20)).foregroundStyle(PCV4.ink)
+                        Text((r.value ?? "—").components(separatedBy: " (").first ?? "—").font(GaryFonts.display(18)).foregroundStyle(PCV4.ink)
+                            .lineLimit(1).minimumScaleFactor(0.6)
                         if let d = r.detail { Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut).lineLimit(1).minimumScaleFactor(0.7) }
-                    }.frame(maxWidth: .infinity)
+                    }.frame(maxWidth: .infinity).frame(minHeight: 56, alignment: .top)
                 }
             }
             if let h = headline, let v = h.value {
@@ -774,6 +806,24 @@ struct PlayerCardV4: View {
                 .padding(.top, 12).overlay(Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1), alignment: .top)
             }
         }
+    }
+
+    // Extra "Recent" rows revealed by the toggle — advanced + game-relevant stats already in
+    // the pack (expected stats vs actual, this-park split, batter-vs-tonight's-starter). No new data.
+    private func recentExtra(_ p: PlayerInsightPack) -> [(String, String)] {
+        var out: [(String, String)] = []
+        for x in (p.xstats ?? []) {
+            guard let label = x.label, let a = x.actual, let e = x.expected else { continue }
+            let v = (x.verdict?.isEmpty == false) ? "\(a) vs \(e) · \(x.verdict!)" : "\(a) vs \(e)"
+            out.append((label.uppercased(), v))
+        }
+        if let venue = p.venue, let v = venue.value {
+            out.append(((venue.label ?? "AT THIS PARK").uppercased(), v + (venue.detail.map { " · \($0)" } ?? "")))
+        }
+        if let bvp = p.bvp, let v = bvp.value {
+            out.append(((bvp.label ?? "VS STARTER").uppercased(), v + (bvp.detail.map { " · \($0)" } ?? "")))
+        }
+        return out
     }
 
     // prop row: label / line — rate

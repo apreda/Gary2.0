@@ -460,7 +460,7 @@ function hitterForm(splits) {
   const valueParts = [];
   if (avg != null) valueParts.push(`${pct3(avg)} AVG`);
   if (ops != null) valueParts.push(`${pct3(ops)} OPS`);
-  const out = { label: 'LAST 15 DAYS', value: valueParts.join(' · ') };
+  const out = { label: (row.split_name || 'Last 15 Days').toUpperCase(), value: valueParts.join(' · ') };
   if (ab != null) out.detail = `${ab} AB`;
   return out;
 }
@@ -712,7 +712,7 @@ function pitcherForm(splits) {
   const valueParts = [];
   if (era != null) valueParts.push(`${round(era, 2).toFixed(2)} ERA`);
   if (oppAvg != null) valueParts.push(`${pct3(oppAvg)} opp AVG`);
-  const out = { label: 'LAST 15 DAYS', value: valueParts.join(' · ') };
+  const out = { label: (row.split_name || 'Last 15 Days').toUpperCase(), value: valueParts.join(' · ') };
   if (ip != null) out.detail = `${formatIp(ip)} IP`;
   return out;
 }
