@@ -49,7 +49,8 @@ private struct MLBFielder: Identifiable {
 }
 
 private struct MLBWeather {
-    let temp: Int, windMph: Int, dir: String, roofOpen: Bool, helps: Bool
+    let temp: Int, windMph: Int, dir: String, helps: Bool
+    let venue: String?, condition: String?   // venue + sky condition (the feed has no humidity/roof)
     // carry-zone centre in data space (wind arrow removed — founder call)
     let carry: CGPoint
 }
@@ -182,7 +183,7 @@ struct MLBGameIntelView: View {
             )
             if #available(iOS 16.4, *) { carousel.presentationBackground(.clear) } else { carousel }
         }
-        .sheet(isPresented: $showWeather) { weatherSheet.presentationDetents([.medium]) }
+        .sheet(isPresented: $showWeather) { weatherSheet.presentationDetents([.height(300)]) }
         .task { await loadRealLineup() }
     }
 
@@ -254,7 +255,7 @@ struct MLBGameIntelView: View {
                 if s != LineupState.allCases.last { Spacer() }
             }
             Spacer()
-            Button { showWeather = true } label: { weatherChip }.buttonStyle(.plain)
+            if weather != nil { Button { showWeather = true } label: { weatherChip }.buttonStyle(.plain) }
         }
         .padding(.horizontal, 22).padding(.top, showHeader ? 14 : 2)
     }
@@ -262,7 +263,7 @@ struct MLBGameIntelView: View {
     private var weatherChip: some View {
         HStack(spacing: 5) {
             Image(systemName: "wind").font(.system(size: 10, weight: .bold)).foregroundStyle(MLBI.gold)
-            Text("\(Self.weather.windMph) \(Self.weather.dir)").font(GaryFonts.mono(10, bold: true)).foregroundStyle(MLBI.ink2)
+            Text("\(weather?.windMph ?? 0) \(weather?.dir ?? "")").font(GaryFonts.mono(10, bold: true)).foregroundStyle(MLBI.ink2)
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(Capsule().fill(MLBI.panel).overlay(Capsule().stroke(MLBI.line, lineWidth: 1)))
@@ -342,11 +343,13 @@ struct MLBGameIntelView: View {
             var inf = Path(); inf.move(to: t.map(f)); bp.infield.dropFirst().forEach { inf.addLine(to: t.map($0)) }; inf.closeSubpath()
             ctx.fill(inf, with: .color(MLBI.dirt))
         }
-        // wind carry zone (radial warm glow over where the wind helps)
-        let c = t.map(Self.weather.carry)
-        let rad = 80 * t.scale / 1.0
-        ctx.fill(Path(ellipseIn: CGRect(x: c.x - rad, y: c.y - rad, width: rad * 2, height: rad * 2)),
-                 with: .radialGradient(Gradient(colors: [MLBI.hot.opacity(0.28), MLBI.hot.opacity(0)]), center: c, startRadius: 0, endRadius: rad))
+        // wind carry zone (radial warm glow) — only when real conditions help the hitter (over-lean)
+        if let wx = weather, wx.helps {
+            let c = t.map(wx.carry)
+            let rad = 80 * t.scale / 1.0
+            ctx.fill(Path(ellipseIn: CGRect(x: c.x - rad, y: c.y - rad, width: rad * 2, height: rad * 2)),
+                     with: .radialGradient(Gradient(colors: [MLBI.hot.opacity(0.28), MLBI.hot.opacity(0)]), center: c, startRadius: 0, endRadius: rad))
+        }
         if let f = bp.foul.first {
             var fl = Path(); fl.move(to: t.map(f)); bp.foul.dropFirst().forEach { fl.addLine(to: t.map($0)) }
             ctx.stroke(fl, with: .color(Color.white.opacity(0.5)), lineWidth: 1)
@@ -423,28 +426,30 @@ struct MLBGameIntelView: View {
 
     private var weatherSheet: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 11) {
-                ZStack { Circle().fill(Color(hex: "#23303a")).frame(width: 42, height: 42); Image(systemName: "sun.max.fill").foregroundStyle(Color(hex: "#FFD45A")) }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("First-pitch conditions").font(GaryFonts.text(18, .bold)).foregroundStyle(.white)
-                    Text("\(ballpark?.park ?? "Ballpark") · Roof \(Self.weather.roofOpen ? "open" : "closed")").font(GaryFonts.mono(10.5)).foregroundStyle(MLBI.ink3)
+            if let w = weather {
+                HStack(spacing: 11) {
+                    ZStack { Circle().fill(Color(hex: "#23303a")).frame(width: 42, height: 42); Image(systemName: "sun.max.fill").foregroundStyle(Color(hex: "#FFD45A")) }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("First-pitch conditions").font(GaryFonts.text(18, .bold)).foregroundStyle(.white)
+                        Text([w.venue ?? ballpark?.park, w.condition].compactMap { $0 }.joined(separator: " · "))
+                            .font(GaryFonts.mono(10.5)).foregroundStyle(MLBI.ink3)
+                    }
+                    Spacer()
+                    Text(w.helps ? "HITTER" : "PITCHER").font(GaryFonts.mono(9, bold: true))
+                        .foregroundStyle(w.helps ? MLBI.hot : MLBI.cold).padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(Capsule().fill((w.helps ? MLBI.hot : MLBI.cold).opacity(0.18)))
+                }.padding(.top, 22)
+                HStack(spacing: 8) {
+                    wxCell("\(w.temp)°", "TEMP")
+                    wxCell("\(w.windMph)", "MPH \(w.dir)")
+                }.padding(.top, 16)
+                if let read = weatherRead {
+                    Text("THE READ").font(GaryFonts.mono(9, bold: true)).tracking(1.2).foregroundStyle(MLBI.gold).padding(.top, 18)
+                    Text(read).font(GaryFonts.text(13)).foregroundStyle(MLBI.ink2).padding(.top, 7).fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
-                Text(Self.weather.helps ? "HITTER" : "PITCHER").font(GaryFonts.mono(9, bold: true))
-                    .foregroundStyle(MLBI.hot).padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(Capsule().fill(MLBI.hot.opacity(0.18)))
-            }.padding(.top, 22)
-            HStack(spacing: 8) {
-                wxCell("\(Self.weather.temp)°", "TEMP")
-                wxCell("\(Self.weather.windMph)", "MPH \(Self.weather.dir)")
-                wxCell("41%", "HUMIDITY")
-            }.padding(.top, 16)
-            Text("THE READ").font(GaryFonts.mono(9, bold: true)).tracking(1.2).foregroundStyle(MLBI.gold).padding(.top, 18)
-            Text("Wind blowing out to \(Self.weather.dir) at \(Self.weather.windMph) — the orange zone on the field. Lifts carry for the left-handed pull bats and nudges the team total OVER + anytime-HR markets.")
-                .font(GaryFonts.text(13)).foregroundStyle(MLBI.ink2).padding(.top, 7).fixedSize(horizontal: false, vertical: true)
-            Spacer()
+            }
         }
-        .padding(.horizontal, 20).frame(maxWidth: .infinity, alignment: .leading).background(Color(hex: "#0F1612").ignoresSafeArea())
+        .padding(.horizontal, 20).padding(.bottom, 22).frame(maxWidth: .infinity, alignment: .leading).background(Color(hex: "#0F1612").ignoresSafeArea())
     }
 
     private func wxCell(_ v: String, _ k: String) -> some View {
@@ -457,9 +462,16 @@ struct MLBGameIntelView: View {
 
     private func heatColor(_ h: String) -> Color { h == "hot" ? MLBI.hot : h == "cold" ? MLBI.cold : MLBI.steady }
 
-    // Sample weather (labelled) — roof open, wind out to right-centre.
-    fileprivate static let weather = MLBWeather(temp: 78, windMph: 12, dir: "RC", roofOpen: true, helps: true,
-                                    carry: CGPoint(x: 165, y: 95))
+    // Real first-pitch conditions from the live park_weather insight (nil until it posts; mock deleted).
+    private var weather: MLBWeather? {
+        guard let w = parkEdges.first(where: { $0.weather != nil })?.weather else { return nil }
+        let lean = w.lean ?? "over"
+        return MLBWeather(temp: w.temp_f ?? 0, windMph: w.wind_mph ?? 0, dir: (w.wind_dir ?? "").uppercased(),
+                          helps: lean == "over", venue: w.venue, condition: w.condition,
+                          carry: CGPoint(x: lean == "over" ? 165 : 125, y: 95))
+    }
+    // THE READ prose — the real over/under-aware string the backend already writes for this game.
+    private var weatherRead: String? { parkEdges.first(where: { $0.weather != nil })?.detail }
 
     // Labelled sample lineup at standard fielding positions, spread for legibility.
     private static let lineup: [MLBFielder] = [
@@ -627,13 +639,10 @@ struct PlayerCardV4: View {
                 Text(pack?.name ?? name)
                     .font(GaryFonts.display(38)).foregroundStyle(PCV4.ink).lineLimit(2).minimumScaleFactor(0.7)
                 Spacer()
-                VStack(alignment: .trailing, spacing: 7) {
-                    Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 30, height: 30).opacity(0.9)
-                    if heat == "hot" {
-                        chip("▲ HOT")
-                    } else if heat == "cold" {
-                        chip("▼ COLD")
-                    }
+                if heat == "hot" {
+                    chip("▲ HOT")
+                } else if heat == "cold" {
+                    chip("▼ COLD")
                 }
             }
             if let id = identityLine {

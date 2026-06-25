@@ -112,6 +112,13 @@ struct SwapMeta: Decodable {
     let barrel: Double?      // barrel% allowed
     let opp: String?         // opponent abbreviation faced
     let verdict: String?     // one-line conviction read (Hub voice)
+    // Park-weather payload (kind == "park_weather"): live first-pitch conditions.
+    let temp_f: Int?         // °F
+    let wind_mph: Int?       // mph
+    let wind_dir: String?    // "out" | "in" | "cross" (lean axis, not field bearing)
+    let lean: String?        // "over" (hitter) | "under" (pitcher)
+    let venue: String?
+    let condition: String?   // "Partly Cloudy" etc.
 }
 
 /// One team's confirmed starting XI (WC Confirmed XI lane).

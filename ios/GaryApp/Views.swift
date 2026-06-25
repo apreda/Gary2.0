@@ -16198,6 +16198,8 @@ struct Signal: Identifiable {
     /// Regression payload (pitcher rows) — direction, ERA/xERA, peripherals and
     /// the verdict. `reg.day` ("tonight"/"tomorrow") splits the Regression Board.
     var reg: SwapMeta? = nil
+    /// Live first-pitch park-weather payload (park_weather lane) — temp/wind/lean drive the MLB weather chip + sheet.
+    var weather: SwapMeta? = nil
 }
 
 // MARK: - Picks Tab (per-game swipe carousel: Today's Top + game-by-game)
@@ -17957,7 +17959,8 @@ extension Connection {
             resultNote: result_note,
             swap: (meta?.kind == "swap") ? meta : nil,
             confirmedXI: (meta?.kind == "confirmedXI") ? meta : nil,
-            reg: (meta?.kind == "regression_pitcher") ? meta : nil
+            reg: (meta?.kind == "regression_pitcher") ? meta : nil,
+            weather: (meta?.kind == "park_weather") ? meta : nil
         )
     }
 }
