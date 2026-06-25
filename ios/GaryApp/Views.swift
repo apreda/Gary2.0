@@ -1909,13 +1909,18 @@ struct HomeView: View {
                     // This reduces load time from ~600ms to ~200ms
 
                     let date = SupabaseAPI.todayEST()
+                    // Pull-to-refresh bumps homeNonce (starts at 0 = first load). On a pull we
+                    // MUST bypass the per-date cache, or the refresh just re-reads stale data
+                    // (this is the "pull-to-refresh shows no new picks/props" bug). Matches the
+                    // Picks/Props tabs, which already pass forceRefresh: true on their .refreshable.
+                    let forceFresh = homeNonce > 0
 
                     // Start all fetches in parallel using async let
                     async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
                     async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
                     async let formFetch = SupabaseAPI.fetchSevenDayFormBySport()
-                    async let picksFetch = SupabaseAPI.fetchAllPicks(date: date)
-                    async let propPicksFetch = SupabaseAPI.fetchPropPicks(date: date)
+                    async let picksFetch = SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceFresh)
+                    async let propPicksFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceFresh)
                     // Pull the full recent window (not just 30) so the morning recap's
                     // game record counts EVERY graded game pick from the night's slate —
                     // with "Gary picks every game" a single day's slate can exceed 30, and
