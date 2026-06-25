@@ -1729,6 +1729,8 @@ struct HomeView: View {
     /// The settled night's combined record (games + props) — the scorecard's
     /// ledger, same set as net + best cash.
     @State private var lastNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
+    /// "TODAY" once the rolling recap has crossed into today's graded picks, else "LAST NIGHT".
+    @State private var recapLabel: String = "LAST NIGHT"
     /// GAME picks only — the fresh-day recap pop-up's ledger (props keep
     /// their own strip in the box scores; user call, Jun 11).
     @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
@@ -1951,6 +1953,14 @@ struct HomeView: View {
                     let recentGameResults = (try? await gameResultsFetch) ?? []
                     let recentPropResults = (try? await propResultsFetch) ?? []
 
+                    // Rolling recap anchor: the most recent SETTLED day INCLUDING today, so the
+                    // scorecard + prop box + highlights roll from yesterday into today as today's
+                    // picks grade. recapLabel reads "TODAY" once we've crossed over.
+                    let recapDays = recentGameResults.filter { ["won","lost","push"].contains($0.result ?? "") }.compactMap { $0.game_date }
+                                  + recentPropResults.filter { ["won","lost","push"].contains($0.result ?? "") }.compactMap { $0.game_date }
+                    let recapDay = Set(recapDays).max()
+                    recapLabel = (recapDay == SupabaseAPI.todayEST()) ? "TODAY" : "LAST NIGHT"
+
                     // ③ The marquee + biggest cashes + masthead units — one
                     // pass over the latest settled night. Template-built, no AI.
                     let night = Self.buildLastNight(games: recentGameResults, props: recentPropResults)
@@ -1984,7 +1994,7 @@ struct HomeView: View {
                     bestCashOdds = night.bestOdds
 
                     // Fresh-day recap pop-up — GAME picks only, once per day.
-                    let gamesNight = Self.buildLastNight(games: recentGameResults, props: [])
+                    let gamesNight = Self.buildLastNight(games: recentGameResults, props: [], includeToday: false)
                     gamesNightRecord = gamesNight.record
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
@@ -2067,7 +2077,7 @@ struct HomeView: View {
                     nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
                     slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
-                    nightHighlights = await SupabaseAPI.fetchNightHighlights(date: SupabaseAPI.hubGradedDateEST())
+                    nightHighlights = await SupabaseAPI.fetchNightHighlights(date: recapDay ?? SupabaseAPI.hubGradedDateEST())
                     homeStreaks = await SupabaseAPI.fetchStreaks()
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
@@ -2917,7 +2927,7 @@ struct HomeView: View {
                     tint: TeamColors.color(for: h.team))
             }
             tabs.append(HomePropBoxSection.Tab(
-                label: c.label, title: "\(all.count) \(c.noun)", status: "LAST NIGHT",
+                label: c.label, title: "\(all.count) \(c.noun)", status: recapLabel,
                 cols: ("PLAYER", "TEAM", "NIGHT"), rows: Array(rows)))
         }
         return tabs
@@ -2949,7 +2959,7 @@ struct HomeView: View {
         let allRows = Array(byConf.filter { $0.result == "won" }.prefix(2).map(row))
                     + Array(byConf.filter { $0.result == "lost" }.prefix(2).map(row))
         if !allRows.isEmpty {
-            options.append(.init(label: "ALL", status: "LAST NIGHT", rows: allRows))
+            options.append(.init(label: "ALL", status: latest == SupabaseAPI.todayEST() ? "TODAY" : "LAST NIGHT", rows: allRows))
         }
 
         // One option per game Gary had props in — densest first.
@@ -3025,7 +3035,7 @@ struct HomeView: View {
                 // last night's slate (feedback: unlabeled windows next to the
                 // form lane's L10 numbers read contradictory).
                 scoreCell(Self.recordLine(lastNightRecord.w, lastNightRecord.l, lastNightRecord.p),
-                          "LAST NIGHT", .white.opacity(0.92))
+                          recapLabel, .white.opacity(0.92))
                 if let net = lastNightNet {
                     Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
                     scoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
@@ -3305,7 +3315,7 @@ struct HomeView: View {
     /// One pass over the latest settled night: the marquee story (biggest
     /// cash, or the owned miss), the Biggest Cashes rows, and net units.
     /// All template — honesty is the brand, so the net includes the losses.
-    private static func buildLastNight(games: [GameResult], props: [PropResult])
+    private static func buildLastNight(games: [GameResult], props: [PropResult], includeToday: Bool = true)
         -> (story: HomeMarqueeHero.Story?, marqueeGame: GameResult?, cashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?, record: (w: Int, l: Int, p: Int)) {
 
         let settledGames = games.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
@@ -3319,8 +3329,11 @@ struct HomeView: View {
         // rollover merge. Exclude TODAY so this morning's early games (a WC dawn kickoff)
         // never leak into yesterday's recap; an empty/off day falls back to the prior slate.
         let today = SupabaseAPI.todayEST()
-        let prior = Set(days).filter { $0 < today }
-        guard let anchor = prior.max() else { return (nil, nil, [], nil, 0, 0, nil, (0, 0, 0)) }
+        // includeToday=true: ROLLING recap — the scorecard/prop box build out of yesterday into
+        // today as today's picks grade (label tracks the day). includeToday=false: yesterday-only,
+        // for the once-a-day recap pop-up (never this morning's partial slate).
+        let candidate = includeToday ? Set(days) : Set(days).filter { $0 < today }
+        guard let anchor = candidate.max() else { return (nil, nil, [], nil, 0, 0, nil, (0, 0, 0)) }
         let nightSet: Set<String> = [anchor]
         let nightGames = settledGames.filter { nightSet.contains($0.game_date ?? "") }
         let nightProps = settledProps.filter { nightSet.contains($0.game_date ?? "") }
