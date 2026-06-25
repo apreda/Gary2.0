@@ -4510,11 +4510,11 @@ struct HomeGarysForm: View {
 /// favorites, dog flat-stake units. Data only, no commentary.
 struct HomeMarketPulseStrip: View {
     let rows: [SupabaseAPI.MarketPulseRow]
-    private var oversW: Int { rows.reduce(0) { $0 + ($1.overs_wins ?? 0) } }
-    private var oversL: Int { rows.reduce(0) { $0 + ($1.overs_losses ?? 0) } }
     private var favW: Int { rows.reduce(0) { $0 + ($1.fav_wins ?? 0) } }
     private var favL: Int { rows.reduce(0) { $0 + ($1.fav_losses ?? 0) } }
-    private var dogNet: Double { rows.reduce(0) { $0 + ($1.dog_net_units ?? 0) } }
+    private var oversW: Int { rows.reduce(0) { $0 + ($1.overs_wins ?? 0) } }
+    private var oversL: Int { rows.reduce(0) { $0 + ($1.overs_losses ?? 0) } }
+    private var games: Int { rows.reduce(0) { $0 + ($1.games_counted ?? 0) } }
 
     private func stat(_ v: String, _ k: String, _ color: Color = .white.opacity(0.92)) -> some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -4523,14 +4523,15 @@ struct HomeMarketPulseStrip: View {
         }
     }
 
+    // Records, not units — how the whole slate broke last night, ALL sports combined
+    // (favorites vs dogs, overs vs unders). Not Gary's picks; the market itself.
     var body: some View {
         HStack {
-            stat("OVERS \(oversW)–\(oversL)", "LAST NIGHT")
+            stat("FAVES \(favW)–\(favL)", "FAVE / DOG")
             Spacer()
-            stat("FAVES \(favW)–\(favL)", "ML")
+            stat("OVERS \(oversW)–\(oversL)", "OVER / UNDER")
             Spacer()
-            stat(String(format: "DOGS %+.1fU", dogNet), "FLAT STAKES",
-                 dogNet >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+            stat("\(games) GAMES", "ALL SPORTS")
         }
         .padding(.vertical, 12).padding(.horizontal, 14)
         .quantPanel()

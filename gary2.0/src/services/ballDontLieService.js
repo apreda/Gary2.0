@@ -5202,14 +5202,22 @@ const ballDontLieService = {
       if (gameIds?.length) params.game_ids = gameIds;
       if (dates?.length) params.dates = dates;
       if (!gameIds?.length && !dates?.length) return [];
+      params.per_page = 100; // BDL defaults to 25 → a busy date paginates; pull every page
       const cacheKey = `mlb_odds_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/odds${buildQuery(params)}`;
-        console.log(`[BDL] Fetching MLB odds`);
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        const odds = response.data?.data || [];
-        console.log(`[BDL] MLB odds: ${odds.length} records`);
-        return odds;
+        const all = [];
+        let cursor = null;
+        let pages = 0;
+        do {
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/odds${buildQuery(cursor != null ? { ...params, cursor } : params)}`;
+          console.log(`[BDL] Fetching MLB odds${cursor != null ? ` (page ${pages + 1})` : ''}`);
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          all.push(...(response.data?.data || []));
+          cursor = response.data?.meta?.next_cursor ?? null;
+          pages += 1;
+        } while (cursor != null && pages < 8);
+        console.log(`[BDL] MLB odds: ${all.length} records (${pages} page${pages === 1 ? '' : 's'})`);
+        return all;
       }, ttlMinutes);
     } catch (error) {
       console.error(`[BDL] MLB odds error:`, error?.response?.data || error.message);
