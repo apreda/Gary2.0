@@ -2028,7 +2028,7 @@ struct HomeView: View {
                         pulse = await SupabaseAPI.fetchMarketPulse(date: pulseBack)
                     }
                     pulseRows = pulse
-                    propBoxGames = Self.buildPropBoxGames(props: recentPropResults, games: recentGameResults)
+                    propBoxGames = Self.buildPropBoxGames(props: recentPropResults, games: recentGameResults, anchor: recapDay, label: recapLabel)
 
                     // ⑤ Door counts — live games + edges posted tonight.
                     let liveRows = await liveFetch
@@ -2296,7 +2296,7 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         }
-        if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
+        if lastNightGraded > 0 {
             scorecard
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
@@ -2936,10 +2936,12 @@ struct HomeView: View {
     /// THE BOX's game dropdown: an "ALL" option (Gary's 2 best winners + 2 best
     /// losers from last night's graded props), then one option per game Gary had
     /// props in — densest first, the game's final score as the label.
-    static func buildPropBoxGames(props: [PropResult], games: [GameResult]) -> [HomePropBoxSection.GameOption] {
+    static func buildPropBoxGames(props: [PropResult], games: [GameResult], anchor: String?, label: String) -> [HomePropBoxSection.GameOption] {
+        // Driven off the SAME rolling anchor (recapDay) + label as the scorecard + HR tabs,
+        // so THE BOX never reads "LAST NIGHT" while the scorecard one row up reads "TODAY".
         let graded = props.filter { ["won", "lost", "push"].contains($0.result ?? "") }
-        guard let latest = graded.compactMap({ $0.game_date }).max() else { return [] }
-        let day = graded.filter { $0.game_date == latest }
+        guard let anchor = anchor else { return [] }
+        let day = graded.filter { $0.game_date == anchor }
         guard !day.isEmpty else { return [] }
 
         func row(_ p: PropResult) -> HomePropBoxSection.Row {
@@ -2959,7 +2961,7 @@ struct HomeView: View {
         let allRows = Array(byConf.filter { $0.result == "won" }.prefix(2).map(row))
                     + Array(byConf.filter { $0.result == "lost" }.prefix(2).map(row))
         if !allRows.isEmpty {
-            options.append(.init(label: "ALL", status: latest == SupabaseAPI.todayEST() ? "TODAY" : "LAST NIGHT", rows: allRows))
+            options.append(.init(label: "ALL", status: label, rows: allRows))
         }
 
         // One option per game Gary had props in — densest first.
@@ -2969,7 +2971,7 @@ struct HomeView: View {
         }
         for (matchup, gprops) in ordered {
             var label = matchup
-            if let g = games.first(where: { $0.game_date == latest && ($0.matchup ?? "") == matchup }),
+            if let g = games.first(where: { $0.game_date == anchor && ($0.matchup ?? "") == matchup }),
                let score = g.final_score?.split(separator: "-"), score.count == 2 {
                 let parts = matchup.components(separatedBy: " @ ")
                 if parts.count == 2 {
