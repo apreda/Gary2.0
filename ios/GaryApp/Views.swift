@@ -1744,6 +1744,7 @@ struct HomeView: View {
     @State private var yesterdayTopPropResult: String? = nil
     // Front-page modules
     @State private var marquee: HomeMarqueeHero.Story? = nil
+    @State private var cachedHeadlines: [HomeMarqueeHero.Story]? = nil   // instant cold-open paint
     @State private var cashRows: [HomeCashesSection.Row] = []
     @State private var worstBeat: HomeCashesSection.Row? = nil
     @State private var lastNightNet: Double? = nil
@@ -1900,6 +1901,8 @@ struct HomeView: View {
             default: break
             }
             #endif
+            // Paint last session's headline cards instantly (load() re-validates the day key).
+            if cachedHeadlines == nil { cachedHeadlines = HomeHeadlinesCache.load() }
             do {
                 try await withTimeout(seconds: 30) {
                     // PARALLEL FETCH: Run all independent API calls simultaneously
@@ -2057,6 +2060,7 @@ struct HomeView: View {
                     // The night's stories for the player (graded date = the
                     // same night the marquee covers).
                     nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
+                    HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
                     slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
                     nightHighlights = await SupabaseAPI.fetchNightHighlights(date: SupabaseAPI.hubGradedDateEST())
                     homeStreaks = await SupabaseAPI.fetchStreaks()
@@ -2212,6 +2216,8 @@ struct HomeView: View {
     }
 
     private var headlineStories: [HomeMarqueeHero.Story] {
+        // Paint last session's cards instantly on cold open; live wins the instant marquee lands.
+        if marquee == nil, let cached = cachedHeadlines { return cached }
         var out: [HomeMarqueeHero.Story] = []
         if var m = marquee {
             // The marquee leads, wearing the clean game_recaps headline + recap body +
@@ -3491,8 +3497,32 @@ struct HomeView: View {
 /// ③ The Marquee — last night's story as a static hero (no footage, no
 /// logos: facts are free). League chip up top, the game headline, and the
 /// receipt bar: "Gary had it · Phillies TT over 4.5 — CASHED +145".
+// Day-keyed on-disk cache of the derived headline cards, so the Home marquee paints instantly
+// on cold open and then refreshes. Keyed on the graded night (rolls 3am EST) so it can never
+// surface yesterday's card today; never stores [] so a transient failure can't poison it.
+private struct HomeHeadlinesCacheEntry: Codable {
+    let payloadDayKey: String
+    let stories: [HomeMarqueeHero.Story]
+}
+enum HomeHeadlinesCache {
+    private static let key = "homeHeadlines"
+    static func load() -> [HomeMarqueeHero.Story]? {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let entry = try? JSONDecoder().decode(HomeHeadlinesCacheEntry.self, from: data),
+              entry.payloadDayKey == SupabaseAPI.hubGradedDateEST(),
+              !entry.stories.isEmpty
+        else { return nil }
+        return entry.stories
+    }
+    static func save(_ stories: [HomeMarqueeHero.Story]) {
+        guard !stories.isEmpty else { return }
+        let entry = HomeHeadlinesCacheEntry(payloadDayKey: SupabaseAPI.hubGradedDateEST(), stories: stories)
+        if let data = try? JSONEncoder().encode(entry) { UserDefaults.standard.set(data, forKey: key) }
+    }
+}
+
 struct HomeMarqueeHero: View {
-    struct Story {
+    struct Story: Codable {
         let league: String
         var headline: String
         let sub: String

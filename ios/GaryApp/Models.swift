@@ -255,7 +255,7 @@ struct NightHighlightRow: Decodable {
 }
 
 // MARK: - Pick Fact Check (claims from the rationale, graded vs reality)
-struct FactClaim: Decodable {
+struct FactClaim: Codable {
     let claim: String?
     let verdict: String?   // "right" | "wrong" | "unclear"
     let note: String?
