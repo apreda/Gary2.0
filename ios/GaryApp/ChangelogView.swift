@@ -58,9 +58,10 @@ let changelogEntries: [ChangelogEntry] = [
         type: .update,
         title: "Gary 2.17 — A sharper player card and cleaner World Cup reads",
         changes: [
-            "Player breakdown cards are redesigned — matte black with a gold edge and Gary's mark, floating front and center",
-            "World Cup game intel now reads \"Venue\" instead of \"Ballpark\"",
-            "Settled cards show the team beside each score, and doubleheaders no longer show the wrong game's result",
+            "Redesigned player breakdown cards — matte black with a gold edge and Gary's mark — that expand to advanced stats, park splits, and the matchup; far more players now have a full card",
+            "Deeper World Cup intel in the Hub: new xG Regression, Advancement, and xG Recap reads",
+            "The Home screen's headlines now load instantly",
+            "Settled cards show the team beside each score, doubleheaders show the right result, and the World Cup reads \"Venue\"",
         ]
     ),
     ChangelogEntry(
