@@ -78,6 +78,9 @@ import { computeWcXgRegression } from './computers/wcXgRegression.js';
 // Group-stage advancement odds — the bookmakers' 'to qualify from group' market per team.
 import { computeWcAdvancementOdds } from './computers/wcAdvancementOdds.js';
 import { computeWcConfirmedXI } from './computers/wcConfirmedXI.js';
+// Live match-day weather (Open-Meteo by stadium lat/long) — complements wcVenueEdge's
+// static altitude/roof facts with the actual forecast at kickoff. Skips roofed venues.
+import { computeWcWeather } from './computers/wcWeather.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -122,6 +125,7 @@ const WC_COMPUTERS = [
   computeWcXgRegression,
   computeWcAdvancementOdds,
   computeWcConfirmedXI, // confirmed-XI shape/availability edges (match-day only — needs posted lineups)
+  computeWcWeather,     // live match-day forecast (heat/wind/rain) per fixture
 ];
 
 const WC_PREVIEW_COMPUTERS = [
@@ -135,6 +139,7 @@ const WC_PREVIEW_COMPUTERS = [
   computeWcXg,
   computeWcXgRegression,
   computeWcAdvancementOdds,
+  computeWcWeather,
 ];
 
 const COMPUTERS_BY_LEAGUE = {

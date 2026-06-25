@@ -215,8 +215,9 @@ function buildVenueRow(match) {
 
 // --- venue lookup ----------------------------------------------------------
 
-/** Match a fixture's stadium name to its static facts by keyword / alias. */
-function lookupVenue(venueName) {
+/** Match a fixture's stadium name to its static facts by keyword / alias.
+ *  Exported so wcWeather can share the roof table (skip climate-controlled venues). */
+export function lookupVenue(venueName) {
   const key = String(venueName || '').toLowerCase();
   if (!key) return null;
   for (const f of VENUE_FACTS) {
