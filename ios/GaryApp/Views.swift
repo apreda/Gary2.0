@@ -19519,18 +19519,17 @@ struct PlayerInsightSheet: View {
     @State private var loading = true
 
     var body: some View {
-        // Unified with the lineup carousel — the same v4 card, with the Hub's "why this
-        // surfaced" lane verdict carried in as the edge hero.
-        ScrollView(showsIndicators: false) {
-            PlayerCardV4(
-                name: pack?.name ?? fallbackName,
-                game: (pack?.game ?? signal?.game) ?? "",
-                pack: pack,
-                loading: loading,
-                edge: hubEdge
-            )
-            .padding(16).padding(.top, 6)
-        }
+        // Unified with the lineup carousel — the same v4 card (which has its OWN internal
+        // ScrollView, so NO outer ScrollView here — nesting two vertical scrollers breaks
+        // scrolling), with the Hub's "why this surfaced" lane verdict as the edge hero.
+        PlayerCardV4(
+            name: pack?.name ?? fallbackName,
+            game: (pack?.game ?? signal?.game) ?? "",
+            pack: pack,
+            loading: loading,
+            edge: hubEdge
+        )
+        .padding(16)
         .background(GaryColors.darkBg.ignoresSafeArea())
         .overlay(alignment: .topTrailing) {
             Button { dismiss() } label: {

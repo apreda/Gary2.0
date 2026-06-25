@@ -50,8 +50,8 @@ private struct MLBFielder: Identifiable {
 
 private struct MLBWeather {
     let temp: Int, windMph: Int, dir: String, roofOpen: Bool, helps: Bool
-    // carry-zone centre in data space + wind-arrow start/end
-    let carry: CGPoint, windFrom: CGPoint, windTo: CGPoint
+    // carry-zone centre in data space (wind arrow removed — founder call)
+    let carry: CGPoint
 }
 
 // Shared data→view transform.
@@ -459,7 +459,7 @@ struct MLBGameIntelView: View {
 
     // Sample weather (labelled) — roof open, wind out to right-centre.
     fileprivate static let weather = MLBWeather(temp: 78, windMph: 12, dir: "RC", roofOpen: true, helps: true,
-                                    carry: CGPoint(x: 165, y: 95), windFrom: CGPoint(x: 128, y: 150), windTo: CGPoint(x: 168, y: 95))
+                                    carry: CGPoint(x: 165, y: 95))
 
     // Labelled sample lineup at standard fielding positions, spread for legibility.
     private static let lineup: [MLBFielder] = [

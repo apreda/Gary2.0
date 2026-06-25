@@ -440,6 +440,7 @@ struct GaryPick: Identifiable, Codable {
 
         return GaryPick(
             pick_id: dict["pick_id"] as? String,
+            game_id: (dict["game_id"] as? NSNumber)?.intValue,
             pick: dict["pick"] as? String,
             rationale: dict["rationale"] as? String,
             league: dict["league"] as? String,
@@ -1199,7 +1200,7 @@ struct PropPick: Identifiable, Codable {
 
     // CodingKeys to map snake_case from JSON
     enum CodingKeys: String, CodingKey {
-        case player, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats
+        case player, game_id, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats
         case commence_time = "commence_time"
         case tdCategory = "td_category"
     }
@@ -1250,6 +1251,7 @@ struct PropPick: Identifiable, Codable {
         
         return PropPick(
             player: dict["player"] as? String,
+            game_id: (dict["game_id"] as? NSNumber)?.intValue,
             team: dict["team"] as? String,
             prop: dict["prop"] as? String,
             bet: dict["bet"] as? String,
