@@ -674,7 +674,7 @@ private struct GaryCharacterView: View {
     let amplitude: CGFloat
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: false)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: state == .idle)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
                 let size = min(geo.size.width, geo.size.height)

@@ -2041,24 +2041,25 @@ struct HomeView: View {
                     initialLive = liveRows
 
                     // Record box rolls on the EST slate day (todayEST() = 3am-ET anchor,
-                    // same as the Regression Board/recap). Once today's first game has
-                    // STARTED (any of today's games live or final), show TODAY's live
-                    // record — W-L of today's graded picks so far, 0-0 if none graded yet,
-                    // never a stale prior number. Updates as today's picks grade; once the
-                    // day rolls over the box's date moves and it reads "YESTERDAY" again.
+                    // same as the Regression Board/recap). Grading only runs ~3x/day, so a
+                    // bare live/final trigger would flip the box to "TODAY 0-0" the instant
+                    // a game went live and leave "0-0" reading as a real result for hours.
+                    // Instead: only switch to TODAY/LIVE once at least one of today's picks
+                    // has actually GRADED — until then keep showing YESTERDAY's record.
+                    // Updates as today's picks grade; once the day rolls over the box's date
+                    // moves and it reads "YESTERDAY" again.
                     let slateDay = SupabaseAPI.todayEST()
-                    let todayStarted = liveRows.contains { $0.isLive || $0.isFinal }
-                        || recentGameResults.contains { $0.game_date == slateDay && ["won","lost","push"].contains($0.result ?? "") }
-                    if todayStarted {
-                        var w = 0, l = 0, p = 0
-                        for r in recentGameResults where r.game_date == slateDay {
-                            switch (r.result ?? "").lowercased() {
-                            case "won", "win", "w": w += 1
-                            case "lost", "loss", "l": l += 1
-                            case "push", "p": p += 1
-                            default: break
-                            }
+                    var w = 0, l = 0, p = 0
+                    for r in recentGameResults where r.game_date == slateDay {
+                        switch (r.result ?? "").lowercased() {
+                        case "won", "win", "w": w += 1
+                        case "lost", "loss", "l": l += 1
+                        case "push", "p": p += 1
+                        default: break
                         }
+                    }
+                    let todayGradedCount = w + l + p
+                    if todayGradedCount > 0 {
                         yesterdayRecord = (w, l, p)
                         recordBoxLabel = liveRows.contains { $0.isLive } ? "LIVE" : "TODAY"
                     } else {
@@ -2314,8 +2315,17 @@ struct HomeView: View {
         }
         if !sevenDayForm.isEmpty {
             HomeFormSection(records: sevenDayForm, yesterday: yesterdayRecord, recordLabel: recordBoxLabel,
-                            // The record box re-opens the once/day recap popup so users can re-check it.
-                            onYesterday: { withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true } })
+                            // While the box reads YESTERDAY, re-open the once/day recap popup
+                            // (the popup is hard-anchored to last night, so it only makes sense
+                            // there). Once the box flips to TODAY/LIVE, a "last night" popup over
+                            // a TODAY label would mismatch — route the tap to the Winners tab.
+                            onYesterday: {
+                                if recordBoxLabel == "YESTERDAY" {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true }
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+                                }
+                            })
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
@@ -16836,8 +16846,6 @@ struct PicksCarouselView: View {
     @State private var sport = "ALL"
     @State private var page = 0
     @State private var selectedProp: PropPick?
-    /// Shared-element namespace for the sliding gold underline under the active matchup tab.
-    @Namespace private var pickTabNS
 
     /// Every league with content: today's props/picks plus the per-sport
     /// yesterday recaps (a sport with no picks today shows its results —
@@ -17867,13 +17875,17 @@ struct PulseTable: View {
                 Text(value)
                     .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
                     .lineLimit(1)
-                if let team = cell["team"], !team.isEmpty {
+                if let team = cell["team"], !team.isEmpty, col.key != "team" {
                     Text(team.uppercased())
                         .font(GaryFonts.mono(9))
                         .foregroundStyle(.white.opacity(0.4))
                 }
                 trendChip(cell["trend"])
             }
+        } else if col.key == "trend" {
+            // The trend is already represented by the ▲/▼ chip in the primary cell —
+            // don't also draw the raw "hot"/"cold" word as a duplicate column.
+            EmptyView()
         } else {
             Text(value.isEmpty ? "—" : value)
                 .font(emphasisFont(col.emphasis))

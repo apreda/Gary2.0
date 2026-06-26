@@ -197,12 +197,19 @@ async function deleteDayRows(date, league) {
 }
 
 /**
- * Delete the existing situational confirmedXI row(s) for one (date, league, game)
+ * Delete the existing confirmedXI situational row(s) for one (date, league, game)
  * so the confirmedXI lane can UPGRADE IN PLACE (projected < contested < confirmed)
  * instead of being frozen by the additive-freeze. EXEMPTION FOR confirmedXI ONLY —
  * every other lane keeps first-write-wins. The confirmedXI lane re-keys to the same
  * `situational|||<game_id>` rowKey on every run, so without this the freshly-computed
  * 'confirmed' row gets dropped and a live game stays stuck on "LINEUP NOT CONFIRMED YET".
+ *
+ * SCOPED by `meta->>'kind'='confirmedXI'`: category='situational' is SHARED by two WC
+ * lanes — confirmedXI AND wcRestEdge (the Rest & Fatigue card). A blanket category-only
+ * delete would wipe the sibling wcRestEdge row whenever it's absent from this run's fresh
+ * rows (e.g. a transient getMatches failure), permanently losing the Rest & Fatigue card
+ * for the day. The jsonb `kind` discriminator ensures only confirmedXI rows are removed;
+ * the wcRestEdge sibling is never touched and keeps its normal first-write-wins freeze.
  */
 async function deleteSituationalRowForGame(date, league, gameId) {
   await axios({
@@ -214,6 +221,7 @@ async function deleteSituationalRowForGame(date, league, gameId) {
       league: `eq.${league}`,
       category: `eq.situational`,
       game_id: `eq.${gameId}`,
+      'meta->>kind': `eq.confirmedXI`,
     },
   });
 }
@@ -491,22 +499,33 @@ async function run() {
       let upgraded = 0;
       for (const gameId of confirmedXiGameIds) {
         await deleteSituationalRowForGame(targetDate, league, gameId);
-        // Re-insert ALL of this run's situational rows for that game (the confirmedXI
-        // rows PLUS any sibling situational rows e.g. rest-edge), since the delete
-        // cleared the whole game's situational slot.
-        const gameSituational = rows.filter(
-          (r) => r.category === 'situational' && String(r.game_id) === gameId
+        // Re-insert ONLY this run's confirmedXI situational rows for that game — the
+        // scoped delete above removed only kind='confirmedXI' rows, so any sibling
+        // situational row (e.g. wcRestEdge / Rest & Fatigue) is untouched in the DB
+        // and must NOT be re-inserted here (that would duplicate it). The sibling
+        // keeps its normal first-write-wins freeze below.
+        const gameConfirmedXi = rows.filter(
+          (r) =>
+            r.category === 'situational' &&
+            r.meta?.kind === 'confirmedXI' &&
+            String(r.game_id) === gameId
         );
-        if (gameSituational.length) await insertRows(gameSituational);
-        upgraded += gameSituational.length;
+        if (gameConfirmedXi.length) await insertRows(gameConfirmedXi);
+        upgraded += gameConfirmedXi.length;
       }
 
-      // Additive-freeze for every other row (first-write-wins). The confirmedXI
-      // games' situational rows were just written above, so exclude them here.
+      // Additive-freeze for every other row (first-write-wins). The confirmedXI rows
+      // for those games were just written above, so exclude ONLY them here — sibling
+      // situational rows (e.g. wcRestEdge) still flow through the normal freeze so a
+      // fresh one lands once and an existing one is preserved.
       const seen = await existingKeys(targetDate, league);
       const fresh = rows.filter(
         (r) =>
-          !(r.category === 'situational' && confirmedXiGameIds.has(String(r.game_id))) &&
+          !(
+            r.category === 'situational' &&
+            r.meta?.kind === 'confirmedXI' &&
+            confirmedXiGameIds.has(String(r.game_id))
+          ) &&
           !seen.has(rowKey(r))
       );
       if (fresh.length) await insertRows(fresh);
