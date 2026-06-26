@@ -540,9 +540,11 @@ enum SupabaseAPI {
     /// renders every tab with no per-tab code. 30-min in-memory cache (keyed by
     /// date+league), [] on any failure — the section then collapses.
     private static var _leaguePulseCache: [String: (rows: [LeaguePulseRow], at: Date)] = [:]
-    static func fetchLeaguePulse(date: String, league: String) async -> [LeaguePulseRow] {
+    /// - Parameter forceRefresh: bypass the 30-min cache (pull-to-refresh / EST
+    ///   day rollover) so a manual refresh and the 3am slate flip always refetch.
+    static func fetchLeaguePulse(date: String, league: String, forceRefresh: Bool = false) async -> [LeaguePulseRow] {
         let cacheKey = "\(date)|\(league)"
-        if let c = _leaguePulseCache[cacheKey], Date().timeIntervalSince(c.at) < 1800 {
+        if !forceRefresh, let c = _leaguePulseCache[cacheKey], Date().timeIntervalSince(c.at) < 1800 {
             return c.rows
         }
         let url = buildURL(table: "league_pulse", query: [

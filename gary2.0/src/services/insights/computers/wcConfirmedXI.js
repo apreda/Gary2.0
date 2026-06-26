@@ -199,6 +199,12 @@ async function rowsForMatch(match, season, injStatus = new Map()) {
   });
   const meta = { kind: 'confirmedXI', status, home: sheet(h, home.name), away: sheet(a, away.name) };
   if (doubts.length) meta.doubts = doubts;
+  // Carry the real kickoff timestamp so the persistence layer can enforce a
+  // MONOTONIC-PAST-KICKOFF guard: once a game has stored status='confirmed' and
+  // kickoff has passed, a later run (e.g. BDL drops the sheet mid-match, flipping
+  // this back to 'projected') must NOT downgrade it. Grounded — the actual match
+  // datetime, never fabricated; null when the feed has no datetime.
+  if (match?.datetime) meta.kickoff = new Date(match.datetime).toISOString();
 
   // A projection isn't a real selection → carry the sheet so the field renders real
   // names, but make NO situational claim. The shape/rotation/keeper/benched reads

@@ -182,12 +182,32 @@ final class BillfoldSnapshotStore {
 
     private var snapshot: BillfoldSnapshot?
     private var inflightTask: Task<BillfoldSnapshot, Error>?
+    private var inflightWindowKey: String?
     private var generation: Int = 0
 
     private init() {}
 
-    fileprivate func cachedSnapshotIfFresh() -> BillfoldSnapshot? {
-        let activeWindow = SupabaseAPI.billfoldSnapshotWindowKey()
+    /// How far back the DEFAULT (non-all-time) snapshot pages history. 150 days
+    /// comfortably covers every bounded Billfold timeframe (7d/30d/90d) with
+    /// margin; YTD + all-time fetch full history (see `needsFullHistory`).
+    private static let defaultHistoryDays = 150
+
+    /// Timeframes whose window can exceed the bounded floor need full history.
+    /// YTD late in the year can reach ~365 days, so it joins all-time here.
+    static func needsFullHistory(timeframe: String) -> Bool {
+        timeframe == "all" || timeframe == "ytd"
+    }
+
+    /// The cache/window key, scoped by whether this is the bounded or the full
+    /// snapshot so a bounded snapshot is never handed back for an all-time
+    /// request (and vice versa).
+    private func windowKey(fullHistory: Bool) -> String {
+        let base = SupabaseAPI.billfoldSnapshotWindowKey()
+        return fullHistory ? "\(base)|full" : base
+    }
+
+    fileprivate func cachedSnapshotIfFresh(fullHistory: Bool = false) -> BillfoldSnapshot? {
+        let activeWindow = windowKey(fullHistory: fullHistory)
         guard let snapshot, snapshot.windowKey == activeWindow else { return nil }
         return snapshot
     }
@@ -196,28 +216,41 @@ final class BillfoldSnapshotStore {
         _ = try? await load()
     }
 
-    fileprivate func load(forceRefresh: Bool = false) async throws -> BillfoldSnapshot {
-        let activeWindow = SupabaseAPI.billfoldSnapshotWindowKey()
+    fileprivate func load(forceRefresh: Bool = false, fullHistory: Bool = false) async throws -> BillfoldSnapshot {
+        let activeWindow = windowKey(fullHistory: fullHistory)
 
         if !forceRefresh, let snapshot, snapshot.windowKey == activeWindow {
             return snapshot
         }
 
         if !forceRefresh, let inflightTask {
-            return try await inflightTask.value
+            // Only reuse the in-flight task if it's fetching the SAME breadth;
+            // an all-time request must not adopt a bounded fetch's result.
+            if inflightWindowKey == activeWindow {
+                return try await inflightTask.value
+            }
         }
 
-        if forceRefresh {
-            inflightTask?.cancel()
-        }
+        inflightTask?.cancel()
 
         generation += 1
         let requestGeneration = generation
 
-        let task = Task(priority: .utility) {
+        // Bound the default fetch to the last `defaultHistoryDays`; only an
+        // explicit all-time / YTD selection pages the entire history. This keeps
+        // the default 36h snapshot from downloading + decoding years of rows.
+        let since: String? = fullHistory
+            ? nil
+            : BillfoldCompute.dayFormatter.string(
+                from: Calendar.current.date(byAdding: .day, value: -Self.defaultHistoryDays, to: Date()) ?? Date())
+
+        // Detached (not the @MainActor-inherited `Task {}`) so BOTH the decode
+        // and the heavy `deriveState` run OFF the main actor; the resulting
+        // value-type snapshot is assigned back on MainActor below.
+        let task = Task.detached(priority: .utility) {
             let (games, props, picks) = try await withTimeout(seconds: 30) {
-                async let gameTask = SupabaseAPI.fetchAllGameResults(since: nil, forceRefresh: forceRefresh, billfold: true)
-                async let propTask = SupabaseAPI.fetchPropResults(since: nil, forceRefresh: forceRefresh, billfold: true)
+                async let gameTask = SupabaseAPI.fetchAllGameResults(since: since, forceRefresh: forceRefresh, billfold: true)
+                async let propTask = SupabaseAPI.fetchPropResults(since: since, forceRefresh: forceRefresh, billfold: true)
                 async let pickTask = SupabaseAPI.fetchAllDailyPicksRaw(forceRefresh: forceRefresh, billfold: true)
                 return try await (gameTask, propTask, pickTask)
             }
@@ -252,17 +285,20 @@ final class BillfoldSnapshotStore {
         }
 
         inflightTask = task
+        inflightWindowKey = activeWindow
 
         do {
             let freshSnapshot = try await task.value
             if requestGeneration == generation {
                 snapshot = freshSnapshot
                 inflightTask = nil
+                inflightWindowKey = nil
             }
             return freshSnapshot
         } catch {
             if requestGeneration == generation {
                 inflightTask = nil
+                inflightWindowKey = nil
             }
             throw error
         }
@@ -9984,12 +10020,22 @@ struct BillfoldView: View {
         }
         .onChange(of: selectedTab) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
         .onChange(of: selectedSport) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
-        .onChange(of: timeframe) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1 }
-        .onChange(of: sportTimeframe) { _ in recomputeCache() }
+        .onChange(of: timeframe) { _ in onTimeframeChange(); chartZoomScale = 1; chartZoomAnchor = 1 }
+        .onChange(of: sportTimeframe) { _ in onTimeframeChange() }
         .onChange(of: spreadSport) { _ in recomputeCache() }
-        .onChange(of: topdTimeframe) { _ in recomputeCache() }
+        .onChange(of: topdTimeframe) { _ in onTimeframeChange() }
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
+        }
+    }
+
+    /// A timeframe pick recomputes from the data already in hand. If it now
+    /// needs full history that the bounded snapshot doesn't have, also kick off
+    /// a full-history load — `applySnapshot` recomputes again once it lands.
+    private func onTimeframeChange() {
+        recomputeCache()
+        if needsFullHistory, BillfoldSnapshotStore.shared.cachedSnapshotIfFresh(fullHistory: true) == nil {
+            Task { await loadData() }
         }
     }
 
@@ -11393,14 +11439,24 @@ struct BillfoldView: View {
 
     // MARK: - Data Loading
 
+    /// True when any active timeframe selection needs the full (unbounded)
+    /// history — only then do we page the entire ledger. The default 7d/30d/90d
+    /// view is served from the bounded ~150-day snapshot.
+    private var needsFullHistory: Bool {
+        BillfoldSnapshotStore.needsFullHistory(timeframe: timeframe)
+            || BillfoldSnapshotStore.needsFullHistory(timeframe: sportTimeframe)
+            || BillfoldSnapshotStore.needsFullHistory(timeframe: topdTimeframe)
+    }
+
     private func loadData(forceRefresh: Bool = false) async {
-        let cachedSnapshot = await MainActor.run { BillfoldSnapshotStore.shared.cachedSnapshotIfFresh() }
+        let wantsFull = await MainActor.run { needsFullHistory }
+        let cachedSnapshot = await MainActor.run { BillfoldSnapshotStore.shared.cachedSnapshotIfFresh(fullHistory: wantsFull) }
         await MainActor.run {
             if settledCount == 0 && cachedSnapshot == nil { loading = true }
             error = nil
         }
         do {
-            let snapshot = try await BillfoldSnapshotStore.shared.load(forceRefresh: forceRefresh)
+            let snapshot = try await BillfoldSnapshotStore.shared.load(forceRefresh: forceRefresh, fullHistory: wantsFull)
             await MainActor.run {
                 applySnapshot(snapshot)
             }
@@ -15864,6 +15920,10 @@ final class PropsSlateStore: ObservableObject {
     @Published var loading = true
     @Published var fetchFailed = false
     @Published var loaded = false   // first successful (or attempted) load completed
+    /// Bumped on every explicit pull-to-refresh so subviews that own their own
+    /// network state (e.g. LEAGUE PULSE) can re-key their `.task` and refetch.
+    /// Only changes on user refresh — never during live-score polling.
+    @Published var refreshTick = 0
 
     // MARK: Loading (single source of truth — never fetched twice for one store)
 
@@ -15876,6 +15936,7 @@ final class PropsSlateStore: ObservableObject {
     }
 
     func refresh() async {
+        refreshTick &+= 1
         await loadProps(forceRefresh: true)
         await loadGamePicks(forceRefresh: true)
     }
@@ -17097,7 +17158,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
-                                   edges: sportConnections, scopeLeague: sport, onTapProp: { selectedProp = $0 })
+                                   edges: sportConnections, scopeLeague: sport, refreshTick: store.refreshTick, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .refreshable { await store.refresh() }
@@ -17405,12 +17466,15 @@ struct PicksTodayPage: View {
     /// scope that filters the edges. LEAGUE PULSE is league-wide, so it only
     /// lights up on an MLB or WC scope and collapses otherwise.
     let scopeLeague: String
+    /// Bumped by the store on every pull-to-refresh — threaded into LEAGUE PULSE
+    /// so a manual refresh refetches it (it owns its own network state).
+    let refreshTick: Int
     let onTapProp: (PropPick) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
-            LeaguePulseSection(league: scopeLeague)          // NEW — above TODAY'S EDGES
+            LeaguePulseSection(league: scopeLeague, refreshTick: refreshTick)  // NEW — above TODAY'S EDGES
             EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
         }
     }
@@ -17697,10 +17761,18 @@ struct PlayerIntelSection: View {
 struct LeaguePulseSection: View {
     /// The Picks page's sport scope ("ALL"/"MLB"/"WC"/…).
     let league: String
+    /// Bumped by the Picks store on each pull-to-refresh; a change re-keys the
+    /// `.task` below so a manual refresh refetches LEAGUE PULSE (it owns its
+    /// own network state and isn't part of the store's data load).
+    var refreshTick: Int = 0
 
     @State private var rows: [LeaguePulseRow] = []
     @State private var selectedTab: String? = nil
     @State private var loaded = false
+    /// The (league|EST-day|refreshTick) key the current `rows` were fetched for.
+    /// Used to decide when a `.task` run is a refresh/rollover (force a refetch,
+    /// bypassing the 30-min cache) vs. a first paint.
+    @State private var loadedKey: String = ""
 
     /// LEAGUE PULSE is league-wide — only MLB or WC scopes resolve to a feed.
     /// "ALL" and every other scope fetch nothing (EmptyView, no gap).
@@ -17773,10 +17845,18 @@ struct LeaguePulseSection: View {
                 }
             }
         }
-        .task(id: league) {
-            guard let lg = pulseLeague else { rows = []; loaded = true; return }
-            let fetched = await SupabaseAPI.fetchLeaguePulse(date: SupabaseAPI.todayEST(), league: lg)
-            await MainActor.run { rows = fetched; loaded = true }
+        // Key on the EST slate day AND the refresh tick (not just `league`) so the
+        // task re-runs across the 3am EST rollover and on pull-to-refresh — the
+        // old `.task(id: league)` never refetched once the day rolled or the user
+        // pulled to refresh.
+        .task(id: "\(league)|\(SupabaseAPI.todayEST())|\(refreshTick)") {
+            guard let lg = pulseLeague else { rows = []; loaded = true; loadedKey = ""; return }
+            let key = "\(lg)|\(SupabaseAPI.todayEST())|\(refreshTick)"
+            // A changed key that we've already loaded once = a rollover or manual
+            // refresh → bypass the 30-min cache so we actually pull fresh rows.
+            let force = loaded && key != loadedKey
+            let fetched = await SupabaseAPI.fetchLeaguePulse(date: SupabaseAPI.todayEST(), league: lg, forceRefresh: force)
+            await MainActor.run { rows = fetched; loaded = true; loadedKey = key }
         }
     }
 

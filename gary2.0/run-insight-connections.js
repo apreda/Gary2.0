@@ -227,6 +227,33 @@ async function deleteSituationalRowForGame(date, league, gameId) {
 }
 
 /**
+ * Read the existing stored confirmedXI situational row for one (date, league,
+ * game), if any. Returns { status, kickoff } from its jsonb meta, or null when
+ * no such row is stored yet. Used by the MONOTONIC-PAST-KICKOFF downgrade guard:
+ * once a game is stored 'confirmed' and kickoff has passed, a later run must not
+ * write it back down to 'projected'/'contested' (BDL can drop the team sheet
+ * mid-match, which would otherwise recompute the status downward). GROUNDED —
+ * reads the real prior row; never invents a 'confirmed' state.
+ */
+async function existingConfirmedXiRow(date, league, gameId) {
+  const { data } = await axios.get(REST_URL, {
+    headers: restHeaders,
+    params: {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+      category: `eq.situational`,
+      game_id: `eq.${gameId}`,
+      'meta->>kind': `eq.confirmedXI`,
+      select: 'meta',
+      limit: 1,
+    },
+  });
+  const meta = (data && data[0] && data[0].meta) || null;
+  if (!meta) return null;
+  return { status: meta.status || null, kickoff: meta.kickoff || null };
+}
+
+/**
  * Insert connection rows. The caller passes only the cards not already posted
  * for the day (additive-freeze), so this never duplicates. Sanitizes via JSON
  * round-trip to strip functions/circular refs (same pattern as storeDailyPicks).
@@ -498,18 +525,37 @@ async function run() {
       );
       let upgraded = 0;
       for (const gameId of confirmedXiGameIds) {
-        await deleteSituationalRowForGame(targetDate, league, gameId);
-        // Re-insert ONLY this run's confirmedXI situational rows for that game — the
-        // scoped delete above removed only kind='confirmedXI' rows, so any sibling
-        // situational row (e.g. wcRestEdge / Rest & Fatigue) is untouched in the DB
-        // and must NOT be re-inserted here (that would duplicate it). The sibling
-        // keeps its normal first-write-wins freeze below.
         const gameConfirmedXi = rows.filter(
           (r) =>
             r.category === 'situational' &&
             r.meta?.kind === 'confirmedXI' &&
             String(r.game_id) === gameId
         );
+
+        // MONOTONIC-PAST-KICKOFF GUARD: status only ever moves UP
+        // (projected → contested → confirmed). Once a game is stored 'confirmed'
+        // and kickoff has passed, REFUSE to write it back down to a lesser status
+        // — BDL can drop the confirmed team sheet mid-match, which makes this run
+        // recompute the status downward (back to 'projected'/'contested'). Skip
+        // the delete+re-insert entirely so the real prior 'confirmed' row is held.
+        // Grounded: only honors an actual stored 'confirmed'; never fabricates one.
+        const freshStatus = gameConfirmedXi[0]?.meta?.status || null;
+        if (freshStatus && freshStatus !== 'confirmed') {
+          const prior = await existingConfirmedXiRow(targetDate, league, gameId);
+          const kickoffMs = prior?.kickoff ? Date.parse(prior.kickoff) : NaN;
+          const kickoffPassed = Number.isFinite(kickoffMs) && Date.now() >= kickoffMs;
+          if (prior?.status === 'confirmed' && kickoffPassed) {
+            console.log(`   ⏸️  confirmedXI ${league} game ${gameId}: holding stored 'confirmed' — refused downgrade to '${freshStatus}' (kickoff passed; BDL sheet likely dropped).`);
+            continue; // leave the stored confirmed row in place
+          }
+        }
+
+        await deleteSituationalRowForGame(targetDate, league, gameId);
+        // Re-insert ONLY this run's confirmedXI situational rows for that game — the
+        // scoped delete above removed only kind='confirmedXI' rows, so any sibling
+        // situational row (e.g. wcRestEdge / Rest & Fatigue) is untouched in the DB
+        // and must NOT be re-inserted here (that would duplicate it). The sibling
+        // keeps its normal first-write-wins freeze below.
         if (gameConfirmedXi.length) await insertRows(gameConfirmedXi);
         upgraded += gameConfirmedXi.length;
       }

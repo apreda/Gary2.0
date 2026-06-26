@@ -50,7 +50,10 @@ const PEN_GAMES = 3;              // last N completed games per team
 const PEN_HEAVY_IP = 11;          // relief IP over the window flagged "heavy"
 
 // MLB injuries — LOCKED label thresholds (read-only consume, do NOT change logic):
-//   FRESH = 0-3 days since report/return signal, PRICED-IN = > 3 days.
+//   FRESH = 0-3 days on the real injury timeline (BDL return_date / onset date),
+//   PRICED-IN = > 3 days. Keyed on the canonical timeline, NOT a row's last-edit
+//   metadata (updated_at / report_date), so a long-standing injury edited today
+//   is correctly PRICED-IN. See freshnessLabel().
 const INJ_FRESH_MAX_DAYS = 3;
 
 // WC discipline accumulation flag (honest, only when card data present).
@@ -701,19 +704,39 @@ function injuryNote(inj) {
 }
 
 /**
- * FRESH (0-3 days) / PRICED-IN (>3 days) label — read-only consume of the LOCKED
- * injury-freshness definition (NOT a re-implementation of the agentic duration
- * engine). Uses the most recent date signal available on the row (update/report
- * date); when no date is present, returns null (no guess).
+ * FRESH (0-3 days) / PRICED-IN (>3 days) label — consumes the LOCKED injury
+ * timeline the canonical engine reads (the BDL `return_date` / `date` signal),
+ * NOT a row's last-edit metadata. This is deliberate: keying on `updated_at` /
+ * `report_date` (when the row was last touched) mislabels a long-standing,
+ * priced-in injury that merely got edited today as FRESH. The real injury
+ * timeline is the BDL `return_date` (projected return — the LOCKED FRESH/PRICED-IN
+ * signal per CLAUDE.md + the BDL injury-endpoint docs) with `date` (injury onset)
+ * as the fallback when no return date is published. When neither timeline field
+ * is present, returns null (no guess). updated_at / report_date are intentionally
+ * NOT consulted.
  */
 function freshnessLabel(inj, todayMs) {
-  const iso = inj?.updated_at || inj?.report_date || inj?.date || inj?.start_date || null;
-  if (!iso) return null;
-  const t = Date.parse(String(iso));
-  if (!Number.isFinite(t) || todayMs == null) return null;
-  const days = Math.floor((todayMs - t) / 86400000);
-  if (days < 0) return null;
-  return days <= INJ_FRESH_MAX_DAYS ? 'FRESH' : 'PRICED-IN';
+  if (todayMs == null) return null;
+
+  // Primary: projected return_date — the canonical FRESH/PRICED-IN timeline.
+  // A return still in the future (or just passed) = a live, FRESH absence; a
+  // return date well in the past means the situation has long been on the board.
+  const ret = inj?.return_date ? Date.parse(String(inj.return_date)) : NaN;
+  if (Number.isFinite(ret)) {
+    const daysToReturn = Math.floor((ret - todayMs) / 86400000);
+    // Future/imminent return is fresh news; a return that lapsed >3d ago is priced in.
+    return daysToReturn >= -INJ_FRESH_MAX_DAYS ? 'FRESH' : 'PRICED-IN';
+  }
+
+  // Fallback: injury onset date (`date`) — how long the injury has been a thing.
+  const onset = inj?.date ? Date.parse(String(inj.date)) : NaN;
+  if (Number.isFinite(onset)) {
+    const ageDays = Math.floor((todayMs - onset) / 86400000);
+    if (ageDays < 0) return null;
+    return ageDays <= INJ_FRESH_MAX_DAYS ? 'FRESH' : 'PRICED-IN';
+  }
+
+  return null;
 }
 
 // WC discipline field probes — tolerant of either a flat {yellow,red} extension or
