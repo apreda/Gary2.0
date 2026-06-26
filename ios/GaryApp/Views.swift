@@ -4742,27 +4742,33 @@ struct HomeMarketPulseStrip: View {
     let rows: [SupabaseAPI.MarketPulseRow]
     private var oversW: Int { rows.reduce(0) { $0 + ($1.overs_wins ?? 0) } }
     private var oversL: Int { rows.reduce(0) { $0 + ($1.overs_losses ?? 0) } }
-    private var games: Int { rows.reduce(0) { $0 + ($1.games_counted ?? 0) } }
+    // Winning +ML underdogs across the slate, grounded in the per-game meta
+    // (winner_is_dog == true). 0 when no row has a pre-game ML snapshot.
+    private var mlDogs: Int {
+        rows.reduce(0) { acc, row in
+            acc + (row.meta ?? []).reduce(0) { $0 + (($1.winner_is_dog == true) ? 1 : 0) }
+        }
+    }
 
     private func stat(_ v: String, _ k: String, _ color: Color = .white.opacity(0.92)) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(v).font(GaryFonts.mono(13.5, bold: true)).foregroundStyle(color)
-            Text(k).font(GaryFonts.mono(8.5)).tracking(1.1).foregroundStyle(.white.opacity(0.35))
+            // Labels are gold — Gary's signature accent (founder request).
+            Text(k).font(GaryFonts.mono(8.5)).tracking(1.1).foregroundStyle(GaryColors.gold)
         }
     }
 
     // Records, not units — how the whole slate broke, ALL sports combined: how many
-    // overs vs unders hit + the game count. Not Gary's picks; the market itself.
-    // (Favorites record dropped on purpose: the odds feed only keeps the SETTLED
-    // post-game line, so a favorite read off it is circular — overs/unders + games
-    // are the metrics we can stand behind. See market-pulse builder notes.)
+    // overs vs unders hit + how many winning +ML underdogs landed. Not Gary's picks;
+    // the market itself. (+ML DOGS counts meta.winner_is_dog == true — every value is
+    // stored from the pre-game ML snapshot; shows 0 when no row carries one.)
     var body: some View {
         HStack {
             stat("\(oversW)", "OVERS HIT")
             Spacer()
             stat("\(oversL)", "UNDERS HIT")
             Spacer()
-            stat("\(games)", "GAMES · ALL SPORTS")
+            stat("\(mlDogs)", "+ML DOGS")
         }
         .padding(.vertical, 12).padding(.horizontal, 14)
         .quantPanel()
