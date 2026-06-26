@@ -362,17 +362,18 @@ function seasonDisplayByRole(s, role, { ownForm } = {}) {
   const out = {};
 
   if (role === 'keeper') {
-    // line1: "{saves} saves / {conceded} GA"  line2: "{caps} caps · {CS} CS"
+    // line1: "{saves} saves / {conceded} GA"  line2: "{caps} caps"
     const saves = num(s.saves);
     const conc = num(s.conceded);
     const p1 = [];
     if (saves != null) p1.push(`${saves} saves`);
     if (conc != null) p1.push(`${conc} GA`);
     if (p1.length) out.line1 = p1.join(' / ');
-    const csInfo = cleanSheetsFromForm(ownForm);
+    // Caps = the keeper's OWN cycle appearances. The team clean-sheet count lives in the
+    // splits with its proper "/N" denominator; pairing a bare "5 CS" next to a low cap
+    // count (e.g. "1 cap · 5 CS") reads as a contradiction, so line2 is caps only.
     const l2 = [];
     if (caps != null) l2.push(capsLabel(caps));
-    if (csInfo) l2.push(`${csInfo.cs} CS`);
     if (l2.length) out.line2 = l2.join(' · ');
     return (out.line1 || out.line2) ? out : null;
   }
@@ -452,7 +453,9 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     const kp = num(s.keyPasses);
     if (kp != null) out.push({ label: 'Creativity', value: `${kp} key passes`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
     const pa = num(s.passAccuracy);
-    if (pa != null) out.push({ label: 'Pass accuracy', value: `${Math.round(pa)}%` });
+    // API reports 0 when it doesn't track a player's passing; a real value is 40-99%,
+    // so floor out the gap rather than surface a bogus "0%".
+    if (pa != null && pa >= 40) out.push({ label: 'Pass accuracy', value: `${Math.round(pa)}%` });
     const dt = num(s.duelsTotal);
     const dw = num(s.duelsWon);
     if (dt != null && dw != null && dt > 0) {
@@ -607,7 +610,8 @@ function strengthsWeaknesses({ sstat, form, formRows, role, ownForm, oppForm, me
         else if (pct < 40) weaknesses.push(`Loses the duel battle — ${pct}% won`);
       }
       const pa = num(sstat.passAccuracy);
-      if (pa != null && pa < 75) weaknesses.push(`Loose distribution — ${Math.round(pa)}% pass accuracy`);
+      // Only a genuine-but-low value is a weakness; a 0 is missing data, not loose passing.
+      if (pa != null && pa >= 40 && pa < 75) weaknesses.push(`Loose distribution — ${Math.round(pa)}% pass accuracy`);
     } else if (role === 'defender' && caps != null && caps > 0) {
       if (g != null && g >= 2) strengths.push(`Set-piece threat — ${g} goals from the back this cycle`);
       const tk = num(sstat.tackles);
