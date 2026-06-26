@@ -1480,13 +1480,11 @@ enum GaryColors {
     // NFL Green (same as prop picks)
     static let nflAccent = Color(hex: "#22C55E")
 
-    // Lightened baseball-field accent for MLB card eyebrows — the dark #2D5A27
-    // grass green is hard to read on small text. Grass -> infield dirt -> base white.
-    static let mlbGrass = Color(hex: "#7BC267")
-    static let mlbFieldText = LinearGradient(
-        colors: [Color(hex: "#7BC267"), Color(hex: "#C9A66B"), Color(hex: "#EDEDE6")],
-        startPoint: .leading, endPoint: .trailing
-    )
+    // MLB label/eyebrow accent — a SOLID light grass green (user call, Jun 26):
+    // the old green→dirt-brown→white field gradient was retired for a clean,
+    // readable single field-green that reads well on small text.
+    static let mlbGrass = Color(hex: "#4FB14F")
+    static let mlbFieldText = Color(hex: "#4FB14F")
 }
 
 // MARK: - Immersive Background
@@ -5394,7 +5392,7 @@ enum Sport: String, CaseIterable {
         case .ncaab: return Color(hex: "#F97316")    // Orange
         case .ncaaf: return Color(hex: "#DC2626")    // Red
         case .epl: return Color(hex: "#8B5CF6")      // Purple
-        case .mlb: return Color(hex: "#2D5A27")      // Outfield grass green
+        case .mlb: return Color(hex: "#4FB14F")      // Light grass green (matches MLB label)
         case .mlbHR: return Color(hex: "#2D5A27")    // Outfield grass green (same as MLB)
         case .wnba: return Color(hex: "#F97316")     // Orange
         case .worldCup: return Color(hex: "#14B8A6") // World Cup teal — greens belong to NFL/MLB
@@ -12628,6 +12626,10 @@ struct CompactPickRow: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.5)
                     .padding(.top, 10)
+                    // Settled cards carry the diagonal stamp on the right; reserve its
+                    // column so a long pick (e.g. "UNDER 2.5 GOALS") wraps instead of
+                    // sliding under the CASHED/LOST stamp.
+                    .padding(.trailing, displayResult != nil ? 96 : 0)
 
                 HStack(alignment: .center, spacing: 8) {
                     Text(significanceTag ?? (pick.league ?? "").uppercased())
@@ -12661,7 +12663,10 @@ struct CompactPickRow: View {
                 // Footer — the live line while the game runs (teams + score + COVERING/
                 // TRAILING in green/red), with a tap-to-flip chevron on the right. Share
                 // moved up to the meta line; "Gary's Take" is now just the chevron.
-                if showTakeAffordance {
+                // Footer renders when there's a tap-to-flip affordance OR a settled/live
+                // line to show — so Billfold receipts (showTakeAffordance:false) still get
+                // the "FINAL · score" line, just without the chevron.
+                if showTakeAffordance || liveFooterText != nil {
                     Rectangle()
                         .fill(.white.opacity(0.12))
                         .frame(height: 1)
@@ -12683,9 +12688,11 @@ struct CompactPickRow: View {
                                 .minimumScaleFactor(0.8)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(GaryColors.heroAccent.opacity(0.7))
+                        if showTakeAffordance {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(GaryColors.heroAccent.opacity(0.7))
+                        }
                     }
                 }
             }
@@ -16910,7 +16917,8 @@ struct PicksCarouselView: View {
                                       // prefer yesterday's (graded) pick for a series matchup.
                                       entries: sport == "MLB HR" ? [] : store.gamePicksForMatchup(g.matchup, preferYesterday: pickDay == .yesterday),
                                       gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
-                                      edges: edges(for: g), onTapProp: { selectedProp = $0 })
+                                      edges: edges(for: g), onTapProp: { selectedProp = $0 },
+                                      onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } })
                             .padding(.bottom, 130)
                     }
                     .refreshable { await store.refresh() }
@@ -17255,6 +17263,9 @@ struct PicksGamePage: View {
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
     let onTapProp: (PropPick) -> Void
+    /// Flips the whole Picks view to YESTERDAY's board/results — wired from the
+    /// locked look-ahead card so a user with no pick yet can go see last night.
+    var onSeeYesterday: (() -> Void)? = nil
 
     private var topProps: [PropPick] {
         // The slip scales — show up to 5, strongest first.
@@ -17330,25 +17341,54 @@ struct PicksGamePage: View {
                 // No pick yet → a blurred MOCK pick card so the layout always reads
                 // (paywall-style, like the Winners page). Redaction bars (never fake
                 // content), unveils ~90 min before; later this same blur gates by plan.
+                // The placeholder mirrors a REAL pick card's footprint exactly (same
+                // width = screen − 44, height = CompactPickRow.uniformHeight, corner
+                // radius 20, fill #121110, border, padding 18) so the blurred preview
+                // reads as a true card sitting in the slot.
+                let lockedCardW = UIScreen.main.bounds.width - 44
                 ZStack {
+                    // Blurred mock contents — redaction bars, never fake copy.
                     VStack(alignment: .leading, spacing: 12) {
                         RoundedRectangle(cornerRadius: 4).fill(GaryColors.gold.opacity(0.5)).frame(width: 92, height: 11)
                         RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.55)).frame(width: 210, height: 24)
                         RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.3)).frame(width: 150, height: 13)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(18)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.04)))
                     .blur(radius: 5)
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(GaryColors.gold.opacity(0.18), lineWidth: 1))
-                    VStack(spacing: 6) {
+
+                    // Lock overlay — keeps the existing copy, adds a tap to last night.
+                    VStack(spacing: 8) {
                         Image(systemName: "lock.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(GaryColors.gold)
                         Text("UNVEILS ~90 MIN BEFORE").font(GaryFonts.mono(10.5, bold: true)).tracking(1.2).foregroundStyle(.white.opacity(0.88))
                         Text("The read's below").font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+                        if let onSeeYesterday {
+                            Button(action: onSeeYesterday) {
+                                Text("See yesterday's results ›")
+                                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
+                                    .foregroundStyle(GaryColors.gold)
+                                    .padding(.horizontal, 14).padding(.vertical, 7)
+                                    .background(Capsule().fill(GaryColors.gold.opacity(0.12)))
+                                    .overlay(Capsule().strokeBorder(GaryColors.gold.opacity(0.45), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
+                        }
                     }
                 }
-                .padding(.horizontal, 10)
+                // Match the real pick card's exact footprint (CompactPickRow chrome).
+                .frame(width: lockedCardW, height: CompactPickRow.uniformHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(hex: "#121110"))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(.white.opacity(0.10), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(.horizontal, 16)
             }
 
             PlayerIntelSection(matchup: group.matchup)

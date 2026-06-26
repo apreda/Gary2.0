@@ -42,6 +42,7 @@ import {
   formatProps, attachPropRates, safeCall as safeCallShared,
 } from './shared.js';
 import * as apiFootball from '../apiFootballService.js';
+import { previousXI } from './computers/wcConfirmedXI.js';
 
 // Thin local binding so every safeCall() site carries a '[wcPlayerInsightCards]'
 // error prefix while reusing the shared implementation.
@@ -54,6 +55,7 @@ const safeCall = (fn, fallback) => safeCallShared(fn, fallback, 'wcPlayerInsight
 const MAX_PROPS = 3;            // anytime_goal / shots / shots_on_target
 const MAX_STRENGTHS = 3;
 const MAX_WEAKNESSES = 3;
+const DEFAULT_SEASON = 2026;   // WC season (for the projected-XI regulars fetch)
 
 // A confirmed XI lists 11 starters per side; require a side to reach this before
 // we treat the lineup as posted (a half-populated sheet would mislabel benchers).
@@ -104,35 +106,55 @@ export async function buildWcPlayerInsightCards({ date, league, matches } = {}) 
   }
 
   const packs = [];
-  const stats = { matches: 0, starters: 0, built: 0, keeper: 0, outfield: 0, skipped: 0 };
+  const stats = { matches: 0, starters: 0, built: 0, keeper: 0, outfield: 0, skipped: 0, projectedMatches: 0, confirmedMatches: 0 };
 
   for (const match of slate) {
     const matchId = match?.id ?? match?.soccer_match_id ?? null;
     if (matchId == null) { continue; }
     stats.matches += 1;
 
-    // 1. Confirmed starting XI for this match.
+    // team_id -> { name, abbr, isHome, oppId } (needed for both the confirmed-XI
+    // side check and the projected-XI regulars fetch below).
+    const teamMeta = buildTeamMeta(match);
+
+    // 1. Starting XI: prefer the CONFIRMED sheet (posts ~90 min before kickoff). When
+    // it's not posted/full yet, fall back to the PROJECTED XI — each side's recent
+    // regulars (OUT/suspended dropped), the SAME projection the field view shows — so
+    // a card populates in the morning. A later run upgrades it to the confirmed build.
     const lineups = await safeCall(() => wc.getMatchLineups([matchId]), []);
-    const starters = asArray(lineups).filter((l) => l?.is_starter && l?.player?.id != null);
-    if (!starters.length) {
-      console.log(`[wcPlayerInsightCards] match ${matchId}: no confirmed XI posted yet — skipping.`);
-      continue;
-    }
-    // Require a real XI on at least one side before trusting the sheet.
-    const perSide = {};
-    for (const s of starters) perSide[s.team_id] = (perSide[s.team_id] || 0) + 1;
-    if (!Object.values(perSide).some((c) => c >= XI_MIN_STARTERS)) {
-      console.log(`[wcPlayerInsightCards] match ${matchId}: XI not fully posted (${starters.length} starters) — skipping.`);
-      continue;
+    let starters = asArray(lineups).filter((l) => l?.is_starter && l?.player?.id != null);
+    let xiSource = 'confirmed';
+
+    // Require a real XI on at least one side before trusting the live sheet.
+    const sideCount = (rows) => {
+      const per = {};
+      for (const s of rows) per[s.team_id] = (per[s.team_id] || 0) + 1;
+      return per;
+    };
+    const confirmedFull = Object.values(sideCount(starters)).some((c) => c >= XI_MIN_STARTERS);
+
+    if (!confirmedFull) {
+      const projected = await projectedStarters(match, teamMeta);
+      if (projected.length) {
+        starters = projected;
+        xiSource = 'projected';
+        console.log(`[wcPlayerInsightCards] match ${matchId}: no confirmed XI yet — using projected XI (${projected.length} starters).`);
+      } else if (!starters.length) {
+        console.log(`[wcPlayerInsightCards] match ${matchId}: no confirmed XI + no projection available — skipping.`);
+        continue;
+      } else {
+        // Partial confirmed sheet, no projection — keep what's confirmed (better than nothing).
+        console.log(`[wcPlayerInsightCards] match ${matchId}: partial confirmed XI (${starters.length} starters), no projection — building what's posted.`);
+      }
     }
 
     // 2. Per-match shared reads (one fetch each, reused across this match's starters).
-    const teamMeta = buildTeamMeta(match);                       // team_id -> { name, abbr, isHome, oppId }
     const props = await safeCall(() => wc.getPlayerProps({ matchId }), []);
     const squadByTeam = await loadSquads(teamMeta);               // team_id -> getSquadStats map
     const formByTeam = await loadForms(teamMeta);                 // team_id -> getRecentForm result
     const histByPlayer = await loadPriorMatchHistory(wc, match, teamMeta); // player_id -> [finals stat rows, oldest->newest]
     const gameLabel = matchAbbrLabel(match);
+    if (xiSource === 'projected') stats.projectedMatches += 1; else stats.confirmedMatches += 1;
 
     for (const starter of starters) {
       stats.starters += 1;
@@ -161,8 +183,8 @@ export async function buildWcPlayerInsightCards({ date, league, matches } = {}) 
   }
 
   console.log(
-    `[wcPlayerInsightCards] ${stats.matches} match(es), ${stats.starters} starters -> ` +
-      `built ${stats.built} (${stats.outfield} outfield / ${stats.keeper} keeper), skipped ${stats.skipped}.`,
+    `[wcPlayerInsightCards] ${stats.matches} match(es) (${stats.confirmedMatches} confirmed / ${stats.projectedMatches} projected), ` +
+      `${stats.starters} starters -> built ${stats.built} (${stats.outfield} outfield / ${stats.keeper} keeper), skipped ${stats.skipped}.`,
   );
   return packs;
 }
@@ -460,6 +482,44 @@ function buildTeamMeta(match) {
   if (homeId != null) map.set(homeId, { name: nameOf(home), abbr: abbrOf(home), isHome: true, oppId: awayId });
   if (awayId != null) map.set(awayId, { name: nameOf(away), abbr: abbrOf(away), isHome: false, oppId: homeId });
   return map;
+}
+
+/**
+ * Projected XI starter rows for BOTH sides of a match, in the SAME shape the
+ * confirmed sheet yields ({ team_id, is_starter, position, shirt_number,
+ * player:{id,name} }). Built from previousXI() — each side's recent regulars with
+ * OUT/suspended dropped — the canonical projection the field view + situational
+ * lane share. Returns [] when neither side has a usable prior-match XI (openers).
+ *
+ * Grounding: every projected starter is a REAL player who actually started recent
+ * matches; nothing is invented. Their card's stats (season/splits/form) are joined
+ * by player id/name exactly as for a confirmed starter, so the morning card is just
+ * as grounded — only the "is he starting tonight" question is a projection, which
+ * the confirmed run resolves.
+ */
+async function projectedStarters(match, teamMeta) {
+  const matchId = match?.id ?? match?.soccer_match_id ?? null;
+  const out = [];
+  for (const [teamId, meta] of teamMeta.entries()) {
+    if (teamId == null || !meta?.name) continue;
+    const side = await safeCall(
+      () => previousXI(teamId, meta.name, matchId, DEFAULT_SEASON),
+      null,
+    );
+    const starters = asArray(side?.starters);
+    if (!starters.length) continue;
+    for (const s of starters) {
+      if (s?.player?.id == null) continue;
+      out.push({
+        team_id: s.team_id ?? teamId,
+        is_starter: true,
+        position: s.position ?? s.player?.position ?? null,
+        shirt_number: s.shirt_number ?? null,
+        player: { id: s.player.id, name: s.player.name },
+      });
+    }
+  }
+  return out;
 }
 
 /** Resolve a side's team object across the raw + normalized match shapes. */

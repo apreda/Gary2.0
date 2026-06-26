@@ -37,12 +37,24 @@
 //   * getBatterXStats(season)/getPitcherXStats(season) -> name-joined expected
 //     stats (ba/est_ba/slg/est_slg/woba/est_woba ; era/xera for pitchers)
 
+import axios from 'axios';
 import {
   nameKey, pct3, round, parseBatsThrows,
   num, asArray, dedupeCap, formatOdds, marketRank,
   formatProps, attachPropRates, safeCall as safeCallShared,
 } from './shared.js';
 import { getBatterXStats, getPitcherXStats } from '../baseballSavantService.js';
+
+// Same env resolution as run-insight-connections.js / garyHrThreats.js — used to
+// read the projected MLB field lineups (mlb_field_lineups, status='projected') so
+// a card populates in the MORNING from the projected starters, then upgrades to the
+// confirmed build once BDL posts the real sheet (the day's cards are rebuilt 4x).
+const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY || '';
 
 // Thin local binding so every existing safeCall() site keeps the exact
 // '[playerInsightCards]' error prefix while using the shared implementation.
@@ -102,10 +114,17 @@ export async function buildPlayerInsightCards({ date, league, connections, games
     return [];
   }
 
+  // Projected-lineup fallback source: the day's mlb_field_lineups rows (the SAME
+  // projected starters the iOS field view shows). When BDL hasn't posted a sheet
+  // yet, getMlbLineups() returns null — we then read the projected field lineup
+  // (each team's most recent confirmed regulars) so a player still gets a card in
+  // the morning. The confirmed sheet (when posted) always wins; this is fallback-only.
+  const projectedByGameId = await loadProjectedFieldLineups(date);
+
   // Per-game memoized lineups + props (reused for the candidate union AND the per-player loop).
   const lineupMemo = new Map();
   const propsMemo = new Map();
-  const getLineups = (gameId) => memoLineups(bdl, lineupMemo, gameId);
+  const getLineups = (gameId) => memoLineups(bdl, lineupMemo, gameId, projectedByGameId);
   const getProps = (gameId) => memoProps(bdl, propsMemo, gameId);
 
   // Candidate set = edge-flagged players (connections) UNION every player in the day's posted
@@ -1200,12 +1219,115 @@ function stripInternal(rows) {
 }
 
 // Per-run memos so co-located players (same game) share one lineups/props fetch.
-async function memoLineups(bdl, memo, gameId) {
+//
+// Fallback chain: the live BDL sheet (getMlbLineups) is authoritative; when it
+// returns null/empty (sheet not posted yet) we substitute the projected lineup
+// from mlb_field_lineups, adapted to the same { [abbr]: { teamName, pitcher,
+// batters[] } } shape so locatePlayer + the pack builders run UNCHANGED. The
+// confirmed sheet always overrides the projection (it's tried first every run).
+async function memoLineups(bdl, memo, gameId, projectedByGameId) {
   const key = String(gameId);
   if (memo.has(key)) return memo.get(key);
-  const v = await safeCall(() => bdl.getMlbLineups(gameId), null);
+  let v = await safeCall(() => bdl.getMlbLineups(gameId), null);
+  if (!usableLineup(v)) {
+    const projected = projectedByGameId?.get(key) || null;
+    if (usableLineup(projected)) {
+      console.log(`[playerInsightCards] game ${key}: no posted BDL sheet — using projected field lineup.`);
+      v = projected;
+    }
+  }
   memo.set(key, v);
   return v;
+}
+
+/** A lineup object is usable when at least one side has a batting order posted. */
+function usableLineup(lineups) {
+  if (!lineups || typeof lineups !== 'object') return false;
+  return Object.values(lineups).some((side) => Array.isArray(side?.batters) && side.batters.length > 0);
+}
+
+/**
+ * Load the day's projected MLB lineups from mlb_field_lineups and adapt each
+ * game's payload into the getMlbLineups() shape ({ [abbr]: { teamName, pitcher,
+ * batters[] } }) keyed by game_id. Reads BOTH projected and confirmed rows — a
+ * confirmed field-lineup row is an equally-good fallback if BDL's live sheet
+ * blips — but the live BDL sheet is always preferred when present (memoLineups).
+ *
+ * Field-lineup fielder shape: { playerId, name, pos, order, bats, ... } and the
+ * team's pitcher: { name, hand, playerId }. We rebuild batsThrows from bats/hand
+ * so parseBatsThrows downstream still resolves the hitter's bats and the pitcher's
+ * throwing hand. NON-FATAL: any failure returns an empty map (confirmed-only build).
+ */
+async function loadProjectedFieldLineups(date) {
+  const map = new Map();
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.log('[playerInsightCards] no Supabase config — projected-lineup fallback disabled.');
+    return map;
+  }
+  let rows = [];
+  try {
+    const resp = await axios.get(
+      `${SUPABASE_URL}/rest/v1/mlb_field_lineups`,
+      {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+        params: { date: `eq.${date}`, select: 'game_id,home_team,away_team,status,payload' },
+        timeout: 15000,
+      },
+    );
+    rows = Array.isArray(resp.data) ? resp.data : [];
+  } catch (err) {
+    console.warn(`[playerInsightCards] mlb_field_lineups fetch failed: ${err?.message || err}`);
+    return map;
+  }
+  for (const row of rows) {
+    const gameId = row?.game_id != null ? String(row.game_id) : null;
+    if (!gameId) continue;
+    const lineups = adaptFieldLineupPayload(row);
+    if (usableLineup(lineups)) map.set(gameId, lineups);
+  }
+  console.log(`[playerInsightCards] projected-lineup fallback ready for ${map.size} game(s) on ${date}.`);
+  return map;
+}
+
+/** Reassemble a "bats_throws"-style string from the field-lineup bats + facing-pitcher hand. */
+function batsThrowsFrom(bats, throws) {
+  const b = bats ? String(bats).trim().toUpperCase()[0] : '';
+  const t = throws ? String(throws).trim().toUpperCase()[0] : '';
+  if (!b && !t) return '';
+  return `${b}/${t}`;
+}
+
+/** mlb_field_lineups payload ({ home, away } w/ fielders + pitcher) -> getMlbLineups() shape. */
+function adaptFieldLineupPayload(row) {
+  const payload = row?.payload;
+  if (!payload || typeof payload !== 'object') return null;
+  const out = {};
+  for (const [side, abbr] of [['home', row?.home_team], ['away', row?.away_team]]) {
+    const t = payload[side];
+    if (!t || !Array.isArray(t.fielders) || t.fielders.length === 0) continue;
+    const key = abbr || t.team || side;
+    out[key] = {
+      teamName: t.team || abbr || null,
+      pitcher: t.pitcher && t.pitcher.playerId != null && t.pitcher.playerId !== ''
+        ? {
+            name: t.pitcher.name,
+            position: 'P',
+            batsThrows: batsThrowsFrom('', t.pitcher.hand),
+            playerId: t.pitcher.playerId,
+          }
+        : null,
+      batters: t.fielders
+        .filter((b) => b?.playerId != null && b.playerId !== '')
+        .map((b) => ({
+          name: b.name,
+          position: b.pos,
+          battingOrder: b.order,
+          batsThrows: batsThrowsFrom(b.bats, ''),
+          playerId: b.playerId,
+        })),
+    };
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 async function memoProps(bdl, memo, gameId) {

@@ -220,6 +220,56 @@ struct MLBGameIntelView: View {
         "P": (125, 176), "C": (125, 214), "DH": (40, 214),
     ]
 
+    // Real TEAM colours — so each side wears ITS OWN identity, not one fixed venue colour.
+    // primary = the dark body/road jersey colour; numberOnWhite = a dark colour that stays
+    // readable as a number printed ON a white home jersey; hasPinstripes = the team genuinely
+    // wears pinstripes at home. Keyed below by BDL abbreviation; resolved from the displayed
+    // team name via the existing mlbTeamKeywords map.
+    // `primary` = cap/body (dark) colour, `numberOnWhite` = legacy dark number for the away read,
+    // `accent` = the team's BRIGHT signature/brand colour used for the HOME white-jersey number.
+    struct MLBTeamColor { let primary: Color; let numberOnWhite: Color; let accent: Color; let hasPinstripes: Bool }
+    private static let teamColors: [String: MLBTeamColor] = [
+        "ARI": MLBTeamColor(primary: Color(hex: "#A71930"), numberOnWhite: Color(hex: "#A71930"), accent: Color(hex: "#E3D4AD"), hasPinstripes: false), // Diamondbacks (Sedona red / sand)
+        "ATL": MLBTeamColor(primary: Color(hex: "#13274F"), numberOnWhite: Color(hex: "#CE1141"), accent: Color(hex: "#CE1141"), hasPinstripes: false), // Braves (navy / scarlet)
+        "BAL": MLBTeamColor(primary: Color(hex: "#DF4601"), numberOnWhite: Color(hex: "#000000"), accent: Color(hex: "#DF4601"), hasPinstripes: false), // Orioles (orange / black)
+        "BOS": MLBTeamColor(primary: Color(hex: "#BD3039"), numberOnWhite: Color(hex: "#0C2340"), accent: Color(hex: "#BD3039"), hasPinstripes: false), // Red Sox (red / navy)
+        "CHC": MLBTeamColor(primary: Color(hex: "#0E3386"), numberOnWhite: Color(hex: "#0E3386"), accent: Color(hex: "#CC3433"), hasPinstripes: true),  // Cubs (blue / red) — HOME PINSTRIPES
+        "CWS": MLBTeamColor(primary: Color(hex: "#27251F"), numberOnWhite: Color(hex: "#27251F"), accent: Color(hex: "#C4CED4"), hasPinstripes: false), // White Sox (black / silver)
+        "CHW": MLBTeamColor(primary: Color(hex: "#27251F"), numberOnWhite: Color(hex: "#27251F"), accent: Color(hex: "#C4CED4"), hasPinstripes: false), // White Sox (alt abbr)
+        "CIN": MLBTeamColor(primary: Color(hex: "#C6011F"), numberOnWhite: Color(hex: "#000000"), accent: Color(hex: "#C6011F"), hasPinstripes: false), // Reds (red / black)
+        "CLE": MLBTeamColor(primary: Color(hex: "#00385D"), numberOnWhite: Color(hex: "#E50022"), accent: Color(hex: "#E50022"), hasPinstripes: false), // Guardians (navy / red)
+        "COL": MLBTeamColor(primary: Color(hex: "#33006F"), numberOnWhite: Color(hex: "#33006F"), accent: Color(hex: "#C4CED4"), hasPinstripes: true),  // Rockies (purple / silver) — HOME PINSTRIPES
+        "DET": MLBTeamColor(primary: Color(hex: "#0C2340"), numberOnWhite: Color(hex: "#0C2340"), accent: Color(hex: "#FA4616"), hasPinstripes: false), // Tigers (navy / orange)
+        "HOU": MLBTeamColor(primary: Color(hex: "#002D62"), numberOnWhite: Color(hex: "#EB6E1F"), accent: Color(hex: "#EB6E1F"), hasPinstripes: false), // Astros (navy / orange)
+        "KC":  MLBTeamColor(primary: Color(hex: "#004687"), numberOnWhite: Color(hex: "#004687"), accent: Color(hex: "#BD9B60"), hasPinstripes: false), // Royals (royal blue / gold)
+        "LAA": MLBTeamColor(primary: Color(hex: "#BA0021"), numberOnWhite: Color(hex: "#003263"), accent: Color(hex: "#BA0021"), hasPinstripes: false), // Angels (red / navy)
+        "LAD": MLBTeamColor(primary: Color(hex: "#005A9C"), numberOnWhite: Color(hex: "#005A9C"), accent: Color(hex: "#005A9C"), hasPinstripes: false), // Dodgers (Dodger blue)
+        "MIA": MLBTeamColor(primary: Color(hex: "#00A3E0"), numberOnWhite: Color(hex: "#000000"), accent: Color(hex: "#00A3E0"), hasPinstripes: false), // Marlins (Miami blue / black)
+        "MIL": MLBTeamColor(primary: Color(hex: "#12284B"), numberOnWhite: Color(hex: "#12284B"), accent: Color(hex: "#FFC52F"), hasPinstripes: false), // Brewers (navy / gold)
+        "MIN": MLBTeamColor(primary: Color(hex: "#002B5C"), numberOnWhite: Color(hex: "#D31145"), accent: Color(hex: "#D31145"), hasPinstripes: false), // Twins (navy / red)
+        "NYM": MLBTeamColor(primary: Color(hex: "#002D72"), numberOnWhite: Color(hex: "#FF5910"), accent: Color(hex: "#FF5910"), hasPinstripes: true),  // Mets (blue / orange) — HOME PINSTRIPES
+        "NYY": MLBTeamColor(primary: Color(hex: "#0C2340"), numberOnWhite: Color(hex: "#0C2340"), accent: Color(hex: "#0C2340"), hasPinstripes: true),  // Yankees (navy) — HOME PINSTRIPES
+        "ATH": MLBTeamColor(primary: Color(hex: "#003831"), numberOnWhite: Color(hex: "#003831"), accent: Color(hex: "#EFB21E"), hasPinstripes: false), // Athletics (green / gold)
+        "OAK": MLBTeamColor(primary: Color(hex: "#003831"), numberOnWhite: Color(hex: "#003831"), accent: Color(hex: "#EFB21E"), hasPinstripes: false), // Athletics (alt abbr)
+        "PHI": MLBTeamColor(primary: Color(hex: "#E81828"), numberOnWhite: Color(hex: "#284898"), accent: Color(hex: "#E81828"), hasPinstripes: true),  // Phillies (red / blue) — HOME PINSTRIPES
+        "PIT": MLBTeamColor(primary: Color(hex: "#161513"), numberOnWhite: Color(hex: "#161513"), accent: Color(hex: "#FDB827"), hasPinstripes: false), // Pirates (black / GOLD)
+        "SD":  MLBTeamColor(primary: Color(hex: "#2F241D"), numberOnWhite: Color(hex: "#2F241D"), accent: Color(hex: "#FFC425"), hasPinstripes: false), // Padres (brown / gold)
+        "SF":  MLBTeamColor(primary: Color(hex: "#27251F"), numberOnWhite: Color(hex: "#FD5A1E"), accent: Color(hex: "#FD5A1E"), hasPinstripes: false), // Giants (black / orange)
+        "SEA": MLBTeamColor(primary: Color(hex: "#0C2C56"), numberOnWhite: Color(hex: "#005C5C"), accent: Color(hex: "#005C5C"), hasPinstripes: false), // Mariners (navy / teal)
+        "STL": MLBTeamColor(primary: Color(hex: "#C41E3A"), numberOnWhite: Color(hex: "#0C2340"), accent: Color(hex: "#C41E3A"), hasPinstripes: false), // Cardinals (red / navy)
+        "TB":  MLBTeamColor(primary: Color(hex: "#092C5C"), numberOnWhite: Color(hex: "#092C5C"), accent: Color(hex: "#8FBCE6"), hasPinstripes: false), // Rays (navy / light blue)
+        "TEX": MLBTeamColor(primary: Color(hex: "#003278"), numberOnWhite: Color(hex: "#C0111F"), accent: Color(hex: "#C0111F"), hasPinstripes: false), // Rangers (blue / red)
+        "TOR": MLBTeamColor(primary: Color(hex: "#134A8E"), numberOnWhite: Color(hex: "#134A8E"), accent: Color(hex: "#1D2D5C"), hasPinstripes: false), // Blue Jays (royal blue)
+        "WSH": MLBTeamColor(primary: Color(hex: "#AB0003"), numberOnWhite: Color(hex: "#14225A"), accent: Color(hex: "#AB0003"), hasPinstripes: false), // Nationals (red / navy)
+    ]
+    /// Resolve a displayed team name to its real colours via the shared keyword map.
+    private static func teamColor(forName name: String) -> MLBTeamColor {
+        let n = name.lowercased()
+        if let abbr = mlbTeamKeywords.first(where: { $0.value.contains { n.contains($0) } })?.key,
+           let c = teamColors[abbr] { return c }
+        return MLBTeamColor(primary: Color(hex: "#12284B"), numberOnWhite: Color(hex: "#12284B"), accent: Color(hex: "#12284B"), hasPinstripes: false)
+    }
+
     private static func surname(_ full: String) -> String {
         let parts = full.split(separator: " "); return parts.count > 1 ? String(parts.last!) : full
     }
@@ -381,9 +431,18 @@ struct MLBGameIntelView: View {
     }
 
     private func token(_ f: MLBFielder) -> some View {
-        let jersey = ballpark?.jersey ?? Color(hex: "#12284B")
-        let textC = ballpark?.text ?? Color.white
-        let cap = heatColor(f.heat)
+        // Real TEAM colours for the side currently on the field (Option A):
+        //  • AWAY = the team's DARK primary, number in WHITE.
+        //  • HOME = WHITE jersey, number in the team's dark colour, + team pinstripes if they wear them.
+        let tc = Self.teamColor(forName: homeUp ? homeName : awayName)
+        let jersey: Color = homeUp ? .white : tc.primary
+        // HOME white jersey → number in the team's bright signature accent (e.g. Pirates GOLD).
+        // AWAY dark jersey → number stays WHITE.
+        let textC: Color = homeUp ? tc.accent : .white
+        let pinstripes = homeUp && tc.hasPinstripes
+        // STANDARD players wear the team cap colour; HOT/COLD keep their red/blue heat tint.
+        let isNeutral = f.heat != "hot" && f.heat != "cold"
+        let cap: Color = isNeutral ? tc.primary : heatColor(f.heat)
         return VStack(spacing: 1) {
             ZStack {
                 // Contested — a fill-in starter (the usual regular is resting/out): a dashed gold ring.
@@ -393,9 +452,25 @@ struct MLBGameIntelView: View {
                 }
                 // jersey
                 MLBJerseyShape().fill(jersey).frame(width: 40, height: 38)
+                    .overlay {
+                        // Home pinstripes — thin vertical team-primary lines, clipped to the jersey.
+                        if pinstripes {
+                            MLBJerseyShape().fill(jersey)
+                                .frame(width: 40, height: 38)
+                                .overlay(
+                                    HStack(spacing: 4) {
+                                        ForEach(0..<8, id: \.self) { _ in
+                                            Rectangle().fill(tc.primary.opacity(0.55)).frame(width: 0.8)
+                                        }
+                                    }
+                                    .frame(width: 40, height: 38)
+                                )
+                                .clipShape(MLBJerseyShape())
+                        }
+                    }
                     .overlay(MLBJerseyShape().stroke(.black.opacity(0.35), lineWidth: 0.8).frame(width: 40, height: 38))
-                Rectangle().fill(textC.opacity(0.45)).frame(width: 1, height: 16).offset(y: 9)   // button placket
-                Text("\(f.num)").font(GaryFonts.mono(13, bold: true)).foregroundStyle(textC).offset(y: 8)
+                // Number sits cleanly UP on the chest (upper-centre of the jersey) — no placket line through it.
+                Text("\(f.num)").font(GaryFonts.mono(16, bold: true)).foregroundStyle(textC).offset(y: -2)
                 // cap — New Era 59FIFTY (flat brim + structured crown)
                 ZStack {
                     MLBCapBrim().fill(cap).overlay(MLBCapBrim().fill(.black.opacity(0.22))).frame(width: 27, height: 18)

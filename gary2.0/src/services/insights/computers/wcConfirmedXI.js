@@ -256,7 +256,11 @@ async function bestSignal(side, opp, matchId, season) {
 
 // The team's most recent COMPLETED WC match before `matchId`, with its starting XI +
 // keeper. null for openers (no prior match).
-async function previousXI(teamId, teamName, matchId, season, injStatus = new Map()) {
+//
+// Exported so the WC player-insight-card builder reuses the SAME projected XI the
+// field view + this situational lane show (the morning "likely XI" from each side's
+// recent regulars, OUT/suspended dropped) — one canonical projection, no second copy.
+export async function previousXI(teamId, teamName, matchId, season, injStatus = new Map()) {
   const matches = await safe(() => wc.getMatches({ teamIds: [teamId], seasons: [season] }), []);
   const prior = (matches || [])
     .filter((m) => m?.status === 'completed' && m?.id !== matchId && m?.datetime)
