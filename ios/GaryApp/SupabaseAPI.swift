@@ -255,7 +255,11 @@ enum SupabaseAPI {
         // Convert to SportRecord array, sorted by total games
         return sportStats.map { league, stats in
             SportRecord(league: league, wins: stats.wins, losses: stats.losses, pushes: stats.pushes)
-        }.sorted { $0.total > $1.total }
+        }
+        // Defense in depth: no World Cup box in the Home form/record strips when
+        // the WC feature is off.
+        .filter { !AppFlags.hidesWorldCupRow($0.league) }
+        .sorted { $0.total > $1.total }
     }
 
     /// Per-sport GAME-pick record over the last 7 days (game_results, all sports) —
@@ -282,6 +286,9 @@ enum SupabaseAPI {
         return sportStats.map { league, stats in
             SportRecord(league: league, wins: stats.wins, losses: stats.losses, pushes: stats.pushes)
         }
+        // Defense in depth: no World Cup box in the 7-Day Form strip when the WC
+        // feature is off.
+        .filter { !AppFlags.hidesWorldCupRow($0.league) }
         // Only sports with a meaningful week — keeps end-of-season stragglers
         // (a stray NHL/NBA game) off the Home module; the active sports lead.
         .filter { $0.wins + $0.losses + $0.pushes >= 3 }
@@ -382,7 +389,9 @@ enum SupabaseAPI {
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
         guard let row = rows.first else { return [] }
 
-        return parsePicksRow(row.picks)
+        // Defense in depth: drop any World Cup-tagged pick when the WC feature is
+        // off (Apple 5.2.1) so no WC pick can reach a shelf, list, or card.
+        return parsePicksRow(row.picks).filter { !AppFlags.hidesWorldCupRow($0.league) }
     }
 
     // MARK: - Insight Connections ("Today's Edges" hub)
@@ -445,7 +454,8 @@ enum SupabaseAPI {
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([WireItem].self, from: data) else { return [] }
-        return rows
+        // Defense in depth: no World Cup wire stories when the WC feature is off.
+        return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
     }
 
     /// League-wide market results for one settled night (overs record,
@@ -523,7 +533,9 @@ enum SupabaseAPI {
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([DailySlateRow].self, from: data) else { return [] }
-        return rows
+        // Defense in depth: no World Cup games on the slate when the WC feature
+        // is off — keeps a WC fixture out of every slate list and placeholder lane.
+        return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
     }
 
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence
@@ -592,7 +604,9 @@ enum SupabaseAPI {
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([GameRecapRow].self, from: data) else { return [] }
-        return rows
+        // Defense in depth: keep World Cup recaps out of the Home headline
+        // carousel (the marquee + slides) when the WC feature is off.
+        return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
     }
 
     /// The most recent WINNERS-only game record (the top-per-sport game picks the
@@ -792,9 +806,12 @@ enum SupabaseAPI {
                 init(from decoder: Decoder) throws { value = try? Connection(from: decoder) }
             }
             let rows = try JSONDecoder().decode([Lossy].self, from: data)
-            let conns = rows.compactMap { $0.value }
+            // Defense in depth: when the WC feature is off, drop every World Cup
+            // row (and short-circuit the `league: "WC"` iteration the Hub/Home make)
+            // so no WC edge, tournament lane, or game-intel signal can surface.
+            let conns = rows.compactMap { $0.value }.filter { !AppFlags.hidesWorldCupRow($0.league) }
             if conns.count != rows.count {
-                print("[SupabaseAPI] fetchInsightConnections(\(league)): dropped \(rows.count - conns.count) undecodable row(s)")
+                print("[SupabaseAPI] fetchInsightConnections(\(league)): dropped \(rows.count - conns.count) undecodable/filtered row(s)")
             }
             return conns
         } catch {
@@ -978,6 +995,11 @@ enum SupabaseAPI {
                 }
             }
         }
+
+        // Hide World Cup props when WC is off (App Store FIFA-IP gate). WC props carry
+        // sport:"WC" with a NULL top-level league, so filter on the RESOLVED league — this
+        // is the one feed the master sweep missed; it closes the Props-tab/Winners-shelf leak.
+        allPicks = allPicks.filter { !AppFlags.hidesWorldCupRow($0.effectiveLeague) }
 
         // Store in cache
         await APICache.shared.set(cacheKey, value: allPicks)

@@ -1808,15 +1808,19 @@ struct HomeView: View {
 
     /// Today's WC picks, earliest kickoff first (opener leads).
     private var worldCupPicksToday: [GaryPick] {
-        todayPicks
+        guard AppFlags.worldCupEnabled else { return [] }
+        return todayPicks
             .filter { ($0.league ?? "").uppercased() == "WC" }
             .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
     }
 
     /// The WC module — shown during the window whenever there's WC content
     /// (storylines from the Wire, or today's matches once the slate posts).
+    /// Gated entirely behind `AppFlags.worldCupEnabled`: off ⇒ EmptyView, so the
+    /// whole front-page World Cup module (header, headline, opener, board, the
+    /// "WORLD CUP · WIRE" rows) never renders.
     @ViewBuilder private var worldCupModule: some View {
-        if Self.worldCupWindowActive() {
+        if AppFlags.worldCupEnabled, Self.worldCupWindowActive() {
             let wcWire = wireItems.filter { ($0.league ?? "").uppercased() == "WC" }
             let picks = worldCupPicksToday
             if !wcWire.isEmpty || !picks.isEmpty {
@@ -2052,7 +2056,7 @@ struct HomeView: View {
                     // Tonight's edges — the Hub's top reads for today's slate,
                     // teased on the Tonight page (full board one tap away).
                     var tonightEdges: [Signal] = []
-                    for lg in ["MLB", "NBA", "WC"] where tonightEdges.count < 3 {
+                    for lg in AppFlags.insightLeagues where tonightEdges.count < 3 {
                         if let conns = try? await SupabaseAPI.fetchInsightConnections(date: SupabaseAPI.todayEST(), league: lg) {
                             tonightEdges.append(contentsOf: conns.compactMap { $0.toSignal() })
                         }
@@ -2063,7 +2067,7 @@ struct HomeView: View {
                     // Hub's receipts, verdicts attached — instead of nothing.
                     if tonightSignals.isEmpty {
                         var graded: [Signal] = []
-                        for lg in ["MLB", "NBA", "WC"] {
+                        for lg in AppFlags.insightLeagues {
                             if let conns = try? await SupabaseAPI.fetchInsightConnections(date: gradedDate, league: lg) {
                                 graded.append(contentsOf: conns.compactMap { $0.toSignal() }.filter { $0.result != nil })
                             }
@@ -5743,7 +5747,13 @@ struct PremiumPicksView: View {
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
     // Any extra league present in the data is appended automatically.
     // Every sport Gary actually covers — lanes hold placeholders off-slate.
-    private let canonicalSports = ["MLB", "NBA", "NHL", "WC", "NFL", "NCAAF", "NCAAB"]
+    // WC is dropped from the canonical list when the World Cup feature is off, so
+    // no WC shelf/placeholder lane is ever ordered into the board.
+    private var canonicalSports: [String] {
+        AppFlags.worldCupEnabled
+            ? ["MLB", "NBA", "NHL", "WC", "NFL", "NCAAF", "NCAAB"]
+            : ["MLB", "NBA", "NHL", "NFL", "NCAAF", "NCAAB"]
+    }
     // Sports with a props product (WC + college are game picks only).
     private let propSports = ["MLB", "NBA", "NHL", "NFL"]
 
@@ -7050,7 +7060,7 @@ struct PlansSheetView: View {
         if let f = focus, Self.sports.contains(f) {
             _selection = State(initialValue: .sports)
             _pickedSports = State(initialValue: [f])
-        } else if focus == "WC", Self.worldCupWindowActive() {
+        } else if AppFlags.worldCupEnabled, focus == "WC", Self.worldCupWindowActive() {
             _selection = State(initialValue: .worldCup)
         } else {
             _selection = State(initialValue: .allAccess)
@@ -7073,7 +7083,9 @@ struct PlansSheetView: View {
         let now = Date()
         return now >= start && now < end
     }
-    private var wcActive: Bool { Self.worldCupWindowActive() }
+    // Gated behind the World Cup feature flag: off ⇒ the WORLD CUP PASS plan
+    // never appears in the paywall (and `.worldCup` selection stays unreachable).
+    private var wcActive: Bool { AppFlags.worldCupEnabled && Self.worldCupWindowActive() }
 
     // MARK: Body
 
@@ -17182,7 +17194,7 @@ struct PicksCarouselView: View {
     private func loadConnections() async {
         let date = SupabaseAPI.todayEST()
         var out: [Signal] = []
-        for lg in ["MLB", "NBA", "WC"] {
+        for lg in AppFlags.insightLeagues {
             if let conns = try? await SupabaseAPI.fetchInsightConnections(date: date, league: lg) {
                 out.append(contentsOf: conns.compactMap { $0.toSignal() })
             }
@@ -18379,7 +18391,7 @@ struct PropsHubView: View {
         var collected: [Signal] = []
         var dropped = 0
         var anyError = false
-        for lg in ["MLB", "NBA", "WC"] {
+        for lg in AppFlags.insightLeagues {
             do {
                 let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
                 let signals = conns.compactMap { $0.toSignal() }
@@ -18411,7 +18423,7 @@ struct PropsHubView: View {
         // empty room.
         var yday: [Signal] = []
         if collected.isEmpty {
-            for lg in ["MLB", "NBA", "WC"] {
+            for lg in AppFlags.insightLeagues {
                 if let conns = try? await SupabaseAPI.fetchInsightConnections(date: gradedDate, league: lg) {
                     yday.append(contentsOf: conns.compactMap { $0.toSignal() }.filter { $0.result != nil })
                 }

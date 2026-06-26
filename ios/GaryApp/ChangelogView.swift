@@ -56,12 +56,11 @@ let changelogEntries: [ChangelogEntry] = [
         version: "2.17",
         date: "June 2026",
         type: .update,
-        title: "Gary 2.17 — A sharper player card and cleaner World Cup reads",
+        title: "Gary 2.17 — A sharper player card",
         changes: [
             "Redesigned player breakdown cards — matte black with a gold edge and Gary's mark — that expand to advanced stats, park splits, and the matchup; far more players now have a full card",
-            "Deeper World Cup intel in the Hub: new xG Regression, Advancement, and xG Recap reads",
             "The Home screen's headlines now load instantly",
-            "Settled cards show the team beside each score, doubleheaders show the right result, and the World Cup reads \"Venue\"",
+            "Settled cards show the team beside each score, and doubleheaders show the right result",
         ]
     ),
     ChangelogEntry(
@@ -72,7 +71,6 @@ let changelogEntries: [ChangelogEntry] = [
         changes: [
             "Live scores update on their own while you watch — no need to close and reopen the app",
             "The Hub holds one set of reads for the whole day — picks don't change on you between visits",
-            "World Cup picks read with the full setup and reasoning every other sport gets",
             "Prop box on Home: pick any game, or see Gary's two best winners and two best losers from last night",
             "Headline cards: tap to open the full recap, with bigger, easier-to-read bullets",
             "Games with two picks (a side and a total) now show the right result on each",
@@ -83,11 +81,10 @@ let changelogEntries: [ChangelogEntry] = [
         version: "2.15",
         date: "June 2026",
         type: .update,
-        title: "Gary 2.15 — Cleaner cards, World Cup, and picks you can trust",
+        title: "Gary 2.15 — Cleaner cards and picks you can trust",
         changes: [
             "Pick cards are cleaner everywhere: odds in the sport's color, handicaps and totals formatted right, and the same card size on every page",
             "Pick cards show the live score while the game is in play",
-            "World Cup lineups show real kit colors and the true formation on the pitch, with the stadium on the back of the card",
             "The Hub reads like a digest now: tap a section to open it, tap a player for the full breakdown",
             "Regression Board adds tomorrow's projected starters, plus deeper reads on tonight's arms — ERA vs xERA, hard-hit and barrel rates, and the verdict",
             "Your daily recap now reflects how the night actually went",
@@ -102,8 +99,6 @@ let changelogEntries: [ChangelogEntry] = [
         title: "Gary 2.14 — Sharper, faster, more accurate",
         changes: [
             "The Wire only reports real games now — no more stale or off-day news",
-            "Tale of the Tape for World Cup shows a team's odds to advance and title price from kickoff, not just once group games are played",
-            "World Cup matchups now get their own page on the Picks tab, like every other sport",
             "Every pick card is the same clean size, whatever the headline length",
             "Last night's late games keep their full recap and bullets on Home",
             "Picks page: sport filter moved above the matchups; combo props read as H+R+RBI",
@@ -114,16 +109,12 @@ let changelogEntries: [ChangelogEntry] = [
         version: "2.13",
         date: "June 2026",
         type: .feature,
-        title: "Gary 2.13 — World Cup, free for everyone",
+        title: "Gary 2.13 — Free for everyone",
         changes: [
             "Everything is free this version — every board, every sport, no paywall. Accounts optional.",
-            "World Cup game picks are live for all 104 matches, June 11 – July 19",
-            "Full 3-way market coverage: moneyline (including Draw), Asian handicap, and total goals",
             "New Home: morning recaps with stat bullets, the Wire with tap-to-expand stories, the full slate with real lines",
             "Streaks board in the Hub: team runs, hot and cold bats, who has one on the line tonight",
-            "The Night Board: every homer, gem, multi-hit and steal from last night — searchable",
-            "Tale of the Tape for every WC match: group standing, form, xG and xGA, possession, shots, pass accuracy",
-            "World Cup lanes in Today's Edges: venue and altitude notes, group-stage stakes, matchup history"
+            "The Night Board: every homer, gem, multi-hit and steal from last night — searchable"
         ]
     ),
     ChangelogEntry(
