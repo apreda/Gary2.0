@@ -16304,26 +16304,158 @@ final class LiveScoreCache: ObservableObject {
     /// this when the live board has no score for a graded matchup — e.g. a WC
     /// final the poller never carried, or any Yesterday-tab card.
     @Published var gradedFinals: [String: String] = [:]
-    private var started = false
 
+    /// The single running poll loop. `started` is the idempotency guard;
+    /// `pollTask` is held so the loop's lifetime is observable (and so a future
+    /// teardown could cancel it). One loop, ever — never two concurrent.
+    private var started = false
+    private var pollTask: Task<Void, Never>?
+    /// Wakes the poll loop out of its adaptive sleep the instant the app returns
+    /// to the foreground (refreshNow). The loop awaits a sleep that RACES this
+    /// signal; firing it short-circuits the wait so the next fetch runs now.
+    /// `wakeGen` tags the parked continuation so the timer bridge of one sleep
+    /// cycle can never resume the continuation of a later cycle — whoever wins
+    /// (wake or timer) clears the handle, the loser sees `wakeContinuation == nil`
+    /// (or a bumped gen) and no-ops. All access is @MainActor-serialized, so this
+    /// is plain ordering, not a lock.
+    private var wakeContinuation: CheckedContinuation<Void, Never>?
+    private var wakeGen = 0
+
+    /// PERF#1(d): O(1) lookups. Rebuilt only when `scores` actually changes.
+    /// game_id → row (doubleheader-exact), and normalized abbr matchup key
+    /// ("sd|phi") → rows (the same fuzzy resolution as abbrGameMatches, but the
+    /// keyword scan happens once per refresh, not once per card per tick).
+    private var byGameId: [String: LiveScore] = [:]
+    private var byMatchupKey: [String: [LiveScore]] = [:]
+
+    /// Adaptive poll cadence. While any game is live the board must feel live, so
+    /// poll fast; with nothing live (all scheduled/final) back off hard — the
+    /// backend only writes every 1-2 min and an idle board doesn't change.
+    private let liveInterval: UInt64 = 22_000_000_000   // ~22s while a game is live
+    private let idleInterval: UInt64 = 180_000_000_000  // 3 min when nothing is live
+
+    @MainActor
     func startIfNeeded() {
         guard !started else { return }
         started = true
-        // @MainActor: the poller publishes `scores` (a @Published) on the main
-        // thread — the network await still suspends off-main, only the assignment
-        // resumes on main. (Fixes "Publishing changes from background threads".)
-        Task { @MainActor [weak self] in
+        pollTask = Task { @MainActor [weak self] in
+            // SELF-HEALING: the loop should never end on its own (the only awaits
+            // are a non-throwing fetch and a sleep we treat as best-effort). If it
+            // somehow does — cancellation, an unforeseen throw — clear `started`
+            // so startIfNeeded()/refreshNow() can revive it with a fresh loop.
+            defer {
+                self?.started = false
+                self?.pollTask = nil
+                self?.wakeContinuation = nil
+            }
             while !Task.isCancelled {
                 guard let self else { return }
-                self.scores = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
-                try? await Task.sleep(nanoseconds: 90_000_000_000)
+                // @MainActor: fetch suspends off-main; only the assignment (gated to
+                // real changes) resumes on main. (Fixes "Publishing from background
+                // threads" and the per-tick whole-carousel rerender — PERF#1a.)
+                let fresh = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
+                self.apply(fresh)
+                if Task.isCancelled { return }
+                // Fast while live, slow when idle — derived from what's on the board.
+                let interval = fresh.contains(where: { $0.isLive }) ? self.liveInterval : self.idleInterval
+                await self.sleepOrWake(interval)
             }
         }
     }
 
+    /// Force an immediate refresh — revives a dead loop, then wakes a sleeping one
+    /// so the next fetch runs NOW (no waiting out the adaptive interval). Called on
+    /// foreground so returning to the app shows current scores instantly.
+    @MainActor
+    func refreshNow() {
+        // Revive first: if the loop died (or never started), startIfNeeded spins up
+        // a fresh one that fetches immediately on entry — nothing more to do.
+        let wasRunning = started
+        startIfNeeded()
+        guard wasRunning else { return }
+        // Already running and parked in its sleep — wake it. Bumping the gen + niling
+        // the handle BEFORE resuming means the racing timer bridge for this cycle
+        // will see the change and skip its own resume (single resume guaranteed).
+        if let c = wakeContinuation {
+            wakeContinuation = nil
+            wakeGen &+= 1
+            c.resume()
+        }
+    }
+
+    /// Sleep up to `interval`, but return early if refreshNow() fires the wake
+    /// signal. Exactly one of the two paths (timer end or external wake) resumes
+    /// the continuation; the other no-ops via the gen tag — no double-resume, no
+    /// leaked continuation across cycles.
+    @MainActor
+    private func sleepOrWake(_ interval: UInt64) async {
+        let timer = Task { try? await Task.sleep(nanoseconds: interval) }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            wakeGen &+= 1
+            let myGen = wakeGen
+            wakeContinuation = cont
+            // Bridge the timer's completion back to THIS cycle's continuation.
+            Task { @MainActor in
+                await timer.value
+                // Only resume if our cycle's continuation is still parked (a wake
+                // didn't already fire it and move on to a newer cycle).
+                guard self.wakeGen == myGen, self.wakeContinuation != nil else { return }
+                self.wakeContinuation = nil
+                self.wakeGen &+= 1
+                cont.resume()
+            }
+        }
+        timer.cancel()
+    }
+
+    /// Commit a fresh fetch only when it actually differs (PERF#1a dedupe) and
+    /// rebuild the O(1) indexes alongside it. Publishing an identical array would
+    /// spuriously rerender every observer (the whole PicksCarousel) on every tick.
+    @MainActor
+    private func apply(_ fresh: [LiveScore]) {
+        guard fresh != scores else { return }
+        scores = fresh
+        rebuildIndexes()
+    }
+
+    @MainActor
+    private func rebuildIndexes() {
+        var gid: [String: LiveScore] = [:]
+        var mk: [String: [LiveScore]] = [:]
+        for s in scores {
+            if let id = s.game_id { gid[id] = s }
+            if let key = liveScoreMatchupKey(awayAbbr: s.away_abbr, homeAbbr: s.home_abbr) {
+                mk[key, default: []].append(s)
+            }
+        }
+        byGameId = gid
+        byMatchupKey = mk
+    }
+
     func status(forMatchup matchup: String) -> LiveScore? {
         guard !matchup.isEmpty else { return nil }
-        let matches = scores.filter { abbrGameMatches($0.abbrGame, matchup: matchup) }
+        // O(1): resolve the query matchup to the same normalized abbr keys the
+        // index is built on, instead of scanning + fuzzy-matching every row per
+        // card per tick (PERF#1d). Each candidate hit is re-verified with the
+        // canonical abbrGameMatches so a cross-league abbr collision can never
+        // return the wrong game — the result is byte-identical to the old scan,
+        // we just stop touching every row. Falls back to the linear scan only
+        // when the query resolves to no key (preserves the old reach).
+        var matches: [LiveScore] = []
+        let keys = matchupAbbrKeys(matchup)
+        if !keys.isEmpty {
+            var seenTags = Set<String>()
+            for key in keys {
+                guard let hit = byMatchupKey[key] else { continue }
+                for row in hit where abbrGameMatches(row.abbrGame, matchup: matchup) {
+                    // Dedup identical rows that resolved under multiple alias keys.
+                    let tag = row.game_id ?? row.abbrGame
+                    if seenTags.insert(tag).inserted { matches.append(row) }
+                }
+            }
+        } else {
+            matches = scores.filter { abbrGameMatches($0.abbrGame, matchup: matchup) }
+        }
         guard matches.count > 1 else { return matches.first }
         // Poller artifact: duplicate rows for one matchup (seen live Jun 10 —
         // a bogus pre-game "final" alongside the real "scheduled" row). A
@@ -16336,8 +16468,7 @@ final class LiveScoreCache: ObservableObject {
     /// share one matchup string), where status(forMatchup:) is ambiguous. nil if not found.
     func status(forGameId gameId: Int?) -> LiveScore? {
         guard let gid = gameId else { return nil }
-        let s = String(gid)
-        return scores.first { $0.game_id == s }
+        return byGameId[String(gid)]
     }
 
     /// Settled final score string ("3-1") for a matchup, from game_results (today
@@ -17130,6 +17261,58 @@ let wcTeamKeywords: [String: [String]] = [
     "URU": ["uruguay"], "USA": ["usa"], "UZB": ["uzbekistan"],
 ]
 
+/// Reverse keyword index (lowercased name keyword → the abbreviations it maps to,
+/// across all leagues), built once. Used to resolve a full-team-name matchup side
+/// to its abbreviation(s) in ~O(1) — the inverse of the per-row keyword scan that
+/// `abbrGameMatches` runs. Cross-league keyword collisions are preserved (a token
+/// can yield several abbrs); the matchup-key builder intersects both sides so a
+/// real game still lands on a single key.
+let reverseTeamKeywordIndex: [String: Set<String>] = {
+    var idx: [String: Set<String>] = [:]
+    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords] {
+        for (abbr, kws) in map {
+            for kw in kws { idx[kw, default: []].insert(abbr.uppercased()) }
+        }
+    }
+    return idx
+}()
+
+/// Normalized matchup key for the LiveScoreCache index, built from a score row's
+/// away/home ABBREVIATIONS ("SD","PHI" → "SD|PHI"). Lowercased+joined so the
+/// query side (matchupAbbrKey) lands on the exact same string.
+func liveScoreMatchupKey(awayAbbr: String?, homeAbbr: String?) -> String? {
+    guard let a = awayAbbr?.uppercased(), let h = homeAbbr?.uppercased(),
+          !a.isEmpty, !h.isEmpty else { return nil }
+    return "\(a)|\(h)"
+}
+
+/// Resolve a full-team-name matchup ("San Diego Padres @ Philadelphia Phillies")
+/// to the candidate "AWY|HOM" abbr keys the live-score index is built on. Returns
+/// every combination because a side can carry abbr aliases (CWS/CHW, ATH/OAK) and
+/// cross-league collisions — the score row stored ONE concrete abbr, so we probe
+/// all candidates and the right one hits. Empty when neither side resolves (caller
+/// falls back to the linear scan, so reach is never lost).
+func matchupAbbrKeys(_ matchup: String) -> [String] {
+    func abbrs(for side: String) -> [String] {
+        let hay = side.lowercased()
+        var hits: [String] = []
+        var seen = Set<String>()
+        // Longest keywords first so "white sox" wins over a bare token.
+        for (kw, abset) in reverseTeamKeywordIndex.sorted(by: { $0.key.count > $1.key.count }) {
+            guard hay.contains(kw) else { continue }
+            for ab in abset where !seen.contains(ab) { seen.insert(ab); hits.append(ab) }
+        }
+        return hits
+    }
+    let sides = matchup.components(separatedBy: " @ ")
+    guard sides.count == 2 else { return [] }
+    let away = abbrs(for: sides[0]), home = abbrs(for: sides[1])
+    guard !away.isEmpty, !home.isEmpty else { return [] }
+    var keys: [String] = []
+    for a in away { for h in home { keys.append("\(a)|\(h)") } }
+    return keys
+}
+
 /// Match an "AWY @ HOM" abbreviation label (a hub edge's `game`) against a
 /// full-team-name matchup string. Both abbreviations must resolve (via the
 /// MLB, NBA, or World Cup keyword maps) to a name present in the matchup —
@@ -17382,6 +17565,13 @@ struct PicksCarouselView: View {
     @State private var sport = "ALL"
     @State private var page = 0
     @State private var selectedProp: PropPick?
+    /// PERF#1(b/c): memoized UNSORTED game set + precomputed per-game edge index.
+    /// Rebuilt by rebuildMemo() only when picks/props/slate/connections or the
+    /// day/sport filter change — never on a live-score tick. The cheap live-status
+    /// sort layers on top in `games`, so a 20-25s score publish re-orders + relabels
+    /// without redoing the grouping or the games×connections edge scan.
+    @State private var gamesMemo: [(matchup: String, time: String, props: [PropPick])] = []
+    @State private var edgeIndex: [String: [Signal]] = [:]
 
     /// Every league with content: today's props/picks plus the per-sport
     /// yesterday recaps (a sport with no picks today shows its results —
@@ -17446,7 +17636,11 @@ struct PicksCarouselView: View {
         let yp = store.yesterdayPropsAll.filter { !$0.isTDPick && !isHomeRunProp($0) }   // ungated: all of yesterday, HR retired
         return sport == "ALL" ? yp : yp.filter { propSportKey($0) == sport }
     }
-    private var games: [(matchup: String, time: String, props: [PropPick])] {
+    /// PERF#1(b): the heavy grouping/merge/look-ahead, memoized into `gamesMemo`
+    /// and recomputed ONLY when picks/props/slate/day/sport change (see rebuildMemo)
+    /// — never on a live-score tick. Returns the UNSORTED set; the cheap live-status
+    /// sort lives in `games` so a 20-25s tick only re-orders, it never re-groups.
+    private func computeGamesUnsorted() -> [(matchup: String, time: String, props: [PropPick])] {
         // The matchup row is day-scoped (the dropdown): Today groups today's slate
         // props; Yesterday groups yesterday's own props — sourcing the day directly
         // (not a fresh/stale filter on a shared list) is what makes EVERY yesterday
@@ -17504,15 +17698,44 @@ struct PicksCarouselView: View {
                 out.append((matchup: mu, time: time, props: []))
             }
         }
+        return out
+    }
 
+    private var games: [(matchup: String, time: String, props: [PropPick])] {
+        let out = gamesMemo
         // Today: LIVE games first, then upcoming by start time, then finished/graded
         // bumped to the very back — so the bar stays current as the day rolls on.
-        // Yesterday is already all-settled; keep its existing time order.
+        // Yesterday is already all-settled; keep its existing time order. This is the
+        // only per-tick work (a small sort over an already-built set) — the grouping
+        // above is memoized, so a live-score publish re-orders without re-grouping.
         guard pickDay == .today else { return out }
         return out
             .map { (g: $0, bucket: gameStatusBucket($0), start: gameStart($0)) }
             .sorted { ($0.bucket, $0.start) < ($1.bucket, $1.start) }
             .map { $0.g }
+    }
+
+    /// Recompute the memoized game set + edge index. Called on first load and
+    /// whenever the underlying picks/props/slate/connections or the day/sport
+    /// filter change — NOT on live-score ticks. `nonEmptyKeysOf` guards the
+    /// keep-last-good rule the store already follows (never blank a populated bar
+    /// on a transient empty refresh).
+    private func rebuildMemo() {
+        let built = computeGamesUnsorted()
+        gamesMemo = built
+        // PERF#1(c): precompute each game's edge list ONCE (the N×M games×connections
+        // scan), keyed by the game's matchup key, so edges(for:) is an O(1) dict
+        // lookup at render time instead of re-scanning every connection against every
+        // game on every render/live tick. Same dual match as the old edges(for:):
+        // an edge attaches if its abbr-game resolves against the game's matchup+prop
+        // teams (abbrGameMatches) OR shares the last-word matchup key (WC nations).
+        var idx: [String: [Signal]] = [:]
+        for g in built {
+            let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
+            let gKey = Self.matchupKey(g.matchup)
+            idx[gKey] = connections.filter { abbrGameMatches($0.game, matchup: hay) || Self.matchupKey($0.game) == gKey }
+        }
+        edgeIndex = idx
     }
 
     /// Match key from team last-words ("San Diego Padres @ LA Dodgers" →
@@ -17574,17 +17797,25 @@ struct PicksCarouselView: View {
 
         .task {
             await store.loadIfNeeded()
+            rebuildMemo()          // build the memo before consumeFocus reads `games`
             consumeFocus()
             if !connLoaded { await loadConnections() }
+            rebuildMemo()          // fold the just-loaded connections into the edge index
         }
         .task {
             // Keep the SHARED live-score cache warm while this tab is on screen — the
             // matchup tabs and the cards both read LiveScoreCache.shared now (it owns
-            // the dedup + its own 90s refresh loop), so this page no longer keeps its
-            // own snapshot that could disagree with the cards.
+            // the dedup + its own adaptive refresh loop), so this page no longer keeps
+            // its own snapshot that could disagree with the cards.
             LiveScoreCache.shared.startIfNeeded()
         }
-        .onChange(of: sport) { _ in page = 0 }
+        .onChange(of: sport) { _ in page = 0; rebuildMemo() }
+        .onChange(of: pickDay) { _ in rebuildMemo() }
+        .onChange(of: connLoaded) { _ in rebuildMemo() }
+        // The store's picks/props/slate settle asynchronously after each load — a
+        // count signature fires rebuildMemo() once they land (and after a refresh),
+        // so the memo tracks the data without recomputing on every live-score tick.
+        .onChange(of: dataSignature) { _ in rebuildMemo() }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
         .onChange(of: store.loading) { loading in if !loading { consumeFocus() } }
         .onChange(of: scenePhase) { phase in
@@ -17592,6 +17823,14 @@ struct PicksCarouselView: View {
             // !hasContent, so existing data stays put while fresh rows load underneath).
             if phase == .active { Task { await store.refresh() } }
         }
+    }
+
+    /// A cheap Equatable digest of every input the memoized game set + edge index
+    /// depend on (counts + the refresh tick). Changes only when the underlying data
+    /// actually changes — NOT on a live-score publish — so `.onChange` drives
+    /// rebuildMemo() exactly when needed and never on a tick.
+    private var dataSignature: String {
+        "\(store.allProps.count)-\(store.yesterdayPropsAll.count)-\(store.gamePicks.count)-\(store.yesterdayGamePicksAll.count)-\(store.slate.count)-\(connections.count)-\(store.refreshTick)"
     }
 
     /// Land on the matchup the Hub deep-linked ("LAD @ ARI"). Leaves the
@@ -17902,12 +18141,14 @@ struct PicksCarouselView: View {
     /// Best-effort: surface edges whose "ABBR @ ABBR" shares a team token with
     /// this game's matchup or its prop teams. abbrGameMatches resolves both MLB
     /// and NBA abbreviations, so either league's edges attach to their game.
+    /// PERF#1(c): now an O(1) read of the precomputed edgeIndex (built in
+    /// rebuildMemo when connections/games change), not a per-render N×M scan.
+    /// Falls back to the live scan for any game key not yet indexed (e.g. a
+    /// deep-link race before the first rebuild) so reach is never lost.
     private func edges(for g: (matchup: String, time: String, props: [PropPick])) -> [Signal] {
-        let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
-        // WC edges (the confirmed/projected XI lane) label the game with FULL nation
-        // names ("Australia @ USA"), which abbrGameMatches (built for abbrev games like
-        // "CHW @ DET") can't resolve — so ALSO match on the last-word matchup key.
         let key = Self.matchupKey(g.matchup)
+        if let hit = edgeIndex[key] { return hit }
+        let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
         return connections.filter { abbrGameMatches($0.game, matchup: hay) || Self.matchupKey($0.game) == key }
     }
 

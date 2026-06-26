@@ -137,7 +137,7 @@ struct XIMan: Decodable {
 
 // MARK: - Live Scores (2-minute poller snapshots)
 
-struct LiveScore: Decodable {
+struct LiveScore: Decodable, Equatable {
     let league: String?
     let game_id: String?
     let away_abbr: String?

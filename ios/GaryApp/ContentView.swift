@@ -127,6 +127,9 @@ struct ContentView: View {
             if selectedTab < 0 || selectedTab > lastValidTabIndex { selectedTab = 0 }
             loadedTabs.insert(selectedTab)
             maybeShowGaryIntro(for: selectedTab)
+            // Warm the shared live-score poll loop at launch (idempotent) so scores
+            // are current on the very first screen, not only after a tab that pokes it.
+            LiveScoreCache.shared.startIfNeeded()
             await BillfoldSnapshotStore.shared.prewarmIfNeeded()
         }
         .onChange(of: selectedTab) { newTab in
@@ -142,6 +145,10 @@ struct ContentView: View {
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             ReviewPrompt.noteSession()
+            // FORCE-REFRESH ON FOREGROUND: revive a dead poll loop and wake a
+            // sleeping one so returning to the app shows current scores instantly
+            // (the loop's adaptive sleep otherwise runs out before the next fetch).
+            LiveScoreCache.shared.refreshNow()
             Task(priority: .utility) {
                 await BillfoldSnapshotStore.shared.prewarmIfNeeded()
             }
