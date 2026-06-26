@@ -4877,17 +4877,29 @@ struct HomePropBoxSection: View {
                 titleRow   // game dropdown on THE BOX, static label elsewhere
                 Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
                 gridHeader
-                Button(action: onOpen) {
+                // Fixed-height scroll: the box stays the same size (~10 rows
+                // visible) but scrolls internally to reach every row.
+                //
+                // IMPORTANT: this inner vertical ScrollView is nested inside the
+                // Home page's outer vertical ScrollView. Wrapping the rows in a
+                // `Button` (the old version) installed a gesture that swallowed
+                // the inner scroll drag — the box clipped to ~10 rows but would
+                // not scroll. The tap-to-open is now per-row via `.onTapGesture`
+                // (which does NOT block the scroll pan), so the inner box
+                // genuinely scrolls to every row while staying tappable.
+                ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 0) {
                         ForEach(currentRows) { row in
                             Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                             boxRow(row)
+                                .contentShape(Rectangle())
+                                .onTapGesture { onOpen() }
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .frame(height: min(CGFloat(max(currentRows.count, 1)) * 37, 374))
+                .scrollIndicators(.visible)
             }
             .background(Color(hex: "#181616"))
             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -17008,14 +17020,12 @@ struct PicksCarouselView: View {
                 }
                 Text(" ")
                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                Group {
-                    if on {
-                        Capsule().fill(GaryColors.gold).frame(height: 2)
-                            .matchedGeometryEffect(id: "pickTabUnderline", in: pickTabNS)
-                    } else {
-                        Capsule().fill(Color.clear).frame(height: 2)
-                    }
-                }
+                // Gold selected-underline REMOVED from the day tab (founder call) — the
+                // selected state already reads from the white/bold label vs the dim
+                // matchup tabs, and the bar was crowding GARY'S PICK below. A clear
+                // 2pt spacer stays so the day tab keeps the same height/baseline as
+                // the matchup tabs in the bottom-aligned row.
+                Capsule().fill(Color.clear).frame(height: 2)
             }
             .contentShape(Rectangle())
         } primaryAction: {
@@ -17258,9 +17268,11 @@ struct PicksTodayPage: View {
                               gameResult: gamePickResult(gp.pick),
                               showSportBadge: true)
                 .padding(.horizontal, 22)   // match the per-game cards (screen−44) so eyebrow + time line up across the Picks tab
+                .padding(.top, 10)          // breathing room from the day/matchup tab row (was flush after the gold underline came off)
         } else if let only = prop {
             FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
                 .padding(.horizontal, 22)   // same width as the per-game prop cards
+                .padding(.top, 10)          // breathing room from the tab row (matches the game-card variant)
         }
     }
 
@@ -18436,11 +18448,30 @@ struct StreakBoard: View {
 
     /// Tonight's actionable streaks lead; longest runs break ties.
     private func ordered(_ r: [StreakRow]) -> [StreakRow] {
-        r.sorted {
-            let (a, b) = ($0.next_game != nil, $1.next_game != nil)
-            if a != b { return a }
-            return ($0.length ?? 0) > ($1.length ?? 0)
+        // Sort each DIRECTION (positive: win/over/hit/hr · negative: loss/under/hitless)
+        // by tonight's-actionable-first then longest run, then INTERLEAVE — leading with
+        // whichever side has the longer top streak — so a lopsided night (all unders/
+        // losses) still surfaces both kinds near the top, biggest of each first. A
+        // single-direction group just stays a plain length sort.
+        func sortDir(_ rows: [StreakRow]) -> [StreakRow] {
+            rows.sorted {
+                let (a, b) = ($0.next_game != nil, $1.next_game != nil)
+                if a != b { return a }
+                return ($0.length ?? 0) > ($1.length ?? 0)
+            }
         }
+        let positive: Set<String> = ["win", "over", "hit", "hr"]
+        var pos = sortDir(r.filter { positive.contains($0.kind ?? "") })
+        var neg = sortDir(r.filter { !positive.contains($0.kind ?? "") })
+        var takePos = (pos.first?.length ?? -1) >= (neg.first?.length ?? -1)
+        var out: [StreakRow] = []
+        while !pos.isEmpty || !neg.isEmpty {
+            if takePos, !pos.isEmpty { out.append(pos.removeFirst()) }
+            else if !neg.isEmpty { out.append(neg.removeFirst()) }
+            else if !pos.isEmpty { out.append(pos.removeFirst()) }
+            takePos.toggle()
+        }
+        return out
     }
 
     private var groups: [Group] {

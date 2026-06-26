@@ -132,6 +132,10 @@ struct MLBGameIntelView: View {
     @State private var realAway: SupabaseAPI.MLBTeamLineup? = nil
     @State private var homeUp = true
     @State private var lineupLoaded = false
+    /// True only when the builder reports the REAL sheet is confirmed (BDL posted
+    /// the official lineup). Until then the Confirmed tab shows an empty state —
+    /// the projection never masquerades as confirmed.
+    @State private var confirmedAvailable = false
 
     private var awayName: String { matchup.components(separatedBy: " @ ").first ?? "Away" }
     private var homeName: String { matchup.components(separatedBy: " @ ").last ?? "Home" }
@@ -209,7 +213,9 @@ struct MLBGameIntelView: View {
                 realHome = row.payload.home
                 realAway = row.payload.away
                 // Real status from the builder — BDL posts the confirmed sheet pre-game.
-                state = (row.status == "confirmed") ? .confirmed : .projected
+                let isConfirmed = (row.status == "confirmed")
+                confirmedAvailable = isConfirmed
+                state = isConfirmed ? .confirmed : .projected
             }
         }
     }
@@ -330,7 +336,39 @@ struct MLBGameIntelView: View {
         .background(Capsule().fill(MLBI.panel).overlay(Capsule().stroke(MLBI.line, lineWidth: 1)))
     }
 
-    private var fieldCard: some View {
+    /// The Confirmed tab is selected but no real confirmed sheet has posted yet —
+    /// show the projection only on the Projected tab, never under Confirmed.
+    private var showConfirmedPending: Bool { state == .confirmed && !confirmedAvailable }
+
+    @ViewBuilder private var fieldCard: some View {
+        if showConfirmedPending {
+            confirmedPendingCard
+        } else {
+            fieldBody
+        }
+    }
+
+    /// Empty state shown when the user taps Confirmed before the official sheet posts.
+    private var confirmedPendingCard: some View {
+        VStack(spacing: 8) {
+            VStack(spacing: 6) {
+                Text("LINEUP NOT CONFIRMED YET")
+                    .font(GaryFonts.mono(14, bold: true)).tracking(2.5).foregroundStyle(MLBI.gold)
+                    .multilineTextAlignment(.center)
+                Text("Posts ~2–3h before first pitch")
+                    .font(GaryFonts.mono(10)).foregroundStyle(MLBI.ink3)
+                Text("Tap Projected for Gary's projected lineup")
+                    .font(GaryFonts.mono(9.5)).foregroundStyle(MLBI.ink4)
+            }
+            .padding(.vertical, 22).padding(.horizontal, 26)
+            .frame(maxWidth: .infinity)
+            .frame(height: 452)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(GaryColors.cardBg.opacity(0.5)))
+        }
+        .padding(.horizontal, 14).padding(.top, 12)
+    }
+
+    private var fieldBody: some View {
         VStack(spacing: 8) {
             GeometryReader { geo in
                 let t = fieldT(geo.size)

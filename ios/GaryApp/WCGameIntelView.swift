@@ -86,6 +86,12 @@ struct WCGameIntelView: View {
     private var homeFormation: String { confirmedXI?.home?.formation ?? "4-3-3" }
     private var awayFormation: String { confirmedXI?.away?.formation ?? "4-4-2" }
     private var hasRealXI: Bool { (confirmedXI?.home?.xi?.isEmpty == false) || (confirmedXI?.away?.xi?.isEmpty == false) }
+    /// True only when the feed reports the official sheet is CONFIRMED. A projected /
+    /// contested XI (status != "confirmed") must never render under the Confirmed tab.
+    private var confirmedAvailable: Bool { (confirmedXI?.status ?? "").lowercased() == "confirmed" }
+    /// The user tapped Confirmed before the official sheet posted — show the empty
+    /// state, not the projection. The Projected tab keeps showing the projection.
+    private var showConfirmedPending: Bool { state == .confirmed && !confirmedAvailable }
 
     // Resolved together so a colour clash (both nations similar) flips the HOME
     // side to white-with-a-hint while the away side keeps its colour.
@@ -187,23 +193,46 @@ struct WCGameIntelView: View {
         .padding(.horizontal, 22).padding(.top, showHeader ? 14 : 2)
     }
 
-    private var pitchCard: some View {
-        VStack(spacing: 8) {
-            pitch
-                .frame(height: 560)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08)))
-                .overlay {
-                    if !hasRealXI {
-                        VStack(spacing: 6) {
-                            Text("PROJECTED").font(GaryFonts.mono(13, bold: true)).tracking(2.5).foregroundStyle(WCI.gold)
-                            Text("Confirmed XI posts ~60 min before kickoff").font(GaryFonts.mono(10)).foregroundStyle(WCI.ink3)
+    @ViewBuilder private var pitchCard: some View {
+        if showConfirmedPending {
+            confirmedPendingCard
+        } else {
+            VStack(spacing: 8) {
+                pitch
+                    .frame(height: 560)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08)))
+                    .overlay {
+                        if !hasRealXI {
+                            VStack(spacing: 6) {
+                                Text("PROJECTED").font(GaryFonts.mono(13, bold: true)).tracking(2.5).foregroundStyle(WCI.gold)
+                                Text("Confirmed XI posts ~60 min before kickoff").font(GaryFonts.mono(10)).foregroundStyle(WCI.ink3)
+                            }
+                            .padding(.horizontal, 22).padding(.vertical, 16)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.5)))
                         }
-                        .padding(.horizontal, 22).padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.5)))
                     }
-                }
+            }
+            .padding(.horizontal, 14).padding(.top, 13)
         }
+    }
+
+    /// Empty state shown when Confirmed is tapped before the official XI posts.
+    private var confirmedPendingCard: some View {
+        VStack(spacing: 6) {
+            Text("LINEUP NOT CONFIRMED YET")
+                .font(GaryFonts.mono(13, bold: true)).tracking(2.5).foregroundStyle(WCI.gold)
+                .multilineTextAlignment(.center)
+            Text("Posts ~60 min before kickoff")
+                .font(GaryFonts.mono(10)).foregroundStyle(WCI.ink3)
+            Text("Tap Projected for Gary's projected XI")
+                .font(GaryFonts.mono(9.5)).foregroundStyle(WCI.ink4)
+        }
+        .padding(.vertical, 26).padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
+        .frame(height: 560)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.black.opacity(0.25)))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08)))
         .padding(.horizontal, 14).padding(.top, 13)
     }
 

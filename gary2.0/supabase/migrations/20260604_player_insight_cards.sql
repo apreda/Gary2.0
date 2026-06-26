@@ -13,7 +13,10 @@ CREATE TABLE IF NOT EXISTS public.player_insight_cards (
   payload jsonb NOT NULL,
   generated_by text,
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (date, player_id)
+  -- Widened 2026-06-26 from (date, player_id): low MLBAM ids collide with
+  -- API-Football WC ids on the same date (e.g. MLB 158 = WC 158), silently
+  -- dropping MLB cards on days with both leagues. league disambiguates them.
+  UNIQUE (date, league, player_id)
 );
 
 CREATE INDEX IF NOT EXISTS player_insight_cards_date_player_idx
