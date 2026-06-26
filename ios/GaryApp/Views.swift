@@ -1456,6 +1456,8 @@ enum GaryColors {
     // Deep backgrounds
     static let darkBg = Color(hex: "#08080A")
     static let cardBg = Color(hex: "#121214")
+    /// Near-black text/ink that sits on the gold CTA / active pills / chips.
+    static let ink = Color(hex: "#0C0B0B")
     static let elevatedBg = Color(hex: "#1E1A1A")
     
     // Glass tints
@@ -1813,9 +1815,21 @@ struct HomeView: View {
 
     /// Time-aware front page: results lead in the morning, the slate leads
     /// pre-game, the tape + takeover lead while Gary's games are in progress.
-    private enum HomePhase: Equatable { case morning, pregame, live }
+    private enum HomePhase: Equatable { case morning, pregame, live, tomorrow }
     private var phase: HomePhase {
         if liveScoresNow.contains(where: { $0.isLive }) || gamesLiveNow > 0 { return .live }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        return cal.component(.hour, from: Date()) < 12 ? .morning : .pregame
+    }
+    /// The Tomorrow look-ahead payload (tomorrow_board). nil until it loads /
+    /// posts — the Tomorrow body shows its own honest-empty states meanwhile.
+    @State private var tomorrowBoard: TomorrowBoard? = nil
+    /// What the "TODAY" pill maps to: today's locked Home, time-aware (morning
+    /// before noon ET, pregame after) — exactly the computed `phase` clock, so
+    /// the Today pill drives selectedPhase to .morning/.pregame untouched. Live
+    /// and Tomorrow are their own pills.
+    private var todayClockPhase: HomePhase {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
         return cal.component(.hour, from: Date()) < 12 ? .morning : .pregame
@@ -1906,6 +1920,8 @@ struct HomeView: View {
                         pregameSections
                     case .live:
                         liveSections
+                    case .tomorrow:
+                        TomorrowView.Body(board: tomorrowBoard)
                     }
 
                     // ── ⑥ Footer — quiet ──
@@ -1941,6 +1957,7 @@ struct HomeView: View {
             case "morning": selectedPhase = .morning
             case "pregame": selectedPhase = .pregame
             case "live":    selectedPhase = .live
+            case "tomorrow": selectedPhase = .tomorrow
             default: break
             }
             #endif
@@ -2144,6 +2161,9 @@ struct HomeView: View {
                     nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
                     slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
+                    // The TOMORROW look-ahead board (keyed on tomorrow's EST slate
+                    // day) — feeds the Tomorrow pill's countdown + scoreboard.
+                    tomorrowBoard = await SupabaseAPI.fetchTomorrowBoard(date: Self.tomorrowSlateDateEST())
                     nightHighlights = await SupabaseAPI.fetchNightHighlights(date: recapDay ?? SupabaseAPI.hubGradedDateEST())
                     homeStreaks = await SupabaseAPI.fetchStreaks()
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
@@ -2650,39 +2670,88 @@ struct HomeView: View {
     /// idiom), not a gold pill: primary nav reads as nav, and gold marks the
     /// active tab with a 2pt sliding underline. Opens on Morning; Pre-game is a
     /// tap away. (No Live tab — the home isn't a live-scores surface.)
-    private var phaseSwitcher: some View {
-        HStack(spacing: 0) {
-            phaseTab("Morning", .morning)
-            Spacer().frame(width: 28)
-            phaseTab("Tonight", .pregame)
-            Spacer(minLength: 0)
+    // The matte-capsule, gold-active-pill switcher — TODAY · LIVE · TOMORROW.
+    // CLAUDE.md's locked "Morning·Pre-game·Live matte capsule, gold active pill"
+    // sanctions the gold-pill chrome; here it's relabeled + given sub-counts.
+    //   TODAY    = today's locked Home (morning before noon ET, pregame after) —
+    //             drives selectedPhase off the `phase` clock, untouched.
+    //   LIVE     = the existing live state, verbatim.
+    //   TOMORROW = the new look-ahead body.
+
+    /// Which pill currently reads as active.
+    private enum SwitcherPill { case today, live, tomorrow }
+    private var activePill: SwitcherPill {
+        switch selectedPhase {
+        case .morning, .pregame: return .today
+        case .live:              return .live
+        case .tomorrow:          return .tomorrow
         }
+    }
+
+    private var phaseSwitcher: some View {
+        HStack(spacing: 6) {
+            switcherPill("TODAY", sub: todaySubCount, pill: .today)
+            switcherPill("LIVE", sub: liveSubCount, pill: .live, redDot: gamesLiveNow > 0)
+            switcherPill("TOMORROW", sub: tomorrowSubCount, pill: .tomorrow)
+        }
+        .padding(4)
+        .background(
+            Capsule(style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.04))
+                .overlay(Capsule(style: .continuous).stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
+        )
         .padding(.horizontal, 16)
     }
 
-    private func phaseTab(_ label: String, _ p: HomePhase) -> some View {
-        let on = selectedPhase == p
+    /// Sub-count strings — Today = "N LIVE" if any are live else "N PICKS";
+    /// Live = "N NOW"; Tomorrow = "N GAMES" from the board's game_count.
+    private var todaySubCount: String {
+        let live = gamesLiveNow
+        if live > 0 { return "\(live) LIVE" }
+        return "\(todayPicks.count) PICKS"
+    }
+    private var liveSubCount: String { "\(gamesLiveNow) NOW" }
+    private var tomorrowSubCount: String { "\(tomorrowBoard?.game_count ?? 0) GAMES" }
+
+    private func switcherPill(_ label: String, sub: String, pill: SwitcherPill, redDot: Bool = false) -> some View {
+        let on = activePill == pill
         return Button {
-            // Reduce Motion: the underline jumps instead of sliding.
-            if reduceMotion { selectedPhase = p }
-            else { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selectedPhase = p } }
+            let target: HomePhase = {
+                switch pill {
+                case .today:    return todayClockPhase
+                case .live:     return .live
+                case .tomorrow: return .tomorrow
+                }
+            }()
+            if reduceMotion { selectedPhase = target }
+            else { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selectedPhase = target } }
         } label: {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(label.uppercased())
-                    .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(on ? .white : .white.opacity(0.45))
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    if redDot {
+                        Circle().fill(GaryColors.loss).frame(width: 5, height: 5)
+                    }
+                    Text(label)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                        .foregroundStyle(on ? GaryColors.ink : .white.opacity(0.55))
+                }
+                Text(sub)
+                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
+                    .foregroundStyle(on ? GaryColors.ink.opacity(0.7) : .white.opacity(0.3))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .background(
                 Group {
                     if on {
-                        Capsule().fill(GaryColors.gold).frame(height: 2)
-                            .matchedGeometryEffect(id: "phaseUnderline", in: phaseTabNS)
-                    } else {
-                        Capsule().fill(Color.clear).frame(height: 2)
+                        Capsule(style: .continuous).fill(GaryColors.gold)
+                            .matchedGeometryEffect(id: "phasePill", in: phaseTabNS)
                     }
                 }
-            }
+            )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel("\(label) — \(sub)")
         .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
     }
 
@@ -3393,6 +3462,12 @@ struct HomeView: View {
         guard let d = f.date(from: s),
               let shifted = Calendar.current.date(byAdding: .day, value: days, to: d) else { return nil }
         return f.string(from: shifted)
+    }
+
+    /// Tomorrow's EST slate day (todayEST + 1) — the key the Tomorrow board is
+    /// written under.
+    private static func tomorrowSlateDateEST() -> String {
+        shiftDate(SupabaseAPI.todayEST(), by: 1) ?? SupabaseAPI.todayEST()
     }
 
     /// Days until the 2026 World Cup opener (June 11, EST). Nil after kickoff.
@@ -9732,6 +9807,406 @@ private struct QuantPanel: ViewModifier {
 
 private extension View {
     func quantPanel(radius: CGFloat = 12) -> some View { modifier(QuantPanel(radius: radius)) }
+}
+
+// MARK: - Tomorrow View (the "TOMORROW" Home state — the look-ahead board)
+//
+// The C1plus mock rebuilt on the app's real components/spacing: a countdown
+// hero, big-games-to-watch, the full scoreboard, and a by-sport probable-
+// starters / key-returns footer grid. Everything is server-precomputed
+// (tomorrow_board); the only live work is the 1Hz countdown tick. Rendered as
+// the body of the new TOMORROW switcher pill on Home — it is not its own tab,
+// so it carries no masthead (Home's GaryPageHeader sits above the switcher).
+struct TomorrowView {
+
+    /// sport -> hero eyebrow term, keyed on countdown_sport (uppercased). The
+    /// mock's "FIRST PITCH IN" is just the MLB branch; tomorrow it auto-switches
+    /// to "KICKOFF IN" if a WC match is the earliest game.
+    static func countdownTerm(_ sport: String?) -> String {
+        let s = (sport ?? "").uppercased()
+        switch s {
+        case "MLB":                       return "FIRST PITCH IN"
+        case "NFL", "NCAAF":              return "KICKOFF IN"
+        case "NBA", "NCAAB":             return "TIP-OFF IN"
+        case "NHL":                       return "PUCK DROP IN"
+        default:
+            if s == "WC" || s.hasPrefix("SOCCER") { return "KICKOFF IN" }
+            return "FIRST GAME IN"
+        }
+    }
+
+    /// Sport-dot legend color: MLB green, WC teal, everything else gold.
+    static func sportDotColor(_ league: String?) -> Color {
+        switch (league ?? "").uppercased() {
+        case "MLB": return Color(hex: "#4FB14F")
+        case "WC":  return Color(hex: "#3FB6A8")
+        default:    return GaryColors.gold
+        }
+    }
+
+    /// "7:10 PM ET" from an ISO commence time, in Eastern.
+    static func etTime(_ iso: String?, withZone: Bool = true) -> String {
+        guard let iso, let date = parseISO8601(iso) else { return "—" }
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = withZone ? "h:mm a" : "h:mm"
+        var s = f.string(from: date)
+        if withZone { s += " ET" }
+        return s
+    }
+
+    /// "Saturday, June 27" for tomorrow's slate day (countdown_iso's date, ET).
+    static func weekdayLabel(_ iso: String?) -> String {
+        guard let iso, let date = parseISO8601(iso) else { return "" }
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEEE, MMMM d"
+        return f.string(from: date)
+    }
+
+    /// "Saturday" — short weekday for section subs.
+    static func weekday(_ iso: String?) -> String {
+        guard let iso, let date = parseISO8601(iso) else { return "Tomorrow" }
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEEE"
+        return f.string(from: date)
+    }
+
+    /// Stable sport order for the by-sport footer groups: MLB, WC, then the rest.
+    static func sortedLeagues(_ people: [TomorrowPerson]) -> [String] {
+        let order = ["MLB", "WC"]
+        let present = Array(Set(people.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty }))
+        let head = order.filter { present.contains($0) }
+        let tail = present.filter { !order.contains($0) }.sorted()
+        return head + tail
+    }
+
+    /// The Tomorrow body — the scrolling content under the switcher. Lives inside
+    /// Home's ScrollView, so it returns a VStack (no ScrollView/background here).
+    struct Body: View {
+        let board: TomorrowBoard?
+        /// 1Hz tick for the live countdown. Re-render every second.
+        @State private var now = Date()
+        private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 22) {
+                countdownHero
+                bigGames
+                if let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
+                footerGrid
+            }
+            .onReceive(ticker) { now = $0 }
+        }
+
+        // ── ① Countdown hero ───────────────────────────────────────────────
+
+        private var countdownHero: some View {
+            let iso = board?.countdown_iso
+            let anyLines = board?.any_lines ?? false
+            let target = iso.flatMap { parseISO8601($0) }
+            let hasClock = (target != nil) && anyLines
+            return VStack(alignment: .leading, spacing: 0) {
+                if hasClock, let target {
+                    Text(TomorrowView.countdownTerm(board?.countdown_sport))
+                        .font(GaryFonts.mono(10, bold: true)).tracking(2)
+                        .foregroundStyle(GaryColors.gold)
+                    Text(Self.hms(from: now, to: target))
+                        .font(GaryFonts.mono(39)).monospacedDigit()
+                        .foregroundStyle(.white)
+                        .padding(.top, 6)
+                    Text(Self.heroSub(board: board, iso: iso))
+                        .font(GaryFonts.text(13))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.top, 8)
+                } else {
+                    // Honest-empty: no slate posted (iso nil) OR lines not open.
+                    Text("TOMORROW")
+                        .font(GaryFonts.mono(10, bold: true)).tracking(2)
+                        .foregroundStyle(GaryColors.gold)
+                    Text(iso == nil ? "Tomorrow's board posts soon"
+                                    : "Lines open soon")
+                        .font(GaryFonts.text(20, .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.top, 8)
+                    if iso != nil {
+                        Text(Self.heroSub(board: board, iso: iso))
+                            .font(GaryFonts.text(13))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .padding(.top, 6)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .quantPanel(radius: 18)
+            // The gold radial-glow corner from the mock.
+            .overlay(alignment: .topTrailing) {
+                RadialGradient(colors: [GaryColors.gold.opacity(0.18), .clear],
+                               center: .topTrailing, startRadius: 0, endRadius: 150)
+                    .frame(width: 200, height: 200)
+                    .allowsHitTesting(false)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .padding(.horizontal, 16)
+        }
+
+        private static func hms(from: Date, to: Date) -> String {
+            let secs = max(0, Int(to.timeIntervalSince(from)))
+            let h = secs / 3600, m = (secs % 3600) / 60, s = secs % 60
+            return String(format: "%02d:%02d:%02d", h, m, s)
+        }
+
+        private static func heroSub(board: TomorrowBoard?, iso: String?) -> String {
+            let count = board?.game_count ?? 0
+            let day = TomorrowView.weekdayLabel(iso)
+            let firstTime = TomorrowView.etTime(iso)
+            if board?.any_lines == false || iso == nil {
+                return "lines open soon"
+            }
+            let plural = count == 1 ? "game" : "games"
+            return "\(count) \(plural) on the board · \(day) · slate opens \(firstTime)"
+        }
+
+        // ── ② Big games to watch ───────────────────────────────────────────
+
+        @ViewBuilder private var bigGames: some View {
+            let games = (board?.big_games ?? []).sorted { $0.rank < $1.rank }.prefix(3)
+            if !games.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HubSectionHeader(eyebrow: "Big Games To Watch",
+                                     sub: TomorrowView.weekday(board?.countdown_iso))
+                    VStack(spacing: 0) {
+                        ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
+                            bigGameRow(g)
+                            if idx < games.count - 1 {
+                                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .quantPanel()
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+
+        private func bigGameRow(_ g: TomorrowBigGame) -> some View {
+            HStack(alignment: .top, spacing: 10) {
+                Text("\(g.rank)")
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(width: 14, alignment: .leading)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(g.matchup ?? "")
+                        .font(GaryFonts.text(13.5, .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                    HStack(spacing: 7) {
+                        if let reason = g.reason, !reason.isEmpty {
+                            Text(reason.uppercased())
+                                .font(GaryFonts.mono(8.5, bold: true))
+                                .foregroundStyle(GaryColors.gold)
+                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                .background(Capsule().fill(GaryColors.gold.opacity(0.12)))
+                        }
+                        if let ctx = g.context, !ctx.isEmpty {
+                            Text(ctx)
+                                .font(GaryFonts.mono(9))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                Spacer(minLength: 6)
+                Text(TomorrowView.etTime(g.commence_time, withZone: false))
+                    .font(GaryFonts.mono(10.5))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+        }
+
+        // ── ③ Tomorrow's board (full scoreboard) ───────────────────────────
+
+        private func tomorrowBoardSection(_ b: TomorrowBoard) -> some View {
+            VStack(alignment: .leading, spacing: 8) {
+                // Board label row + sport-dot legend.
+                HStack(spacing: 10) {
+                    Text("Tomorrow's Board · \(TomorrowView.weekday(b.countdown_iso))")
+                        .font(GaryFonts.mono(11))
+                        .foregroundStyle(.white.opacity(0.45))
+                    Spacer(minLength: 6)
+                    legendDot(Color(hex: "#4FB14F"), "MLB")
+                    legendDot(Color(hex: "#3FB6A8"), "WC")
+                }
+                .padding(.horizontal, 16)
+
+                VStack(spacing: 0) {
+                    boardHeader
+                    ForEach(Array(b.board.enumerated()), id: \.offset) { idx, row in
+                        boardRow(row, alt: idx % 2 == 1)
+                    }
+                }
+                .quantPanel(radius: 14)
+                .padding(.horizontal, 16)
+            }
+        }
+
+        private func legendDot(_ c: Color, _ label: String) -> some View {
+            HStack(spacing: 4) {
+                Circle().fill(c).frame(width: 6, height: 6)
+                Text(label).font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.4))
+            }
+        }
+
+        // 48 | 1fr | 46 | 42 | 46  (TIME | MATCHUP | SPR | O/U | ML)
+        private var boardHeader: some View {
+            HStack(spacing: 0) {
+                Text("TIME").frame(width: 48, alignment: .leading)
+                Text("MATCHUP").frame(maxWidth: .infinity, alignment: .leading)
+                Text("SPR").frame(width: 46, alignment: .trailing)
+                Text("O/U").frame(width: 42, alignment: .trailing)
+                Text("ML").frame(width: 46, alignment: .trailing)
+            }
+            .font(GaryFonts.mono(8.5))
+            .foregroundStyle(.white.opacity(0.28))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+
+        private func boardRow(_ row: TomorrowBoardRow, alt: Bool) -> some View {
+            let marquee = row.is_marquee ?? false
+            let away = row.away_abbr ?? abbr(row.away_team)
+            let home = row.home_abbr ?? abbr(row.home_team)
+            return HStack(spacing: 0) {
+                Text(TomorrowView.etTime(row.commence_time, withZone: false))
+                    .font(GaryFonts.mono(10.5))
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(width: 48, alignment: .leading)
+                HStack(spacing: 5) {
+                    Circle().fill(TomorrowView.sportDotColor(row.league)).frame(width: 6, height: 6)
+                    Text("\(away) @ \(home)")
+                        .font(GaryFonts.mono(10.5, bold: true))
+                        .foregroundStyle(.white.opacity(0.9))
+                    if marquee {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 7.5))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(Self.lineStr(row.spread, signed: true))
+                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 46, alignment: .trailing)
+                Text(Self.lineStr(row.total))
+                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 42, alignment: .trailing)
+                Text(Self.mlStr(row.ml_home))
+                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.45))
+                    .frame(width: 46, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(alignment: .leading) {
+                if marquee {
+                    LinearGradient(colors: [GaryColors.gold.opacity(0.09), .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                } else if alt {
+                    Color.white.opacity(0.018)
+                }
+            }
+        }
+
+        private static func lineStr(_ v: Double?, signed: Bool = false) -> String {
+            guard let v else { return "—" }
+            if signed && v > 0 { return "+" + Self.trimNum(v) }
+            return Self.trimNum(v)
+        }
+        private static func mlStr(_ v: Double?) -> String {
+            guard let v else { return "—" }
+            let i = Int(v.rounded())
+            return i > 0 ? "+\(i)" : "\(i)"
+        }
+        private static func trimNum(_ v: Double) -> String {
+            if v == v.rounded() { return String(Int(v)) }
+            return String(format: "%.1f", v)
+        }
+
+        private func abbr(_ team: String?) -> String {
+            guard let team, !team.isEmpty else { return "—" }
+            // Fallback only — server normally provides away_abbr/home_abbr.
+            return String(team.prefix(3)).uppercased()
+        }
+
+        // ── ④ Footer grid (probable starters + key returns) ────────────────
+
+        @ViewBuilder private var footerGrid: some View {
+            let starters = board?.starters ?? []
+            let returns = board?.returns ?? []
+            // If BOTH are fully empty, hide the whole 2-col grid.
+            if !starters.isEmpty || !returns.isEmpty {
+                HStack(alignment: .top, spacing: 11) {
+                    footerCard(title: "PROBABLE STARTERS", people: starters)
+                    footerCard(title: "KEY RETURNS", people: returns)
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+
+        private func footerCard(title: String, people: [TomorrowPerson]) -> some View {
+            let leagues = TomorrowView.sortedLeagues(people)
+            return VStack(alignment: .leading, spacing: 10) {
+                Text(title)
+                    .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
+                    .foregroundStyle(GaryColors.gold)
+                if leagues.isEmpty {
+                    // Honest-empty: a single faint "—" row, title stays.
+                    Text("—")
+                        .font(GaryFonts.mono(9))
+                        .foregroundStyle(.white.opacity(0.25))
+                        .padding(.vertical, 5)
+                } else {
+                    ForEach(leagues, id: \.self) { lg in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(lg)
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
+                                .foregroundStyle(.white.opacity(0.28))
+                                .padding(.top, 6)
+                                .padding(.bottom, 3)
+                            let rows = people.filter { ($0.league ?? "").uppercased() == lg }
+                            if rows.isEmpty {
+                                Text("—")
+                                    .font(GaryFonts.mono(9))
+                                    .foregroundStyle(.white.opacity(0.25))
+                                    .padding(.vertical, 5)
+                            } else {
+                                ForEach(Array(rows.enumerated()), id: \.offset) { _, p in
+                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                        Text(p.name ?? "")
+                                            .font(GaryFonts.text(12.5, .semibold))
+                                            .foregroundStyle(.white.opacity(0.9))
+                                            .lineLimit(1)
+                                        Spacer(minLength: 4)
+                                        if let d = p.detail, !d.isEmpty {
+                                            Text(d)
+                                                .font(GaryFonts.mono(9))
+                                                .foregroundStyle(.white.opacity(0.45))
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    .padding(.vertical, 5)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .quantPanel()
+        }
+    }
 }
 
 // MARK: - Billfold View

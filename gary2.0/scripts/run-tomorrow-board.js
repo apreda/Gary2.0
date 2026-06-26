@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+/**
+ * Tomorrow Board snapshot CLI
+ *
+ * Assembles tomorrow's TOMORROW-tab snapshot (slate + line board, ranked big
+ * games, by-sport probable starters, best-effort key returns, earliest-game
+ * countdown) into the `tomorrow_board` Supabase table via tomorrowService.
+ *
+ * The 5 AM scheduler plan step calls writeTomorrowBoard automatically, plus a
+ * cheap evening re-run picks up overnight-posted lines. This CLI exists for
+ * backfills and manual re-snapshots.
+ *
+ * Usage:
+ *   node scripts/run-tomorrow-board.js                    # tomorrow (ET)
+ *   node scripts/run-tomorrow-board.js --date 2026-06-27  # specific ET date
+ */
+
+import '../src/loadEnv.js';
+
+const args = process.argv.slice(2);
+
+function getArgValue(flag) {
+  const eq = args.find((a) => a.startsWith(`${flag}=`));
+  if (eq) return eq.split('=').slice(1).join('=');
+  const idx = args.indexOf(flag);
+  if (idx === -1) return undefined;
+  const next = args[idx + 1];
+  if (!next || next.startsWith('--')) return undefined;
+  return next;
+}
+
+const { writeTomorrowBoard, tomorrowET } = await import('../src/services/tomorrowService.js');
+
+const dateArg = getArgValue('--date');
+const targetDate = dateArg || tomorrowET();
+
+if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+  console.error(`❌ Invalid --date "${targetDate}". Expected YYYY-MM-DD.`);
+  process.exit(1);
+}
+
+try {
+  const r = await writeTomorrowBoard(targetDate);
+  console.log(
+    `\n🏁 Tomorrow board for ${r.date}: ${r.game_count} game(s), ` +
+    `${r.big_games.length} big game(s), ${r.starters.length} starter(s), ` +
+    `${r.returns.length} return(s), lines=${r.any_lines ? 'posted' : 'open soon'}, ` +
+    `countdown=${r.countdown_sport || 'none'}`,
+  );
+  process.exit(0);
+} catch (e) {
+  console.error(`❌ Tomorrow board write failed: ${e.message}`);
+  process.exit(1);
+}

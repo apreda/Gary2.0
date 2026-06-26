@@ -285,6 +285,22 @@ async function writeDailySlateNonFatal(dateStr) {
   }
 }
 
+// Pre-assemble TOMORROW's board (slate + line snapshot, ranked big games,
+// by-sport probable starters, best-effort key returns, earliest-game countdown)
+// into the `tomorrow_board` table for the app's TOMORROW tab. daily_slate only
+// ever carries today, so the Tomorrow tab needs this dedicated snapshot. NON-FATAL
+// by design — never blocks the daily build. Idempotent upsert on (date); the
+// evening re-run refreshes overnight-posted lines.
+async function writeTomorrowBoardNonFatal(tomorrowDateStr) {
+  try {
+    const { writeTomorrowBoard } = await import('../src/services/tomorrowService.js');
+    const r = await writeTomorrowBoard(tomorrowDateStr);
+    log(`🗓️ Tomorrow board published: ${r.game_count} game(s), ${r.big_games.length} big game(s), ${r.starters.length} starter(s) (lines ${r.any_lines ? 'posted' : 'open soon'})`);
+  } catch (e) {
+    log(`⚠️ Tomorrow board write failed (non-fatal): ${e.message}`);
+  }
+}
+
 // Build the plan, but ride out transient fetch outages. A wifi/API failure at
 // build time used to return an empty plan that then slept 24h — the bug that
 // silently killed a whole slate (see Friday's "Sleeping 21.22 hours" log).
@@ -302,6 +318,8 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
     if (schedule.length > 0 || !fetchFailed) {
       // Plan built (or genuinely no games) — snapshot the public slate for the app.
       await writeDailySlateNonFatal(dateStr);
+      // Also pre-assemble TOMORROW's board (daily_slate only carries today).
+      await writeTomorrowBoardNonFatal(addDaysISO(dateStr, 1));
       return schedule;
     }
     if (Date.now() - start >= maxWaitMs) {

@@ -37,11 +37,11 @@ const SLATE_SPORTS = [
   { key: 'soccer_world_cup', league: 'WC' },
 ];
 
-function getETDateStr(date) {
+export function getETDateStr(date) {
   return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
-function toNum(v) {
+export function toNum(v) {
   if (v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -58,7 +58,7 @@ function toNum(v) {
  *     spreads pass through untouched.
  *   - Totals <= 0 are junk in every league.
  */
-function sanitizeLines(league, { spread, ml_home, ml_away, total }) {
+export function sanitizeLines(league, { spread, ml_home, ml_away, total }) {
   const mlJunk =
     (ml_home !== null && Math.abs(ml_home) > 2000) ||
     (ml_away !== null && Math.abs(ml_away) > 2000);
@@ -75,7 +75,9 @@ function sanitizeLines(league, { spread, ml_home, ml_away, total }) {
  * Fetch one league's games for the ET date and map them to daily_slate rows.
  * Returns [] when the league has no games (or matches haven't started — WC).
  */
-async function buildLeagueRows(sport, etDateStr) {
+export const SLATE_SPORTS_LIST = SLATE_SPORTS;
+
+export async function buildLeagueRows(sport, etDateStr) {
   if (sport.key === 'soccer_world_cup') {
     const wc = await import('./fifaWorldCupService.js');
     const matches = await wc.getMatches({});

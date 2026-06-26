@@ -576,6 +576,22 @@ enum SupabaseAPI {
         return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
     }
 
+    /// Tomorrow's look-ahead board (tomorrow_board) — the "TOMORROW" Home state.
+    /// One row per date carrying the precomputed countdown target/sport, the full
+    /// scoreboard, big-games-to-watch, and by-sport starters/returns. The app does
+    /// no slate-min math; everything is display-formatted server-side.
+    static func fetchTomorrowBoard(date: String) async -> TomorrowBoard? {
+        let url = buildURL(table: "tomorrow_board", query: [
+            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,game_count,any_lines,board,big_games,starters,returns"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "limit", value: "1")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([TomorrowBoard].self, from: data) else { return nil }
+        return rows.first
+    }
+
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence
     /// story per settled game Gary picked — the story player's slides.
     /// Live streaks as of the last completed night — newest snapshot wins

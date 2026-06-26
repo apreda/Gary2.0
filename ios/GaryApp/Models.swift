@@ -1894,3 +1894,53 @@ enum DFSPlatform: String, CaseIterable {
         }
     }
 }
+
+// MARK: - Tomorrow Board (the look-ahead "TOMORROW" Home state — tomorrow_board)
+//
+// Server (writeTomorrowBoard / tomorrowService.js) precomputes everything the app
+// renders: the earliest-game countdown + its sport, the full scoreboard with
+// short abbrs + marquee flags, the big-games-to-watch list, and the by-sport
+// probable-starters + key-returns rolls. The app does ZERO slate math — it just
+// renders the strings and ticks the countdown.
+struct TomorrowBoard: Decodable {
+    let date: String
+    let countdown_iso: String?      // ISO8601 of earliest game; nil => no slate yet
+    let countdown_sport: String?    // "MLB"/"WC"/"NBA"/"NHL"/... -> hero term map
+    let game_count: Int
+    let any_lines: Bool             // false => hero "lines open soon", board shows all "—"
+    let board: [TomorrowBoardRow]
+    let big_games: [TomorrowBigGame]
+    let starters: [TomorrowPerson]
+    let returns: [TomorrowPerson]
+}
+
+struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation extras
+    let league: String?
+    let away_team: String?
+    let home_team: String?
+    let away_abbr: String?           // precomputed short codes (NYY @ BOS)
+    let home_abbr: String?
+    let commence_time: String?
+    let venue: String?
+    let spread: Double?
+    let ml_home: Double?
+    let ml_away: Double?
+    let total: Double?
+    let is_marquee: Bool?            // gold star + tinted row
+}
+
+struct TomorrowBigGame: Decodable {
+    let rank: Int                    // 1,2,3
+    let league: String?
+    let matchup: String?            // "Yankees @ Red Sox" (full names, mock style)
+    let reason: String?             // chip: "RIVALRY"/"FIRST PLACE"/"GROUP DECIDER"
+    let context: String?            // "AL East · Cole vs Crochet"
+    let commence_time: String?      // for the right-aligned time "7:10"
+}
+
+struct TomorrowPerson: Decodable {   // starters AND returns share this
+    let league: String?             // groups by sport sub-header
+    let name: String?               // "G. Cole" / "Brazil XI"
+    let team: String?
+    let detail: String?             // starters: "NYY 2.41" or "4-3-3" or ""; returns: "wrist"/"IL → start"
+}

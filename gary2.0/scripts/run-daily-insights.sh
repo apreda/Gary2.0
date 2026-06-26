@@ -38,3 +38,14 @@ echo "[$(date)] Insight connections complete."
 echo "[$(date)] Starting The Wire run..."
 node run-wire-items.js "$@" || echo "[$(date)] Wire items run failed (non-fatal)"
 echo "[$(date)] The Wire complete."
+
+# Refresh TOMORROW's board (slate + line snapshot + ranked big games + by-sport
+# probable starters + earliest-game countdown) for the app's TOMORROW tab. Runs
+# on the same 4x-daily insights cadence; the evening (19:30 ET) pass is the
+# important one — it picks up tomorrow's lines that post overnight so "—" flips
+# to real numbers before users wake. Idempotent upsert on (date). Non-fatal: a
+# board failure must NOT fail the insights job. The 5 AM scheduler also writes
+# this board; these passes simply keep it fresh.
+echo "[$(date)] Starting Tomorrow board run..."
+node scripts/run-tomorrow-board.js || echo "[$(date)] Tomorrow board run failed (non-fatal)"
+echo "[$(date)] Tomorrow board complete."
