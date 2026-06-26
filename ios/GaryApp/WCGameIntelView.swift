@@ -86,9 +86,14 @@ struct WCGameIntelView: View {
     private var homeFormation: String { confirmedXI?.home?.formation ?? "4-3-3" }
     private var awayFormation: String { confirmedXI?.away?.formation ?? "4-4-2" }
     private var hasRealXI: Bool { (confirmedXI?.home?.xi?.isEmpty == false) || (confirmedXI?.away?.xi?.isEmpty == false) }
-    /// True only when the feed reports the official sheet is CONFIRMED. A projected /
-    /// contested XI (status != "confirmed") must never render under the Confirmed tab.
-    private var confirmedAvailable: Bool { (confirmedXI?.status ?? "").lowercased() == "confirmed" }
+    /// True only when the feed reports the official sheet is CONFIRMED *and* a real XI
+    /// is posted. A projected / contested XI (status != "confirmed"), or a "confirmed"
+    /// status with no players yet, must never render under the Confirmed tab. When this
+    /// is true we render the actual starters on the Confirmed tab — including while the
+    /// match is LIVE (the backend keeps the confirmed sheet through full-time).
+    private var confirmedAvailable: Bool {
+        (confirmedXI?.status ?? "").lowercased() == "confirmed" && hasRealXI
+    }
     /// The user tapped Confirmed before the official sheet posted — show the empty
     /// state, not the projection. The Projected tab keeps showing the projection.
     private var showConfirmedPending: Bool { state == .confirmed && !confirmedAvailable }

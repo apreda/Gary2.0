@@ -473,12 +473,25 @@ enum SupabaseAPI {
         let dog_losses: Int?
         let dog_net_units: Double?
         let games_counted: Int?
+        // Per-game dogs/favs detail (MLB builder writes these into meta jsonb).
+        // winner_is_dog: true = winning +ML underdog, false = winning -ML favorite,
+        // null = no pre-game ML snapshot or a push (skip from the dogs/favs view).
+        let meta: [MarketPulseGame]?
+    }
+
+    struct MarketPulseGame: Decodable {
+        let matchup: String?
+        let winner_team: String?
+        let winner_ml: Int?
+        let winner_is_dog: Bool?
+        let away_score: Int?
+        let home_score: Int?
     }
 
     /// Market pulse rows for a date. Returns [] on any failure.
     static func fetchMarketPulse(date: String) async -> [MarketPulseRow] {
         let url = buildURL(table: "market_pulse", query: [
-            URLQueryItem(name: "select", value: "date,league,overs_wins,overs_losses,overs_pushes,fav_wins,fav_losses,dog_wins,dog_losses,dog_net_units,games_counted"),
+            URLQueryItem(name: "select", value: "date,league,overs_wins,overs_losses,overs_pushes,fav_wins,fav_losses,dog_wins,dog_losses,dog_net_units,games_counted,meta"),
             URLQueryItem(name: "date", value: "eq.\(date)")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),

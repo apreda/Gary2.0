@@ -197,6 +197,28 @@ async function deleteDayRows(date, league) {
 }
 
 /**
+ * Delete the existing situational confirmedXI row(s) for one (date, league, game)
+ * so the confirmedXI lane can UPGRADE IN PLACE (projected < contested < confirmed)
+ * instead of being frozen by the additive-freeze. EXEMPTION FOR confirmedXI ONLY —
+ * every other lane keeps first-write-wins. The confirmedXI lane re-keys to the same
+ * `situational|||<game_id>` rowKey on every run, so without this the freshly-computed
+ * 'confirmed' row gets dropped and a live game stays stuck on "LINEUP NOT CONFIRMED YET".
+ */
+async function deleteSituationalRowForGame(date, league, gameId) {
+  await axios({
+    method: 'DELETE',
+    url: REST_URL,
+    headers: { ...restHeaders, Prefer: 'return=minimal' },
+    params: {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+      category: `eq.situational`,
+      game_id: `eq.${gameId}`,
+    },
+  });
+}
+
+/**
  * Insert connection rows. The caller passes only the cards not already posted
  * for the day (additive-freeze), so this never duplicates. Sanitizes via JSON
  * round-trip to strip functions/circular refs (same pattern as storeDailyPicks).
@@ -452,10 +474,43 @@ async function run() {
       // the user already saw is replaced — no intra-day churn. Grading updates the
       // result field separately. (Was DELETE-then-INSERT, which churned the board.)
       if (resetDay) await deleteDayRows(targetDate, league);   // manual force-refresh only
+
+      // UPGRADE-IN-PLACE EXEMPTION (confirmedXI lane only): the confirmed-XI lane
+      // re-keys to the same `situational|||<game_id>` rowKey every run, so the
+      // additive-freeze would drop its freshly-computed 'confirmed' row and the
+      // projected→confirmed transition would never land (game stuck on "LINEUP NOT
+      // CONFIRMED YET"). For each game that has a confirmedXI row THIS run, delete
+      // the prior situational row(s) for that game and re-insert this run's
+      // situational rows so it advances projected < contested < confirmed. Every
+      // OTHER lane keeps first-write-wins below — the churn protection is untouched.
+      const confirmedXiGameIds = new Set(
+        rows
+          .filter((r) => r.meta?.kind === 'confirmedXI' && r.game_id != null)
+          .map((r) => String(r.game_id))
+      );
+      let upgraded = 0;
+      for (const gameId of confirmedXiGameIds) {
+        await deleteSituationalRowForGame(targetDate, league, gameId);
+        // Re-insert ALL of this run's situational rows for that game (the confirmedXI
+        // rows PLUS any sibling situational rows e.g. rest-edge), since the delete
+        // cleared the whole game's situational slot.
+        const gameSituational = rows.filter(
+          (r) => r.category === 'situational' && String(r.game_id) === gameId
+        );
+        if (gameSituational.length) await insertRows(gameSituational);
+        upgraded += gameSituational.length;
+      }
+
+      // Additive-freeze for every other row (first-write-wins). The confirmedXI
+      // games' situational rows were just written above, so exclude them here.
       const seen = await existingKeys(targetDate, league);
-      const fresh = rows.filter((r) => !seen.has(rowKey(r)));
+      const fresh = rows.filter(
+        (r) =>
+          !(r.category === 'situational' && confirmedXiGameIds.has(String(r.game_id))) &&
+          !seen.has(rowKey(r))
+      );
       if (fresh.length) await insertRows(fresh);
-      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${rows.length - fresh.length} already posted (frozen).`);
+      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${rows.length - fresh.length - upgraded} already posted (frozen); ${upgraded} confirmedXI situational row(s) upgraded-in-place.`);
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });

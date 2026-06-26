@@ -1709,6 +1709,9 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var animateIn = false
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
+    /// The record-box label — rolls "TODAY"/"LIVE" once today's slate (EST 3am
+    /// anchor) has started, back to "YESTERDAY" once the day rolls over.
+    @State private var recordBoxLabel: String = "YESTERDAY"
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
     /// Gary's last-7-days GAME-pick record per sport — the Morning "7-Day Form" module.
     @State private var sevenDayForm: [SupabaseAPI.SportRecord] = []
@@ -2030,12 +2033,37 @@ struct HomeView: View {
                         pulse = await SupabaseAPI.fetchMarketPulse(date: pulseBack)
                     }
                     pulseRows = pulse
-                    propBoxGames = Self.buildPropBoxGames(props: recentPropResults, games: recentGameResults, anchor: recapDay, label: recapLabel)
+                    propBoxGames = Self.buildPropBoxGames(props: recentPropResults, games: recentGameResults, pulse: pulse, anchor: recapDay, label: recapLabel)
 
                     // ⑤ Door counts — live games + edges posted tonight.
                     let liveRows = await liveFetch
                     gamesLiveNow = liveRows.filter { $0.isLive }.count
                     initialLive = liveRows
+
+                    // Record box rolls on the EST slate day (todayEST() = 3am-ET anchor,
+                    // same as the Regression Board/recap). Once today's first game has
+                    // STARTED (any of today's games live or final), show TODAY's live
+                    // record — W-L of today's graded picks so far, 0-0 if none graded yet,
+                    // never a stale prior number. Updates as today's picks grade; once the
+                    // day rolls over the box's date moves and it reads "YESTERDAY" again.
+                    let slateDay = SupabaseAPI.todayEST()
+                    let todayStarted = liveRows.contains { $0.isLive || $0.isFinal }
+                        || recentGameResults.contains { $0.game_date == slateDay && ["won","lost","push"].contains($0.result ?? "") }
+                    if todayStarted {
+                        var w = 0, l = 0, p = 0
+                        for r in recentGameResults where r.game_date == slateDay {
+                            switch (r.result ?? "").lowercased() {
+                            case "won", "win", "w": w += 1
+                            case "lost", "loss", "l": l += 1
+                            case "push", "p": p += 1
+                            default: break
+                            }
+                        }
+                        yesterdayRecord = (w, l, p)
+                        recordBoxLabel = liveRows.contains { $0.isLive } ? "LIVE" : "TODAY"
+                    } else {
+                        recordBoxLabel = "YESTERDAY"   // keep the recordFetch fallback record
+                    }
                     // Keep the snapshot fresh — the tape/takeover re-render
                     // off the shared 90s poller once it starts.
                     LiveScoreCache.shared.startIfNeeded()
@@ -2285,8 +2313,8 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
         if !sevenDayForm.isEmpty {
-            HomeFormSection(records: sevenDayForm, yesterday: yesterdayRecord,
-                            // The "YESTERDAY" box re-opens the once/day recap popup so users can re-check it.
+            HomeFormSection(records: sevenDayForm, yesterday: yesterdayRecord, recordLabel: recordBoxLabel,
+                            // The record box re-opens the once/day recap popup so users can re-check it.
                             onYesterday: { withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true } })
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
@@ -2938,7 +2966,7 @@ struct HomeView: View {
     /// THE BOX's game dropdown: an "ALL" option (Gary's 2 best winners + 2 best
     /// losers from last night's graded props), then one option per game Gary had
     /// props in — densest first, the game's final score as the label.
-    static func buildPropBoxGames(props: [PropResult], games: [GameResult], anchor: String?, label: String) -> [HomePropBoxSection.GameOption] {
+    static func buildPropBoxGames(props: [PropResult], games: [GameResult], pulse: [SupabaseAPI.MarketPulseRow], anchor: String?, label: String) -> [HomePropBoxSection.GameOption] {
         // Driven off the SAME rolling anchor (recapDay) + label as the scorecard + HR tabs,
         // so THE BOX never reads "LAST NIGHT" while the scorecard one row up reads "TODAY".
         let graded = props.filter { ["won", "lost", "push"].contains($0.result ?? "") }
@@ -2966,15 +2994,20 @@ struct HomeView: View {
             options.append(.init(label: "ALL", status: label, rows: allRows))
         }
 
-        // +ML Dogs — the day's moneyline UNDERDOGS (positive ML) that WON
-        // outright. Grounded entirely in game_results: real pre-game moneyline
-        // (the +odds tail of pick_text), the winning team, the final score.
-        // GAME results, so this option carries a different row set than the prop
-        // reads above it. Rendered TEAM · +ML · FINAL ✓ (reuses the box columns).
-        let dogRows = buildMlDogRows(games: games, anchor: anchor)
+        // +ML Dogs / Favs — the FULL SLATE's moneyline winners, grounded in
+        // market_pulse.meta (MLB builder's genuine pre-game ML join). Every
+        // winning +odds underdog → Dogs; every winning -odds favorite → Favs.
+        // GAME results, so these carry a different row set than the prop reads
+        // above. Rendered TEAM · ML · FINAL ✓ (reuses the box columns). If a
+        // day has none of either, that option simply doesn't appear.
+        let (dogRows, favRows) = buildMlSlateRows(pulse: pulse)
         if !dogRows.isEmpty {
             options.append(.init(label: "+ML Dogs", status: label, rows: dogRows,
                                  cols: ("TEAM", "+ML", "FINAL")))
+        }
+        if !favRows.isEmpty {
+            options.append(.init(label: "Favs", status: label, rows: favRows,
+                                 cols: ("TEAM", "-ML", "FINAL")))
         }
 
         // One option per game Gary had props in — densest first.
@@ -2996,42 +3029,39 @@ struct HomeView: View {
         return options
     }
 
-    /// +ML Dogs rows — the anchor day's moneyline UNDERDOGS that won outright.
-    /// A dog = a moneyline pick at POSITIVE odds ("Rangers ML +124"); a win =
-    /// result == "won". Every value is real and stored: the team comes off the
-    /// pick text, the +odds off `effectiveOdds` (the +124 tail), the final score
-    /// off `final_score`. Nothing is fabricated; if no dog won, the option simply
-    /// doesn't appear. Columns map TEAM · +ML · FINAL (state "won" → the ✓).
-    static func buildMlDogRows(games: [GameResult], anchor: String?) -> [HomePropBoxSection.Row] {
-        guard let anchor = anchor else { return [] }
-        var rows: [HomePropBoxSection.Row] = []
-        for g in games where g.game_date == anchor && g.result == "won" {
-            let pick = g.pick_text ?? ""
-            // Moneyline picks only — the line carries "ML" (skip spreads/totals).
-            guard pick.range(of: #"\bML\b"#, options: .regularExpression) != nil else { continue }
-            // Underdog = a positive moneyline. effectiveOdds is the [+-]\d{3,}
-            // tail of pick_text (e.g. "+124"); keep only the plus side.
-            guard let odds = g.effectiveOdds, odds.hasPrefix("+") else { continue }
-            // Team = pick_text up to "ML" ("Rangers ML +124" → "Rangers").
-            let team = pick.components(separatedBy: " ML").first?
-                .trimmingCharacters(in: .whitespaces) ?? pick
-            guard !team.isEmpty else { continue }
-            // final_score is "away-home"; orient so the winning team's number
-            // leads (TEAM scored more, since it won outright).
-            var finalText = g.final_score ?? "—"
-            if let parts = g.final_score?.split(separator: "-"), parts.count == 2,
-               let a = Int(parts[0]), let b = Int(parts[1]) {
-                let hi = max(a, b), lo = min(a, b)
-                finalText = "\(hi)-\(lo)"
+    /// +ML Dogs + Favs rows — the FULL SLATE's moneyline winners, sourced from
+    /// market_pulse.meta (the MLB builder's genuine pre-game ML join, NOT pick
+    /// text). For each game: winner_is_dog == true → a winning underdog (+ML),
+    /// false → a winning favorite (-ML); null is skipped (no pre-game ML / push).
+    /// Every value is real and stored: the winning team, its pre-game moneyline,
+    /// the final score. Returns (dogs, favs); each empty when the slate had none.
+    /// Columns map TEAM · ML · FINAL (state "won" → the ✓).
+    static func buildMlSlateRows(pulse: [SupabaseAPI.MarketPulseRow]) -> (dogs: [HomePropBoxSection.Row], favs: [HomePropBoxSection.Row]) {
+        var dogs: [HomePropBoxSection.Row] = []
+        var favs: [HomePropBoxSection.Row] = []
+        for pr in pulse {
+            let league = pr.league
+            for game in pr.meta ?? [] {
+                guard let isDog = game.winner_is_dog,
+                      let team = game.winner_team, !team.isEmpty,
+                      let ml = game.winner_ml else { continue }
+                // Format the ML with its explicit sign (+124 / -156).
+                let oddsText = ml > 0 ? "+\(ml)" : "\(ml)"
+                // Orient the final so the winning team's (higher) number leads.
+                var finalText = "—"
+                if let a = game.away_score, let h = game.home_score {
+                    finalText = "\(max(a, h))-\(min(a, h))"
+                }
+                let r = HomePropBoxSection.Row(
+                    player: Formatters.shortTeamName(team, league: league).uppercased(),
+                    line: oddsText,
+                    actual: finalText,
+                    state: "won",
+                    tint: GaryColors.gold)
+                if isDog { dogs.append(r) } else { favs.append(r) }
             }
-            rows.append(HomePropBoxSection.Row(
-                player: Formatters.shortTeamName(team, league: g.effectiveLeague).uppercased(),
-                line: odds,
-                actual: finalText,
-                state: "won",
-                tint: GaryColors.gold))
         }
-        return rows
+        return (dogs, favs)
     }
 
     /// Box-score unit for a prop type — "total_bases" → "TB".
@@ -4428,7 +4458,18 @@ struct HomeHeadlinesFeed: View {
 struct HomeFormSection: View {
     let records: [SupabaseAPI.SportRecord]
     let yesterday: (wins: Int, losses: Int, pushes: Int)
+    /// "YESTERDAY" once the slate's done, or "TODAY"/"LIVE" while today's games
+    /// run (3am-ET anchor). LIVE/TODAY shows 0-0 before the first pick grades.
+    var recordLabel: String = "YESTERDAY"
     let onYesterday: () -> Void
+
+    /// Show the record box when there's something to show. For a finished slate
+    /// that's a non-empty record; for a live/today slate we show it even at 0-0
+    /// (the live count builds out as picks grade — never a stale number).
+    private var showRecordBox: Bool {
+        let isToday = recordLabel == "TODAY" || recordLabel == "LIVE"
+        return isToday || (yesterday.wins + yesterday.losses + yesterday.pushes > 0)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -4442,11 +4483,13 @@ struct HomeFormSection: View {
                             record: r.pushes > 0 ? "\(r.wins)-\(r.losses)-\(r.pushes)" : "\(r.wins)-\(r.losses)",
                             labelStyle: leagueStyle(r.league))
                 }
-                // Yesterday's result as a MATCHING box (not a strip), minimal words —
-                // taps into Winners (user call, Jun 17).
-                if yesterday.wins + yesterday.losses + yesterday.pushes > 0 {
+                // Today's live / yesterday's result as a MATCHING box (not a strip),
+                // minimal words — taps into Winners (user call, Jun 17). Rolls on
+                // the EST slate day: "LIVE"/"TODAY" while today's games run, then
+                // "YESTERDAY" once the day flips.
+                if showRecordBox {
                     Button(action: onYesterday) {
-                        formBox(label: "YESTERDAY",
+                        formBox(label: recordLabel,
                                 record: yesterday.pushes > 0 ? "\(yesterday.wins)-\(yesterday.losses)-\(yesterday.pushes)" : "\(yesterday.wins)-\(yesterday.losses)",
                                 labelStyle: AnyShapeStyle(GaryColors.gold))
                     }

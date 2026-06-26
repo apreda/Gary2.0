@@ -121,6 +121,72 @@ const teamName = (t) => {
   return t.full_name || t.display_name || t.name || t.abbreviation || '';
 };
 
+// ── daily_slate join helpers (mirror src/services/streaksService.js) ──────────
+// Per-game PREGAME moneyline is read from the `daily_slate` morning snapshot,
+// NEVER re-derived from the live BDL odds endpoint for a past date — that feed
+// only keeps the latest snapshot, which post-game is the SETTLED in-game line
+// (the winner reads ~-10000, circular). daily_slate freezes the real two-sided
+// pregame line before first pitch. It's keyed by (ET date, mascot away, mascot
+// home), so each BDL final joins by its real ET date + normalized team names.
+// BDL games carry the mascot under `.name` ("Braves"); daily_slate stores the
+// same mascot-short string (oddsService mapTeamName), so we join on `.name`,
+// NOT `.display_name` ("Atlanta Braves"), which would not match.
+const TEAM_ALIASES = { 'Oakland Athletics': 'Athletics' };
+const canonicalTeam = (name) => (name ? TEAM_ALIASES[name] || name : name);
+
+function normalizeName(name) {
+  if (!name) return '';
+  let s = String(canonicalTeam(name)).toLowerCase();
+  s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); // strip accents
+  s = s.replace(/[.'’\-]/g, ' ').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+/** Per-game join key for daily_slate: "ETdate|normAway|normHome". */
+function slateKey(etDate, awayName, homeName) {
+  return `${etDate}|${normalizeName(awayName)}|${normalizeName(homeName)}`;
+}
+
+/** BDL games index by UTC date; resolve each game's real ET slate day. */
+function isoToETDate(iso) {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+/**
+ * Map<bdlGameId, { ml_home, ml_away }> of GENUINE pregame moneylines for the
+ * given MLB finals, sourced from daily_slate (keyed by ET date + mascot names).
+ * A final with no stored slate row (e.g. before daily_slate existed) is simply
+ * absent → it's treated as having no pregame ML and skipped for dogs/favs.
+ */
+async function fetchMlbPregameMl(finals) {
+  const byGame = new Map();
+  if (!finals.length) return byGame;
+  const etDates = [...new Set(finals.map((g) => isoToETDate(g.date)))];
+  let slate = [];
+  try {
+    const { data, error } = await supabase
+      .from('daily_slate')
+      .select('date, away_team, home_team, ml_home, ml_away')
+      .eq('league', 'MLB')
+      .in('date', etDates);
+    if (error) throw new Error(error.message);
+    slate = data || [];
+  } catch (err) {
+    console.warn(`   ⚠️  daily_slate read failed (pregame ML unavailable): ${err.message}`);
+    return byGame;
+  }
+  const byKey = new Map();
+  for (const r of slate) {
+    if (!r?.date || r.away_team == null || r.home_team == null) continue;
+    byKey.set(slateKey(r.date, r.away_team, r.home_team), r);
+  }
+  for (const g of finals) {
+    const r = byKey.get(slateKey(isoToETDate(g.date), g.away_team?.name, g.home_team?.name));
+    if (r) byGame.set(g.id, { ml_home: num(r.ml_home), ml_away: num(r.ml_away) });
+  }
+  return byGame;
+}
+
 /** Median of a numeric array (closing-line consensus across vendors). */
 function median(values) {
   const arr = values.filter((v) => v !== null && v !== undefined).map(Number).sort((a, b) => a - b);
@@ -136,7 +202,7 @@ function median(values) {
  *  - dogs flat-stake: +american/100 when the dog wins, −1 when it loses
  * Mutates `acc`. Returns the per-game meta record (or null if not gradeable).
  */
-function accumulate(acc, { matchup, homeScore, awayScore, total, spreadHome }) {
+function accumulate(acc, { matchup, awayTeam, homeTeam, homeScore, awayScore, total, spreadHome, mlHome, mlAway }) {
   const hs = num(homeScore);
   const as = num(awayScore);
   if (hs === null || as === null) return null; // no final score → skip
@@ -180,7 +246,37 @@ function accumulate(acc, { matchup, homeScore, awayScore, total, spreadHome }) {
     else { acc.fav_losses += 1; acc.dog_wins += 1; }
   }
 
-  return { matchup, total: t, combined, ouResult, favorite, winner, spreadHome: sh };
+  // Winning DOGS / FAVS view — sourced from the GENUINE pregame moneyline frozen
+  // in daily_slate (NOT the settled BDL line). The winner's own pregame ML sign
+  // buckets them: positive ML = a winning dog, negative ML = a winning fav.
+  // `winner_is_dog` is null when there's no pregame ML for the winning side
+  // (no slate snapshot, or a missing/pick-'em side) — the consumer skips those.
+  const mh = num(mlHome);
+  const ma = num(mlAway);
+  const winnerMl = winner === 'home' ? mh : winner === 'away' ? ma : null;
+  let winnerIsDog = null;
+  if (winner !== 'push' && winnerMl !== null && winnerMl !== 0) {
+    winnerIsDog = winnerMl > 0;
+  }
+
+  return {
+    matchup,
+    away_team: awayTeam,
+    home_team: homeTeam,
+    away_score: as,
+    home_score: hs,
+    total: t,
+    combined,
+    ouResult,
+    favorite,
+    winner,                         // 'home' | 'away' | 'push'
+    winner_team: winner === 'home' ? homeTeam : winner === 'away' ? awayTeam : null,
+    spreadHome: sh,
+    ml_home: mh,                    // genuine PREGAME moneyline (daily_slate)
+    ml_away: ma,                    // genuine PREGAME moneyline (daily_slate)
+    winner_ml: winnerMl,            // the winning side's pregame ML (sign = dog/fav)
+    winner_is_dog: winnerIsDog,     // true=winning dog (+ML), false=winning fav (−ML), null=n/a
+  };
 }
 
 /**
@@ -263,22 +359,35 @@ async function buildMlb(date) {
     oddsByGame.get(gid).push(r);
   }
 
+  // Pregame moneylines for every final, from the daily_slate snapshot (the only
+  // grounded source — the live odds feed's post-game ML is settled/circular).
+  const finals = (games || []).filter((g) => {
+    const status = String(g.status || '').toUpperCase();
+    return status.includes('FINAL')
+      && num(g.home_team_data?.runs) !== null
+      && num(g.away_team_data?.runs) !== null;
+  });
+  const pregameMlByGame = await fetchMlbPregameMl(finals);
+
   const acc = freshAcc();
   const meta = [];
 
-  for (const g of games || []) {
-    const status = String(g.status || '').toUpperCase();
-    const isFinal = status.includes('FINAL');
+  for (const g of finals) {
     const homeScore = num(g.home_team_data?.runs);
     const awayScore = num(g.away_team_data?.runs);
-    if (!isFinal || homeScore === null || awayScore === null) continue;
 
     const rows = oddsByGame.get(g.id) || [];
     const total = median(rows.map((r) => num(r.total_value)));
     const spreadHome = median(rows.map((r) => num(r.spread_home_value)));
 
-    const matchup = `${teamName(g.away_team)} @ ${teamName(g.home_team)}`;
-    const rec = accumulate(acc, { matchup, homeScore, awayScore, total, spreadHome });
+    const awayTeam = teamName(g.away_team);
+    const homeTeam = teamName(g.home_team);
+    const matchup = `${awayTeam} @ ${homeTeam}`;
+    const { ml_home = null, ml_away = null } = pregameMlByGame.get(g.id) || {};
+    const rec = accumulate(acc, {
+      matchup, awayTeam, homeTeam, homeScore, awayScore, total, spreadHome,
+      mlHome: ml_home, mlAway: ml_away,
+    });
     if (rec) meta.push(rec);
   }
 
@@ -340,7 +449,10 @@ async function buildNba(date) {
     const spreadHome = median(spreadHomeVals);
 
     const matchup = `${awayNm} @ ${homeNm}`;
-    const rec = accumulate(acc, { matchup, homeScore, awayScore, total, spreadHome });
+    // NBA carries no daily_slate pregame-ML join here, so mlHome/mlAway stay null
+    // → winner_is_dog is null and NBA games are excluded from the dogs/favs view
+    // (the view is MLB-only for now). Team names keep the meta shape consistent.
+    const rec = accumulate(acc, { matchup, awayTeam: awayNm, homeTeam: homeNm, homeScore, awayScore, total, spreadHome });
     if (rec) meta.push(rec);
   }
 
