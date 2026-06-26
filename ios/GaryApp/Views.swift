@@ -2966,6 +2966,17 @@ struct HomeView: View {
             options.append(.init(label: "ALL", status: label, rows: allRows))
         }
 
+        // +ML Dogs — the day's moneyline UNDERDOGS (positive ML) that WON
+        // outright. Grounded entirely in game_results: real pre-game moneyline
+        // (the +odds tail of pick_text), the winning team, the final score.
+        // GAME results, so this option carries a different row set than the prop
+        // reads above it. Rendered TEAM · +ML · FINAL ✓ (reuses the box columns).
+        let dogRows = buildMlDogRows(games: games, anchor: anchor)
+        if !dogRows.isEmpty {
+            options.append(.init(label: "+ML Dogs", status: label, rows: dogRows,
+                                 cols: ("TEAM", "+ML", "FINAL")))
+        }
+
         // One option per game Gary had props in — densest first.
         let byGame = Dictionary(grouping: day.filter { $0.matchup?.isEmpty == false }) { $0.matchup ?? "" }
         let ordered = byGame.sorted {
@@ -2983,6 +2994,44 @@ struct HomeView: View {
             options.append(.init(label: label, status: "FINAL", rows: Array(gprops.prefix(5).map(row))))
         }
         return options
+    }
+
+    /// +ML Dogs rows — the anchor day's moneyline UNDERDOGS that won outright.
+    /// A dog = a moneyline pick at POSITIVE odds ("Rangers ML +124"); a win =
+    /// result == "won". Every value is real and stored: the team comes off the
+    /// pick text, the +odds off `effectiveOdds` (the +124 tail), the final score
+    /// off `final_score`. Nothing is fabricated; if no dog won, the option simply
+    /// doesn't appear. Columns map TEAM · +ML · FINAL (state "won" → the ✓).
+    static func buildMlDogRows(games: [GameResult], anchor: String?) -> [HomePropBoxSection.Row] {
+        guard let anchor = anchor else { return [] }
+        var rows: [HomePropBoxSection.Row] = []
+        for g in games where g.game_date == anchor && g.result == "won" {
+            let pick = g.pick_text ?? ""
+            // Moneyline picks only — the line carries "ML" (skip spreads/totals).
+            guard pick.range(of: #"\bML\b"#, options: .regularExpression) != nil else { continue }
+            // Underdog = a positive moneyline. effectiveOdds is the [+-]\d{3,}
+            // tail of pick_text (e.g. "+124"); keep only the plus side.
+            guard let odds = g.effectiveOdds, odds.hasPrefix("+") else { continue }
+            // Team = pick_text up to "ML" ("Rangers ML +124" → "Rangers").
+            let team = pick.components(separatedBy: " ML").first?
+                .trimmingCharacters(in: .whitespaces) ?? pick
+            guard !team.isEmpty else { continue }
+            // final_score is "away-home"; orient so the winning team's number
+            // leads (TEAM scored more, since it won outright).
+            var finalText = g.final_score ?? "—"
+            if let parts = g.final_score?.split(separator: "-"), parts.count == 2,
+               let a = Int(parts[0]), let b = Int(parts[1]) {
+                let hi = max(a, b), lo = min(a, b)
+                finalText = "\(hi)-\(lo)"
+            }
+            rows.append(HomePropBoxSection.Row(
+                player: Formatters.shortTeamName(team, league: g.effectiveLeague).uppercased(),
+                line: odds,
+                actual: finalText,
+                state: "won",
+                tint: GaryColors.gold))
+        }
+        return rows
     }
 
     /// Box-score unit for a prop type — "total_bases" → "TB".
@@ -4617,9 +4666,11 @@ struct HomeWireSection: View {
                     Text((item.league ?? "").uppercased())
                         .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
                         .foregroundStyle(Sport.from(league: item.league ?? "").accentColor.opacity(0.95))
-                    Text("· \(kindLabel(item.kind))")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.35))
+                    if item.kind != "result" {   // a recap is self-evidently FINAL — drop the redundant label, keep LINE MOVE/INJURY/PACE
+                        Text("· \(kindLabel(item.kind))")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
                 }
                 Spacer(minLength: 6)
                 Image(systemName: "chevron.down")
@@ -4835,6 +4886,10 @@ struct HomePropBoxSection: View {
         let label: String     // "ALL" or "Angels 9 · Athletics 7"
         let status: String    // "LAST NIGHT" (ALL) or "FINAL" (a game)
         let rows: [Row]
+        /// Column header override — the +ML Dogs option re-labels the grid
+        /// TEAM · +ML · FINAL (it shows game results, not player props). nil =
+        /// inherit the tab's PLAYER · LINE · RESULT.
+        var cols: (String, String, String)? = nil
     }
     let tabs: [Tab]
     let onOpen: () -> Void
@@ -4916,7 +4971,11 @@ struct HomePropBoxSection: View {
                 let sel = opts[min(selectedGame, opts.count - 1)]
                 Menu {
                     ForEach(Array(opts.enumerated()), id: \.offset) { i, o in
-                        Button(o.label) { selectedGame = i }
+                        // Option words in gold (Gary's signature) — the menu label
+                        // text only; data rows + chrome keep their own colors.
+                        Button { selectedGame = i } label: {
+                            Text(o.label).foregroundStyle(GaryColors.gold)
+                        }
                     }
                 } label: {
                     HStack(spacing: 5) {
@@ -4929,6 +4988,10 @@ struct HomePropBoxSection: View {
                             .foregroundStyle(GaryColors.gold.opacity(0.85))
                     }
                 }
+                // System menus tint their option rows from `.tint`; gold here
+                // carries the option words even when SwiftUI overrides the
+                // per-Button foregroundStyle.
+                .tint(GaryColors.gold)
             } else {
                 Text(tab.title)
                     .font(GaryFonts.mono(13, bold: true))
@@ -4956,12 +5019,21 @@ struct HomePropBoxSection: View {
         }
         return tab.status
     }
+    /// Column headers follow the selected option when it overrides them
+    /// (the +ML Dogs option → TEAM · +ML · FINAL), else the tab's defaults.
+    private var currentCols: (String, String, String) {
+        if let opts = tab.gameOptions, !opts.isEmpty,
+           let cols = opts[min(selectedGame, opts.count - 1)].cols {
+            return cols
+        }
+        return tab.cols
+    }
 
     private var gridHeader: some View {
         HStack(spacing: 8) {
-            Text(tab.cols.0).frame(width: 108, alignment: .leading)
-            Text(tab.cols.1).frame(width: 64, alignment: .leading)
-            Text(tab.cols.2).frame(maxWidth: .infinity, alignment: .trailing)
+            Text(currentCols.0).frame(width: 108, alignment: .leading)
+            Text(currentCols.1).frame(width: 64, alignment: .leading)
+            Text(currentCols.2).frame(maxWidth: .infinity, alignment: .trailing)
             Text("✓").frame(width: 22, alignment: .center)
         }
         .font(GaryFonts.mono(8.5)).tracking(1.2)
@@ -17055,17 +17127,10 @@ struct PicksCarouselView: View {
                 Text(status?.text ?? " ")
                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
                     .foregroundStyle(status?.color ?? .clear)
-                // Gold active-underline (restored, user call Jun 16) — a single capsule
-                // that slides between tabs via matchedGeometry; inactive tabs hold a
-                // clear spacer so every tab keeps the same height.
-                Group {
-                    if on {
-                        Capsule().fill(GaryColors.gold).frame(height: 2)
-                            .matchedGeometryEffect(id: "pickTabUnderline", in: pickTabNS)
-                    } else {
-                        Capsule().fill(Color.clear).frame(height: 2)
-                    }
-                }
+                // Underline removed (user call Jun 26) — the selected tab is already
+                // clear from the white/bold font color, matching the TODAY tab. Keep a
+                // clear 2pt spacer so every tab holds the same height/baseline.
+                Capsule().fill(Color.clear).frame(height: 2)
             }
             .contentShape(Rectangle())
         }

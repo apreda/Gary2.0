@@ -25,11 +25,17 @@
  *   - Streaks longer than the lookback window report the window-truncated
  *     length (a 40+ game run would be national news long before this caps it).
  *
- * O/U streaks use the per-date consensus closing total from BDL odds (median
- * total_value across vendors — verified to return totals for PAST dates, same
- * probe as src/services/insights/computers/streaking.js). A final with no
- * resolvable line, or a push, BREAKS the streak — strict consecutive, nothing
- * waved through.
+ * O/U streaks read the genuine PREGAME total from the `daily_slate` table (the
+ * 5am morning snapshot of every game's opening line, keyed by ET date + team
+ * names — NOT BDL game id). The live BDL odds endpoint must NEVER be used for a
+ * PAST date: re-fetching it overwrites each game's row in place and only retains
+ * the last-seen LIVE in-game snapshot (frozen mid-game, collapsed toward the
+ * runs already scored), which manufactured phantom UNDER streaks off lines that
+ * had drifted just above the final. A final with no stored pregame line (e.g.
+ * before daily_slate existed, ~Jun 10) is SKIPPED for O/U — its O/U streak
+ * simply shortens or disappears, which is correct, not a regression. A push, or
+ * the first game lacking a line, also BREAKS the streak — strict consecutive,
+ * nothing waved through, never a live-snapshot fallback.
  *
  * next_game comes from the MLB Stats API schedule for TODAY (ET): if the
  * subject's team plays today → "vs Brewers · 7:10 PM ET" / "at Brewers ·
@@ -80,6 +86,26 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
 const TEAM_ALIASES = { 'Oakland Athletics': 'Athletics' };
 const canonicalTeam = (name) => (name ? (TEAM_ALIASES[name] || name) : name);
 
+/**
+ * Normalize a team name into a join key (lower, accent/punct-stripped) — same
+ * idiom as nightHighlights.js / run-all-results.js. Used to join BDL game
+ * objects to daily_slate rows whose team strings come from a different BDL field
+ * (daily_slate stores oddsService's mapTeamName output; BDL MLB games carry
+ * display_name). canonicalTeam first so "Oakland Athletics" ↔ "Athletics" lands.
+ */
+function normalizeName(name) {
+  if (!name) return '';
+  let s = String(canonicalTeam(name)).toLowerCase();
+  s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); // strip accents
+  s = s.replace(/[.'’\-]/g, ' ').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+/** Per-game join key for daily_slate: "ETdate|normAway|normHome". */
+function slateKey(etDate, awayName, homeName) {
+  return `${etDate}|${normalizeName(awayName)}|${normalizeName(homeName)}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Date helpers (ET-aware — BDL indexes MLB games by UTC date)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,13 +135,6 @@ function avgStr(hits, ab) {
   if (!ab) return '.000';
   return (hits / ab).toFixed(3).replace(/^0/, '');
 }
-
-const median = (arr) => {
-  if (!arr.length) return null;
-  const s = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BDL fetches (429 retry + timeout idiom from nightHighlights.js)
@@ -162,27 +181,57 @@ async function fetchFinalsForWindow(startET, endET, apiKey) {
 }
 
 /**
- * Consensus closing total per game id: median total_value across vendors,
- * fetched per UTC date over the window (BDL returns totals for past dates).
+ * PREGAME total per BDL game id, sourced from the `daily_slate` morning snapshot
+ * (NEVER the live BDL odds endpoint for a past date — that re-fetch overwrites
+ * each game's row in place with a frozen LIVE in-game line and fabricates UNDER
+ * streaks). daily_slate is keyed by (ET date, away_team, home_team), so each
+ * final joins by date + normalized team names. A game with no stored slate line
+ * (e.g. before daily_slate existed) is simply absent → its O/U streak shortens.
+ *
+ * @param finals  the window's BDL final game objects (newest-first)
+ * @returns Map<bdlGameId, number>  pregame total per resolvable game
  */
-async function fetchTotalsForWindow(startET, endET, apiKey) {
-  const byGame = new Map(); // game_id → [totals]
-  for (let d = startET; d <= shiftDateStr(endET, 1); d = shiftDateStr(d, 1)) {
-    try {
-      const json = await bdlFetch(`${BDL_BASE}/mlb/v1/odds?dates[]=${d}&per_page=100`, apiKey);
-      for (const r of json?.data || []) {
-        const tv = Number(r?.total_value);
-        if (r?.game_id == null || !Number.isFinite(tv)) continue;
-        if (!byGame.has(r.game_id)) byGame.set(r.game_id, []);
-        byGame.get(r.game_id).push(tv);
-      }
-    } catch (err) {
-      console.warn(`  ⚠️ odds fetch failed for ${d} (O/U streaks may shorten): ${err.message}`);
-    }
-    await sleep(120);
+async function fetchTotalsForWindow(finals, supabase, startET, endET) {
+  const lines = new Map(); // bdl game_id → pregame total
+  if (!supabase) {
+    console.warn('  ⚠️ no Supabase client — O/U streaks skipped (no pregame line source)');
+    return lines;
   }
-  const lines = new Map();
-  for (const [gid, totals] of byGame) lines.set(gid, median(totals));
+
+  // 1. Pull every MLB daily_slate row across the window, indexed by join key.
+  const slateByKey = new Map(); // "ETdate|normAway|normHome" → total
+  try {
+    const { data, error } = await supabase
+      .from('daily_slate')
+      .select('date, away_team, home_team, total')
+      .eq('league', 'MLB')
+      .gte('date', startET)
+      .lte('date', endET);
+    if (error) throw new Error(error.message);
+    for (const r of data || []) {
+      const tv = Number(r?.total);
+      if (!r?.date || r.away_team == null || r.home_team == null || !Number.isFinite(tv)) continue;
+      slateByKey.set(slateKey(r.date, r.away_team, r.home_team), tv);
+    }
+  } catch (err) {
+    console.warn(`  ⚠️ daily_slate read failed (O/U streaks skipped): ${err.message}`);
+    return lines;
+  }
+
+  // 2. Join each final to its slate row by ET date + normalized team names.
+  //    daily_slate stores oddsService's mapTeamName output (full_name || name);
+  //    BDL MLB game teams carry NO full_name, so the slate holds the NICKNAME
+  //    (`name`, e.g. "Padres"). Join on that nickname — display_name ("San Diego
+  //    Padres") would never match. (full_name/display_name kept as fallbacks.)
+  const teamName = (t) => t?.name || t?.full_name || t?.display_name;
+  for (const g of finals) {
+    if (g?.id == null || !g.date) continue;
+    const homeName = teamName(g.home_team);
+    const awayName = teamName(g.away_team || g.visitor_team);
+    if (!homeName || !awayName) continue;
+    const total = slateByKey.get(slateKey(isoToETDate(g.date), awayName, homeName));
+    if (Number.isFinite(total)) lines.set(g.id, total);
+  }
   return lines;
 }
 
@@ -478,8 +527,8 @@ export async function writeStreaks({ supabase, bdlApiKey, date, dryRun = false }
   }
   const gamesById = new Map(finals.map((g) => [g.id, g]));
 
-  const lineByGameId = await fetchTotalsForWindow(startET, date, bdlApiKey);
-  console.log(`  📈 closing totals resolved for ${lineByGameId.size} games`);
+  const lineByGameId = await fetchTotalsForWindow(finals, supabase, startET, date);
+  console.log(`  📈 pregame totals (daily_slate) resolved for ${lineByGameId.size} games`);
 
   const teamRows = buildTeamStreaks(finals, lineByGameId);
 

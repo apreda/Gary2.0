@@ -54,6 +54,48 @@ function inXI(name, xiNames) {
   });
 }
 
+// Card-accumulation suspensions for the UPCOMING match, read from the BDL FIFA
+// match-events feed of a team's MOST RECENT completed match. A red shown in that
+// match triggers an AUTOMATIC next-match ban, so the player can't be in the XI we're
+// projecting — drop him exactly as the OUT/SUS injury filter does.
+//
+// Two unambiguous, single-match signals (no cross-match accounting, no guessing):
+//   • a STRAIGHT RED  (incident_class === 'red', not rescinded)
+//   • a SECOND YELLOW in the same match = a sending-off → red (two non-rescinded
+//     'yellow' incidents for one player in that match)
+// Both are fully determinable from one match's events and always carry a 1-match ban.
+//
+// NOT attempted: cross-match yellow ACCUMULATION (e.g. 2 single yellows in 2 different
+// group games). That needs full-tournament card history + ban-served + post-QF wipe
+// tracking the events feed does not annotate, so counting it would risk a false drop.
+// We deliberately handle reds only (see report). GROUNDED: real, non-rescinded card
+// events only; any gap (no events / fetch fails) drops nothing (fails safe).
+//
+// `prior` is the team's recent completed matches, MOST-RECENT FIRST (as built in
+// previousXI). Returns a Set of norm(name) for players suspended for the next match.
+async function cardSuspendedNames(prior, teamId) {
+  const last = (prior || [])[0]; // only the immediately preceding match bans the next one
+  if (!last?.id) return new Set();
+  const events = await safe(() => wc.getMatchEvents(last.id), []);
+  const reds = new Set();        // norm(name) with a non-rescinded straight red
+  const yellowCount = new Map(); // norm(name) -> count of non-rescinded yellows in this match
+  for (const e of events || []) {
+    if (e?.incident_type !== 'card') continue;
+    if (e?.rescinded === true) continue;        // a rescinded card carries no ban
+    const nm = e?.player?.name;
+    if (!nm) continue;
+    const key = norm(nm);
+    const cls = String(e?.incident_class || '').toLowerCase();
+    if (cls === 'red') reds.add(key);
+    else if (cls === 'yellow') yellowCount.set(key, (yellowCount.get(key) || 0) + 1);
+  }
+  const suspended = new Set(reds);
+  for (const [key, count] of yellowCount) {
+    if (count >= 2) suspended.add(key); // 2nd yellow in one match = sending-off → next-match ban
+  }
+  return suspended;
+}
+
 // "5-4-1" / "3-4-2-1" -> { defenders, forwards }.
 function parseFormation(f) {
   const parts = String(f || '').split('-').map((n) => parseInt(n, 10)).filter(Number.isFinite);
@@ -276,13 +318,36 @@ export async function previousXI(teamId, teamName, matchId, season, injStatus = 
   }
   if (!sides.length) return null;
   const base = sides[0]; // most recent anchors the formation
-  if (sides.length === 1) return base;
+
+  // Players banned for THIS match by a red / 2nd-yellow sending-off in the team's most
+  // recent match (card accumulation the injury feed may not list). Real card events only;
+  // empty on any gap. Computed even for the single-prior case so an opener-plus-one drops
+  // a just-sent-off regular too.
+  const cardSusp = await cardSuspendedNames(prior, teamId);
+
+  if (sides.length === 1) {
+    // One prior XI only: still drop a card-suspended starter (his slot goes unfilled here —
+    // the field shows the rest; we never invent a replacement from a single match).
+    if (cardSusp.size) {
+      const starters = base.starters.filter((s) => !cardSusp.has(norm(s.player?.name || '')));
+      if (starters.length >= 11) {
+        return {
+          teamId, teamName, starters,
+          formation: base.formation, defenders: base.defenders, forwards: base.forwards,
+          names: starters.map((s) => s.player?.name).filter(Boolean),
+          keeper: starters.find((s) => s.position === 'G')?.player?.name || base.keeper,
+        };
+      }
+    }
+    return base;
+  }
 
   // Project the REGULARS, not just the last XI — rank players by how many recent matches
   // they started (ties to recency), DROP anyone ruled OUT/suspended in the BDL injury feed
-  // (so an injured regular's backup correctly takes the slot — Pulisic OUT, his replacement
-  // in), keep the top 11. Each keeps their most-recent shirt + position. Mirrors how the
-  // projection sites build a "likely XI" without ever showing a player who can't play.
+  // OR card-suspended for this match (so the suspended regular's backup correctly takes the
+  // slot — Pulisic OUT or a red-carded starter banned, his replacement in), keep the top 11.
+  // Each keeps their most-recent shirt + position. Mirrors how the projection sites build a
+  // "likely XI" without ever showing a player who can't play.
   const w = sides.length;
   const agg = new Map(); // id -> { entry (most-recent), starts, weight }
   sides.forEach((s, i) => {
@@ -295,7 +360,12 @@ export async function previousXI(teamId, teamName, matchId, season, injStatus = 
     }
   });
   const starters = [...agg.values()]
-    .filter((r) => !/^(OUT|SUS)/.test(injStatus.get(norm(r.entry.player?.name || '')) || ''))
+    .filter((r) => {
+      const nm = norm(r.entry.player?.name || '');
+      if (/^(OUT|SUS)/.test(injStatus.get(nm) || '')) return false; // ruled out / suspended (injury feed)
+      if (cardSusp.has(nm)) return false;                            // red / 2nd-yellow ban from last match
+      return true;
+    })
     .sort((x, y) => (y.starts - x.starts) || (y.weight - x.weight))
     .slice(0, 11)
     .map((r) => r.entry);

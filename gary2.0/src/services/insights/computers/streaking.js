@@ -14,13 +14,18 @@
 //     (the same fields run-grade-insights.js trusts).
 //   - W/L streak: consecutive same-result finals, newest first. >= STREAK_MIN
 //     surfaces, with the run differential across the run and the L10 record.
-//   - O/U streak: each past final's consensus total line comes from
-//     getMlbGameOdds({ dates: [d] }) (median total_value across vendors,
-//     verified to return totals for PAST dates — probed live 2026-06-10).
-//     total runs > line = over, < = under; a push or a missing line BREAKS the
-//     streak (strict consecutive). >= STREAK_MIN surfaces. Tonight's posted
-//     total (median, via getMlbGameOdds({ gameIds })) is stamped on line_val so
-//     the morning grader can settle the row.
+//   - O/U streak: each past final's total line is the genuine PREGAME total
+//     from the `daily_slate` morning snapshot (keyed by ET date + team names,
+//     read once via the REST API). The live BDL odds endpoint is NEVER used for
+//     a PAST date — re-fetching it overwrites each game's row in place with a
+//     frozen LIVE in-game line (collapsed toward the runs already scored), which
+//     fabricated phantom UNDER streaks. A final with no stored pregame line (e.g.
+//     before daily_slate existed) is SKIPPED — its O/U streak shortens, never
+//     falls back to the live line. total runs > line = over, < = under; a push
+//     or a missing line BREAKS the streak (strict consecutive). >= STREAK_MIN
+//     surfaces. Tonight's posted total (median, via getMlbGameOdds({ gameIds }))
+//     is stamped on line_val so the morning grader can settle the row — that's a
+//     LIVE pregame fetch for TONIGHT's game, which is correct.
 //   - Rows attach to the team's NOT-YET-FINAL slate game; a team with only a
 //     finished game on the slate is skipped (a streak note about a game that
 //     already ended is dead content).
@@ -30,9 +35,19 @@
 //
 // Defensive: any missing piece -> skip that team/angle silently; never throws.
 
+import axios from 'axios';
 import {
   makeRow, TONES, pickVariant, round, median, shiftDateStr,
 } from '../shared.js';
+
+// Same env resolution as garyHrThreats.js / src/supabaseClient.js — daily_slate
+// is read under whichever key is present (anon can SELECT it; service role too).
+const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY || '';
 
 // Tunables.
 const STREAK_MIN = 4;          // surface streaks of this length+
@@ -57,11 +72,9 @@ export async function computeStreaking(ctx) {
     }
   };
   addFinals(games);
-  const pastDates = [];
   for (let back = 1; back <= LOOKBACK_DAYS; back++) {
     const d = shiftDateStr(date, -back);
     if (!d) break;
-    pastDates.push(d);
     try {
       addFinals(await bdl.getMlbGamesForDate(d));
     } catch (err) {
@@ -73,17 +86,13 @@ export async function computeStreaking(ctx) {
     return [];
   }
 
-  // 2. Consensus total line per past final (median across vendors), keyed by
-  //    game id. A date with no odds rows simply leaves those games line-less.
-  const lineByGameId = new Map();
-  for (const d of pastDates) {
-    try {
-      const odds = (await bdl.getMlbGameOdds({ dates: [d] })) || [];
-      indexTotals(odds, lineByGameId);
-    } catch (err) {
-      console.error('[streaking] past odds error:', err?.message || err);
-    }
-  }
+  // 2. PREGAME total line per past final, sourced from the `daily_slate` morning
+  //    snapshot (NEVER the live BDL odds endpoint for a past date — that re-fetch
+  //    overwrites each game's row with a frozen LIVE in-game line and fabricates
+  //    UNDER streaks). Joined by ET date + normalized team names. A final with no
+  //    stored slate line is simply left line-less → its O/U streak shortens.
+  const windowStart = shiftDateStr(date, -LOOKBACK_DAYS);
+  const lineByGameId = await fetchSlateLines([...finalsById.values()], windowStart, date);
 
   // 3. Tonight's posted totals for line_val (one call for the whole slate).
   const tonightIds = games.filter((g) => !isFinal(g)).map((g) => g?.id).filter((x) => x != null);
@@ -193,6 +202,90 @@ export async function computeStreaking(ctx) {
 /** A BDL MLB game is final by status (scores live during play, so status only). */
 function isFinal(game) {
   return String(game?.status || '').toUpperCase().includes('FINAL');
+}
+
+// ── daily_slate pregame-line join ───────────────────────────────────────────
+
+const TEAM_ALIASES = { 'oakland athletics': 'athletics' };
+
+/** Team name → join key (lower, accent/punct-stripped, A's aliased). */
+function normalizeName(name) {
+  if (!name) return '';
+  let s = String(name).toLowerCase();
+  s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); // strip accents
+  s = s.replace(/[.'’\-]/g, ' ').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return TEAM_ALIASES[s] || s;
+}
+
+/** ISO datetime → ET calendar date (YYYY-MM-DD). */
+function isoToETDate(iso) {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+/** Per-game daily_slate join key: "ETdate|normAway|normHome". */
+function slateKey(etDate, awayName, homeName) {
+  return `${etDate}|${normalizeName(awayName)}|${normalizeName(homeName)}`;
+}
+
+// daily_slate stores oddsService's mapTeamName output (full_name || name); BDL
+// MLB game teams carry NO full_name, so the slate holds the NICKNAME (`name`,
+// e.g. "Padres"). Join on that nickname — display_name ("San Diego Padres")
+// would never match. (full_name kept as a defensive fallback for other shapes.)
+const slateTeamName = (t) => t?.name || t?.full_name || t?.display_name || '';
+
+/**
+ * PREGAME total per BDL game id, read from the `daily_slate` morning snapshot —
+ * NEVER the live BDL odds endpoint for a past date (that re-fetch fabricates
+ * UNDER streaks off frozen in-game lines). daily_slate is keyed by (ET date,
+ * away_team, home_team), so each final joins by date + normalized team names. A
+ * final with no resolvable slate line is absent from the map → it's line-less,
+ * never given a live-snapshot fallback. Never throws (a read failure → {}).
+ *
+ * @param finals  BDL MLB final game objects
+ * @returns Map<bdlGameId, number>
+ */
+async function fetchSlateLines(finals, startET, endET) {
+  const lines = new Map();
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.log('[streaking] missing Supabase config — O/U streaks skipped (no pregame line source)');
+    return lines;
+  }
+
+  // Pull every MLB daily_slate row across the window once, indexed by join key.
+  const slateByKey = new Map();
+  try {
+    const resp = await axios.get(
+      `${SUPABASE_URL}/rest/v1/daily_slate`,
+      {
+        params: {
+          league: 'eq.MLB',
+          date: `gte.${startET}`,
+          select: 'date,away_team,home_team,total',
+        },
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+        timeout: 15000,
+      },
+    );
+    for (const r of Array.isArray(resp?.data) ? resp.data : []) {
+      if (!r?.date || r.date > endET) continue; // upper bound (params allow one filter per key)
+      const tv = Number(r?.total);
+      if (r.away_team == null || r.home_team == null || !Number.isFinite(tv)) continue;
+      slateByKey.set(slateKey(r.date, r.away_team, r.home_team), tv);
+    }
+  } catch (err) {
+    console.error('[streaking] daily_slate read failed (O/U streaks skipped):', err?.message || err);
+    return lines;
+  }
+
+  for (const g of finals) {
+    if (g?.id == null || !g.date) continue;
+    const homeName = slateTeamName(g.home_team);
+    const awayName = slateTeamName(g.visitor_team || g.away_team);
+    if (!homeName || !awayName) continue;
+    const total = slateByKey.get(slateKey(isoToETDate(g.date), awayName, homeName));
+    if (Number.isFinite(total)) lines.set(g.id, total);
+  }
+  return lines;
 }
 
 /** Index odds rows' median total_value per game id into `map`. */
