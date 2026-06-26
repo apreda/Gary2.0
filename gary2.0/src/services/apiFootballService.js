@@ -312,6 +312,10 @@ export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
       const name = r.player?.name;
       if (!name) continue;
       const s = (r.statistics || [])[0] || {};
+      // Coerce a numeric API-Football stat or null. The /players object reports a
+      // not-recorded field as null (NEVER 0), so a missing rating/keeper stat stays
+      // null and the card omits it — no fabricated 0 (e.g. an outfielder's saves).
+      const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
       out[name.toLowerCase()] = {
         name,
         goals: s.goals?.total ?? 0,
@@ -320,6 +324,28 @@ export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
         shots: s.shots?.total ?? null,
         shots_on: s.shots?.on ?? null,
         position: r.player?.position || s.games?.position || null,
+        // ── NEW EXTRACTION (same /players response, previously discarded) ──
+        // Keeper: saves made + goals conceded over the cycle.
+        saves: n(s.goals?.saves),
+        conceded: n(s.goals?.conceded),
+        // Midfield creativity + distribution.
+        keyPasses: n(s.passes?.key),
+        passAccuracy: n(s.passes?.accuracy),     // % (API reports 0-100)
+        // Duels (NOT split aerial-only by API-Football — label honestly).
+        duelsTotal: n(s.duels?.total),
+        duelsWon: n(s.duels?.won),
+        // Defensive volume.
+        tackles: n(s.tackles?.total),
+        // Discipline.
+        yellow: n(s.cards?.yellow),
+        red: n(s.cards?.red),
+        // Penalties (kept for completeness; not surfaced on the base card yet).
+        penScored: n(s.penalty?.scored),
+        penMissed: n(s.penalty?.missed),
+        penSaved: n(s.penalty?.saved),
+        // Workload + form.
+        minutes: n(s.games?.minutes),
+        rating: n(s.games?.rating),
       };
     }
     if (rows.length < 20) break; // API-Football pages /players 20/page; a short page is the last

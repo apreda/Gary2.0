@@ -10,9 +10,19 @@
 //       rows { team_id, is_starter, position, shirt_number, player:{id,name} }
 //   * International season line + splits -> API-Football getSquadStats(teamName),
 //       keyed by LOWERCASED player name -> { name, goals, assists, appearances,
-//       shots, shots_on, position }. This is the player's CURRENT INTERNATIONAL
-//       cycle (qualifiers + friendlies + Nations League) — labeled as caps, NEVER
-//       as club stats (there is NO club fetcher).
+//       shots, shots_on, position, + (NEW) saves, conceded, keyPasses,
+//       passAccuracy, duelsTotal, duelsWon, tackles, yellow, red, minutes, rating }.
+//       This is the player's CURRENT INTERNATIONAL cycle (qualifiers + friendlies +
+//       Nations League) — labeled as caps, NEVER as club stats (there is NO club
+//       fetcher). The season line + splits are ROLE-TAILORED (forward / midfielder /
+//       defender / keeper) off these grounded numbers; the iOS container is fixed
+//       (PlayerCardV4 reads PlayerInsightPack), so only WHICH numbers fill
+//       season/splits/strengths varies by role — no new Swift fields.
+//   * Per-player xG / xA / big-chance / progressive passes do NOT exist in
+//       API-Football's player object (team-level only via getRecentTeamStats), so
+//       "finishing regression (goals vs xG)" + xA are DROPPED at the player card.
+//       The keeper's true save% (saves/(saves+conceded)) replaces "goals-vs-xG".
+//       Team xG context lives in the Hub's wcXgRegression lane (team-level).
 //   * Nation recent form (L5) -> API-Football getRecentForm(teamName)
 //   * Tonight's lines        -> BDL FIFA getPlayerProps({matchId}) joined by
 //       player_id (rows carry NO name): anytime_goal / shots / shots_on_target,
@@ -75,8 +85,21 @@ const PROP_VENDORS = ['draftkings', 'betrivers', 'betmgm'];
 // Trackable prop types (also the display order). "shots" stays trackable for the
 // CARD (line + odds), but has no per-match extractor in getPlayerMatchStats
 // (total shots isn't a field there), so it simply ships rate-less — fail closed,
-// exactly like an untrackable MLB type.
+// exactly like an untrackable MLB type. Likewise assists / saves / cards have no
+// per-match field, so they ship line+odds only (rate-less), like MLB's walks.
 const PROP_PRIORITY = ['anytime_goal', 'shots', 'shots_on_target'];
+
+// Role-tailored ANGLE markets (display order). Only types in the role's list are
+// shown (an out-of-role market is dropped, never quoted) and only the first
+// MAX_PROPS survive. anytime_goal + shots_on_target keep their per-match rates;
+// assists / saves / cards ship rate-less (line+odds only).
+const PROP_PRIORITY_BY_ROLE = {
+  forward:    ['anytime_goal', 'shots', 'shots_on_target'],
+  midfielder: ['anytime_goal', 'assists', 'shots_on_target'],
+  defender:   ['anytime_goal', 'shots_on_target', 'cards'],
+  keeper:     ['saves'],
+};
+const propPriorityByRole = (role) => PROP_PRIORITY_BY_ROLE[role] || PROP_PRIORITY;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public entry
@@ -202,6 +225,9 @@ function buildOnePack(ctx) {
   const meta = teamMeta.get(teamId) || {};
   const position = normalizePosition(starter.position || starter.player.position);
   const isKeeper = isGoalkeeper(starter.position || starter.player.position);
+  // Outfield sub-role drives WHICH grounded numbers fill season/splits/strengths.
+  // (The iOS container is fixed; only the field contents vary by role.)
+  const role = isKeeper ? 'keeper' : outfieldRole(position);
 
   const payload = { type: isKeeper ? 'keeper' : 'outfield', name, game: gameLabel };
   if (meta.abbr) payload.team = meta.abbr;
@@ -211,7 +237,15 @@ function buildOnePack(ctx) {
   const opp = meta.oppId != null ? teamMeta.get(meta.oppId) : null;
   if (opp?.name) payload.opponent = { name: opp.name };
 
+  // Team-level form context, shared across splits/strengths:
+  //   ownForm = this nation's recent fixtures (clean sheets, GA/gm)
+  //   oppForm = the opponent nation's recent fixtures (their attack — keeper context)
+  const ownForm = formByTeam.get(teamId) || null;
+  const oppForm = meta.oppId != null ? (formByTeam.get(meta.oppId) || null) : null;
+
   // International season line + splits, from this team's squad map (joined id->name).
+  // ROLE-TAILORED: a forward shows G/A/SH + conversion; a midfielder key passes +
+  // duels; a defender duels/tackles/discipline/clean sheets; a keeper save%/CS.
   const squad = squadByTeam.get(teamId) || {};
   const sstat = lookupSquadStat(squad, name);
   if (!sstat) {
@@ -226,30 +260,35 @@ function buildOnePack(ctx) {
       console.warn(`[wcPlayerInsightCards] squad-join MISS: "${name}" (${meta.name || teamId}) — no intl row + no tournament minutes; season omitted.`);
     }
   } else {
-    const season = seasonDisplay(sstat);
+    const season = seasonDisplayByRole(sstat, role, { ownForm });
     if (season) payload.season = season;
-    const splits = seasonSplits(sstat);
+    const splits = seasonSplitsByRole(sstat, role, { meta, opp, ownForm, oppForm });
     if (splits.length) payload.splits = splits;
   }
 
   // Nation recent form (L5) — the team-level signal that applies to every starter.
-  const form = nationForm(formByTeam.get(teamId), meta.name);
+  const form = nationForm(ownForm, meta.name);
   if (form) payload.form = form;
 
   // Tonight's lines for this player: ONE vendor, joined by player_id, reusing the
-  // shared formatProps for label/line/odds + dedupe + cap.
-  const vendorRows = pickVendorRows(props, playerId);
-  const formatted = formatProps(vendorRows, playerId, PROP_PRIORITY, { labelFor: propLabel, maxProps: MAX_PROPS });
+  // shared formatProps for label/line/odds + dedupe + cap. The ANGLE markets are
+  // role-tailored: forwards/wingers -> goal/shots/SoT; midfielders -> goal/assists/
+  // SoT; defenders -> goal/SoT/cards; keepers -> saves. assists/saves/cards have no
+  // per-match extractor in getPlayerMatchStats, so they ship rate-less (line+odds
+  // only), exactly like MLB's walks.
+  const propPriority = propPriorityByRole(role);
+  const vendorRows = pickVendorRows(props, playerId, propPriority);
+  const formatted = formatProps(vendorRows, playerId, propPriority, { labelFor: propLabel, maxProps: MAX_PROPS });
   if (formatted.length) payload.props = formatted;
 
   // Prior-match history (finals only) -> prop hit rates + last-match form rows.
   const history = asArray(histByPlayer.get(playerId)); // oldest -> newest
-  const formRows = lastMatchFormRows(history);
+  const formRows = lastMatchFormRowsByRole(history, role);
   if (formRows.length) payload.formRows = formRows;
   attachPropRates(formatted, history, RATE_STAT, { window: RATE_WINDOW, minRows: RATE_MIN_ROWS });
 
   // Deterministic, plain-copy strengths / weaknesses derived from the above.
-  const { strengths, weaknesses } = strengthsWeaknesses({ sstat, form, formRows, isKeeper });
+  const { strengths, weaknesses } = strengthsWeaknesses({ sstat, form, formRows, role, ownForm, oppForm, meta });
   if (strengths.length) payload.strengths = strengths;
   if (weaknesses.length) payload.weaknesses = weaknesses;
 
@@ -283,40 +322,179 @@ function tournamentSeasonLine(hist) {
   return { line1: bits.join(' / '), line2: `${apps} app${apps === 1 ? '' : 's'} · ${mins} min, this tournament` };
 }
 
-function seasonDisplay(s) {
+/** Map a readable position label to the outfield sub-role used for tailoring. */
+function outfieldRole(position) {
+  const p = String(position || '').toLowerCase();
+  if (p.startsWith('defend')) return 'defender';
+  if (p.startsWith('midfield')) return 'midfielder';
+  // Forward / Winger / Attacker / Striker all read as the scoring role; unknown
+  // outfielders default to forward (the scoring-tilted, most-generic read).
+  return 'forward';
+}
+
+/** "{caps} caps" label (or null when caps unknown — never a fabricated 0). */
+function capsLabel(caps) { return caps != null ? `${caps} ${caps === 1 ? 'cap' : 'caps'}` : null; }
+
+/** Count this nation's recent fixtures where it kept a clean sheet (ga === 0),
+ *  from getRecentForm().fixtures (team-level, grounded). Returns {cs, n} or null. */
+function cleanSheetsFromForm(formResult) {
+  const fx = asArray(formResult?.fixtures).filter((f) => num(f?.ga) != null);
+  if (!fx.length) return null;
+  const cs = fx.filter((f) => num(f.ga) === 0).length;
+  return { cs, n: fx.length };
+}
+
+/** This nation's recent goals-scored-per-match (opponent's attack read for a keeper). */
+function gfPerMatch(formResult) {
+  const span = formResult?.l5 || formResult?.l10;
+  return span ? num(span.gfPerMatch) : null;
+}
+
+/**
+ * ROLE-TAILORED international season line from a getSquadStats row. The two display
+ * rungs map 1:1 onto PlayerCardV4's season.line1 / season.line2 — only the grounded
+ * numbers chosen vary by role. Every field is omitted (never coerced to 0) when its
+ * source value is null.
+ */
+function seasonDisplayByRole(s, role, { ownForm } = {}) {
   if (!s) return null;
+  const caps = num(s.appearances);
+  const out = {};
+
+  if (role === 'keeper') {
+    // line1: "{saves} saves / {conceded} GA"  line2: "{caps} caps · {CS} CS"
+    const saves = num(s.saves);
+    const conc = num(s.conceded);
+    const p1 = [];
+    if (saves != null) p1.push(`${saves} saves`);
+    if (conc != null) p1.push(`${conc} GA`);
+    if (p1.length) out.line1 = p1.join(' / ');
+    const csInfo = cleanSheetsFromForm(ownForm);
+    const l2 = [];
+    if (caps != null) l2.push(capsLabel(caps));
+    if (csInfo) l2.push(`${csInfo.cs} CS`);
+    if (l2.length) out.line2 = l2.join(' · ');
+    return (out.line1 || out.line2) ? out : null;
+  }
+
   const g = num(s.goals);
   const a = num(s.assists);
+
+  if (role === 'midfielder') {
+    // line1: "{G} G / {A} A / {KP} KP" (omit KP rung when absent — never 0).
+    const kp = num(s.keyPasses);
+    const p1 = [];
+    if (g != null) p1.push(`${g} G`);
+    if (a != null) p1.push(`${a} A`);
+    if (kp != null) p1.push(`${kp} KP`);
+    if (p1.length) out.line1 = p1.join(' / ');
+    // line2: "{caps} caps · {rating} rating"
+    const rating = num(s.rating);
+    const l2 = [];
+    if (caps != null) l2.push(capsLabel(caps));
+    if (rating != null) l2.push(`${rating.toFixed(2)} rating`);
+    if (l2.length) out.line2 = l2.join(' · ');
+    return (out.line1 || out.line2) ? out : null;
+  }
+
+  if (role === 'defender') {
+    // line1: "{G} G / {A} A" (set-piece threat)  line2: "{caps} caps"
+    const p1 = [];
+    if (g != null) p1.push(`${g} G`);
+    if (a != null) p1.push(`${a} A`);
+    if (p1.length) out.line1 = p1.join(' / ');
+    if (caps != null) out.line2 = capsLabel(caps);
+    return (out.line1 || out.line2) ? out : null;
+  }
+
+  // forward / winger: line1 "{G} G / {A} A / {SH} SH"  line2 "{caps} caps"
   const sh = num(s.shots);
-  const caps = num(s.appearances);
   const p1 = [];
   if (g != null) p1.push(`${g} G`);
   if (a != null) p1.push(`${a} A`);
   if (sh != null) p1.push(`${sh} SH`);
-  const out = {};
   if (p1.length) out.line1 = p1.join(' / ');
-  if (caps != null) out.line2 = `${caps} ${caps === 1 ? 'cap' : 'caps'}`;
+  if (caps != null) out.line2 = capsLabel(caps);
   return (out.line1 || out.line2) ? out : null;
 }
 
 /**
- * International shot splits as LabeledStats: total shots and shots-on-target over
- * the current cycle. Each rung is omitted when its source value is null (a player
- * with no recorded shots shows no shot split — never a fabricated 0).
+ * ROLE-TAILORED splits (PlayerCardV4 SPLITS section: LabeledStat label/value/detail).
+ * Every rung is omitted when its grounded source value is null — no fabricated 0.
+ * Per-player xG / xA / big-chance are NOT groundable (team-level only) so they never
+ * appear here; conversion is computed from grounded goals + shots, NOT xG.
  */
-function seasonSplits(s) {
+function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
   if (!s) return [];
   const caps = num(s.appearances);
-  const capTail = caps != null ? ` over ${caps} ${caps === 1 ? 'cap' : 'caps'}` : '';
+  const nation = meta?.name || 'Nation';
   const out = [];
-  const shots = num(s.shots);
-  if (shots != null) {
-    out.push({ label: 'Shots (intl)', value: `${shots}`, detail: `Total shots${capTail}`.trim() });
+
+  if (role === 'keeper') {
+    const saves = num(s.saves);
+    const conc = num(s.conceded);
+    if (saves != null && conc != null && (saves + conc) > 0) {
+      const faced = saves + conc;
+      out.push({ label: 'Save rate', value: `${Math.round((saves / faced) * 100)}%`, detail: `${saves} of ${faced} faced` });
+    }
+    const csInfo = cleanSheetsFromForm(ownForm);
+    if (csInfo) out.push({ label: 'Clean sheets', value: `${csInfo.cs}/${csInfo.n}`, detail: `over ${csInfo.n} recent` });
+    const oppGf = gfPerMatch(oppForm);
+    if (oppGf != null && opp?.name) {
+      out.push({ label: `${opp.name} attack`, value: `${oppGf} scored/gm`, detail: "opponent's recent scoring" });
+    }
+    const nf = nationForm(ownForm, nation);
+    if (nf) out.push(nf);
+    return out;
   }
+
+  if (role === 'midfielder') {
+    const kp = num(s.keyPasses);
+    if (kp != null) out.push({ label: 'Creativity', value: `${kp} key passes`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
+    const pa = num(s.passAccuracy);
+    if (pa != null) out.push({ label: 'Pass accuracy', value: `${Math.round(pa)}%` });
+    const dt = num(s.duelsTotal);
+    const dw = num(s.duelsWon);
+    if (dt != null && dw != null && dt > 0) {
+      out.push({ label: 'Duels won', value: `${dw}/${dt}`, detail: `${Math.round((dw / dt) * 100)}%` });
+    }
+    const nf = nationForm(ownForm, nation);
+    if (nf) out.push(nf);
+    return out;
+  }
+
+  if (role === 'defender') {
+    const dt = num(s.duelsTotal);
+    const dw = num(s.duelsWon);
+    if (dt != null && dw != null && dt > 0) {
+      // API-Football duels are NOT split aerial-only — label honestly. Frame as a
+      // set-piece threat only when the defender has actually scored (goals > 0).
+      const setPiece = (num(s.goals) || 0) > 0;
+      out.push({ label: setPiece ? 'Duels (set-piece)' : 'Duels', value: `${dw}/${dt}`, detail: `${Math.round((dw / dt) * 100)}% won` });
+    }
+    const tk = num(s.tackles);
+    if (tk != null) out.push({ label: 'Tackles', value: `${tk}`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
+    const y = num(s.yellow);
+    const r = num(s.red);
+    if (y != null || r != null) out.push({ label: 'Discipline', value: `${y ?? 0}Y / ${r ?? 0}R` });
+    const csInfo = cleanSheetsFromForm(ownForm);
+    if (csInfo) out.push({ label: `${nation} clean sheets`, value: `${csInfo.cs}/${csInfo.n}`, detail: `team kept ${csInfo.cs} of last ${csInfo.n}` });
+    return out;
+  }
+
+  // forward / winger
   const sot = num(s.shots_on);
   if (sot != null) {
-    out.push({ label: 'On target (intl)', value: `${sot}`, detail: `Shots on target${capTail}`.trim() });
+    out.push({ label: 'On target (intl)', value: `${sot}`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
   }
+  const goals = num(s.goals);
+  const shots = num(s.shots);
+  if (goals != null && shots != null && shots > 0) {
+    // Conversion computed from grounded goals + shots — NOT xG (not groundable).
+    out.push({ label: 'Conversion', value: `${Math.round((goals / shots) * 100)}%`, detail: `${goals} on ${shots} shots` });
+  }
+  const nf = nationForm(ownForm, nation);
+  if (nf) out.push(nf);
   return out;
 }
 
@@ -346,7 +524,7 @@ function nationForm(formResult, teamName) {
  * gradeable observation — the grader reads a played player's null goals as 0) and
  * shots-on-target only when that field is present (null omitted, never coerced).
  */
-function lastMatchFormRows(history) {
+function lastMatchFormRowsByRole(history, role) {
   const played = asArray(history).filter((r) => num(r?.minutes_played) != null && num(r.minutes_played) >= FORM_MIN_MINUTES);
   if (!played.length) return [];
   const last = played[played.length - 1];
@@ -354,12 +532,31 @@ function lastMatchFormRows(history) {
   const g = num(last.goals) ?? 0;          // full shift confirmed -> 0 is real
   const a = num(last.assists) ?? 0;
   const sot = num(last.shots_on_target);    // nullable: omit when absent
-  const bits = [`${g} G`];
-  if (a > 0) bits.push(`${a} A`);
-  if (sot != null) bits.push(`${sot} SoT`);
-  const entry = { label: 'LAST MATCH', value: bits.join(' · ') };
+
+  let value;
+  if (role === 'keeper') {
+    // No per-player shots-FACED field exists on player_match_stats, so a busy-keeper
+    // "faced N SoT" can't be grounded here — show a clean full-shift minutes row.
+    value = min != null ? `${min}'` : 'Full shift';
+  } else if (role === 'defender') {
+    // Defenders rarely tally — a clean full-shift row, goals only if they scored.
+    const bits = [];
+    if (g > 0) bits.push(`${g} G`);
+    if (a > 0) bits.push(`${a} A`);
+    bits.push(min != null ? `${min}'` : 'full shift');
+    value = bits.join(' · ');
+  } else {
+    // forward / winger / midfielder: goals + (when present) SoT.
+    const bits = [`${g} G`];
+    if (a > 0) bits.push(`${a} A`);
+    if (sot != null) bits.push(`${sot} SoT`);
+    value = bits.join(' · ');
+  }
+
+  const entry = { label: 'LAST MATCH', value };
   const det = [];
-  if (min != null) det.push(`${min}'`);
+  // The keeper row already carries minutes in its value; others get it in detail.
+  if (role !== 'keeper' && role !== 'defender' && min != null) det.push(`${min}'`);
   const dt = matchShortDate(last);
   if (dt) det.push(dt);
   if (det.length) entry.detail = det.join(' · ');
@@ -367,46 +564,104 @@ function lastMatchFormRows(history) {
 }
 
 /**
- * Up to 3 plain-copy strengths / weaknesses, deterministic, derived only from the
- * grounded fields above. No bet instructions, no Layer-3 conclusions about the
- * pick. Keepers get a save-volume read; outfielders a scoring/form read.
+ * Up to 3 plain-copy strengths / weaknesses, deterministic, ROLE-TAILORED, derived
+ * ONLY from the grounded fields above. No bet instructions, no Layer-3 conclusions
+ * about the pick. Forwards read on scoring/finishing; midfielders on creativity +
+ * duels; defenders on aerial/set-piece threat + tackle volume + discipline + team
+ * clean-sheet rate; keepers on save% + clean-sheet rate.
  */
-function strengthsWeaknesses({ sstat, form, formRows, isKeeper }) {
+function strengthsWeaknesses({ sstat, form, formRows, role, ownForm, oppForm, meta } = {}) {
   const strengths = [];
   const weaknesses = [];
+  const nation = meta?.name || (form?.label ? form.label.replace(/ last \d+$/, '') : 'Nation');
 
   if (sstat) {
     const g = num(sstat.goals);
     const a = num(sstat.assists);
     const caps = num(sstat.appearances);
     const sot = num(sstat.shots_on);
-    if (!isKeeper && caps != null && caps > 0) {
+
+    if (role === 'keeper') {
+      const saves = num(sstat.saves);
+      const conc = num(sstat.conceded);
+      if (saves != null && conc != null && (saves + conc) > 0) {
+        const rate = Math.round((saves / (saves + conc)) * 100);
+        if (rate >= 70) strengths.push(`Strong save rate — stopping ${rate}% of shots faced this cycle`);
+        else if (rate <= 55) weaknesses.push(`Low save rate — only ${rate}% of shots faced stopped`);
+      }
+      const csInfo = cleanSheetsFromForm(ownForm);
+      if (csInfo && csInfo.n >= 2) {
+        const pct = Math.round((csInfo.cs / csInfo.n) * 100);
+        if (pct >= 50) strengths.push(`${nation} keeping clean sheets — ${csInfo.cs} of last ${csInfo.n}`);
+      }
+    } else if (role === 'midfielder' && caps != null && caps > 0) {
+      const involvement = (g ?? 0) + (a ?? 0);
+      if (involvement >= 3) strengths.push(`Goal involvement — ${g ?? 0}G/${a ?? 0}A in ${caps} cap${caps === 1 ? '' : 's'}`);
+      const kp = num(sstat.keyPasses);
+      if (kp != null && kp >= 6) strengths.push(`Creator — ${kp} key passes over ${caps} cap${caps === 1 ? '' : 's'}`);
+      const dt = num(sstat.duelsTotal);
+      const dw = num(sstat.duelsWon);
+      if (dt != null && dw != null && dt >= 4) {
+        const pct = Math.round((dw / dt) * 100);
+        if (pct >= 55) strengths.push(`Duel dominance — wins ${pct}% of duels`);
+        else if (pct < 40) weaknesses.push(`Loses the duel battle — ${pct}% won`);
+      }
+      const pa = num(sstat.passAccuracy);
+      if (pa != null && pa < 75) weaknesses.push(`Loose distribution — ${Math.round(pa)}% pass accuracy`);
+    } else if (role === 'defender' && caps != null && caps > 0) {
+      if (g != null && g >= 2) strengths.push(`Set-piece threat — ${g} goals from the back this cycle`);
+      const tk = num(sstat.tackles);
+      if (tk != null && tk >= 8) strengths.push(`Tackle volume — ${tk} tackles over ${caps} cap${caps === 1 ? '' : 's'}`);
+      const csInfo = cleanSheetsFromForm(ownForm);
+      if (csInfo && csInfo.n >= 2) {
+        const pct = Math.round((csInfo.cs / csInfo.n) * 100);
+        if (pct >= 50) strengths.push(`${nation} clean-sheet rate — ${csInfo.cs} of last ${csInfo.n}`);
+      }
+      const y = num(sstat.yellow);
+      const r = num(sstat.red);
+      if ((y != null && y >= 3) || (r != null && r >= 1)) {
+        weaknesses.push(`Discipline risk — ${y ?? 0}Y / ${r ?? 0}R this cycle`);
+      }
+    } else if (caps != null && caps > 0) {
+      // forward / winger
       const involvement = (g ?? 0) + (a ?? 0);
       if (g != null && g >= 3) strengths.push(`Scoring this cycle — ${g} goal${g === 1 ? '' : 's'} in ${caps} cap${caps === 1 ? '' : 's'}`);
       else if (involvement >= 3) strengths.push(`Goal involvement — ${g ?? 0}G/${a ?? 0}A in ${caps} cap${caps === 1 ? '' : 's'}`);
       if (sot != null && sot >= 4) strengths.push(`Hits the target — ${sot} shots on target this cycle`);
+      const shots = num(sstat.shots);
+      if (g != null && shots != null && shots >= 5) {
+        const conv = Math.round((g / shots) * 100);
+        if (conv >= 25) strengths.push(`Clinical finisher — ${conv}% conversion (${g} on ${shots})`);
+      }
       if (involvement === 0 && caps >= 3) weaknesses.push(`No goals or assists in ${caps} caps this cycle`);
     }
   }
 
-  // Nation form -> a context read (applies to the whole side).
-  if (form?.detail) {
+  // Nation form -> a context read (applies to the whole side; not for keepers,
+  // whose own-GA read lives in their splits instead).
+  if (role !== 'keeper' && form?.detail) {
     const gf = parseRate(form.detail, /([\d.]+)\s*scored\/gm/);
     const ga = parseRate(form.detail, /([\d.]+)\s*conceded\/gm/);
-    if (gf != null && gf >= 2.0) strengths.push(`${form.label.replace(/ last \d+$/, '')} scoring freely — ${gf} goals/gm recently`);
-    if (ga != null && ga >= 2.0) weaknesses.push(`${form.label.replace(/ last \d+$/, '')} leaking goals — ${ga} conceded/gm recently`);
+    if (gf != null && gf >= 2.0) strengths.push(`${nation} scoring freely — ${gf} goals/gm recently`);
+    if (ga != null && ga >= 2.0) weaknesses.push(`${nation} leaking goals — ${ga} conceded/gm recently`);
   }
 
-  // Keeper save volume from the last full match.
-  if (isKeeper && formRows.length) {
-    const sotConceded = parseRate(formRows[0].value, /(\d+)\s*SoT/);
-    if (sotConceded != null && sotConceded >= 4) strengths.push(`Busy last out — faced ${sotConceded} shots on target`);
+  // Keeper: own-nation recent GA as a leak read.
+  if (role === 'keeper') {
+    const ga = gaPerMatch(ownForm);
+    if (ga != null && ga >= 2.0) weaknesses.push(`${nation} leaking goals — ${ga} conceded/gm recently`);
   }
 
   return {
     strengths: dedupeCap(strengths, MAX_STRENGTHS),
     weaknesses: dedupeCap(weaknesses, MAX_WEAKNESSES),
   };
+}
+
+/** This nation's recent goals-conceded-per-match (own GA read). */
+function gaPerMatch(formResult) {
+  const span = formResult?.l5 || formResult?.l10;
+  return span ? num(span.gaPerMatch) : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -419,8 +674,15 @@ function strengthsWeaknesses({ sstat, form, formRows, isKeeper }) {
  * posted at line 1 (true anytime) or 2/3 (brace/hat-trick) — keep the LOWEST line
  * so the card shows the standard anytime number, not a long-shot milestone.
  */
-function pickVendorRows(propRows, playerId) {
-  const mine = asArray(propRows).filter((r) => String(r?.player_id) === String(playerId));
+function pickVendorRows(propRows, playerId, allowedTypes) {
+  const allow = Array.isArray(allowedTypes) && allowedTypes.length
+    ? new Set(allowedTypes.map((t) => String(t).toLowerCase()))
+    : null;
+  const mine = asArray(propRows)
+    .filter((r) => String(r?.player_id) === String(playerId))
+    // Only consider the role's markets when choosing a vendor, so e.g. a keeper's
+    // vendor is chosen on the book that actually posts saves, not a stray goal line.
+    .filter((r) => !allow || allow.has(String(r?.prop_type || '').toLowerCase()));
   if (!mine.length) return [];
   let vendor = null;
   for (const v of PROP_VENDORS) {
@@ -448,6 +710,9 @@ function propLabel(propType) {
     anytime_goal: 'Anytime goal',
     shots: 'Shots',
     shots_on_target: 'Shots on target',
+    assists: 'Assists',
+    saves: 'Saves',
+    cards: 'Card',
   };
   return map[propType] || propType.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 }

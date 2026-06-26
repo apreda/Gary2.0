@@ -522,6 +522,29 @@ enum SupabaseAPI {
         return rows
     }
 
+    /// League-wide "League Pulse" tables for a date+league (one row per tab).
+    /// Generic schema: each row carries its own columns[] + rows[] so the UI
+    /// renders every tab with no per-tab code. 30-min in-memory cache (keyed by
+    /// date+league), [] on any failure — the section then collapses.
+    private static var _leaguePulseCache: [String: (rows: [LeaguePulseRow], at: Date)] = [:]
+    static func fetchLeaguePulse(date: String, league: String) async -> [LeaguePulseRow] {
+        let cacheKey = "\(date)|\(league)"
+        if let c = _leaguePulseCache[cacheKey], Date().timeIntervalSince(c.at) < 1800 {
+            return c.rows
+        }
+        let url = buildURL(table: "league_pulse", query: [
+            URLQueryItem(name: "select", value: "date,league,tab,title,subtitle,sort_note,columns,rows"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "league", value: "eq.\(league)"),
+            URLQueryItem(name: "order", value: "tab.asc")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([LeaguePulseRow].self, from: data) else { return [] }
+        _leaguePulseCache[cacheKey] = (rows, Date())
+        return rows
+    }
+
     /// The full day's slate — every game + opening lines (daily_slate,
     /// written at the 5am plan step). The board exists before picks do.
     static func fetchDailySlate(date: String) async -> [DailySlateRow] {

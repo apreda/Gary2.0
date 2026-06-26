@@ -32,6 +32,7 @@ const { buildPlayerInsightCards } = await import('./src/services/insights/player
 const { buildWcPlayerInsightCards } = await import('./src/services/insights/wcPlayerInsightCards.js');
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
 const fifaWorldCupService = (await import('./src/services/fifaWorldCupService.js')).default;
+const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -60,6 +61,13 @@ const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 // insert succeeds; failures here are NON-FATAL to the connections run.
 const CARDS_TABLE = 'player_insight_cards';
 const CARDS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${CARDS_TABLE}` : null;
+
+// League Pulse: league-wide daily leaderboard tables (MLB + WC). Unlike the
+// additive-freeze connections write, pulse is a LIVE SNAPSHOT — full-row UPSERT
+// on (date, league, tab) each run via Prefer: resolution=merge-duplicates. A
+// dropped/ungroundable tab simply never gets a row (iOS hides any tab with no row).
+const PULSE_TABLE = 'league_pulse';
+const PULSE_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${PULSE_TABLE}` : null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arg parsing (mirrors getArgValue in scripts/run-agentic-picks.js)
@@ -320,6 +328,63 @@ async function buildAndStoreCards({ date, league, connections }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// League Pulse write path (UPSERT-by-tab — live snapshot, NOT additive-freeze)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build the day's League Pulse tab packs (MLB + WC) and UPSERT them on
+ * (date, league, tab) — a full-row replace each run via merge-duplicates, so the
+ * board is always the current snapshot (the live-data behavior the spec wants, the
+ * opposite of the connections additive-freeze). NON-FATAL: any failure here is
+ * caught + warned so it never sinks the connections run. Respects --dry-run.
+ */
+async function buildAndStorePulse({ date, league }) {
+  if (league !== 'MLB' && league !== 'WC') return;
+  try {
+    const packs = await buildLeaguePulse({ date, league });
+    if (!Array.isArray(packs) || packs.length === 0) {
+      console.log(`   ℹ️  No league pulse tabs built for ${league} (${date}).`);
+      return;
+    }
+
+    const rows = packs.map((p) => ({
+      date: p.date,
+      league: p.league,
+      tab: p.tab,
+      title: p.title,
+      subtitle: p.subtitle ?? null,
+      columns: p.columns,
+      rows: p.rows,
+      sort_note: p.sort_note ?? null,
+      generated_by: 'insights-cli',
+    }));
+
+    if (dryRun) {
+      console.log(`   🧪 Would UPSERT ${rows.length} league pulse tab(s): ${rows.map((r) => r.tab).join(', ')}. Sample:`);
+      console.log(JSON.stringify(rows[0], null, 2));
+      return;
+    }
+
+    // UPSERT on the (date, league, tab) unique constraint — full-row replace.
+    const sanitized = JSON.parse(JSON.stringify(rows));
+    await axios({
+      method: 'POST',
+      url: PULSE_REST_URL,
+      data: sanitized,
+      headers: {
+        ...restHeaders,
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+    });
+    console.log(`   ✅ Stored ${rows.length} league pulse tab(s) for ${league} (${date}): ${rows.map((r) => r.tab).join(', ')}.`);
+  } catch (err) {
+    // NON-FATAL — a pulse build/write failure must not fail the connections run.
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.warn(`   ⚠️  [${league}] league pulse skipped: ${detail}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -359,6 +424,10 @@ async function run() {
 
     if (connections.length === 0) {
       console.log(`   No connections generated for ${league} on ${targetDate}.`);
+      // League Pulse is INDEPENDENT of the connections (it builds league-wide
+      // tables straight from the slate), so still build it on a 0-connection day
+      // (e.g. a thin WC opener). NON-FATAL + dry-run-aware internally.
+      await buildAndStorePulse({ date: targetDate, league });
       continue;
     }
 
@@ -371,6 +440,8 @@ async function run() {
       // Player insight cards build on the SAME connections (MLB only); in dry-run
       // this prints the pack count + one sample payload instead of writing.
       await buildAndStoreCards({ date: targetDate, league, connections });
+      // League Pulse (MLB + WC) builds its own league-wide tables from the slate.
+      await buildAndStorePulse({ date: targetDate, league });
       continue;
     }
 
@@ -388,6 +459,9 @@ async function run() {
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });
+      // League Pulse (MLB + WC) — league-wide leaderboard tables, full-row UPSERT
+      // each run (live snapshot). NON-FATAL — guarded internally.
+      await buildAndStorePulse({ date: targetDate, league });
     } catch (err) {
       hadError = true;
       const detail = err.response?.data

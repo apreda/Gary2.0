@@ -16234,6 +16234,11 @@ struct Signal: Identifiable {
     /// Regression payload (pitcher rows) — direction, ERA/xERA, peripherals and
     /// the verdict. `reg.day` ("tonight"/"tomorrow") splits the Regression Board.
     var reg: SwapMeta? = nil
+    /// The row's own EST slate day (insight_connections.date). Lets surfaces
+    /// like the Regression Board re-anchor "Today"/"Tomorrow" against the
+    /// CURRENT EST slate day (todayEST) instead of trusting a baked string,
+    /// so a carried-forward row can never be mislabeled past the 3am rollover.
+    var slateDate: String? = nil
     /// Live first-pitch park-weather payload (park_weather lane) — temp/wind/lean drive the MLB weather chip + sheet.
     var weather: SwapMeta? = nil
 }
@@ -16904,7 +16909,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
-                                   edges: sportConnections, onTapProp: { selectedProp = $0 })
+                                   edges: sportConnections, scopeLeague: sport, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .refreshable { await store.refresh() }
@@ -17217,11 +17222,16 @@ struct PicksTodayPage: View {
     let gamePickResult: (GaryPick) -> String?
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
+    /// The Picks page's current sport scope ("ALL"/"MLB"/"WC"/…) — the same
+    /// scope that filters the edges. LEAGUE PULSE is league-wide, so it only
+    /// lights up on an MLB or WC scope and collapses otherwise.
+    let scopeLeague: String
     let onTapProp: (PropPick) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
+            LeaguePulseSection(league: scopeLeague)          // NEW — above TODAY'S EDGES
             EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
         }
     }
@@ -17492,6 +17502,243 @@ struct PlayerIntelSection: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
         .contentShape(Rectangle())
+    }
+}
+
+
+// MARK: - League Pulse (league-wide tabbed tables — TODAY page only)
+//
+// A fully data-driven section: each league_pulse row owns its columns[] + rows[]
+// so ONE generic PulseTable renders every tab with no per-tab Swift code. The
+// tab bar is one pill per returned row's tab (in a fixed display order); a tab
+// with no row is simply absent. League-wide, so it sits ONLY on PicksTodayPage
+// and collapses to EmptyView on any non-MLB / non-WC scope (or when empty).
+struct LeaguePulseSection: View {
+    /// The Picks page's sport scope ("ALL"/"MLB"/"WC"/…).
+    let league: String
+
+    @State private var rows: [LeaguePulseRow] = []
+    @State private var selectedTab: String? = nil
+    @State private var loaded = false
+
+    /// LEAGUE PULSE is league-wide — only MLB or WC scopes resolve to a feed.
+    /// "ALL" and every other scope fetch nothing (EmptyView, no gap).
+    private var pulseLeague: String? {
+        switch HubLeagueSel.from(league) {
+        case .mlb: return "MLB"
+        case .wc:  return "WC"
+        default:   return nil   // ALL / NBA / NHL / etc — no league-wide pulse
+        }
+    }
+
+    /// Fixed display order per league; any tab without a row drops out.
+    private static let tabOrder: [String: [String]] = [
+        "MLB": ["starting_pitchers", "hot_cold_bats", "bullpen", "injuries"],
+        "WC":  ["top_scorers", "form_xg", "injuries", "discipline"],
+    ]
+
+    /// Returned rows arranged in the league's fixed tab order (unknown tabs last).
+    private var orderedRows: [LeaguePulseRow] {
+        let order = Self.tabOrder[pulseLeague ?? ""] ?? []
+        return rows.sorted { a, b in
+            let ai = order.firstIndex(of: a.tab ?? "") ?? Int.max
+            let bi = order.firstIndex(of: b.tab ?? "") ?? Int.max
+            if ai != bi { return ai < bi }
+            return (a.tab ?? "") < (b.tab ?? "")
+        }
+    }
+
+    private var activeRow: LeaguePulseRow? {
+        if let t = selectedTab, let r = orderedRows.first(where: { $0.tab == t }) { return r }
+        return orderedRows.first
+    }
+
+    var body: some View {
+        Group {
+            if pulseLeague != nil && !orderedRows.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("LEAGUE PULSE")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.horizontal, 16).padding(.top, 4)
+
+                    if orderedRows.count > 1 { tabBar }
+
+                    if let row = activeRow {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Title + subtitle/sort_note caption for the selected tab.
+                            VStack(alignment: .leading, spacing: 2) {
+                                if let title = row.title, !title.isEmpty {
+                                    Text(title)
+                                        .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white)
+                                }
+                                let caption = [row.subtitle, row.sortNote]
+                                    .compactMap { $0?.isEmpty == false ? $0 : nil }
+                                    .joined(separator: " · ")
+                                if !caption.isEmpty {
+                                    Text(caption)
+                                        .font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.4))
+                                        .lineLimit(2)
+                                }
+                            }
+                            .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 8)
+
+                            PulseTable(row: row)
+                                .padding(.bottom, 4)
+                        }
+                        .quantPanel()
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+        }
+        .task(id: league) {
+            guard let lg = pulseLeague else { rows = []; loaded = true; return }
+            let fetched = await SupabaseAPI.fetchLeaguePulse(date: SupabaseAPI.todayEST(), league: lg)
+            await MainActor.run { rows = fetched; loaded = true }
+        }
+    }
+
+    /// One pill per present tab — gold underline marks the active tab, matching
+    /// the TODAY'S EDGES category tab bar.
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 22) {
+                ForEach(orderedRows) { tabPill($0) }
+            }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 2)
+        }
+    }
+
+    @ViewBuilder
+    private func tabPill(_ row: LeaguePulseRow) -> some View {
+        let active = (activeRow?.tab == row.tab)
+        let label = (row.title ?? row.tab ?? "").uppercased()
+        Button { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = row.tab } } label: {
+            Text(label)
+                .font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
+                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
+                .padding(.bottom, 8)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 2)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Renders ONE league_pulse row as a small table: a header from columns[] and a
+/// row per rows[] entry, reading row[col.key]. Zero hardcoding — the schema is
+/// in the payload. Reserved cell keys it honors: "team" (abbr beside the primary
+/// cell), "trend" ("hot"/"cold" → ▲/▼ chip), "highlight" ("today" → gold edge).
+struct PulseTable: View {
+    let row: LeaguePulseRow
+
+    private var columns: [LeaguePulseColumn] { row.columns }
+    private var cells: [[String: String]] { row.rows }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider().background(Color.white.opacity(0.07))
+            if cells.isEmpty {
+                Text("No data yet.")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+            } else {
+                ForEach(Array(cells.enumerated()), id: \.offset) { idx, cell in
+                    dataRow(cell)
+                    if idx < cells.count - 1 {
+                        Divider().background(Color.white.opacity(0.05)).padding(.leading, 14)
+                    }
+                }
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(columns.enumerated()), id: \.offset) { _, col in
+                Text(col.label.uppercased())
+                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.35))
+                    .frame(maxWidth: .infinity, alignment: alignment(col))
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+    }
+
+    private func dataRow(_ cell: [String: String]) -> some View {
+        let isToday = (cell["highlight"] == "today")
+        return HStack(spacing: 8) {
+            ForEach(Array(columns.enumerated()), id: \.offset) { _, col in
+                cellView(col, cell)
+                    .frame(maxWidth: .infinity, alignment: alignment(col))
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 9)
+        .overlay(alignment: .leading) {
+            // "today" → gold left edge (a probable starter / today's player).
+            Rectangle().fill(isToday ? GaryColors.gold : .clear).frame(width: 2)
+        }
+        .background(isToday ? GaryColors.gold.opacity(0.05) : .clear)
+    }
+
+    @ViewBuilder
+    private func cellView(_ col: LeaguePulseColumn, _ cell: [String: String]) -> some View {
+        let value = cell[col.key] ?? ""
+        if col.emphasis == "primary" {
+            // Primary cell: bold name + optional team abbr + optional trend chip.
+            HStack(spacing: 6) {
+                Text(value)
+                    .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
+                    .lineLimit(1)
+                if let team = cell["team"], !team.isEmpty {
+                    Text(team.uppercased())
+                        .font(GaryFonts.mono(9))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                trendChip(cell["trend"])
+            }
+        } else {
+            Text(value.isEmpty ? "—" : value)
+                .font(emphasisFont(col.emphasis))
+                .foregroundStyle(emphasisColor(col.emphasis))
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private func trendChip(_ trend: String?) -> some View {
+        switch trend {
+        case "hot":
+            Text("▲").font(.system(size: 10, weight: .bold)).foregroundStyle(GaryColors.mlbGrass)
+        case "cold":
+            Text("▼").font(.system(size: 10, weight: .bold)).foregroundStyle(Color(hex: "#D9534F"))
+        default:
+            EmptyView()
+        }
+    }
+
+    private func emphasisFont(_ e: String?) -> Font {
+        switch e {
+        case "stat":  return GaryFonts.mono(13, bold: true)
+        case "muted": return GaryFonts.mono(12)
+        default:      return GaryFonts.mono(12.5)
+        }
+    }
+
+    private func emphasisColor(_ e: String?) -> Color {
+        switch e {
+        case "stat":  return .white.opacity(0.9)
+        case "muted": return .white.opacity(0.45)
+        default:      return .white.opacity(0.7)
+        }
+    }
+
+    private func alignment(_ col: LeaguePulseColumn) -> Alignment {
+        col.align == "trailing" ? .trailing : .leading
     }
 }
 
@@ -18029,6 +18276,7 @@ extension Connection {
             swap: (meta?.kind == "swap") ? meta : nil,
             confirmedXI: (meta?.kind == "confirmedXI") ? meta : nil,
             reg: (meta?.kind == "regression_pitcher") ? meta : nil,
+            slateDate: date,
             weather: (meta?.kind == "park_weather") ? meta : nil
         )
     }
@@ -18618,7 +18866,7 @@ struct PropsHubView: View {
                     if !items(.regression).isEmpty {
                         HubSectionTitle(title: "Regression Board").padding(.horizontal, 16)
                             .id("regression")
-                        RegressionBoard(signals: items(.regression)) { s in
+                        RegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
@@ -19396,16 +19644,62 @@ struct FeatureEdgeCard: View {
 /// (WHIP, K/9, hard-hit%, barrel%, opp BA→xBA) and, tonight, the full breakdown.
 struct RegressionBoard: View {
     let signals: [Signal]
+    /// The CURRENT EST slate day (SupabaseAPI.todayEST()). The Today/Tomorrow
+    /// split is anchored to THIS, not the row's baked "tonight"/"tomorrow"
+    /// string — so when the EST day rolls over (~3am ET) what was Tomorrow
+    /// becomes Today, a fresh Tomorrow appears, and a stale prior-Today drops.
+    var todayEST: String = SupabaseAPI.todayEST()
     let onTap: (Signal) -> Void
     @State private var tab: RegTab? = nil
     @State private var expandedID: UUID? = nil
 
     private enum RegTab: Hashable { case pitchers, hitters, tomorrow }
 
+    /// The next EST slate day after `todayEST` ("Tomorrow").
+    private var tomorrowEST: String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: todayEST),
+              let next = Calendar.current.date(byAdding: .day, value: 1, to: d) else { return todayEST }
+        return f.string(from: next)
+    }
+
+    /// The EST slate day a regression row actually applies to. A row carries
+    /// its own `slateDate` (insight_connections.date) plus a baked
+    /// "tonight"/"tomorrow" tag: "tomorrow" rows apply to slateDate + 1 day.
+    /// Returns nil when the row predates the slateDate column (old rows) so we
+    /// can fall back to the baked string.
+    private func rowSlateDay(_ s: Signal) -> String? {
+        guard let base = s.slateDate else { return nil }
+        guard s.reg?.day == "tomorrow" else { return base }   // "tonight" or unset → its own date
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: base),
+              let next = Calendar.current.date(byAdding: .day, value: 1, to: d) else { return base }
+        return f.string(from: next)
+    }
+
     // Pitchers (ERA→xERA, carry reg meta → expandable) vs hitters (BA→xBA, no
-    // reg meta) vs tomorrow's projected starters (pitchers, look-ahead).
-    private var pitcherRows: [Signal] { signals.filter { $0.reg?.day == "tonight" } }
-    private var tomorrowRows: [Signal] { signals.filter { $0.reg?.day == "tomorrow" } }
+    // reg meta) vs tomorrow's projected starters (pitchers, look-ahead). The
+    // Today/Tomorrow split rolls on the EST slate day: a row maps to a tab by
+    // comparing its real slate day to todayEST / tomorrowEST. A row whose real
+    // day is already in the PAST is dropped — never labeled "Today".
+    private var pitcherRows: [Signal] {
+        signals.filter { s in
+            guard s.reg != nil else { return false }
+            if let day = rowSlateDay(s) { return day == todayEST }
+            return s.reg?.day == "tonight"   // old rows w/o a date → trust the baked tag
+        }
+    }
+    private var tomorrowRows: [Signal] {
+        signals.filter { s in
+            guard s.reg != nil else { return false }
+            if let day = rowSlateDay(s) { return day == tomorrowEST }
+            return s.reg?.day == "tomorrow"  // old rows w/o a date → trust the baked tag
+        }
+    }
     private var hitterRows: [Signal] { signals.filter { $0.reg == nil } }
 
     private func rowsFor(_ t: RegTab) -> [Signal] {

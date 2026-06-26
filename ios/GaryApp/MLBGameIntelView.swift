@@ -435,7 +435,8 @@ struct MLBGameIntelView: View {
         //  • AWAY = the team's DARK primary, number in WHITE.
         //  • HOME = WHITE jersey, number in the team's dark colour, + team pinstripes if they wear them.
         let tc = Self.teamColor(forName: homeUp ? homeName : awayName)
-        let jersey: Color = homeUp ? .white : tc.primary
+        // HOME white jersey softened to a warm off-white (#E7E4DC) — pure white read too glaring.
+        let jersey: Color = homeUp ? Color(hex: "#E7E4DC") : tc.primary
         // HOME white jersey → number in the team's bright signature accent (e.g. Pirates GOLD).
         // AWAY dark jersey → number stays WHITE.
         let textC: Color = homeUp ? tc.accent : .white
