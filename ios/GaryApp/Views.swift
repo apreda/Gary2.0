@@ -6210,6 +6210,45 @@ struct PremiumPicksView: View {
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08), lineWidth: 1))
     }
 
+    /// On the TODAY board, a sport that hasn't posted/graded a pick yet would
+    /// otherwise fall back to YESTERDAY's settled result — a stale "LAST RESULT"
+    /// card that misreads as today's. Instead we tease that sport's lane with the
+    /// SAME blurred lock treatment the Picks tab uses (sharp chrome, blurred call,
+    /// lock overlay) so it reads as "picks coming," never as old data. Matches the
+    /// shelf card footprint (width = screen − 44, CompactPickRow.uniformHeight).
+    private func teasedTodayCard(for league: String) -> some View {
+        let cardW = UIScreen.main.bounds.width - 44
+        return ZStack {
+            // Blurred mock contents — redaction bars, never fake copy.
+            VStack(alignment: .leading, spacing: 12) {
+                RoundedRectangle(cornerRadius: 4).fill(GaryColors.gold.opacity(0.5)).frame(width: 92, height: 11)
+                RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.55)).frame(width: 210, height: 24)
+                RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.3)).frame(width: 150, height: 13)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(18)
+            .blur(radius: 5)
+
+            // Lock overlay — same language as the Picks-tab look-ahead card.
+            VStack(spacing: 8) {
+                Image(systemName: "lock.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(GaryColors.gold)
+                Text("UNVEILS ~90 MIN BEFORE").font(GaryFonts.mono(10.5, bold: true)).tracking(1.2).foregroundStyle(.white.opacity(0.88))
+                Text("Tonight's \(league) pick is coming").font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+            }
+        }
+        .frame(width: cardW, height: CompactPickRow.uniformHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(hex: "#121110"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(.white.opacity(0.10), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
     // MARK: - Content
 
     // MARK: - Toggle bar (Terminal Tape) + mode content
@@ -6507,12 +6546,19 @@ struct PremiumPicksView: View {
     }
 
     private func gameShelfView(_ shelf: GameShelf) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // On the TODAY board a settled shelf is a STALE prior-day fallback (today's
+        // pick hasn't posted/graded yet). Tease it with the blurred lock card
+        // instead of showing yesterday's result as if it were tonight's.
+        let isStaleToday = selectedDate == nil && shelf.settled && !shelf.picks.isEmpty
+        return VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league,
                         status: shelf.picks.isEmpty
                             ? "·  —"
+                            : isStaleToday ? "·  PICK COMING"
                             : (shelf.settled ? "·  LAST RESULT" : "·  \(shelf.picks.count) play\(shelf.picks.count == 1 ? "" : "s")"))
-            if shelf.picks.isEmpty {
+            if isStaleToday {
+                teasedTodayCard(for: shelf.league).padding(.horizontal, 16)
+            } else if shelf.picks.isEmpty {
                 placeholderRow(for: shelf.league)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -6594,11 +6640,18 @@ struct PremiumPicksView: View {
     }
 
     private func propShelfView(_ shelf: PropShelf) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // Same TODAY-board rule as the game shelf: a settled prop lane is a stale
+        // prior-day fallback — tease it with the blurred lock card, not yesterday's
+        // graded result dressed up as tonight's.
+        let isStaleToday = selectedDate == nil && shelf.settled && !shelf.props.isEmpty
+        return VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league, status: shelf.props.isEmpty ? "·  —"
+                            : isStaleToday ? "·  PICK COMING"
                             : shelf.settled ? "·  LAST RESULT"
                             : "·  \(shelf.props.count) prop\(shelf.props.count == 1 ? "" : "s")")
-            if shelf.props.isEmpty {
+            if isStaleToday {
+                teasedTodayCard(for: shelf.league).padding(.horizontal, 16)
+            } else if shelf.props.isEmpty {
                 propPlaceholderRow(for: shelf.league)
             } else {
                 // Horizontal rail of game-groups: same-game props share ONE
