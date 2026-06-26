@@ -370,29 +370,76 @@ struct AuthTextField: View {
 }
 
 // MARK: - Apple Sign In Button
+// Driven by a manual ASAuthorizationController with an EXPLICIT presentation anchor. The
+// SwiftUI SignInWithAppleButton auto-resolves its anchor from the environment, and that
+// resolution fails in iPhone-compatibility mode on iPad (the app is iPhone-only,
+// TARGETED_DEVICE_FAMILY=1) — the tap fires but the sheet has no window to present in, so
+// the button reads as "unresponsive" (App Store 2.1a rejection on iPad Air). We keep Apple's
+// official ASAuthorizationAppleIDButton for the HIG-compliant look and supply the anchor
+// ourselves (same approach the Google path already uses via OAuthPresentationContext).
+
+final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private let authManager: AuthManager
+    private var controller: ASAuthorizationController?   // retain through the flow or it deallocs mid-present
+
+    init(authManager: AuthManager) { self.authManager = authManager }
+
+    @objc func start() {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        self.controller = controller
+        controller.performRequests()
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        self.controller = nil
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
+        Task { try? await authManager.signInWithApple(credential: credential) }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        self.controller = nil
+        // .canceled (1001) = the user dismissed the sheet — stay silent; surface anything else.
+        if let authErr = error as? ASAuthorizationError, authErr.code == .canceled { return }
+        print("[AppleSignIn] failed: \(error.localizedDescription)")
+    }
+
+    // Explicit anchor: the foreground-active window scene's key window, so Apple's sheet always
+    // has a real window — including iPad compat mode and any multi-scene state.
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        let scenes = UIApplication.shared.connectedScenes
+        let windowScene = (scenes.first { $0.activationState == .foregroundActive } as? UIWindowScene)
+            ?? (scenes.first as? UIWindowScene)
+        return windowScene?.keyWindow ?? windowScene?.windows.first ?? ASPresentationAnchor()
+    }
+}
 
 struct AppleSignInButton: View {
     @ObservedObject var authManager: AuthManager
 
     var body: some View {
-        SignInWithAppleButton(.signIn) { request in
-            request.requestedScopes = [.email, .fullName]
-        } onCompletion: { result in
-            switch result {
-            case .success(let authorization):
-                if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                    Task {
-                        try? await authManager.signInWithApple(credential: credential)
-                    }
-                }
-            case .failure:
-                break
-            }
-        }
-        .signInWithAppleButtonStyle(.white)
-        .frame(height: 50)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        AppleIDButtonRepresentable(authManager: authManager)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
     }
+}
+
+private struct AppleIDButtonRepresentable: UIViewRepresentable {
+    let authManager: AuthManager
+
+    func makeCoordinator() -> AppleSignInCoordinator { AppleSignInCoordinator(authManager: authManager) }
+
+    func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
+        let button = ASAuthorizationAppleIDButton(authorizationButtonType: .signIn, authorizationButtonStyle: .white)
+        button.cornerRadius = 12
+        button.addTarget(context.coordinator, action: #selector(AppleSignInCoordinator.start), for: .touchUpInside)
+        return button
+    }
+
+    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {}
 }
 
 // MARK: - Social Sign In Button
