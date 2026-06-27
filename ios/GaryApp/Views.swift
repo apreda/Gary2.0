@@ -17934,6 +17934,8 @@ enum SignalKind {
     case fantasyPickups
     // MLB team angle — a team's record in tonight's starter's last N starts
     case teamRecord
+    // MLB team angle — bullpen workload (relief IP) over the last 3 games
+    case bullpenFatigue
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -17956,6 +17958,7 @@ enum SignalKind {
         case .xgRecap: return "soccerball"
         case .fantasyPickups: return "star.fill"
         case .teamRecord: return "person.3.fill"
+        case .bullpenFatigue: return "bolt.slash.fill"
         }
     }
     var tint: Color {
@@ -17992,6 +17995,7 @@ enum SignalKind {
         case .xgRecap: return "XG RECAP"
         case .fantasyPickups: return "FANTASY PICKUPS"
         case .teamRecord: return "RECORD"
+        case .bullpenFatigue: return "BULLPEN"
         }
     }
 }
@@ -19124,7 +19128,14 @@ struct PicksTodayPage: View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
             LeaguePulseSection(league: scopeLeague, refreshTick: refreshTick)  // NEW — above TODAY'S EDGES
-            EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
+            // World Cup gets a bespoke section (4 fan-legible lanes + a tap-through
+            // team-news card) instead of the generic MLB-shaped EdgesSection. WC-only:
+            // the shared EdgesSection / locked MLB design is never touched.
+            if scopeLeague == "WC" {
+                WCTodaySection(edges: edges)
+            } else {
+                EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
+            }
         }
     }
 
@@ -20136,6 +20147,7 @@ extension SignalKind {
         case "streaking": return .streak
         case "starter_form": return .starterForm
         case "starter_team_record", "team_record": return .teamRecord
+        case "bullpen_fatigue": return .bullpenFatigue
         case "first_inning": return .firstInning
         case "running_game": return .runningGame
         case "park_weather": return .parkWeather
@@ -20709,7 +20721,7 @@ struct PropsHubView: View {
         searchText = ""
         searchFocused = false
         switch lane {
-        case .platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord:
+        case .platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord, .bullpenFatigue:
             laneTab = lane
             pendingScrollAnchor = "playerEdges"
         case .firstInning, .runningGame, .parkWeather:
@@ -21032,7 +21044,7 @@ struct PropsHubView: View {
         // Ballpark ("a different pitcher in this park") is an MLB-only concept — never
         // surface it for other leagues (it was showing, unreadable, under WC).
         let base: [SignalKind] = sel == .mlb
-            ? [.platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord]
+            ? [.platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord, .bullpenFatigue]
             : [.platoon, .hot, .cold, .starterForm]
         return base.filter { !items($0).isEmpty }
     }
@@ -21050,6 +21062,7 @@ struct PropsHubView: View {
         case .cold: return "COOLING"
         case .starterForm: return "STARTERS"
         case .teamRecord: return "TEAMS"
+        case .bullpenFatigue: return "BULLPEN"
         default: return k.chip
         }
     }
@@ -21061,6 +21074,7 @@ struct PropsHubView: View {
         case .cold: return "Slumps the line may not reflect"
         case .starterForm: return "Last three starts vs the season"
         case .teamRecord: return "Their record in his starts"
+        case .bullpenFatigue: return "Worked-down pens tonight"
         default: return ""
         }
     }
@@ -22018,7 +22032,7 @@ struct EdgeList: View {
     }
 
     @ViewBuilder private func row(_ s: Signal, isOpen: Bool) -> some View {
-        if s.kind == .teamRecord { teamRow(s, isOpen: isOpen) }
+        if s.kind == .teamRecord || s.kind == .bullpenFatigue { teamRow(s, isOpen: isOpen) }
         else { playerRow(s, isOpen: isOpen) }
     }
 

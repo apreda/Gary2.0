@@ -39,6 +39,7 @@ import { computeOwned } from './computers/owned.js';
 import { computeCoolingOff } from './computers/coolingOff.js';
 import { computeStarterForm } from './computers/starterForm.js';
 import { computeStarterTeamRecord } from './computers/starterTeamRecord.js';
+import { computeBullpenFatigue } from './computers/bullpenFatigue.js';
 import { computeStreaking } from './computers/streaking.js';
 import { computeFirstInning } from './computers/firstInning.js';
 import { computeRunningGame } from './computers/runningGame.js';
@@ -103,6 +104,7 @@ const MLB_COMPUTERS = [
   computeCoolingOff,
   computeStarterForm,
   computeStarterTeamRecord,
+  computeBullpenFatigue,
   computeStreaking,
   computeFirstInning,
   computeRunningGame,
