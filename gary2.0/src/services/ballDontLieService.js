@@ -5286,7 +5286,14 @@ const ballDontLieService = {
               date: g.date,
               status: g.status,
               seasonType: g.season_type,
-              postseason: !!g.postseason
+              postseason: !!g.postseason,
+              // Team ids + final runs — lets team-record angles (e.g.
+              // starterTeamRecord) derive W/L from the SAME id space the
+              // chrono game-log uses. (getGames is first-page-only / unusable.)
+              homeId: g.home_team?.id,
+              awayId: g.away_team?.id,
+              homeRuns: g.home_team_data?.runs,
+              awayRuns: g.away_team_data?.runs
             });
           }
           cursor = response.data?.meta?.next_cursor;
