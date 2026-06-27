@@ -119,6 +119,15 @@ struct SwapMeta: Decodable {
     let lean: String?        // "over" (hitter) | "under" (pitcher)
     let venue: String?
     let condition: String?   // "Partly Cloudy" etc.
+    // Fantasy-pickup payload (kind == "fantasy_pickup"): the Hub's two-column board.
+    let role: String?        // "SP" | "HITTER"
+    let tier: String?        // "MUST_ADD" | "STREAM" | "DEEP"
+    let reason: String?      // one-line matchup reason
+    let ops: Double?         // hitter season OPS
+    let avg: Double?         // hitter season AVG
+    let batting_order: Int?  // lineup spot
+    let opp_sp: String?      // opposing starter (hitter pickups)
+    let opp_sp_era: Double?  // opposing starter xERA
 }
 
 /// One team's confirmed starting XI (WC Confirmed XI lane).

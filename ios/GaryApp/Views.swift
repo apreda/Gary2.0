@@ -17999,6 +17999,7 @@ struct Signal: Identifiable {
     var slateDate: String? = nil
     /// Live first-pitch park-weather payload (park_weather lane) — temp/wind/lean drive the MLB weather chip + sheet.
     var weather: SwapMeta? = nil
+    var fantasy: SwapMeta? = nil   // fantasy-pickup payload (role / tier / ops / opp_sp)
 }
 
 // MARK: - Picks Tab (per-game swipe carousel: Today's Top + game-by-game)
@@ -20160,7 +20161,8 @@ extension Connection {
             confirmedXI: (meta?.kind == "confirmedXI") ? meta : nil,
             reg: (meta?.kind == "regression_pitcher") ? meta : nil,
             slateDate: date,
-            weather: (meta?.kind == "park_weather") ? meta : nil
+            weather: (meta?.kind == "park_weather") ? meta : nil,
+            fantasy: (meta?.kind == "fantasy_pickup") ? meta : nil
         )
     }
 }
@@ -20779,7 +20781,7 @@ struct PropsHubView: View {
                     // across lanes (top 2 per kind), a tight horizontal spotlight rail.
                     if !featured.isEmpty {
                         HubSectionTitle(title: "Featured").padding(.horizontal, 16)
-                        EdgeFeatureStrip(signals: featured) { breakdownSignal = $0 }
+                        FeaturedRibbon(signals: featured) { breakdownSignal = $0 }
                     }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
@@ -20793,9 +20795,11 @@ struct PropsHubView: View {
                     // GARY HOME RUN THREATS — Gary's homer picks for today, with
                     // his two-sentence reason. Fed by gary_hr_threats.
                     if !items(.hrThreat).isEmpty {
-                        HubDisclosure(anchor: "hrThreats", eyebrow: "Gary Home Run Threats", count: items(.hrThreat).count, openSet: $openSections) {
+                        HubDisclosure(anchor: "hrThreats", eyebrow: "Gary Home Run Threats", count: min(items(.hrThreat).count, 3), openSet: $openSections) {
                             VStack(spacing: 0) {
-                                ForEach(items(.hrThreat)) { s in
+                                // Cap the display at 3 (founder) — guards against the
+                                // additive-freeze writer accumulating more over a day.
+                                ForEach(Array(items(.hrThreat).prefix(3))) { s in
                                     SignalRow(s: s) { _ in
                                         if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                                     }
@@ -20805,22 +20809,15 @@ struct PropsHubView: View {
                         }
                         .id("hrThreats")
                     }
-                    // FANTASY PICKUPS — today's most streamable starting pitchers,
-                    // ranked best→worst on real xERA / K9 / WHIP / opponent offense
-                    // (Gary's grounded answer to an ESPN streamers column). Tap a
-                    // row → the player's full breakdown. Fed by fantasy_pickups.
+                    // FANTASY PICKUPS — a two-column board: STREAM pitchers | ADD
+                    // hitters, availability-tiered (founder wanted a NEW display type;
+                    // widely-available pickups, not owned aces). Fed by fantasy_pickups.
                     if !items(.fantasyPickups).isEmpty {
-                        HubDisclosure(anchor: "fantasyPickups", eyebrow: "Fantasy Pickups", count: items(.fantasyPickups).count, openSet: $openSections) {
-                            VStack(spacing: 0) {
-                                ForEach(items(.fantasyPickups)) { s in
-                                    SignalRow(s: s) { _ in
-                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
-                                    }
-                                }
-                            }
-                            .quantPanel().padding(.horizontal, 16)
+                        HubSectionTitle(title: "Fantasy Pickups").padding(.horizontal, 16)
+                            .id("fantasyPickups")
+                        FantasyPickupsBoard(signals: items(.fantasyPickups)) { s in
+                            if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
-                        .id("fantasyPickups")
                     }
                     // OWNED — career batter-vs-pitcher history (NBA: season series)
                     if !items(.h2h).isEmpty {
@@ -21436,6 +21433,44 @@ struct HubDisclosure<Content: View>: View {
 }
 
 /// Horizontal carousel of large "featured" edge cards.
+/// FEATURED — a horizontal stat RIBBON (a display the Hub uses nowhere else):
+/// the day's top edges as number-led blocks — the key stat big and tone-coloured,
+/// the subject under it, the lane tag in gold — separated by thin vertical
+/// hairlines. No cards, no badges, no flip; a tap opens the player's breakdown.
+struct FeaturedRibbon: View {
+    let signals: [Signal]
+    let onTap: (Signal) -> Void
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(Array(signals.enumerated()), id: \.element.id) { i, s in
+                    Button { onTap(s) } label: { block(s) }.buttonStyle(.plain)
+                    if i < signals.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 50)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+    @ViewBuilder private func block(_ s: Signal) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(s.value.isEmpty ? "—" : s.value)
+                .font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(s.headline)
+                .font(GaryFonts.text(12, .semibold)).foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(s.kind.chip)
+                .font(GaryFonts.mono(7.5, bold: true)).tracking(1)
+                .foregroundStyle(GaryColors.gold.opacity(0.85)).lineLimit(1)
+        }
+        .frame(width: 118, alignment: .leading)
+        .padding(.vertical, 4).padding(.horizontal, 14)
+        .contentShape(Rectangle())
+    }
+}
+
 struct EdgeFeatureStrip: View {
     let signals: [Signal]
     /// Called from the card BACK's "Full breakdown" button (cards flip on tap).
@@ -21469,23 +21504,23 @@ struct FlippableEdgeCard<Front: View>: View {
 
     var body: some View {
         ZStack {
-            front().opacity(flipped ? 0 : 1)
-            EdgeCardBack(s: s, cornerRadius: cornerRadius)
+            front()
+                .opacity(flipped ? 0 : 1)
+                .allowsHitTesting(!flipped)
+                .onTapGesture { flipped = true }
+            EdgeCardBack(s: s, cornerRadius: cornerRadius,
+                         onBack: { flipped = false },
+                         onBreakdown: { onBreakdown(s) })
                 .opacity(flipped ? 1 : 0)
+                .allowsHitTesting(flipped)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         }
+        // Only the ACTIVE face takes taps, so the front flips to the detail and
+        // the back can always flip BACK (the old code opened the profile on the
+        // second tap, trapping the card — founder).
         .frame(width: width, height: height)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.55, dampingFraction: 0.82), value: flipped)
-        .contentShape(Rectangle())
-        // Tap → flip to the detail; tap the detail again → the full profile.
-        .onTapGesture {
-            if flipped {
-                if s.playerId != nil { onBreakdown(s) } else { flipped = false }
-            } else {
-                flipped = true
-            }
-        }
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -21493,6 +21528,9 @@ struct FlippableEdgeCard<Front: View>: View {
 struct EdgeCardBack: View {
     let s: Signal
     let cornerRadius: CGFloat
+    /// Tap the back (off the button) to flip back; the button opens the profile.
+    let onBack: () -> Void
+    let onBreakdown: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -21507,16 +21545,18 @@ struct EdgeCardBack: View {
                 .lineLimit(8)
                 .minimumScaleFactor(0.85)
             Spacer(minLength: 0)
-            if s.playerId != nil {
-                Text("tap again for the full profile  →")
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
-                    .foregroundStyle(GaryColors.gold.opacity(0.95))
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else {
-                Text("tap to flip back  ↺")
-                    .font(GaryFonts.mono(9, bold: false)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.3))
-                    .frame(maxWidth: .infinity, alignment: .center)
+            HStack(spacing: 8) {
+                Text("flip back ↺").font(GaryFonts.mono(8.5)).tracking(0.5).foregroundStyle(.white.opacity(0.3))
+                Spacer()
+                if s.playerId != nil {
+                    Button(action: onBreakdown) {
+                        Text("Full breakdown →")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
+                            .foregroundStyle(GaryColors.gold)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .padding(12)
@@ -21526,6 +21566,8 @@ struct EdgeCardBack: View {
                 .fill(GaryColors.warmWhite.opacity(0.06))
                 .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(s.kind.tint.opacity(0.35), lineWidth: 1))
         )
+        .contentShape(Rectangle())
+        .onTapGesture { onBack() }
     }
 }
 
@@ -21615,6 +21657,69 @@ struct FeatureEdgeCard: View {
 /// by their ERA-vs-xERA gap. Compact, scannable rows (rank · name · direction ·
 /// gap bar · xERA); tap a pitcher row to expand the verdict + peripherals
 /// (WHIP, K/9, hard-hit%, barrel%, opp BA→xBA) and, tonight, the full breakdown.
+/// FANTASY PICKUPS — a two-column board (a display the Hub doesn't use elsewhere):
+/// PITCHERS to stream on the left, HITTERS to add on the right. Sharp + container-
+/// less — plain column heads, hairline-divided rows, the stat in colour, the
+/// matchup as the one-line read. Order carries priority (no badges, no jargon).
+struct FantasyPickupsBoard: View {
+    let signals: [Signal]
+    let onTap: (Signal) -> Void
+
+    private var pitchers: [Signal] { signals.filter { ($0.fantasy?.role ?? "") == "SP" } }
+    private var hitters: [Signal] { signals.filter { ($0.fantasy?.role ?? "") == "HITTER" } }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 18) {
+            column("Pitchers", pitchers, stat: GaryColors.gold)
+            column("Hitters", hitters, stat: Color(hex: "#4FB14F"))
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder private func column(_ title: String, _ items: [Signal], stat: Color) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title.uppercased())
+                .font(GaryFonts.mono(9, bold: true)).tracking(1.4)
+                .foregroundStyle(GaryColors.gold)
+                .padding(.bottom, 9)
+            if items.isEmpty {
+                Text("none today").font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.28))
+            } else {
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
+                    Button { onTap(s) } label: { row(s, stat: stat) }
+                        .buttonStyle(.plain)
+                    if i < items.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder private func row(_ s: Signal, stat: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Text(s.headline)
+                    .font(GaryFonts.text(12.5, .semibold)).foregroundStyle(.white.opacity(0.95))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                if let pos = s.fantasy?.position, !pos.isEmpty, pos != "SP" {
+                    Text(pos).font(GaryFonts.mono(7.5, bold: true)).foregroundStyle(.white.opacity(0.34))
+                }
+            }
+            Text(s.value)
+                .font(GaryFonts.mono(12, bold: true)).foregroundStyle(stat)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(s.fantasy?.reason ?? s.detail)
+                .font(GaryFonts.mono(8)).foregroundStyle(.white.opacity(0.4))
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
 struct RegressionBoard: View {
     let signals: [Signal]
     /// The CURRENT EST slate day (SupabaseAPI.todayEST()). The Today/Tomorrow
