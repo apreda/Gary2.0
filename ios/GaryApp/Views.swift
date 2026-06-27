@@ -17932,6 +17932,8 @@ enum SignalKind {
     case advancement, xgRecap
     // MLB fantasy streamers — today's most pickup-worthy starting pitchers
     case fantasyPickups
+    // MLB team angle — a team's record in tonight's starter's last N starts
+    case teamRecord
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -17953,6 +17955,7 @@ enum SignalKind {
         case .advancement: return "flag.checkered"
         case .xgRecap: return "soccerball"
         case .fantasyPickups: return "star.fill"
+        case .teamRecord: return "person.3.fill"
         }
     }
     var tint: Color {
@@ -17988,6 +17991,7 @@ enum SignalKind {
         case .advancement: return "ADVANCEMENT"
         case .xgRecap: return "XG RECAP"
         case .fantasyPickups: return "FANTASY PICKUPS"
+        case .teamRecord: return "RECORD"
         }
     }
 }
@@ -20131,6 +20135,7 @@ extension SignalKind {
         case "gary_hr_threats", "hr_threat", "hr threats": return .hrThreat
         case "streaking": return .streak
         case "starter_form": return .starterForm
+        case "starter_team_record", "team_record": return .teamRecord
         case "first_inning": return .firstInning
         case "running_game": return .runningGame
         case "park_weather": return .parkWeather
@@ -20704,7 +20709,7 @@ struct PropsHubView: View {
         searchText = ""
         searchFocused = false
         switch lane {
-        case .platoon, .hot, .ballpark, .cold, .starterForm:
+        case .platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord:
             laneTab = lane
             pendingScrollAnchor = "playerEdges"
         case .firstInning, .runningGame, .parkWeather:
@@ -21027,7 +21032,7 @@ struct PropsHubView: View {
         // Ballpark ("a different pitcher in this park") is an MLB-only concept — never
         // surface it for other leagues (it was showing, unreadable, under WC).
         let base: [SignalKind] = sel == .mlb
-            ? [.platoon, .hot, .ballpark, .cold, .starterForm]
+            ? [.platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord]
             : [.platoon, .hot, .cold, .starterForm]
         return base.filter { !items($0).isEmpty }
     }
@@ -21044,6 +21049,7 @@ struct PropsHubView: View {
         case .ballpark: return sel == .wc ? "VENUE" : "BALLPARK"
         case .cold: return "COOLING"
         case .starterForm: return "STARTERS"
+        case .teamRecord: return "TEAMS"
         default: return k.chip
         }
     }
@@ -21054,6 +21060,7 @@ struct PropsHubView: View {
         case .ballpark: return "A different pitcher in this park"
         case .cold: return "Slumps the line may not reflect"
         case .starterForm: return "Last three starts vs the season"
+        case .teamRecord: return "Their record in his starts"
         default: return ""
         }
     }
@@ -22011,6 +22018,43 @@ struct EdgeList: View {
     }
 
     @ViewBuilder private func row(_ s: Signal, isOpen: Bool) -> some View {
+        if s.kind == .teamRecord { teamRow(s, isOpen: isOpen) }
+        else { playerRow(s, isOpen: isOpen) }
+    }
+
+    // TEAM angle row — the headline IS the story ("Cardinals 7-1 in Pallante's
+    // last 8 starts"); the record rides the right in tone colour, tap expands.
+    @ViewBuilder private func teamRow(_ s: Signal, isOpen: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
+                Text(s.headline)
+                    .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.95))
+                    .lineLimit(isOpen ? nil : 2).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 6)
+                if !s.value.isEmpty {
+                    Text(s.value)
+                        .font(GaryFonts.mono(16, bold: true)).foregroundColor(s.tone.color)
+                        .fixedSize()
+                }
+                Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.35))
+            }
+            if !s.game.isEmpty {
+                Text(s.game.uppercased())
+                    .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55))
+            }
+            if isOpen {
+                Text(s.detail)
+                    .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.66))
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
+            }
+        }
+        .padding(.vertical, 12).padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder private func playerRow(_ s: Signal, isOpen: Bool) -> some View {
         let unit = statLabel(s.kind)
         VStack(alignment: .leading, spacing: 6) {
             // Line 1 — name + the labelled stat (colour = good/bad).
