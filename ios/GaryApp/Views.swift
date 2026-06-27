@@ -21679,11 +21679,11 @@ struct FantasyPickupsBoard: View {
     @ViewBuilder private func column(_ title: String, _ items: [Signal], stat: Color) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title.uppercased())
-                .font(GaryFonts.mono(9, bold: true)).tracking(1.4)
+                .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
                 .foregroundStyle(GaryColors.gold)
-                .padding(.bottom, 9)
+                .padding(.bottom, 10)
             if items.isEmpty {
-                Text("none today").font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.28))
+                Text("none today").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.45))
             } else {
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
                     Button { onTap(s) } label: { row(s, stat: stat) }
@@ -21698,23 +21698,24 @@ struct FantasyPickupsBoard: View {
     }
 
     @ViewBuilder private func row(_ s: Signal, stat: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Text(s.headline)
-                    .font(GaryFonts.text(12.5, .semibold)).foregroundStyle(.white.opacity(0.95))
+                    .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(.white.opacity(0.96))
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if let pos = s.fantasy?.position, !pos.isEmpty, pos != "SP" {
-                    Text(pos).font(GaryFonts.mono(7.5, bold: true)).foregroundStyle(.white.opacity(0.34))
+                    Text(pos).font(GaryFonts.mono(8.5, bold: true)).foregroundStyle(.white.opacity(0.55))
                 }
             }
             Text(s.value)
-                .font(GaryFonts.mono(12, bold: true)).foregroundStyle(stat)
+                .font(GaryFonts.mono(15, bold: true)).foregroundStyle(stat)
                 .lineLimit(1).minimumScaleFactor(0.7)
+            // Readable secondary text — grey-on-black must stay ≥~0.6 opacity (founder).
             Text(s.fantasy?.reason ?? s.detail)
-                .font(GaryFonts.mono(8)).foregroundStyle(.white.opacity(0.4))
+                .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.62))
                 .lineLimit(2).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
