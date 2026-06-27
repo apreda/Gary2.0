@@ -582,7 +582,7 @@ enum SupabaseAPI {
     /// no slate-min math; everything is display-formatted server-side.
     static func fetchTomorrowBoard(date: String) async -> TomorrowBoard? {
         let url = buildURL(table: "tomorrow_board", query: [
-            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,game_count,any_lines,board,big_games,starters,returns"),
+            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera,wc_lookahead"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "limit", value: "1")
         ])

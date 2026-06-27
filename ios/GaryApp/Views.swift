@@ -1909,17 +1909,17 @@ struct HomeView: View {
                     // Pre-game and Live are one tap away on the switcher.
                     phaseSwitcher
 
-                    // Three orderings of the same blocks — results in the
-                    // morning, the slate pre-game, the tape + takeover when
-                    // games are live. (World Cup module parked — it used to lead
-                    // the page; restore on request.)
+                    // TODAY is one full merged page that evolves through the day —
+                    // results-first in the morning, the slate + board + World Cup
+                    // always present, the live tape + full live experience leading
+                    // once games tip off. NOTHING is dropped across the day. LIVE
+                    // is no longer its own tab (founder call): Today absorbs the
+                    // live state, so `.live` routes to `todaySections` too — which
+                    // leads with the live tape/takeover/board/in-game Wire when
+                    // games are on. TOMORROW is the only separate body.
                     switch effectivePhase {
-                    case .morning:
-                        morningSections
-                    case .pregame:
-                        pregameSections
-                    case .live:
-                        liveSections
+                    case .morning, .pregame, .live:
+                        todaySections
                     case .tomorrow:
                         TomorrowView.Body(board: tomorrowBoard)
                     }
@@ -1990,7 +1990,11 @@ struct HomeView: View {
                     async let liveFetch = SupabaseAPI.fetchLiveScores(date: date)
                     async let todayLedgerFetch = SupabaseAPI.fetchInsightLedger(date: date)
                     async let wireFetch = SupabaseAPI.fetchWireItems(date: date)
-                    async let pulseFetch = SupabaseAPI.fetchMarketPulse(date: SupabaseAPI.hubGradedDateEST())
+                    // Market pulse anchors to TODAY's rolling row — the builder now
+                    // writes a zeroed row at the start of the slate and re-upserts it
+                    // as today's games go FINAL, so the strip shows today's counts
+                    // (0 before any final, climbing as they grade), not yesterday's.
+                    async let pulseFetch = SupabaseAPI.fetchMarketPulse(date: SupabaseAPI.todayEST())
 
                     // Wait for performance record first (needed for hero image)
                     if let record = try? await recordFetch {
@@ -2081,7 +2085,13 @@ struct HomeView: View {
                         wires = await SupabaseAPI.fetchWireItems(date: SupabaseAPI.yesterdayEST())
                     }
                     wireItems = wires
+                    // Today's rolling row leads; when today has no slate at all (the
+                    // builder writes nothing), fall back to the settled prior day so
+                    // the strip isn't empty on an off day.
                     var pulse = await pulseFetch
+                    if pulse.isEmpty {
+                        pulse = await SupabaseAPI.fetchMarketPulse(date: SupabaseAPI.hubGradedDateEST())
+                    }
                     if pulse.isEmpty, let pulseBack = Self.shiftDate(SupabaseAPI.hubGradedDateEST(), by: -1) {
                         pulse = await SupabaseAPI.fetchMarketPulse(date: pulseBack)
                     }
@@ -2156,9 +2166,16 @@ struct HomeView: View {
                         edgesHitRate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
                     }
 
-                    // The night's stories for the player (graded date = the
-                    // same night the marquee covers).
-                    nightRecaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
+                    // The night's stories. The headline ROLLS TODAY: prefer today's
+                    // graded+recapped games (the local recap writers now write today's
+                    // recaps as games settle), and only fall back to last night when
+                    // today has NO recapped result yet — clearly the prior night, no
+                    // flicker. Once a today headline exists it does not revert.
+                    var recaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.todayEST())
+                    if recaps.isEmpty {
+                        recaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
+                    }
+                    nightRecaps = recaps
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
                     slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
                     // The TOMORROW look-ahead board (keyed on tomorrow's EST slate
@@ -2360,8 +2377,16 @@ struct HomeView: View {
         return out
     }
 
-    @ViewBuilder private var morningSections: some View {
-        // The headlines lead the page — rotating marquee cards, front-page style.
+    /// TODAY — the single full merged Home page. Every section that used to live
+    /// across the old Morning + Pre-game + Live states renders here, nothing
+    /// dropped: it just RE-ORDERS as the day evolves. While games are live the
+    /// tape leads; otherwise the results-first morning stack leads. The forward-
+    /// looking blocks the founder flagged (TONIGHT'S BOARD / free pick card, the
+    /// WORLD CUP module, the SLATE, the big one) are always present here.
+    @ViewBuilder private var todaySections: some View {
+        // ── ① The headlines marquee LEADS the page — rotating front-page cards,
+        // moved to the top (where Tonight's Top Plays used to sit; that carousel
+        // now lives in the Winners tab).
         if !headlineStories.isEmpty {
             HomeHeadlinesCarousel(stories: headlineStories) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
@@ -2369,12 +2394,12 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
+
+        // ── ② The 7-Day Form — directly under the headlines card (founder:
+        // "under the headlines, not down at the bottom"). MLB / World Cup / Live
+        // records; tap re-opens last night's recap or jumps to the Winners tab.
         if !sevenDayForm.isEmpty {
             HomeFormSection(records: sevenDayForm, yesterday: yesterdayRecord, recordLabel: recordBoxLabel,
-                            // While the box reads YESTERDAY, re-open the once/day recap popup
-                            // (the popup is hard-anchored to last night, so it only makes sense
-                            // there). Once the box flips to TODAY/LIVE, a "last night" popup over
-                            // a TODAY label would mismatch — route the tap to the Winners tab.
                             onYesterday: {
                                 if recordBoxLabel == "YESTERDAY" {
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true }
@@ -2385,6 +2410,56 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
+
+        // ── ③ Tonight's Board — under the form + headlines (founder call). The
+        // unified board: BOARD shows EVERY game on the slate with the live-score
+        // overlay (settled · live · upcoming) — the old standalone Slate's value
+        // tabs (STREAKS / HOME DOGS / ROAD DOGS) are folded in here. The bottom
+        // Slate section was removed; this is the one board now.
+        if !liveBoardRows.isEmpty {
+            HomeSlateSection(header: "Today's board", sub: "", tabs: [
+                .init(label: "BOARD", rows: liveBoardRows,
+                      empty: "The board fills in as picks post."),
+                .init(label: "STREAKS", rows: streaksToContinueRows,
+                      empty: "No active streaks in action."),
+                .init(label: "HOME DOGS", rows: homeDogSlateRows,
+                      empty: "No home underdogs on the slate."),
+                .init(label: "ROAD DOGS", rows: roadDogSlateRows,
+                      empty: "No road underdogs on the slate."),
+            ]) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
+        }
+
+        // ── (REMOVED) The dedicated "The World Cup" Home module (its own headline
+        // + WC match list) was pulled per the founder ("we don't need this section
+        // anymore"). WC still flows through the board tabs, the headlines, and the
+        // Wire — only the standalone Home module is gone. `worldCupModule` is left
+        // defined but unrendered (parked) for an easy restore.
+
+        // ── ④ The big one — the marquee game with stakes attached.
+        if let big = bigOneModel {
+            bigOneSection(big)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.11), value: animateIn)
+        }
+
+        // ── ⑤ The results-first morning stack — prop box, scorecard, the Wire
+        // (the 7-Day Form moved up under the headlines). Carried over from the
+        // locked Morning page (Hits & heartbreakers was removed per founder).
+        morningSections
+
+        // ── (REMOVED) The standalone Slate section that used to sit at the
+        // very bottom is gone — its BOARD became the unified Tonight's Board
+        // above (every game + live scores), and its HOME DOGS / ROAD DOGS /
+        // STREAKS tabs were folded into that same board.
+    }
+
+    @ViewBuilder private var morningSections: some View {
+        // (The headlines marquee AND the 7-Day Form now lead `todaySections`
+        // up top — both moved out of this results stack per the redesign.)
         if !propBoxTabs.isEmpty {
             HomePropBoxSection(tabs: propBoxTabs) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
@@ -2403,63 +2478,20 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.13), value: animateIn)
         }
-        if !cashRows.isEmpty || worstBeat != nil {
-            HomeHitsSection(cashes: Array(cashRows.prefix(2)), beat: worstBeat, graded: lastNightGraded) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
-        }
-        if !receiptLanes.isEmpty {
-            HomeReceiptsSection(lanes: receiptLanes, sub: receiptsSub) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.18), value: animateIn)
-        }
-        // Morning carries NO forward-looking sections — the board and slate
-        // live on Tonight (the page split: last night / tonight).
+        // The Hits & heartbreakers (biggest-cashes) section was REMOVED from the
+        // Today page per the founder. cashRows/worstBeat are still computed for
+        // the best-cash odds line in the scorecard; the rail itself is gone.
+        // The Receipts section was dropped from the merged Today page for space
+        // (founder, rolling-Home final pass). receiptLanes is still computed for
+        // the Hub; it just isn't rendered here.
+        // The forward-looking sections (board / World Cup / slate / the big one)
+        // are no longer split off — `todaySections` renders them ABOVE this
+        // results stack so the merged Today page carries everything in one page.
     }
 
-    /// Tonight: the board LEADS — free pick first, then the slate's three
-    /// reads; last night collapses to one strip at the bottom. Nothing graded
-    /// renders here.
-    @ViewBuilder private var pregameSections: some View {
-        boardSection
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
-        // The World Cup module (restored from its parked state): countdown +
-        // the Wire's WC storylines now, tomorrow's opener + board once the
-        // tournament slate posts.
-        worldCupModule
-        Group {
-            // Three reads on tonight — ALWAYS rendered; each tab carries its
-            // own honest empty note until picks post. (Wire = Morning only.)
-            // SPREADS tab dropped (founder's call Jun 17): for a baseball-heavy
-            // board it's a wall of identical ±1.5 run lines — no read. BOARD (by
-            // start time) + HOME DOGS (the value angle) are the two that land.
-            // spreadSlateRows is parked for when point-spread sports return.
-            HomeSlateSection(header: "Slate", sub: "", tabs: [
-                .init(label: "BOARD", rows: pregameSlateRows,
-                      empty: "Tonight's board fills in as picks post."),
-                .init(label: "HOME DOGS", rows: homeDogSlateRows,
-                      empty: "No home underdogs on the slate tonight."),
-            ]) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
-        }
-        if let big = bigOneModel {
-            bigOneSection(big)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.16), value: animateIn)
-        }
-        // Edges section removed from Tonight (founder's call Jun 17): it read as
-        // off-brand here and duplicated the Hub tab, which owns the full edges
-        // board. Morning keeps the graded recap. (tonightEdgesSection parked.)
-        // No last-night anything here — Morning owns the recap entirely.
-    }
+    // NOTE: the old `pregameSections` builder was folded into `todaySections`
+    // (the merged Today page) — board + World Cup + slate + the big one all live
+    // there now, so nothing pre-game was dropped.
 
     // MARK: Tonight extras — the bettor's read on the DAY
 
@@ -2649,109 +2681,78 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
         }
         if !liveSlateRows.isEmpty {
-            HomeSlateSection(header: "Tonight's board", sub: liveBoardSub, rows: liveSlateRows) {
+            HomeSlateSection(header: "Today's board", sub: "", rows: liveSlateRows) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
             }
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
         }
-        HomeCompactStrip(prefix: "TONIGHT",
-                         record: "\(tonightRecord.w)–\(tonightRecord.l)",
-                         suffix: liveCountText) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-        }
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
     }
 
     // MARK: - Home state switcher (Morning / Pre-game)
 
-    /// The home's state switcher — underline tabs (the Winners "Terminal Tape"
-    /// idiom), not a gold pill: primary nav reads as nav, and gold marks the
-    /// active tab with a 2pt sliding underline. Opens on Morning; Pre-game is a
-    /// tap away. (No Live tab — the home isn't a live-scores surface.)
     // The matte-capsule, gold-active-pill switcher — TODAY · LIVE · TOMORROW.
-    // CLAUDE.md's locked "Morning·Pre-game·Live matte capsule, gold active pill"
-    // sanctions the gold-pill chrome; here it's relabeled + given sub-counts.
-    //   TODAY    = today's locked Home (morning before noon ET, pregame after) —
-    //             drives selectedPhase off the `phase` clock, untouched.
+    // This is the SAME chrome the locked Morning page used for its
+    // Morning·Pre-game·Live switcher (CLAUDE.md: "matte capsule, gold active
+    // pill"): a slim single-line segmented control — a faint matte capsule
+    // track with a gold pill sliding under the active label. No chunky stacked
+    // sub-counts (founder call); LIVE keeps a small red dot when games are on.
+    //   TODAY    = the full merged Home page (morning before noon ET, pregame
+    //             after) — drives selectedPhase off the `phase` clock, untouched.
     //   LIVE     = the existing live state, verbatim.
-    //   TOMORROW = the new look-ahead body.
+    //   TOMORROW = the look-ahead body.
 
-    /// Which pill currently reads as active.
-    private enum SwitcherPill { case today, live, tomorrow }
+    /// Which pill currently reads as active. LIVE was retired (founder call):
+    /// Today already evolves to lead with the live tape/takeover once games tip
+    /// off, so a standalone Live tab was redundant. The switcher is TODAY ·
+    /// TOMORROW.
+    private enum SwitcherPill { case today, tomorrow }
     private var activePill: SwitcherPill {
         switch selectedPhase {
-        case .morning, .pregame: return .today
-        case .live:              return .live
-        case .tomorrow:          return .tomorrow
+        case .morning, .pregame, .live: return .today
+        case .tomorrow:                 return .tomorrow
         }
     }
 
+    // The text + gold-underline tab strip (matches the Picks page game tabs):
+    // plain labels, the active one white/bold over a gold underline bar, the
+    // rest grey with no underline. Replaces the old matte-capsule pill.
     private var phaseSwitcher: some View {
-        HStack(spacing: 6) {
-            switcherPill("TODAY", sub: todaySubCount, pill: .today)
-            switcherPill("LIVE", sub: liveSubCount, pill: .live, redDot: gamesLiveNow > 0)
-            switcherPill("TOMORROW", sub: tomorrowSubCount, pill: .tomorrow)
+        HStack(spacing: 26) {
+            switcherTab("TODAY", pill: .today)
+            switcherTab("TOMORROW", pill: .tomorrow)
+            Spacer(minLength: 0)
         }
-        .padding(4)
-        .background(
-            Capsule(style: .continuous)
-                .fill(GaryColors.warmWhite.opacity(0.04))
-                .overlay(Capsule(style: .continuous).stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
-        )
         .padding(.horizontal, 16)
     }
 
-    /// Sub-count strings — Today = "N LIVE" if any are live else "N PICKS";
-    /// Live = "N NOW"; Tomorrow = "N GAMES" from the board's game_count.
-    private var todaySubCount: String {
-        let live = gamesLiveNow
-        if live > 0 { return "\(live) LIVE" }
-        return "\(todayPicks.count) PICKS"
-    }
-    private var liveSubCount: String { "\(gamesLiveNow) NOW" }
-    private var tomorrowSubCount: String { "\(tomorrowBoard?.game_count ?? 0) GAMES" }
-
-    private func switcherPill(_ label: String, sub: String, pill: SwitcherPill, redDot: Bool = false) -> some View {
+    private func switcherTab(_ label: String, pill: SwitcherPill) -> some View {
         let on = activePill == pill
         return Button {
-            let target: HomePhase = {
-                switch pill {
-                case .today:    return todayClockPhase
-                case .live:     return .live
-                case .tomorrow: return .tomorrow
-                }
-            }()
+            // TODAY drives selectedPhase off the live/clock state so the merged
+            // Today page leads with the live tape whenever games are on, the
+            // results-first morning stack otherwise.
+            let target: HomePhase = (pill == .today) ? phase : .tomorrow
             if reduceMotion { selectedPhase = target }
             else { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selectedPhase = target } }
         } label: {
-            VStack(spacing: 2) {
-                HStack(spacing: 4) {
-                    if redDot {
-                        Circle().fill(GaryColors.loss).frame(width: 5, height: 5)
-                    }
-                    Text(label)
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
-                        .foregroundStyle(on ? GaryColors.ink : .white.opacity(0.55))
-                }
-                Text(sub)
-                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
-                    .foregroundStyle(on ? GaryColors.ink.opacity(0.7) : .white.opacity(0.3))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 7)
-            .background(
-                Group {
+            VStack(spacing: 6) {
+                Text(label)
+                    .font(GaryFonts.mono(12.5, bold: on)).tracking(0.6)
+                    .foregroundStyle(on ? .white : .white.opacity(0.4))
+                ZStack {
+                    Capsule().fill(Color.clear).frame(height: 2)
                     if on {
-                        Capsule(style: .continuous).fill(GaryColors.gold)
-                            .matchedGeometryEffect(id: "phasePill", in: phaseTabNS)
+                        Capsule().fill(GaryColors.gold).frame(height: 2)
+                            .matchedGeometryEffect(id: "phaseUnderline", in: phaseTabNS)
                     }
                 }
-            )
+            }
+            .fixedSize()
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(label) — \(sub)")
+        .accessibilityLabel(label)
         .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
     }
 
@@ -2907,10 +2908,12 @@ struct HomeView: View {
     }
 
     private func slateRow(_ g: DailySlateRow, id: String, chip: String) -> HomeSlateSection.Row {
+        // No venue/stadium on the board rows — the league badge + pick chip
+        // carry the row; the stadium just truncated and cluttered (founder).
         HomeSlateSection.Row(
             id: id,
             title: "\(Self.shortTeam(g.away_team)) @ \(Self.shortTeam(g.home_team))",
-            sub: (g.venue ?? "").uppercased(), tone: nil, chip: chip, league: g.league,
+            sub: "", tone: nil, chip: chip, league: g.league,
             time: Formatters.formatCommenceTime(g.commence_time).uppercased())
     }
 
@@ -2921,7 +2924,7 @@ struct HomeView: View {
             let sorted = todayPicks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
             return sorted.prefix(8).map { p in
                 HomeSlateSection.Row(id: p.id, title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
-                                     sub: (p.venue ?? "").uppercased(), tone: nil, chip: p.pick ?? "",
+                                     sub: "", tone: nil, chip: p.pick ?? "",
                                      league: p.league, time: Formatters.formatCommenceTime(p.displayTime).uppercased())
             }
         }
@@ -2969,6 +2972,51 @@ struct HomeView: View {
         }
     }
 
+    /// ROAD DOGS — visitors at plus money tonight, biggest price first (the
+    /// away-side twin of HOME DOGS).
+    private var roadDogSlateRows: [HomeSlateSection.Row] {
+        let dogs = slateGames.filter { let m = $0.ml_away ?? 0; return m > 0 && m <= 2000 }
+        let sorted = dogs.sorted { ($0.ml_away ?? 0) > ($1.ml_away ?? 0) }
+        return sorted.enumerated().map { i, g in
+            slateRow(g, id: "rd-\(i)",
+                     chip: "\(Self.shortTeam(g.away_team).uppercased()) +\(Int(g.ml_away ?? 0))")
+        }
+    }
+
+    /// STREAKS — live runs around the league that are in action again today
+    /// (next_game posted). Team streaks lead, then by length desc; the chip
+    /// encodes kind + length (W3 / L1 / O4 / U2 / 5G HIT / 0-FOR-7 / HR x3).
+    private var streaksToContinueRows: [HomeSlateSection.Row] {
+        let live = homeStreaks.filter { ($0.next_game?.isEmpty == false) }
+        let sorted = live.sorted { a, b in
+            let aTeam = a.subject_type == "team", bTeam = b.subject_type == "team"
+            if aTeam != bTeam { return aTeam }            // team streaks first
+            return (a.length ?? 0) > (b.length ?? 0)      // then by length desc
+        }
+        return sorted.enumerated().map { i, s in
+            let len = s.length ?? 0
+            let chip: String
+            switch (s.kind ?? "").lowercased() {
+            case "win":     chip = "W\(len)"
+            case "loss":    chip = "L\(len)"
+            case "over":    chip = "O\(len)"
+            case "under":   chip = "U\(len)"
+            case "hit":     chip = "\(len)G HIT"
+            case "hitless": chip = "0-FOR-\(len)"
+            case "hr":      chip = "HR x\(len)"
+            default:        chip = "\(len)"
+            }
+            // Team streaks title on the team; player streaks add the bat.
+            var title = Self.shortTeam(s.team ?? s.subject)
+            if s.subject_type == "player", let subj = s.subject, !subj.isEmpty {
+                title += " · \(subj)"
+            }
+            return HomeSlateSection.Row(id: "stk-\(i)", title: title,
+                                        sub: (s.next_game ?? "").uppercased(),
+                                        tone: nil, chip: chip, league: s.league)
+        }
+    }
+
     private var liveSlateRows: [HomeSlateSection.Row] {
         let sorted = todayPicks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
         return sorted.prefix(8).map { p in
@@ -3001,30 +3049,54 @@ struct HomeView: View {
         }
     }
 
-    private var liveBoardSub: String {
-        let lives = liveScoresNow.filter { $0.isLive }.count
-        let finals = liveScoresNow.filter { $0.isFinal && pickFor($0) != nil }.count
-        let upcoming = max(0, todayPicks.count - lives - finals)
-        return "\(finals) settled · \(lives) live · \(upcoming) upcoming"
-    }
-
-    /// Tonight so far, from finals Gary had a side in.
-    private var tonightRecord: (w: Int, l: Int) {
-        var w = 0, l = 0
-        for ls in liveScoresNow where ls.isFinal {
-            guard let p = pickFor(ls) else { continue }
-            switch HomeLiveVerdict.evaluate(pick: p, live: ls) {
-            case .covering: w += 1
-            case .trailing: l += 1
-            case .neutral: break
+    /// The unified board's BOARD tab — EVERY game on today's slate (not just the
+    /// ones Gary has a side in), with the live-score overlay preserved. Built
+    /// from the full `slateGames` like `pregameSlateRows`, but each row checks
+    /// `liveScoresNow` so settled/live games show their score + verdict the way
+    /// the old Tonight's Board did. Falls back to the pick-driven `liveSlateRows`
+    /// when the daily slate hasn't posted yet.
+    private var liveBoardRows: [HomeSlateSection.Row] {
+        guard !slateGames.isEmpty else { return liveSlateRows }
+        let ordered = slateGames.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+        return ordered.enumerated().map { i, g in
+            let matchup = "\(g.away_team ?? "") @ \(g.home_team ?? "")"
+            let live = liveScoresNow.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
+            let pick = pickFor(slate: g)
+            // The chip: Gary's call once posted, else the home ML, else a dash.
+            let chip: String
+            if let p = pick?.pick, !p.isEmpty {
+                chip = p
+            } else if let mlh = g.ml_home, abs(mlh) <= 2000 {
+                chip = String(format: "%@ %+.0f", Self.shortTeam(g.home_team).uppercased(), mlh)
+            } else {
+                chip = "—"
             }
+            // No live row yet → the plain pre-game board row (start time owns the
+            // right column, sport accent on the league).
+            guard let ls = live else {
+                return slateRow(g, id: "lb-\(i)", chip: chip)
+            }
+            // Live/settled → score line + verdict, scores overlaid.
+            let v = pick.map { HomeLiveVerdict.evaluate(pick: $0, live: ls) } ?? .neutral
+            let title = ls.scoreLine ?? ls.abbrGame
+            var sub: String
+            var tone: HomeLiveVerdict? = nil
+            if ls.isLive {
+                let vt = v == .covering ? "COVERING" : v == .trailing ? "TRAILING" : ""
+                sub = [ls.detail ?? "", vt].filter { !$0.isEmpty }.joined(separator: " · ").uppercased()
+                tone = v
+            } else if ls.isFinal {
+                sub = pick == nil ? "FINAL"
+                    : v == .covering ? "FINAL · CASHED ✓"
+                    : v == .trailing ? "FINAL · NO CASH" : "FINAL"
+                tone = pick == nil ? nil : v
+            } else {
+                sub = [Formatters.formatCommenceTime(g.commence_time), g.venue].compactMap { $0 }.filter { !$0.isEmpty }
+                    .joined(separator: " · ").uppercased()
+            }
+            return HomeSlateSection.Row(id: "lb-\(i)", title: title, sub: sub, tone: tone,
+                                        chip: chip, league: g.league)
         }
-        return (w, l)
-    }
-
-    private var liveCountText: String? {
-        let n = liveScoresNow.filter { $0.isLive }.count
-        return n > 0 ? "\(n) LIVE" : nil
     }
 
     /// Last word of a team name — "Red Sox" → "Sox", good enough for a row
@@ -4749,12 +4821,43 @@ struct HomeMarketPulseStrip: View {
             acc + (row.meta ?? []).reduce(0) { $0 + (($1.winner_is_dog == true) ? 1 : 0) }
         }
     }
+    // Winning −ML favorites across the slate (winner_is_dog == false). The
+    // meta-derived parallel to +ML DOGS — a real negative pre-game ML that held.
+    // null (no pre-game ML / push) doesn't count either way.
+    private var mlFavs: Int {
+        rows.reduce(0) { acc, row in
+            acc + (row.meta ?? []).reduce(0) { $0 + (($1.winner_is_dog == false) ? 1 : 0) }
+        }
+    }
 
-    private func stat(_ v: String, _ k: String, _ color: Color = .white.opacity(0.92)) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(v).font(GaryFonts.mono(13.5, bold: true)).foregroundStyle(color)
-            // Labels are gold — Gary's signature accent (founder request).
-            Text(k).font(GaryFonts.mono(8.5)).tracking(1.1).foregroundStyle(GaryColors.gold)
+    // One market split: two complementary records (overs vs unders, dogs vs
+    // favs) read as a labeled proportional bar — the fill shows which way the
+    // night broke at a glance, no mental math. Numbers anchor each end, gold
+    // labels (founder request), neutral bar (this is the market, not Gary).
+    private func splitRow(_ lv: Int, _ lk: String, _ rv: Int, _ rk: String) -> some View {
+        let total = max(lv + rv, 1)
+        let lFrac = CGFloat(lv) / CGFloat(total)
+        return VStack(spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                HStack(spacing: 6) {
+                    Text("\(lv)").font(GaryFonts.mono(15, bold: true)).foregroundStyle(.white.opacity(0.92))
+                    Text(lk).font(GaryFonts.mono(8.5)).tracking(1.1).foregroundStyle(GaryColors.gold)
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    Text(rk).font(GaryFonts.mono(8.5)).tracking(1.1).foregroundStyle(GaryColors.gold)
+                    Text("\(rv)").font(GaryFonts.mono(15, bold: true)).foregroundStyle(.white.opacity(0.92))
+                }
+            }
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    Rectangle().fill(Color.white.opacity(0.85))
+                        .frame(width: max(0, geo.size.width * lFrac))
+                    Rectangle().fill(Color.white.opacity(0.14))
+                }
+                .clipShape(Capsule())
+            }
+            .frame(height: 3)
         }
     }
 
@@ -4763,14 +4866,11 @@ struct HomeMarketPulseStrip: View {
     // the market itself. (+ML DOGS counts meta.winner_is_dog == true — every value is
     // stored from the pre-game ML snapshot; shows 0 when no row carries one.)
     var body: some View {
-        HStack {
-            stat("\(oversW)", "OVERS HIT")
-            Spacer()
-            stat("\(oversL)", "UNDERS HIT")
-            Spacer()
-            stat("\(mlDogs)", "+ML DOGS")
+        VStack(spacing: 14) {
+            splitRow(oversW, "OVERS HIT", oversL, "UNDERS HIT")
+            splitRow(mlDogs, "+ML DOGS", mlFavs, "+ML FAVS")
         }
-        .padding(.vertical, 12).padding(.horizontal, 14)
+        .padding(.vertical, 13).padding(.horizontal, 14)
         .quantPanel()
     }
 }
@@ -4946,7 +5046,7 @@ struct HomeWorldCupModule: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
                 Circle().fill(teal).frame(width: 6, height: 6)
-                Text(compact ? "WORLD CUP · WIRE" : "TODAY'S HEADLINE")
+                Text(compact ? "WORLD CUP · WIRE" : "HEADLINE")
                     .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
                     .foregroundStyle(.white.opacity(0.35))
             }
@@ -6065,7 +6165,9 @@ struct PremiumPicksView: View {
                             Section {
                                 jumpBar(proxy)
                                 modeContent
-                                    .padding(.top, 16)
+                                    // Tightened from 16 — the jumpBar above already
+                                    // sets the board off from the sticky toggle.
+                                    .padding(.top, 10)
                                     .padding(.bottom, 120)
                             } header: {
                                 toggleBar
@@ -6423,9 +6525,82 @@ struct PremiumPicksView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Tonight's Top Plays (moved here from Home, Jun 2026)
+    //
+    // The swipeable free-pick carousel — Gary's top few plays per sport, the
+    // strongest by confidence, LIVE games first then upcoming by start, settled
+    // games sinking to the back. Free for now; slots into the paid model later.
+    // Today's slate only (selectedDate == nil) — a chosen past day shows graded
+    // boards, not a "tonight" strip.
+
+    /// The plays that feed the carousel — pulled from the already-loaded game
+    /// shelves' TODAY picks (settled == false). Top 3 per league by confidence,
+    /// ordered LIVE → upcoming(by start) → final.
+    private var tonightTopPlays: [GaryPick] {
+        guard selectedDate == nil else { return [] }
+        var selected: [GaryPick] = []
+        for shelf in gameShelves where !shelf.settled {
+            selected.append(contentsOf:
+                shelf.picks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(3))
+        }
+        let live = LiveScoreCache.shared
+        func bucket(_ p: GaryPick) -> Int {
+            let mu = "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")"
+            guard let ls = live.status(forMatchup: mu) else { return 1 }
+            if ls.isFinal { return 2 }
+            if ls.isLive { return 0 }
+            return 1
+        }
+        func start(_ p: GaryPick) -> Date {
+            if let iso = p.commence_time, let d = parseISO8601(iso) { return d }
+            return .distantFuture
+        }
+        return selected.sorted {
+            let (a, b) = (bucket($0), bucket($1))
+            return a != b ? a < b : start($0) < start($1)
+        }
+    }
+
+    @ViewBuilder private var tonightTopPlaysSection: some View {
+        let plays = tonightTopPlays
+        if !plays.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("TONIGHT'S TOP PLAYS")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Spacer()
+                    if plays.count > 1 {
+                        Text("SWIPE \u{2192}")
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
+                            .foregroundStyle(GaryColors.gold.opacity(0.55))
+                    }
+                }
+                .padding(.horizontal, 16)
+                let cardW = UIScreen.main.bounds.width - 44   // a sliver of the next card peeks
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(plays) { pick in
+                            FlippablePickCard(pick: pick,
+                                              eyebrowOverride: pick.id == plays.first?.id ? "FREE PICK" : nil,
+                                              gameResult: nil, showSportBadge: true)
+                                .frame(width: cardW)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+
     @ViewBuilder private var modeContent: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        // Tighter inter-shelf rhythm (was 22) — the shelf headers already give
+        // each rail vertical breathing room, so 22 over-spaced the board.
+        VStack(alignment: .leading, spacing: 16) {
             if mode == .games {
+                // Tonight's Top Plays leads the games board (moved from Home —
+                // free now, paid later).
+                tonightTopPlaysSection
                 // Paid boards lead with full cards. Locked boards with content
                 // follow as blurred previews — the user sees the real board
                 // exactly as members do, just unreadable (tap = checkout).
@@ -6649,29 +6824,6 @@ struct PremiumPicksView: View {
         }
     }
 
-    /// "Minnesota Twins @ Texas Rangers" → "TWINS @ RANGERS" — the little title that
-    /// sits over each rail column so users know which game its picks belong to.
-    private func columnMatchup(_ m: String?) -> String {
-        guard let m = m, !m.isEmpty else { return "" }
-        let parts = m.components(separatedBy: " @ ")
-        guard parts.count == 2 else { return m.uppercased() }
-        let a = (parts[0].components(separatedBy: " ").last ?? parts[0]).trimmingCharacters(in: .whitespaces)
-        let h = (parts[1].components(separatedBy: " ").last ?? parts[1]).trimmingCharacters(in: .whitespaces)
-        guard !a.isEmpty, !h.isEmpty else { return "" }
-        return "\(a) @ \(h)".uppercased()
-    }
-
-    @ViewBuilder private func columnTitle(_ matchup: String?) -> some View {
-        let label = columnMatchup(matchup)
-        if !label.isEmpty {
-            Text(label)
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                .foregroundStyle(.white.opacity(0.42))
-                .lineLimit(1).minimumScaleFactor(0.75)
-                .padding(.leading, 4)
-        }
-    }
-
     private func gameShelfView(_ shelf: GameShelf) -> some View {
         // On the TODAY board a settled shelf is a STALE prior-day fallback (today's
         // pick hasn't posted/graded yet). Tease it with the blurred lock card
@@ -6694,8 +6846,8 @@ struct PremiumPicksView: View {
                     // card knocked the shelf out of alignment (June 4 fix).
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(sortedShelfPicks(shelf), id: \.id) { pick in
-                            VStack(alignment: .leading, spacing: 6) {
-                            columnTitle("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+                            // Matchup sub-header removed — the pick card already
+                            // prints the matchup (redundant "TEAM @ TEAM" line cut).
                             ZStack {
                                 if sportUnlocked(shelf.league) {
                                     FlippablePickCard(pick: pick,
@@ -6716,7 +6868,6 @@ struct PremiumPicksView: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
-                            }
                             }
                             .frame(width: UIScreen.main.bounds.width - 44)
                         }
@@ -6786,8 +6937,8 @@ struct PremiumPicksView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(Array(sortedPropGroups(shelf).enumerated()), id: \.offset) { _, group in
-                            VStack(alignment: .leading, spacing: 6) {
-                            columnTitle(group.first?.matchup)
+                            // Matchup sub-header removed — the prop card already
+                            // prints the matchup (redundant "TEAM @ TEAM" line cut).
                             ZStack {
                                 if sportUnlocked(shelf.league) {
                                     if group.count == 1, let only = group.first {
@@ -6831,7 +6982,6 @@ struct PremiumPicksView: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
-                            }
                             }
                             .frame(width: UIScreen.main.bounds.width - 44)
                         }
@@ -9879,6 +10029,15 @@ struct TomorrowView {
         return f.string(from: date)
     }
 
+    /// "Sat Jun 27" — the tight date for the countdown hero subtitle.
+    static func shortDateLabel(_ iso: String?) -> String {
+        guard let iso, let date = parseISO8601(iso) else { return "" }
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEE MMM d"
+        return f.string(from: date)
+    }
+
     /// Stable sport order for the by-sport footer groups: MLB, WC, then the rest.
     static func sortedLeagues(_ people: [TomorrowPerson]) -> [String] {
         let order = ["MLB", "WC"]
@@ -9894,14 +10053,24 @@ struct TomorrowView {
         let board: TomorrowBoard?
         /// 1Hz tick for the live countdown. Re-render every second.
         @State private var now = Date()
+        /// The active look-ahead tab (Starters · Key Returns · Form · Run
+        /// Profile · Weather). The giant inline list overflowed the screen — this
+        /// is now a contained tabbed table that scrolls internally.
+        @State private var lookAheadTab = 0
+        /// MLB / WC top-level switch for "The Day Ahead". MLB = the existing
+        /// tabbed table; WC = the per-match World Cup look-ahead cards.
+        @State private var lookAheadSport: LookAheadSport = .mlb
         private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+        /// Teal WC accent, matching the board's sport-dot legend.
+        private let wcAccent = Color(hex: "#3FB6A8")
 
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
                 countdownHero
                 bigGames
+                lookAheadTabs
                 if let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
-                footerGrid
             }
             .onReceive(ticker) { now = $0 }
         }
@@ -9966,13 +10135,15 @@ struct TomorrowView {
 
         private static func heroSub(board: TomorrowBoard?, iso: String?) -> String {
             let count = board?.game_count ?? 0
-            let day = TomorrowView.weekdayLabel(iso)
-            let firstTime = TomorrowView.etTime(iso)
+            // Tight subtitle (founder call): just the count + the short date, e.g.
+            // "21 games · Sat Jun 27" — the start time was dropped to cut grey
+            // words (the big timer above already counts down to first pitch).
+            let day = TomorrowView.shortDateLabel(iso)
             if board?.any_lines == false || iso == nil {
                 return "lines open soon"
             }
             let plural = count == 1 ? "game" : "games"
-            return "\(count) \(plural) on the board · \(day) · slate opens \(firstTime)"
+            return day.isEmpty ? "\(count) \(plural)" : "\(count) \(plural) · \(day)"
         }
 
         // ── ② Big games to watch ───────────────────────────────────────────
@@ -9981,8 +10152,7 @@ struct TomorrowView {
             let games = (board?.big_games ?? []).sorted { $0.rank < $1.rank }.prefix(3)
             if !games.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    HubSectionHeader(eyebrow: "Big Games To Watch",
-                                     sub: TomorrowView.weekday(board?.countdown_iso))
+                    HubSectionHeader(eyebrow: "Big Games To Watch", sub: "")
                     VStack(spacing: 0) {
                         ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
                             bigGameRow(g)
@@ -9999,35 +10169,53 @@ struct TomorrowView {
         }
 
         private func bigGameRow(_ g: TomorrowBigGame) -> some View {
-            HStack(alignment: .top, spacing: 10) {
+            // Both probable starters, "Away vs Home" — gold, mono. MLB only;
+            // WC big games leave the pitchers nil → no line. "Undecided" is
+            // shown verbatim when a probable is unposted.
+            let away = (g.awayPitcher ?? g.pitchers?.away)?.trimmingCharacters(in: .whitespaces)
+            let home = (g.homePitcher ?? g.pitchers?.home)?.trimmingCharacters(in: .whitespaces)
+            let pitchersLine: String? = {
+                guard let a = away, !a.isEmpty, let h = home, !h.isEmpty else { return nil }
+                return "\(a) vs \(h)"
+            }()
+            return HStack(alignment: .top, spacing: 10) {
                 Text("\(g.rank)")
                     .font(GaryFonts.mono(13, bold: true))
                     .foregroundStyle(GaryColors.gold)
                     .frame(width: 14, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(g.matchup ?? "")
-                        .font(GaryFonts.text(13.5, .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                    HStack(spacing: 7) {
-                        if let reason = g.reason, !reason.isEmpty {
-                            Text(reason.uppercased())
-                                .font(GaryFonts.mono(8.5, bold: true))
-                                .foregroundStyle(GaryColors.gold)
-                                .padding(.horizontal, 6).padding(.vertical, 3)
-                                .background(Capsule().fill(GaryColors.gold.opacity(0.12)))
-                        }
-                        if let ctx = g.context, !ctx.isEmpty {
-                            Text(ctx)
-                                .font(GaryFonts.mono(9))
-                                .foregroundStyle(.white.opacity(0.45))
-                                .lineLimit(1)
-                        }
+                    .padding(.top, 1)
+                VStack(alignment: .leading, spacing: 3) {
+                    // Top line: bold matchup (left) · time (right).
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(g.matchup ?? "")
+                            .font(GaryFonts.text(13.5, .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.9)
+                        Spacer(minLength: 6)
+                        Text(TomorrowView.etTime(g.commence_time, withZone: false))
+                            .font(GaryFonts.mono(10.5))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    // Plain-text standing under the matchup — no chip/bubble
+                    // (founder call). e.g. "Yankees 1st · Red Sox 5th, AL East".
+                    if let standing = g.standing, !standing.isEmpty {
+                        Text(standing)
+                            .font(GaryFonts.mono(9.5))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // Both probable starters, gold. WC games show no line.
+                    if let pitchersLine {
+                        Text(pitchersLine)
+                            .font(GaryFonts.mono(9.5))
+                            .foregroundStyle(GaryColors.gold.opacity(0.95))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     }
                 }
-                Spacer(minLength: 6)
-                Text(TomorrowView.etTime(g.commence_time, withZone: false))
-                    .font(GaryFonts.mono(10.5))
-                    .foregroundStyle(.white.opacity(0.6))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
@@ -10039,7 +10227,7 @@ struct TomorrowView {
             VStack(alignment: .leading, spacing: 8) {
                 // Board label row + sport-dot legend.
                 HStack(spacing: 10) {
-                    Text("Tomorrow's Board · \(TomorrowView.weekday(b.countdown_iso))")
+                    Text("Tomorrow's Board")
                         .font(GaryFonts.mono(11))
                         .foregroundStyle(.white.opacity(0.45))
                     Spacer(minLength: 6)
@@ -10145,72 +10333,672 @@ struct TomorrowView {
             return String(team.prefix(3)).uppercased()
         }
 
-        // ── ④ Footer grid (probable starters + key returns) ────────────────
+        // ── ④ Look-ahead tabs (Starters · Key Returns · Form · Run Profile ·
+        // Weather) ─────────────────────────────────────────────────────────────
+        //
+        // The old version stacked the entire by-sport starters + returns lists
+        // inline, which overflowed the screen on a full slate. This is now a
+        // tabbed table (the app's HomePropBoxSection idiom): a mono tab strip
+        // with the active tab in gold, over a FIXED-HEIGHT container that scrolls
+        // internally to reach every row — grouped by sport where relevant. Tabs
+        // with no data are hidden; the whole section hides if nothing has data.
 
-        @ViewBuilder private var footerGrid: some View {
-            let starters = board?.starters ?? []
-            let returns = board?.returns ?? []
-            // If BOTH are fully empty, hide the whole 2-col grid.
-            if !starters.isEmpty || !returns.isEmpty {
-                HStack(alignment: .top, spacing: 11) {
-                    footerCard(title: "PROBABLE STARTERS", people: starters)
-                    footerCard(title: "KEY RETURNS", people: returns)
+        /// Which look-ahead lanes actually have data, in display order.
+        private var lookAheadAvailable: [LookAheadLane] {
+            LookAheadLane.allCases.filter { hasData($0) }
+        }
+        private func hasData(_ lane: LookAheadLane) -> Bool {
+            switch lane {
+            case .starters: return !(board?.starters ?? []).isEmpty
+            case .returns:  return !(board?.returns ?? []).isEmpty
+            case .form:     return !(board?.form ?? []).isEmpty
+            case .runProfile: return !(board?.run_profile ?? []).isEmpty
+            case .weather:  return !(board?.weather ?? []).isEmpty
+            }
+        }
+        /// Tomorrow's WC matches, earliest kickoff first. Empty on non-WC days.
+        private var wcMatches: [TomorrowWcMatch] {
+            (board?.wc_lookahead ?? []).sorted {
+                ($0.commence_time ?? "") < ($1.commence_time ?? "")
+            }
+        }
+        private var hasMlbLookahead: Bool { !lookAheadAvailable.isEmpty }
+        private var hasWcLookahead: Bool { !wcMatches.isEmpty }
+
+        /// "The Day Ahead" — an MLB / WC sport switch over the per-sport look-ahead.
+        /// MLB keeps the existing tabbed table (Starters · Form · Run Profile ·
+        /// Weather); WC gets its own built-out per-match cards. The switch only
+        /// appears when BOTH sports have look-ahead data — otherwise the single
+        /// available sport renders alone (no orphan toggle).
+        @ViewBuilder private var lookAheadTabs: some View {
+            if hasMlbLookahead || hasWcLookahead {
+                // Resolve the effective sport: if the selected sport has no data,
+                // fall back to whichever does (so a WC-only tomorrow opens on WC).
+                let sport: LookAheadSport = {
+                    if lookAheadSport == .wc, hasWcLookahead { return .wc }
+                    if lookAheadSport == .mlb, hasMlbLookahead { return .mlb }
+                    return hasMlbLookahead ? .mlb : .wc
+                }()
+                VStack(alignment: .leading, spacing: 6) {
+                    HubSectionHeader(eyebrow: "The Day Ahead", sub: "")
+                    // MLB / WC switch — only when both have data.
+                    if hasMlbLookahead && hasWcLookahead {
+                        HStack(spacing: 18) {
+                            ForEach([LookAheadSport.mlb, .wc], id: \.self) { s in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.15)) { lookAheadSport = s }
+                                } label: {
+                                    Text(s.label)
+                                        .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                                        .foregroundStyle(s == sport
+                                            ? (s == .wc ? wcAccent : GaryColors.gold)
+                                            : .white.opacity(0.4))
+                                        .frame(minHeight: 30)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    if sport == .wc {
+                        wcLookAheadBody
+                    } else {
+                        mlbLookAheadTable
+                    }
                 }
-                .padding(.horizontal, 16)
             }
         }
 
-        private func footerCard(title: String, people: [TomorrowPerson]) -> some View {
-            let leagues = TomorrowView.sortedLeagues(people)
-            return VStack(alignment: .leading, spacing: 10) {
-                Text(title)
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
-                    .foregroundStyle(GaryColors.gold)
-                if leagues.isEmpty {
-                    // Honest-empty: a single faint "—" row, title stays.
-                    Text("—")
-                        .font(GaryFonts.mono(9))
-                        .foregroundStyle(.white.opacity(0.25))
-                        .padding(.vertical, 5)
-                } else {
-                    ForEach(leagues, id: \.self) { lg in
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(lg)
-                                .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
-                                .foregroundStyle(.white.opacity(0.28))
-                                .padding(.top, 6)
-                                .padding(.bottom, 3)
-                            let rows = people.filter { ($0.league ?? "").uppercased() == lg }
-                            if rows.isEmpty {
-                                Text("—")
-                                    .font(GaryFonts.mono(9))
-                                    .foregroundStyle(.white.opacity(0.25))
-                                    .padding(.vertical, 5)
-                            } else {
-                                ForEach(Array(rows.enumerated()), id: \.offset) { _, p in
-                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                        Text(p.name ?? "")
-                                            .font(GaryFonts.text(12.5, .semibold))
-                                            .foregroundStyle(.white.opacity(0.9))
-                                            .lineLimit(1)
-                                        Spacer(minLength: 4)
-                                        if let d = p.detail, !d.isEmpty {
-                                            Text(d)
-                                                .font(GaryFonts.mono(9))
-                                                .foregroundStyle(.white.opacity(0.45))
-                                                .lineLimit(1)
-                                        }
+        /// The MLB look-ahead — the existing fixed-height, internally-scrolling
+        /// tabbed table (Starters · Form · Run Profile · Weather).
+        @ViewBuilder private var mlbLookAheadTable: some View {
+            let lanes = lookAheadAvailable
+            if !lanes.isEmpty {
+                let active = lanes[min(lookAheadTab, lanes.count - 1)]
+                VStack(alignment: .leading, spacing: 6) {
+                    // Mono tab strip — active in gold, the rest dim (app-wide).
+                    if lanes.count > 1 {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 18) {
+                                ForEach(Array(lanes.enumerated()), id: \.element) { i, lane in
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.15)) { lookAheadTab = i }
+                                    } label: {
+                                        Text(lane.label)
+                                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
+                                            .foregroundStyle(i == min(lookAheadTab, lanes.count - 1) ? GaryColors.gold : .white.opacity(0.4))
+                                            .frame(minHeight: 30)
+                                            .contentShape(Rectangle())
                                     }
-                                    .padding(.vertical, 5)
+                                    .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.horizontal, 2)
                         }
+                        .padding(.horizontal, 16)
+                    }
+                    // Fixed-height, internally-scrolling table.
+                    VStack(spacing: 0) {
+                        laneHeader(active)
+                        Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                        ScrollView(.vertical, showsIndicators: true) {
+                            laneBody(active)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .frame(height: 300)
+                        .scrollIndicators(.visible)
+                    }
+                    .background(Color(hex: "#181616"))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+
+        // ── WC look-ahead — one built-out card per tomorrow match ───────────
+        @ViewBuilder private var wcLookAheadBody: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(wcMatches.enumerated()), id: \.offset) { _, m in
+                    wcMatchCard(m)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+
+        /// One WC match: matchup + kickoff + group/stage/venue header, both sides'
+        /// formation + projected XI, the L5 form (record + GF/GA per game), key
+        /// scorers, and the lines (spread / total / ML). Grounded — empty fields
+        /// are omitted or read "—".
+        private func wcMatchCard(_ m: TomorrowWcMatch) -> some View {
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Header: matchup, kickoff, group · stage · venue.
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(m.match ?? "\(m.away_team ?? "—") @ \(m.home_team ?? "—")")
+                            .font(GaryFonts.text(16, .semibold))
+                            .foregroundStyle(.white.opacity(0.95))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                        Spacer(minLength: 8)
+                        if let k = m.kickoff, !k.isEmpty {
+                            Text(k.uppercased())
+                                .font(GaryFonts.mono(11, bold: true))
+                                .foregroundStyle(wcAccent)
+                        }
+                    }
+                    let meta = [m.group, m.stage, m.venue]
+                        .compactMap { $0 }.filter { !$0.isEmpty }
+                        .joined(separator: " · ")
+                    if !meta.isEmpty {
+                        Text(meta.uppercased())
+                            .font(GaryFonts.mono(8.5)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.4))
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 11)
+
+                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+
+                // ── Both sides — projected XI + formation, L5 form, key players.
+                wcSideBlock(side: m.away, fallbackName: m.away_team, label: "AWAY")
+                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                wcSideBlock(side: m.home, fallbackName: m.home_team, label: "HOME")
+
+                // ── Lines — spread / total / ML, straight off the board.
+                if let lines = m.lines, wcHasAnyLine(lines) {
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                    wcLinesRow(lines, m: m)
+                }
+            }
+            .background(Color(hex: "#181616"))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(wcAccent.opacity(0.18), lineWidth: 1))
+        }
+
+        /// One side of a WC match: team + formation, projected XI (wrapped), L5
+        /// form line, and key scorers. Any field with no grounded source is
+        /// omitted (the side still renders its name + whatever it has).
+        @ViewBuilder private func wcSideBlock(side: TomorrowWcSide?, fallbackName: String?, label: String) -> some View {
+            VStack(alignment: .leading, spacing: 7) {
+                // Team name + AWAY/HOME tag + formation.
+                HStack(spacing: 7) {
+                    Text(label)
+                        .font(GaryFonts.mono(7.5, bold: true)).tracking(0.8)
+                        .foregroundStyle(wcAccent.opacity(0.75))
+                    Text(side?.team ?? fallbackName ?? "—")
+                        .font(GaryFonts.text(13.5, .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 6)
+                    if let f = side?.xi?.formation, !f.isEmpty {
+                        Text(f)
+                            .font(GaryFonts.mono(10.5, bold: true))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+
+                // L5 form — record + GF/GA per game.
+                if let form = side?.form {
+                    HStack(spacing: 10) {
+                        if let rec = form.record, !rec.isEmpty {
+                            wcStat("L5", rec)
+                        }
+                        if let gf = form.gf_per_game {
+                            wcStat("GF/G", String(format: "%.1f", gf))
+                        }
+                        if let ga = form.ga_per_game {
+                            wcStat("GA/G", String(format: "%.1f", ga))
+                        }
+                    }
+                }
+
+                // Projected XI — wrapped name list.
+                let xiNames = wcXiNames(side?.xi)
+                if !xiNames.isEmpty {
+                    Text(xiNames.joined(separator: " · "))
+                        .font(GaryFonts.mono(9.5)).tracking(0.2)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(3)
+                }
+
+                // Key players — leading scorers.
+                if let kps = side?.key_players, !kps.isEmpty {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("KEY")
+                            .font(GaryFonts.mono(7.5, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.35))
+                            .padding(.top, 1)
+                        Text(kps.compactMap { wcKeyPlayerLabel($0) }.joined(separator: "  ·  "))
+                            .font(GaryFonts.mono(9.5))
+                            .foregroundStyle(GaryColors.gold.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(2)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .quantPanel()
+            .padding(.horizontal, 14).padding(.vertical, 11)
+        }
+
+        /// One labeled WC stat chip, e.g. "L5 3-1-1".
+        private func wcStat(_ label: String, _ value: String) -> some View {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.4))
+                Text(value)
+                    .font(GaryFonts.mono(10.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+        }
+
+        /// The lines row — spread / total / ML home / ML away, "—" when a leg is
+        /// unposted. Shown only when at least one leg has a value.
+        private func wcLinesRow(_ lines: TomorrowWcLines, m: TomorrowWcMatch) -> some View {
+            let homeAbbr = abbr(m.home_team ?? m.home?.team)
+            let awayAbbr = abbr(m.away_team ?? m.away?.team)
+            return HStack(spacing: 0) {
+                wcLineCell("SPREAD", wcSpreadText(lines.spread))
+                wcLineDivider
+                wcLineCell("TOTAL", lines.total.map { String(format: "%.1f", $0) } ?? "—")
+                wcLineDivider
+                wcLineCell("\(awayAbbr) ML", wcMlText(lines.ml_away))
+                wcLineDivider
+                wcLineCell("\(homeAbbr) ML", wcMlText(lines.ml_home))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+        }
+        private var wcLineDivider: some View {
+            Rectangle().fill(Color.white.opacity(0.06)).frame(width: 1, height: 22)
+        }
+        private func wcLineCell(_ label: String, _ value: String) -> some View {
+            VStack(spacing: 3) {
+                Text(label)
+                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.4))
+                Text(value)
+                    .font(GaryFonts.mono(11, bold: true))
+                    .foregroundStyle(value == "—" ? .white.opacity(0.35) : .white.opacity(0.9))
+            }
+            .frame(maxWidth: .infinity)
+        }
+
+        // ── WC helpers ──────────────────────────────────────────────────────
+        private func wcHasAnyLine(_ l: TomorrowWcLines) -> Bool {
+            l.spread != nil || l.total != nil || l.ml_home != nil || l.ml_away != nil
+        }
+        private func wcSpreadText(_ s: Double?) -> String {
+            guard let s else { return "—" }
+            return s > 0 ? String(format: "+%.1f", s) : String(format: "%.1f", s)
+        }
+        private func wcMlText(_ ml: Double?) -> String {
+            guard let ml else { return "—" }
+            return ml > 0 ? "+\(Int(ml))" : "\(Int(ml))"
+        }
+        /// Projected XI names — keeper first when present (and not already in the
+        /// outfield list), then the listed XI.
+        private func wcXiNames(_ xi: TomorrowWcXI?) -> [String] {
+            guard let xi else { return [] }
+            var names = (xi.xi ?? []).compactMap { $0.n }.filter { !$0.isEmpty }
+            if let gk = xi.keeper, !gk.isEmpty, !names.contains(gk) {
+                names.insert(gk, at: 0)
+            }
+            return names
+        }
+        /// "Mbappé 5" — name + goal count when scoring data exists.
+        private func wcKeyPlayerLabel(_ p: TomorrowWcKeyPlayer) -> String? {
+            guard let name = p.name, !name.isEmpty else { return nil }
+            if let g = p.goals, g > 0 { return "\(name) \(g)" }
+            return name
+        }
+
+        /// The fixed column-header row for the active lane.
+        @ViewBuilder private func laneHeader(_ lane: LookAheadLane) -> some View {
+            HStack(spacing: 8) {
+                switch lane {
+                case .starters:
+                    Text("PITCHER / GAME")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("ERA · xERA")
+                        .frame(width: 150, alignment: .trailing)
+                case .returns:
+                    Text("PLAYER / TEAM")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("STATUS")
+                        .frame(width: 120, alignment: .trailing)
+                case .form:
+                    Text("TEAM").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("L10").frame(width: 56, alignment: .trailing)
+                    Text("STREAK").frame(width: 60, alignment: .trailing)
+                case .runProfile:
+                    Text("TEAM").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("RS/G").frame(width: 52, alignment: .trailing)
+                    Text("RA/G").frame(width: 52, alignment: .trailing)
+                    Text("DIFF").frame(width: 48, alignment: .trailing)
+                case .weather:
+                    Text("MATCHUP / VENUE").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("FORECAST").frame(width: 132, alignment: .trailing)
+                }
+            }
+            .font(GaryFonts.mono(8.5)).tracking(1.2)
+            .foregroundStyle(.white.opacity(0.45))
+            .padding(.vertical, 8).padding(.horizontal, 14)
+        }
+
+        /// The scrolling rows for the active lane, grouped by sport where the
+        /// data spans leagues.
+        @ViewBuilder private func laneBody(_ lane: LookAheadLane) -> some View {
+            switch lane {
+            case .starters: starterRows(board?.starters ?? [])
+            case .returns:  peopleRows(board?.returns ?? [])
+            case .form:     formRows(board?.form ?? [])
+            case .runProfile: runProfileRows(board?.run_profile ?? [])
+            case .weather:  weatherRows(board?.weather ?? [])
+            }
+        }
+
+        // STARTERS — pitcher name + gold team abbr + the game it's in on the
+        // left; ERA · xERA on the right, each colored green (below league avg =
+        // good) / red (above = bad) / white (around avg). The team is dropped
+        // from the right side (it was "HOU 4.03") — right side is numbers now.
+        @ViewBuilder private func starterRows(_ people: [TomorrowPerson]) -> some View {
+            let leagues = TomorrowView.sortedLeagues(people)
+            let lgAvgEra = board?.league_avg_era
+            let lgAvgXera = board?.league_avg_xera
+            VStack(spacing: 0) {
+                ForEach(leagues, id: \.self) { lg in
+                    sportSubHeader(lg)
+                    let rows = people.filter { ($0.league ?? "").uppercased() == lg }
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, p in
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name ?? "")
+                                    .font(GaryFonts.text(12.5, .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .lineLimit(1)
+                                HStack(spacing: 6) {
+                                    // Team abbreviation — GOLD.
+                                    let teamAbbr = (p.abbr?.isEmpty == false ? p.abbr : p.team) ?? ""
+                                    if !teamAbbr.isEmpty {
+                                        Text(teamAbbr)
+                                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
+                                            .foregroundStyle(GaryColors.gold)
+                                    }
+                                    // The game this starter is in, e.g. "HOU @ DET".
+                                    if let g = p.game, !g.isEmpty {
+                                        Text(g)
+                                            .font(GaryFonts.mono(8.5)).tracking(0.3)
+                                            .foregroundStyle(.white.opacity(0.4))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            // ERA · xERA, both labeled + colored vs league average.
+                            if p.era != nil || p.xera != nil {
+                                HStack(spacing: 6) {
+                                    if let era = p.era {
+                                        eraStat("ERA", era, avg: lgAvgEra)
+                                    }
+                                    if p.era != nil && p.xera != nil {
+                                        Text("·").font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.25))
+                                    }
+                                    if let xera = p.xera {
+                                        eraStat("xERA", xera, avg: lgAvgXera)
+                                    }
+                                }
+                                .frame(width: 150, alignment: .trailing)
+                            } else {
+                                Text("—")
+                                    .font(GaryFonts.mono(10))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .frame(width: 150, alignment: .trailing)
+                            }
+                        }
+                        .padding(.vertical, 9).padding(.horizontal, 14)
+                        hairline
+                    }
+                }
+            }
+        }
+
+        /// One labeled, color-coded ERA/xERA stat: "ERA 4.03". Below the league
+        /// average reads green (good), above reads red (bad), neutral white near
+        /// the average — a clear bettor signal on the starter's quality.
+        private func eraStat(_ label: String, _ value: Double, avg: Double?) -> some View {
+            HStack(spacing: 3) {
+                Text(label)
+                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.4))
+                Text(String(format: "%.2f", value))
+                    .font(GaryFonts.mono(11, bold: true))
+                    .foregroundStyle(eraColor(value, avg: avg))
+            }
+        }
+
+        /// Green when comfortably below the league average (better pitcher), red
+        /// when comfortably above (worse), white in the ±0.40 band around it. ERA
+        /// is lower-is-better, so the comparison is inverted from run-diff. When
+        /// the league average is missing, fall back to a neutral fixed anchor so
+        /// the lane still reads a sensible good/bad signal.
+        private func eraColor(_ value: Double, avg: Double?) -> Color {
+            let baseline = avg ?? 4.00
+            let band = 0.40
+            if value < baseline - band { return GaryColors.win }
+            if value > baseline + band { return GaryColors.loss }
+            return .white.opacity(0.8)
+        }
+
+        // Starters / Key Returns — name + team on the left, detail/status right,
+        // grouped under a sport sub-header.
+        @ViewBuilder private func peopleRows(_ people: [TomorrowPerson]) -> some View {
+            let leagues = TomorrowView.sortedLeagues(people)
+            VStack(spacing: 0) {
+                ForEach(leagues, id: \.self) { lg in
+                    sportSubHeader(lg)
+                    let rows = people.filter { ($0.league ?? "").uppercased() == lg }
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, p in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name ?? "")
+                                    .font(GaryFonts.text(12.5, .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .lineLimit(1)
+                                if let t = p.team, !t.isEmpty {
+                                    Text(t)
+                                        .font(GaryFonts.mono(8.5)).tracking(0.5)
+                                        .foregroundStyle(.white.opacity(0.35))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Text((p.detail?.isEmpty == false ? p.detail : "—") ?? "—")
+                                .font(GaryFonts.mono(10))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .frame(width: 120, alignment: .trailing)
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        .padding(.vertical, 9).padding(.horizontal, 14)
+                        hairline
+                    }
+                }
+            }
+        }
+
+        @ViewBuilder private func formRows(_ rows: [TomorrowForm]) -> some View {
+            let leagues = sortedFormLeagues(rows.map { $0.league })
+            VStack(spacing: 0) {
+                ForEach(leagues, id: \.self) { lg in
+                    if leagues.count > 1 { sportSubHeader(lg) }
+                    let r = rows.filter { ($0.league ?? "").uppercased() == lg }
+                    ForEach(Array(r.enumerated()), id: \.offset) { _, f in
+                        HStack(spacing: 8) {
+                            HStack(spacing: 5) {
+                                Text(f.abbr ?? abbr(f.team))
+                                    .font(GaryFonts.mono(11, bold: true))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                if f.home == true {
+                                    Text("HOME")
+                                        .font(GaryFonts.mono(7.5, bold: true)).tracking(0.6)
+                                        .foregroundStyle(GaryColors.gold.opacity(0.7))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(f.l10 ?? "—")
+                                .font(GaryFonts.mono(10.5))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .frame(width: 56, alignment: .trailing)
+                            Text(f.streak ?? "—")
+                                .font(GaryFonts.mono(10.5, bold: true))
+                                .foregroundStyle(streakColor(f.streak))
+                                .frame(width: 60, alignment: .trailing)
+                        }
+                        .padding(.vertical, 9).padding(.horizontal, 14)
+                        hairline
+                    }
+                }
+            }
+        }
+
+        @ViewBuilder private func runProfileRows(_ rows: [TomorrowRunProfile]) -> some View {
+            let leagues = sortedFormLeagues(rows.map { $0.league })
+            VStack(spacing: 0) {
+                ForEach(leagues, id: \.self) { lg in
+                    if leagues.count > 1 { sportSubHeader(lg) }
+                    let r = rows.filter { ($0.league ?? "").uppercased() == lg }
+                    ForEach(Array(r.enumerated()), id: \.offset) { _, rp in
+                        HStack(spacing: 8) {
+                            Text(rp.abbr ?? abbr(rp.team))
+                                .font(GaryFonts.mono(11, bold: true))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(Self.oneDecimal(rp.rs_per_game))
+                                .font(GaryFonts.mono(10.5))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .frame(width: 52, alignment: .trailing)
+                            Text(Self.oneDecimal(rp.ra_per_game))
+                                .font(GaryFonts.mono(10.5))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .frame(width: 52, alignment: .trailing)
+                            Text(Self.signedInt(rp.run_diff))
+                                .font(GaryFonts.mono(10.5, bold: true))
+                                .foregroundStyle(diffColor(rp.run_diff))
+                                .frame(width: 48, alignment: .trailing)
+                        }
+                        .padding(.vertical, 9).padding(.horizontal, 14)
+                        hairline
+                    }
+                }
+            }
+        }
+
+        @ViewBuilder private func weatherRows(_ rows: [TomorrowWeather]) -> some View {
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, w in
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            // Prefer abbreviations (HOU @ DET) so the matchup fits
+                            // without truncating; fall back to a mascot-short label.
+                            Text({
+                                if let a = w.away_abbr, let h = w.home_abbr, !a.isEmpty, !h.isEmpty { return "\(a) @ \(h)" }
+                                return w.matchup.map(shortenMatchup) ?? "—"
+                            }())
+                                .font(GaryFonts.text(12.5, .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1)
+                            if let v = w.venue, !v.isEmpty {
+                                Text(v)
+                                    .font(GaryFonts.mono(8.5)).tracking(0.3)
+                                    .foregroundStyle(.white.opacity(0.35))
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            HStack(spacing: 6) {
+                                if let t = w.temp_f { Text("\(t)°").font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.75)) }
+                                if let wind = w.wind_mph { Text("\(wind)mph").font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.5)) }
+                            }
+                            if let note = w.note, !note.isEmpty {
+                                Text(note)
+                                    .font(GaryFonts.mono(8.5))
+                                    .foregroundStyle(GaryColors.gold.opacity(0.8))
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(width: 132, alignment: .trailing)
+                    }
+                    .padding(.vertical, 9).padding(.horizontal, 14)
+                    hairline
+                }
+            }
+        }
+
+        // ── Look-ahead helpers ─────────────────────────────────────────────
+        private var hairline: some View {
+            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+        }
+        private func sportSubHeader(_ lg: String) -> some View {
+            Text(lg)
+                .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
+                .foregroundStyle(.white.opacity(0.3))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 9).padding(.bottom, 4).padding(.horizontal, 14)
+        }
+        /// MLB / WC head ordering for the form + run-profile lanes.
+        private func sortedFormLeagues(_ leagues: [String?]) -> [String] {
+            let order = ["MLB", "WC"]
+            let present = Array(Set(leagues.compactMap { ($0 ?? "").uppercased() }.filter { !$0.isEmpty }))
+            let head = order.filter { present.contains($0) }
+            let tail = present.filter { !order.contains($0) }.sorted()
+            return head + tail
+        }
+        private func streakColor(_ s: String?) -> Color {
+            guard let s, let first = s.first else { return .white.opacity(0.5) }
+            if first == "W" { return GaryColors.win }
+            if first == "L" { return GaryColors.loss }
+            return .white.opacity(0.6)
+        }
+        private func diffColor(_ d: Int?) -> Color {
+            guard let d else { return .white.opacity(0.5) }
+            return d > 0 ? GaryColors.win : d < 0 ? GaryColors.loss : .white.opacity(0.6)
+        }
+        private static func oneDecimal(_ v: Double?) -> String {
+            guard let v else { return "—" }
+            return String(format: "%.1f", v)
+        }
+        private static func signedInt(_ v: Int?) -> String {
+            guard let v else { return "—" }
+            return v > 0 ? "+\(v)" : "\(v)"
+        }
+    }
+}
+
+/// The look-ahead tabs shown under the Tomorrow board. Order = display order.
+enum LookAheadLane: CaseIterable, Hashable {
+    case starters, returns, form, runProfile, weather
+    var label: String {
+        switch self {
+        case .starters:   return "STARTERS"
+        case .returns:    return "KEY RETURNS"
+        case .form:       return "FORM"
+        case .runProfile: return "RUN PROFILE"
+        case .weather:    return "WEATHER"
+        }
+    }
+}
+
+/// The top-level MLB / WC switch for "The Day Ahead" — MLB routes to the tabbed
+/// table, WC to the per-match World Cup look-ahead cards.
+enum LookAheadSport: Hashable {
+    case mlb, wc
+    var label: String {
+        switch self {
+        case .mlb: return "MLB"
+        case .wc:  return "WORLD CUP"
         }
     }
 }
@@ -17661,7 +18449,7 @@ struct PicksCarouselView: View {
         }
         func gameTime(_ p: GaryPick) -> String {
             if let iso = p.commence_time, let d = parseISO8601(iso) {
-                return Formatters.dayTimeFormatterEST.string(from: d) + " ET"
+                return Formatters.tabTimeFormatterEST.string(from: d) + " ET"
             }
             return p.time ?? ""
         }
@@ -17697,7 +18485,7 @@ struct PicksCarouselView: View {
                 seenKeys.insert(key)
                 let time: String = {
                     if let iso = s.commence_time, let d = parseISO8601(iso) {
-                        return Formatters.dayTimeFormatterEST.string(from: d) + " ET"
+                        return Formatters.tabTimeFormatterEST.string(from: d) + " ET"
                     }
                     return ""
                 }()
@@ -23660,6 +24448,15 @@ enum Formatters {
     static let dayTimeFormatterEST: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "EEEE h:mm a"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        return f
+    }()
+
+    // Time-only (no weekday) for the Picks-page matchup tabs — reads "6:40 PM ET"
+    // (founder call Jun 26: drop the leading weekday from the tab sub-line).
+    static let tabTimeFormatterEST: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
         f.timeZone = TimeZone(identifier: "America/New_York")
         return f
     }()

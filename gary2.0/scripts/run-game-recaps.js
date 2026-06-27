@@ -63,15 +63,29 @@ function getArgValue(flag) {
 const dryRun = args.includes('--dry-run');
 const force = args.includes('--force');
 const leagueArg = getArgValue('--league')?.toUpperCase() || null;
-const targetDate = getArgValue('--date') || (() => {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return yesterday.toISOString().split('T')[0];
-})();
+const explicitDate = getArgValue('--date');
 
-if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
-  console.error(`❌ Invalid --date "${targetDate}". Expected YYYY-MM-DD.`);
-  process.exit(1);
+// ET-anchored date (mirrors the cloud grader's estDate so recap dates line up
+// with how game_results files games — game_date IS the ET slate day).
+function estDate(offset = 0) {
+  const d = new Date(Date.now() + offset * 86400000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+}
+
+// When no --date is passed, cover TODAY + YESTERDAY (ET) just like the cloud
+// grade-results function (estDate(0)/estDate(-1)). Today's games get graded by
+// the cloud grader as they finish, but game_recaps (the Home marquee headline
+// TEXT) is written only here — so recapping today AS games settle rolls the
+// headline same-day instead of waiting for the 2am yesterday-only pass.
+const targetDates = explicitDate ? [explicitDate] : [estDate(0), estDate(-1)];
+
+for (const d of targetDates) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    console.error(`❌ Invalid date "${d}". Expected YYYY-MM-DD.`);
+    process.exit(1);
+  }
 }
 
 // ── Evidence helpers ─────────────────────────────────────────────────────────
@@ -95,7 +109,7 @@ async function fetchMlbStatsForGame(gameId) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-async function main() {
+async function main(targetDate) {
   console.log(`\n📰 BETTING RECAPS — date=${targetDate}` +
     (leagueArg ? ` league=${leagueArg}` : '') + (dryRun ? ' (DRY RUN)' : '') + (force ? ' (FORCE)' : ''));
 
@@ -236,7 +250,18 @@ async function main() {
   console.log(`════════════════════════════════════════\n`);
 }
 
-main().catch((err) => {
+// Run each target date through the (idempotent) recap pass. Today first so the
+// Home marquee headline rolls to today's finished games as soon as possible;
+// yesterday second to backfill any late finals the cloud grader settled
+// overnight. Already-recapped matchups are skipped (see dedup above), so this is
+// a no-op / $0 when nothing new has finished.
+async function run() {
+  for (const d of targetDates) {
+    await main(d);
+  }
+}
+
+run().catch((err) => {
   console.error('\n❌ FATAL ERROR:', err);
   process.exit(1);
 });

@@ -800,7 +800,9 @@ struct PlayerCardV4: View {
             section("The read") { VStack(alignment: .leading, spacing: 11) { ForEach(read.indices, id: \.self) { readRow(read[$0]) } } }
         }
         if let sp = p.splits, !sp.isEmpty {
-            section("Splits") { VStack(alignment: .leading, spacing: 14) { ForEach(sp.indices, id: \.self) { splitRow(sp[$0]) } } }
+            // WC cards carry a role-aware title (FINISHING / ON THE BALL / AT THE BACK / IN GOAL);
+            // MLB omits it → "Splits". section() uppercases, so it matches the gold eyebrow style.
+            section(p.statsSectionTitle ?? "Splits") { VStack(alignment: .leading, spacing: 14) { ForEach(sp.indices, id: \.self) { splitRow(sp[$0]) } } }
         }
         if let fr = p.formRows, !fr.isEmpty {
             section("Recent") {

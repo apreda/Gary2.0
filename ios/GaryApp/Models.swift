@@ -264,6 +264,9 @@ struct PlayerInsightPack: Decodable {
     let pitchMatchup: [PitchRow]?
     let venue: LabeledStat?
     let props: [PropLine]?
+    /// WC: role-aware stats-section title ("FINISHING" / "ON THE BALL" / "AT THE BACK" / "IN GOAL").
+    /// MLB cards omit this → stats section falls back to "SPLITS".
+    let statsSectionTitle: String?
 }
 
 // MARK: - Daily Slate (every game + opening lines, from the 5am snapshot)
@@ -1912,6 +1915,21 @@ struct TomorrowBoard: Decodable {
     let big_games: [TomorrowBigGame]
     let starters: [TomorrowPerson]
     let returns: [TomorrowPerson]
+    // The tabbed look-ahead table's extra lanes (server-precomputed, grounded).
+    // All optional — older rows without these fields still decode.
+    let form: [TomorrowForm]?
+    let run_profile: [TomorrowRunProfile]?
+    let weather: [TomorrowWeather]?
+    // Grounded league-average ERA/xERA (PA-weighted mean across tomorrow's
+    // probable starters) — the baseline the Starters lane colors each pitcher's
+    // ERA/xERA against (below avg = good/green, above = bad/red). Optional;
+    // older rows without these still decode.
+    let league_avg_era: Double?
+    let league_avg_xera: Double?
+    // World Cup look-ahead — one entry per tomorrow WC match (its own lane, no
+    // longer mixed into the MLB-only `starters`). Optional; nil/[] on non-WC
+    // days or older rows.
+    let wc_lookahead: [TomorrowWcMatch]?
 }
 
 struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation extras
@@ -1933,14 +1951,144 @@ struct TomorrowBigGame: Decodable {
     let rank: Int                    // 1,2,3
     let league: String?
     let matchup: String?            // "Yankees @ Red Sox" (full names, mock style)
-    let reason: String?             // chip: "RIVALRY"/"FIRST PLACE"/"GROUP DECIDER"
+    // The current divisional standing as PLAIN TEXT (no chip), e.g.
+    // "Yankees 1st · Red Sox 5th, AL East" — replaces the old `reason` chip.
+    let standing: String?
     let context: String?            // "AL East · Cole vs Crochet"
     let commence_time: String?      // for the right-aligned time "7:10"
+    // Probable starters (MLB only) — last names; "Undecided" when unposted.
+    // WC big games leave these nil → no pitcher line rendered.
+    let awayPitcher: String?
+    let homePitcher: String?
+    // Backend mirror of the same two values; kept optional / unused by the row.
+    let pitchers: TomorrowBigGamePitchers?
+}
+
+struct TomorrowBigGamePitchers: Decodable {
+    let away: String?
+    let home: String?
 }
 
 struct TomorrowPerson: Decodable {   // starters AND returns share this
     let league: String?             // groups by sport sub-header
     let name: String?               // "G. Cole" / "Brazil XI"
     let team: String?
-    let detail: String?             // starters: "NYY 2.41" or "4-3-3" or ""; returns: "wrist"/"IL → start"
+    let detail: String?             // legacy "NYY 2.41" string (kept for back-compat / returns status)
+    // Structured starter fields (server-grounded). All optional — returns rows
+    // and older board rows leave them nil.
+    let abbr: String?               // team abbreviation (gold in the Starters lane)
+    let era: Double?                // Savant season ERA | nil when unavailable
+    let xera: Double?               // Savant expected ERA | nil (never fabricated)
+    let game: String?               // the game this starter is in, e.g. "HOU @ DET"
+    let opponent: String?           // opposing team abbr | nil
+    let home: Bool?                 // pitching at home?
+}
+
+// FORM — per-team last-10 + current streak (grounded from standings).
+struct TomorrowForm: Decodable {
+    let league: String?
+    let team: String?
+    let abbr: String?
+    let l10: String?                // "7-3"
+    let streak: String?             // "W3" / "L1" / nil
+    let home: Bool?                 // plays at home tomorrow
+}
+
+// RUN PROFILE — season scoring / run-prevention shape (grounded from standings).
+struct TomorrowRunProfile: Decodable {
+    let league: String?
+    let team: String?
+    let abbr: String?
+    let runs_scored: Int?
+    let runs_allowed: Int?
+    let run_diff: Int?
+    let rs_per_game: Double?
+    let ra_per_game: Double?
+    let home: Bool?
+}
+
+// WEATHER — outdoor-MLB first-pitch forecast (grounded; roofed parks omitted).
+struct TomorrowWeather: Decodable {
+    let league: String?
+    let matchup: String?            // "Yankees @ Red Sox"
+    let away_abbr: String?
+    let home_abbr: String?
+    let venue: String?
+    let temp_f: Int?
+    let wind_mph: Int?
+    let precip_pct: Int?
+    let note: String?               // "82° — ball carries" / "40% rain" / nil
+    let commence_time: String?
+}
+
+// MARK: - Tomorrow WC Look-ahead (wc_lookahead — one entry per tomorrow match)
+//
+// The World Cup branch of "The Day Ahead". Server (buildWcLookahead in
+// tomorrowService.js) joins the WC fixture feed to the same slate rows the
+// board renders (for the posted lines), then layers the grounded day-before
+// reads per side: projected XI + formation, L5 form, key scorers. GROUNDED —
+// any field with no usable source is null/[]; lines are nil when unposted.
+struct TomorrowWcMatch: Decodable {
+    let league: String?             // "WC"
+    let match: String?              // "Away @ Home"
+    let away_team: String?
+    let home_team: String?
+    let commence_time: String?      // ISO8601 kickoff
+    let kickoff: String?            // short ET clock, e.g. "3:00"
+    let stage: String?              // plain-text stage/round | nil
+    let group: String?              // "Group A" | nil
+    let venue: String?              // stadium name | nil
+    let lines: TomorrowWcLines?
+    let home: TomorrowWcSide?
+    let away: TomorrowWcSide?
+}
+
+// LINES — straight off the board's slate row. nil when unposted.
+struct TomorrowWcLines: Decodable {
+    let spread: Double?
+    let total: Double?
+    let ml_home: Double?
+    let ml_away: Double?
+}
+
+// One side of a WC look-ahead match: projected XI + formation, L5 form,
+// key players. Each field is null when its grounded source is unavailable.
+struct TomorrowWcSide: Decodable {
+    let team: String?
+    let xi: TomorrowWcXI?
+    let form: TomorrowWcForm?
+    let key_players: [TomorrowWcKeyPlayer]?
+}
+
+// Projected XI + formation (recent regulars, OUT/suspended dropped server-side).
+struct TomorrowWcXI: Decodable {
+    let formation: String?          // "4-2-3-1" | nil
+    let keeper: String?
+    let xi: [TomorrowWcStarter]?    // projected XI (keeper may also lead this list)
+}
+
+struct TomorrowWcStarter: Decodable {
+    let n: String?                  // player name
+    let p: String?                  // position | nil
+    let num: Int?                   // shirt number | nil
+}
+
+// Recent form (L5) — W-D-L record + goals for/against per game.
+struct TomorrowWcForm: Decodable {
+    let record: String?             // "W-D-L", e.g. "3-1-1"
+    let w: Int?
+    let d: Int?
+    let l: Int?
+    let gf_per_game: Double?
+    let ga_per_game: Double?
+    let form: String?               // "WWDLW" most-recent-first | nil
+    let matches: Int?
+}
+
+// A key player to watch — a leading cycle scorer for the side.
+struct TomorrowWcKeyPlayer: Decodable {
+    let name: String?
+    let goals: Int?
+    let assists: Int?
+    let position: String?
 }

@@ -20,14 +20,55 @@
  *      sport at tomorrow's ET date, so the Tomorrow board never drifts from the
  *      Today slate. Lines null => board renders "—". any_lines=false when ZERO
  *      games have any posted line ("lines open soon" hero).
- *   2. PROBABLE STARTERS — MLB probable pitchers (getMlbSchedule, both sides,
- *      all games) joined to Savant season ERA by name. WC = "<Team> XI", team
- *      name only (no forward projected XI / formation exists the day before).
+ *   2. PROBABLE STARTERS — MLB probable pitchers ONLY (getMlbSchedule, both
+ *      sides, all games) joined to Savant season ERA + xERA by name, each tagged
+ *      with its game ("HOU @ DET"), opponent abbr, and home flag. Shape:
+ *      {name, team, abbr, era, xera, game, opponent, home, detail}. Plus a
+ *      top-level grounded league_avg_era / league_avg_xera (PA-weighted mean of
+ *      the same Savant pitcher corpus) so the iOS can color each pitcher's
+ *      ERA/xERA relative to league (below = good). era/xera null when Savant
+ *      has no row (never fabricated). WC is NO LONGER mixed in here — it has its
+ *      own dedicated lane (see WC LOOK-AHEAD below).
+ *   2b. WC LOOK-AHEAD — its own iOS tab, one entry per tomorrow World Cup match
+ *      (away vs home + kickoff). Each match carries the grounded, day-before,
+ *      bettor-useful look-ahead, all from data the app already pays for:
+ *        • projected XI + formation per side — reuses previousXI() (each team's
+ *          recent-regulars projection; OUT/suspended dropped). Confirmed sheets
+ *          don't post until ~2h pre-kickoff, so the day before is PROJECTED.
+ *        • recent FORM per side — getRecentForm() L5 (W-D-L + GF/GA per match).
+ *        • the LINES for the match — spread / total / 3-way ML straight off the
+ *          SAME slate row the board renders ("—" when a book hasn't posted).
+ *        • KEY PLAYERS to watch per side — each team's leading cycle scorers from
+ *          getSquadStats (goals/assists, grounded); omitted when unavailable.
+ *      GROUNDED only — never fabricates an XI/form/line/scorer; a side with no
+ *      usable projection or form simply omits that field.
  *   3. KEY RETURNS — best-effort IL->active roster-status lane; honest-empty
  *      when nothing qualifies (no dedicated return-date feed exists).
+ *   3b. EXTRA TABBED LANES (the iOS Starters/Returns section is now a tab strip —
+ *      Starters · Key Returns · +3 more). Three additional GROUNDED day-before
+ *      lanes, each a clearly-named array on the snapshot:
+ *        • FORM        — per MLB team L10 (W-L) + current streak (standings
+ *                        records.splitRecords lastTen + streak.streakCode).
+ *        • RUN PROFILE — per MLB team season runs scored / allowed / differential
+ *                        + per-game rates (standings). The grounded stand-in for
+ *                        an "over/under trend": game_results stores no betting
+ *                        total to compute a real O/U record from, so we never
+ *                        fabricate one — we surface the team's actual scoring /
+ *                        run-prevention shape instead.
+ *        • WEATHER     — first-pitch forecast for OUTDOOR MLB games via Open-Meteo
+ *                        (the same key-less, day-before-available source wcWeather
+ *                        uses); domed/closed parks skipped, omitted when no coords
+ *                        / forecast resolve. temp_f / wind_mph / precip_pct + note.
  *   4. BIG GAMES — top-3 marquee games by a grounded newsworthiness weight
  *      (standings rank, division rivalry, primetime window, ace starter, WC
- *      stage). NO Layer-3 betting conclusions — just why it's worth watching.
+ *      stage). The DISPLAYED context is now each game's ACTUAL current divisional
+ *      standing as plain text (e.g. "Brewers 1st · Cubs 2nd, NL Central") via the
+ *      `standing` field — not a reason chip. WC games (no MLB-style divisions) use
+ *      the group/stage as plain text, or omit. MLB items also carry BOTH probable
+ *      starters' last names — `awayPitcher` / `homePitcher` (+ a `pitchers:{away,
+ *      home}` mirror) — sourced from the SAME schedule read as the starters lane,
+ *      "Undecided" per side when a probable is unposted (never blank, never
+ *      fabricated). WC items carry no pitcher fields. NO Layer-3 betting conclusions.
  *   5. COUNTDOWN — earliest commence_time across ALL of tomorrow's slate +
  *      that game's league (drives the hero term + clock).
  *
@@ -83,6 +124,10 @@ function abbrevName(fullName) {
   const last = parts[parts.length - 1];
   const first = parts[0];
   return `${first.charAt(0)}. ${last}`;
+}
+/** "Gerrit Cole" -> "Cole" (probable-pitcher last name); "" when no name. */
+function lastNameOf(fullName) {
+  return String(fullName || '').trim().split(/\s+/).pop() || '';
 }
 
 /* ─────────────────────────── ET time formatting ─────────────────────────── */
@@ -145,10 +190,13 @@ function abbrFor(name, teamIndex) {
 }
 
 /**
- * Standings lookup by MLB team id => { divisionRank, gamesBack, wins, losses }.
- * getMlbStandings returns the raw MLB Stats API payload: records[].teamRecords[]
- * with team.id, divisionRank (string), gamesBack (string, "-" for leader),
- * wins, losses.
+ * Standings lookup by MLB team id. getMlbStandings returns the raw MLB Stats API
+ * payload: records[].teamRecords[] with team.id, divisionRank (string), gamesBack
+ * (string, "-" for leader), wins, losses, streak {streakCode}, records.splitRecords
+ * (carries the lastTen W-L), runsScored / runsAllowed / runDifferential. We read
+ * every field the board's grounded lanes need here, in one pass.
+ * => { divisionRank, gamesBack, wins, losses, streakCode, l10W, l10L, runsScored,
+ *      runsAllowed, runDiff }
  */
 function indexStandings(standingsRaw) {
   const byTeamId = new Map();
@@ -159,40 +207,85 @@ function indexStandings(standingsRaw) {
       if (id == null) continue;
       const rank = Number(tr.divisionRank);
       const gb = tr.gamesBack === '-' ? 0 : Number(tr.gamesBack);
+      const lastTen = (tr.records?.splitRecords || []).find((s) => s?.type === 'lastTen');
+      const rs = Number(tr.runsScored);
+      const ra = Number(tr.runsAllowed);
+      const rd = Number(tr.runDifferential);
       byTeamId.set(id, {
         divisionRank: Number.isFinite(rank) ? rank : null,
         gamesBack: Number.isFinite(gb) ? gb : null,
         wins: Number(tr.wins),
         losses: Number(tr.losses),
+        streakCode: tr.streak?.streakCode || null, // "W3" / "L1"
+        l10W: lastTen && Number.isFinite(Number(lastTen.wins)) ? Number(lastTen.wins) : null,
+        l10L: lastTen && Number.isFinite(Number(lastTen.losses)) ? Number(lastTen.losses) : null,
+        runsScored: Number.isFinite(rs) ? rs : null,
+        runsAllowed: Number.isFinite(ra) ? ra : null,
+        runDiff: Number.isFinite(rd) ? rd : null,
       });
     }
   }
   return byTeamId;
 }
 
-/** Savant pitcher xStats indexed by full-name + last-name key => season ERA. */
+/**
+ * Savant pitcher xStats indexed by full-name + last-name key => { era, xera }.
+ * The Savant expected-statistics CSV carries BOTH actual season `era` and
+ * expected `xera` in the SAME row, so the board gets xERA for free from the
+ * fetch that already grounds ERA. xera is null when the CSV row lacks it
+ * (never fabricated). Keyed on era presence — a pitcher with no era is skipped.
+ */
 function indexPitcherEraByName(pitcherX) {
   const map = new Map();
   for (const r of pitcherX || []) {
     const era = Number(r?.era);
     if (!Number.isFinite(era)) continue;
+    const xeraNum = Number(r?.xera);
+    const rec = { era, xera: Number.isFinite(xeraNum) ? xeraNum : null };
     const last = r?.last_name || '';
     const first = r?.first_name || '';
     if (last) {
-      map.set(nameKey(`${first} ${last}`), era);
-      if (!map.has(nameKey(last))) map.set(nameKey(last), era);
+      map.set(nameKey(`${first} ${last}`), rec);
+      if (!map.has(nameKey(last))) map.set(nameKey(last), rec);
     } else if (r?.name) {
-      map.set(nameKey(r.name), era);
+      map.set(nameKey(r.name), rec);
     }
   }
   return map;
 }
-function eraForName(fullName, eraByName) {
+/** => { era, xera } for a pitcher name (xera null when unavailable), or null. */
+function statsForName(fullName, eraByName) {
   if (!fullName) return null;
   const e = eraByName.get(nameKey(fullName));
-  if (Number.isFinite(e)) return e;
+  if (e) return e;
   const e2 = eraByName.get(lastNameKey(fullName));
-  return Number.isFinite(e2) ? e2 : null;
+  return e2 || null;
+}
+
+/**
+ * Grounded current MLB LEAGUE-AVERAGE ERA / xERA, derived from the SAME Savant
+ * pitcher xStats corpus the starters lane already fetches — a plate-appearance-
+ * WEIGHTED mean (weighting by `pa` approximates innings, so workhorse starters
+ * count fully and tiny-sample relievers can't distort the average up). Used by
+ * the iOS to color each pitcher's ERA/xERA relative to league (below = good).
+ * GROUNDED: null when the corpus is empty; never a hardcoded constant.
+ * => { league_avg_era: number|null, league_avg_xera: number|null }
+ */
+function computeLeagueAvgEra(pitcherX) {
+  let eraW = 0, eraPa = 0;
+  let xeraW = 0, xeraPa = 0;
+  for (const r of pitcherX || []) {
+    const pa = Number(r?.pa);
+    const w = Number.isFinite(pa) && pa > 0 ? pa : 1; // unweighted fallback if pa absent
+    const era = Number(r?.era);
+    if (Number.isFinite(era)) { eraW += era * w; eraPa += w; }
+    const xera = Number(r?.xera);
+    if (Number.isFinite(xera)) { xeraW += xera * w; xeraPa += w; }
+  }
+  return {
+    league_avg_era: eraPa > 0 ? Number((eraW / eraPa).toFixed(2)) : null,
+    league_avg_xera: xeraPa > 0 ? Number((xeraW / xeraPa).toFixed(2)) : null,
+  };
 }
 
 /* ─────────────────────── curated division rivalries ─────────────────────── */
@@ -239,13 +332,17 @@ async function buildSlate(etDateStr) {
   return { rows: deduped, byLeague };
 }
 
-/* ──────────────────────── 2. PROBABLE STARTERS (MLB/WC) ─────────────────── */
+/* ──────────────────────── 2. PROBABLE STARTERS (MLB only) ───────────────── */
 
 async function buildStarters(etDateStr, teamIndex, eraByName) {
   const starters = [];
-  // Per MLB game (keyed "awayFullName|homeFullName"): ace label + both-aces flag
+  // Per MLB game (keyed "awayAbbr|homeAbbr"): ace label + both-aces flag
   // for the big-games ACE hook, built from the SAME schedule read.
   const acesByGame = new Map();
+  // Per MLB game (same "awayAbbr|homeAbbr" key): BOTH probable starters'
+  // last names for the big-games card => { away, home }. "Undecided" when a
+  // side has no posted probable (never blank, never fabricated).
+  const pitchersByGame = new Map();
 
   // MLB — every named probable pitcher, both sides, all games.
   try {
@@ -253,19 +350,54 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
     for (const g of sched || []) {
       const awayName = g?.teams?.away?.team?.name;
       const homeName = g?.teams?.home?.team?.name;
+      // Game-level matchup label (abbreviations), built once per game so every
+      // starter in it knows which game it's pitching tomorrow (e.g. "HOU @ DET").
+      const awayAbbrG = abbrFor(awayName, teamIndex);
+      const homeAbbrG = abbrFor(homeName, teamIndex);
+      const gameLabel = awayAbbrG && homeAbbrG ? `${awayAbbrG} @ ${homeAbbrG}` : null;
       const gameAces = []; // { lastName, era }
+      // Both probable starters' last names, "Undecided" when a side has no
+      // posted probable (captured BEFORE the no-name continue below).
+      const gamePitchers = { away: 'Undecided', home: 'Undecided' };
       for (const side of ['away', 'home']) {
         const t = g?.teams?.[side];
         const name = t?.probablePitcher?.fullName;
+        if (name) gamePitchers[side] = lastNameOf(name);
         if (!name) continue;
         const abbr = abbrFor(t?.team?.name, teamIndex) || '';
-        const era = eraForName(name, eraByName);
+        const oppAbbr = side === 'away' ? homeAbbrG : awayAbbrG;
+        const home = side === 'home';
+        const stats = statsForName(name, eraByName);
+        const era = stats?.era ?? null;
+        const xera = stats?.xera ?? null;
         const detail = era != null ? `${abbr} ${era.toFixed(2)}` : abbr;
-        starters.push({ league: 'MLB', name: abbrevName(name), team: abbr, detail });
+        starters.push({
+          league: 'MLB',
+          name: abbrevName(name),
+          team: abbr,
+          abbr,                         // explicit alias (iOS gold team-name source)
+          era,                          // number | null
+          xera,                         // number | null (never fabricated)
+          game: gameLabel,              // "HOU @ DET" | null
+          opponent: oppAbbr || null,    // opposing team abbr | null
+          home,                         // pitching at home?
+          detail,                       // legacy "HOU 4.03" string (kept for back-compat)
+        });
         if (era != null && era <= ACE_ERA) {
           const last = String(name).trim().split(/\s+/).pop();
           gameAces.push({ lastName: last, era });
         }
+      }
+      // Both-pitchers map for the big-games card — keyed by abbreviations so
+      // the slate (nicknames) and schedule (full names) resolve to the same
+      // game. Stored for EVERY game (unlike aces, which gate on ERA).
+      if (awayName && homeName) {
+        const aAbbr = abbrFor(awayName, teamIndex);
+        const hAbbr = abbrFor(homeName, teamIndex);
+        pitchersByGame.set(`${aAbbr}|${hAbbr}`, {
+          away: gamePitchers.away,
+          home: gamePitchers.home,
+        });
       }
       if (gameAces.length && awayName && homeName) {
         gameAces.sort((a, b) => a.era - b.era);
@@ -283,24 +415,200 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
     console.warn(`[TomorrowBoard] MLB starters fetch failed: ${e.message}`);
   }
 
-  // WC — team name only ("<Team> XI"). No forward projected XI / formation
-  // exists the day before; never fabricate a shape.
+  // WC is no longer mixed into starters — it has its own dedicated lane
+  // (buildWcLookahead). starters[] is MLB pitchers only.
+  return { starters, acesByGame, pitchersByGame };
+}
+
+/* ─────────────────────── 2b. WC LOOK-AHEAD (own tab) ─────────────────────── */
+
+/**
+ * Name normalizer IDENTICAL to wcConfirmedXI.js's internal `norm` (diacritic-strip
+ * + alphanumeric collapse). previousXI() looks up its injStatus map with that same
+ * `norm`, so the OUT/SUS keys we build here MUST match it byte-for-byte — nameKey()
+ * (which keeps accents) would silently never match and drop nobody. Kept in lockstep.
+ */
+function wcNorm(s) {
+  return String(s || '')
+    .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** A team's L5 form as a flat, grounded shape, or null. From getRecentForm().l5:
+ *  { record: "3-1-1", w, d, l, gf_per_game, ga_per_game, form: "WWDLW" }. */
+function formShape(recentForm) {
+  const l5 = recentForm?.l5;
+  if (!l5 || !Number.isFinite(Number(l5.played)) || Number(l5.played) === 0) return null;
+  return {
+    record: `${l5.w}-${l5.d}-${l5.l}`, // W-D-L
+    w: l5.w, d: l5.d, l: l5.l,
+    gf_per_game: Number.isFinite(Number(l5.gfPerMatch)) ? Number(l5.gfPerMatch) : null,
+    ga_per_game: Number.isFinite(Number(l5.gaPerMatch)) ? Number(l5.gaPerMatch) : null,
+    form: l5.form || null, // "WWDLW" most-recent-first
+    matches: l5.played,
+  };
+}
+
+/** Projected XI + formation for a side as a flat shape, or null. Reuses
+ *  previousXI() — the SAME recent-regulars projection the field view + the
+ *  situational lane show (OUT/suspended dropped). Confirmed sheets don't post
+ *  until ~2h pre-kickoff, so the day before is necessarily PROJECTED. */
+function xiShape(side) {
+  if (!side || !Array.isArray(side.starters) || side.starters.length < 11) return null;
+  return {
+    formation: side.formation || null, // "4-3-3" | null
+    keeper: side.keeper || null,
+    xi: side.starters
+      .map((s) => ({ n: s.player?.name, p: s.position || null, num: s.shirt_number ?? null }))
+      .filter((p) => p.n),
+  };
+}
+
+/** Up to `n` grounded key players for a side from getSquadStats — the leading
+ *  cycle scorers (goals desc, then assists). Each { name, goals, assists,
+ *  position }. Only players with a real goal/assist tally qualify (no fabricated
+ *  rate); [] when the squad map is empty. */
+function keyPlayersFrom(squad, n = 3) {
+  const players = Object.values(squad || {}).filter(
+    (p) => p?.name && (Number(p.goals) > 0 || Number(p.assists) > 0),
+  );
+  if (!players.length) return [];
+  players.sort(
+    (a, b) => (Number(b.goals) - Number(a.goals)) || (Number(b.assists) - Number(a.assists)),
+  );
+  return players.slice(0, n).map((p) => ({
+    name: p.name,
+    goals: Number.isFinite(Number(p.goals)) ? Number(p.goals) : null,
+    assists: Number.isFinite(Number(p.assists)) ? Number(p.assists) : null,
+    position: p.position || null,
+  }));
+}
+
+/**
+ * WC LOOK-AHEAD — one entry per tomorrow World Cup match. Joins the WC match feed
+ * (for ids/teams/stage) to the SAME slate rows the board renders (for the posted
+ * lines), then layers the grounded day-before reads per side:
+ *   • projected XI + formation  — previousXI() (recent regulars, OUT/SUS dropped)
+ *   • recent form (L5)          — getRecentForm() (W-D-L + GF/GA per game)
+ *   • key players to watch      — getSquadStats() leading scorers
+ * GROUNDED: a side with no usable projection/form just omits that field; lines
+ * are "—"/null when unposted; nothing is ever fabricated. Best-effort per match
+ * and per side — one flaky team never sinks the lane.
+ *
+ * @param {Array} slateRows   the assembled slate rows (carry WC lines per match)
+ * @param {string} etDateStr  tomorrow's ET date
+ * @param {number} season     WC season (2026)
+ */
+async function buildWcLookahead(slateRows, etDateStr, season) {
+  const out = [];
+  // Index the slate's WC line rows by "away|home" so each match reuses the EXACT
+  // line the board shows (no second odds fetch, never drifts from the board).
+  const lineByPair = new Map();
+  for (const r of slateRows) {
+    if (r.league !== 'WC') continue;
+    lineByPair.set(`${r.away_team}|${r.home_team}`, r);
+  }
+  if (!lineByPair.size) return out; // no WC tomorrow
+
+  let wc, previousXI, apiFootball;
   try {
-    const wc = await import('./fifaWorldCupService.js');
-    const matches = await wc.getMatches({});
-    for (const m of Array.isArray(matches) ? matches : []) {
+    wc = await import('./fifaWorldCupService.js');
+    ({ previousXI } = await import('./insights/computers/wcConfirmedXI.js'));
+    apiFootball = await import('./apiFootballService.js');
+  } catch (e) {
+    console.warn(`[TomorrowBoard] WC look-ahead deps failed (skipping lane): ${e.message}`);
+    return out;
+  }
+
+  // WC injury snapshot once for the slate — lets previousXI drop OUT/suspended
+  // regulars from each projection (same map wcConfirmedXI builds). Empty on any
+  // gap → no doubts dropped (fails safe).
+  let injStatus = new Map();
+  try {
+    const injRows = await wc.getInjuries({ seasons: [season] });
+    for (const r of injRows || []) {
+      const nm = r?.player?.name;
+      if (nm && r?.status) injStatus.set(wcNorm(nm), String(r.status).toUpperCase());
+    }
+  } catch (e) {
+    console.warn(`[TomorrowBoard] WC injuries fetch failed (no doubts dropped): ${e.message}`);
+  }
+
+  let matches = [];
+  try { matches = await wc.getMatches({}); } catch (e) {
+    console.warn(`[TomorrowBoard] WC matches fetch failed (skipping lane): ${e.message}`);
+    return out;
+  }
+
+  for (const m of Array.isArray(matches) ? matches : []) {
+    try {
       if (!m?.home_team?.name || !m?.away_team?.name || !m?.datetime) continue;
       const start = new Date(m.datetime);
       if (Number.isNaN(start.getTime()) || getETDateStr(start) !== etDateStr) continue;
-      for (const teamName of [m.away_team.name, m.home_team.name]) {
-        starters.push({ league: 'WC', name: `${teamName} XI`, team: teamName, detail: '' });
-      }
+
+      const away = m.away_team, home = m.home_team;
+      const lineRow = lineByPair.get(`${away.name}|${home.name}`);
+
+      // Projected XI per side — reuse the canonical projection. injStatus is keyed
+      // with wcNorm (matching previousXI's internal norm) so OUT/SUS regulars drop.
+      const [hXi, aXi] = await Promise.all([
+        previousXI(home.id, home.name, m.id, season, injStatus).catch(() => null),
+        previousXI(away.id, away.name, m.id, season, injStatus).catch(() => null),
+      ]);
+
+      // Recent form per side (L5) — grounded W-D-L + GF/GA per game.
+      const [hForm, aForm] = await Promise.all([
+        apiFootball.getRecentForm(home.name).catch(() => null),
+        apiFootball.getRecentForm(away.name).catch(() => null),
+      ]);
+
+      // Key players per side — leading cycle scorers from the squad map.
+      const [hSquad, aSquad] = await Promise.all([
+        apiFootball.getSquadStats(home.name).catch(() => ({})),
+        apiFootball.getSquadStats(away.name).catch(() => ({})),
+      ]);
+
+      const entry = {
+        league: 'WC',
+        match: `${away.name} @ ${home.name}`,
+        away_team: away.name,
+        home_team: home.name,
+        commence_time: m.datetime,
+        kickoff: etClock(m.datetime),                 // short ET clock, e.g. "3:00"
+        stage: m.round_name || m.stage?.name || null, // plain-text stage/round
+        group: m.group?.name || null,
+        venue: m.stadium?.name || null,
+        // LINES — straight off the board's slate row. "—"/null when unposted.
+        lines: {
+          spread: lineRow?.spread ?? null,
+          total: lineRow?.total ?? null,
+          ml_home: lineRow?.ml_home ?? null,
+          ml_away: lineRow?.ml_away ?? null,
+        },
+        // Per side: projected XI + formation, L5 form, key players. Each field is
+        // omitted (null/[]) when its grounded source is unavailable.
+        home: {
+          team: home.name,
+          xi: xiShape(hXi),               // { formation, keeper, xi:[...] } | null
+          form: formShape(hForm),         // { record, gf_per_game, ... } | null
+          key_players: keyPlayersFrom(hSquad),
+        },
+        away: {
+          team: away.name,
+          xi: xiShape(aXi),
+          form: formShape(aForm),
+          key_players: keyPlayersFrom(aSquad),
+        },
+      };
+      out.push(entry);
+    } catch (e) {
+      console.warn(`[TomorrowBoard] WC look-ahead match skipped: ${e.message}`);
     }
-  } catch (e) {
-    console.warn(`[TomorrowBoard] WC starters fetch failed: ${e.message}`);
   }
 
-  return { starters, acesByGame };
+  // Earliest kickoff first.
+  out.sort((a, b) => new Date(a.commence_time || 0) - new Date(b.commence_time || 0));
+  return out;
 }
 
 /* ──────────────────────────── 3. KEY RETURNS ────────────────────────────── */
@@ -324,6 +632,218 @@ async function buildReturns() {
   }
 }
 
+/* ──────── 3b. EXTRA TABBED LANES (FORM · RUN PROFILE · WEATHER) ──────────── */
+
+/**
+ * Build the distinct MLB teams playing tomorrow from the slate rows, each as
+ * { team (full name), abbr, id, opp (full name), home (bool) }. One entry per
+ * team per appearance (a team in a doubleheader shows once after slate de-dupe).
+ */
+function slateTeamsMlb(board, teamIndex, idByName) {
+  const out = [];
+  const seen = new Set();
+  for (const row of board) {
+    if (row.league !== 'MLB') continue;
+    for (const [team, opp, home] of [
+      [row.away_team, row.home_team, false],
+      [row.home_team, row.away_team, true],
+    ]) {
+      const id = idByName.get(nameKey(team));
+      if (id == null || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ team, abbr: abbrFor(team, teamIndex), id, opp, home });
+    }
+  }
+  return out;
+}
+
+/**
+ * FORM — each MLB team's last-10 (W-L) + current streak, straight from standings
+ * (records.splitRecords lastTen + streak.streakCode). GROUNDED: a team is omitted
+ * when its L10 split is absent. l10 is a "W-L" string; streak is "W3"/"L1" (null
+ * when none). Grouped by league for the iOS tab.
+ */
+function buildForm(mlbTeams, standings) {
+  const mlb = [];
+  for (const t of mlbTeams) {
+    const st = standings.get(t.id);
+    if (!st || st.l10W == null || st.l10L == null) continue; // grounded-only
+    mlb.push({
+      league: 'MLB',
+      team: t.team,
+      abbr: t.abbr,
+      l10: `${st.l10W}-${st.l10L}`,
+      streak: st.streakCode || null,
+      home: t.home,
+    });
+  }
+  return mlb;
+}
+
+/**
+ * RUN PROFILE — the grounded, day-before scoring/run-prevention shape for each MLB
+ * team (the honest stand-in for an "over/under trend": game_results stores no
+ * betting total to compute a real O/U record from, so we never fabricate one).
+ * Season runs scored / allowed / differential + per-game rates, straight from
+ * standings (runsScored / runsAllowed / runDifferential / wins+losses). GROUNDED:
+ * a team is omitted when its run totals are absent.
+ */
+function buildRunProfile(mlbTeams, standings) {
+  const mlb = [];
+  for (const t of mlbTeams) {
+    const st = standings.get(t.id);
+    if (!st || st.runsScored == null || st.runsAllowed == null) continue; // grounded-only
+    const gp = (Number(st.wins) || 0) + (Number(st.losses) || 0);
+    const rsg = gp > 0 ? st.runsScored / gp : null; // runs scored / game
+    const rag = gp > 0 ? st.runsAllowed / gp : null; // runs allowed / game
+    mlb.push({
+      league: 'MLB',
+      team: t.team,
+      abbr: t.abbr,
+      runs_scored: st.runsScored,
+      runs_allowed: st.runsAllowed,
+      run_diff: st.runDiff != null ? st.runDiff : (st.runsScored - st.runsAllowed),
+      rs_per_game: rsg != null ? Number(rsg.toFixed(2)) : null,
+      ra_per_game: rag != null ? Number(rag.toFixed(2)) : null,
+      home: t.home,
+    });
+  }
+  return mlb;
+}
+
+/* ──── WEATHER (outdoor MLB, day-before forecast via Open-Meteo) ──────────── */
+
+// Domed / retractable-roof MLB parks — closed/controlled, so the open-air forecast
+// never reaches the field. Static fact set (like RIVALRY_PAIRS); skip these games.
+const ROOFED_PARKS = new Set([
+  'tropicana field',          // Rays (fixed)
+  'rogers centre',            // Blue Jays (retractable)
+  'chase field',              // Diamondbacks (retractable)
+  'minute maid park',         // Astros (retractable) — also "daikin park"
+  'daikin park',
+  'globe life field',         // Rangers (retractable)
+  'american family field',    // Brewers (retractable)
+  't-mobile park',            // Mariners (retractable)
+  'loandepot park',           // Marlins (retractable)
+  'loandepot park ',
+]);
+function isRoofedPark(name) {
+  return ROOFED_PARKS.has(nameKey(name).replace(/\s+/g, ' ').trim());
+}
+
+const WEATHER_TEMP_HOT = 88;   // °F — "ball carries" note
+const WEATHER_TEMP_COLD = 50;  // °F — "heavy air" note
+const WEATHER_WIND_MIN = 12;   // mph — wind "in play"
+const WEATHER_RAIN_PCT = 40;   // % — rain watch
+
+/**
+ * WEATHER — first-pitch forecast for tomorrow's OUTDOOR MLB games, via Open-Meteo
+ * (the same free, key-less, day-before-available forecast source wcWeather already
+ * uses). Each game's venue lat/lon comes from the MLB Stats API venue feed; the
+ * hourly forecast is read at the game's UTC start hour. GROUNDED: domed/closed
+ * parks are skipped, and a game with no resolvable coords or forecast is omitted —
+ * never a fabricated reading. Each row carries temp_f / wind_mph / precip_pct + a
+ * short plain-text `note` for the single most notable factor (or null when calm).
+ */
+async function buildWeather(schedule, etDateStr, teamIndex) {
+  const rows = [];
+  const venueCache = new Map(); // venueId -> {lat, lon, name}
+  for (const g of schedule || []) {
+    try {
+      const iso = g?.gameDate;
+      if (!iso) continue;
+      const start = new Date(iso);
+      if (Number.isNaN(start.getTime()) || getETDateStr(start) !== etDateStr) continue;
+
+      const venueName = g?.venue?.name || null;
+      if (isRoofedPark(venueName)) continue; // domed/closed — forecast is moot
+
+      const coords = await venueCoords(g?.venue?.id, venueCache);
+      if (!coords) continue;
+      // Roof flag from the venue feed is the authoritative skip when present.
+      if (coords.roofType && /dome|retractable|closed|indoor/i.test(coords.roofType)) continue;
+
+      const hourKey = iso.slice(0, 13); // "2026-06-27T23" (UTC, matches Open-Meteo GMT)
+      const dateKey = iso.slice(0, 10);
+      const fc = await openMeteoHour(coords.lat, coords.lon, dateKey, hourKey);
+      if (!fc) continue;
+
+      const { temp, wind, precip } = fc;
+      const awayName = g?.teams?.away?.team?.name;
+      const homeName = g?.teams?.home?.team?.name;
+
+      // Single most notable plain-text note (rain > heat > wind > cold), or null.
+      let note = null;
+      if (Number.isFinite(precip) && precip >= WEATHER_RAIN_PCT) note = `${Math.round(precip)}% rain`;
+      else if (Number.isFinite(temp) && temp >= WEATHER_TEMP_HOT) note = `${Math.round(temp)}° — ball carries`;
+      else if (Number.isFinite(wind) && wind >= WEATHER_WIND_MIN) note = `${Math.round(wind)} mph wind`;
+      else if (Number.isFinite(temp) && temp <= WEATHER_TEMP_COLD) note = `${Math.round(temp)}° — heavy air`;
+
+      rows.push({
+        league: 'MLB',
+        matchup: awayName && homeName ? `${awayName} @ ${homeName}` : null,
+        away_abbr: abbrFor(awayName, teamIndex),
+        home_abbr: abbrFor(homeName, teamIndex),
+        venue: venueName,
+        temp_f: Number.isFinite(temp) ? Math.round(temp) : null,
+        wind_mph: Number.isFinite(wind) ? Math.round(wind) : null,
+        precip_pct: Number.isFinite(precip) ? Math.round(precip) : null,
+        note,
+        commence_time: iso,
+      });
+    } catch (e) {
+      console.warn(`[TomorrowBoard] weather game skipped: ${e.message}`);
+    }
+  }
+  return rows;
+}
+
+/** MLB venue lat/lon (+ roofType) from the Stats API venue feed; cached per id. Never throws. */
+async function venueCoords(venueId, cache) {
+  if (venueId == null) return null;
+  if (cache.has(venueId)) return cache.get(venueId);
+  let result = null;
+  try {
+    const { data } = await axios.get(
+      `https://statsapi.mlb.com/api/v1/venues/${venueId}?hydrate=location`,
+      { timeout: 8000 },
+    );
+    const v = data?.venues?.[0];
+    const lat = Number(v?.location?.defaultCoordinates?.latitude);
+    const lon = Number(v?.location?.defaultCoordinates?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      result = { lat, lon, name: v?.name || null, roofType: v?.roofType || null };
+    }
+  } catch (e) {
+    console.warn(`[TomorrowBoard] venue ${venueId} coords failed: ${e.message}`);
+  }
+  cache.set(venueId, result);
+  return result;
+}
+
+/** Open-Meteo hourly forecast at a UTC hour key -> { temp, wind, precip } or null. Never throws. */
+async function openMeteoHour(lat, lon, dateKey, hourKey) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+      + '&hourly=temperature_2m,precipitation_probability,wind_speed_10m'
+      + '&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=GMT'
+      + `&start_date=${dateKey}&end_date=${dateKey}`;
+    const { data } = await axios.get(url, { timeout: 8000 });
+    const times = data?.hourly?.time;
+    if (!Array.isArray(times)) return null;
+    const i = times.findIndex((t) => String(t).slice(0, 13) === hourKey);
+    if (i < 0) return null;
+    return {
+      temp: Number(data.hourly.temperature_2m?.[i]),
+      wind: Number(data.hourly.wind_speed_10m?.[i]),
+      precip: Number(data.hourly.precipitation_probability?.[i]),
+    };
+  } catch (e) {
+    console.warn(`[TomorrowBoard] Open-Meteo fetch failed: ${e.message}`);
+    return null;
+  }
+}
+
 /* ───────────────────────────── 4. BIG GAMES ─────────────────────────────── */
 
 /**
@@ -336,9 +856,14 @@ async function buildReturns() {
 function buildBigGames(board, { mlb }) {
   const scored = board.map((row) => {
     let weight = 0;
-    let reason = null;       // single highest-weight factor -> chip
+    let reason = null;       // single highest-weight factor -> internal ranking trace
     let bestReasonW = -1;
+    let standing = null;     // plain-text divisional standing -> what iOS renders
     const ctxParts = [];
+    // BOTH probable starters' last names for MLB cards => { away, home }.
+    // null for non-MLB (WC carries no pitchers). "Undecided" per side when a
+    // probable is unposted.
+    let pitchers = null;
 
     const setReason = (label, w) => {
       if (w > bestReasonW) { bestReasonW = w; reason = label; }
@@ -355,6 +880,7 @@ function buildBigGames(board, { mlb }) {
       const hTeam = homeId != null ? mlb.teamIndex.byId.get(homeId) : null;
 
       // STANDINGS — both first/second in division, or a tight in-division race.
+      // (Ranking heuristic UNCHANGED — these weights still select the top 3.)
       const bothTop2 = aSt?.divisionRank && hSt?.divisionRank && aSt.divisionRank <= 2 && hSt.divisionRank <= 2;
       const sameDivision = aTeam?.divisionId != null && aTeam.divisionId === hTeam?.divisionId;
       if (aSt?.divisionRank === 1 || hSt?.divisionRank === 1) {
@@ -367,21 +893,32 @@ function buildBigGames(board, { mlb }) {
         const small = (aSt?.gamesBack != null && aSt.gamesBack <= 3) || (hSt?.gamesBack != null && hSt.gamesBack <= 3);
         if (small) { setReason('PENNANT RACE', 32); weight += 10; }
       }
-      if (sameDivision && hTeam?.divisionName) {
-        // Short division tag for context ("AL East").
-        ctxParts.push(shortDivision(hTeam.divisionName));
-      }
+
+      // DISPLAYED CONTEXT — the ACTUAL current divisional standing, plain text.
+      // (Replaces the old reason-chip / division tag as what iOS shows.)
+      standing = bigGameStanding({
+        aSt, hSt, aTeam, hTeam, awayTeam: row.away_team, homeTeam: row.home_team,
+      });
 
       // RIVALRY — curated divisional pairs.
       if (isRivalry(awayAbbr, homeAbbr)) { setReason('RIVALRY', 27); weight += 24; }
 
-      // ACE — a probable with a season ERA at/below the ace threshold.
+      // ACE — a probable with a season ERA at/below the ace threshold (ranking only).
       const aces = mlb.acesByGame.get(`${awayAbbr}|${homeAbbr}`);
       if (aces?.label) {
         setReason('ACE', 22);
         weight += aces.both ? 16 : 9;
         ctxParts.push(aces.label);
       }
+
+      // BOTH probable starters (last names) for the card. "Undecided" per side
+      // when no probable is posted; falls back to "Undecided"/"Undecided" if
+      // the game didn't resolve in the schedule read at all.
+      const gp = mlb.pitchersByGame?.get(`${awayAbbr}|${homeAbbr}`);
+      pitchers = {
+        away: gp?.away || 'Undecided',
+        home: gp?.home || 'Undecided',
+      };
     }
 
     if (row.league === 'WC') {
@@ -393,6 +930,8 @@ function buildBigGames(board, { mlb }) {
         setReason('GROUP STAGE', 14); weight += 12;
         if (row._wc_group) ctxParts.push(row._wc_group);
       }
+      // WC has no MLB-style divisions — use the group/stage as plain-text standing.
+      standing = [row._wc_stage, row._wc_group].filter(Boolean).join(' · ') || null;
     }
 
     // PRIMETIME — national window weight boost (never a chip alone).
@@ -402,7 +941,7 @@ function buildBigGames(board, { mlb }) {
     // Fallback so a 3+-game slate always fills three slots.
     weight += 1;
 
-    return { row, weight, reason, ctx: ctxParts.filter(Boolean).join(' · ') || null };
+    return { row, weight, reason, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
   });
 
   scored.sort((a, b) => {
@@ -411,14 +950,27 @@ function buildBigGames(board, { mlb }) {
     return new Date(a.row.commence_time || 0) - new Date(b.row.commence_time || 0);
   });
 
-  return scored.slice(0, 3).map((s, i) => ({
-    rank: i + 1,
-    league: s.row.league,
-    matchup: `${s.row.away_team} @ ${s.row.home_team}`,
-    reason: s.reason || (etHour(s.row.commence_time) >= PRIMETIME_HOUR_ET ? 'PRIMETIME' : 'MARQUEE'),
-    context: s.ctx,
-    commence_time: s.row.commence_time || null,
-  }));
+  return scored.slice(0, 3).map((s, i) => {
+    const item = {
+      rank: i + 1,
+      league: s.row.league,
+      matchup: `${s.row.away_team} @ ${s.row.home_team}`,
+      // DISPLAYED divisional context — plain text, e.g. "Brewers 1st · Cubs 2nd, NL
+      // Central". null when standings don't resolve (iOS hides it). Replaces the old
+      // reason chip as the rendered context.
+      standing: s.standing,
+      context: s.ctx,
+      commence_time: s.row.commence_time || null,
+    };
+    // MLB only: BOTH probable starters' last names. "Undecided" per side when a
+    // probable is unposted. WC carries no pitchers (left off entirely).
+    if (s.pitchers) {
+      item.awayPitcher = s.pitchers.away;
+      item.homePitcher = s.pitchers.home;
+      item.pitchers = { away: s.pitchers.away, home: s.pitchers.home };
+    }
+    return item;
+  });
 }
 
 /** "American League East" -> "AL East"; "National League Central" -> "NL Central". */
@@ -427,6 +979,56 @@ function shortDivision(name) {
   return String(name)
     .replace(/^American League\s+/i, 'AL ')
     .replace(/^National League\s+/i, 'NL ');
+}
+
+/** 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th", 5 -> "5th". */
+function ordinal(n) {
+  if (!Number.isFinite(n)) return null;
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+}
+
+/**
+ * Plain-text divisional standing for a big game, e.g. "Brewers 1st · Cubs 2nd, NL
+ * Central" when both lead the same division, else the more newsworthy single team's
+ * place ("1st, NL Central"). GROUNDED from standings + team index; null when
+ * neither side's rank/division resolves (e.g. WC, or a standings gap).
+ */
+function bigGameStanding({ aSt, hSt, aTeam, hTeam, awayTeam, homeTeam }) {
+  const aRank = aSt?.divisionRank;
+  const hRank = hSt?.divisionRank;
+  const sameDivision = aTeam?.divisionId != null && aTeam.divisionId === hTeam?.divisionId;
+  const divName = shortDivision(hTeam?.divisionName) || shortDivision(aTeam?.divisionName);
+
+  // Both placed in the SAME division -> show both with one shared division tag.
+  if (sameDivision && Number.isFinite(aRank) && Number.isFinite(hRank) && divName) {
+    return `${nick(awayTeam)} ${ordinal(aRank)} · ${nick(homeTeam)} ${ordinal(hRank)}, ${divName}`;
+  }
+  // Different divisions (interleague / cross-division) -> name each side's place.
+  const parts = [];
+  if (Number.isFinite(aRank) && (shortDivision(aTeam?.divisionName))) {
+    parts.push(`${nick(awayTeam)} ${ordinal(aRank)} ${shortDivision(aTeam.divisionName)}`);
+  }
+  if (Number.isFinite(hRank) && (shortDivision(hTeam?.divisionName))) {
+    parts.push(`${nick(homeTeam)} ${ordinal(hRank)} ${shortDivision(hTeam.divisionName)}`);
+  }
+  if (parts.length) return parts.join(' · ');
+  return null;
+}
+
+/**
+ * Short, unambiguous team nickname ("Milwaukee Brewers" -> "Brewers"). Keeps the
+ * two-word nicknames whole so "Boston Red Sox" -> "Red Sox" (not a bare "Sox" that
+ * collides with the White Sox) and "Toronto Blue Jays" -> "Blue Jays".
+ */
+function nick(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/);
+  if (parts.length >= 2) {
+    const last2 = `${parts[parts.length - 2]} ${parts[parts.length - 1]}`;
+    if (/^(red sox|white sox|blue jays)$/i.test(last2)) return last2;
+  }
+  return parts[parts.length - 1] || fullName || '';
 }
 
 /* ──────────────────────── presentation: board rows ──────────────────────── */
@@ -462,7 +1064,7 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
  * re-runs (e.g. the evening line refresh) overwrite in place so overnight-posted
  * lines flip "—" to real numbers before users wake.
  *
- * @returns {Promise<{date,game_count,any_lines,big_games,starters,returns,countdown_sport}>}
+ * @returns {Promise<{date,game_count,any_lines,big_games,starters,returns,form,run_profile,weather,wc_lookahead,league_avg_era,league_avg_xera,countdown_sport}>}
  */
 export async function writeTomorrowBoard(etDateStr = tomorrowET()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(etDateStr)) {
@@ -491,19 +1093,50 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET()) {
   try { standings = indexStandings(await getMlbStandings(SEASON)); }
   catch (e) { console.warn(`[TomorrowBoard] standings fetch failed: ${e.message}`); }
 
+  // Savant pitcher xStats — one fetch grounds BOTH the per-starter ERA/xERA index
+  // AND the top-level league-average ERA/xERA (PA-weighted mean of this corpus).
   let eraByName = new Map();
-  try { eraByName = indexPitcherEraByName(await getPitcherXStats(SEASON)); }
-  catch (e) { console.warn(`[TomorrowBoard] savant ERA fetch failed: ${e.message}`); }
+  let leagueAvg = { league_avg_era: null, league_avg_xera: null };
+  try {
+    const pitcherX = await getPitcherXStats(SEASON);
+    eraByName = indexPitcherEraByName(pitcherX);
+    leagueAvg = computeLeagueAvgEra(pitcherX);
+  } catch (e) { console.warn(`[TomorrowBoard] savant ERA fetch failed: ${e.message}`); }
 
-  // 2. STARTERS (+ ace-by-game map from the same schedule read).
-  const { starters, acesByGame } = await buildStarters(etDateStr, teamIndex, eraByName);
+  // 2. STARTERS (+ ace-by-game AND both-pitchers-by-game maps from the same
+  // schedule read).
+  const { starters, acesByGame, pitchersByGame } = await buildStarters(etDateStr, teamIndex, eraByName);
 
   // 3. RETURNS (best-effort, honest-empty).
   const returns = await buildReturns();
 
+  // 3b. EXTRA TABBED LANES — FORM · RUN PROFILE · WEATHER. All GROUNDED-only
+  // (omit a team/game when its source data is absent; never fabricate).
+  const mlbSlateTeams = slateTeamsMlb(slateRows, teamIndex, idByName);
+  const form = buildForm(mlbSlateTeams, standings);
+  const run_profile = buildRunProfile(mlbSlateTeams, standings);
+  let weather = [];
+  try {
+    // getMlbSchedule is 2-hr cached (already read in buildStarters) → free here.
+    const sched = await getMlbSchedule(etDateStr);
+    weather = await buildWeather(sched, etDateStr, teamIndex);
+  } catch (e) {
+    console.warn(`[TomorrowBoard] weather lane failed (honest-empty): ${e.message}`);
+  }
+
+  // 2b. WC LOOK-AHEAD — its own iOS tab (projected XI + formation, L5 form, the
+  // posted lines, and key players per side). GROUNDED; honest-empty when no WC
+  // tomorrow or its sources are short. Joins the slate's WC line rows in place.
+  let wc_lookahead = [];
+  try {
+    wc_lookahead = await buildWcLookahead(slateRows, etDateStr, SEASON);
+  } catch (e) {
+    console.warn(`[TomorrowBoard] WC look-ahead lane failed (honest-empty): ${e.message}`);
+  }
+
   // 4. BIG GAMES.
   const bigGames = buildBigGames(slateRows, {
-    mlb: { teamIndex, standings, idByName, acesByGame },
+    mlb: { teamIndex, standings, idByName, acesByGame, pitchersByGame },
   });
   const marqueeKeys = new Set(
     bigGames.map((b) => {
@@ -541,6 +1174,18 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET()) {
     big_games: bigGames,
     starters,
     returns,
+    form,
+    run_profile,
+    weather,
+    // Dedicated WC day-before look-ahead (its own iOS tab) — one entry per WC
+    // match with projected XI + formation, L5 form, lines, and key players per
+    // side. Pulled out of starters[] (which is now MLB pitchers only).
+    wc_lookahead,
+    // Grounded current MLB league-average ERA / xERA (PA-weighted mean of the
+    // Savant pitcher corpus) — the reference the iOS colors each starter's
+    // ERA/xERA against (below avg = good/green, above = bad/red).
+    league_avg_era: leagueAvg.league_avg_era,
+    league_avg_xera: leagueAvg.league_avg_xera,
     updated_at: new Date().toISOString(),
   };
 
@@ -562,6 +1207,9 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET()) {
   console.log(
     `[TomorrowBoard] ✅ ${etDateStr}: ${board.length} game(s)${summary ? ` (${summary})` : ''}, ` +
     `${bigGames.length} big game(s), ${starters.length} starter(s), ${returns.length} return(s), ` +
+    `${form.length} form, ${run_profile.length} run-profile, ${weather.length} weather, ` +
+    `${wc_lookahead.length} wc-lookahead, ` +
+    `lgERA=${leagueAvg.league_avg_era ?? '—'}/xERA=${leagueAvg.league_avg_xera ?? '—'}, ` +
     `lines=${any_lines ? 'posted' : 'open soon'}, countdown=${countdown_sport || 'none'}`,
   );
 
@@ -572,6 +1220,12 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET()) {
     big_games: bigGames,
     starters,
     returns,
+    form,
+    run_profile,
+    weather,
+    wc_lookahead,
+    league_avg_era: leagueAvg.league_avg_era,
+    league_avg_xera: leagueAvg.league_avg_xera,
     countdown_sport,
   };
 }

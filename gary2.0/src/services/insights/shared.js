@@ -403,14 +403,21 @@ export function formatProps(propRows, playerId, priorityTypes, { labelFor, maxPr
  * (no lean implied). Strips the internal `_type` either way. A type with no
  * statMap extractor, or a sub-minRows window, simply gets no rate (fail closed).
  *
+ * `phraseFor(type, cleared, total)` (optional) overrides the rate STRING per prop
+ * type — used by the WC card so a yes/no anytime-goal prop reads "scored 0 of 2"
+ * instead of the over/under "0/2 over" wording (which only makes sense for a true
+ * over/under market like shots). When omitted, the default "{cleared}/{total} over"
+ * is used, so MLB and any existing caller are byte-for-byte unchanged.
+ *
  * @param {Array}  props    formatProps() output (mutated in place)
  * @param {Array}  rows     per-game stat rows, oldest -> newest
  * @param {object} statMap  prop_type -> (row) => Number
  * @param {object} cfg
  * @param {number} cfg.window  trailing window size
  * @param {number} cfg.minRows minimum rows required to publish a rate
+ * @param {(type:string, cleared:number, total:number)=>string} [cfg.phraseFor]
  */
-export function attachPropRates(props, rows, statMap, { window, minRows } = {}) {
+export function attachPropRates(props, rows, statMap, { window, minRows, phraseFor } = {}) {
   if (!Array.isArray(props) || !props.length) return;
   const win = (Array.isArray(rows) ? rows : []).slice(-window);
   for (const p of props) {
@@ -421,6 +428,7 @@ export function attachPropRates(props, rows, statMap, { window, minRows } = {}) 
     const line = Number(p.line);
     if (!statOf || !Number.isFinite(line)) continue;
     const cleared = win.filter((r) => statOf(r) > line).length;
-    p.rate = `${cleared}/${win.length} over`;
+    const custom = typeof phraseFor === 'function' ? phraseFor(type, cleared, win.length) : null;
+    p.rate = custom || `${cleared}/${win.length} over`;
   }
 }

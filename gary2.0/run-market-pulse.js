@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Market Pulse — League-Wide Market Results (Yesterday)
+ * Market Pulse — League-Wide Market Results (TODAY-rolling)
  *
  * Summarizes how the betting market behaved across a full league slate for a
  * given day: the overs/unders record (total points vs the closing total),
@@ -9,6 +9,18 @@
  * upserted via the supabase client (onConflict date,league) so re-runs refresh
  * rather than duplicate. iOS reads via the anon SELECT policy.
  *
+ * TODAY-ANCHORED (Jun 2026): the default date is TODAY in EST, not yesterday.
+ * The Home "Wire" strip resets to 0 the moment today's slate begins and BUILDS
+ * as today's games go final + grade (the grader/launchd cadence re-runs this
+ * 5x/day). The 0-state is real: as soon as today has a slate (>=1 scheduled
+ * game) a row is written with zeroed counts (games_counted 0, empty meta), and
+ * each later run re-upserts the same (date, league) row with the running tally
+ * as games finalize. Per-game meta carries winner_is_dog (true=+ML dog winner,
+ * false=−ML fav winner), so iOS derives BOTH "+ML DOGS" and the new "+ML FAVS"
+ * counts straight from meta. iOS reads the date == todayEST() row; before any
+ * game is final it sees the zeroed row, so the strip shows 0/0/0/0, not stale
+ * yesterday counts. Pass --yesterday (or --date) to (re)build a settled day.
+ *
  * Data sources:
  *   MLB — bdl.getMlbGamesForDate(date) for finals + bdl.getMlbGameOdds({ dates })
  *         for closing total / moneylines, joined per game id.
@@ -16,7 +28,8 @@
  *         for totals + h2h, joined to bdl.getNbaGamesForDate(date) for finals.
  *
  * Usage:
- *   node run-market-pulse.js                       # yesterday (EST), MLB + NBA
+ *   node run-market-pulse.js                       # TODAY (EST), rolling — MLB + NBA + WC
+ *   node run-market-pulse.js --yesterday           # the settled prior EST day
  *   node run-market-pulse.js --date 2026-06-04     # specific date
  *   node run-market-pulse.js --league MLB          # single league
  *   node run-market-pulse.js --dry-run             # print rows, no write
@@ -72,11 +85,17 @@ function yesterdayEST() {
 }
 
 const dryRun = args.includes('--dry-run');
+const yesterdayFlag = args.includes('--yesterday');
 const dateArg = getArgValue('--date');
 const leagueArg = getArgValue('--league');
 
-// Date: --date if given, else YESTERDAY in EST (YYYY-MM-DD).
-const targetDate = dateArg || yesterdayEST();
+// Date precedence: --date (explicit) > --yesterday (settled prior day) > TODAY (EST).
+// TODAY is the default so the strip is today-anchored and rolls as games grade.
+const targetDate = dateArg || (yesterdayFlag ? yesterdayEST() : getESTDate());
+// A row built for TODAY is written even with 0 graded games (the 0-state reset),
+// as long as today actually has a slate; a settled past day keeps the old
+// "skip empty" behavior (no row when nothing was gradeable).
+const isToday = !dateArg && !yesterdayFlag;
 if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
   console.error(`❌ Invalid --date "${targetDate}". Expected YYYY-MM-DD.`);
   process.exit(1);
@@ -391,7 +410,10 @@ async function buildMlb(date) {
     if (rec) meta.push(rec);
   }
 
-  return { acc, meta };
+  // slated = how many games exist on the date at all (any status), so run() can
+  // tell "today has a slate but nothing's final yet" (write the 0-row) apart
+  // from "no games today" (write nothing).
+  return { acc, meta, slated: (games || []).length };
 }
 
 /**
@@ -456,7 +478,7 @@ async function buildNba(date) {
     if (rec) meta.push(rec);
   }
 
-  return { acc, meta };
+  return { acc, meta, slated: (finalGames || []).length };
 }
 
 /**
@@ -467,7 +489,7 @@ async function buildNba(date) {
 async function buildWc(date) {
   const matches = (await fifa.getMatchesForDate(date)) || [];
   const completed = matches.filter((m) => String(m.status || '').toLowerCase() === 'completed');
-  if (!completed.length) return { acc: freshAcc(), meta: [] };
+  if (!completed.length) return { acc: freshAcc(), meta: [], slated: matches.length };
 
   let oddsRows = [];
   try {
@@ -495,7 +517,7 @@ async function buildWc(date) {
     const rec = accumulateSoccer(acc, { matchup, homeScore: sc.home, awayScore: sc.away, total, spreadHome });
     if (rec) meta.push(rec);
   }
-  return { acc, meta };
+  return { acc, meta, slated: matches.length };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -514,13 +536,21 @@ async function run() {
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
     try {
-      const { acc, meta } = league === 'MLB' ? await buildMlb(targetDate)
+      const { acc, meta, slated = 0 } = league === 'MLB' ? await buildMlb(targetDate)
         : league === 'NBA' ? await buildNba(targetDate)
         : await buildWc(targetDate);
 
       if (acc.games_counted === 0) {
-        console.log(`   No gradeable ${league} games (score + odds) for ${targetDate}.`);
-        continue;
+        // TODAY 0-state: if today HAS a slate but nothing's final yet, still write
+        // a zeroed row so the strip resets to 0 and rolls up as games grade. A
+        // settled past day (or a today with no slate at all) writes nothing.
+        if (isToday && slated > 0) {
+          console.log(`   ${league}: slate of ${slated}, 0 final yet — writing 0-state row.`);
+          // falls through to build the (all-zero) row below
+        } else {
+          console.log(`   No gradeable ${league} games (score + odds) for ${targetDate}.`);
+          continue;
+        }
       }
 
       const row = {

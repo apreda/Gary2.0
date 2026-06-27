@@ -57,12 +57,33 @@ if (GEMINI_API_KEY) {
 // Caching
 const cache = { games: new Map(), stats: new Map(), box: new Map(), propRows: new Map() };
 
+// ET-anchored date (mirrors the cloud grade-results function's estDate so the
+// dates we grade/recap line up with how games are filed — game_date IS the ET
+// slate day).
+const estDate = (offset = 0) => {
+  const d = new Date(Date.now() + offset * 86400000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+};
+
+// Explicit CLI date wins; otherwise default to ET-yesterday.
 const getTargetDate = () => {
   const args = process.argv.slice(2);
   if (args.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(args[0])) return args[0];
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return yesterday.toISOString().split('T')[0];
+  return estDate(-1);
+};
+
+// When no CLI date is passed, cover TODAY + YESTERDAY (ET) just like the cloud
+// grade-results function (estDate(0)/estDate(-1)). The cloud grader settles
+// today's games as they finish, but game_recaps (the Home marquee headline
+// TEXT) is written only by this local path — so grading+recapping today AS
+// games settle rolls the headline same-day instead of waiting for the 2am
+// yesterday-only pass. Every step here is idempotent per date.
+const getTargetDates = () => {
+  const args = process.argv.slice(2);
+  if (args.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(args[0])) return [args[0]];
+  return [estDate(0), estDate(-1)];
 };
 
 function normalizeName(name) {
@@ -1132,8 +1153,7 @@ async function processPropBets(date) {
   return stats;
 }
 
-async function main() {
-  const targetDate = getTargetDate();
+async function main(targetDate = getTargetDate()) {
   console.log(`\n📅 TARGET DATE: ${targetDate}`);
 
   // Props grade FIRST: the betting recaps written during game grading enrich
@@ -1180,7 +1200,19 @@ async function main() {
   console.log(`════════════════════════════════════════\n`);
 }
 
-main().catch(err => {
+// Grade + recap each target date in turn. With no CLI date this is TODAY then
+// YESTERDAY (ET) — today first so the Home marquee headline rolls to today's
+// finished games same-day; yesterday second to backfill late overnight finals.
+// The finality gate skips anything still in progress, and every step is
+// idempotent per date, so re-runs cost ~$0 once nothing new has settled.
+async function run() {
+  const dates = getTargetDates();
+  for (const date of dates) {
+    await main(date);
+  }
+}
+
+run().catch(err => {
   console.error('\n❌ FATAL ERROR:', err);
   process.exit(1);
 });

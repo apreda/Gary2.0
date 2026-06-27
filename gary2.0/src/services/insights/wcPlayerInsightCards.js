@@ -67,6 +67,22 @@ const MAX_STRENGTHS = 3;
 const MAX_WEAKNESSES = 3;
 const DEFAULT_SEASON = 2026;   // WC season (for the projected-XI regulars fetch)
 
+// Prop-odds SANITY band. The FIFA player-prop feed (getPlayerProps) returns raw
+// vendor odds that — unlike the moneyline/spread/total path — never pass through
+// the service's cleanOdds() sentinel scrub, so a malformed/scaled milestone price
+// (e.g. an "Anytime goal +70000", a 700:1 line that is a feed artifact, not a real
+// market) can leak straight onto the card. We drop any prop whose American odds
+// fall outside a realistic band: longer than a true longshot (+2000 ≈ 4.8% implied)
+// or more juiced than a deep favorite (-10000 ≈ 99% implied). This is a junk-value
+// guard, NOT Gary's pick-selection band (propOddsService is far tighter) — the card
+// just must never SURFACE a garbage number.
+const PROP_ODDS_MAX = 2000;     // drop anything longer than +2000
+const PROP_ODDS_MIN = -10000;   // drop anything more juiced than -10000
+
+// A card resting on only this many international caps (or fewer) is a small sample —
+// flag it so a bettor isn't misled by e.g. "95% pass accuracy" off 2 games.
+const SMALL_SAMPLE_CAPS = 2;
+
 // A confirmed XI lists 11 starters per side; require a side to reach this before
 // we treat the lineup as posted (a half-populated sheet would mislabel benchers).
 const XI_MIN_STARTERS = 11;
@@ -94,9 +110,16 @@ const PROP_PRIORITY = ['anytime_goal', 'shots', 'shots_on_target'];
 // MAX_PROPS survive. anytime_goal + shots_on_target keep their per-match rates;
 // assists / saves / cards ship rate-less (line+odds only).
 const PROP_PRIORITY_BY_ROLE = {
+  // Forwards/wingers are the scoring role — lead with the goal market.
   forward:    ['anytime_goal', 'shots', 'shots_on_target'],
-  midfielder: ['anytime_goal', 'assists', 'shots_on_target'],
-  defender:   ['anytime_goal', 'shots_on_target', 'cards'],
+  // ROLE-FIT (Jun 26): a midfielder — especially a holding/deep-lying one — is a low
+  // anytime-goal threat, so leading his angle with "Anytime goal" misleads. Lead with
+  // the markets that fit the job (assists, shots on target) and demote anytime_goal to
+  // last so it only shows when nothing more on-role is posted.
+  midfielder: ['assists', 'shots_on_target', 'anytime_goal'],
+  // A defender's on-role markets are cards (he commits fouls) and the set-piece SoT
+  // threat; anytime_goal is demoted to last (a centre-back rarely scores from open play).
+  defender:   ['cards', 'shots_on_target', 'anytime_goal'],
   keeper:     ['saves'],
 };
 const propPriorityByRole = (role) => PROP_PRIORITY_BY_ROLE[role] || PROP_PRIORITY;
@@ -232,6 +255,11 @@ function buildOnePack(ctx) {
   const payload = { type: isKeeper ? 'keeper' : 'outfield', name, game: gameLabel };
   if (meta.abbr) payload.team = meta.abbr;
   if (position) payload.position = position;
+  // Role-aware title for the stats block, so iOS can render a soccer-appropriate
+  // section header ("FINISHING" / "ON THE BALL" / "AT THE BACK" / "IN GOAL") in
+  // place of the MLB "Splits". iOS reads this field; MLB cards never carry it, so
+  // MLB keeps "Splits" untouched.
+  payload.statsSectionTitle = statsSectionTitleForRole(role);
 
   // Opponent = the OTHER nation (no "hand" concept in soccer — leave it absent).
   const opp = meta.oppId != null ? teamMeta.get(meta.oppId) : null;
@@ -264,6 +292,12 @@ function buildOnePack(ctx) {
     if (season) payload.season = season;
     const splits = seasonSplitsByRole(sstat, role, { meta, opp, ownForm, oppForm });
     if (splits.length) payload.splits = splits;
+    // SMALL-SAMPLE TELL: when the whole stats block rests on <= 2 caps, a rate like
+    // "95% pass accuracy" off 2 games is noise — flag it so the bettor isn't misled.
+    const caps = num(sstat.appearances);
+    if (caps != null && caps > 0 && caps <= SMALL_SAMPLE_CAPS) {
+      payload.smallSample = `Small sample — ${caps} ${caps === 1 ? 'cap' : 'caps'} this cycle`;
+    }
   }
 
   // Nation recent form (L5) — the team-level signal that applies to every starter.
@@ -278,14 +312,22 @@ function buildOnePack(ctx) {
   // only), exactly like MLB's walks.
   const propPriority = propPriorityByRole(role);
   const vendorRows = pickVendorRows(props, playerId, propPriority);
-  const formatted = formatProps(vendorRows, playerId, propPriority, { labelFor: propLabel, maxProps: MAX_PROPS });
+  // SANITY CAP: pre-filter the raw vendor rows so a junk/scaled milestone price
+  // (e.g. "+70000") never even survives selection — it's dropped, not flagged, so
+  // the card always carries either a real number or no odds at all.
+  const sanedRows = sanePropRows(vendorRows);
+  const formatted = formatProps(sanedRows, playerId, propPriority, { labelFor: propLabel, maxProps: MAX_PROPS });
   if (formatted.length) payload.props = formatted;
 
   // Prior-match history (finals only) -> prop hit rates + last-match form rows.
   const history = asArray(histByPlayer.get(playerId)); // oldest -> newest
   const formRows = lastMatchFormRowsByRole(history, role);
   if (formRows.length) payload.formRows = formRows;
-  attachPropRates(formatted, history, RATE_STAT, { window: RATE_WINDOW, minRows: RATE_MIN_ROWS });
+  // anytime_goal is a yes/no market, so "0/2 over" reads wrong — phrase it as
+  // "scored 0 of 2". shots_on_target is a true over/under, so it keeps "over".
+  attachPropRates(formatted, history, RATE_STAT, {
+    window: RATE_WINDOW, minRows: RATE_MIN_ROWS, phraseFor: propRatePhrase,
+  });
 
   // Deterministic, plain-copy strengths / weaknesses derived from the above.
   const { strengths, weaknesses } = strengthsWeaknesses({ sstat, form, formRows, role, ownForm, oppForm, meta });
@@ -440,18 +482,23 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     }
     const csInfo = cleanSheetsFromForm(ownForm);
     if (csInfo) out.push({ label: 'Clean sheets', value: `${csInfo.cs}/${csInfo.n}`, detail: `over ${csInfo.n} recent` });
+    // OPPONENT CONTEXT: the attack the keeper is about to face.
     const oppGf = gfPerMatch(oppForm);
     if (oppGf != null && opp?.name) {
-      out.push({ label: `${opp.name} attack`, value: `${oppGf} scored/gm`, detail: "opponent's recent scoring" });
+      out.push({ label: `vs ${opp.name} attack`, value: `${oppGf} scored/gm`, detail: "opponent's recent scoring" });
     }
-    const nf = nationForm(ownForm, nation);
-    if (nf) out.push(nf);
+    // Form lives in RECENT (payload.form) — do NOT duplicate the nation last-5 here.
     return out;
   }
 
   if (role === 'midfielder') {
     const kp = num(s.keyPasses);
-    if (kp != null) out.push({ label: 'Creativity', value: `${kp} key passes`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
+    // ROLE-FIT: a near-zero key-pass count isn't "Creativity" — omit it rather than
+    // dress up "1 key pass over 2 caps" as a creative read. Only surface when there's
+    // a meaningful sample of creation (>= 2 key passes).
+    if (kp != null && kp >= 2) {
+      out.push({ label: 'Creativity', value: `${kp} ${kp === 1 ? 'key pass' : 'key passes'}`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
+    }
     const pa = num(s.passAccuracy);
     // API reports 0 when it doesn't track a player's passing; a real value is 40-99%,
     // so floor out the gap rather than surface a bogus "0%".
@@ -461,8 +508,7 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     if (dt != null && dw != null && dt > 0) {
       out.push({ label: 'Duels won', value: `${dw}/${dt}`, detail: `${Math.round((dw / dt) * 100)}%` });
     }
-    const nf = nationForm(ownForm, nation);
-    if (nf) out.push(nf);
+    pushOppMatchup(out, role, opp, oppForm);
     return out;
   }
 
@@ -482,6 +528,7 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     if (y != null || r != null) out.push({ label: 'Discipline', value: `${y ?? 0}Y / ${r ?? 0}R` });
     const csInfo = cleanSheetsFromForm(ownForm);
     if (csInfo) out.push({ label: `${nation} clean sheets`, value: `${csInfo.cs}/${csInfo.n}`, detail: `team kept ${csInfo.cs} of last ${csInfo.n}` });
+    pushOppMatchup(out, role, opp, oppForm);
     return out;
   }
 
@@ -496,9 +543,28 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     // Conversion computed from grounded goals + shots — NOT xG (not groundable).
     out.push({ label: 'Conversion', value: `${Math.round((goals / shots) * 100)}%`, detail: `${goals} on ${shots} shots` });
   }
-  const nf = nationForm(ownForm, nation);
-  if (nf) out.push(nf);
+  pushOppMatchup(out, role, opp, oppForm);
+  // Form lives in RECENT (payload.form) — do NOT duplicate the nation last-5 here.
   return out;
+}
+
+/**
+ * OPPONENT CONTEXT (the matchup angle a bettor wants, not just the player's own form).
+ * For an attacker (forward/winger/midfielder) the relevant matchup is the OPPONENT'S
+ * DEFENCE — how much they concede; for a defender it's the OPPONENT'S ATTACK — how
+ * much they score. Grounded entirely from API-Football getRecentForm() per-match
+ * rates; omitted when the opponent's form or name is missing (never fabricated).
+ */
+function pushOppMatchup(out, role, opp, oppForm) {
+  if (!opp?.name) return;
+  if (role === 'defender') {
+    const gf = gfPerMatch(oppForm);
+    if (gf != null) out.push({ label: `vs ${opp.name} attack`, value: `${gf} scored/gm`, detail: "opponent's recent scoring" });
+    return;
+  }
+  // forward / winger / midfielder — the defence they're attacking.
+  const ga = gaPerMatch(oppForm);
+  if (ga != null) out.push({ label: `vs ${opp.name} defense`, value: `${ga} conceded/gm`, detail: "opponent's recent leaks" });
 }
 
 /**
@@ -548,8 +614,19 @@ function lastMatchFormRowsByRole(history, role) {
     if (a > 0) bits.push(`${a} A`);
     bits.push(min != null ? `${min}'` : 'full shift');
     value = bits.join(' · ');
+  } else if (role === 'midfielder') {
+    // NON-SCORER HEADLINE: a midfielder's "0 G" last match is a weak lead. When he
+    // didn't score, lead with minutes + involvement (assists, SoT) — the parts of his
+    // shift that actually matter — and only surface goals when he scored.
+    const bits = [];
+    if (g > 0) bits.push(`${g} G`);
+    if (a > 0) bits.push(`${a} A`);
+    if (sot != null && sot > 0) bits.push(`${sot} SoT`);
+    bits.push(min != null ? `${min}'` : 'full shift');
+    value = bits.join(' · ');
   } else {
-    // forward / winger / midfielder: goals + (when present) SoT.
+    // forward / winger: scoring is the job — lead with goals (a played-full-shift 0
+    // is a real, gradeable observation), then assists + SoT when present.
     const bits = [`${g} G`];
     if (a > 0) bits.push(`${a} A`);
     if (sot != null) bits.push(`${sot} SoT`);
@@ -558,8 +635,9 @@ function lastMatchFormRowsByRole(history, role) {
 
   const entry = { label: 'LAST MATCH', value };
   const det = [];
-  // The keeper row already carries minutes in its value; others get it in detail.
-  if (role !== 'keeper' && role !== 'defender' && min != null) det.push(`${min}'`);
+  // The keeper / defender / midfielder rows already carry minutes in their value;
+  // only the forward row gets minutes in detail.
+  if (role === 'forward' && min != null) det.push(`${min}'`);
   const dt = matchShortDate(last);
   if (dt) det.push(dt);
   if (det.length) entry.detail = det.join(' · ');
@@ -719,6 +797,51 @@ function propLabel(propType) {
     cards: 'Card',
   };
   return map[propType] || propType.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * Drop any prop row whose American odds fall outside the sanity band (a junk /
+ * scaled milestone price like "+70000"). The surfaced number is market.odds for a
+ * milestone (anytime_goal) and over/under rows alike — the same field formatProps
+ * reads — so we evaluate exactly the value that would ship. A row with NO numeric
+ * odds is kept (it may still carry a line); only a present-but-insane price is cut.
+ */
+function sanePropRows(rows) {
+  return asArray(rows).filter((r) => {
+    const o = Number(r?.market?.odds);
+    if (!Number.isFinite(o)) return true;             // no odds → keep (line-only)
+    if (o > PROP_ODDS_MAX || o < PROP_ODDS_MIN) {
+      console.warn(`[wcPlayerInsightCards] dropping insane prop odds: ${r?.prop_type || 'prop'} @ ${o} (player ${r?.player_id}).`);
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Rate wording per prop type. anytime_goal is a YES/NO market, so over/under
+ * wording ("0/2 over") is wrong — phrase it as "scored 0 of 2". shots_on_target is
+ * a true over/under, so it keeps the default "{cleared}/{total} over" (returns null
+ * to defer to attachPropRates' default).
+ */
+function propRatePhrase(type, cleared, total) {
+  if (type === 'anytime_goal') return `scored ${cleared} of ${total}`;
+  return null;
+}
+
+/**
+ * Role-aware title for the stats block (drives the iOS section header). MLB keeps
+ * "Splits"; WC gets a soccer-appropriate, role-aware title. Forwards/wingers read
+ * the scoring role ("FINISHING"); midfielders the ball-progression role ("ON THE
+ * BALL"); defenders the defensive role ("AT THE BACK"); keepers ("IN GOAL").
+ */
+function statsSectionTitleForRole(role) {
+  switch (role) {
+    case 'keeper': return 'IN GOAL';
+    case 'defender': return 'AT THE BACK';
+    case 'midfielder': return 'ON THE BALL';
+    default: return 'FINISHING'; // forward / winger
+  }
 }
 
 // prop_type -> per-match stat extractor from a getPlayerMatchStats row. ONLY the

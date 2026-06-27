@@ -3,7 +3,8 @@
  * Tomorrow Board snapshot CLI
  *
  * Assembles tomorrow's TOMORROW-tab snapshot (slate + line board, ranked big
- * games, by-sport probable starters, best-effort key returns, earliest-game
+ * games w/ plain-text divisional standing, by-sport probable starters, key
+ * returns, the extra tabbed lanes — FORM · RUN PROFILE · WEATHER, earliest-game
  * countdown) into the `tomorrow_board` Supabase table via tomorrowService.
  *
  * The 5 AM scheduler plan step calls writeTomorrowBoard automatically, plus a
@@ -44,7 +45,10 @@ try {
   console.log(
     `\n🏁 Tomorrow board for ${r.date}: ${r.game_count} game(s), ` +
     `${r.big_games.length} big game(s), ${r.starters.length} starter(s), ` +
-    `${r.returns.length} return(s), lines=${r.any_lines ? 'posted' : 'open soon'}, ` +
+    `${r.returns.length} return(s), ${r.form.length} form, ` +
+    `${r.run_profile.length} run-profile, ${r.weather.length} weather, ` +
+    `${r.wc_lookahead.length} wc-lookahead, ` +
+    `lines=${r.any_lines ? 'posted' : 'open soon'}, ` +
     `countdown=${r.countdown_sport || 'none'}`,
   );
   process.exit(0);
