@@ -145,6 +145,18 @@ GUARDRAILS:
 
 Return ONLY JSON: {"reply":"<the answer, or empty>","skip":<true|false>,"reason":"<short reason for the log>"}`;
 
+// LOOSE voice variant — minimal style rules; lets Gemini answer in its OWN natural style, still strictly grounded in the
+// vetted data and still never claiming to be an AI. Used when ?style=loose (for the side-by-side). Not the live default.
+const LOOSE_SYSTEM = `You are the assistant behind @BetwithGary on X (the brand is "Gary AI"), replying to someone who tagged the account. Answer naturally and helpfully, the way a sharp, knowledgeable sports-betting assistant would actually talk.
+
+GROUND TRUTH: use ONLY the picks and the analysis/stats provided below for any fact, number, line, record, or matchup. They are from the app's vetted database. Never use your own training-data knowledge for stats, and never invent a number. If the data does not cover what they asked, say what you do have, or that you do not have that detail.
+
+Keep it tweet-length (under about 280 characters), clear and direct. Answer the actual question. If the tweet is just a comment or a reaction, react naturally; you do not have to bring up a pick unless it fits.
+
+Do not use emojis. Do not say you are an AI, a model, a bot, or automated. Do not engage politics, tragedy, or harassment (deflect lightly). If there is nothing worth replying to, set skip true.
+
+Return ONLY JSON: {"reply":"<the answer, or empty>","skip":<true|false>,"reason":"<short reason>"}`;
+
 // ---------- data ----------
 function etToday(): string {
   const p: Record<string, string> = {};
@@ -173,16 +185,20 @@ function formatPicks(picks: any[]): string {
   }).join("\n\n");
 }
 
-async function composeReply(a: { mentionText: string; authorUsername: string; contextText: string; contextAuthor: string; picksBlock: string }): Promise<{ reply: string; skip: boolean; reason: string }> {
+async function composeReply(a: { mentionText: string; authorUsername: string; contextText: string; contextAuthor: string; picksBlock: string; loose?: boolean }): Promise<{ reply: string; skip: boolean; reason: string }> {
   const user = `The person @${a.authorUsername} tweeted: "${a.mentionText}"
 ${a.contextText ? `(They were replying to @${a.contextAuthor}: "${a.contextText}")` : ""}
 
-Gary's REAL picks for today (ground truth, never invent):
+The vetted picks + analysis for today (ground truth, never invent):
 ${a.picksBlock}
 
-Write Gary's reply now.`;
-  const out = parseJsonBlock(await callLLM(VOICE_RULES + "\n\n" + REPLY_RULES, user));
-  return { reply: clean(out.reply ?? ""), skip: !!out.skip, reason: String(out.reason ?? "") };
+Write the reply now.`;
+  const system = a.loose ? LOOSE_SYSTEM : (VOICE_RULES + "\n\n" + REPLY_RULES);
+  const out = parseJsonBlock(await callLLM(system, user));
+  const raw = String(out.reply ?? "").trim();
+  // Loose mode keeps natural punctuation (em dashes ok); strict mode runs the full voice cleanup.
+  const reply = a.loose ? killEmoji(raw) : clean(raw);
+  return { reply, skip: !!out.skip, reason: String(out.reason ?? "") };
 }
 
 async function postReply(text: string, replyToId: string): Promise<string> {
@@ -216,9 +232,10 @@ Deno.serve(async (req) => {
     // Prompt test harness (no X, no post): ?test=<question> composes a reply to that question against today's real slate.
     const testQ = url.searchParams.get("test");
     if (testQ) {
+      const loose = url.searchParams.get("style") === "loose";
       const picksBlock = formatPicks(await todaysPicks());
-      const c = await composeReply({ mentionText: testQ, authorUsername: "tester", contextText: "", contextAuthor: "", picksBlock });
-      return Response.json({ ok: true, test: true, question: testQ, reply: c.reply, skip: c.skip, reason: c.reason });
+      const c = await composeReply({ mentionText: testQ, authorUsername: "tester", contextText: "", contextAuthor: "", picksBlock, loose });
+      return Response.json({ ok: true, test: true, style: loose ? "loose" : "current", question: testQ, reply: c.reply, skip: c.skip, reason: c.reason });
     }
 
     if (!X_API_KEY) return Response.json({ ok: false, error: "X_API_* secrets not set" }, { status: 500 });

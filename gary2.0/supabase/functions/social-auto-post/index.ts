@@ -343,16 +343,10 @@ function splitTweets(text: string, max = 270): string[] {
   flush();
   return out;
 }
-// The REPLY under the WC card = Gary's FULL real rationale (his actual words, NO LLM), threaded, ending with a
-// link-in-bio pointer. The depth that sells the app. (The caption above the card is a punchy hook — see wcCaption.)
-function wcRationaleReply(chosen: any): string[] {
-  const sentences = splitSentences(clean(String(chosen?.rationale ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").trim()));
-  const full = sentences.join(" ");
-  const chunks = full ? splitTweets(full, 270) : [];
-  const handoff = "Full breakdown's in the app. Link in bio.";
-  if (chunks.length && chunks[chunks.length - 1].length + 2 + handoff.length <= 278) chunks[chunks.length - 1] += `\n\n${handoff}`;
-  else chunks.push(handoff);
-  return chunks;
+// The SINGLE reply under the WC card: just the link-in-bio handoff. We HOLD the depth (the full read lives in the app),
+// and the card + its punchy caption are the hook. Founder call: ONE reply only, never a multi-tweet rationale thread.
+function wcHandoffReply(): string[] {
+  return [APP_HANDOFF[0]];
 }
 
 // Punchy WC caption ABOVE the card: a useful, checkable fact + the key stat + a casual stance, pulled from Gary's
@@ -456,7 +450,7 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
     // no scene-setting). The reply threads Gary's FULL real rationale (his words, the depth). Caption falls back to the
     // rationale's first sentence if the LLM ever fails.
     const caption = await wcCaption(chosen, away, home);
-    const replyChunks = wcRationaleReply(chosen);
+    const replyChunks = wcHandoffReply();
 
     if (dryRun) { out.push({ game: key, time: timeLabel, pick: pickLine, caption, reply_thread: replyChunks, card: cardUrl }); continue; }
 
@@ -477,8 +471,7 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
       console.error("WC card failed, falling back to text: " + String(e));
       mainId = await postTweet(`${caption}\n\n${pickLine}`);
     }
-    // The reply is Gary's FULL real rationale as a plain-text THREAD (his brain = the value that sells the app), each
-    // tweet chained under the last, ending with the link-in-bio pointer. Best-effort per chunk (stop on first failure).
+    // ONE reply only: the link-in-bio handoff, chained under the card. We hold the depth (the full read is in the app).
     const replyIds: string[] = [];
     let prev = mainId;
     for (const chunk of replyChunks) {
