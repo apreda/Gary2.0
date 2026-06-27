@@ -20849,23 +20849,9 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
-                    // GARY HOME RUN THREATS — Gary's homer picks for today, with
-                    // his two-sentence reason. Fed by gary_hr_threats.
-                    if !items(.hrThreat).isEmpty {
-                        HubDisclosure(anchor: "hrThreats", eyebrow: "Gary Home Run Threats", count: min(items(.hrThreat).count, 3), openSet: $openSections) {
-                            VStack(spacing: 0) {
-                                // Cap the display at 3 (founder) — guards against the
-                                // additive-freeze writer accumulating more over a day.
-                                ForEach(Array(items(.hrThreat).prefix(3))) { s in
-                                    SignalRow(s: s) { _ in
-                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
-                                    }
-                                }
-                            }
-                            .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("hrThreats")
-                    }
+                    // (HR Threats / Owned / Beneficiary / Rest / Conditions / Tournament
+                    // / xG lists now live as tiles in The Board above — no duplicate
+                    // lists, no expand-a-ton-of-categories.)
                     // FANTASY PICKUPS — a two-column board: STREAM pitchers | ADD
                     // hitters, availability-tiered (founder wanted a NEW display type;
                     // widely-available pickups, not owned aces). Fed by fantasy_pickups.
@@ -20876,39 +20862,6 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
-                    // OWNED — career batter-vs-pitcher history (NBA: season series)
-                    if !items(.h2h).isEmpty {
-                        HubDisclosure(anchor: "owned", eyebrow: "Owned", count: items(.h2h).count, openSet: $openSections) {
-                            VStack(spacing: 0) {
-                                ForEach(items(.h2h)) { s in
-                                    SignalRow(s: s) { _ in
-                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
-                                    }
-                                }
-                            }
-                            .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("owned")
-                    }
-                    // THE BENEFICIARY — transaction-style OUT → IN swap rows;
-                    // tapping a row opens the replacement's full player insights.
-                    if !items(.injury).isEmpty {
-                        HubDisclosure(anchor: "beneficiary", eyebrow: "The Beneficiary", count: items(.injury).count, openSet: $openSections) {
-                            VStack(spacing: 0) {
-                                ForEach(items(.injury)) { s in
-                                    if s.swap != nil {
-                                        BeneficiarySwapRow(s: s) {
-                                            if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
-                                        }
-                                    } else {
-                                        SignalRow(s: s) { _ in selectedSignal = s }
-                                    }
-                                }
-                            }
-                            .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("beneficiary")
-                    }
                     // WC GAME INTEL — tap a match → the Starting XI / The Read
                     // dashboard (WC league toggle only).
                     if sel == .wc, !wcIntelSignals.isEmpty {
@@ -20917,27 +20870,6 @@ struct PropsHubView: View {
                                 .quantPanel().padding(.horizontal, 16)
                         }
                         .id("wcIntel")
-                    }
-                    // REST & FATIGUE — schedule spots and bullpen workload
-                    if !items(.situational).isEmpty {
-                        HubDisclosure(anchor: "restFatigue", eyebrow: "Rest & Fatigue", count: items(.situational).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("restFatigue")
-                    }
-                    // THE CONDITIONS — game-state reads, one tabbed section
-                    // (first inning / the running game / park & weather).
-                    if !conditionLanes.isEmpty {
-                        HubDisclosure(anchor: "conditions", eyebrow: "The Conditions", count: conditionLanes.reduce(0) { $0 + items($1).count }, openSet: $openSections) {
-                            VStack(spacing: 0) {
-                                hubLaneStrip(lanes: conditionLanes, active: activeCondLane, title: condTitle) { condTab = $0 }
-                                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
-                                ForEach(items(activeCondLane)) { s in SignalRow(s: s) { _ in selectedSignal = s } }
-                            }
-                            .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("conditions")
                     }
                     // STREAKS — the full board: teams on runs, hot and cold bats,
                     // and which streaks are on the line tonight (league-scoped).
@@ -20960,47 +20892,6 @@ struct PropsHubView: View {
                             NightBoard(rows: selNightRows).padding(.horizontal, 16)
                         }
                         .id("lastNight")
-                    }
-                    // TOURNAMENT STAKES — group standings, title odds, market context (World Cup)
-                    if !items(.tournament).isEmpty {
-                        HubDisclosure(anchor: "tournament", eyebrow: "Tournament Stakes", count: items(.tournament).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("tournament")
-                    }
-                    // xG REGRESSION — who's over/under-finishing their chances (World Cup forward read)
-                    if !items(.xgRegression).isEmpty {
-                        HubDisclosure(anchor: "xgRegression", eyebrow: "xG Regression", count: items(.xgRegression).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.xgRegression)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("xgRegression")
-                    }
-                    // ADVANCEMENT — "to qualify from group" odds for today's group fixtures (World Cup)
-                    if !items(.advancement).isEmpty {
-                        HubDisclosure(anchor: "advancement", eyebrow: "Advancement", count: items(.advancement).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.advancement)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("advancement")
-                    }
-                    // xG RECAP — the last match day's xG-vs-result story (World Cup)
-                    if !items(.xgRecap).isEmpty {
-                        HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("xgRecap")
-                    }
-                    // Anything else → a compact list
-                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression, .advancement, .xgRecap, .fantasyPickups].contains($0.kind) }
-                    if !extras.isEmpty {
-                        HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: extras.count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("moreEdges")
                     }
                 }
             }
