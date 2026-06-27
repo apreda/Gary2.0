@@ -18881,8 +18881,8 @@ struct PicksCarouselView: View {
         guard on else { return AnyShapeStyle(Color.white.opacity(0.35)) }
         if s == "ALL" { return AnyShapeStyle(GaryColors.gold) }
         if s == "MLB" || s == "MLB HR" {
-            // MLB reads in a clean light green — the muddy field gradient was the
-            // olive look the founder kept flagging.
+            // MLB reads in a clean light green (the muddy field gradient was the
+            // olive look the founder kept flagging).
             return AnyShapeStyle(GaryColors.mlbFieldText)
         }
         return AnyShapeStyle(Sport.from(league: s).accentColor)
@@ -20776,29 +20776,6 @@ struct PropsHubView: View {
         return out
     }
 
-    /// THE BOARD source — round-robin the top of each category so the board's big
-    /// tiles span categories, then fill with seconds. Capped so the whole day's
-    /// signals fit in tiles without endless scroll or lane-tab switching.
-    private var boardSignals: [Signal] {
-        let cats: [SignalKind] = [.streak, .teamRecord, .bullpenFatigue, .platoon,
-                                  .hot, .ballpark, .cold, .starterForm, .hrThreat, .regression,
-                                  .h2h, .injury, .situational, .firstInning, .runningGame, .parkWeather,
-                                  .advancement, .xgRecap, .xgRegression, .tournament]
-        let buckets = cats.map { items($0) }
-        var picked: [Signal] = []
-        var round = 0
-        while picked.count < 20 {
-            var added = false
-            for b in buckets where round < b.count {
-                picked.append(b[round]); added = true
-                if picked.count >= 20 { break }
-            }
-            if !added { break }
-            round += 1
-        }
-        return picked
-    }
-
     var body: some View {
         GeometryReader { geo in
         ScrollViewReader { proxy in
@@ -20831,14 +20808,25 @@ struct PropsHubView: View {
                     }
                     gradedReceipts
                 } else {
-                    // THE BOARD — the whole Hub as one free-sizing tile board: every
-                    // category's top signals shown at once (no lane tabs, no expand-to-
-                    // read), tile size by impact, colour by tone. Tap a tile for the read.
-                    if !boardSignals.isEmpty {
-                        HubSectionTitle(title: "The Board").padding(.horizontal, 16)
+                    // PLAYER EDGES — moved to the TOP (replaces the old Featured strip,
+                    // founder), ALWAYS expanded: lane tabs (platoon / heat / ballpark /
+                    // cooling / starters) over a horizontal swipe scroller. Applies to
+                    // MLB and WC (the lanes adapt to the selected league).
+                    if !playerEdgeLanes.isEmpty {
+                        HubSectionTitle(title: "Insights").padding(.horizontal, 16)
                             .id("playerEdges")
-                        HubTileBoard(signals: boardSignals, width: geo.size.width - 32) { breakdownSignal = $0 }
-                            .padding(.horizontal, 16)
+                        VStack(alignment: .leading, spacing: 8) {
+                            hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
+                            EdgeList(signals: items(activeLane)) { breakdownSignal = $0 }
+                        }
+                    }
+
+                    // FEATURED — kept (founder), reformatted as the redesigned hero
+                    // cards, now sitting BELOW Player Edges. The highest-relevance mix
+                    // across lanes (top 2 per kind), a tight horizontal spotlight rail.
+                    if !featured.isEmpty {
+                        HubSectionTitle(title: "Featured").padding(.horizontal, 16)
+                        FeaturedRibbon(signals: featured) { breakdownSignal = $0 }
                     }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
@@ -20849,9 +20837,23 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
-                    // (HR Threats / Owned / Beneficiary / Rest / Conditions / Tournament
-                    // / xG lists now live as tiles in The Board above — no duplicate
-                    // lists, no expand-a-ton-of-categories.)
+                    // GARY HOME RUN THREATS — Gary's homer picks for today, with
+                    // his two-sentence reason. Fed by gary_hr_threats.
+                    if !items(.hrThreat).isEmpty {
+                        HubDisclosure(anchor: "hrThreats", eyebrow: "Gary Home Run Threats", count: min(items(.hrThreat).count, 3), openSet: $openSections) {
+                            VStack(spacing: 0) {
+                                // Cap the display at 3 (founder) — guards against the
+                                // additive-freeze writer accumulating more over a day.
+                                ForEach(Array(items(.hrThreat).prefix(3))) { s in
+                                    SignalRow(s: s) { _ in
+                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    }
+                                }
+                            }
+                            .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("hrThreats")
+                    }
                     // FANTASY PICKUPS — a two-column board: STREAM pitchers | ADD
                     // hitters, availability-tiered (founder wanted a NEW display type;
                     // widely-available pickups, not owned aces). Fed by fantasy_pickups.
@@ -20862,6 +20864,39 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
+                    // OWNED — career batter-vs-pitcher history (NBA: season series)
+                    if !items(.h2h).isEmpty {
+                        HubDisclosure(anchor: "owned", eyebrow: "Owned", count: items(.h2h).count, openSet: $openSections) {
+                            VStack(spacing: 0) {
+                                ForEach(items(.h2h)) { s in
+                                    SignalRow(s: s) { _ in
+                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    }
+                                }
+                            }
+                            .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("owned")
+                    }
+                    // THE BENEFICIARY — transaction-style OUT → IN swap rows;
+                    // tapping a row opens the replacement's full player insights.
+                    if !items(.injury).isEmpty {
+                        HubDisclosure(anchor: "beneficiary", eyebrow: "The Beneficiary", count: items(.injury).count, openSet: $openSections) {
+                            VStack(spacing: 0) {
+                                ForEach(items(.injury)) { s in
+                                    if s.swap != nil {
+                                        BeneficiarySwapRow(s: s) {
+                                            if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                        }
+                                    } else {
+                                        SignalRow(s: s) { _ in selectedSignal = s }
+                                    }
+                                }
+                            }
+                            .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("beneficiary")
+                    }
                     // WC GAME INTEL — tap a match → the Starting XI / The Read
                     // dashboard (WC league toggle only).
                     if sel == .wc, !wcIntelSignals.isEmpty {
@@ -20870,6 +20905,27 @@ struct PropsHubView: View {
                                 .quantPanel().padding(.horizontal, 16)
                         }
                         .id("wcIntel")
+                    }
+                    // REST & FATIGUE — schedule spots and bullpen workload
+                    if !items(.situational).isEmpty {
+                        HubDisclosure(anchor: "restFatigue", eyebrow: "Rest & Fatigue", count: items(.situational).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("restFatigue")
+                    }
+                    // THE CONDITIONS — game-state reads, one tabbed section
+                    // (first inning / the running game / park & weather).
+                    if !conditionLanes.isEmpty {
+                        HubDisclosure(anchor: "conditions", eyebrow: "The Conditions", count: conditionLanes.reduce(0) { $0 + items($1).count }, openSet: $openSections) {
+                            VStack(spacing: 0) {
+                                hubLaneStrip(lanes: conditionLanes, active: activeCondLane, title: condTitle) { condTab = $0 }
+                                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                                ForEach(items(activeCondLane)) { s in SignalRow(s: s) { _ in selectedSignal = s } }
+                            }
+                            .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("conditions")
                     }
                     // STREAKS — the full board: teams on runs, hot and cold bats,
                     // and which streaks are on the line tonight (league-scoped).
@@ -20892,6 +20948,47 @@ struct PropsHubView: View {
                             NightBoard(rows: selNightRows).padding(.horizontal, 16)
                         }
                         .id("lastNight")
+                    }
+                    // TOURNAMENT STAKES — group standings, title odds, market context (World Cup)
+                    if !items(.tournament).isEmpty {
+                        HubDisclosure(anchor: "tournament", eyebrow: "Tournament Stakes", count: items(.tournament).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("tournament")
+                    }
+                    // xG REGRESSION — who's over/under-finishing their chances (World Cup forward read)
+                    if !items(.xgRegression).isEmpty {
+                        HubDisclosure(anchor: "xgRegression", eyebrow: "xG Regression", count: items(.xgRegression).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.xgRegression)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("xgRegression")
+                    }
+                    // ADVANCEMENT — "to qualify from group" odds for today's group fixtures (World Cup)
+                    if !items(.advancement).isEmpty {
+                        HubDisclosure(anchor: "advancement", eyebrow: "Advancement", count: items(.advancement).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.advancement)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("advancement")
+                    }
+                    // xG RECAP — the last match day's xG-vs-result story (World Cup)
+                    if !items(.xgRecap).isEmpty {
+                        HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("xgRecap")
+                    }
+                    // Anything else → a compact list
+                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression, .advancement, .xgRecap, .fantasyPickups].contains($0.kind) }
+                    if !extras.isEmpty {
+                        HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: extras.count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("moreEdges")
                     }
                 }
             }
@@ -21385,189 +21482,6 @@ struct HubDisclosure<Content: View>: View {
 }
 
 /// Horizontal carousel of large "featured" edge cards.
-/// THE BOARD — the whole Hub as one free-sizing tile board. Every category's top
-/// signals are laid out at once in varied-size tiles (no lane tabs, no expand-to-
-/// read): tile size carries impact, the soft tone tint carries good/bad, and the
-/// user takes in the day at a glance. Tap a tile for the full read.
-struct HubTileBoard: View {
-    let signals: [Signal]
-    let width: CGFloat
-    let onTap: (Signal) -> Void
-    private let gap: CGFloat = 8
-
-    // Row templates: slot width-fractions + height. Mixed widths/heights give the
-    // free-sizing, treemap-like feel (not a uniform grid or a split down the middle).
-    private let template: [(slots: [CGFloat], h: CGFloat)] = [
-        ([0.58, 0.42], 134),
-        ([0.40, 0.60], 110),
-        ([0.34, 0.33, 0.33], 98),
-        ([0.50, 0.50], 106),
-        ([0.33, 0.34, 0.33], 92),
-        ([0.60, 0.40], 104),
-        ([0.50, 0.50], 98),
-        ([0.34, 0.33, 0.33], 92),
-    ]
-
-    private var rows: [[(s: Signal, w: CGFloat, h: CGFloat)]] {
-        var out: [[(Signal, CGFloat, CGFloat)]] = []
-        var i = 0, t = 0
-        while i < signals.count {
-            let row = template[t % template.count]
-            let n = row.slots.count
-            let avail = width - gap * CGFloat(n - 1)
-            var tiles: [(Signal, CGFloat, CGFloat)] = []
-            for frac in row.slots {
-                guard i < signals.count else { break }
-                tiles.append((signals[i], (avail * frac).rounded(), row.h))
-                i += 1
-            }
-            out.append(tiles)
-            t += 1
-        }
-        return out
-    }
-
-    private func subject(_ s: Signal) -> String {
-        if s.kind == .teamRecord || s.kind == .bullpenFatigue {
-            return String(s.headline.split(separator: " ").first ?? Substring(s.headline))
-        }
-        if s.kind == .ballpark {
-            // "At <venue>, <Player> pitches to a ..." → just the pitcher name.
-            let h = s.headline
-            if let comma = h.range(of: ", ") {
-                let after = String(h[comma.upperBound...])
-                for verb in [" pitches", " throws", " starts", " takes", " gets"] {
-                    if let r = after.range(of: verb) { return String(after[..<r.lowerBound]) }
-                }
-                return after.split(separator: " ").prefix(2).joined(separator: " ")
-            }
-        }
-        return (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
-            .trimmingCharacters(in: .whitespaces)
-    }
-
-    @ViewBuilder private func tile(_ s: Signal, w: CGFloat, h: CGFloat) -> some View {
-        let big = w > 205
-        let med = w > 150
-        Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(s.kind.chip)
-                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                    .foregroundStyle(GaryColors.gold.opacity(0.82)).lineLimit(1)
-                if !s.value.isEmpty {
-                    Text(s.value)
-                        .font(GaryFonts.mono(big ? 30 : med ? 23 : 18, bold: true))
-                        .foregroundColor(s.tone.color).lineLimit(1).minimumScaleFactor(0.5)
-                }
-                Spacer(minLength: 2)
-                Text(subject(s))
-                    .font(GaryFonts.text(big ? 14.5 : 12.5, .semibold))
-                    .foregroundStyle(.white.opacity(0.93))
-                    .lineLimit(2).minimumScaleFactor(0.8)
-                if !s.game.isEmpty {
-                    Text(s.game.uppercased())
-                        .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
-                }
-            }
-            .padding(11)
-            .frame(width: w, height: h, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(s.tone.color.opacity(0.10))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(s.tone.color.opacity(0.20), lineWidth: 1))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    var body: some View {
-        VStack(spacing: gap) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: gap) {
-                    ForEach(Array(row.enumerated()), id: \.offset) { _, it in
-                        tile(it.s, w: it.w, h: it.h)
-                    }
-                    if row.count == 1 { Spacer(minLength: 0) }
-                }
-            }
-        }
-    }
-}
-
-/// TODAY'S SIGNALS — a free-form mosaic (varied tile sizes, NOT a uniform grid
-/// or a split-down-the-middle): the day's biggest signal leads as a tall hero,
-/// the rest ride smaller tiles beside + below it. Each tile = the lane tag, the
-/// value big in tone colour, the subject. Tap jumps to that lane. The tile's
-/// soft tone tint makes the board read green/red at a glance (no "fade" words).
-struct HubSignalsMosaic: View {
-    let signals: [Signal]
-    let onTap: (Signal) -> Void
-
-    private func subject(_ s: Signal) -> String {
-        if s.kind == .teamRecord || s.kind == .bullpenFatigue {
-            return String(s.headline.split(separator: " ").first ?? Substring(s.headline))
-        }
-        return (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
-            .trimmingCharacters(in: .whitespaces)
-    }
-
-    @ViewBuilder private func tile(_ s: Signal, big: Bool) -> some View {
-        Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: big ? 7 : 4) {
-                Text(s.kind.chip)
-                    .font(GaryFonts.mono(big ? 9 : 8, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(0.85)).lineLimit(1)
-                if !s.value.isEmpty {
-                    Text(s.value)
-                        .font(GaryFonts.mono(big ? 30 : 19, bold: true))
-                        .foregroundColor(s.tone.color).lineLimit(1).minimumScaleFactor(0.6)
-                }
-                Spacer(minLength: 2)
-                Text(subject(s))
-                    .font(GaryFonts.text(big ? 14 : 12, .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(big ? 2 : 1).minimumScaleFactor(0.8)
-            }
-            .padding(big ? 14 : 11)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(s.tone.color.opacity(0.10))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(s.tone.color.opacity(0.22), lineWidth: 1))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    var body: some View {
-        let s = signals
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                if s.indices.contains(0) { tile(s[0], big: true).frame(height: 168) }
-                if s.count > 1 {
-                    VStack(spacing: 8) {
-                        if s.indices.contains(1) { tile(s[1], big: false) }
-                        if s.indices.contains(2) { tile(s[2], big: false) }
-                    }
-                    .frame(width: 132)
-                }
-            }
-            if s.count > 3 {
-                HStack(spacing: 8) {
-                    if s.indices.contains(3) { tile(s[3], big: false) }
-                    if s.indices.contains(4) { tile(s[4], big: false) }
-                }
-                .frame(height: 78)
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-}
-
 /// FEATURED — a horizontal stat RIBBON (a display the Hub uses nowhere else):
 /// the day's top edges as number-led blocks — the key stat big and tone-coloured,
 /// the subject under it, the lane tag in gold — separated by thin vertical
