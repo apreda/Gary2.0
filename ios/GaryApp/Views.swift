@@ -20775,6 +20775,18 @@ struct PropsHubView: View {
         return out
     }
 
+    /// TODAY'S SIGNALS source — the top signal from each of a few diverse
+    /// categories (streaks lead so they're surfaced), capped at 5 for the mosaic.
+    private var leadSignals: [Signal] {
+        let cats: [SignalKind] = [.streak, .teamRecord, .bullpenFatigue, .platoon, .hrThreat, .hot]
+        var picked: [Signal] = []
+        for c in cats {
+            if let top = items(c).first { picked.append(top) }
+            if picked.count >= 5 { break }
+        }
+        return picked
+    }
+
     var body: some View {
         GeometryReader { geo in
         ScrollViewReader { proxy in
@@ -20807,10 +20819,18 @@ struct PropsHubView: View {
                     }
                     gradedReceipts
                 } else {
-                    // PLAYER EDGES — moved to the TOP (replaces the old Featured strip,
-                    // founder), ALWAYS expanded: lane tabs (platoon / heat / ballpark /
-                    // cooling / starters) over a horizontal swipe scroller. Applies to
-                    // MLB and WC (the lanes adapt to the selected league).
+                    // TODAY'S SIGNALS — a free-form mosaic of the day's biggest signals
+                    // (streak / team / bullpen / edges), varied tile sizes, surfaced up
+                    // top so streaks + angles aren't buried in the lanes below.
+                    if !leadSignals.isEmpty {
+                        HubSectionTitle(title: "Today's Signals").padding(.horizontal, 16)
+                        HubSignalsMosaic(signals: leadSignals) { s in
+                            if playerEdgeLanes.contains(s.kind) { laneTab = s.kind }
+                            HubFocusState.shared.focusLane = s.kind
+                        }
+                    }
+
+                    // PLAYER EDGES — lane tabs over the expandable Insights list.
                     if !playerEdgeLanes.isEmpty {
                         HubSectionTitle(title: "Insights").padding(.horizontal, 16)
                             .id("playerEdges")
@@ -20818,14 +20838,6 @@ struct PropsHubView: View {
                             hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
                             EdgeList(signals: items(activeLane)) { breakdownSignal = $0 }
                         }
-                    }
-
-                    // FEATURED — kept (founder), reformatted as the redesigned hero
-                    // cards, now sitting BELOW Player Edges. The highest-relevance mix
-                    // across lanes (top 2 per kind), a tight horizontal spotlight rail.
-                    if !featured.isEmpty {
-                        HubSectionTitle(title: "Featured").padding(.horizontal, 16)
-                        FeaturedRibbon(signals: featured) { breakdownSignal = $0 }
                     }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
@@ -21481,6 +21493,78 @@ struct HubDisclosure<Content: View>: View {
 }
 
 /// Horizontal carousel of large "featured" edge cards.
+/// TODAY'S SIGNALS — a free-form mosaic (varied tile sizes, NOT a uniform grid
+/// or a split-down-the-middle): the day's biggest signal leads as a tall hero,
+/// the rest ride smaller tiles beside + below it. Each tile = the lane tag, the
+/// value big in tone colour, the subject. Tap jumps to that lane. The tile's
+/// soft tone tint makes the board read green/red at a glance (no "fade" words).
+struct HubSignalsMosaic: View {
+    let signals: [Signal]
+    let onTap: (Signal) -> Void
+
+    private func subject(_ s: Signal) -> String {
+        if s.kind == .teamRecord || s.kind == .bullpenFatigue {
+            return String(s.headline.split(separator: " ").first ?? Substring(s.headline))
+        }
+        return (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    @ViewBuilder private func tile(_ s: Signal, big: Bool) -> some View {
+        Button { onTap(s) } label: {
+            VStack(alignment: .leading, spacing: big ? 7 : 4) {
+                Text(s.kind.chip)
+                    .font(GaryFonts.mono(big ? 9 : 8, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold.opacity(0.85)).lineLimit(1)
+                if !s.value.isEmpty {
+                    Text(s.value)
+                        .font(GaryFonts.mono(big ? 30 : 19, bold: true))
+                        .foregroundColor(s.tone.color).lineLimit(1).minimumScaleFactor(0.6)
+                }
+                Spacer(minLength: 2)
+                Text(subject(s))
+                    .font(GaryFonts.text(big ? 14 : 12, .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(big ? 2 : 1).minimumScaleFactor(0.8)
+            }
+            .padding(big ? 14 : 11)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(s.tone.color.opacity(0.10))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(s.tone.color.opacity(0.22), lineWidth: 1))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    var body: some View {
+        let s = signals
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                if s.indices.contains(0) { tile(s[0], big: true).frame(height: 168) }
+                if s.count > 1 {
+                    VStack(spacing: 8) {
+                        if s.indices.contains(1) { tile(s[1], big: false) }
+                        if s.indices.contains(2) { tile(s[2], big: false) }
+                    }
+                    .frame(width: 132)
+                }
+            }
+            if s.count > 3 {
+                HStack(spacing: 8) {
+                    if s.indices.contains(3) { tile(s[3], big: false) }
+                    if s.indices.contains(4) { tile(s[4], big: false) }
+                }
+                .frame(height: 78)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+}
+
 /// FEATURED — a horizontal stat RIBBON (a display the Hub uses nowhere else):
 /// the day's top edges as number-led blocks — the key stat big and tone-coloured,
 /// the subject under it, the lane tag in gold — separated by thin vertical
