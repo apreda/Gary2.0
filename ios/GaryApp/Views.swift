@@ -22081,7 +22081,6 @@ struct EdgeList: View {
         switch k {
         case .cold, .hot, .starterForm: return "season"
         case .ballpark: return "elsewhere"
-        case .platoon: return "off-hand"
         default: return ""
         }
     }
