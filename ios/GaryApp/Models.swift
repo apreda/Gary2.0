@@ -1909,6 +1909,7 @@ struct TomorrowBoard: Decodable {
     let date: String
     let countdown_iso: String?      // ISO8601 of earliest game; nil => no slate yet
     let countdown_sport: String?    // "MLB"/"WC"/"NBA"/"NHL"/... -> hero term map
+    let countdown_matchup: String?  // opening game(s), e.g. "BOS @ NYY" (names the kickoff)
     let game_count: Int
     let any_lines: Bool             // false => hero "lines open soon", board shows all "—"
     let board: [TomorrowBoardRow]

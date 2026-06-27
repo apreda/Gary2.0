@@ -1164,10 +1164,27 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     (r) => r.spread != null || r.ml_home != null || r.ml_away != null || r.total != null,
   );
 
+  // The opening matchup(s) — the game(s) at the earliest commence time, named
+  // (abbreviations) for the countdown hero (founder: "whatever game or games
+  // kick off the day"). De-duped, up to 3 joined with " · ".
+  let countdown_matchup = null;
+  if (countdown_iso != null) {
+    const openers = board
+      .filter((r) => r.commence_time === countdown_iso)
+      .map((r) => {
+        const away = r.away_abbr || r.away_team;
+        const home = r.home_abbr || r.home_team;
+        return away && home ? `${away} @ ${home}` : null;
+      })
+      .filter(Boolean);
+    if (openers.length) countdown_matchup = [...new Set(openers)].slice(0, 3).join(' · ');
+  }
+
   const record = {
     date: etDateStr,
     countdown_iso,
     countdown_sport,
+    countdown_matchup,
     game_count: board.length,
     any_lines,
     board,

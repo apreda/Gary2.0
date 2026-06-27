@@ -4943,9 +4943,8 @@ struct HomeWireSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "The Wire", sub: sub)
-            if !pulse.isEmpty {
-                HomeMarketPulseStrip(rows: pulse).padding(.horizontal, 16)
-            }
+            // (The market-pulse over/under strip was removed from the Wire per the
+            // founder — the Wire is the news feed, not a stats strip.)
             let shown = Array(items.prefix(limit))
             if !shown.isEmpty {
                 VStack(spacing: 0) {
@@ -10179,6 +10178,13 @@ struct TomorrowView {
                     Text(TomorrowView.countdownTerm(board?.countdown_sport))
                         .font(GaryFonts.mono(10, bold: true)).tracking(2)
                         .foregroundStyle(GaryColors.gold)
+                    // Name the opening game(s) (founder) — what kicks the day off.
+                    if let m = board?.countdown_matchup, !m.isEmpty {
+                        Text(m)
+                            .font(GaryFonts.mono(15, bold: true)).tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .padding(.top, 4)
+                    }
                     Text(Self.hms(from: now, to: target))
                         .font(GaryFonts.mono(39)).monospacedDigit()
                         .foregroundStyle(.white)
@@ -10813,21 +10819,24 @@ struct TomorrowView {
                                     .font(GaryFonts.text(12.5, .semibold))
                                     .foregroundStyle(.white.opacity(0.9))
                                     .lineLimit(1)
-                                HStack(spacing: 6) {
-                                    // Team abbreviation — GOLD.
+                                // The matchup shown ONCE — the starter's OWN team in
+                                // gold, the opponent grey (no more "HOU HOU @ DET").
+                                if let g = p.game, !g.isEmpty {
                                     let teamAbbr = (p.abbr?.isEmpty == false ? p.abbr : p.team) ?? ""
-                                    if !teamAbbr.isEmpty {
-                                        Text(teamAbbr)
-                                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                                            .foregroundStyle(GaryColors.gold)
+                                    let parts = g.components(separatedBy: " @ ")
+                                    HStack(spacing: 3) {
+                                        if parts.count == 2 {
+                                            Text(parts[0])
+                                                .foregroundStyle(parts[0] == teamAbbr ? GaryColors.gold : .white.opacity(0.4))
+                                            Text("@").foregroundStyle(.white.opacity(0.3))
+                                            Text(parts[1])
+                                                .foregroundStyle(parts[1] == teamAbbr ? GaryColors.gold : .white.opacity(0.4))
+                                        } else {
+                                            Text(g).foregroundStyle(.white.opacity(0.4))
+                                        }
                                     }
-                                    // The game this starter is in, e.g. "HOU @ DET".
-                                    if let g = p.game, !g.isEmpty {
-                                        Text(g)
-                                            .font(GaryFonts.mono(8.5)).tracking(0.3)
-                                            .foregroundStyle(.white.opacity(0.4))
-                                            .lineLimit(1)
-                                    }
+                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.4)
+                                    .lineLimit(1)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -20752,9 +20761,26 @@ struct PropsHubView: View {
                     }
                     gradedReceipts
                 } else {
-                    // FEATURED — highest relevance, max 2 per lane so the strip mixes kinds
-                    HubSectionTitle(title: "Featured").padding(.horizontal, 16)
-                    EdgeFeatureStrip(signals: featured) { breakdownSignal = $0 }
+                    // PLAYER EDGES — moved to the TOP (replaces the old Featured strip,
+                    // founder), ALWAYS expanded: lane tabs (platoon / heat / ballpark /
+                    // cooling / starters) over a horizontal swipe scroller. Applies to
+                    // MLB and WC (the lanes adapt to the selected league).
+                    if !playerEdgeLanes.isEmpty {
+                        HubSectionTitle(title: "Player Edges").padding(.horizontal, 16)
+                            .id("playerEdges")
+                        VStack(alignment: .leading, spacing: 8) {
+                            hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
+                            EdgeScroller(signals: items(activeLane)) { breakdownSignal = $0 }
+                        }
+                    }
+
+                    // FEATURED — kept (founder), reformatted as the redesigned hero
+                    // cards, now sitting BELOW Player Edges. The highest-relevance mix
+                    // across lanes (top 2 per kind), a tight horizontal spotlight rail.
+                    if !featured.isEmpty {
+                        HubSectionTitle(title: "Featured").padding(.horizontal, 16)
+                        EdgeFeatureStrip(signals: featured) { breakdownSignal = $0 }
+                    }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
                     if !items(.regression).isEmpty {
@@ -20795,16 +20821,6 @@ struct PropsHubView: View {
                             .quantPanel().padding(.horizontal, 16)
                         }
                         .id("fantasyPickups")
-                    }
-                    // PLAYER EDGES — lane tabs (platoon / heat / ballpark / cooling / starters).
-                    if !playerEdgeLanes.isEmpty {
-                        HubDisclosure(anchor: "playerEdges", eyebrow: "Player Edges", count: playerEdgeLanes.reduce(0) { $0 + items($1).count }, openSet: $openSections) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
-                                EdgeScroller(signals: items(activeLane)) { breakdownSignal = $0 }
-                            }
-                        }
-                        .id("playerEdges")
                     }
                     // OWNED — career batter-vs-pitcher history (NBA: season series)
                     if !items(.h2h).isEmpty {

@@ -129,6 +129,9 @@ export async function computeGaryHrThreats(ctx) {
     }));
   }
 
-  console.log(`[garyHrThreats] examined=${allPicks.length} picks, emitted=${rows.length} HR threats`);
-  return rows;
+  // Cap at 3 — Gary shouldn't surface more HR calls than he can credibly predict
+  // (founder). Keep the highest-conviction three.
+  const capped = rows.sort((a, b) => b.relevance_score - a.relevance_score).slice(0, 3);
+  console.log(`[garyHrThreats] examined=${allPicks.length} picks, emitted=${capped.length}/${rows.length} HR threats`);
+  return capped;
 }
