@@ -20772,7 +20772,7 @@ struct PropsHubView: View {
                             .id("playerEdges")
                         VStack(alignment: .leading, spacing: 8) {
                             hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
-                            EdgeScroller(signals: items(activeLane)) { breakdownSignal = $0 }
+                            EdgeList(signals: items(activeLane)) { breakdownSignal = $0 }
                         }
                     }
 
@@ -21536,7 +21536,7 @@ struct EdgeCardBack: View {
             HStack(spacing: 6) {
                 Text(s.kind.chip).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
                 Spacer()
-                Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.58)).lineLimit(1)
             }
             Text(s.detail)
                 .font(.system(size: 11)).foregroundStyle(.white.opacity(0.78))
@@ -21928,6 +21928,68 @@ struct RegressionBoard: View {
 }
 
 /// Horizontal scroller of compact player/edge cards.
+/// PLAYER EDGES — a clear, readable LIST (replaces the truncating flip-card
+/// scroller). Each edge states the INFORMATION plainly: player + matchup, the
+/// stat WITH its label ("1.85 ERA", not a bare "1.85"), and a readable one-line
+/// reason. No spark bars, no flip, no mystery numbers — info first.
+struct EdgeList: View {
+    let signals: [Signal]
+    let onTap: (Signal) -> Void
+
+    private func statLabel(_ k: SignalKind) -> String {
+        switch k {
+        case .starterForm: return "ERA"
+        case .hot, .cold, .platoon: return "OPS"
+        case .regression: return "xERA"
+        default: return ""
+        }
+    }
+    private func cleanName(_ s: Signal) -> String {
+        (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(signals.enumerated()), id: \.element.id) { i, s in
+                Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
+                if i < signals.count - 1 {
+                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1).padding(.leading, 14)
+                }
+            }
+        }
+        .quantPanel().padding(.horizontal, 16)
+    }
+
+    @ViewBuilder private func row(_ s: Signal) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(cleanName(s))
+                    .font(GaryFonts.text(15, .semibold)).foregroundStyle(.white.opacity(0.96))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                if !s.game.isEmpty {
+                    Text(s.game.uppercased())
+                        .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                if !s.value.isEmpty {
+                    let unit = statLabel(s.kind)
+                    (Text(s.value).foregroundColor(s.tone.color)
+                        + Text(unit.isEmpty ? "" : " \(unit)").foregroundColor(.white.opacity(0.55)))
+                        .font(GaryFonts.mono(14, bold: true)).lineLimit(1)
+                }
+            }
+            // The read — readable (founder: info first, no tiny grey-on-black).
+            Text(s.detail)
+                .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.66))
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 12).padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
 struct EdgeScroller: View {
     let signals: [Signal]
     /// Called from the card BACK's "Full breakdown" button (cards flip on tap).
@@ -21953,7 +22015,7 @@ struct MiniEdgeCard: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+            Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.58)).lineLimit(1)
             Text(name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
             if !s.value.isEmpty {
                 Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
