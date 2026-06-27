@@ -4972,8 +4972,8 @@ struct HomeWireSection: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.5))
                     Text((item.source_handle ?? "").uppercased())
-                        .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.35))
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.55))
                 } else {
                     // The league word IS the color chip — no status dot.
                     Text((item.league ?? "").uppercased())
@@ -4981,14 +4981,14 @@ struct HomeWireSection: View {
                         .foregroundStyle(Sport.from(league: item.league ?? "").accentColor.opacity(0.95))
                     if item.kind != "result" {   // a recap is self-evidently FINAL — drop the redundant label, keep LINE MOVE/INJURY/PACE
                         Text("· \(kindLabel(item.kind))")
-                            .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.35))
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.55))
                     }
                 }
                 Spacer(minLength: 6)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.45))
                     .rotationEffect(.degrees(expanded ? 180 : 0))
             }
             Text(item.headline ?? "")
@@ -5002,15 +5002,14 @@ struct HomeWireSection: View {
                         Rectangle().fill(Color.white.opacity(0.14)).frame(width: 2)
                     }
                 }
-            if let subline = item.subline, !subline.isEmpty {
-                // Sentence-length text in the reading face, not tracked mono
-                // (four horsemen #2) — and bright enough to actually read.
+            // Headlines-only until tapped (founder): the explanation unfolds on tap.
+            if expanded, let subline = item.subline, !subline.isEmpty {
                 Text(subline)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.66))
                     .lineSpacing(2)
-                    .lineLimit(expanded ? nil : 2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
             }
             // The deeper read, unfolded in place — never a sheet.
             if expanded, let body = item.meta?.body, !body.isEmpty {
@@ -5646,7 +5645,7 @@ struct HomeSlateSection: View {
         switch tone {
         case .covering: return Color(hex: "#3FB950")
         case .trailing: return Color(hex: "#E5484D")
-        default: return .white.opacity(0.35)
+        default: return .white.opacity(0.62)   // readable, not the old 0.35 grey-on-black
         }
     }
 
@@ -5707,7 +5706,7 @@ struct HomeSlateSection: View {
                                         // gradient (founder's call); every other
                                         // league wears its flat sport accent.
                                         Text(lg.uppercased())
-                                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
                                             .foregroundStyle(lg.uppercased() == "MLB"
                                                 ? AnyShapeStyle(GaryColors.mlbFieldText)
                                                 : AnyShapeStyle(Sport.from(league: lg).accentColor.opacity(0.95)))
@@ -5716,12 +5715,12 @@ struct HomeSlateSection: View {
                                     // time owns the right column.
                                     if row.time != nil, !row.chip.isEmpty, row.chip != "—" {
                                         Text(row.chip.uppercased())
-                                            .font(GaryFonts.mono(10))
-                                            .foregroundStyle(.white.opacity(0.5))
+                                            .font(GaryFonts.mono(11))
+                                            .foregroundStyle(.white.opacity(0.6))
                                     }
                                     if !row.sub.isEmpty {
                                         Text(row.sub)
-                                            .font(GaryFonts.mono(9.5))
+                                            .font(GaryFonts.mono(11))
                                             .foregroundStyle(subColor(row.tone))
                                     }
                                 }
@@ -20768,7 +20767,7 @@ struct PropsHubView: View {
                     // cooling / starters) over a horizontal swipe scroller. Applies to
                     // MLB and WC (the lanes adapt to the selected league).
                     if !playerEdgeLanes.isEmpty {
-                        HubSectionTitle(title: "Player Edges").padding(.horizontal, 16)
+                        HubSectionTitle(title: "Insights").padding(.horizontal, 16)
                             .id("playerEdges")
                         VStack(alignment: .leading, spacing: 8) {
                             hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
@@ -21927,22 +21926,38 @@ struct RegressionBoard: View {
     }
 }
 
-/// Horizontal scroller of compact player/edge cards.
-/// PLAYER EDGES — a clear, readable LIST (replaces the truncating flip-card
-/// scroller). Each edge states the INFORMATION plainly: player + matchup, the
-/// stat WITH its label ("1.85 ERA", not a bare "1.85"), and a readable one-line
-/// reason. No spark bars, no flip, no mystery numbers — info first.
+/// PLAYER EDGES — concise, EXPANDABLE rows. Collapsed shows the ANGLE at a glance:
+/// player · matchup · the labelled stat (colour carries good/bad, so no "cooling
+/// off" words) · the baseline it's measured against (".247 OPS · was .836
+/// season"). Tap a row to expand the full read + profile link. No paragraphs.
 struct EdgeList: View {
     let signals: [Signal]
     let onTap: (Signal) -> Void
+    @State private var open: Set<String> = []
 
     private func statLabel(_ k: SignalKind) -> String {
         switch k {
-        case .starterForm: return "ERA"
-        case .hot, .cold, .platoon: return "OPS"
+        case .starterForm, .ballpark: return "ERA"
         case .regression: return "xERA"
+        case .hot, .cold, .platoon: return "OPS"
         default: return ""
         }
+    }
+    /// What the baseline (spark[0]) is measured against, per lane.
+    private func baselineWord(_ k: SignalKind) -> String {
+        switch k {
+        case .cold, .hot, .starterForm: return "season"
+        case .ballpark: return "elsewhere"
+        case .platoon: return "off-hand"
+        default: return ""
+        }
+    }
+    private func fmtBase(_ v: Double, unit: String) -> String {
+        if unit == "OPS" {
+            let s = String(format: "%.3f", v)
+            return s.hasPrefix("0") ? String(s.dropFirst()) : s
+        }
+        return String(format: "%.2f", v)
     }
     private func cleanName(_ s: Signal) -> String {
         (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
@@ -21952,7 +21967,13 @@ struct EdgeList: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(signals.enumerated()), id: \.element.id) { i, s in
-                Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
+                let isOpen = open.contains(s.id.uuidString)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        if isOpen { open.remove(s.id.uuidString) } else { open.insert(s.id.uuidString) }
+                    }
+                } label: { row(s, isOpen: isOpen) }
+                .buttonStyle(.plain)
                 if i < signals.count - 1 {
                     Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1).padding(.leading, 14)
                 }
@@ -21961,28 +21982,47 @@ struct EdgeList: View {
         .quantPanel().padding(.horizontal, 16)
     }
 
-    @ViewBuilder private func row(_ s: Signal) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+    @ViewBuilder private func row(_ s: Signal, isOpen: Bool) -> some View {
+        let unit = statLabel(s.kind)
+        VStack(alignment: .leading, spacing: 6) {
+            // Line 1 — name + the labelled stat (colour = good/bad).
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(cleanName(s))
                     .font(GaryFonts.text(15, .semibold)).foregroundStyle(.white.opacity(0.96))
                     .lineLimit(1).minimumScaleFactor(0.8)
-                if !s.game.isEmpty {
-                    Text(s.game.uppercased())
-                        .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
-                }
                 Spacer(minLength: 6)
                 if !s.value.isEmpty {
-                    let unit = statLabel(s.kind)
                     (Text(s.value).foregroundColor(s.tone.color)
-                        + Text(unit.isEmpty ? "" : " \(unit)").foregroundColor(.white.opacity(0.55)))
-                        .font(GaryFonts.mono(14, bold: true)).lineLimit(1)
+                        + Text(unit.isEmpty ? "" : " \(unit)").foregroundColor(.white.opacity(0.6)))
+                        .font(GaryFonts.mono(15, bold: true)).lineLimit(1)
                 }
             }
-            // The read — readable (founder: info first, no tiny grey-on-black).
-            Text(s.detail)
-                .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.66))
-                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            // Line 2 — matchup + the baseline contrast (the angle) + expand caret.
+            HStack(spacing: 6) {
+                if !s.game.isEmpty {
+                    Text(s.game.uppercased())
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                if let base = s.spark.first, !baselineWord(s.kind).isEmpty {
+                    Text("\(fmtBase(base, unit: unit)) \(baselineWord(s.kind))")
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                }
+                Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.35))
+            }
+            // Expanded — the full story + profile link.
+            if isOpen {
+                Text(s.detail)
+                    .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.66))
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
+                if s.playerId != nil {
+                    Button { onTap(s) } label: {
+                        Text("Full profile →")
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.5).foregroundStyle(GaryColors.gold)
+                    }.buttonStyle(.plain).padding(.top, 4)
+                }
+            }
         }
         .padding(.vertical, 12).padding(.horizontal, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
