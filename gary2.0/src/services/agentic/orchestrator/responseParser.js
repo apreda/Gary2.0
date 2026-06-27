@@ -328,6 +328,11 @@ function resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds)
     if (namesHome && !namesAway) return { odds: ml.home ?? null, handicap: null, goal_line: null };
     if (namesAway && !namesHome) return { odds: ml.away ?? null, handicap: null, goal_line: null };
   }
+  if (parsed.type === 'to_advance' && gameOdds?.soccer_advance_odds) {
+    const adv = gameOdds.soccer_advance_odds;
+    if (namesHome && !namesAway) return { odds: adv.home ?? null, handicap: null, goal_line: null };
+    if (namesAway && !namesHome) return { odds: adv.away ?? null, handicap: null, goal_line: null };
+  }
   return null;
 }
 
@@ -345,6 +350,9 @@ function expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds) {
   };
   let side = build(parsed.side_pick, parsed.side_rationale, parsed.side_confidence, null);
   const total = build(parsed.total_pick, parsed.total_rationale, parsed.total_confidence, 'total');
+  const advance = parsed.advance_pick
+    ? build(parsed.advance_pick, parsed.advance_rationale, parsed.advance_confidence, 'to_advance')
+    : null;
   // The side leg must be a 3-way ML / draw / Asian handicap — never a total. If the
   // side slot parsed to a total (Gary mis-slotted it, or the text read "over/under"),
   // it's not a valid side: drop it rather than ship two totals with one mislabeled as
@@ -358,11 +366,16 @@ function expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds) {
     console.error('[Orchestrator] ⚽ WC dual-pick: neither side_pick nor total_pick parsed — null');
     return null;
   }
-  if (side && total) {
-    primary.additionalPicks = [primary === side ? total : side];
-    console.log(`[Orchestrator] ⚽ WC dual-pick — SIDE "${side.pick}" (${side.type}) + TOTAL "${total.pick}"`);
+  const extras = [];
+  if (side && total) extras.push(total);
+  else if (!side && total && primary !== total) extras.push(total);
+  if (advance) extras.push(advance);
+  if (extras.length > 0) {
+    primary.additionalPicks = extras;
+    const labels = extras.map(e => `"${e.pick}" (${e.type})`).join(', ');
+    console.log(`[Orchestrator] ⚽ WC pick — SIDE "${side?.pick ?? '—'}" + extras: [${labels}]`);
   } else {
-    console.warn(`[Orchestrator] ⚽ WC dual-pick: only one play parsed ("${primary.pick}") — storing single pick`);
+    console.warn(`[Orchestrator] ⚽ WC: only one play parsed ("${primary.pick}") — storing single pick`);
   }
   return primary;
 }
