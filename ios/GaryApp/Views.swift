@@ -6358,7 +6358,7 @@ struct PremiumPicksView: View {
         VStack(spacing: 10) {
             Image(systemName: "clock.badge")
                 .font(.system(size: 30)).foregroundStyle(GaryColors.gold)
-            Text("Tonight's board drops soon")
+            Text("Today's board drops soon")
                 .font(GaryFonts.text(18, .semibold)).foregroundStyle(.white)
             Text("It's still early — Gary posts his picks a few hours before the games start. Pull to refresh, or use the date menu up top for past days' results.")
                 .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.7))
@@ -6387,7 +6387,7 @@ struct PremiumPicksView: View {
     private var comingSoonStrip: some View {
         HStack(spacing: 9) {
             Image(systemName: "clock.badge").font(.system(size: 13)).foregroundStyle(GaryColors.gold)
-            Text("Tonight's board drops soon — Gary posts a few hours before games. Date menu up top has past results.")
+            Text("Today's board drops soon — Gary posts a few hours before games. Date menu up top has past results.")
                 .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

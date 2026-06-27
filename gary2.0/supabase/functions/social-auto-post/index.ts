@@ -391,16 +391,20 @@ function isGamePick(p: any): boolean {
   const propish = ["prop", "anytime", "goalscorer", "scorer", "shots", "shot", "passes", "saves", "assist", "tackle", "card", "player"];
   return !propish.some((x) => t.includes(x));
 }
-// Pick ONE play to feature for a game's single card: game picks only, highest confidence (ties -> the side over the total).
+// Pick ONE play to feature for a game's single card. ALWAYS prefer a SIDE (moneyline / goal line / handicap / spread)
+// over the TOTAL (over/under) — the total is tweeted ONLY when the game has no side pick at all. Confidence decides
+// within the chosen tier (so among two sides, the more confident one wins; a high-confidence total never jumps a side).
 function chooseGamePick(gPicks: any[]): any | null {
   const games = gPicks.filter(isGamePick);
   if (!games.length) return null;
-  const isSide = (p: any) => { const t = String(p?.type ?? "").toLowerCase(); return t.includes("money") || t === "ml" || t.includes("spread") || t.includes("handicap"); };
-  return [...games].sort((a, b) => {
-    const c = parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0);
-    if (Math.abs(c) > 1e-9) return c;
-    return (isSide(b) ? 1 : 0) - (isSide(a) ? 1 : 0);
-  })[0];
+  // A TOTAL = over/under total goals/points (same detection as wcHeroLines/wcOpp). Everything else game-level is a SIDE.
+  const isTotal = (p: any) => {
+    const txt = String(p?.pick ?? "").toLowerCase();
+    return String(p?.type ?? "").toLowerCase() === "total" || txt.includes("over") || txt.includes("under");
+  };
+  const byConf = (a: any, b: any) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0);
+  const sides = games.filter((p) => !isTotal(p));
+  return [...(sides.length ? sides : games)].sort(byConf)[0];
 }
 
 async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryRun: boolean) {

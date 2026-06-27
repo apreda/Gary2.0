@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Oswald:wght@400;500;600;700&family=Special+Elite&family=Libre+Franklin:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,900&family=Bungee&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#000;}
+  *{box-sizing:border-box;}
+
+  .poster{
+    position:absolute;
+    top:0;left:0;
+    width:1080px;
+    height:1350px;
+    overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 18% 8%, #16140f 0%, #0B0A09 55%, #060504 100%);
+    font-family:'Libre Franklin',sans-serif;
+  }
+
+  /* paper grain / smudge texture */
+  .grain{
+    position:absolute;inset:0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 2px, transparent 2px 6px),
+      radial-gradient(60% 40% at 80% 90%, rgba(201,162,39,.06), transparent 70%);
+    mix-blend-mode:overlay;
+    pointer-events:none;
+    z-index:60;
+  }
+  .vignette{
+    position:absolute;inset:0;
+    box-shadow:inset 0 0 240px 60px rgba(0,0,0,.85);
+    pointer-events:none;z-index:55;
+  }
+
+  /* ---------- TAPE ---------- */
+  .tape{
+    position:absolute;
+    background:
+      linear-gradient(180deg, rgba(201,162,39,.92), rgba(168,132,28,.82));
+    box-shadow:0 6px 14px rgba(0,0,0,.55);
+    z-index:40;
+  }
+  .tape::after{
+    content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 6px, transparent 6px 14px);
+    mix-blend-mode:overlay;
+  }
+  .tape.frosted{
+    background:linear-gradient(180deg, rgba(220,220,210,.42), rgba(180,180,170,.30));
+    border-top:1px solid rgba(255,255,255,.35);
+    border-bottom:1px solid rgba(0,0,0,.25);
+  }
+  .tape.frosted::after{opacity:.5;}
+
+  /* ---------- HEADER ---------- */
+  .topbar{
+    position:absolute;top:26px;left:38px;right:38px;
+    display:flex;align-items:flex-start;justify-content:space-between;
+    z-index:30;
+  }
+  .brandlock{display:flex;align-items:center;gap:14px;}
+  .bearchip{
+    width:74px;height:74px;border-radius:8px;
+    background:#0f0d0a;
+    border:2px solid rgba(201,162,39,.55);
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+    box-shadow:0 4px 14px rgba(0,0,0,.6), inset 0 0 0 1px rgba(0,0,0,.4);
+    transform:rotate(-3deg);
+  }
+  .bearchip img{width:96px;height:96px;object-fit:cover;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
+  .wordmark{display:flex;flex-direction:column;line-height:1;}
+  .wordmark .name{
+    font-family:'Archivo Black',sans-serif;
+    font-size:30px;color:#EFE8D6;letter-spacing:1px;
+  }
+  .wordmark .name b{color:#C9A227;}
+  .wordmark .site{
+    font-family:'DM Mono',monospace;
+    font-size:13px;color:#9a9485;letter-spacing:2px;margin-top:6px;
+    text-transform:uppercase;
+  }
+  .datestamp{
+    text-align:right;
+    transform:rotate(2deg);
+  }
+  .datestamp .kicker{
+    font-family:'Special Elite',monospace;
+    font-size:13px;letter-spacing:5px;color:#C9A227;text-transform:uppercase;
+  }
+  .datestamp .date{
+    font-family:'Oswald',sans-serif;font-weight:600;
+    font-size:22px;color:#cfc8b8;letter-spacing:1px;margin-top:4px;
+  }
+  .redstamp{
+    display:inline-block;margin-top:8px;
+    font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:3px;
+    color:#e7e0d0;
+    border:2px solid rgba(180,40,40,.8);
+    padding:3px 10px;border-radius:3px;
+    transform:rotate(-4deg);
+    box-shadow:0 0 0 2px rgba(180,40,40,.15);
+  }
+  .redstamp b{color:#d94b3a;}
+
+  /* ---------- HERO RECORD ---------- */
+  .hero{
+    position:absolute;top:138px;left:32px;
+    width:600px;height:330px;
+    z-index:25;
+  }
+  .heroLabel{
+    position:absolute;top:6px;left:8px;
+    font-family:'Special Elite',monospace;
+    font-size:16px;letter-spacing:7px;color:#8c8676;text-transform:uppercase;
+    transform:rotate(-1.5deg);
+  }
+  .record{
+    position:absolute;top:30px;left:0;
+    display:flex;align-items:flex-start;
+  }
+  /* each cut-out glyph */
+  .glyph{
+    display:inline-block;
+    line-height:.82;
+    position:relative;
+    box-shadow:0 10px 22px rgba(0,0,0,.6);
+  }
+  .g5{
+    font-family:'Anton',sans-serif;
+    font-size:280px;
+    background:#EFE8D6;color:#0B0A09;
+    padding:6px 16px 0 16px;
+    transform:rotate(-5deg);
+    border:1px solid #b9b2a0;
+    z-index:3;
+  }
+  .gdash{
+    font-family:'Archivo Black',sans-serif;
+    font-size:190px;color:#0B0A09;
+    background:#C9A227;
+    padding:0 8px;
+    margin:46px -8px 0 -6px;
+    transform:rotate(4deg);
+    z-index:4;
+    border:1px solid #8e7018;
+  }
+  .g1{
+    font-family:'Bungee',cursive;
+    font-size:241px;
+    color:#EFE8D6;
+    background:#171410;
+    padding:10px 26px 4px 22px;
+    margin-top:14px;margin-left:-4px;
+    transform:rotate(-2deg);
+    border:2px solid #C9A227;
+    z-index:5;
+  }
+  /* tape on record */
+  .heroTape1{top:62px;left:62px;width:150px;height:42px;transform:rotate(-7deg);}
+  .heroTape2{top:300px;left:330px;width:130px;height:38px;transform:rotate(6deg);}
+
+  .units{
+    position:absolute;top:280px;left:18px;
+    display:flex;align-items:baseline;gap:2px;
+    transform:rotate(-2deg);
+    z-index:30;
+  }
+  .units .u{
+    display:inline-block;line-height:.9;
+    box-shadow:0 5px 12px rgba(0,0,0,.5);
+  }
+  .uPlus{font-family:'Archivo Black',sans-serif;font-size:68px;color:#0B0A09;background:#6fae5e;padding:2px 9px;transform:rotate(5deg);}
+  .u4{font-family:'Playfair Display',serif;font-style:italic;font-weight:900;font-size:89px;color:#EFE8D6;background:#231f18;padding:0 12px;border:1px solid #4a4334;transform:rotate(-3deg);}
+  .uDot{font-family:'Anton',sans-serif;font-size:89px;color:#C9A227;align-self:flex-end;}
+  .u3{font-family:'Bebas Neue',sans-serif;font-size:103px;color:#0B0A09;background:#EFE8D6;padding:0 11px;transform:rotate(3deg);border:1px solid #b9b2a0;}
+  .uU{font-family:'Oswald',sans-serif;font-weight:700;font-size:61px;color:#C9A227;background:#171410;padding:6px 10px 2px;transform:rotate(-4deg);border:1px solid #C9A227;}
+  .unitsCap{
+    position:absolute;top:400px;left:24px;
+    font-family:'DM Mono',monospace;font-size:14px;letter-spacing:3px;
+    color:#8c8676;text-transform:uppercase;transform:rotate(-1deg);
+  }
+
+  /* season record, taped sideways */
+  .season{
+    position:absolute;top:200px;right:22px;
+    width:78px;height:330px;
+    z-index:24;
+  }
+  .seasonInner{
+    position:absolute;top:120px;left:-118px;
+    width:340px;
+    transform:rotate(-90deg);transform-origin:center;
+    background:#13110d;
+    border:1px dashed rgba(201,162,39,.5);
+    padding:12px 18px;
+    text-align:center;
+    box-shadow:0 8px 20px rgba(0,0,0,.6);
+  }
+  .seasonInner .lbl{
+    font-family:'Special Elite',monospace;font-size:12px;letter-spacing:4px;
+    color:#8c8676;text-transform:uppercase;
+  }
+  .seasonInner .val{
+    font-family:'Oswald',sans-serif;font-weight:700;font-size:34px;
+    color:#EFE8D6;letter-spacing:2px;margin-top:2px;
+  }
+  .seasonInner .val b{color:#C9A227;}
+  .seasonTape{top:188px;right:8px;width:60px;height:120px;transform:rotate(0deg);}
+
+  /* ---------- LEDGER / RECEIPT ---------- */
+  .ledgerHead{
+    position:absolute;top:556px;left:38px;right:38px;
+    display:flex;align-items:center;gap:16px;
+    z-index:22;
+  }
+  .ledgerHead .ttl{
+    font-family:'Anton',sans-serif;font-size:37px;letter-spacing:2px;
+    color:#EFE8D6;text-transform:uppercase;
+    background:#C9A227;color:#0B0A09;padding:2px 14px 0;
+    transform:rotate(-1.5deg);
+    box-shadow:0 5px 14px rgba(0,0,0,.5);
+  }
+  .ledgerHead .rule{flex:1;height:0;border-top:2px dashed #3a352a;}
+
+  .rows{
+    position:absolute;top:606px;left:38px;right:38px;
+    display:flex;flex-direction:column;gap:14px;
+    z-index:20;
+  }
+  .row{
+    display:flex;align-items:stretch;
+    min-height:96px;
+  }
+  /* torn magazine strip */
+  .strip{
+    flex:1;
+    position:relative;
+    background:linear-gradient(95deg, #efe8d6 0%, #e7dfca 100%);
+    color:#1a1712;
+    display:flex;align-items:center;
+    padding:0 20px;
+    box-shadow:0 7px 16px rgba(0,0,0,.5);
+    clip-path:polygon(0 6%,3% 0,12% 7%,26% 1%,40% 8%,55% 2%,70% 9%,85% 1%,97% 7%,100% 0,100% 100%,96% 95%,82% 100%,67% 93%,52% 100%,38% 92%,23% 100%,10% 94%,2% 100%,0 96%);
+  }
+  .row:nth-child(even) .strip{background:linear-gradient(95deg,#e4dcc6 0%,#d9d0b6 100%);transform:rotate(.5deg);}
+  .row:nth-child(odd) .strip{transform:rotate(-.4deg);}
+  .strip::before{
+    /* torn left ink edge */
+    content:"";position:absolute;left:0;top:0;bottom:0;width:7px;
+    background:repeating-linear-gradient(180deg,#1a1712 0 4px, transparent 4px 7px);
+    opacity:.35;
+  }
+  .sportTag{
+    flex:0 0 138px;
+    font-family:'Bebas Neue',sans-serif;font-size:54px;letter-spacing:3px;
+    line-height:1;
+    padding:11px 12px 7px;border-radius:4px;
+    text-align:center;color:#fff;
+    margin-right:26px;
+    box-shadow:0 4px 9px rgba(0,0,0,.4);
+    align-self:center;
+  }
+  .sportTag .acc{display:block;height:7px;margin-top:7px;border-radius:2px;background:#fff;opacity:.55;}
+  .tag-mlb{background:#11357a;}
+  .tag-mlb .acc{background:#e21f33;opacity:.9;}
+  .tag-wc{background:#0a7d3c;}
+  .tag-wc .acc{background:#f4c700;opacity:.9;}
+  .tag-nba{background:#08703f;}
+  .tag-nba .acc{background:#0b0a09;opacity:.85;}
+  .tag-nhl{background:#0a1a2f;}
+  .tag-nhl .acc{background:#cf6a16;opacity:.95;}
+
+  .pickwrap{display:flex;flex-direction:column;justify-content:center;flex:1;min-width:0;}
+  .pick{
+    font-family:'Oswald',sans-serif;font-weight:700;
+    font-size:58px;color:#16130e;letter-spacing:.3px;line-height:1.02;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .pick b{font-weight:700;}
+  /* standalone +/- money figure, green win / red loss — now the big right-side hero */
+  .plBig{
+    flex:0 0 auto;margin-left:26px;
+    font-family:'Oswald',sans-serif;font-weight:700;
+    font-size:64px;letter-spacing:.5px;line-height:1;
+    white-space:nowrap;
+    text-shadow:0 1px 0 rgba(255,255,255,.3);
+  }
+  .plWin{color:#2f7d46;}
+  .plLoss{color:#b3271d;}
+
+  /* ---------- FOOTER ---------- */
+  .footer{
+    position:absolute;bottom:24px;left:38px;right:38px;
+    display:flex;align-items:center;justify-content:space-between;
+    z-index:30;
+  }
+  .ftLeft{display:flex;flex-direction:column;gap:3px;}
+  .ftLeft .tag{
+    font-family:'Special Elite',monospace;font-size:16px;letter-spacing:3px;
+    color:#cfc8b8;
+  }
+  .ftLeft .tag b{color:#C9A227;}
+  .ftLeft .sub{
+    font-family:'DM Mono',monospace;font-size:12px;letter-spacing:3px;
+    color:#7d7768;text-transform:uppercase;
+  }
+  .cta{
+    display:flex;align-items:center;gap:12px;
+    background:#C9A227;color:#0B0A09;
+    padding:10px 18px;border-radius:4px;
+    transform:rotate(-1.5deg);
+    box-shadow:0 6px 16px rgba(0,0,0,.55);
+  }
+  .cta .arr{font-family:'Anton',sans-serif;font-size:30px;line-height:1;}
+  .cta .ctaTxt{display:flex;flex-direction:column;line-height:1.1;}
+  .cta .big{font-family:'Archivo Black',sans-serif;font-size:20px;letter-spacing:.5px;}
+  .cta .small{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;}
+
+  .footTape{bottom:78px;left:150px;width:120px;height:30px;transform:rotate(2deg);}
+</style>
+</head>
+<body>
+  <div class="poster">
+
+    <!-- HEADER -->
+    <div class="topbar">
+      <div class="brandlock">
+        <div class="bearchip"><img src="{{BEAR}}" alt="Gary"></div>
+        <div class="wordmark">
+          <span class="name">GARY <b>A.I.</b></span>
+          <span class="site">betwithgary.ai</span>
+        </div>
+      </div>
+      <div class="datestamp">
+        <div class="kicker">DAILY RESULTS</div>
+        <div class="date">JUNE 23, 2026</div>
+        <div class="redstamp">EVERY <b>L</b> KEPT ON FILE</div>
+      </div>
+    </div>
+
+    <!-- HERO RECORD -->
+    <div class="hero">
+      <div class="heroLabel">YESTERDAY'S CARD</div>
+      <div class="record">
+        <span class="glyph g5">5</span>
+        <span class="glyph gdash">&ndash;</span>
+        <span class="glyph g1">1</span>
+      </div>
+      <div class="tape heroTape1"></div>
+      <div class="tape heroTape2"></div>
+
+      <div class="units">
+        <span class="u uPlus">+</span>
+        <span class="u u4">4</span>
+        <span class="u uDot">.</span>
+        <span class="u u3">3</span>
+        <span class="u uU">u</span>
+      </div>
+      <div class="unitsCap">UNITS BANKED &middot; 83% OF CARD</div>
+    </div>
+
+    <!-- SEASON RECORD (taped sideways) -->
+    <div class="season">
+      <div class="tape seasonTape"></div>
+      <div class="seasonInner">
+        <div class="lbl">ON THE YEAR &mdash; FULL SAMPLE</div>
+        <div class="val"><b>184</b>&ndash;159</div>
+      </div>
+    </div>
+
+    <!-- LEDGER HEADER -->
+    <div class="ledgerHead">
+      <div class="ttl">THE RECEIPT</div>
+      <div class="rule"></div>
+    </div>
+
+    <!-- ROWS -->
+    <div class="rows">
+
+      <!-- 1 -->
+      <div class="row">
+        <div class="strip">
+          <div class="sportTag tag-mlb">MLB<span class="acc"></span></div>
+          <div class="pickwrap">
+            <div class="pick"><b>Dodgers Moneyline</b></div>
+          </div>
+          <div class="plBig plWin">+$78.13</div>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="row">
+        <div class="strip">
+          <div class="sportTag tag-wc">WC<span class="acc"></span></div>
+          <div class="pickwrap">
+            <div class="pick"><b>Brazil &minus;1.5</b></div>
+          </div>
+          <div class="plBig plWin">+$105.00</div>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="row">
+        <div class="strip">
+          <div class="sportTag tag-nba">NBA<span class="acc"></span></div>
+          <div class="pickwrap">
+            <div class="pick"><b>Celtics &minus;6.5</b></div>
+          </div>
+          <div class="plBig plWin">+$90.91</div>
+        </div>
+      </div>
+
+      <!-- 4 -->
+      <div class="row">
+        <div class="strip">
+          <div class="sportTag tag-nhl">NHL<span class="acc"></span></div>
+          <div class="pickwrap">
+            <div class="pick"><b>Oilers Moneyline</b></div>
+          </div>
+          <div class="plBig plWin">+$71.43</div>
+        </div>
+      </div>
+
+      <!-- 5 — THE LOSS, pasted in plain sight -->
+      <div class="row">
+        <div class="strip">
+          <div class="sportTag tag-mlb">MLB<span class="acc"></span></div>
+          <div class="pickwrap">
+            <div class="pick"><b>Aaron Judge O1.5 Hits</b></div>
+          </div>
+          <div class="plBig plLoss">&minus;$100.00</div>
+        </div>
+      </div>
+
+      <!-- 6 -->
+      <div class="row">
+        <div class="strip">
+          <div class="sportTag tag-wc">WC<span class="acc"></span></div>
+          <div class="pickwrap">
+            <div class="pick"><b>Mbapp&eacute; Anytime Goal</b></div>
+          </div>
+          <div class="plBig plWin">+$86.96</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <div class="tape footTape frosted"></div>
+    <div class="footer">
+      <div class="ftLeft">
+        <div class="tag">Every result graded, <b>win or loss.</b></div>
+        <div class="sub">WE KEEP THE RECEIPTS &mdash; NOTHING GETS DELETED</div>
+      </div>
+      <div class="cta">
+        <span class="arr">&rarr;</span>
+        <div class="ctaTxt">
+          <span class="big">GET THE APP</span>
+          <span class="small">LINK IN BIO &middot; betwithgary.ai</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="vignette"></div>
+    <div class="grain"></div>
+  </div>
+</body>
+</html>

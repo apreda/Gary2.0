@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#000;}
+  *{box-sizing:border-box;}
+  .poster{
+    position:relative;
+    width:1080px;height:1350px;
+    background:
+      radial-gradient(120% 90% at 84% 8%, #16130c 0%, #0B0A09 52%, #060504 100%);
+    overflow:hidden;
+    font-family:'Archivo',sans-serif;
+    color:#EDE6D3;
+  }
+  /* faint engineering grid for "designed" texture */
+  .grid{
+    position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(201,162,39,.045) 1px,transparent 1px),
+      linear-gradient(90deg, rgba(201,162,39,.045) 1px,transparent 1px);
+    background-size:90px 90px;
+    pointer-events:none;
+  }
+  /* gold seam — the strong diagonal axis */
+  .axis{
+    position:absolute;
+    width:1700px;height:2px;
+    background:linear-gradient(90deg,transparent,#C9A227 14%,#C9A227 86%,transparent);
+    top:560px;left:-310px;
+    transform:rotate(-29deg);
+    opacity:.55;
+  }
+  .axis2{
+    position:absolute;
+    width:1700px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(201,162,39,.4) 20%,rgba(201,162,39,.4) 80%,transparent);
+    top:640px;left:-310px;
+    transform:rotate(-29deg);
+  }
+
+  /* ===== TOP META BAR ===== */
+  .topbar{
+    position:absolute;top:0;left:0;right:0;height:96px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 40px;
+    border-bottom:1px solid rgba(201,162,39,.22);
+  }
+  .brand{display:flex;align-items:center;gap:18px;}
+  .brand img{width:62px;height:62px;display:block;}
+  .brand .wm{
+    font-family:'Archivo Black',sans-serif;
+    font-size:27px;letter-spacing:.08em;color:#EDE6D3;line-height:1;
+  }
+  .brand .wm b{color:#C9A227;}
+  .brand .sub{
+    font-family:'Archivo',sans-serif;font-weight:600;
+    font-size:12.5px;letter-spacing:.34em;color:#8a8madj;color:#8a857a;text-transform:uppercase;margin-top:5px;
+  }
+  .datebox{text-align:right;}
+  .datebox .kick{
+    font-family:'Archivo',sans-serif;font-weight:700;
+    font-size:12.5px;letter-spacing:.42em;color:#C9A227;text-transform:uppercase;
+  }
+  .datebox .day{
+    font-family:'Archivo Narrow',sans-serif;font-weight:700;
+    font-size:21px;letter-spacing:.18em;color:#cfc7b4;text-transform:uppercase;margin-top:6px;
+  }
+
+  /* ===== HERO RECORD (rotated diagonal type mass) ===== */
+  .hero{
+    position:absolute;
+    top:150px;left:-22px;
+    transform:rotate(-29deg);
+    transform-origin:left top;
+  }
+  .hero .label{
+    font-family:'Archivo',sans-serif;font-weight:800;
+    font-size:20px;letter-spacing:.5em;color:#9a8f72;text-transform:uppercase;
+    margin-left:14px;margin-bottom:-6px;
+  }
+  .record{
+    font-family:'Archivo Black',sans-serif;
+    font-size:470px;line-height:.8;letter-spacing:-.02em;
+    color:#C9A227;
+    text-shadow:0 0 60px rgba(201,162,39,.18);
+    display:flex;align-items:baseline;
+  }
+  .record .dash{
+    color:#3a342400;
+    -webkit-text-stroke:6px #C9A227;color:transparent;
+    margin:0 -6px;font-size:328px;
+  }
+  .recmeta{
+    margin-left:16px;margin-top:4px;
+    display:flex;align-items:center;gap:24px;
+  }
+  .recmeta .units{
+    font-family:'Archivo Black',sans-serif;font-size:74px;color:#EDE6D3;letter-spacing:-.01em;
+  }
+  .recmeta .roi{
+    font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:24px;
+    letter-spacing:.22em;color:#9a8f72;text-transform:uppercase;
+  }
+  .season{
+    margin-left:18px;margin-top:20px;
+    font-family:'Archivo',sans-serif;font-weight:600;
+    font-size:21px;letter-spacing:.16em;color:#8a857a;
+  }
+  .season b{color:#cfc7b4;font-weight:800;}
+
+  /* ===== PICK BLOCK (orthogonal, opposite corner) ===== */
+  .ledger{
+    position:absolute;
+    left:40px;right:40px;bottom:100px;
+    background:#0d0c0a;
+    border:1px solid rgba(201,162,39,.28);
+    box-shadow:0 -8px 40px rgba(0,0,0,.5);
+  }
+  .ledger-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:22px 24px 20px;
+    border-bottom:1px solid rgba(201,162,39,.2);
+  }
+  .ledger-head .t{
+    font-family:'Archivo',sans-serif;font-weight:800;
+    font-size:18px;letter-spacing:.4em;color:#EDE6D3;text-transform:uppercase;
+  }
+  .ledger-head .c{
+    font-family:'Archivo Narrow',sans-serif;font-weight:700;
+    font-size:15.5px;letter-spacing:.26em;color:#9a8f72;text-transform:uppercase;
+  }
+  .row{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    align-items:center;
+    column-gap:26px;
+    padding:0 26px;
+    height:100px;
+    border-bottom:1px solid rgba(255,255,255,.05);
+  }
+  .row:last-child{border-bottom:none;}
+  /* league/sport tag — large + prominent, gold poster chip */
+  .league{
+    font-family:'Archivo Black',sans-serif;
+    font-size:23px;letter-spacing:.04em;line-height:1;
+    text-transform:uppercase;
+    color:#C9A227;
+    border:1.5px solid rgba(201,162,39,.55);
+    background:rgba(201,162,39,.09);
+    padding:13px 16px;border-radius:4px;
+    white-space:nowrap;text-align:center;
+    min-width:104px;
+  }
+  .pick{min-width:0;}
+  .pick .title{
+    font-family:'Archivo',sans-serif;font-weight:800;
+    font-size:44px;color:#F2ECDD;letter-spacing:0;line-height:1.04;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .result{text-align:right;}
+  .result .money{
+    font-family:'Archivo Black',sans-serif;
+    font-size:42px;letter-spacing:0;line-height:1;
+  }
+
+  /* ===== FOOTER ===== */
+  .footer{
+    position:absolute;left:0;right:0;bottom:0;height:74px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 40px;
+    border-top:1px solid rgba(201,162,39,.22);
+    background:#070605;
+  }
+  .footer .tag{
+    font-family:'Archivo',sans-serif;font-weight:600;
+    font-size:15.5px;letter-spacing:.26em;color:#8a857a;text-transform:uppercase;
+  }
+  .footer .site{
+    font-family:'Archivo Black',sans-serif;
+    font-size:23px;letter-spacing:.05em;color:#C9A227;
+  }
+  .footer .site span{color:#EDE6D3;}
+</style>
+</head>
+<body>
+  <div class="poster">
+    <div class="grid"></div>
+    <div class="axis"></div>
+    <div class="axis2"></div>
+
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="brand">
+        <img src="{{BEAR}}" alt="">
+        <div>
+          <div class="wm">GARY<b>.</b>A.I.</div>
+          <div class="sub">Every result graded</div>
+        </div>
+      </div>
+      <div class="datebox">
+        <div class="kick">Daily Results</div>
+        <div class="day">Mon · June 23, 2026</div>
+      </div>
+    </div>
+
+    <!-- HERO RECORD -->
+    <div class="hero">
+      <div class="label">RECORD</div>
+      <div class="record"><span>5</span><span class="dash">–</span><span>1</span></div>
+      <div class="recmeta">
+        <div class="units">+4.1u</div>
+        <div class="roi">on the day</div>
+      </div>
+      <div class="season">ON THE YEAR&nbsp;&nbsp;<b>147–118</b>&nbsp;&nbsp;·&nbsp;&nbsp;55.5%</div>
+    </div>
+
+    <!-- PICK LEDGER -->
+    <div class="ledger">
+      <div class="ledger-head">
+        <div class="t">The Receipt</div>
+        <div class="c">6 graded · 5 W / 1 L</div>
+      </div>
+
+      <div class="row">
+        <div class="league">MLB</div>
+        <div class="pick">
+          <div class="title">Dodgers Moneyline</div>
+        </div>
+        <div class="result">
+          <div class="money" style="color:#5BD08A">+$74.07</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="league">WORLD CUP</div>
+        <div class="pick">
+          <div class="title">Brazil −1.5</div>
+        </div>
+        <div class="result">
+          <div class="money" style="color:#5BD08A">+$115.00</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="league">NBA</div>
+        <div class="pick">
+          <div class="title">Celtics −6.5</div>
+        </div>
+        <div class="result">
+          <div class="money" style="color:#5BD08A">+$90.91</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="league">NHL</div>
+        <div class="pick">
+          <div class="title">Oilers Moneyline</div>
+        </div>
+        <div class="result">
+          <div class="money" style="color:#5BD08A">+$83.33</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="league">MLB</div>
+        <div class="pick">
+          <div class="title">Aaron Judge Over 1.5 Hits</div>
+        </div>
+        <div class="result">
+          <div class="money" style="color:#F0736B">−$100.00</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="league">WORLD CUP</div>
+        <div class="pick">
+          <div class="title">Mbappé Anytime Goal</div>
+        </div>
+        <div class="result">
+          <div class="money" style="color:#5BD08A">+$95.24</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <div class="tag">Wins and losses · posted daily</div>
+      <div class="site"><span>betwithgary</span>.ai</div>
+    </div>
+  </div>
+</body>
+</html>

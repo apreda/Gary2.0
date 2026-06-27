@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#000;}
+  *{box-sizing:border-box;}
+  .poster{
+    position:relative;
+    width:1080px;height:1350px;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(201,162,39,0.10), transparent 60%),
+      linear-gradient(180deg,#0d0c0a 0%, #0b0a09 55%, #080706 100%);
+    font-family:'Inter',sans-serif;
+    color:#EDE9DF;
+    overflow:hidden;
+    display:flex;flex-direction:column;
+    padding:42px 46px 38px 46px;
+  }
+  /* faint grid texture */
+  .poster::before{
+    content:"";position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(201,162,39,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,162,39,0.035) 1px, transparent 1px);
+    background-size:60px 60px;
+    pointer-events:none;
+  }
+  .poster > *{position:relative;z-index:2;}
+
+  /* ===== HEADER ===== */
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;}
+  .hdr-l{display:flex;flex-direction:column;gap:7px;}
+  .kicker{
+    font-family:'JetBrains Mono',monospace;
+    font-size:14px;font-weight:600;letter-spacing:4px;
+    color:#9a9punk;color:#8E8A7E;text-transform:uppercase;
+    display:flex;align-items:center;gap:12px;
+  }
+  .kicker .dot{width:8px;height:8px;border-radius:50%;background:#C9A227;box-shadow:0 0 10px rgba(201,162,39,0.8);}
+  .brand{display:flex;align-items:center;gap:16px;}
+  .brand .mark{
+    width:60px;height:60px;border-radius:14px;
+    background:linear-gradient(145deg,#1a1813,#0e0d0a);
+    border:1px solid rgba(201,162,39,0.4);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+  .brand .mark img{width:100%;height:100%;object-fit:cover;}
+  .brand-txt{display:flex;flex-direction:column;line-height:1;}
+  .brand-name{font-size:30px;font-weight:900;letter-spacing:0.5px;color:#F4F1E8;}
+  .brand-name b{color:#C9A227;}
+  .brand-sub{font-family:'JetBrains Mono',monospace;font-size:13px;color:#7d7a70;margin-top:5px;letter-spacing:1px;}
+  .hdr-r{text-align:right;display:flex;flex-direction:column;gap:6px;}
+  .date-lbl{font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:3px;color:#8E8A7E;text-transform:uppercase;}
+  .date-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:#D9D4C7;letter-spacing:1px;}
+  .graded-pill{
+    margin-top:4px;align-self:flex-end;
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;
+    color:#C9A227;border:1px solid rgba(201,162,39,0.35);
+    border-radius:20px;padding:5px 12px;text-transform:uppercase;
+  }
+
+  /* ===== HERO READOUT ===== */
+  .hero{
+    margin-top:34px;
+    background:linear-gradient(180deg, rgba(20,18,13,0.9), rgba(12,11,8,0.9));
+    border:1px solid rgba(201,162,39,0.22);
+    border-radius:20px;
+    padding:30px 36px;
+    display:flex;align-items:center;justify-content:space-between;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .hero-rec{display:flex;flex-direction:column;}
+  .hero-rec .rl{font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:5px;color:#8E8A7E;text-transform:uppercase;margin-bottom:4px;}
+  .record{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:800;font-size:146px;line-height:0.9;
+    color:#F4D77A;letter-spacing:-2px;
+    text-shadow:0 4px 24px rgba(201,162,39,0.25);
+  }
+  .record .dash{color:#8a7a3e;font-weight:500;padding:0 6px;}
+  .hero-div{width:1px;height:140px;background:linear-gradient(180deg,transparent,rgba(201,162,39,0.3),transparent);}
+  .hero-stats{display:flex;flex-direction:column;gap:18px;text-align:right;}
+  .stat-row{display:flex;flex-direction:column;align-items:flex-end;}
+  .stat-lbl{font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:3px;color:#8E8A7E;text-transform:uppercase;}
+  .stat-big{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:60px;line-height:1;color:#C9A227;letter-spacing:-1px;margin-top:2px;}
+  .stat-units{color:#E8DFBE;}
+
+  /* ===== MATRIX GRID ===== */
+  .matrix-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-top:34px;margin-bottom:14px;
+  }
+  .mh-title{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;letter-spacing:3px;color:#D9D4C7;text-transform:uppercase;}
+  .mh-legend{display:flex;gap:22px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:1px;color:#8E8A7E;}
+  .mh-legend .lg{display:flex;align-items:center;gap:8px;}
+  .lg .swatch{width:14px;height:14px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;}
+  .sw-win{background:rgba(58,140,94,0.85);color:#04140b;}
+  .sw-loss{background:rgba(176,58,58,0.85);color:#1a0606;}
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-template-rows:repeat(2,1fr);
+    gap:16px;
+    flex:1;
+  }
+  .tile{
+    position:relative;
+    border-radius:18px;
+    padding:24px 24px 22px 24px;
+    display:flex;flex-direction:column;justify-content:space-between;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,0.12);
+    box-shadow:0 24px 44px rgba(0,0,0,0.62), 0 6px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.13);
+  }
+  .tile.win{
+    background:
+      radial-gradient(220px 150px at 50% -8%, rgba(82,192,132,0.42), transparent 72%),
+      linear-gradient(168deg, rgba(36,70,52,0.98), rgba(9,18,13,0.98));
+    border-color:rgba(74,168,112,0.52);
+    box-shadow:0 24px 46px rgba(0,0,0,0.62), 0 0 36px rgba(46,130,86,0.18), inset 0 1px 0 rgba(150,235,190,0.26), inset 0 -30px 50px rgba(0,0,0,0.36);
+  }
+  .tile.loss{
+    background:
+      radial-gradient(220px 150px at 50% -8%, rgba(222,82,82,0.44), transparent 72%),
+      linear-gradient(168deg, rgba(66,28,28,0.98), rgba(20,9,9,0.98));
+    border-color:rgba(190,76,76,0.54);
+    box-shadow:0 24px 46px rgba(0,0,0,0.62), 0 0 36px rgba(150,50,50,0.18), inset 0 1px 0 rgba(240,150,150,0.24), inset 0 -30px 50px rgba(0,0,0,0.36);
+  }
+  .tile-top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .sport-tag{
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+    letter-spacing:2px;padding:5px 10px;border-radius:6px;text-transform:uppercase;
+    background:rgba(255,255,255,0.07);color:#CFCBBE;
+    display:flex;align-items:center;gap:8px;
+  }
+  .sport-tag .chip{width:9px;height:9px;border-radius:50%;}
+  .marker{
+    width:58px;height:58px;border-radius:15px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Inter',sans-serif;font-weight:900;font-size:35px;line-height:1;
+    flex-shrink:0;
+  }
+  .marker.w{background:#3F9D6A;color:#06180e;box-shadow:0 0 0 3px rgba(63,157,106,0.18);}
+  .marker.l{background:#C04C4C;color:#1c0707;box-shadow:0 0 0 3px rgba(192,76,76,0.18);}
+  .tile-body{margin-top:18px;}
+  .pick-name{font-size:42px;font-weight:800;line-height:1.08;color:#F4F1E8;letter-spacing:0.2px;}
+  .tile-meta{
+    margin-top:13px;
+    font-family:'JetBrains Mono',monospace;font-size:17px;letter-spacing:0.5px;color:#9b978b;
+    display:flex;gap:14px;align-items:center;
+  }
+  .tile-meta .res{font-weight:700;letter-spacing:2px;text-transform:uppercase;}
+  .res.w{color:#74C99A;}
+  .res.l{color:#E08A8A;}
+  .tile-meta .odds{color:#C9A227;}
+
+  /* ===== SEASON STRIP ===== */
+  .season{
+    margin-top:26px;
+    background:linear-gradient(180deg, rgba(16,15,11,0.9), rgba(11,10,8,0.9));
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:16px;
+    padding:18px 26px;
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .season-l{display:flex;flex-direction:column;gap:3px;}
+  .season-lbl{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:3px;color:#8E8A7E;text-transform:uppercase;}
+  .season-val{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;color:#E8DFBE;letter-spacing:0.5px;}
+  .season-val span{color:#C9A227;}
+  .heatmap{display:flex;gap:4px;align-items:center;}
+  .heatmap .cell{width:11px;height:30px;border-radius:3px;}
+
+  /* ===== FOOTER ===== */
+  .ftr{
+    margin-top:22px;display:flex;justify-content:space-between;align-items:center;
+    border-top:1px solid rgba(201,162,39,0.18);padding-top:18px;
+  }
+  .ftr-l{font-family:'JetBrains Mono',monospace;font-size:15px;letter-spacing:1px;color:#9b978b;}
+  .ftr-l b{color:#C9A227;font-weight:700;}
+  .ftr-r{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;letter-spacing:2px;color:#F4F1E8;display:flex;align-items:center;gap:10px;}
+  .ftr-r .arrow{color:#C9A227;}
+</style>
+</head>
+<body>
+  <div class="poster">
+
+    <!-- HEADER -->
+    <div class="hdr">
+      <div class="hdr-l">
+        <div class="kicker"><span class="dot"></span>Daily Results &middot; Graded</div>
+        <div class="brand">
+          <div class="mark"><img src="{{BEAR}}" alt="Gary"></div>
+          <div class="brand-txt">
+            <div class="brand-name">GARY <b>A.I.</b></div>
+            <div class="brand-sub">// confusion_matrix.eval()</div>
+          </div>
+        </div>
+      </div>
+      <div class="hdr-r">
+        <div class="date-lbl">Slate Date</div>
+        <div class="date-val">JUN 23, 2026</div>
+        <div class="graded-pill">6 picks &middot; settled</div>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-rec">
+        <div class="rl">Day Record</div>
+        <div class="record">5<span class="dash">&ndash;</span>1</div>
+      </div>
+      <div class="hero-div"></div>
+      <div class="hero-stats">
+        <div class="stat-row">
+          <div class="stat-lbl">Units</div>
+          <div class="stat-big stat-units">+4.30u</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-lbl">Accuracy</div>
+          <div class="stat-big">.833</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATRIX -->
+    <div class="matrix-head">
+      <div class="mh-title">Outcome Matrix</div>
+      <div class="mh-legend">
+        <div class="lg"><span class="swatch sw-win">&#10003;</span> Won</div>
+        <div class="lg"><span class="swatch sw-loss">&#10007;</span> Lost</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- 1 -->
+      <div class="tile win">
+        <div class="tile-top">
+          <div class="sport-tag"><span class="chip" style="background:#2C5FA6;"></span>MLB</div>
+          <div class="marker w">&#10003;</div>
+        </div>
+        <div class="tile-body">
+          <div class="pick-name">Dodgers ML</div>
+          <div class="tile-meta"><span class="res w">Win</span><span class="odds">&minus;135</span></div>
+        </div>
+      </div>
+      <!-- 2 -->
+      <div class="tile win">
+        <div class="tile-top">
+          <div class="sport-tag"><span class="chip" style="background:#E0B43A;"></span>WC</div>
+          <div class="marker w">&#10003;</div>
+        </div>
+        <div class="tile-body">
+          <div class="pick-name">Brazil &minus;1.5</div>
+          <div class="tile-meta"><span class="res w">Win</span><span class="odds">+115</span></div>
+        </div>
+      </div>
+      <!-- 3 -->
+      <div class="tile win">
+        <div class="tile-top">
+          <div class="sport-tag"><span class="chip" style="background:#178A5A;"></span>NBA</div>
+          <div class="marker w">&#10003;</div>
+        </div>
+        <div class="tile-body">
+          <div class="pick-name">Celtics &minus;6.5</div>
+          <div class="tile-meta"><span class="res w">Win</span><span class="odds">&minus;110</span></div>
+        </div>
+      </div>
+      <!-- 4 -->
+      <div class="tile win">
+        <div class="tile-top">
+          <div class="sport-tag"><span class="chip" style="background:#C7541F;"></span>NHL</div>
+          <div class="marker w">&#10003;</div>
+        </div>
+        <div class="tile-body">
+          <div class="pick-name">Oilers ML</div>
+          <div class="tile-meta"><span class="res w">Win</span><span class="odds">+105</span></div>
+        </div>
+      </div>
+      <!-- 5 LOSS -->
+      <div class="tile loss">
+        <div class="tile-top">
+          <div class="sport-tag"><span class="chip" style="background:#2C5FA6;"></span>MLB &middot; Prop</div>
+          <div class="marker l">&#10007;</div>
+        </div>
+        <div class="tile-body">
+          <div class="pick-name">A. Judge Over 1.5 Hits</div>
+          <div class="tile-meta"><span class="res l">Loss</span><span class="odds">+140</span></div>
+        </div>
+      </div>
+      <!-- 6 -->
+      <div class="tile win">
+        <div class="tile-top">
+          <div class="sport-tag"><span class="chip" style="background:#E0B43A;"></span>WC &middot; Prop</div>
+          <div class="marker w">&#10003;</div>
+        </div>
+        <div class="tile-body">
+          <div class="pick-name">Mbapp&eacute; Anytime Goal</div>
+          <div class="tile-meta"><span class="res w">Win</span><span class="odds">&minus;120</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEASON STRIP -->
+    <div class="season">
+      <div class="season-l">
+        <div class="season-lbl">On the year</div>
+        <div class="season-val">184<span>&ndash;</span>159 <span style="color:#8E8A7E;font-size:18px;">&middot; .536 acc</span></div>
+      </div>
+      <div class="heatmap">
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#C04C4C;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#C04C4C;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#C04C4C;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#C04C4C;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#C04C4C;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+        <span class="cell" style="background:#3F9D6A;"></span>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="ftr">
+      <div class="ftr-l"><b>Every result graded</b> &mdash; win or loss.</div>
+      <div class="ftr-r">betwithgary.ai <span class="arrow">&rarr;</span> in bio</div>
+    </div>
+
+  </div>
+</body>
+</html>
