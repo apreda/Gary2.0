@@ -5649,6 +5649,19 @@ struct HomeSlateSection: View {
         }
     }
 
+    /// Split a sub ("VS PHILLIES · 4:10 PM ET") into the lead, the GOLD time
+    /// digits ("4:10"), and the rest ("PM ET"). The time renders gold + fixed
+    /// so it's never truncated — only the matchup yields (founder). No time
+    /// token → all lead.
+    private func splitSubTime(_ sub: String) -> (lead: String, num: String, rest: String) {
+        guard let r = sub.range(of: "\\d{1,2}:\\d{2}", options: .regularExpression) else {
+            return (sub, "", "")
+        }
+        return (String(sub[sub.startIndex..<r.lowerBound]).trimmingCharacters(in: .whitespaces),
+                String(sub[r]),
+                String(sub[r.upperBound...]).trimmingCharacters(in: .whitespaces))
+    }
+
     /// Plain mono text tabs — active wears gold, the rest dim (the app-wide
     /// colored-when-active rule; no capsules).
     private var tabStrip: some View {
@@ -5719,9 +5732,24 @@ struct HomeSlateSection: View {
                                             .foregroundStyle(.white.opacity(0.6))
                                     }
                                     if !row.sub.isEmpty {
-                                        Text(row.sub)
+                                        let p = splitSubTime(row.sub)
+                                        Text(p.lead)
                                             .font(GaryFonts.mono(11))
                                             .foregroundStyle(subColor(row.tone))
+                                            .lineLimit(1).layoutPriority(0)
+                                        if !p.num.isEmpty {
+                                            // Start time: gold digits, never truncated (founder).
+                                            Text(p.num)
+                                                .font(GaryFonts.mono(11, bold: true))
+                                                .foregroundStyle(GaryColors.gold)
+                                                .fixedSize().layoutPriority(1)
+                                            if !p.rest.isEmpty {
+                                                Text(p.rest)
+                                                    .font(GaryFonts.mono(11))
+                                                    .foregroundStyle(subColor(row.tone))
+                                                    .fixedSize().layoutPriority(1)
+                                            }
+                                        }
                                     }
                                 }
                                     .lineLimit(1)
