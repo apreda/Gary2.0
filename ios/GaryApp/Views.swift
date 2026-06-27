@@ -21458,7 +21458,7 @@ struct FeaturedRibbon: View {
             Text(s.value.isEmpty ? "—" : s.value)
                 .font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
                 .lineLimit(1).minimumScaleFactor(0.6)
-            Text(s.headline)
+            Text((s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline).trimmingCharacters(in: .whitespaces))
                 .font(GaryFonts.text(12, .semibold)).foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1).minimumScaleFactor(0.7)
             Text(s.kind.chip)
@@ -21564,7 +21564,7 @@ struct EdgeCardBack: View {
         .background(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(GaryColors.warmWhite.opacity(0.06))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(s.kind.tint.opacity(0.35), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(GaryColors.warmWhite.opacity(0.1), lineWidth: 1))
         )
         .contentShape(Rectangle())
         .onTapGesture { onBack() }
@@ -21935,7 +21935,7 @@ struct EdgeScroller: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(signals) { s in
-                    FlippableEdgeCard(s: s, width: 170, height: 152, cornerRadius: 14, onBreakdown: onTap) {
+                    FlippableEdgeCard(s: s, width: 170, height: 152, cornerRadius: 8, onBreakdown: onTap) {
                         MiniEdgeCard(s: s)
                     }
                 }
@@ -21965,9 +21965,9 @@ struct MiniEdgeCard: View {
         .padding(12)
         .frame(width: 170, height: 152, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(GaryColors.warmWhite.opacity(0.04))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
         )
     }
 }
