@@ -12,8 +12,10 @@
  * backfills and manual re-snapshots.
  *
  * Usage:
- *   node scripts/run-tomorrow-board.js                    # tomorrow (ET)
+ *   node scripts/run-tomorrow-board.js                    # tomorrow (ET) -> tomorrow_board
+ *   node scripts/run-tomorrow-board.js --today            # today (ET)    -> today_board
  *   node scripts/run-tomorrow-board.js --date 2026-06-27  # specific ET date
+ *   node scripts/run-tomorrow-board.js --date 2026-06-27 --table today_board
  */
 
 import '../src/loadEnv.js';
@@ -33,7 +35,12 @@ function getArgValue(flag) {
 const { writeTomorrowBoard, tomorrowET } = await import('../src/services/tomorrowService.js');
 
 const dateArg = getArgValue('--date');
-const targetDate = dateArg || tomorrowET();
+const today = args.includes('--today');
+const tableArg = getArgValue('--table');
+// Today's ET calendar date (en-CA formats YYYY-MM-DD), for the --today path.
+const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const targetDate = dateArg || (today ? todayET : tomorrowET());
+const table = tableArg || (today ? 'today_board' : 'tomorrow_board');
 
 if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
   console.error(`❌ Invalid --date "${targetDate}". Expected YYYY-MM-DD.`);
@@ -41,9 +48,9 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
 }
 
 try {
-  const r = await writeTomorrowBoard(targetDate);
+  const r = await writeTomorrowBoard(targetDate, table);
   console.log(
-    `\n🏁 Tomorrow board for ${r.date}: ${r.game_count} game(s), ` +
+    `\n🏁 ${table} for ${r.date}: ${r.game_count} game(s), ` +
     `${r.big_games.length} big game(s), ${r.starters.length} starter(s), ` +
     `${r.returns.length} return(s), ${r.form.length} form, ` +
     `${r.run_profile.length} run-profile, ${r.weather.length} weather, ` +

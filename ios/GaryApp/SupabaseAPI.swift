@@ -592,6 +592,21 @@ enum SupabaseAPI {
         return rows.first
     }
 
+    /// Today's look-ahead board (today_board) — same shape as TomorrowBoard, keyed
+    /// on TODAY's EST slate day. Feeds the Home "The Day Ahead" section (the same
+    /// Starters / Form / Run Profile / Weather + MLB/WC table the Tomorrow page uses).
+    static func fetchTodayBoard(date: String) async -> TomorrowBoard? {
+        let url = buildURL(table: "today_board", query: [
+            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera,wc_lookahead"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "limit", value: "1")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([TomorrowBoard].self, from: data) else { return nil }
+        return rows.first
+    }
+
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence
     /// story per settled game Gary picked — the story player's slides.
     /// Live streaks as of the last completed night — newest snapshot wins

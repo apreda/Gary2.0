@@ -1066,7 +1066,7 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
  *
  * @returns {Promise<{date,game_count,any_lines,big_games,starters,returns,form,run_profile,weather,wc_lookahead,league_avg_era,league_avg_xera,countdown_sport}>}
  */
-export async function writeTomorrowBoard(etDateStr = tomorrowET()) {
+export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(etDateStr)) {
     throw new Error(`writeTomorrowBoard: invalid date "${etDateStr}" (expected YYYY-MM-DD)`);
   }
@@ -1192,7 +1192,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET()) {
   const sanitized = JSON.parse(JSON.stringify(record));
   await axios({
     method: 'POST',
-    url: `${supabaseUrl}/rest/v1/${TABLE}`,
+    url: `${supabaseUrl}/rest/v1/${table}`,
     data: sanitized,
     params: { on_conflict: CONFLICT_KEY },
     headers: {

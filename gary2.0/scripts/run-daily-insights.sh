@@ -49,3 +49,11 @@ echo "[$(date)] The Wire complete."
 echo "[$(date)] Starting Tomorrow board run..."
 node scripts/run-tomorrow-board.js || echo "[$(date)] Tomorrow board run failed (non-fatal)"
 echo "[$(date)] Tomorrow board complete."
+
+# Refresh TODAY's look-ahead board (today_board) — the same Starters / Form / Run
+# Profile / Weather + WC table for TODAY's slate; feeds the Home "The Day Ahead"
+# section. Non-fatal, like the tomorrow pass above; re-runs keep it fresh as
+# today's lineups firm up.
+echo "[$(date)] Starting Today board run..."
+node scripts/run-tomorrow-board.js --today || echo "[$(date)] Today board run failed (non-fatal)"
+echo "[$(date)] Today board complete."
