@@ -1950,6 +1950,16 @@ struct HomeView: View {
             }
         }
         .task(id: homeNonce) {
+            // Keep the prop box current as games finish through the day — the live
+            // SCORES poll via LiveScoreCache, but prop RESULTS grade server-side, so
+            // re-fetch + rebuild on the same 90s cadence (founder: it went stale).
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 90_000_000_000)
+                if Task.isCancelled { break }
+                await refreshPropBox()
+            }
+        }
+        .task(id: homeNonce) {
             #if DEBUG
             // Lets the screenshot tooling drive the switcher:
             //   simctl launch ... --args -previewPhase live
@@ -2082,9 +2092,15 @@ struct HomeView: View {
                     // graded props the cashes use.
                     var wires = await wireFetch
                     if wires.isEmpty {
-                        wires = await SupabaseAPI.fetchWireItems(date: SupabaseAPI.yesterdayEST())
+                        // Same rolling anchor the headlines use (most recent settled day),
+                        // so the Wire stays current instead of falling a day stale.
+                        let wireDay = recapDay ?? SupabaseAPI.yesterdayEST()
+                        wires = await SupabaseAPI.fetchWireItems(date: wireDay)
                     }
-                    wireItems = wires
+                    // Drop the fabricated X "voice" quotes — Gary never attributes
+                    // invented quotes to real handles (founder). Only real betting
+                    // news (result / line_move / injury / pace) rides the Wire.
+                    wireItems = wires.filter { ($0.kind ?? "") != "voice" }
                     // Today's rolling row leads; when today has no slate at all (the
                     // builder writes nothing), fall back to the settled prior day so
                     // the strip isn't empty on an off day.
@@ -3153,6 +3169,20 @@ struct HomeView: View {
     /// THE BOX's game dropdown: an "ALL" option (Gary's 2 best winners + 2 best
     /// losers from last night's graded props), then one option per game Gary had
     /// props in — densest first, the game's final score as the label.
+    /// Re-fetch graded results and rebuild the prop box so it advances as games
+    /// finish through the day (the prop poller calls this on a 90s cadence).
+    private func refreshPropBox() async {
+        async let gFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
+        async let pFetch = SupabaseAPI.fetchRecentPropResults(limit: 200)
+        let games = (try? await gFetch) ?? []
+        let props = (try? await pFetch) ?? []
+        let recapDays = games.filter { ["won", "lost", "push"].contains($0.result ?? "") }.compactMap { $0.game_date }
+                      + props.filter { ["won", "lost", "push"].contains($0.result ?? "") }.compactMap { $0.game_date }
+        let anchor = Set(recapDays).max()
+        let label = (anchor == SupabaseAPI.todayEST()) ? "TODAY" : "LAST NIGHT"
+        propBoxGames = Self.buildPropBoxGames(props: props, games: games, pulse: pulseRows, anchor: anchor, label: label)
+    }
+
     static func buildPropBoxGames(props: [PropResult], games: [GameResult], pulse: [SupabaseAPI.MarketPulseRow], anchor: String?, label: String) -> [HomePropBoxSection.GameOption] {
         // Driven off the SAME rolling anchor (recapDay) + label as the scorecard + HR tabs,
         // so THE BOX never reads "LAST NIGHT" while the scorecard one row up reads "TODAY".
@@ -5565,6 +5595,8 @@ struct HomeSlateSection: View {
     let tabs: [Tab]
     let onTap: () -> Void
     @State private var selectedTab = 0
+    @State private var expanded = false
+    private let collapsedCount = 7
 
     /// Single-read convenience — existing call sites unchanged.
     init(header: String, sub: String, rows: [Row], onTap: @escaping () -> Void) {
@@ -5582,6 +5614,20 @@ struct HomeSlateSection: View {
     }
 
     private var rows: [Row] { tabs[min(selectedTab, tabs.count - 1)].rows }
+    /// Collapsed board shows the first `collapsedCount`; the rest live behind a
+    /// "Show all" dropdown (founder: long boards get heavy).
+    private var shownRows: [Row] { expanded ? rows : Array(rows.prefix(collapsedCount)) }
+
+    /// Split a pick chip ("BREWERS -1.5 -111") into its pick ("BREWERS -1.5") and
+    /// trailing American odds ("-111") so only the PICK wears gold, not the price.
+    private func splitChipOdds(_ chip: String) -> (pick: String, odds: String?) {
+        let parts = chip.split(separator: " ").map(String.init)
+        guard parts.count > 1, let last = parts.last,
+              last.range(of: "^[+-][0-9]+$", options: .regularExpression) != nil else {
+            return (chip, nil)
+        }
+        return (parts.dropLast().joined(separator: " "), last)
+    }
 
     private func subColor(_ tone: HomeLiveVerdict?) -> Color {
         switch tone {
@@ -5597,7 +5643,7 @@ struct HomeSlateSection: View {
         HStack(spacing: 18) {
             ForEach(Array(tabs.enumerated()), id: \.offset) { i, tab in
                 Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { selectedTab = i }
+                    withAnimation(.easeInOut(duration: 0.15)) { selectedTab = i; expanded = false }
                 } label: {
                     Text(tab.label)
                         .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
@@ -5628,7 +5674,7 @@ struct HomeSlateSection: View {
                         .padding(.vertical, 16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                ForEach(Array(shownRows.enumerated()), id: \.element.id) { i, row in
                     Button(action: onTap) {
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -5677,23 +5723,49 @@ struct HomeSlateSection: View {
                                     .lineLimit(1).minimumScaleFactor(0.8)
                                     .frame(maxWidth: 150, alignment: .trailing)
                             } else {
-                                // Pick reads as clean gold type — no box (the words
-                                // deliver the info; dropping the container lets the
-                                // font breathe bigger).
-                                Text(row.chip.uppercased())
-                                    .font(GaryFonts.mono(14, bold: true))
-                                    .foregroundStyle(GaryColors.gold)
-                                    .lineLimit(1).minimumScaleFactor(0.8)
-                                    .frame(maxWidth: 150, alignment: .trailing)
+                                // Pick reads as clean gold type — no box. Only the
+                                // PICK wears gold; the trailing odds demote to grey
+                                // (founder: "the pick gold, not the odds").
+                                let parts = splitChipOdds(row.chip.uppercased())
+                                HStack(spacing: 5) {
+                                    Text(parts.pick)
+                                        .font(GaryFonts.mono(14, bold: true))
+                                        .foregroundStyle(GaryColors.gold)
+                                    if let odds = parts.odds {
+                                        Text(odds)
+                                            .font(GaryFonts.mono(12, bold: true))
+                                            .foregroundStyle(.white.opacity(0.45))
+                                    }
+                                }
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                                .frame(maxWidth: 150, alignment: .trailing)
                             }
                         }
                         .padding(.vertical, 11).padding(.horizontal, 14)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if i < rows.count - 1 {
+                    if i < shownRows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
                     }
+                }
+                // Expand/collapse the rest of the board — show ~7, dropdown the rest.
+                if rows.count > collapsedCount {
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(expanded ? "Show less" : "Show all \(rows.count) games")
+                                .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
+                            Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundStyle(GaryColors.gold)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 12).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .quantPanel()
@@ -10685,7 +10757,8 @@ struct TomorrowView {
                 }
             }
             .font(GaryFonts.mono(8.5)).tracking(1.2)
-            .foregroundStyle(.white.opacity(0.45))
+            // Gold column headers (founder) — Gary's signature on the look-ahead table.
+            .foregroundStyle(GaryColors.gold)
             .padding(.vertical, 8).padding(.horizontal, 14)
         }
 
@@ -10944,7 +11017,7 @@ struct TomorrowView {
         private func sportSubHeader(_ lg: String) -> some View {
             Text(lg)
                 .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(GaryColors.gold.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 9).padding(.bottom, 4).padding(.horizontal, 14)
         }
@@ -17801,6 +17874,8 @@ enum SignalKind {
     case xgRegression
     // WC: group advancement odds + xG recap (split out of situational)
     case advancement, xgRecap
+    // MLB fantasy streamers — today's most pickup-worthy starting pitchers
+    case fantasyPickups
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -17821,12 +17896,14 @@ enum SignalKind {
         case .xgRegression: return "chart.line.uptrend.xyaxis"
         case .advancement: return "flag.checkered"
         case .xgRecap: return "soccerball"
+        case .fantasyPickups: return "star.fill"
         }
     }
     var tint: Color {
         switch self {
         case .hot: return HubPalette.green
         case .hrThreat: return HubPalette.green
+        case .fantasyPickups: return HubPalette.green
         case .starterForm, .firstInning, .runningGame, .parkWeather: return .white.opacity(0.6)
         case .cold: return HubPalette.red
         case .regression: return HubPalette.red
@@ -17854,6 +17931,7 @@ enum SignalKind {
         case .xgRegression: return "XG REGRESSION"
         case .advancement: return "ADVANCEMENT"
         case .xgRecap: return "XG RECAP"
+        case .fantasyPickups: return "FANTASY PICKUPS"
         }
     }
 }
@@ -19999,6 +20077,7 @@ extension SignalKind {
         case "first_inning": return .firstInning
         case "running_game": return .runningGame
         case "park_weather": return .parkWeather
+        case "fantasy_pickups", "streamers", "pickups": return .fantasyPickups
         default: return nil
         }
     }
@@ -20576,6 +20655,7 @@ struct PropsHubView: View {
         case .streak: pendingScrollAnchor = "streaks"
         case .regression: pendingScrollAnchor = "regression"
         case .hrThreat: pendingScrollAnchor = "hrThreats"
+        case .fantasyPickups: pendingScrollAnchor = "fantasyPickups"
         case .h2h: pendingScrollAnchor = "owned"
         case .injury: pendingScrollAnchor = "beneficiary"
         case .situational: pendingScrollAnchor = "restFatigue"
@@ -20678,6 +20758,23 @@ struct PropsHubView: View {
                             .quantPanel().padding(.horizontal, 16)
                         }
                         .id("hrThreats")
+                    }
+                    // FANTASY PICKUPS — today's most streamable starting pitchers,
+                    // ranked best→worst on real xERA / K9 / WHIP / opponent offense
+                    // (Gary's grounded answer to an ESPN streamers column). Tap a
+                    // row → the player's full breakdown. Fed by fantasy_pickups.
+                    if !items(.fantasyPickups).isEmpty {
+                        HubDisclosure(anchor: "fantasyPickups", eyebrow: "Fantasy Pickups", count: items(.fantasyPickups).count, openSet: $openSections) {
+                            VStack(spacing: 0) {
+                                ForEach(items(.fantasyPickups)) { s in
+                                    SignalRow(s: s) { _ in
+                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    }
+                                }
+                            }
+                            .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("fantasyPickups")
                     }
                     // PLAYER EDGES — lane tabs (platoon / heat / ballpark / cooling / starters).
                     if !playerEdgeLanes.isEmpty {
@@ -20807,7 +20904,7 @@ struct PropsHubView: View {
                         .id("xgRecap")
                     }
                     // Anything else → a compact list
-                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression, .advancement, .xgRecap].contains($0.kind) }
+                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression, .advancement, .xgRecap, .fantasyPickups].contains($0.kind) }
                     if !extras.isEmpty {
                         HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: extras.count, openSet: $openSections) {
                             VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
@@ -21396,38 +21493,84 @@ struct EdgeCardBack: View {
     }
 }
 
+/// Featured edge card — REDESIGNED so every lane reads the same: a gold lane
+/// chip + game eyebrow, a sport-accent identity rule, the VALUE as a big
+/// tone-colored hero number, the subject under it, and a one-line read with a
+/// single quiet chevron (no more repeated "tap for full breakdown", no floating
+/// number, no broken-looking spark bars — consistent across every lane).
 struct FeatureEdgeCard: View {
     let s: Signal
+
+    /// The first sentence of the read — keeps the card to a tight line or two.
+    /// Splits on a period FOLLOWED BY a space so decimals ("2.03") don't cut it.
+    private var read: String {
+        let d = s.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let r = d.range(of: ". "), d.distance(from: d.startIndex, to: r.lowerBound) >= 14 {
+            return String(d[..<r.lowerBound])
+        }
+        return d
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Eyebrow — gold lane chip + the game on one line.
             HStack(spacing: 6) {
-                Text(s.kind.chip).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
-                Spacer()
-                Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
-            }
-            Text(s.headline)
-                .font(GaryFonts.text(15)).foregroundStyle(.white)
-                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            HStack(alignment: .bottom) {
-                if !s.spark.isEmpty { MiniBarChart(values: s.spark, line: s.lineVal, tint: s.kind.tint, height: 24) }
-                Spacer()
-                if !s.value.isEmpty {
-                    Text(s.value).font(GaryFonts.mono(22, bold: true)).foregroundStyle(s.tone.color)
+                Text(s.kind.chip)
+                    .font(GaryFonts.mono(8, bold: true)).tracking(1.2)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer(minLength: 6)
+                if !s.game.isEmpty {
+                    Text(s.game.uppercased())
+                        .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.4))
+                        .lineLimit(1)
                 }
             }
-            if s.playerId != nil {
-                Text("tap for full breakdown  ↘")
-                    .font(GaryFonts.mono(8, bold: false)).tracking(0.5)
-                    .foregroundStyle(.white.opacity(0.3))
+            // Sport-accent identity rule.
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill(s.kind.tint.opacity(0.65))
+                .frame(width: 26, height: 2)
+                .padding(.top, 8)
+
+            Spacer(minLength: 8)
+
+            // Hero: the number leads (the edge at a glance); the subject sits under it.
+            // Lanes with no value let the hook breathe larger instead.
+            if !s.value.isEmpty {
+                Text(s.value)
+                    .font(GaryFonts.mono(23, bold: true))
+                    .foregroundStyle(s.tone.color)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text(s.headline)
+                    .font(GaryFonts.text(12.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 3)
+            } else {
+                Text(s.headline)
+                    .font(GaryFonts.text(16, .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            // The read + a single quiet chevron affordance (the whole card flips/taps).
+            HStack(alignment: .bottom, spacing: 6) {
+                Text(read)
+                    .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.42))
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(s.kind.tint.opacity(0.85))
             }
         }
-        .padding(14)
+        .padding(13)
         .frame(width: 232, height: 162, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(GaryColors.warmWhite.opacity(0.04))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(s.kind.tint.opacity(0.28), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(s.kind.tint.opacity(0.30), lineWidth: 1))
         )
     }
 }

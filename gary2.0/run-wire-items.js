@@ -337,9 +337,7 @@ function buildPrompt({ date, league, resultsContext, allowNames }) {
     `Good: "Spurs don't cover the 6.5 in a 4-point win". Bad: "Spurs win 110-106".\n` +
     `- line_move: name the OLD number and the NEW number ("Total dropped from 9 to 8.5").\n` +
     `- injury: state the BETTING CONSEQUENCE (team total / spread / ML reaction), not just the news.\n` +
-    `- voice: ONLY when you find an ACTUAL recent (last 24h) public post or quote by a prominent betting ` +
-    `analyst. PREFER these curated handles: ${X_VOICES.join(', ')}. Set source_handle, paraphrase ` +
-    `faithfully, and NEVER fabricate a quote, a post, or a handle. If you can't verify one, omit voice items.\n` +
+    `- voice: DISABLED. Do NOT generate any voice items. Gary never attributes quotes to real handles or analysts.\n` +
     `- pace: scoring-environment / pace / weather note relevant to totals.\n` +
     `- Plain, professional copy. No hype, no clickbait, no exclamation marks.\n` +
     `- Only include items you can ground in real, current information. Fewer real items beats padding.\n\n` +
@@ -369,7 +367,9 @@ async function callWireModel(prompt) {
 // Robust JSON extraction (clone of the insights/props "search all blocks" pattern)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VALID_KINDS = new Set(['result', 'line_move', 'injury', 'voice', 'pace']);
+// 'voice' removed — Gary never fabricates attributed analyst quotes (founder). Any
+// stray voice item the model emits is dropped at validation by its absence here.
+const VALID_KINDS = new Set(['result', 'line_move', 'injury', 'pace']);
 
 /**
  * Pull the first valid JSON array of items out of the model text. Tolerates

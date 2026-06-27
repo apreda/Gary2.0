@@ -42,6 +42,7 @@ import { computeStreaking } from './computers/streaking.js';
 import { computeFirstInning } from './computers/firstInning.js';
 import { computeRunningGame } from './computers/runningGame.js';
 import { computeParkWeather } from './computers/parkWeather.js';
+import { computeFantasyPickups } from './computers/fantasyPickups.js';
 
 // NBA connection computers.
 import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
@@ -104,6 +105,7 @@ const MLB_COMPUTERS = [
   computeFirstInning,
   computeRunningGame,
   computeParkWeather,
+  computeFantasyPickups,
 ];
 
 const NBA_COMPUTERS = [
