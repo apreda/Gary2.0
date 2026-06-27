@@ -1521,8 +1521,8 @@ enum GaryColors {
     // MLB label/eyebrow accent — a SOLID light grass green (user call, Jun 26):
     // the old green→dirt-brown→white field gradient was retired for a clean,
     // readable single field-green that reads well on small text.
-    static let mlbGrass = Color(hex: "#4FB14F")
-    static let mlbFieldText = Color(hex: "#4FB14F")
+    static let mlbGrass = Color(hex: "#63D17E")
+    static let mlbFieldText = Color(hex: "#63D17E")
 }
 
 // MARK: - Immersive Background
@@ -5858,7 +5858,7 @@ enum Sport: String, CaseIterable {
         case .ncaab: return Color(hex: "#F97316")    // Orange
         case .ncaaf: return Color(hex: "#DC2626")    // Red
         case .epl: return Color(hex: "#8B5CF6")      // Purple
-        case .mlb: return Color(hex: "#4FB14F")      // Light grass green (matches MLB label)
+        case .mlb: return Color(hex: "#63D17E")      // Clean light green (the MLB label colour)
         case .mlbHR: return Color(hex: "#2D5A27")    // Outfield grass green (same as MLB)
         case .wnba: return Color(hex: "#F97316")     // Orange
         case .worldCup: return Color(hex: "#14B8A6") // World Cup teal — greens belong to NFL/MLB
@@ -18881,8 +18881,9 @@ struct PicksCarouselView: View {
         guard on else { return AnyShapeStyle(Color.white.opacity(0.35)) }
         if s == "ALL" { return AnyShapeStyle(GaryColors.gold) }
         if s == "MLB" || s == "MLB HR" {
-            // MLB reads in its field gradient (grass green → dirt brown → base white).
-            return Sport.mlb.accentGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(GaryColors.mlbFieldText)
+            // MLB reads in a clean light green — the muddy field gradient was the
+            // olive look the founder kept flagging.
+            return AnyShapeStyle(GaryColors.mlbFieldText)
         }
         return AnyShapeStyle(Sport.from(league: s).accentColor)
     }
@@ -20775,14 +20776,25 @@ struct PropsHubView: View {
         return out
     }
 
-    /// TODAY'S SIGNALS source — the top signal from each of a few diverse
-    /// categories (streaks lead so they're surfaced), capped at 5 for the mosaic.
-    private var leadSignals: [Signal] {
-        let cats: [SignalKind] = [.streak, .teamRecord, .bullpenFatigue, .platoon, .hrThreat, .hot]
+    /// THE BOARD source — round-robin the top of each category so the board's big
+    /// tiles span categories, then fill with seconds. Capped so the whole day's
+    /// signals fit in tiles without endless scroll or lane-tab switching.
+    private var boardSignals: [Signal] {
+        let cats: [SignalKind] = [.streak, .teamRecord, .bullpenFatigue, .platoon,
+                                  .hot, .ballpark, .cold, .starterForm, .hrThreat, .regression,
+                                  .h2h, .injury, .situational, .firstInning, .runningGame, .parkWeather,
+                                  .advancement, .xgRecap, .xgRegression, .tournament]
+        let buckets = cats.map { items($0) }
         var picked: [Signal] = []
-        for c in cats {
-            if let top = items(c).first { picked.append(top) }
-            if picked.count >= 5 { break }
+        var round = 0
+        while picked.count < 20 {
+            var added = false
+            for b in buckets where round < b.count {
+                picked.append(b[round]); added = true
+                if picked.count >= 20 { break }
+            }
+            if !added { break }
+            round += 1
         }
         return picked
     }
@@ -20819,25 +20831,14 @@ struct PropsHubView: View {
                     }
                     gradedReceipts
                 } else {
-                    // TODAY'S SIGNALS — a free-form mosaic of the day's biggest signals
-                    // (streak / team / bullpen / edges), varied tile sizes, surfaced up
-                    // top so streaks + angles aren't buried in the lanes below.
-                    if !leadSignals.isEmpty {
-                        HubSectionTitle(title: "Today's Signals").padding(.horizontal, 16)
-                        HubSignalsMosaic(signals: leadSignals) { s in
-                            if playerEdgeLanes.contains(s.kind) { laneTab = s.kind }
-                            HubFocusState.shared.focusLane = s.kind
-                        }
-                    }
-
-                    // PLAYER EDGES — lane tabs over the expandable Insights list.
-                    if !playerEdgeLanes.isEmpty {
-                        HubSectionTitle(title: "Insights").padding(.horizontal, 16)
+                    // THE BOARD — the whole Hub as one free-sizing tile board: every
+                    // category's top signals shown at once (no lane tabs, no expand-to-
+                    // read), tile size by impact, colour by tone. Tap a tile for the read.
+                    if !boardSignals.isEmpty {
+                        HubSectionTitle(title: "The Board").padding(.horizontal, 16)
                             .id("playerEdges")
-                        VStack(alignment: .leading, spacing: 8) {
-                            hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
-                            EdgeList(signals: items(activeLane)) { breakdownSignal = $0 }
-                        }
+                        HubTileBoard(signals: boardSignals, width: geo.size.width - 32) { breakdownSignal = $0 }
+                            .padding(.horizontal, 16)
                     }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
@@ -21493,6 +21494,117 @@ struct HubDisclosure<Content: View>: View {
 }
 
 /// Horizontal carousel of large "featured" edge cards.
+/// THE BOARD — the whole Hub as one free-sizing tile board. Every category's top
+/// signals are laid out at once in varied-size tiles (no lane tabs, no expand-to-
+/// read): tile size carries impact, the soft tone tint carries good/bad, and the
+/// user takes in the day at a glance. Tap a tile for the full read.
+struct HubTileBoard: View {
+    let signals: [Signal]
+    let width: CGFloat
+    let onTap: (Signal) -> Void
+    private let gap: CGFloat = 8
+
+    // Row templates: slot width-fractions + height. Mixed widths/heights give the
+    // free-sizing, treemap-like feel (not a uniform grid or a split down the middle).
+    private let template: [(slots: [CGFloat], h: CGFloat)] = [
+        ([0.58, 0.42], 134),
+        ([0.40, 0.60], 110),
+        ([0.34, 0.33, 0.33], 98),
+        ([0.50, 0.50], 106),
+        ([0.33, 0.34, 0.33], 92),
+        ([0.60, 0.40], 104),
+        ([0.50, 0.50], 98),
+        ([0.34, 0.33, 0.33], 92),
+    ]
+
+    private var rows: [[(s: Signal, w: CGFloat, h: CGFloat)]] {
+        var out: [[(Signal, CGFloat, CGFloat)]] = []
+        var i = 0, t = 0
+        while i < signals.count {
+            let row = template[t % template.count]
+            let n = row.slots.count
+            let avail = width - gap * CGFloat(n - 1)
+            var tiles: [(Signal, CGFloat, CGFloat)] = []
+            for frac in row.slots {
+                guard i < signals.count else { break }
+                tiles.append((signals[i], (avail * frac).rounded(), row.h))
+                i += 1
+            }
+            out.append(tiles)
+            t += 1
+        }
+        return out
+    }
+
+    private func subject(_ s: Signal) -> String {
+        if s.kind == .teamRecord || s.kind == .bullpenFatigue {
+            return String(s.headline.split(separator: " ").first ?? Substring(s.headline))
+        }
+        if s.kind == .ballpark {
+            // "At <venue>, <Player> pitches to a ..." → just the pitcher name.
+            let h = s.headline
+            if let comma = h.range(of: ", ") {
+                let after = String(h[comma.upperBound...])
+                for verb in [" pitches", " throws", " starts", " takes", " gets"] {
+                    if let r = after.range(of: verb) { return String(after[..<r.lowerBound]) }
+                }
+                return after.split(separator: " ").prefix(2).joined(separator: " ")
+            }
+        }
+        return (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    @ViewBuilder private func tile(_ s: Signal, w: CGFloat, h: CGFloat) -> some View {
+        let big = w > 205
+        let med = w > 150
+        Button { onTap(s) } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(s.kind.chip)
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(GaryColors.gold.opacity(0.82)).lineLimit(1)
+                if !s.value.isEmpty {
+                    Text(s.value)
+                        .font(GaryFonts.mono(big ? 30 : med ? 23 : 18, bold: true))
+                        .foregroundColor(s.tone.color).lineLimit(1).minimumScaleFactor(0.5)
+                }
+                Spacer(minLength: 2)
+                Text(subject(s))
+                    .font(GaryFonts.text(big ? 14.5 : 12.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.93))
+                    .lineLimit(2).minimumScaleFactor(0.8)
+                if !s.game.isEmpty {
+                    Text(s.game.uppercased())
+                        .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                }
+            }
+            .padding(11)
+            .frame(width: w, height: h, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(s.tone.color.opacity(0.10))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(s.tone.color.opacity(0.20), lineWidth: 1))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    var body: some View {
+        VStack(spacing: gap) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: gap) {
+                    ForEach(Array(row.enumerated()), id: \.offset) { _, it in
+                        tile(it.s, w: it.w, h: it.h)
+                    }
+                    if row.count == 1 { Spacer(minLength: 0) }
+                }
+            }
+        }
+    }
+}
+
 /// TODAY'S SIGNALS — a free-form mosaic (varied tile sizes, NOT a uniform grid
 /// or a split-down-the-middle): the day's biggest signal leads as a tall hero,
 /// the rest ride smaller tiles beside + below it. Each tile = the lane tag, the
