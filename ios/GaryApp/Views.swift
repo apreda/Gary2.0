@@ -1810,6 +1810,10 @@ struct HomeView: View {
     /// the Prop Box HR / 2+ HITS / K SHOW tabs.
     @State private var nightHighlights: [NightHighlightRow] = []
     @State private var todayPicks: [GaryPick] = []
+    /// todayPicks indexed by String(game_id) — rebuilt only when picks change.
+    /// pickFor(_ live:) reads this (O(1)) instead of scanning todayPicks per live
+    /// score per render; the live tape/takeover/board call it many times a tick.
+    @State private var picksByGameId: [String: GaryPick] = [:]
     @State private var initialLive: [LiveScore] = []
     @ObservedObject private var liveCache = LiveScoreCache.shared
 
@@ -2318,6 +2322,9 @@ struct HomeView: View {
                     }
                     playsOnBoard = (todayOnlyPicks?.count ?? 0) + propCount
                     todayPicks = todayOnlyPicks ?? []
+                    picksByGameId = Dictionary(
+                        (todayPicks.compactMap { p in p.game_id.map { (String($0), p) } }),
+                        uniquingKeysWith: { a, _ in a })
 
                     loading = false
                 }
@@ -2877,10 +2884,9 @@ struct HomeView: View {
     /// game_id FIRST so a doubleheader (same teams, two games in one night) attaches
     /// to the RIGHT game; the fuzzy team match is only the fallback when an id is missing.
     private func pickFor(_ live: LiveScore) -> GaryPick? {
-        if let gid = live.game_id, !gid.isEmpty,
-           let exact = todayPicks.first(where: { $0.game_id.map(String.init) == gid }) {
-            return exact
-        }
+        // O(1) game_id hit (the common path, doubleheader-safe); fuzzy team match
+        // only when the row/pick has no id.
+        if let gid = live.game_id, let exact = picksByGameId[gid] { return exact }
         return todayPicks.first { p in
             abbrGameMatches(live.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
         }
@@ -10226,7 +10232,10 @@ struct TomorrowView {
                 lookAheadTabs
                 if !lookAheadOnly, let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
             }
-            .onReceive(ticker) { now = $0 }
+            // The 1Hz tick drives ONLY the countdown hero. In lookAheadOnly mode
+            // (Home TODAY + the Hub Day Ahead) that hero is hidden, so updating
+            // `now` there just re-renders the whole table every second for nothing.
+            .onReceive(ticker) { if !lookAheadOnly { now = $0 } }
         }
 
         // ── ① Countdown hero ───────────────────────────────────────────────
@@ -10482,8 +10491,8 @@ struct TomorrowView {
                 Text("O/U").frame(width: 42, alignment: .trailing)
                 Text("ML").frame(width: 46, alignment: .trailing)
             }
-            .font(GaryFonts.mono(8.5))
-            .foregroundStyle(.white.opacity(0.28))
+            .font(GaryFonts.mono(10))
+            .foregroundStyle(.white.opacity(0.4))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
@@ -10494,14 +10503,14 @@ struct TomorrowView {
             let home = row.home_abbr ?? abbr(row.home_team)
             return HStack(spacing: 0) {
                 Text(TomorrowView.etTime(row.commence_time, withZone: false))
-                    .font(GaryFonts.mono(10.5))
+                    .font(GaryFonts.mono(12))
                     .foregroundStyle(GaryColors.gold)
                     .frame(width: 48, alignment: .leading)
                 HStack(spacing: 5) {
                     Circle().fill(TomorrowView.sportDotColor(row.league)).frame(width: 6, height: 6)
                     Text("\(away) @ \(home)")
-                        .font(GaryFonts.mono(10.5, bold: true))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .font(GaryFonts.mono(12, bold: true))
+                        .foregroundStyle(.white.opacity(0.92))
                     if marquee {
                         Image(systemName: "star.fill")
                             .font(.system(size: 7.5))
@@ -10510,13 +10519,13 @@ struct TomorrowView {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Text(Self.lineStr(row.spread, signed: true))
-                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.75))
+                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
                     .frame(width: 46, alignment: .trailing)
                 Text(Self.lineStr(row.total))
-                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.75))
+                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
                     .frame(width: 42, alignment: .trailing)
                 Text(Self.mlStr(row.ml_home))
-                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.45))
+                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.5))
                     .frame(width: 46, alignment: .trailing)
             }
             .padding(.horizontal, 12)
@@ -10883,7 +10892,7 @@ struct TomorrowView {
                     Text("PITCHER / GAME")
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text("ERA · xERA")
-                        .frame(width: 150, alignment: .trailing)
+                        .frame(width: 164, alignment: .trailing)
                 case .returns:
                     Text("PLAYER / TEAM")
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -10937,8 +10946,8 @@ struct TomorrowView {
                         HStack(alignment: .top, spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(p.name ?? "")
-                                    .font(GaryFonts.text(12.5, .semibold))
-                                    .foregroundStyle(.white.opacity(0.9))
+                                    .font(GaryFonts.text(14, .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
                                     .lineLimit(1)
                                 // The matchup shown ONCE — the starter's OWN team in
                                 // gold, the opponent grey (no more "HOU HOU @ DET").
@@ -10956,7 +10965,7 @@ struct TomorrowView {
                                             Text(g).foregroundStyle(.white.opacity(0.4))
                                         }
                                     }
-                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.4)
+                                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.4)
                                     .lineLimit(1)
                                 }
                             }
@@ -10974,12 +10983,12 @@ struct TomorrowView {
                                         eraStat("xERA", xera, avg: lgAvgXera)
                                     }
                                 }
-                                .frame(width: 150, alignment: .trailing)
+                                .frame(width: 164, alignment: .trailing)
                             } else {
                                 Text("—")
                                     .font(GaryFonts.mono(10))
                                     .foregroundStyle(.white.opacity(0.4))
-                                    .frame(width: 150, alignment: .trailing)
+                                    .frame(width: 164, alignment: .trailing)
                             }
                         }
                         .padding(.vertical, 9).padding(.horizontal, 14)
@@ -10995,10 +11004,10 @@ struct TomorrowView {
         private func eraStat(_ label: String, _ value: Double, avg: Double?) -> some View {
             HStack(spacing: 3) {
                 Text(label)
-                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.45))
                 Text(String(format: "%.2f", value))
-                    .font(GaryFonts.mono(11, bold: true))
+                    .font(GaryFonts.mono(12.5, bold: true))
                     .foregroundStyle(eraColor(value, avg: avg))
             }
         }
@@ -11028,8 +11037,8 @@ struct TomorrowView {
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(p.name ?? "")
-                                    .font(GaryFonts.text(12.5, .semibold))
-                                    .foregroundStyle(.white.opacity(0.9))
+                                    .font(GaryFonts.text(14, .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
                                     .lineLimit(1)
                                 if let t = p.team, !t.isEmpty {
                                     Text(t)
@@ -11129,25 +11138,25 @@ struct TomorrowView {
                                 if let a = w.away_abbr, let h = w.home_abbr, !a.isEmpty, !h.isEmpty { return "\(a) @ \(h)" }
                                 return w.matchup.map(shortenMatchup) ?? "—"
                             }())
-                                .font(GaryFonts.text(12.5, .semibold))
-                                .foregroundStyle(.white.opacity(0.9))
+                                .font(GaryFonts.text(14, .semibold))
+                                .foregroundStyle(.white.opacity(0.92))
                                 .lineLimit(1)
                             if let v = w.venue, !v.isEmpty {
                                 Text(v)
-                                    .font(GaryFonts.mono(8.5)).tracking(0.3)
-                                    .foregroundStyle(.white.opacity(0.35))
+                                    .font(GaryFonts.mono(9.5)).tracking(0.3)
+                                    .foregroundStyle(.white.opacity(0.4))
                                     .lineLimit(1)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         VStack(alignment: .trailing, spacing: 2) {
                             HStack(spacing: 6) {
-                                if let t = w.temp_f { Text("\(t)°").font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.75)) }
-                                if let wind = w.wind_mph { Text("\(wind)mph").font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.5)) }
+                                if let t = w.temp_f { Text("\(t)°").font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.8)) }
+                                if let wind = w.wind_mph { Text("\(wind)mph").font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.55)) }
                             }
                             if let note = w.note, !note.isEmpty {
                                 Text(note)
-                                    .font(GaryFonts.mono(8.5))
+                                    .font(GaryFonts.mono(9.5))
                                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                                     .lineLimit(1)
                             }
@@ -11166,7 +11175,7 @@ struct TomorrowView {
         }
         private func sportSubHeader(_ lg: String) -> some View {
             Text(lg)
-                .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
+                .font(GaryFonts.mono(10, bold: true)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 9).padding(.bottom, 4).padding(.horizontal, 14)
@@ -20744,12 +20753,27 @@ struct PropsHubView: View {
     /// TODAY's look-ahead board (today_board) — feeds "The Day Ahead" table on the
     /// Hub: the SAME component the Tomorrow page uses, but for today's slate.
     @State private var todayBoard: TomorrowBoard? = nil
+    /// Pre-grouped signals [league: [kind: rows]] — rebuilt only when `fetched`
+    /// changes. items() reads from this (O(1) dict lookup) instead of filtering
+    /// the whole `fetched` array on every call; the body calls items() 30+ times
+    /// per render across ~12 lanes, so the filter was O(lanes × signals) per frame.
+    @State private var itemsIndex: [HubLeagueSel: [SignalKind: [Signal]]] = [:]
 
     private var source: [Signal] { fetched }
 
+    /// Build the [league: [kind: rows]] index (excludes confirmed-XI rows — those
+    /// surface only in the WC "Game Intel" section, never the regular lanes).
+    private static func buildItemsIndex(_ all: [Signal]) -> [HubLeagueSel: [SignalKind: [Signal]]] {
+        var idx: [HubLeagueSel: [SignalKind: [Signal]]] = [:]
+        for s in all where s.confirmedXI == nil {
+            idx[s.league, default: [:]][s.kind, default: []].append(s)
+        }
+        return idx
+    }
+
     // Regular lanes exclude confirmed-XI rows — those surface only in the WC "Game Intel"
     // section (wcIntelSignals), never doubled into Rest & Fatigue etc.
-    private func items(_ k: SignalKind) -> [Signal] { source.filter { $0.league == sel && $0.kind == k && $0.confirmedXI == nil } }
+    private func items(_ k: SignalKind) -> [Signal] { itemsIndex[sel]?[k] ?? [] }
 
     /// Streaks/Last Night are per-league feeds (MLB-only pipelines today) —
     /// scope them to the toggle so MLB bats never show under NBA/WC.
@@ -20831,7 +20855,10 @@ struct PropsHubView: View {
             // Keep last-good data only when the fetch ERRORED. A successful
             // zero-row day (post-3am rollover, edges not posted yet) must
             // clear the board, or yesterday's edges render as tonight's.
-            if !collected.isEmpty || !anyError { fetched = collected }
+            if !collected.isEmpty || !anyError {
+                fetched = collected
+                itemsIndex = Self.buildItemsIndex(collected)   // rebuild the lane cache once per load
+            }
             // Land on the highest-priority league with edges tonight (a
             // Finals night opens on NBA even with a full MLB slate posted) —
             // but never stomp a league the user picked that still has rows.
