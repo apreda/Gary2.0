@@ -18809,7 +18809,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
-                                   edges: sportConnections, scopeLeague: sport, refreshTick: store.refreshTick, onTapProp: { selectedProp = $0 })
+                                   edges: sportConnections, scopeLeague: sport, isToday: pickDay == .today, refreshTick: store.refreshTick, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .refreshable { await store.refresh() }
@@ -19120,6 +19120,10 @@ struct PicksTodayPage: View {
     /// scope that filters the edges. LEAGUE PULSE is league-wide, so it only
     /// lights up on an MLB or WC scope and collapses otherwise.
     let scopeLeague: String
+    /// True on the TODAY board (not the Yesterday view). Drives the blurred
+    /// "pick coming" teaser: TODAY with nothing posted for this sport yet shows the
+    /// lock card, never an empty top — Yesterday with no result just shows nothing.
+    let isToday: Bool
     /// Bumped by the store on every pull-to-refresh — threaded into LEAGUE PULSE
     /// so a manual refresh refetches it (it owns its own network state).
     let refreshTick: Int
@@ -19167,9 +19171,57 @@ struct PicksTodayPage: View {
             FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
                 .padding(.horizontal, 22)   // same width as the per-game prop cards
                 .padding(.top, 10)          // breathing room from the tab row (matches the game-card variant)
+        } else if isToday {
+            // Nothing posted for this sport yet — tease it with the blurred lock card
+            // (never an empty top). A fresh pick replaces it the moment Gary posts.
+            TeasedPickCard(league: scopeLeague == "ALL" ? nil : scopeLeague)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 10)
         }
     }
 
+}
+
+/// The blurred "pick coming" lock card for the Picks TODAY page — sharp chrome,
+/// redaction bars where the call/matchup/time will be, lock overlay. Same look +
+/// footprint as the Winners-tab teaser so the two surfaces read identically.
+struct TeasedPickCard: View {
+    /// Sport label for the "Tonight's <league> pick is coming" line; nil on ALL.
+    var league: String? = nil
+
+    var body: some View {
+        let cardW = UIScreen.main.bounds.width - 44
+        ZStack {
+            // Blurred mock contents — redaction bars, never fake copy.
+            VStack(alignment: .leading, spacing: 12) {
+                RoundedRectangle(cornerRadius: 4).fill(GaryColors.gold.opacity(0.5)).frame(width: 92, height: 11)
+                RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.55)).frame(width: 210, height: 24)
+                RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.3)).frame(width: 150, height: 13)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(18)
+            .blur(radius: 5)
+
+            // Lock overlay — same language as the Winners look-ahead card.
+            VStack(spacing: 8) {
+                Image(systemName: "lock.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(GaryColors.gold)
+                Text("UNVEILS ~90 MIN BEFORE").font(GaryFonts.mono(10.5, bold: true)).tracking(1.2).foregroundStyle(.white.opacity(0.88))
+                Text(league.map { "Tonight's \($0) pick is coming" } ?? "Tonight's pick is coming")
+                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+            }
+        }
+        .frame(width: cardW, height: CompactPickRow.uniformHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(hex: "#121110"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(.white.opacity(0.10), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
 }
 
 struct PicksGamePage: View {
@@ -20595,6 +20647,9 @@ struct PropsHubView: View {
     /// Digest layout — anchors of the long-tail sections currently expanded.
     /// A deep link springs its target open via consumeFocus().
     @State private var openSections: Set<String> = []
+    /// TODAY's look-ahead board (today_board) — feeds "The Day Ahead" table on the
+    /// Hub: the SAME component the Tomorrow page uses, but for today's slate.
+    @State private var todayBoard: TomorrowBoard? = nil
 
     private var source: [Signal] { fetched }
 
@@ -20655,6 +20710,9 @@ struct PropsHubView: View {
             night = await SupabaseAPI.fetchNightHighlights(date: gradedDate)
         }
         let liveStreaks = await SupabaseAPI.fetchStreaks()
+        // TODAY's look-ahead board ("The Day Ahead" table) — today's starters/form/
+        // run-profile/weather, the same table the Tomorrow page shows for tomorrow.
+        let tb = await SupabaseAPI.fetchTodayBoard(date: date)
         // The morning void → yesterday's GRADED board. Today's edges post with
         // lineups (~afternoon); until then the Hub shows its receipts, not an
         // empty room.
@@ -20675,6 +20733,7 @@ struct PropsHubView: View {
             streakRows = liveStreaks
             nightRows = night
             ydaySignals = yday
+            todayBoard = tb
             // Keep last-good data only when the fetch ERRORED. A successful
             // zero-row day (post-3am rollover, edges not posted yet) must
             // clear the board, or yesterday's edges render as tonight's.
@@ -20812,6 +20871,14 @@ struct PropsHubView: View {
                     // founder), ALWAYS expanded: lane tabs (platoon / heat / ballpark /
                     // cooling / starters) over a horizontal swipe scroller. Applies to
                     // MLB and WC (the lanes adapt to the selected league).
+                    // THE DAY AHEAD (TODAY) — the SAME look-ahead table the Tomorrow
+                    // page uses (Starters / Form / Run Profile / Weather + MLB/WC),
+                    // but for TODAY's slate (today_board). Founder: put it on the Hub.
+                    if let tb = todayBoard {
+                        TomorrowView.Body(board: tb, lookAheadOnly: true)
+                            .id("dayAhead")
+                    }
+
                     if !playerEdgeLanes.isEmpty {
                         HubSectionTitle(title: "Insights").padding(.horizontal, 16)
                             .id("playerEdges")
@@ -22008,9 +22075,32 @@ struct EdgeList: View {
         }
         return String(format: "%.2f", v)
     }
+    /// Line 1 reads as the NAME, not the whole sentence. The "Name (POS): …" lanes
+    /// cut cleanly at "(" / ":"; the ballpark/starter-form lanes write full sentences
+    /// ("At Citi Field, Cíonel Perez owns a 0.84 ERA") — the value + "elsewhere" line
+    /// already carry the stat + split, so we drop any "At <venue>," preamble and keep
+    /// the leading name tokens (stopping at the first verb/stat/possessive). No truncation.
     private func cleanName(_ s: Signal) -> String {
-        (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
-            .trimmingCharacters(in: .whitespaces)
+        var h = s.headline.trimmingCharacters(in: .whitespaces)
+        // Drop a leading "At <venue>, " so the player's name leads the line.
+        if h.hasPrefix("At "), let c = h.range(of: ", ") { h = String(h[c.upperBound...]) }
+        // "Name (POS): angle" lanes — cut at the delimiter.
+        if let d = h.rangeOfCharacter(from: CharacterSet(charactersIn: "(:")) {
+            return String(h[..<d.lowerBound]).trimmingCharacters(in: .whitespaces)
+        }
+        // Sentence lanes — keep the leading name tokens only.
+        let stop: Set<String> = ["owns", "pitches", "throws", "has", "posts", "carries", "is", "ERA", "OPS"]
+        var name: [String] = []
+        for raw in h.split(separator: " ") {
+            let w = String(raw)
+            if let apos = w.range(of: "'s") { name.append(String(w[..<apos.lowerBound])); break }
+            let firstChar = w.first.map(String.init) ?? ""
+            if stop.contains(w) || firstChar.lowercased() == firstChar { break }   // verb/stat or lowercase word ends the name
+            name.append(w)
+            if name.count >= 3 { break }
+        }
+        let result = name.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return result.isEmpty ? h : result
     }
 
     var body: some View {
@@ -22075,7 +22165,7 @@ struct EdgeList: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(cleanName(s))
                     .font(GaryFonts.text(15, .semibold)).foregroundStyle(.white.opacity(0.96))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)   // wrap, never "…"
                 Spacer(minLength: 6)
                 if !s.value.isEmpty {
                     (Text(s.value).foregroundColor(s.tone.color)
