@@ -91,17 +91,27 @@ enum SupabaseAPI {
         return String(format: "%04d-%02d-%02d", year, month, day)
     }
     
-    /// Yesterday's date in EST timezone (YYYY-MM-DD format)
+    /// Yesterday's date in EST timezone (YYYY-MM-DD format).
+    /// One day before the 3am-aware SLATE day (todayEST), NOT before wall-clock now:
+    /// between midnight–3am ET, todayEST() is already yesterday's calendar date, so
+    /// subtracting from `now` would return the slate day itself (showing 2-days-ago
+    /// as "yesterday"). Anchor on todayEST so it stays one real day behind the slate.
     static func yesterdayEST() -> String {
         guard let tz = TimeZone(identifier: "America/New_York") else { return "" }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
-        
-        let now = Date()
-        if let yesterday = cal.date(byAdding: .day, value: -1, to: now) {
+        let fmt = DateFormatter()
+        fmt.timeZone = tz
+        fmt.dateFormat = "yyyy-MM-dd"
+        if let today = fmt.date(from: todayEST()),
+           let yesterday = cal.date(byAdding: .day, value: -1, to: today) {
             return formatDateEST(yesterday)
         }
-        return formatDateEST(now)
+        // Fallback (parse failure): one day before wall-clock now.
+        if let yesterday = cal.date(byAdding: .day, value: -1, to: Date()) {
+            return formatDateEST(yesterday)
+        }
+        return formatDateEST(Date())
     }
 
     /// Billfold rolls over after the daily 7:00 AM EST results ingest.
@@ -586,10 +596,19 @@ enum SupabaseAPI {
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "limit", value: "1")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([TomorrowBoard].self, from: data) else { return nil }
-        return rows.first
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                // A 400 here usually means a select column was dropped from the table —
+                // log it so the empty board is debuggable, not silent.
+                print("[fetchTomorrowBoard] HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
+                return nil
+            }
+            return try JSONDecoder().decode([TomorrowBoard].self, from: data).first
+        } catch {
+            print("[fetchTomorrowBoard] error \(date): \(error.localizedDescription)")
+            return nil
+        }
     }
 
     /// Today's look-ahead board (today_board) — same shape as TomorrowBoard, keyed
@@ -601,10 +620,17 @@ enum SupabaseAPI {
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "limit", value: "1")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([TomorrowBoard].self, from: data) else { return nil }
-        return rows.first
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                print("[fetchTodayBoard] HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
+                return nil
+            }
+            return try JSONDecoder().decode([TomorrowBoard].self, from: data).first
+        } catch {
+            print("[fetchTodayBoard] error \(date): \(error.localizedDescription)")
+            return nil
+        }
     }
 
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence

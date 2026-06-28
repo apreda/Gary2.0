@@ -2207,13 +2207,11 @@ struct HomeView: View {
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
 
-                    // Yesterday's top pick & prop (shown when today's aren't ready yet)
+                    // Yesterday's top pick & prop (shown when today's aren't ready yet).
+                    // 3am-aware yesterday (one real day before the slate day), not a
+                    // raw now-minus-1 that would show two-days-ago before 3am ET.
                     do {
-                        var estCal = Calendar.current
-                        estCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-                        let yesterdayDate = estCal.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-                        let yesterdayStr = estCal.dateComponents([.year, .month, .day], from: yesterdayDate)
-                        let yDateStr = String(format: "%04d-%02d-%02d", yesterdayStr.year ?? 2026, yesterdayStr.month ?? 1, yesterdayStr.day ?? 1)
+                        let yDateStr = SupabaseAPI.yesterdayEST()
 
                         if let yPicks = try? await SupabaseAPI.fetchAllPicks(date: yDateStr), !yPicks.isEmpty {
                             let top = yPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
@@ -3607,8 +3605,13 @@ struct HomeView: View {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.timeZone = TimeZone(identifier: "America/New_York")
+        // The day arithmetic must run in EST too — Calendar.current uses the DEVICE
+        // tz, so off-EST (or on a DST boundary) it could shift to the wrong slate
+        // date and the Tomorrow/Day-Ahead board would fetch an empty/next-day key.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
         guard let d = f.date(from: s),
-              let shifted = Calendar.current.date(byAdding: .day, value: days, to: d) else { return nil }
+              let shifted = cal.date(byAdding: .day, value: days, to: d) else { return nil }
         return f.string(from: shifted)
     }
 
@@ -10365,18 +10368,76 @@ struct TomorrowView {
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    // Both probable starters, gold. WC games show no line.
-                    if let pitchersLine {
-                        Text(pitchersLine)
-                            .font(GaryFonts.mono(9.5))
-                            .foregroundStyle(GaryColors.gold.opacity(0.95))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
+                    // Both probable starters with their season ERA — colour carries
+                    // quality (green at/below the league average, red above). MLB only;
+                    // WC big games have nil pitchers → no line. (pitchersLine kept above
+                    // as the existence gate.)
+                    if pitchersLine != nil, let a = away, let h = home {
+                        let bRow = bigGameBoardRow(g)
+                        let aEra = starterERA(lastName: a, abbr: bRow?.away_abbr)
+                        let hEra = starterERA(lastName: h, abbr: bRow?.home_abbr)
+                        (
+                            Text(a).foregroundColor(GaryColors.gold.opacity(0.95))
+                            + Text(aEra.map { " \($0.text)" } ?? "").foregroundColor(aEra?.color ?? .clear)
+                            + Text("  vs  ").foregroundColor(.white.opacity(0.38))
+                            + Text(h).foregroundColor(GaryColors.gold.opacity(0.95))
+                            + Text(hEra.map { " \($0.text)" } ?? "").foregroundColor(hEra?.color ?? .clear)
+                        )
+                        .font(GaryFonts.mono(9.5))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    // Market line — the favourite + total, betting context (MLB).
+                    if (g.league ?? "").uppercased() != "WC", let mkt = bigGameMarket(g) {
+                        Text(mkt)
+                            .font(GaryFonts.mono(9))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1).minimumScaleFactor(0.85)
                     }
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
+        }
+
+        /// The board row for a big game, matched by team last-words ("Reds @ Brewers").
+        private func bigGameBoardRow(_ g: TomorrowBigGame) -> TomorrowBoardRow? {
+            guard let mu = g.matchup?.lowercased(), let rows = board?.board else { return nil }
+            let sides = mu.components(separatedBy: " @ ")
+            guard sides.count == 2,
+                  let aKey = sides[0].split(separator: " ").last.map(String.init),
+                  let hKey = sides[1].split(separator: " ").last.map(String.init) else { return nil }
+            return rows.first {
+                ($0.away_team ?? "").lowercased().contains(aKey) &&
+                ($0.home_team ?? "").lowercased().contains(hKey)
+            }
+        }
+
+        /// A probable starter's ERA + quality colour, matched by team abbr + last name.
+        /// Green at/below the league-average ERA, red above. nil when ERA isn't posted.
+        private func starterERA(lastName: String?, abbr: String?) -> (text: String, color: Color)? {
+            guard let lastName, !lastName.isEmpty, let starters = board?.starters else { return nil }
+            let key = lastName.lowercased()
+            let p = starters.first {
+                $0.era != nil &&
+                (($0.name ?? "").lowercased().split(separator: " ").last.map(String.init) == key) &&
+                (abbr == nil || ($0.abbr ?? "").uppercased() == abbr!.uppercased())
+            }
+            guard let era = p?.era else { return nil }
+            let avg = board?.league_avg_era ?? 4.0
+            return (Self.trimNum(era), era <= avg ? GaryColors.win : GaryColors.loss)
+        }
+
+        /// "MIL -145 · O/U 7.5" — favourite (more-negative ML) + total.
+        private func bigGameMarket(_ g: TomorrowBigGame) -> String? {
+            guard let row = bigGameBoardRow(g) else { return nil }
+            var parts: [String] = []
+            if let mh = row.ml_home, let ma = row.ml_away {
+                let homeFav = mh <= ma
+                let favAbbr = (homeFav ? row.home_abbr : row.away_abbr) ?? abbr(homeFav ? row.home_team : row.away_team)
+                parts.append("\(favAbbr) \(Self.mlStr(homeFav ? mh : ma))")
+            }
+            if let t = row.total { parts.append("O/U \(Self.trimNum(t))") }
+            return parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
         }
 
         // ── ③ Tomorrow's board (full scoreboard) ───────────────────────────
@@ -10842,7 +10903,7 @@ struct TomorrowView {
                     Text("FORECAST").frame(width: 132, alignment: .trailing)
                 }
             }
-            .font(GaryFonts.mono(8.5)).tracking(1.2)
+            .font(GaryFonts.mono(10.5)).tracking(1.2)
             // Gold column headers (founder) — Gary's signature on the look-ahead table.
             .foregroundStyle(GaryColors.gold)
             .padding(.vertical, 8).padding(.horizontal, 14)
@@ -11000,21 +11061,21 @@ struct TomorrowView {
                         HStack(spacing: 8) {
                             HStack(spacing: 5) {
                                 Text(f.abbr ?? abbr(f.team))
-                                    .font(GaryFonts.mono(11, bold: true))
-                                    .foregroundStyle(.white.opacity(0.9))
+                                    .font(GaryFonts.mono(13.5, bold: true))
+                                    .foregroundStyle(.white.opacity(0.92))
                                 if f.home == true {
                                     Text("HOME")
-                                        .font(GaryFonts.mono(7.5, bold: true)).tracking(0.6)
+                                        .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
                                         .foregroundStyle(GaryColors.gold.opacity(0.7))
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Text(f.l10 ?? "—")
-                                .font(GaryFonts.mono(10.5))
-                                .foregroundStyle(.white.opacity(0.75))
+                                .font(GaryFonts.mono(13))
+                                .foregroundStyle(.white.opacity(0.8))
                                 .frame(width: 56, alignment: .trailing)
                             Text(f.streak ?? "—")
-                                .font(GaryFonts.mono(10.5, bold: true))
+                                .font(GaryFonts.mono(13, bold: true))
                                 .foregroundStyle(streakColor(f.streak))
                                 .frame(width: 60, alignment: .trailing)
                         }
@@ -11034,19 +11095,19 @@ struct TomorrowView {
                     ForEach(Array(r.enumerated()), id: \.offset) { _, rp in
                         HStack(spacing: 8) {
                             Text(rp.abbr ?? abbr(rp.team))
-                                .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(.white.opacity(0.9))
+                                .font(GaryFonts.mono(13.5, bold: true))
+                                .foregroundStyle(.white.opacity(0.92))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text(Self.oneDecimal(rp.rs_per_game))
-                                .font(GaryFonts.mono(10.5))
-                                .foregroundStyle(.white.opacity(0.75))
+                                .font(GaryFonts.mono(13))
+                                .foregroundStyle(.white.opacity(0.8))
                                 .frame(width: 52, alignment: .trailing)
                             Text(Self.oneDecimal(rp.ra_per_game))
-                                .font(GaryFonts.mono(10.5))
-                                .foregroundStyle(.white.opacity(0.75))
+                                .font(GaryFonts.mono(13))
+                                .foregroundStyle(.white.opacity(0.8))
                                 .frame(width: 52, alignment: .trailing)
                             Text(Self.signedInt(rp.run_diff))
-                                .font(GaryFonts.mono(10.5, bold: true))
+                                .font(GaryFonts.mono(13, bold: true))
                                 .foregroundStyle(diffColor(rp.run_diff))
                                 .frame(width: 48, alignment: .trailing)
                         }
@@ -20841,8 +20902,13 @@ struct PropsHubView: View {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.timeZone = TimeZone(identifier: "America/New_York")
+        // The day arithmetic must run in EST too — Calendar.current uses the DEVICE
+        // tz, so off-EST (or on a DST boundary) it could shift to the wrong slate
+        // date and the Tomorrow/Day-Ahead board would fetch an empty/next-day key.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
         guard let d = f.date(from: s),
-              let shifted = Calendar.current.date(byAdding: .day, value: days, to: d) else { return nil }
+              let shifted = cal.date(byAdding: .day, value: days, to: d) else { return nil }
         return f.string(from: shifted)
     }
 
