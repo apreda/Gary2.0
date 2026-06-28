@@ -347,10 +347,14 @@ async function run() {
     } catch (e) { console.warn(`[live_scores] phantom-row cleanup (${lg}) failed: ${e?.message || e}`); }
   }
 
-  // Grade any game that JUST went final — picks/props/insights now, not at 6:45am.
+  // Grade any of TODAY's games that JUST went final — picks/props/insights now,
+  // not at 6:45am. Only today's-date rows: a spillover game stamped to its own
+  // (prior) day isn't this poll's slate to grade — it grades under its own day /
+  // the morning batch, so it can't spuriously re-trigger today's grader each poll.
   if (prevFinalIds) {
     const newlyFinal = stamped.filter(
-      (r) => r.status === 'final' && !prevFinalIds.has(`${r.league}:${r.game_id}`),
+      (r) => r.status === 'final' && r.date === targetDate
+        && !prevFinalIds.has(`${r.league}:${r.game_id}`),
     );
     if (newlyFinal.length > 0) {
       const labels = newlyFinal.map((r) => `${r.away_abbr ?? '?'}@${r.home_abbr ?? '?'}`).join(', ');
