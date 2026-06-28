@@ -118,18 +118,28 @@ function readSide(lineups, teamId, teamName) {
   };
 }
 
-export async function computeWcConfirmedXI(ctx) {
-  const games = Array.isArray(ctx?.games) ? ctx.games : [];
-  const season = Number(ctx?.season) || DEFAULT_SEASON;
-  // Real WC injury snapshot (BDL): norm(name) -> status (OUT / GTD / SUS). Fetched once for
-  // the whole slate, cached. OUT drops a regular from the projection; GTD/SUS in the XI
-  // flags Contested. Empty feed → no doubts (fails safe, never fabricates).
+/**
+ * Real WC injury snapshot (BDL): norm(name) -> status (OUT / GTD / SUS). The map
+ * is keyed with THIS module's `norm` so previousXI's lookup (also norm-keyed)
+ * matches. Shared by the confirmed-XI lane AND wcPlayerInsightCards so the pitch
+ * XI and the player cards drop the SAME injured/suspended players — otherwise a
+ * promoted replacement shows on the field with no card behind it. Empty feed ->
+ * empty map (fails safe, never fabricates a doubt).
+ */
+export async function loadWcInjuryStatus(season = DEFAULT_SEASON) {
   const injRows = await safe(() => wc.getInjuries({ seasons: [season] }), []);
   const injStatus = new Map();
   for (const r of injRows || []) {
     const nm = r?.player?.name;
     if (nm && r?.status) injStatus.set(norm(nm), String(r.status).toUpperCase());
   }
+  return injStatus;
+}
+
+export async function computeWcConfirmedXI(ctx) {
+  const games = Array.isArray(ctx?.games) ? ctx.games : [];
+  const season = Number(ctx?.season) || DEFAULT_SEASON;
+  const injStatus = await loadWcInjuryStatus(season);
   console.log(`[wcConfirmedXI] ${injStatus.size} injury statuses loaded`);
   const rows = [];
   for (const match of games) {

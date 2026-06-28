@@ -52,7 +52,7 @@ import {
   formatProps, attachPropRates, safeCall as safeCallShared,
 } from './shared.js';
 import * as apiFootball from '../apiFootballService.js';
-import { previousXI } from './computers/wcConfirmedXI.js';
+import { previousXI, loadWcInjuryStatus } from './computers/wcConfirmedXI.js';
 
 // Thin local binding so every safeCall() site carries a '[wcPlayerInsightCards]'
 // error prefix while reusing the shared implementation.
@@ -154,6 +154,13 @@ export async function buildWcPlayerInsightCards({ date, league, matches } = {}) 
   const packs = [];
   const stats = { matches: 0, starters: 0, built: 0, keeper: 0, outfield: 0, skipped: 0, projectedMatches: 0, confirmedMatches: 0 };
 
+  // Same injury snapshot the confirmed-XI lane uses, so the projected starters we
+  // build cards for EXACTLY match the injury-filtered XI the iOS field shows — no
+  // pitch player without a card behind him (and no card for a player who was
+  // dropped). One fetch for the whole slate.
+  const injStatus = await loadWcInjuryStatus(DEFAULT_SEASON);
+  console.log(`[wcPlayerInsightCards] ${injStatus.size} injury statuses loaded`);
+
   for (const match of slate) {
     const matchId = match?.id ?? match?.soccer_match_id ?? null;
     if (matchId == null) { continue; }
@@ -171,16 +178,24 @@ export async function buildWcPlayerInsightCards({ date, league, matches } = {}) 
     let starters = asArray(lineups).filter((l) => l?.is_starter && l?.player?.id != null);
     let xiSource = 'confirmed';
 
-    // Require a real XI on at least one side before trusting the live sheet.
+    // Require a real XI on at least one side before trusting the live sheet — AND
+    // that we're inside the confirm window (~90 min pre-kickoff). This MUST mirror
+    // wcConfirmedXI's decision: outside the window BDL's "sheet" is just the last
+    // lineup, so that lane projects regulars instead. If the two disagree (sheet
+    // here, projection there), the iOS field shows a projected player whose card
+    // we never built — the exact "Adams: full breakdown posts once confirmed" bug.
     const sideCount = (rows) => {
       const per = {};
       for (const s of rows) per[s.team_id] = (per[s.team_id] || 0) + 1;
       return per;
     };
-    const confirmedFull = Object.values(sideCount(starters)).some((c) => c >= XI_MIN_STARTERS);
+    const kickoff = match?.datetime ? new Date(match.datetime).getTime() : null;
+    const inConfirmWindow = kickoff != null && (kickoff - Date.now()) <= 95 * 60 * 1000;
+    const confirmedFull = inConfirmWindow
+      && Object.values(sideCount(starters)).some((c) => c >= XI_MIN_STARTERS);
 
     if (!confirmedFull) {
-      const projected = await projectedStarters(match, teamMeta);
+      const projected = await projectedStarters(match, teamMeta, injStatus);
       if (projected.length) {
         starters = projected;
         xiSource = 'projected';
@@ -889,13 +904,15 @@ function buildTeamMeta(match) {
  * as grounded — only the "is he starting tonight" question is a projection, which
  * the confirmed run resolves.
  */
-async function projectedStarters(match, teamMeta) {
+async function projectedStarters(match, teamMeta, injStatus = new Map()) {
   const matchId = match?.id ?? match?.soccer_match_id ?? null;
   const out = [];
   for (const [teamId, meta] of teamMeta.entries()) {
     if (teamId == null || !meta?.name) continue;
+    // Pass injStatus so OUT/suspended regulars are dropped and their replacements
+    // promoted — the SAME XI the confirmed-XI lane (the iOS field) shows.
     const side = await safeCall(
-      () => previousXI(teamId, meta.name, matchId, DEFAULT_SEASON),
+      () => previousXI(teamId, meta.name, matchId, DEFAULT_SEASON, injStatus),
       null,
     );
     const starters = asArray(side?.starters);
