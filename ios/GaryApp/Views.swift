@@ -2876,8 +2876,14 @@ struct HomeView: View {
     // MARK: - Live joins (tape / takeover / slate)
 
     /// Gary's pick for a live-score row, if tonight's board has one.
+    /// game_id FIRST so a doubleheader (same teams, two games in one night) attaches
+    /// to the RIGHT game; the fuzzy team match is only the fallback when an id is missing.
     private func pickFor(_ live: LiveScore) -> GaryPick? {
-        todayPicks.first { p in
+        if let gid = live.game_id, !gid.isEmpty,
+           let exact = todayPicks.first(where: { $0.game_id.map(String.init) == gid }) {
+            return exact
+        }
+        return todayPicks.first { p in
             abbrGameMatches(live.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
         }
     }
@@ -3090,8 +3096,11 @@ struct HomeView: View {
         let ordered = slateGames.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
         return ordered.enumerated().map { i, g in
             let matchup = "\(g.away_team ?? "") @ \(g.home_team ?? "")"
-            let live = liveScoresNow.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
             let pick = pickFor(slate: g)
+            // Prefer the EXACT live row by the pick's game_id (doubleheader-safe);
+            // fall back to the fuzzy team match when this game has no pick/id.
+            let live = (pick?.game_id).flatMap { liveCache.status(forGameId: $0) }
+                ?? liveScoresNow.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
             // The chip: Gary's call once posted, else the home ML, else a dash.
             let chip: String
             if let p = pick?.pick, !p.isEmpty {
@@ -3188,13 +3197,36 @@ struct HomeView: View {
     private func refreshPropBox() async {
         async let gFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
         async let pFetch = SupabaseAPI.fetchRecentPropResults(limit: 200)
+        async let formFetch = SupabaseAPI.fetchSevenDayFormBySport()
         let games = (try? await gFetch) ?? []
         let props = (try? await pFetch) ?? []
+        let form = (try? await formFetch) ?? []
         let recapDays = games.filter { ["won", "lost", "push"].contains($0.result ?? "") }.compactMap { $0.game_date }
                       + props.filter { ["won", "lost", "push"].contains($0.result ?? "") }.compactMap { $0.game_date }
         let anchor = Set(recapDays).max()
         let label = (anchor == SupabaseAPI.todayEST()) ? "TODAY" : "LAST NIGHT"
         propBoxGames = Self.buildPropBoxGames(props: props, games: games, pulse: pulseRows, anchor: anchor, label: label)
+        // Re-sync the siblings on the SAME 90s tick so the Record Box / 7-Day Form
+        // don't sit on a launch-time snapshot while games go live + grade (founder:
+        // the form/record stalled on "YESTERDAY"). Same record-box logic as the main
+        // load (today's graded → TODAY/LIVE, else keep YESTERDAY).
+        if !form.isEmpty { sevenDayForm = form }
+        let slateDay = SupabaseAPI.todayEST()
+        var w = 0, l = 0, p = 0
+        for r in games where r.game_date == slateDay {
+            switch (r.result ?? "").lowercased() {
+            case "won", "win", "w": w += 1
+            case "lost", "loss", "l": l += 1
+            case "push", "p": p += 1
+            default: break
+            }
+        }
+        if w + l + p > 0 {
+            yesterdayRecord = (w, l, p)
+            recordBoxLabel = liveScoresNow.contains { $0.isLive } ? "LIVE" : "TODAY"
+        } else {
+            recordBoxLabel = "YESTERDAY"
+        }
     }
 
     static func buildPropBoxGames(props: [PropResult], games: [GameResult], pulse: [SupabaseAPI.MarketPulseRow], anchor: String?, label: String) -> [HomePropBoxSection.GameOption] {
@@ -10113,11 +10145,12 @@ struct TomorrowView {
     }
 
     /// "7:10 PM ET" from an ISO commence time, in Eastern.
-    static func etTime(_ iso: String?, withZone: Bool = true) -> String {
+    static func etTime(_ iso: String?, withZone: Bool = true, meridiem: Bool = false) -> String {
         guard let iso, let date = parseISO8601(iso) else { return "—" }
         let f = DateFormatter()
         f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = withZone ? "h:mm a" : "h:mm"
+        // meridiem = AM/PM but no " ET" suffix (e.g. "9:00 PM"); withZone adds " ET".
+        f.dateFormat = (withZone || meridiem) ? "h:mm a" : "h:mm"
         var s = f.string(from: date)
         if withZone { s += " ET" }
         return s
@@ -10318,7 +10351,7 @@ struct TomorrowView {
                             .lineLimit(1)
                             .minimumScaleFactor(0.9)
                         Spacer(minLength: 6)
-                        Text(TomorrowView.etTime(g.commence_time, withZone: false))
+                        Text(TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true))
                             .font(GaryFonts.mono(10.5))
                             .foregroundStyle(.white.opacity(0.6))
                     }
@@ -10353,8 +10386,8 @@ struct TomorrowView {
                 // Board label row + sport-dot legend.
                 HStack(spacing: 10) {
                     Text("Tomorrow's Board")
-                        .font(GaryFonts.mono(11))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .font(GaryFonts.display(17))
+                        .foregroundStyle(GaryColors.sectionHead)   // match "The Day Ahead" header
                     Spacer(minLength: 6)
                     legendDot(Color(hex: "#4FB14F"), "MLB")
                     legendDot(Color(hex: "#3FB6A8"), "WC")
