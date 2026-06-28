@@ -48,6 +48,23 @@ function estDate(): string {
   }).format(new Date());
 }
 
+// A game's true ET SLATE date from its start datetime. BDL dates by UTC instant,
+// so a 9:38pm ET game (= next UTC day) is returned by BOTH days' `dates:[]`
+// fetches; stamping rows by the game's own ET date (not the poll's wall-clock
+// date) keeps a late game on its real slate day instead of leaking onto the next
+// day's board. Returns null on a missing/garbage datetime (caller falls back).
+function etDateStr(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 function normStatus(raw: unknown): "scheduled" | "live" | "final" {
   const s = String(raw ?? "").toUpperCase();
   if (s.includes("FINAL")) return "final";
@@ -112,7 +129,10 @@ async function mlbGames(date: string, now: string): Promise<Game[]> {
     return {
       startAt,
       row: {
-        date, league: "MLB", game_id: String(g.id),
+        // Stamp by the game's true ET slate date (BDL `dates:[date]` returns a
+        // 9:38pm-ET game under the NEXT UTC day — without this it leaks onto
+        // tomorrow's board). g.date is the game's UTC start instant.
+        date: etDateStr(g.date) ?? date, league: "MLB", game_id: String(g.id),
         away_abbr: g.away_team?.abbreviation ?? null,
         home_abbr: g.home_team?.abbreviation ?? null,
         away_score: num(g.away_team_data?.runs),
@@ -126,7 +146,10 @@ async function mlbGames(date: string, now: string): Promise<Game[]> {
 async function wcGames(date: string, now: string): Promise<Game[]> {
   const matches = await bdlGet("/fifa/worldcup/v1/matches", { seasons: [String(WC_SEASON)], per_page: "100" });
   return matches
-    .filter((m: any) => String(m.datetime ?? "").slice(0, 10) === date)
+    // Filter by ET slate date, not the UTC date slice — a 10pm-ET match is the
+    // next UTC day, so the old slice excluded today's late matches AND pulled
+    // yesterday's late matches onto today.
+    .filter((m: any) => etDateStr(m.datetime) === date)
     .map((m: any): Game => {
       const raw = String(m.status ?? "").toLowerCase();
       const status = raw === "completed" ? "final" : raw === "scheduled" ? "scheduled" : "live";
