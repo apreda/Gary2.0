@@ -396,8 +396,20 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         self.controller = nil
-        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
-        Task { try? await authManager.signInWithApple(credential: credential) }
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            Task { @MainActor in authManager.errorMessage = "Apple didn't return a valid credential. Please try again." }
+            return
+        }
+        // Don't swallow the token-exchange error: AuthManager.signInWithApple sets a
+        // visible errorMessage on failure, so a Supabase rejection shows a banner instead
+        // of looking like nothing happened.
+        Task {
+            do {
+                try await authManager.signInWithApple(credential: credential)
+            } catch {
+                print("[AppleSignIn] token exchange failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
@@ -405,6 +417,12 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
         // .canceled (1001) = the user dismissed the sheet — stay silent; surface anything else.
         if let authErr = error as? ASAuthorizationError, authErr.code == .canceled { return }
         print("[AppleSignIn] failed: \(error.localizedDescription)")
+        // Surface the failure so a missing-entitlement / provisioning error never again
+        // reads as an "unresponsive" button (App Store 2.1a). Hop to the main actor because
+        // AuthManager is @MainActor-isolated.
+        Task { @MainActor in
+            authManager.errorMessage = "Apple sign-in couldn't start. Please try again, or use email."
+        }
     }
 
     // Explicit anchor: the foreground-active window scene's key window, so Apple's sheet always

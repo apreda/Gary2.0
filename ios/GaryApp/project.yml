@@ -13,7 +13,7 @@ settings:
     INFOPLIST_FILE: Info.plist
     IPHONEOS_DEPLOYMENT_TARGET: 16.0
     MARKETING_VERSION: 2.17
-    CURRENT_PROJECT_VERSION: 4
+    CURRENT_PROJECT_VERSION: 5
 targets:
   GaryApp:
     type: application
@@ -37,5 +37,7 @@ targets:
       path: GaryApp.entitlements
       properties:
         aps-environment: production
+        com.apple.developer.applesignin:
+          - Default
     scheme:
       testTargets: []
