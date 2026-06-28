@@ -27,6 +27,7 @@ import { existsSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getESTDate } from '../src/utils/dateUtils.js';
+import { etDateStr } from '../src/services/insights/shared.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
 const fifaWorldCup = await import('../src/services/fifaWorldCupService.js');
@@ -86,6 +87,11 @@ async function mlbRows() {
       detail,
       outs: null,
       bases: null,
+      // True ET slate date for this game (BDL dates by UTC instant, so a 9:38pm
+      // ET game = next UTC day and is returned by BOTH dates' fetches). Stamping
+      // by the game's own ET date keeps a late final on its real slate day
+      // instead of leaking into tomorrow's board.
+      _etDate: etDateStr(g.date),
       _bdl: g,
     };
   });
@@ -126,7 +132,7 @@ async function mlbRows() {
     }
   }
 
-  return rows.map(({ _bdl, ...r }) => r);
+  return rows.map(({ _bdl, ...r }) => r);   // keep _etDate; strip the raw BDL object
 }
 
 function nbaRows() {
@@ -211,6 +217,8 @@ function wcRows() {
         : null,
       outs: null,
       bases: null,
+      // ET slate date (a 10pm ET match = next UTC day; keep it on its own day).
+      _etDate: etDateStr(m.datetime || m.commence_time),
     };
   }));
 }
@@ -278,7 +286,13 @@ async function run() {
     if (r.status === 'fulfilled' && Array.isArray(r.value)) rows.push(...r.value);
   }
 
-  const stamped = rows.map((r) => ({ ...r, date: targetDate, updated_at: new Date().toISOString() }));
+  // Stamp each row by its OWN ET slate date (falling back to targetDate when a
+  // game carried no datetime). A late game returned under tomorrow's UTC date is
+  // routed to its real slate day, so it never leaks onto tomorrow's board and its
+  // final lands on the correct day's row.
+  const stamped = rows.map(({ _etDate, ...r }) => ({
+    ...r, date: _etDate || targetDate, updated_at: new Date().toISOString(),
+  }));
   const live = stamped.filter((r) => r.status === 'live').length;
   const final = stamped.filter((r) => r.status === 'final').length;
 
@@ -312,8 +326,15 @@ async function run() {
   // we actually fetched this poll, drop today's rows whose game_id isn't in the slate
   // we just wrote. Per-league so a failed/empty league fetch never deletes its valid
   // rows (we only ever delete within a league that produced games).
+  // ONLY today's-date rows drive the cleanup: a spillover game stamped to its own
+  // (prior) day is upserted but NOT cleanup-managed here — this poll doesn't hold
+  // that day's full slate, so it must never delete from it (that would wipe the
+  // prior day's legitimate daytime games).
   const slateByLeague = {};
-  for (const r of stamped) { (slateByLeague[r.league] ||= new Set()).add(String(r.game_id)); }
+  for (const r of stamped) {
+    if (r.date !== targetDate) continue;
+    (slateByLeague[r.league] ||= new Set()).add(String(r.game_id));
+  }
   for (const [lg, ids] of Object.entries(slateByLeague)) {
     const keep = [...ids].filter(Boolean);
     if (!keep.length) continue;
