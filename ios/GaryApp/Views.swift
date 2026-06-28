@@ -2412,8 +2412,12 @@ struct HomeView: View {
         // ── ① The headlines marquee LEADS the page — rotating front-page cards,
         // moved to the top (where Tonight's Top Plays used to sit; that carousel
         // now lives in the Winners tab).
-        if !headlineStories.isEmpty {
-            HomeHeadlinesCarousel(stories: headlineStories) {
+        // Compute once — these are referenced for both the isEmpty check and the
+        // use; a bare computed-property access would re-run the whole derivation
+        // each time, on every live-score tick (the Home double-compute hitch).
+        let stories = headlineStories
+        if !stories.isEmpty {
+            HomeHeadlinesCarousel(stories: stories) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
@@ -2451,9 +2455,10 @@ struct HomeView: View {
         // overlay (settled · live · upcoming) — the old standalone Slate's value
         // tabs (STREAKS / HOME DOGS / ROAD DOGS) are folded in here. The bottom
         // Slate section was removed; this is the one board now.
-        if !liveBoardRows.isEmpty {
+        let board = liveBoardRows   // O(games×picks) — compute once, not twice per body eval
+        if !board.isEmpty {
             HomeSlateSection(header: "Today's board", sub: "", tabs: [
-                .init(label: "BOARD", rows: liveBoardRows,
+                .init(label: "BOARD", rows: board,
                       empty: "The board fills in as picks post."),
                 .init(label: "STREAKS", rows: streaksToContinueRows,
                       empty: "No active streaks in action."),
@@ -4592,11 +4597,13 @@ struct HomeHeadlinesCarousel: View {
     let onTap: () -> Void
 
     @State private var page = 0
-    @State private var progress: Double = 0   // 0..1 within the active slide
     @State private var paused = false
     @State private var expanded = false       // the active card's recap is open inline
     private let slideSeconds: Double = 6
-    private let tick = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
+    // A single slide-cadence timer. (Was a 20Hz timer accumulating a `progress`
+    // value into a fill bar that was removed Jun 17 — 20 main-thread wakeups/sec
+    // all session for nothing. Now one wake every `slideSeconds`.)
+    private let slideTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     private func toggleExpand() {
         withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) { expanded.toggle() }
@@ -4650,19 +4657,13 @@ struct HomeHeadlinesCarousel: View {
                 .frame(height: 282)
             }
         }
-        .onReceive(tick) { _ in
+        .onReceive(slideTimer) { _ in
             guard !paused, !expanded, stories.count > 1 else { return }   // freeze while a recap is open
-            progress += 0.05 / slideSeconds
-            if progress >= 1 {
-                progress = 0
-                withAnimation(.easeInOut(duration: 0.4)) { page = (page + 1) % stories.count }
-            }
+            withAnimation(.easeInOut(duration: 0.4)) { page = (page + 1) % stories.count }
         }
-        .onChange(of: page) { _ in progress = 0 }   // manual swipe resets the fill
     }
 
     private func step(_ d: Int) {
-        progress = 0
         withAnimation(.easeInOut(duration: 0.3)) {
             page = (page + d + stories.count) % stories.count
         }
@@ -7088,7 +7089,7 @@ struct PremiumPicksView: View {
                 // Horizontal rail of game-groups: same-game props share ONE
                 // slip; a lone game's prop rides as its own card.
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 10) {
+                    LazyHStack(alignment: .top, spacing: 10) {   // lazy: off-screen prop cards aren't built up front
                         ForEach(Array(sortedPropGroups(shelf).enumerated()), id: \.offset) { _, group in
                             // Matchup sub-header removed — the prop card already
                             // prints the matchup (redundant "TEAM @ TEAM" line cut).
@@ -7392,7 +7393,7 @@ struct PremiumPicksView: View {
         var gShelves: [GameShelf] = []
         for lg in order {
             guard let gp = byLeague[lg], !gp.isEmpty else { continue }
-            let cap = lg == "WC" ? Int.max : 3
+            let cap = lg == "WC" ? 12 : 3   // WC ships 2 plays/match — cap at ~6 matches (was Int.max)
             let ordered: ([GaryPick]) -> [GaryPick] = lg == "WC" ? sortedWC : sortedBest
             gShelves.append(GameShelf(league: lg, picks: Array(ordered(gp).prefix(cap)), settled: true))
         }
@@ -7505,7 +7506,7 @@ struct PremiumPicksView: View {
             // Most leagues show their top 3 plays. World Cup ships TWO plays per
             // match (a side + a total) across every game on the slate, so its
             // shelf shows ALL of them — the lane is a horizontal scroll.
-            let shelfCap = lg == "WC" ? Int.max : 3
+            let shelfCap = lg == "WC" ? 12 : 3   // finite cap so the shelf can't lurch (was Int.max)
             let ordered: ([GaryPick]) -> [GaryPick] = lg == "WC" ? sortedWC : sortedBest
             if let tp = todayByLeague[lg], !tp.isEmpty {
                 gShelves.append(GameShelf(league: lg, picks: Array(ordered(tp).prefix(shelfCap)), settled: false))
@@ -12710,7 +12711,7 @@ struct BillfoldView: View {
                     emptyCarousel
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        LazyHStack(spacing: 8) {   // lazy: up to 20 cards, build on-demand
                             ForEach(Array(recentGameCards.enumerated()), id: \.offset) { _, result in
                                 gameCardView(result)
                             }
@@ -12723,7 +12724,7 @@ struct BillfoldView: View {
                     emptyCarousel
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        LazyHStack(spacing: 8) {   // lazy: up to 20 cards, build on-demand
                             ForEach(Array(recentPropCards.enumerated()), id: \.offset) { _, result in
                                 propCardView(result)
                             }
@@ -14873,6 +14874,10 @@ struct FlippablePickCard: View {
     var backHeight: CGFloat? = nil
 
     @State private var flipped = false
+    /// The heavy back face (Tale of Tape + Sportsbook lines) is built ONLY after
+    /// the first flip — a rail of N cards otherwise pays ~2N heavy builds for backs
+    /// most users never open. Front already drives the height, so no visual change.
+    @State private var hasEverFlipped = false
     @State private var frontH: CGFloat = CompactPickRow.uniformHeight
 
     private var expandedH: CGFloat {
@@ -14888,15 +14893,17 @@ struct FlippablePickCard: View {
             CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, eyebrowOverride: eyebrowOverride, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight)
                 .opacity(flipped ? 0 : 1)
 
-            PickCardBack(pick: pick, gameResult: gameResult)
-                .opacity(flipped ? 1 : 0)
-                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            if flipped || hasEverFlipped {
+                PickCardBack(pick: pick, gameResult: gameResult)
+                    .opacity(flipped ? 1 : 0)
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            }
         }
         .frame(height: flipped ? expandedH : frontH)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
-        .onTapGesture { flipped.toggle() }
+        .onTapGesture { hasEverFlipped = true; flipped.toggle() }
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -16250,6 +16257,9 @@ struct FlippablePropCard: View {
     var backHeight: CGFloat? = nil
 
     @State private var flipped = false
+    /// Back (The Numbers / The Read) built only after the first flip — see
+    /// FlippablePickCard for the rationale (halves a prop rail's build cost).
+    @State private var hasEverFlipped = false
     @State private var frontH: CGFloat = CompactPickRow.uniformHeight
 
     private var expandedH: CGFloat {
@@ -16267,17 +16277,19 @@ struct FlippablePropCard: View {
 
             // ONE back design for prop cards everywhere — the slip's back
             // (GARY'S TAKE · The Numbers · The Read). Same cards, every page.
-            PropSlipBack(props: [prop], current: .constant(prop)) {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = false }
+            if flipped || hasEverFlipped {
+                PropSlipBack(props: [prop], current: .constant(prop)) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = false }
+                }
+                .opacity(flipped ? 1 : 0)
+                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             }
-            .opacity(flipped ? 1 : 0)
-            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         }
         .frame(height: flipped ? expandedH : frontH)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
-        .onTapGesture { flipped.toggle() }
+        .onTapGesture { hasEverFlipped = true; flipped.toggle() }
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -17563,14 +17575,18 @@ final class PropsSlateStore: ObservableObject {
     /// only the first call does the network work, the rest no-op (unless forced).
     func loadIfNeeded(forceRefresh: Bool = false) async {
         if loaded && !forceRefresh { return }
-        await loadProps(forceRefresh: forceRefresh)
-        await loadGamePicks(forceRefresh: forceRefresh)
+        // Props + game picks share no data — fetch them concurrently instead of
+        // props-then-games serially (was the Picks-tab first-paint delay).
+        async let p: Void = loadProps(forceRefresh: forceRefresh)
+        async let gp: Void = loadGamePicks(forceRefresh: forceRefresh)
+        _ = await (p, gp)
     }
 
     func refresh() async {
         refreshTick &+= 1
-        await loadProps(forceRefresh: true)
-        await loadGamePicks(forceRefresh: true)
+        async let p: Void = loadProps(forceRefresh: true)
+        async let gp: Void = loadGamePicks(forceRefresh: true)
+        _ = await (p, gp)
     }
 
     private func loadProps(forceRefresh: Bool) async {
@@ -20798,18 +20814,36 @@ struct PropsHubView: View {
     /// league choice is kept unless it has no rows in the new data.
     private func load() async {
         let date = SupabaseAPI.todayEST()
+        let gradedDate0 = SupabaseAPI.hubGradedDateEST()
+        // Kick the independent graded-surface fetches off in parallel with the
+        // per-league connection fetches below — they share no data, so awaiting
+        // them one-by-one only added round-trips (the Hub-spins-on-open bug).
+        async let rateF = SupabaseAPI.fetchInsightHitRate(date: gradedDate0)
+        async let nightF = SupabaseAPI.fetchNightHighlights(date: gradedDate0)
+        async let streaksF = SupabaseAPI.fetchStreaks()
+        async let tbF = SupabaseAPI.fetchTodayBoard(date: date)
+
+        // Today's connections per league, fetched CONCURRENTLY (was a serial loop).
         var collected: [Signal] = []
         var dropped = 0
         var anyError = false
-        for lg in AppFlags.insightLeagues {
-            do {
-                let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
-                let signals = conns.compactMap { $0.toSignal() }
-                dropped += conns.count - signals.count
-                collected.append(contentsOf: signals)
-            } catch {
-                anyError = true
-                print("[PropsHubView] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
+        await withTaskGroup(of: (sigs: [Signal], dropped: Int, errored: Bool).self) { group in
+            for lg in AppFlags.insightLeagues {
+                group.addTask {
+                    do {
+                        let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
+                        let signals = conns.compactMap { $0.toSignal() }
+                        return (signals, conns.count - signals.count, false)
+                    } catch {
+                        print("[PropsHubView] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
+                        return ([], 0, true)
+                    }
+                }
+            }
+            for await r in group {
+                collected.append(contentsOf: r.sigs)
+                dropped += r.dropped
+                if r.errored { anyError = true }
             }
         }
         if dropped > 0 {
@@ -20818,28 +20852,33 @@ struct PropsHubView: View {
         }
         // Graded surfaces (track record, receipts, night board): the graded
         // date flips at 3am ET but grading lands ~6:45am — walk back one day
-        // when the morning void has nothing yet (Home's idiom).
-        var gradedDate = SupabaseAPI.hubGradedDateEST()
-        var rate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
-        var night = await SupabaseAPI.fetchNightHighlights(date: gradedDate)
+        // when the morning void has nothing yet (Home's idiom). rate/night were
+        // started in parallel above; the retry re-fetches them for the prior day.
+        var gradedDate = gradedDate0
+        var rate = await rateF
+        var night = await nightF
         if rate == nil, night.isEmpty, let back = Self.shiftDate(gradedDate, by: -1) {
             gradedDate = back
-            rate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
-            night = await SupabaseAPI.fetchNightHighlights(date: gradedDate)
+            async let rateB = SupabaseAPI.fetchInsightHitRate(date: gradedDate)
+            async let nightB = SupabaseAPI.fetchNightHighlights(date: gradedDate)
+            rate = await rateB
+            night = await nightB
         }
-        let liveStreaks = await SupabaseAPI.fetchStreaks()
-        // TODAY's look-ahead board ("The Day Ahead" table) — today's starters/form/
-        // run-profile/weather, the same table the Tomorrow page shows for tomorrow.
-        let tb = await SupabaseAPI.fetchTodayBoard(date: date)
+        let liveStreaks = await streaksF
+        let tb = await tbF
         // The morning void → yesterday's GRADED board. Today's edges post with
         // lineups (~afternoon); until then the Hub shows its receipts, not an
-        // empty room.
+        // empty room. (Concurrent per-league, like the today fetch above.)
         var yday: [Signal] = []
         if collected.isEmpty {
-            for lg in AppFlags.insightLeagues {
-                if let conns = try? await SupabaseAPI.fetchInsightConnections(date: gradedDate, league: lg) {
-                    yday.append(contentsOf: conns.compactMap { $0.toSignal() }.filter { $0.result != nil })
+            await withTaskGroup(of: [Signal].self) { group in
+                for lg in AppFlags.insightLeagues {
+                    group.addTask {
+                        guard let conns = try? await SupabaseAPI.fetchInsightConnections(date: gradedDate, league: lg) else { return [] }
+                        return conns.compactMap { $0.toSignal() }.filter { $0.result != nil }
+                    }
                 }
+                for await sigs in group { yday.append(contentsOf: sigs) }
             }
         }
         await MainActor.run {
