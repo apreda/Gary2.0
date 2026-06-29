@@ -2093,6 +2093,20 @@ struct TomorrowWcForm: Decodable {
     let ga_per_game: Double?
     let form: String?               // "WWDLW" most-recent-first | nil
     let matches: Int?
+    // THIS tournament's record only (excludes friendlies + qualifiers) — used by
+    // the Big Games preview. nil until a team has played a WC game.
+    let wc: TomorrowWcRecord?
+}
+
+// A team's World-Cup-tournament-only record (the "WC so far" stat).
+struct TomorrowWcRecord: Decodable {
+    let record: String?             // "W-D-L"
+    let w: Int?
+    let d: Int?
+    let l: Int?
+    let gf_per_game: Double?
+    let ga_per_game: Double?
+    let matches: Int?
 }
 
 // A key player to watch — a leading cycle scorer for the side.

@@ -439,7 +439,7 @@ function wcNorm(s) {
 function formShape(recentForm) {
   const l5 = recentForm?.l5;
   if (!l5 || !Number.isFinite(Number(l5.played)) || Number(l5.played) === 0) return null;
-  return {
+  const out = {
     record: `${l5.w}-${l5.d}-${l5.l}`, // W-D-L
     w: l5.w, d: l5.d, l: l5.l,
     gf_per_game: Number.isFinite(Number(l5.gfPerMatch)) ? Number(l5.gfPerMatch) : null,
@@ -447,6 +447,29 @@ function formShape(recentForm) {
     form: l5.form || null, // "WWDLW" most-recent-first
     matches: l5.played,
   };
+  // WC-ONLY record — THIS tournament's games (excludes friendlies + qualifiers),
+  // for the Big Games preview (founder: "only the WC games"). Null when the team
+  // hasn't played a tournament game yet (then iOS falls back to the L5 record).
+  const wcFix = (recentForm.fixtures || []).filter(
+    (f) => /world cup/i.test(f.league || '') && !/qualif/i.test(f.league || ''),
+  );
+  if (wcFix.length) {
+    let w = 0, d = 0, l = 0, gf = 0, ga = 0;
+    for (const f of wcFix) {
+      gf += Number(f.gf) || 0;
+      ga += Number(f.ga) || 0;
+      const res = f.result || (f.gf > f.ga ? 'W' : f.gf < f.ga ? 'L' : 'D');
+      if (res === 'W') w += 1; else if (res === 'L') l += 1; else d += 1;
+    }
+    out.wc = {
+      record: `${w}-${d}-${l}`,
+      w, d, l,
+      gf_per_game: +(gf / wcFix.length).toFixed(1),
+      ga_per_game: +(ga / wcFix.length).toFixed(1),
+      matches: wcFix.length,
+    };
+  }
+  return out;
 }
 
 /** Projected XI + formation for a side as a flat shape, or null. Reuses

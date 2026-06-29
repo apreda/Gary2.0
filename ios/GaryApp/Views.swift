@@ -10616,11 +10616,17 @@ struct TomorrowView {
         /// WC twin of pitcherLine: same shape, soccer stats (not ERA).
         private func wcTeamLine(team: String?, form: TomorrowWcForm?, league: String?) -> some View {
             let ab = teamAbbrevFromName(team ?? "", league: league)
+            // THIS World Cup's record only (founder: "only the WC games"), falling
+            // back to the L5 form when a team hasn't played a tournament game yet.
+            let rec = form?.wc?.record ?? form?.record
+            let w = form?.wc?.w ?? form?.w
+            let l = form?.wc?.l ?? form?.l
+            let gf = form?.wc?.gf_per_game ?? form?.gf_per_game
             let recColor: Color = {
-                guard let f = form, let w = f.w, let l = f.l else { return .white.opacity(0.9) }
+                guard let w = w, let l = l else { return .white.opacity(0.9) }
                 if w > l { return GaryColors.win }
                 if l > w { return GaryColors.loss }
-                return Color(hex: "#E8B339")   // even form — amber
+                return Color(hex: "#E8B339")   // even — amber
             }()
             return HStack(spacing: 8) {
                 Text(ab.uppercased())
@@ -10632,11 +10638,11 @@ struct TomorrowView {
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 8)
-                if let f = form, let rec = f.record {
+                if let rec = rec {
                     Text(rec)
                         .font(GaryFonts.mono(13, bold: true))
                         .foregroundStyle(recColor)
-                    if let gf = f.gf_per_game {
+                    if let gf = gf {
                         // Spelled out for US fans — not the cryptic "GF".
                         Text("\(Self.trimNum(gf)) Goals/Gm")
                             .font(GaryFonts.mono(10))
