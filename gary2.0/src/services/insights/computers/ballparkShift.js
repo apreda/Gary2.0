@@ -169,13 +169,13 @@ async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
     const oppClause = c.oppAvg != null ? ` Hitters bat ${pct3(c.oppAvg)} off him here.` : '';
     const detailVariants = [
       `${c.name} carries a ${c.venueEra.toFixed(2)} ERA over ${c.venueGames} games ` +
-        `(${c.venueIp} IP) at tonight's park vs ${c.baselineEra.toFixed(2)} across ` +
-        `${c.baseIp} innings everywhere else.${oppClause} He starts here tonight.`,
-      `Across ${c.venueGames} games (${c.venueIp} IP) at this venue, ${c.name} has a ` +
+        `(${c.venueIp} IP) at ${venueName} vs ${c.baselineEra.toFixed(2)} across ` +
+        `${c.baseIp} innings everywhere else.${oppClause}`,
+      `Across ${c.venueGames} games (${c.venueIp} IP) at ${venueName}, ${c.name} has a ` +
         `${c.venueEra.toFixed(2)} ERA against ${c.baselineEra.toFixed(2)} at his other ` +
-        `parks (${c.baseIp} IP).${oppClause} He draws the start here tonight.`,
-      `${c.name} starts at ${venueName} tonight, where his ERA is ${c.venueEra.toFixed(2)} ` +
-        `over ${c.venueIp} innings — ${c.baselineEra.toFixed(2)} on a ${c.baseIp}-inning ` +
+        `parks (${c.baseIp} IP).${oppClause}`,
+      `${c.name} at ${venueName}: ${c.venueEra.toFixed(2)} ERA over ${c.venueIp} innings ` +
+        `(${c.venueGames}G) — ${c.baselineEra.toFixed(2)} on a ${c.baseIp}-inning ` +
         `baseline elsewhere.${oppClause}`,
     ];
 

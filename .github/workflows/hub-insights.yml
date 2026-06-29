@@ -1,0 +1,76 @@
+name: Hub Insights Runner
+
+# Cloud replacement for the laptop-based insight_connections pipeline.
+# Runs node run-insight-connections.js (MLB + NBA + WC) on a schedule so Hub
+# content — streaks, hot/cold, regression, ballpark shifts, WC form, etc. —
+# populates 24/7 with no laptop.
+#
+# Schedule (EDT = UTC-4 in summer, EST = UTC-5 in winter — cron is UTC):
+#   6am ET  → non-lineup lanes (streaks, regression, heat/cold, WC form)
+#   10am ET → starters typically post; ballpark/starter-form lanes fill in
+#   12pm ET → catch-up for early games (12pm first pitch days)
+#   2pm ET  → afternoon confirmation run
+#   4pm ET  → late-posted lineups for evening slate
+#   6pm ET  → final fill before primetime first pitches
+#   8pm ET  → late-night cleanup
+#
+# Additive-freeze: each run only INSERTs rows not already stored for the day —
+# cards a user sees at 9am are still there at 6pm; the afternoon runs add new
+# lanes (lineup-dependent) that were empty before. Nothing is ever replaced.
+#
+# Cost: ~3 min/run avg × 7 runs/day × 30 days = ~630 GitHub Actions minutes/month
+# (GitHub Free includes 2,000 min/month for private repos — well within limits).
+
+on:
+  schedule:
+    - cron: '0 10 * * *'    # 6am EDT / 5am EST
+    - cron: '0 14 * * *'    # 10am EDT / 9am EST
+    - cron: '0 16 * * *'    # 12pm EDT / 11am EST
+    - cron: '0 18 * * *'    # 2pm EDT / 1pm EST
+    - cron: '0 20 * * *'    # 4pm EDT / 3pm EST
+    - cron: '0 22 * * *'    # 6pm EDT / 5pm EST
+    - cron: '0 0 * * *'     # 8pm EDT / 7pm EST (runs at midnight UTC = next calendar day)
+  workflow_dispatch:         # manual trigger from GitHub Actions tab anytime
+
+env:
+  TZ: America/New_York
+
+# Don't cancel a run that's already in progress — an in-flight insights write
+# is idempotent but should finish cleanly rather than be killed mid-insert.
+concurrency:
+  group: hub-insights
+  cancel-in-progress: false
+
+jobs:
+  run-insights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: gary2.0/package-lock.json
+
+      - name: Install dependencies
+        working-directory: gary2.0
+        run: npm ci --legacy-peer-deps
+
+      - name: Run Hub Insights Pipeline
+        working-directory: gary2.0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: node run-insight-connections.js
+
+      - name: Summary
+        if: always()
+        run: echo "Hub Insights completed at $(date -u '+%Y-%m-%d %H:%M UTC')"
