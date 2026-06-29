@@ -20096,7 +20096,9 @@ struct PropSlipBack: View {
     @Binding var current: PropPick?
     let onFlipBack: () -> Void
 
-    private var prop: PropPick { current ?? props[0] }
+    // Optional + guarded (was `props[0]` — crashed if ever handed an empty array;
+    // App Review runs on empty/fresh states, so no force-unwraps on the back).
+    private var prop: PropPick? { current ?? props.first }
 
     private func toggleName(_ p: PropPick) -> String {
         let full = p.player ?? p.team ?? ""
@@ -20104,6 +20106,10 @@ struct PropSlipBack: View {
     }
 
     var body: some View {
+        if let prop { bodyContent(prop) } else { EmptyView() }
+    }
+
+    @ViewBuilder private func bodyContent(_ prop: PropPick) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S TAKE")

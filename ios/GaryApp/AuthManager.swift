@@ -280,6 +280,30 @@ final class AuthManager: ObservableObject {
         clearSession()
     }
 
+    // MARK: - Delete Account (App Store Guideline 5.1.1(v))
+
+    /// Permanently deletes the signed-in user's account + their data via the
+    /// `delete-account` edge function (which verifies the caller from this token,
+    /// then admin-deletes their rows + auth user), then clears the local session.
+    func deleteAccount() async throws {
+        guard !accessToken.isEmpty,
+              let url = URL(string: "\(baseURL)/functions/v1/delete-account") else {
+            throw AuthError.unauthorized
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            let msg = String(data: data, encoding: .utf8) ?? "Account deletion failed."
+            throw AuthError.serverError(msg)
+        }
+        clearSession()
+    }
+
     // MARK: - Helpers
 
     /// Current access token for authenticated API requests

@@ -9,6 +9,9 @@ struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var animateIn = false
     @State private var showSignOutConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var deleting = false
+    @State private var deleteError: String? = nil
     @State private var showSignIn = false
     /// Billfold/Home results format — CASH by default (user call, Jun 18) at a
     /// hypothetical $100/bet; off = the units view. Default must match the
@@ -67,6 +70,27 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to sign out?")
+        }
+        .alert("Delete Account", isPresented: $showDeleteConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Account", role: .destructive) {
+                deleting = true
+                Task {
+                    do {
+                        try await authManager.deleteAccount()
+                    } catch {
+                        deleteError = (error as? LocalizedError)?.errorDescription ?? "Couldn't delete your account. Please try again."
+                    }
+                    deleting = false
+                }
+            }
+        } message: {
+            Text("This permanently deletes your account and all of your data. This can't be undone.")
+        }
+        .alert("Couldn't Delete Account", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK", role: .cancel) { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
         }
         .sheet(isPresented: $showSignIn) {
             AuthView()
@@ -210,6 +234,23 @@ struct SettingsView: View {
             } label: {
                 SettingsRowLabel(title: "Sign Out", icon: "rectangle.portrait.and.arrow.right", tint: .red)
             }
+
+            Divider()
+                .background(Color.white.opacity(0.07))
+                .padding(.horizontal, 16)
+
+            // Account deletion — required by App Store Guideline 5.1.1(v) for any
+            // app with account creation. Permanent; clears the session on success.
+            Button {
+                showDeleteConfirm = true
+            } label: {
+                HStack {
+                    SettingsRowLabel(title: deleting ? "Deleting…" : "Delete Account",
+                                     icon: "trash.fill", tint: .red)
+                    if deleting { Spacer(); ProgressView().tint(.red).padding(.trailing, 16) }
+                }
+            }
+            .disabled(deleting)
         } else {
             Button {
                 showSignIn = true
