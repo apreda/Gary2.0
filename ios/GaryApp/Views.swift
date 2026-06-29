@@ -2483,9 +2483,18 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
 
-        // ── ② The 7-Day Form — directly under the headlines card (founder:
-        // "under the headlines, not down at the bottom"). MLB / World Cup / Live
-        // records; tap re-opens last night's recap or jumps to the Winners tab.
+        // ── ② Countdown to the next game up today — directly under the headlines
+        // now (founder swapped it with the 7-Day Form). Just the countdown hero;
+        // Big Games renders below the form (includeBigGames:false here).
+        if let tb = todayBoard {
+            TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false,
+                              includeBigGames: false, dayLabel: "TODAY")
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
+        }
+
+        // ── ②b The 7-Day Form — moved below the countdown (founder swap). MLB /
+        // World Cup / Live records; tap re-opens last night's recap or the Winners tab.
         if !sevenDayForm.isEmpty {
             HomeFormSection(records: sevenDayForm, yesterday: yesterdayRecord, recordLabel: recordBoxLabel,
                             onYesterday: {
@@ -2499,11 +2508,11 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
 
-        // ── ②b Countdown (to the next game up today) + Big Games To Watch. The
-        // full Day Ahead TABLE lives on the Hub; here it's the countdown hero + Big
-        // Games (includeLookAhead:false drops the table).
+        // ── ②c Big Games To Watch — below the form (countdown is now its own block
+        // above). includeCountdown:false so this Body renders only Big Games.
         if let tb = todayBoard {
-            TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false, dayLabel: "TODAY")
+            TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false,
+                              includeCountdown: false, dayLabel: "TODAY")
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
         }
@@ -4712,11 +4721,12 @@ struct HomeHeadlinesCarousel: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            // A whisper-quiet position cue — tiny dots, the active one gold. No pause
-            // control and no fill bar (the carousel auto-advances and swipes), which
-            // reclaims the crowded top (user call, Jun 17). Hidden while a card is open.
-            if !expanded {
+        VStack(spacing: 6) {
+            // A whisper-quiet position cue — tiny dots, the active one gold. Only
+            // shown when there's more than one card (a lone dot is pointless + just
+            // wastes vertical space); hidden while a card is open. Swipe + the
+            // chevrons carry the "there's more" signal.
+            if !expanded, stories.count > 1 {
                 HStack(spacing: 5) {
                     ForEach(stories.indices, id: \.self) { i in
                         Circle()
@@ -10299,6 +10309,12 @@ struct TomorrowView {
         /// false (it wants only the countdown + big games — the full table lives on
         /// the Hub); the Hub + Tomorrow page keep it.
         var includeLookAhead: Bool = true
+        /// Render the countdown hero / Big Games independently — the Today page
+        /// shows them as SEPARATE blocks (countdown above the 7-Day Form, Big Games
+        /// below it), so it renders one Body with only the countdown and another
+        /// with only Big Games.
+        var includeCountdown: Bool = true
+        var includeBigGames: Bool = true
         /// Header word for the countdown / empty hero — "TODAY" for the today use.
         var dayLabel: String = "TOMORROW"
         /// 1Hz tick for the live countdown. Re-render every second.
@@ -10321,8 +10337,8 @@ struct TomorrowView {
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
                 if !lookAheadOnly {
-                    countdownHero
-                    bigGames
+                    if includeCountdown { countdownHero }
+                    if includeBigGames { bigGames }
                 }
                 if includeLookAhead { lookAheadTabs }
                 if !lookAheadOnly, includeBoard, let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
@@ -10330,7 +10346,7 @@ struct TomorrowView {
             // The 1Hz tick drives ONLY the countdown hero. In lookAheadOnly mode
             // (Home TODAY + the Hub Day Ahead) that hero is hidden, so updating
             // `now` there just re-renders the whole table every second for nothing.
-            .onReceive(ticker) { if !lookAheadOnly { now = $0 } }
+            .onReceive(ticker) { if !lookAheadOnly, includeCountdown { now = $0 } }
             // When the Hub switches league tabs, reset the look-ahead sport
             // so WC tab opens on World Cup starters, MLB tab on MLB starters.
             .task(id: leagueFilter) {
