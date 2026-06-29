@@ -10706,12 +10706,12 @@ struct TomorrowView {
                     Text(rec)
                         .font(GaryFonts.mono(13, bold: true))
                         .foregroundStyle(recColor)
-                    // Plain-language label so US fans (most don't follow soccer,
-                    // and the middle "draw" number is unfamiliar) can parse the record
-                    // — replaces the obscure "GF" goals-per-game stat.
-                    Text("W-D-L")
-                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.42))
+                    if let gf = f.gf_per_game {
+                        // Spelled out for US fans — not the cryptic "GF".
+                        Text("\(Self.trimNum(gf)) Goals/Gm")
+                            .font(GaryFonts.mono(10))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
                 } else {
                     Text("—")
                         .font(GaryFonts.mono(11))
