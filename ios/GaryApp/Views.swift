@@ -10529,64 +10529,92 @@ struct TomorrowView {
                 guard let a = away, !a.isEmpty, let h = home, !h.isEmpty else { return nil }
                 return "\(a) vs \(h)"
             }()
-            return HStack(alignment: .top, spacing: 10) {
+            return HStack(alignment: .top, spacing: 12) {
                 Text("\(g.rank)")
-                    .font(GaryFonts.mono(13, bold: true))
+                    .font(GaryFonts.mono(15, bold: true))
                     .foregroundStyle(GaryColors.gold)
-                    .frame(width: 14, alignment: .leading)
-                    .padding(.top, 1)
-                VStack(alignment: .leading, spacing: 3) {
+                    .frame(width: 16, alignment: .leading)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 7) {
                     // Top line: bold matchup (left) · time (right).
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(g.matchup ?? "")
-                            .font(GaryFonts.text(13.5, .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
+                            .font(GaryFonts.text(15.5, .semibold))
+                            .foregroundStyle(.white.opacity(0.95))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.9)
+                            .minimumScaleFactor(0.85)
                         Spacer(minLength: 6)
                         Text(TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true))
-                            .font(GaryFonts.mono(10.5))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(GaryFonts.mono(12))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
-                    // Plain-text standing under the matchup — no chip/bubble
-                    // (founder call). e.g. "Yankees 1st · Red Sox 5th, AL East".
+                    // Plain-text standing under the matchup — readable (was 9.5/0.55).
                     if let standing = g.standing, !standing.isEmpty {
                         Text(standing)
-                            .font(GaryFonts.mono(9.5))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .font(GaryFonts.mono(11))
+                            .foregroundStyle(.white.opacity(0.6))
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    // Both probable starters with their season ERA — colour carries
-                    // quality (green at/below the league average, red above). MLB only;
-                    // WC big games have nil pitchers → no line. (pitchersLine kept above
-                    // as the existence gate.)
+                    // The pitching matchup — the heart of the game. Each starter on its
+                    // own readable row: abbr · name · ERA (quality-coloured) · xERA (the
+                    // honest regression number, so an elite-looking ERA can't mislead).
+                    // MLB only; WC big games have nil pitchers.
                     if pitchersLine != nil, let a = away, let h = home {
                         let bRow = bigGameBoardRow(g)
-                        let aEra = starterERA(lastName: a, abbr: bRow?.away_abbr)
-                        let hEra = starterERA(lastName: h, abbr: bRow?.home_abbr)
-                        (
-                            Text(a).foregroundColor(GaryColors.gold.opacity(0.95))
-                            + Text(aEra.map { " \($0.text)" } ?? "").foregroundColor(aEra?.color ?? .clear)
-                            + Text("  vs  ").foregroundColor(.white.opacity(0.38))
-                            + Text(h).foregroundColor(GaryColors.gold.opacity(0.95))
-                            + Text(hEra.map { " \($0.text)" } ?? "").foregroundColor(hEra?.color ?? .clear)
-                        )
-                        .font(GaryFonts.mono(9.5))
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        VStack(alignment: .leading, spacing: 5) {
+                            pitcherLine(fallback: a, abbr: bRow?.away_abbr,
+                                        stat: starterStat(lastName: a, abbr: bRow?.away_abbr))
+                            pitcherLine(fallback: h, abbr: bRow?.home_abbr,
+                                        stat: starterStat(lastName: h, abbr: bRow?.home_abbr))
+                        }
+                        .padding(.top, 3)
                     }
                     // Market line — the favourite + total, betting context (MLB).
                     if (g.league ?? "").uppercased() != "WC", let mkt = bigGameMarket(g) {
                         Text(mkt)
-                            .font(GaryFonts.mono(9))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .lineLimit(1).minimumScaleFactor(0.85)
+                            .font(GaryFonts.mono(11.5))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(1).minimumScaleFactor(0.9)
+                            .padding(.top, 1)
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+        }
+
+        /// One probable starter — abbr · name · ERA (quality-coloured) · xERA.
+        private func pitcherLine(fallback: String, abbr: String?,
+                                 stat: (name: String, era: String, xera: String?, color: Color)?) -> some View {
+            HStack(spacing: 8) {
+                if let ab = abbr, !ab.isEmpty {
+                    Text(ab.uppercased())
+                        .font(GaryFonts.mono(10.5, bold: true))
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                        .frame(width: 34, alignment: .leading)
+                }
+                Text(stat?.name ?? fallback)
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1).minimumScaleFactor(0.85)
+                Spacer(minLength: 8)
+                if let s = stat {
+                    Text(s.era)
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(s.color)
+                    if let x = s.xera {
+                        Text("xERA \(x)")
+                            .font(GaryFonts.mono(10.5))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                } else {
+                    Text("ERA —")
+                        .font(GaryFonts.mono(11))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
         }
 
         /// The board row for a big game, matched by team last-words ("Reds @ Brewers").
@@ -10602,9 +10630,9 @@ struct TomorrowView {
             }
         }
 
-        /// A probable starter's ERA + quality colour, matched by team abbr + last name.
-        /// Green at/below the league-average ERA, red above. nil when ERA isn't posted.
-        private func starterERA(lastName: String?, abbr: String?) -> (text: String, color: Color)? {
+        /// A probable starter's full read (name, ERA, xERA, quality colour), matched
+        /// by team abbr + last name. nil when ERA isn't posted.
+        private func starterStat(lastName: String?, abbr: String?) -> (name: String, era: String, xera: String?, color: Color)? {
             guard let lastName, !lastName.isEmpty, let starters = board?.starters else { return nil }
             let key = lastName.lowercased()
             let p = starters.first {
@@ -10612,9 +10640,22 @@ struct TomorrowView {
                 (($0.name ?? "").lowercased().split(separator: " ").last.map(String.init) == key) &&
                 (abbr == nil || ($0.abbr ?? "").uppercased() == abbr!.uppercased())
             }
-            guard let era = p?.era else { return nil }
-            let avg = board?.league_avg_era ?? 4.0
-            return (Self.trimNum(era), era <= avg ? GaryColors.win : GaryColors.loss)
+            guard let p, let era = p.era else { return nil }
+            let avg = board?.league_avg_era ?? 4.32
+            return (p.name ?? lastName, Self.trimNum(era), p.xera.map { Self.trimNum($0) },
+                    Self.bigGameEraColor(era, avg: avg))
+        }
+
+        /// Tiered ERA quality colour vs league avg — elite (bright green) · good
+        /// (green, at/below avg) · amber (a run above) · red (well above). Replaces
+        /// the old meaningless binary cliff at exactly the average.
+        private static func bigGameEraColor(_ era: Double, avg: Double) -> Color {
+            switch era - avg {
+            case ..<(-1.0): return Color(hex: "#36D17A")   // elite
+            case ..<0:      return GaryColors.win           // good
+            case ..<1.0:    return Color(hex: "#E8B339")    // amber — a run above
+            default:        return GaryColors.loss          // well above avg
+            }
         }
 
         /// "MIL -145 · O/U 7.5" — favourite (more-negative ML) + total.
