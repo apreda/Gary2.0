@@ -1849,6 +1849,34 @@ struct HomeView: View {
     private var liveScoresNow: [LiveScore] {
         liveCache.scores.isEmpty ? initialLive : liveCache.scores
     }
+
+    /// ALL of today's WC games (from the full board, not just the marquee), joined
+    /// to their live row by team abbreviation — feeds the leading WC bar.
+    private var wcGamesToday: [WcBarGame] {
+        let rows = (todayBoard?.board ?? []).filter { ($0.league ?? "").uppercased() == "WC" }
+        return rows.compactMap { r in
+            guard let away = r.away_team, let home = r.home_team else { return nil }
+            let aAbbr = (r.away_abbr?.isEmpty == false ? r.away_abbr! : teamAbbrevFromName(away, league: "WC"))
+            let hAbbr = (r.home_abbr?.isEmpty == false ? r.home_abbr! : teamAbbrevFromName(home, league: "WC"))
+            let live = liveScoresNow.first {
+                ($0.league ?? "").uppercased() == "WC"
+                    && ($0.away_abbr ?? "") == aAbbr && ($0.home_abbr ?? "") == hAbbr
+            }
+            return WcBarGame(matchup: "\(away) @ \(home)", awayAbbr: aAbbr, homeAbbr: hAbbr,
+                             commence: r.commence_time.flatMap { parseISO8601($0) }, live: live)
+        }
+    }
+    /// The one WC game to feature: a live game wins; else the next upcoming;
+    /// else the most-recent final (so the bar always reads the latest WC state).
+    private var focusWcGame: WcBarGame? {
+        let games = wcGamesToday
+        if let liveG = games.first(where: { $0.live?.isLive == true }) { return liveG }
+        let upcoming = games.filter { $0.live?.isFinal != true }
+            .sorted { ($0.commence ?? .distantFuture) < ($1.commence ?? .distantFuture) }
+        if let next = upcoming.first { return next }
+        return games.filter { $0.live?.isFinal == true }
+            .sorted { ($0.commence ?? .distantPast) > ($1.commence ?? .distantPast) }.first
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // MARK: - World Cup front-page module (June 4 – July 19, 2026)
@@ -2468,6 +2496,17 @@ struct HomeView: View {
     /// looking blocks the founder flagged (TONIGHT'S BOARD / free pick card, the
     /// WORLD CUP module, the SLATE, the big one) are always present here.
     @ViewBuilder private var todaySections: some View {
+        // ── ⓪ The WC bar LEADS the page — skinny strip counting down to the next
+        // World Cup match, flipping to a live tracker once it kicks off (WC is the
+        // biggest draw until the tournament's over).
+        if let wc = focusWcGame {
+            HomeWcBar(game: wc) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.03), value: animateIn)
+        }
+
         // ── ① The headlines marquee LEADS the page — rotating front-page cards,
         // moved to the top (where Tonight's Top Plays used to sit; that carousel
         // now lives in the Winners tab).
@@ -2499,11 +2538,12 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
 
-        // ── ②b Countdown to today's first game + Big Games To Watch. The full
-        // Day Ahead TABLE lives on the Hub now (founder), but the countdown + big
-        // games stay on the Today page. includeLookAhead:false drops the table.
+        // ── ②b Big Games To Watch. The Day Ahead TABLE lives on the Hub; the
+        // countdown now leads the page as the WC bar (HomeWcBar) — so this block
+        // is Big Games only (includeCountdown:false, includeLookAhead:false).
         if let tb = todayBoard {
-            TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false, dayLabel: "TODAY")
+            TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false,
+                              includeCountdown: false, dayLabel: "TODAY")
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
         }
@@ -3993,6 +4033,84 @@ enum HomeHeadlinesCache {
         guard !stories.isEmpty else { return }
         let entry = HomeHeadlinesCacheEntry(payloadDayKey: SupabaseAPI.hubGradedDateEST(), stories: stories)
         if let data = try? JSONEncoder().encode(entry) { UserDefaults.standard.set(data, forKey: key) }
+    }
+}
+
+// MARK: - Home WC Bar
+//
+// The skinny World-Cup strip that LEADS the Home page (WC is the biggest draw
+// until the tournament's over): counts down to the next WC match, then flips to
+// a live score tracker once it kicks off, then full-time when it ends. One game
+// in focus at a time — live > next-upcoming > most-recent-final.
+struct WcBarGame {
+    let matchup: String        // "Morocco @ Netherlands"
+    let awayAbbr: String
+    let homeAbbr: String
+    let commence: Date?
+    let live: LiveScore?
+}
+
+struct HomeWcBar: View {
+    let game: WcBarGame
+    let onTap: () -> Void
+    // Isolated 1Hz tick — only THIS strip re-renders for the countdown, not the
+    // whole Home page.
+    @State private var now = Date()
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let teal = Color(hex: "#3FB6A8")
+    private let liveRed = Color(hex: "#E5484D")
+
+    private func hms(_ to: Date) -> String {
+        let s = max(0, Int(to.timeIntervalSince(now)))
+        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%02d:%02d", m, sec)
+    }
+    private func score(_ live: LiveScore) -> String {
+        "\(game.awayAbbr) \(live.away_score ?? 0)\u{2013}\(live.home_score ?? 0) \(game.homeAbbr)"
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 9) {
+                if let live = game.live, live.isLive {
+                    HomeStatusDot(color: liveRed)
+                    Text("LIVE").font(GaryFonts.mono(9, bold: true)).tracking(1).foregroundStyle(liveRed)
+                    Text(score(live)).font(GaryFonts.mono(13.5, bold: true)).foregroundStyle(.white.opacity(0.96))
+                    if let d = live.detail, !d.isEmpty {
+                        Text(d).font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    Text("WORLD CUP").font(GaryFonts.mono(8, bold: true)).tracking(1).foregroundStyle(teal.opacity(0.9))
+                } else if let live = game.live, live.isFinal {
+                    Text("FULL TIME").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.5))
+                    Text(score(live)).font(GaryFonts.mono(13.5, bold: true)).foregroundStyle(.white.opacity(0.9))
+                    Spacer(minLength: 8)
+                    Text("WORLD CUP").font(GaryFonts.mono(8, bold: true)).tracking(1).foregroundStyle(teal.opacity(0.9))
+                } else {
+                    Image(systemName: "soccerball.inverse").font(.system(size: 11)).foregroundStyle(teal)
+                    Text("NEXT WC").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(teal)
+                    Text(game.matchup).font(GaryFonts.mono(12, bold: true)).foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
+                    if let c = game.commence, c > now {
+                        Text(hms(c)).font(GaryFonts.mono(13.5, bold: true)).monospacedDigit().foregroundStyle(.white)
+                    } else {
+                        Text("KICKOFF").font(GaryFonts.mono(10, bold: true)).tracking(0.5).foregroundStyle(teal)
+                    }
+                }
+            }
+            .padding(.vertical, 10).padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(teal.opacity(0.06))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(teal.opacity(0.22), lineWidth: 1))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onReceive(ticker) { now = $0 }
+        .padding(.horizontal, 16)
     }
 }
 
@@ -10275,6 +10393,10 @@ struct TomorrowView {
         /// false (it wants only the countdown + big games — the full table lives on
         /// the Hub); the Hub + Tomorrow page keep it.
         var includeLookAhead: Bool = true
+        /// Whether to render the countdown hero. The Today page passes false — its
+        /// countdown now lives in the leading WC bar (HomeWcBar). The Tomorrow tab
+        /// keeps it.
+        var includeCountdown: Bool = true
         /// Header word for the countdown / empty hero — "TODAY" for the today use.
         var dayLabel: String = "TOMORROW"
         /// 1Hz tick for the live countdown. Re-render every second.
@@ -10297,7 +10419,7 @@ struct TomorrowView {
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
                 if !lookAheadOnly {
-                    countdownHero
+                    if includeCountdown { countdownHero }
                     bigGames
                 }
                 if includeLookAhead { lookAheadTabs }
