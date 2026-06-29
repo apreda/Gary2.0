@@ -1751,8 +1751,12 @@ struct HomeView: View {
     /// anchor) has started, back to "YESTERDAY" once the day rolls over.
     @State private var recordBoxLabel: String = "YESTERDAY"
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
-    /// Gary's last-7-days GAME-pick record per sport — the Morning "7-Day Form" module.
+    /// Gary's last-7-days GAME-pick record per sport — kept fetched for content
+    /// gating, but the Home form module now renders `dailyForm` (per-sport LIVE).
     @State private var sevenDayForm: [SupabaseAPI.SportRecord] = []
+    /// Per-sport LIVE FORM — each sport's record for the current active slate day
+    /// (today as it builds, or last night held). The re-logic'd "7-Day Form".
+    @State private var dailyForm: [DailyFormCell] = []
     @State private var yesterdayTopPick: GaryPick? = nil
     @State private var yesterdayTopPickScore: String? = nil
     /// Tonight's top Hub edges (relevance-ordered) — the pre-bet checklist.
@@ -2209,6 +2213,10 @@ struct HomeView: View {
                             if yw + yl + yp > 0 { yesterdayRecord = (yw, yl, yp) }
                         }
                     }
+                    // Per-sport LIVE FORM (the re-logic'd 7-Day Form): MLB + WC each
+                    // build today live, then hold last night until the next day lands.
+                    dailyForm = Self.buildDailyFormBySport(games: recentGameResults, live: liveRows,
+                                                           slateDay: slateDay, anchor: recapDay)
                     // Keep the snapshot fresh — the tape/takeover re-render
                     // off the shared 90s poller once it starts.
                     LiveScoreCache.shared.startIfNeeded()
@@ -2475,27 +2483,13 @@ struct HomeView: View {
         // use; a bare computed-property access would re-run the whole derivation
         // each time, on every live-score tick (the Home double-compute hitch).
         let stories = headlineStories
-        // The Wire beside the headlines is LIVE INTEL only — line moves, injuries,
-        // pace, steam. Results are the headlines on the left, so they're excluded
-        // here (no repeating). 70/30 split, height-matched (founder).
-        let wireIntel = wireItems.filter {
-            ["line_move", "injury", "pace", "steam"].contains(($0.kind ?? "").lowercased())
-        }
+        // Full-width headline carousel. (The Wire was dropped — we can't source real
+        // line-moves/injuries for the WC, so rather than show inferred numbers we
+        // removed it; the 70/30 split is reverted to full width.)
         if !stories.isEmpty {
-            GeometryReader { geo in
-                HStack(alignment: .top, spacing: 8) {
-                    HomeHeadlinesCarousel(stories: stories, edgePad: 0) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-                    }
-                    .frame(width: geo.size.width * 0.68)
-                    if !wireIntel.isEmpty {
-                        HomeWireColumn(items: wireIntel, height: 236)
-                            .frame(width: geo.size.width * 0.32 - 8)
-                    }
-                }
+            HomeHeadlinesCarousel(stories: stories) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
-            .frame(height: 236)
-            .padding(.horizontal, 16)
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
@@ -2510,17 +2504,19 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
         }
 
-        // ── ②b The 7-Day Form — moved below the countdown (founder swap). MLB /
-        // World Cup / Live records; tap re-opens last night's recap or the Winners tab.
-        if !sevenDayForm.isEmpty {
-            HomeFormSection(records: sevenDayForm, yesterday: yesterdayRecord, recordLabel: recordBoxLabel,
-                            onYesterday: {
-                                if recordBoxLabel == "YESTERDAY" {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true }
-                                } else {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-                                }
-                            })
+        // ── ②b LIVE FORM — the old 7-Day Form, re-logic'd into a per-sport DAILY
+        // tracker (founder, Jun 29): each sport builds today's record live, then
+        // holds last night's final until the next day's games land. Tap → Winners,
+        // or last night's recap when the whole slate is settled.
+        if !dailyForm.isEmpty {
+            HomeFormSection(cells: dailyForm, onTap: {
+                let allSettled = dailyForm.allSatisfy { $0.state == .lastNight }
+                if allSettled {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true }
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+                }
+            })
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
@@ -3370,6 +3366,50 @@ struct HomeView: View {
                 if yw + yl + yp > 0 { yesterdayRecord = (yw, yl, yp) }
             }
         }
+        // Keep LIVE FORM fresh on the same 90s tick as the record box.
+        dailyForm = Self.buildDailyFormBySport(games: games, live: liveScoresNow,
+                                               slateDay: slateDay, anchor: anchor)
+    }
+
+    /// Per-sport LIVE FORM — the LIVE-column settle logic applied to each sport.
+    /// For each sport: today's record while today is live or has graded (LIVE when
+    /// games are in progress, else TODAY); otherwise the most recent settled day's
+    /// record (LAST NIGHT), held until the next day's games produce results.
+    static func buildDailyFormBySport(games: [GameResult], live: [LiveScore],
+                                      slateDay: String, anchor: String?,
+                                      sports: [String] = ["MLB", "WC"]) -> [DailyFormCell] {
+        func tally(_ day: String?, _ league: String) -> (Int, Int, Int) {
+            guard let day = day else { return (0, 0, 0) }
+            var w = 0, l = 0, p = 0
+            for r in games where r.game_date == day && (r.league ?? "").uppercased() == league {
+                switch (r.result ?? "").lowercased() {
+                case "won", "win", "w":   w += 1
+                case "lost", "loss", "l": l += 1
+                case "push", "p":         p += 1
+                default: break
+                }
+            }
+            return (w, l, p)
+        }
+        var cells: [DailyFormCell] = []
+        for sport in sports {
+            if AppFlags.hidesWorldCupRow(sport) { continue }
+            let liveNow = live.contains { $0.isLive && ($0.league ?? "").uppercased() == sport }
+            let (tw, tl, tp) = tally(slateDay, sport)
+            // Flip to today on the first GRADE (same gate as the LIVE record box);
+            // liveNow only decides the LIVE-vs-TODAY label, so we hold last night's
+            // final until today actually produces a result.
+            if tw + tl + tp > 0 {
+                cells.append(DailyFormCell(league: sport, wins: tw, losses: tl, pushes: tp,
+                                           state: liveNow ? .live : .today))
+            } else {
+                let (yw, yl, yp) = tally(anchor, sport)
+                if yw + yl + yp > 0 {
+                    cells.append(DailyFormCell(league: sport, wins: yw, losses: yl, pushes: yp, state: .lastNight))
+                }
+            }
+        }
+        return cells
     }
 
     static func buildPropBoxGames(props: [PropResult], games: [GameResult], pulse: [SupabaseAPI.MarketPulseRow], anchor: String?, label: String) -> [HomePropBoxSection.GameOption] {
@@ -4847,64 +4887,64 @@ struct HomeHeadlinesFeed: View {
     }
 }
 
-/// 7-DAY FORM — Gary's last-7-days GAME-pick record per sport, scoreboard style:
-/// the title carries the window, each box shows only the sport and the record
-/// (no units, no "7D" suffix). User pick, Jun 16 (the scoreboard-block direction).
-struct HomeFormSection: View {
-    let records: [SupabaseAPI.SportRecord]
-    let yesterday: (wins: Int, losses: Int, pushes: Int)
-    /// "YESTERDAY" once the slate's done, or "TODAY"/"LIVE" while today's games
-    /// run (3am-ET anchor). LIVE/TODAY shows 0-0 before the first pick grades.
-    var recordLabel: String = "YESTERDAY"
-    let onYesterday: () -> Void
-
-    /// Show the record box when there's something to show. For a finished slate
-    /// that's a non-empty record; for a live/today slate we show it even at 0-0
-    /// (the live count builds out as picks grade — never a stale number).
-    private var showRecordBox: Bool {
-        let isToday = recordLabel == "TODAY" || recordLabel == "LIVE"
-        return isToday || (yesterday.wins + yesterday.losses + yesterday.pushes > 0)
+/// One cell of the LIVE FORM — a single sport's GAME-pick record for the current
+/// active slate day. Built today as games settle (LIVE while in progress), then
+/// holds last night's final until the next day's results land.
+struct DailyFormCell: Identifiable {
+    enum State { case live, today, lastNight }
+    let league: String
+    let wins: Int
+    let losses: Int
+    let pushes: Int
+    let state: State
+    var id: String { league }
+    var record: String { pushes > 0 ? "\(wins)-\(losses)-\(pushes)" : "\(wins)-\(losses)" }
+    var stateLabel: String {
+        switch state {
+        case .live:      return "LIVE"
+        case .today:     return "TODAY"
+        case .lastNight: return "LAST NIGHT"
+        }
     }
+}
+
+/// LIVE FORM — Gary's GAME-pick record for the live day, per sport (MLB / World
+/// Cup). The re-logic'd "7-Day Form" (founder, Jun 29): each cell builds today's
+/// record live and holds last night's final until the next slate lands, so it
+/// always mirrors what's actually happening in real life. No rolling window.
+struct HomeFormSection: View {
+    let cells: [DailyFormCell]
+    let onTap: () -> Void
+
+    private let liveDot = Color(hex: "#3FB950")   // active-green for the LIVE pip
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("7-DAY FORM")
+            Text("LIVE FORM")
                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1.6)
                 .foregroundStyle(GaryColors.gold)
                 .padding(.horizontal, 16)
-            // ONE container with the records divided by hairlines — not 3-4
-            // separate boxes (founder call).
-            HStack(spacing: 0) {
-                let leagueCells = Array(records.prefix(2))
-                ForEach(Array(leagueCells.enumerated()), id: \.element.id) { idx, r in
-                    if idx > 0 { formDivider }
-                    formCell(label: r.league == "WC" ? "WORLD CUP" : r.league,
-                             record: r.pushes > 0 ? "\(r.wins)-\(r.losses)-\(r.pushes)" : "\(r.wins)-\(r.losses)",
-                             labelStyle: leagueStyle(r.league))
-                }
-                // Today's live / yesterday's result as a MATCHING cell — minimal
-                // words, taps into Winners (user call, Jun 17). Rolls on the EST
-                // slate day: "LIVE"/"TODAY" while today's games run, then "YESTERDAY".
-                if showRecordBox {
-                    if !leagueCells.isEmpty { formDivider }
-                    Button(action: onYesterday) {
-                        formCell(label: recordLabel,
-                                 record: yesterday.pushes > 0 ? "\(yesterday.wins)-\(yesterday.losses)-\(yesterday.pushes)" : "\(yesterday.wins)-\(yesterday.losses)",
-                                 labelStyle: AnyShapeStyle(GaryColors.gold))
+            Button(action: onTap) {
+                HStack(spacing: 0) {
+                    ForEach(Array(cells.enumerated()), id: \.element.id) { idx, c in
+                        if idx > 0 { formDivider }
+                        formCell(c)
                     }
-                    .buttonStyle(.plain)
                 }
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.02)))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                .padding(.horizontal, 16)
             }
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.02)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
-            .padding(.horizontal, 16)
+            .buttonStyle(.plain)
         }
     }
 
     /// Hairline between the record cells inside the single form container.
     private var formDivider: some View {
-        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 46)
+        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 58)
     }
+
+    private func leagueLabel(_ league: String) -> String { league == "WC" ? "WORLD CUP" : league }
 
     /// MLB reads in its white-green-brown field gradient (user call, Jun 17); every
     /// other league in its flat accent color.
@@ -4914,21 +4954,29 @@ struct HomeFormSection: View {
             : AnyShapeStyle(Sport.from(league: league).accentColor)
     }
 
-    /// One record cell INSIDE the shared container — no own background/border
-    /// (the container carries those); cells are split by formDivider.
-    private func formCell(label: String, record: String, labelStyle: AnyShapeStyle) -> some View {
-        VStack(spacing: 6) {
-            Text(label)
+    /// One record cell INSIDE the shared container — league label, the live/last-
+    /// night record, and the state line (a green pip when LIVE).
+    @ViewBuilder private func formCell(_ c: DailyFormCell) -> some View {
+        VStack(spacing: 5) {
+            Text(leagueLabel(c.league))
                 .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
-                .foregroundStyle(labelStyle)
+                .foregroundStyle(leagueStyle(c.league))
                 .lineLimit(1).minimumScaleFactor(0.7)
-            Text(record)
+            Text(c.record)
                 .font(GaryFonts.display(34))
                 .foregroundStyle(.white)
                 .lineLimit(1).minimumScaleFactor(0.6)
+            HStack(spacing: 4) {
+                if c.state == .live {
+                    Circle().fill(liveDot).frame(width: 5, height: 5)
+                }
+                Text(c.stateLabel)
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(c.state == .live ? AnyShapeStyle(liveDot) : AnyShapeStyle(.white.opacity(0.5)))
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, 15)
         .contentShape(Rectangle())
     }
 }
@@ -5085,68 +5133,6 @@ struct HomeMarketPulseStrip: View {
             splitRow(mlDogs, "+ML DOGS", mlFavs, "+ML FAVS")
         }
         .padding(.vertical, 13).padding(.horizontal, 14)
-        .quantPanel()
-    }
-}
-
-/// The compact Wire column that rides at ~30% next to the headline carousel
-/// (founder's 70/30 layout). LIVE intel only — line moves, injuries, pace, steam
-/// — never results (those are the headlines on the left). Fixed height to match
-/// the headline card; scrolls internally for more.
-struct HomeWireColumn: View {
-    let items: [SupabaseAPI.WireItem]
-    var height: CGFloat = 236
-
-    private func kindLabel(_ k: String?) -> String {
-        switch k {
-        case "line_move": return "LINE MOVE"
-        case "injury":    return "INJURY"
-        case "pace":      return "PACE"
-        case "steam":     return "STEAM"
-        default:          return "WIRE"
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Internal header so this box top-aligns with the headline card (which
-            // has no header of its own once the dots are gone).
-            HStack {
-                Text("THE WIRE")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 11).padding(.top, 10).padding(.bottom, 8)
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 4) {
-                                Text((item.league ?? "").uppercased())
-                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.3)
-                                    .foregroundStyle(Sport.from(league: item.league ?? "").accentColor.opacity(0.95))
-                                Text("· \(kindLabel(item.kind))")
-                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.3)
-                                    .foregroundStyle(.white.opacity(0.45))
-                            }
-                            Text(item.headline ?? "")
-                                .font(GaryFonts.text(11.5, .semibold))
-                                .foregroundStyle(.white.opacity(0.93))
-                                .lineLimit(3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 11).padding(.vertical, 9)
-                        if i < items.count - 1 {
-                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 11)
-                        }
-                    }
-                }
-            }
-        }
-        .frame(height: height)
         .quantPanel()
     }
 }
@@ -10387,6 +10373,13 @@ struct TomorrowView {
         var includeBigGames: Bool = true
         /// Header word for the countdown / empty hero — "TODAY" for the today use.
         var dayLabel: String = "TOMORROW"
+        /// WC analytical lanes folded into the Day Ahead tab strip (Hub only): the
+        /// xG-regression / advancement / rest signals + a tap handler. Empty/nil on
+        /// Home, so these tabs only appear on the Hub's WC Day Ahead.
+        var wcRegression: [Signal] = []
+        var wcAdvancement: [Signal] = []
+        var wcRest: [Signal] = []
+        var onWcSignalTap: ((Signal) -> Void)? = nil
         /// 1Hz tick for the live countdown. Re-render every second.
         @State private var now = Date()
         /// The active look-ahead tab (Starters · Key Returns · Form · Run
