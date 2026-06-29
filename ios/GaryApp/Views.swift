@@ -2461,7 +2461,7 @@ struct HomeView: View {
         // slate. Reuses TomorrowView.Body in look-ahead-only mode (founder: put it
         // on Today too, between the 7-Day Form and the Board).
         if let tb = todayBoard {
-            TomorrowView.Body(board: tb, lookAheadOnly: true)
+            TomorrowView.Body(board: tb, includeBoard: false, dayLabel: "TODAY")
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
         }
@@ -10251,7 +10251,15 @@ struct TomorrowView {
         /// When true, render ONLY the "The Day Ahead" look-ahead table (Starters /
         /// Form / Run Profile / Weather + MLB/WC) — used on the Home page's TODAY
         /// section. The countdown hero, big games, and full board are hidden.
+        /// Render ONLY the Day Ahead table (no countdown/big-games/board). Currently
+        /// unused — Today + Hub now show the full today treatment (see includeBoard).
         var lookAheadOnly: Bool = false
+        /// Whether to render the full board section under the look-ahead table. The
+        /// Today page + Hub have their OWN board, so they pass false (countdown +
+        /// big games + Day Ahead, no duplicate board).
+        var includeBoard: Bool = true
+        /// Header word for the countdown / empty hero — "TODAY" for the today use.
+        var dayLabel: String = "TOMORROW"
         /// 1Hz tick for the live countdown. Re-render every second.
         @State private var now = Date()
         /// The active look-ahead tab (Starters · Key Returns · Form · Run
@@ -10273,7 +10281,7 @@ struct TomorrowView {
                     bigGames
                 }
                 lookAheadTabs
-                if !lookAheadOnly, let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
+                if !lookAheadOnly, includeBoard, let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
             }
             // The 1Hz tick drives ONLY the countdown hero. In lookAheadOnly mode
             // (Home TODAY + the Hub Day Ahead) that hero is hidden, so updating
@@ -10287,7 +10295,11 @@ struct TomorrowView {
             let iso = board?.countdown_iso
             let anyLines = board?.any_lines ?? false
             let target = iso.flatMap { parseISO8601($0) }
-            let hasClock = (target != nil) && anyLines
+            let isFuture = target.map { $0 > now } ?? false
+            let hasClock = (target != nil) && anyLines && isFuture
+            // TODAY only: the first game already started, so a ticking 00:00:00
+            // would be wrong — show an "underway" state instead.
+            let started = (target != nil) && anyLines && !isFuture
             return VStack(alignment: .leading, spacing: 0) {
                 if hasClock, let target {
                     Text(TomorrowView.countdownTerm(board?.countdown_sport))
@@ -10308,12 +10320,31 @@ struct TomorrowView {
                         .font(GaryFonts.text(13))
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.top, 8)
-                } else {
-                    // Honest-empty: no slate posted (iso nil) OR lines not open.
-                    Text("TOMORROW")
+                } else if started {
+                    // TODAY, first game underway — name it, no ticking clock.
+                    Text(dayLabel)
                         .font(GaryFonts.mono(10, bold: true)).tracking(2)
                         .foregroundStyle(GaryColors.gold)
-                    Text(iso == nil ? "Tomorrow's board posts soon"
+                    if let m = board?.countdown_matchup, !m.isEmpty {
+                        Text(m)
+                            .font(GaryFonts.mono(15, bold: true)).tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .padding(.top, 4)
+                    }
+                    Text("Games are underway")
+                        .font(GaryFonts.text(20, .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.top, 6)
+                    Text(Self.heroSub(board: board, iso: iso))
+                        .font(GaryFonts.text(13))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.top, 6)
+                } else {
+                    // Honest-empty: no slate posted (iso nil) OR lines not open.
+                    Text(dayLabel)
+                        .font(GaryFonts.mono(10, bold: true)).tracking(2)
+                        .foregroundStyle(GaryColors.gold)
+                    Text(iso == nil ? "\(dayLabel == "TODAY" ? "Today's" : "Tomorrow's") board posts soon"
                                     : "Lines open soon")
                         .font(GaryFonts.text(20, .semibold))
                         .foregroundStyle(.white.opacity(0.9))
@@ -20852,7 +20883,21 @@ struct PropsHubView: View {
     /// show a tab that can only render an empty state.
     private var availableLeagues: [HubLeagueSel] {
         // Priority order: the Finals, then the Cup, then the daily slate.
-        let present = [HubLeagueSel.nba, .wc, .mlb].filter { lg in source.contains { $0.league == lg } }
+        // WC is always present during the 2026 World Cup window (Jun 11–Jul 19)
+        // so the tab doesn't disappear on days when signals haven't posted yet.
+        let wcActive: Bool = {
+            let cal = Calendar(identifier: .gregorian)
+            var comps = DateComponents()
+            comps.year = 2026; comps.month = 6; comps.day = 11
+            let start = cal.date(from: comps)!
+            comps.month = 7; comps.day = 20
+            let end = cal.date(from: comps)!
+            return Date() >= start && Date() < end
+        }()
+        var order: [HubLeagueSel] = [.nba, .wc, .mlb]
+        let present = order.filter { lg in
+            (lg == .wc && wcActive) || source.contains { $0.league == lg }
+        }
         return present.isEmpty ? [.mlb] : present
     }
 
@@ -21088,7 +21133,7 @@ struct PropsHubView: View {
                     // page uses (Starters / Form / Run Profile / Weather + MLB/WC),
                     // but for TODAY's slate (today_board). Founder: put it on the Hub.
                     if let tb = todayBoard {
-                        TomorrowView.Body(board: tb, lookAheadOnly: true)
+                        TomorrowView.Body(board: tb, includeBoard: false, dayLabel: "TODAY")
                             .id("dayAhead")
                     }
 
