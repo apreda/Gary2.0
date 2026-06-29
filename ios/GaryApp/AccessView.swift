@@ -16,13 +16,17 @@ struct AccessView: View {
             VStack(spacing: 20) {
                 Spacer(minLength: 20)
                 
-                // Sign-up hero — the full gold-bear portrait (user pick, Jun 18).
-                VStack(spacing: 0) {
-                    Image("GarySignupHero")
+                // The clean single-source Gary mark (not the raw transparent hero
+                // PNG, which showed a checkerboard) — rounded like the app icon.
+                VStack(spacing: 10) {
+                    Image(GaryBrand.mark)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 260, height: 260)
-                    
+                        .frame(width: 168, height: 168)
+                        .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
+
                     Text("GARY A.I.")
                         .font(GaryFonts.mono(30))
                         .foregroundStyle(GaryColors.gold)
@@ -87,13 +91,19 @@ struct AccessView: View {
                             .padding(.vertical, 12)
                     }
 
+                    // Returning-user path — the standard "Already have an account?
+                    // Sign In" line (was a near-invisible grey footnote).
                     Button {
                         showSignIn = true
                     } label: {
-                        Text("Sign In")
-                            .font(GaryFonts.text(12.5, .semibold))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .padding(.vertical, 4)
+                        HStack(spacing: 5) {
+                            Text("Already have an account?")
+                                .foregroundStyle(.white.opacity(0.55))
+                            Text("Sign In")
+                                .foregroundStyle(GaryColors.gold)
+                        }
+                        .font(GaryFonts.text(13.5, .semibold))
+                        .padding(.vertical, 8)
                     }
                 }
                 .padding(.horizontal, 24)
