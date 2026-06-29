@@ -2475,10 +2475,27 @@ struct HomeView: View {
         // use; a bare computed-property access would re-run the whole derivation
         // each time, on every live-score tick (the Home double-compute hitch).
         let stories = headlineStories
+        // The Wire beside the headlines is LIVE INTEL only — line moves, injuries,
+        // pace, steam. Results are the headlines on the left, so they're excluded
+        // here (no repeating). 70/30 split, height-matched (founder).
+        let wireIntel = wireItems.filter {
+            ["line_move", "injury", "pace", "steam"].contains(($0.kind ?? "").lowercased())
+        }
         if !stories.isEmpty {
-            HomeHeadlinesCarousel(stories: stories) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+            GeometryReader { geo in
+                HStack(alignment: .top, spacing: 8) {
+                    HomeHeadlinesCarousel(stories: stories, edgePad: 0) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+                    }
+                    .frame(width: geo.size.width * 0.68)
+                    if !wireIntel.isEmpty {
+                        HomeWireColumn(items: wireIntel, height: 236)
+                            .frame(width: geo.size.width * 0.32 - 8)
+                    }
+                }
             }
+            .frame(height: 236)
+            .padding(.horizontal, 16)
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
@@ -2579,12 +2596,9 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
         }
-        if !wireItems.isEmpty || !pulseRows.isEmpty {
-            HomeWireSection(items: wireItems, sub: "",
-                            pulse: pulseRows, limit: 4)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.13), value: animateIn)
-        }
+        // (The standalone "The Wire" section was folded into the 70/30 row up top:
+        // its live intel rides beside the headlines, its results ARE the headlines.
+        // Removed from here so the Wire isn't shown twice — founder's side-by-side.)
         // The Hits & heartbreakers (biggest-cashes) section was REMOVED from the
         // Today page per the founder. cashRows/worstBeat are still computed for
         // the best-cash odds line in the scorecard; the rail itself is gone.
@@ -4056,6 +4070,9 @@ struct HomeMarqueeHero: View {
     /// Carousel pages fill a fixed frame so the receipt pins to the same
     /// bottom edge on every slide — the section below never jumps.
     var fillsHeight: Bool = false
+    /// The card's horizontal screen margin — 16 full-width, 0 in the 70/30
+    /// side-by-side where the row provides the margin and the Wire sits beside it.
+    var edgePad: CGFloat = 16
     let onTap: () -> Void
     /// Carousel expand: when a toggle is provided, the card shows a MORE/LESS
     /// affordance and tapping it expands the full recap inline — the carousel
@@ -4101,7 +4118,7 @@ struct HomeMarqueeHero: View {
         .frame(height: flipped ? max(frontH + 150 + CGFloat(min(story.claims.count, 4)) * 38, 320) : (fillsHeight ? nil : (frontH > 0 ? frontH : nil)))
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .onPreferenceChange(PickCardHeightKey.self) { frontH = $0 }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, edgePad)
         .contentShape(Rectangle())
         .onTapGesture {
             if let toggle = onToggleExpand {
@@ -4704,6 +4721,7 @@ struct HomeCompactStrip: View {
 /// licensed player, no video.
 struct HomeHeadlinesCarousel: View {
     let stories: [HomeMarqueeHero.Story]
+    var edgePad: CGFloat = 16   // 0 in the 70/30 side-by-side
     let onTap: () -> Void
 
     @State private var page = 0
@@ -4721,32 +4739,19 @@ struct HomeHeadlinesCarousel: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            // A whisper-quiet position cue — tiny dots, the active one gold. Only
-            // shown when there's more than one card (a lone dot is pointless + just
-            // wastes vertical space); hidden while a card is open. Swipe + the
-            // chevrons carry the "there's more" signal.
-            if !expanded, stories.count > 1 {
-                HStack(spacing: 5) {
-                    ForEach(stories.indices, id: \.self) { i in
-                        Circle()
-                            .fill(i == page ? GaryColors.gold.opacity(0.95) : Color.white.opacity(0.18))
-                            .frame(width: i == page ? 5 : 4, height: i == page ? 5 : 4)
-                    }
-                }
-                .frame(height: 6)
-                .padding(.horizontal, 18)
-            }
-
+            // No position dots — the carousel auto-advances on the slide timer and
+            // swipes; the chevrons carry the "there's more" signal. (Dots removed
+            // per founder; they just wasted vertical space + misaligned the 70/30.)
             if expanded {
                 // The active card grown to its full recap — auto-advance is paused.
                 HomeMarqueeHero(story: stories[min(page, stories.count - 1)],
-                                flipEnabled: false, fillsHeight: false, onTap: onTap,
+                                flipEnabled: false, fillsHeight: false, edgePad: edgePad, onTap: onTap,
                                 isExpanded: true, onToggleExpand: toggleExpand)
             } else {
                 ZStack {
                     TabView(selection: $page) {
                         ForEach(Array(stories.enumerated()), id: \.offset) { i, s in
-                            HomeMarqueeHero(story: s, flipEnabled: false, fillsHeight: true, onTap: onTap,
+                            HomeMarqueeHero(story: s, flipEnabled: false, fillsHeight: true, edgePad: edgePad, onTap: onTap,
                                             isExpanded: false, onToggleExpand: toggleExpand)
                                 .tag(i)
                         }
@@ -5080,6 +5085,68 @@ struct HomeMarketPulseStrip: View {
             splitRow(mlDogs, "+ML DOGS", mlFavs, "+ML FAVS")
         }
         .padding(.vertical, 13).padding(.horizontal, 14)
+        .quantPanel()
+    }
+}
+
+/// The compact Wire column that rides at ~30% next to the headline carousel
+/// (founder's 70/30 layout). LIVE intel only — line moves, injuries, pace, steam
+/// — never results (those are the headlines on the left). Fixed height to match
+/// the headline card; scrolls internally for more.
+struct HomeWireColumn: View {
+    let items: [SupabaseAPI.WireItem]
+    var height: CGFloat = 236
+
+    private func kindLabel(_ k: String?) -> String {
+        switch k {
+        case "line_move": return "LINE MOVE"
+        case "injury":    return "INJURY"
+        case "pace":      return "PACE"
+        case "steam":     return "STEAM"
+        default:          return "WIRE"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Internal header so this box top-aligns with the headline card (which
+            // has no header of its own once the dots are gone).
+            HStack {
+                Text("THE WIRE")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 11).padding(.top, 10).padding(.bottom, 8)
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 4) {
+                                Text((item.league ?? "").uppercased())
+                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.3)
+                                    .foregroundStyle(Sport.from(league: item.league ?? "").accentColor.opacity(0.95))
+                                Text("· \(kindLabel(item.kind))")
+                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.3)
+                                    .foregroundStyle(.white.opacity(0.45))
+                            }
+                            Text(item.headline ?? "")
+                                .font(GaryFonts.text(11.5, .semibold))
+                                .foregroundStyle(.white.opacity(0.93))
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 11).padding(.vertical, 9)
+                        if i < items.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 11)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: height)
         .quantPanel()
     }
 }
@@ -18511,6 +18578,9 @@ struct Signal: Identifiable {
     /// Live first-pitch park-weather payload (park_weather lane) — temp/wind/lean drive the MLB weather chip + sheet.
     var weather: SwapMeta? = nil
     var fantasy: SwapMeta? = nil   // fantasy-pickup payload (role / tier / ops / opp_sp)
+    /// Player's field position ("2B", "SS", "LF"…) when the lane is player-backed —
+    /// shown on the Insights row beside the matchup. Sourced from meta.position.
+    var position: String? = nil
 }
 
 // MARK: - Picks Tab (per-game swipe carousel: Today's Top + game-by-game)
@@ -20741,7 +20811,8 @@ extension Connection {
             reg: (meta?.kind == "regression_pitcher") ? meta : nil,
             slateDate: date,
             weather: (meta?.kind == "park_weather") ? meta : nil,
-            fantasy: (meta?.kind == "fantasy_pickup") ? meta : nil
+            fantasy: (meta?.kind == "fantasy_pickup") ? meta : nil,
+            position: meta?.position
         )
     }
 }
@@ -21103,6 +21174,11 @@ struct PropsHubView: View {
     @State private var laneTab: SignalKind? = nil
     /// Selected lane in THE CONDITIONS tab strip; nil = first non-empty lane.
     @State private var condTab: SignalKind? = nil
+    /// Selected lane in the WC INSIGHTS tab strip; nil = first non-empty lane.
+    @State private var wcLaneTab: SignalKind? = nil
+    /// FEATURED ribbon — hidden on the Hub per founder (Jun 29 2026) for MLB + WC.
+    /// Kept fully wired (computed + FeaturedRibbon) so it's a one-flag re-enable.
+    private let showFeaturedOnHub = false
 
     // Real connections fetched from Supabase (insight_connections), mapped to
     // Signals. Real data only — no mock fallback; empty -> honest empty state.
@@ -21430,46 +21506,50 @@ struct PropsHubView: View {
                             .id("playerEdges")
                         VStack(alignment: .leading, spacing: 8) {
                             hubLaneStrip(lanes: playerEdgeLanes, active: activeLane, title: laneTitle) { laneTab = $0 }
-                            EdgeList(signals: items(activeLane)) { breakdownSignal = $0 }
+                            // Regression is now a lane — render the full board on that
+                            // tab, the player-edge list on every other.
+                            if activeLane == .regression {
+                                RegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
+                                    if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                }
+                            } else {
+                                EdgeList(signals: items(activeLane)) { breakdownSignal = $0 }
+                            }
                         }
                     }
 
-                    if !featured.isEmpty {
+                    if showFeaturedOnHub, !featured.isEmpty {
                         HubSectionTitle(title: "Featured").padding(.horizontal, 16)
                         FeaturedRibbon(signals: featured) { breakdownSignal = $0 }
                     }
 
                     if sel == .wc {
-                        // ── WC Hub: purpose-built section order ──────────────────
-                        // Tournament context first — group standings / knockout
-                        // implications frame every today's match.
-                        if !items(.tournament).isEmpty {
-                            HubDisclosure(anchor: "tournament", eyebrow: "Tournament Stakes", count: items(.tournament).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                        // ── WC Hub: mirrors MLB — one Insights lane strip whose first
+                        // tab is the xG Regression board (the soccer twin of MLB's
+                        // Regression tab), then the supporting collapsibles. Built for
+                        // World Cup bettors, not ported from the MLB lanes.
+                        if !wcInsightLanes.isEmpty {
+                            HubSectionTitle(title: "Insights").padding(.horizontal, 16)
+                                .id("playerEdges")
+                            VStack(alignment: .leading, spacing: 8) {
+                                hubLaneStrip(lanes: wcInsightLanes, active: wcActiveLane, title: wcLaneTitle) { wcLaneTab = $0 }
+                                // xG Regression tab → the Goals-vs-xG board; every other
+                                // lane → its plain edge-row list.
+                                if wcActiveLane == .xgRegression {
+                                    WcRegressionBoard(signals: items(.xgRegression)) { s in
+                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    }
+                                } else {
+                                    VStack(spacing: 0) {
+                                        ForEach(items(wcActiveLane)) { s in
+                                            SignalRow(s: s) { _ in
+                                                if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                            }
+                                        }
+                                    }
                                     .quantPanel().padding(.horizontal, 16)
+                                }
                             }
-                            .id("tournament")
-                        }
-                        if !items(.xgRegression).isEmpty {
-                            HubDisclosure(anchor: "xgRegression", eyebrow: "xG Regression", count: items(.xgRegression).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.xgRegression)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                    .quantPanel().padding(.horizontal, 16)
-                            }
-                            .id("xgRegression")
-                        }
-                        if !items(.advancement).isEmpty {
-                            HubDisclosure(anchor: "advancement", eyebrow: "Advancement", count: items(.advancement).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.advancement)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                    .quantPanel().padding(.horizontal, 16)
-                            }
-                            .id("advancement")
-                        }
-                        if !items(.xgRecap).isEmpty {
-                            HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                    .quantPanel().padding(.horizontal, 16)
-                            }
-                            .id("xgRecap")
                         }
                         if !selStreakRows.isEmpty {
                             HubDisclosure(anchor: "streaks", eyebrow: "Streaks", count: selStreakRows.count, openSet: $openSections) {
@@ -21483,6 +21563,13 @@ struct PropsHubView: View {
                                     .quantPanel().padding(.horizontal, 16)
                             }
                             .id("streaks")
+                        }
+                        if !items(.xgRecap).isEmpty {
+                            HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("xgRecap")
                         }
                         if !wcIntelSignals.isEmpty {
                             HubDisclosure(anchor: "wcIntel", eyebrow: "Game Intel", count: wcIntelSignals.count, openSet: $openSections) {
@@ -21498,20 +21585,15 @@ struct PropsHubView: View {
                             }
                             .id("owned")
                         }
-                        if !items(.situational).isEmpty {
-                            HubDisclosure(anchor: "restFatigue", eyebrow: "Rest & Fatigue", count: items(.situational).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                    .quantPanel().padding(.horizontal, 16)
-                            }
-                            .id("restFatigue")
-                        }
                         if !selNightRows.isEmpty {
                             HubDisclosure(anchor: "lastNight", eyebrow: "Last Night", count: selNightRows.count, openSet: $openSections) {
                                 NightBoard(rows: selNightRows).padding(.horizontal, 16)
                             }
                             .id("lastNight")
                         }
-                        let wcExtras = leagueSignals.filter { ![.streak, .tournament, .xgRegression, .advancement, .xgRecap, .situational, .h2h].contains($0.kind) && $0.confirmedXI == nil }
+                        // Anything not already surfaced — the Insights lanes, xG board,
+                        // streaks, recap, intel, h2h, last night — falls to More Edges.
+                        let wcExtras = leagueSignals.filter { ![.tournament, .advancement, .situational, .ballpark, .xgRegression, .streak, .xgRecap, .h2h].contains($0.kind) && $0.confirmedXI == nil }
                         if !wcExtras.isEmpty {
                             HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: wcExtras.count, openSet: $openSections) {
                                 VStack(spacing: 0) { ForEach(wcExtras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
@@ -21522,14 +21604,12 @@ struct PropsHubView: View {
                         // WC pending — only WC-relevant sections
                         let wcPending: [(anchor: String, eyebrow: String)] = {
                             var defs: [(String, String)] = []
-                            if items(.tournament).isEmpty           { defs.append(("tournament", "Tournament Stakes")) }
+                            if wcInsightLanes.isEmpty              { defs.append(("playerEdges", "Insights")) }
                             if items(.xgRegression).isEmpty        { defs.append(("xgRegression", "xG Regression")) }
-                            if items(.advancement).isEmpty         { defs.append(("advancement", "Advancement")) }
                             if items(.xgRecap).isEmpty             { defs.append(("xgRecap", "xG Recap")) }
                             if selStreakRows.isEmpty && items(.streak).isEmpty { defs.append(("streaks", "Streaks")) }
                             if wcIntelSignals.isEmpty              { defs.append(("wcIntel", "Game Intel")) }
                             if items(.h2h).isEmpty                 { defs.append(("owned", "Head-to-Head")) }
-                            if items(.situational).isEmpty         { defs.append(("restFatigue", "Rest & Fatigue")) }
                             if selNightRows.isEmpty                { defs.append(("lastNight", "Last Night")) }
                             return defs
                         }()
@@ -21552,14 +21632,8 @@ struct PropsHubView: View {
                     } else {
                     // ── MLB / NBA Hub: existing section order ────────────────────
 
-                    // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
-                    if !items(.regression).isEmpty {
-                        HubSectionTitle(title: "Regression Board").padding(.horizontal, 16)
-                            .id("regression")
-                        RegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
-                            if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
-                        }
-                    }
+                    // REGRESSION BOARD — now the first tab of the Insights section
+                    // above (founder Jun 29), no longer a standalone section here.
                     if !items(.hrThreat).isEmpty {
                         HubDisclosure(anchor: "hrThreats", eyebrow: "Gary Home Run Threats", count: min(items(.hrThreat).count, 3), openSet: $openSections) {
                             VStack(spacing: 0) {
@@ -21748,8 +21822,9 @@ struct PropsHubView: View {
     private var playerEdgeLanes: [SignalKind] {
         // Ballpark ("a different pitcher in this park") is an MLB-only concept — never
         // surface it for other leagues (it was showing, unreadable, under WC).
+        // Regression leads — the hero board is now the first Insights tab (founder).
         let base: [SignalKind] = sel == .mlb
-            ? [.platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord, .bullpenFatigue]
+            ? [.regression, .platoon, .hot, .ballpark, .cold, .starterForm, .teamRecord, .bullpenFatigue]
             : [.platoon, .hot, .cold, .starterForm]
         return base.filter { !items($0).isEmpty }
     }
@@ -21761,6 +21836,7 @@ struct PropsHubView: View {
     }
     private func laneTitle(_ k: SignalKind) -> String {
         switch k {
+        case .regression: return "REGRESSION"
         case .platoon: return "PLATOON"
         case .hot: return "HEAT CHECK"
         case .ballpark: return sel == .wc ? "VENUE" : "BALLPARK"
@@ -21808,6 +21884,29 @@ struct PropsHubView: View {
         case .runningGame: return "Catcher arms vs teams that run"
         case .parkWeather: return "Wind, heat, and the total"
         default: return ""
+        }
+    }
+
+    // ---- WC Insights lane tabs (Stakes / Advancement / Rest / Venue) ----
+
+    /// The WC analog of `playerEdgeLanes`: today's team / tournament edges, shown in
+    /// the same lane-strip + row-list treatment MLB uses, filtered to lanes with rows.
+    private var wcInsightLanes: [SignalKind] {
+        // xG Regression leads — the hero board is the first Insights tab (founder).
+        [SignalKind.xgRegression, .tournament, .advancement, .situational, .ballpark].filter { !items($0).isEmpty }
+    }
+    private var wcActiveLane: SignalKind {
+        if let t = wcLaneTab, wcInsightLanes.contains(t) { return t }
+        return wcInsightLanes.first ?? .xgRegression
+    }
+    private func wcLaneTitle(_ k: SignalKind) -> String {
+        switch k {
+        case .xgRegression: return "xG REGRESSION"
+        case .tournament:   return "STAKES"
+        case .advancement:  return "ADVANCEMENT"
+        case .situational:  return "REST"
+        case .ballpark:     return "VENUE"
+        default:            return k.chip
         }
     }
 
@@ -22706,6 +22805,74 @@ struct RegressionBoard: View {
     }
 }
 
+/// WC xG REGRESSION — the soccer twin of the pitcher Regression Board. A ranked
+/// leaderboard of the teams whose scoring is most stretched from their xG: each row
+/// pairs a Goals-vs-xG gap bar with the per-match differential ("xG +1.7"), tone-
+/// colored by direction (red = finishing hot, due to cool; green = under-finishing,
+/// due to break out). Tap a row for the full regression read. Built for World Cup
+/// bettors — the analytical edge their pre-tournament odds haven't caught yet.
+struct WcRegressionBoard: View {
+    let signals: [Signal]
+    let onTap: (Signal) -> Void
+    private var rows: [Signal] { Array(signals.prefix(8)) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { i, s in
+                row(i, s)
+                if i < rows.count - 1 {
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 44)
+                }
+            }
+        }
+        .quantPanel().padding(.horizontal, 14)
+    }
+
+    private func row(_ i: Int, _ s: Signal) -> some View {
+        Button { onTap(s) } label: {
+            HStack(spacing: 12) {
+                Text("\(i + 1)")
+                    .font(GaryFonts.mono(12, bold: true))
+                    .foregroundStyle(.white.opacity(0.3)).frame(width: 18)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(team(s)).font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(s.game.uppercased()).font(GaryFonts.mono(9))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+                Spacer(minLength: 6)
+                if s.spark.count >= 2 { gapBar(goals: s.spark[0], xg: s.spark[1], tone: s.tone) }
+                Text(s.value).font(GaryFonts.mono(15, bold: true))
+                    .foregroundStyle(s.tone.color).frame(width: 60, alignment: .trailing)
+            }
+            .padding(.vertical, 10).padding(.horizontal, 14).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Goals scored (tone color — the unsustainable current) over xG (muted — the
+    /// level they regress toward); the two bar lengths show the gap at a glance.
+    private func gapBar(goals: Double, xg: Double, tone: HubTone) -> some View {
+        let maxV = max(goals, xg, 0.1)
+        return VStack(alignment: .leading, spacing: 3) {
+            Capsule().fill(tone.color).frame(width: max(3, CGFloat(goals / maxV) * 56), height: 5)
+            Capsule().fill(Color.white.opacity(0.3)).frame(width: max(3, CGFloat(xg / maxV) * 56), height: 5)
+        }
+        .frame(width: 56, alignment: .leading)
+    }
+
+    /// The team the read is about — the words before "are finishing" / "have created".
+    private func team(_ s: Signal) -> String {
+        let h = s.headline
+        for sep in [" are finishing", " have created", " are ", " have "] {
+            if let r = h.range(of: sep) {
+                return String(h[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return h
+    }
+}
+
 /// PLAYER EDGES — concise, EXPANDABLE rows. Collapsed shows the ANGLE at a glance:
 /// player · matchup · the labelled stat (colour carries good/bad, so no "cooling
 /// off" words) · the baseline it's measured against (".247 OPS · was .836
@@ -22836,19 +23003,28 @@ struct EdgeList: View {
                         .font(GaryFonts.mono(15, bold: true)).lineLimit(1)
                 }
             }
-            // Line 2 — matchup + the baseline contrast (the angle) + expand caret.
+            // Line 2 — position + matchup + the baseline contrast (the angle) + caret.
             HStack(spacing: 6) {
+                if let pos = s.position, !pos.isEmpty {
+                    Text(pos.uppercased())
+                        .font(GaryFonts.mono(10, bold: true)).foregroundStyle(GaryColors.gold).lineLimit(1)
+                }
                 if !s.game.isEmpty {
                     Text(s.game.uppercased())
-                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                 }
                 Spacer(minLength: 4)
+                // Baseline ("was .850 season"): the number reads gold so it's legible
+                // on the dark panel; the unit word stays a quiet — but readable — white.
                 if let base = s.spark.first, !baselineWord(s.kind).isEmpty {
-                    Text("\(fmtBase(base, unit: unit)) \(baselineWord(s.kind))")
-                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                    HStack(spacing: 0) {
+                        Text(fmtBase(base, unit: unit)).foregroundStyle(GaryColors.gold)
+                        Text(" \(baselineWord(s.kind))").foregroundStyle(.white.opacity(0.62))
+                    }
+                    .font(GaryFonts.mono(10)).lineLimit(1)
                 }
                 Image(systemName: isOpen ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.35))
+                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.4))
             }
             // Expanded — the full story + profile link.
             if isOpen {
