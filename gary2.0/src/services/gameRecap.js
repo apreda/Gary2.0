@@ -88,12 +88,16 @@ function buildPrompt({ pick, result, evidence }) {
     `no cliches like "in a thrilling contest".\n` +
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
     `OUTPUT:\n` +
-    `- "headline": a clean, professional game headline in plain English — the result and the one ` +
-    `thing that decided it. 6-12 words. Lead with the team and what they actually did. ` +
-    `NO betting jargon ("dogs", "chalk", "cover", "cashes"), NO hype verbs ("explodes", "erupts", ` +
-    `"power show", "roll"), NO odds or prices in the headline, NO cliches or clickbait. ` +
-    `Good: "Tigers take down the Astros behind Colt Keith's three homers". ` +
-    `Bad: "Tigers roll as +106 dogs behind Colt Keith power show". No ending period.\n` +
+    `- "headline": a headline FOR A BETTOR, framed like a betting-wire item (not a generic ESPN ` +
+    `recap) — LEAD with the bet's angle and weave in the result. 6-12 words. Put the betting lens ` +
+    `front and centre: whether the side COVERED / the ML CLEARED / the total went over-under, and ` +
+    `the PRICE or LINE from THE BET line (you MAY use that one price/line in the headline — e.g. ` +
+    `"-134 ML", "covers -1.5", "as a +130 dog" — but NEVER invent another number). Plain, sharp, ` +
+    `no hype verbs ("explodes", "erupts", "power show"), no clickbait, no exclamation. ` +
+    `Good (wire-style): "White Sox clear -134 ML in a 22-1 rout", ` +
+    `"Tigers cover -1.5 behind Keith's three homers", "France routs Norway 4-1, covers -1.5". ` +
+    `Bad (generic ESPN, no angle): "Tigers take down the Astros behind Colt Keith's three homers". ` +
+    `No ending period.\n` +
     `- "recap": the 2-4 sentence body.\n` +
     `- "bullets": 2-4 short stat lines from the game — the night's hard numbers. ` +
     `Each bullet is at most ${MAX_BULLET_CHARS} characters. Facts STRICTLY from the evidence above. ` +

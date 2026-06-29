@@ -4833,27 +4833,38 @@ struct HomeFormSection: View {
                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1.6)
                 .foregroundStyle(GaryColors.gold)
                 .padding(.horizontal, 16)
-            HStack(spacing: 10) {
-                ForEach(records.prefix(2)) { r in
-                    formBox(label: r.league == "WC" ? "WORLD CUP" : r.league,
-                            record: r.pushes > 0 ? "\(r.wins)-\(r.losses)-\(r.pushes)" : "\(r.wins)-\(r.losses)",
-                            labelStyle: leagueStyle(r.league))
+            // ONE container with the records divided by hairlines — not 3-4
+            // separate boxes (founder call).
+            HStack(spacing: 0) {
+                let leagueCells = Array(records.prefix(2))
+                ForEach(Array(leagueCells.enumerated()), id: \.element.id) { idx, r in
+                    if idx > 0 { formDivider }
+                    formCell(label: r.league == "WC" ? "WORLD CUP" : r.league,
+                             record: r.pushes > 0 ? "\(r.wins)-\(r.losses)-\(r.pushes)" : "\(r.wins)-\(r.losses)",
+                             labelStyle: leagueStyle(r.league))
                 }
-                // Today's live / yesterday's result as a MATCHING box (not a strip),
-                // minimal words — taps into Winners (user call, Jun 17). Rolls on
-                // the EST slate day: "LIVE"/"TODAY" while today's games run, then
-                // "YESTERDAY" once the day flips.
+                // Today's live / yesterday's result as a MATCHING cell — minimal
+                // words, taps into Winners (user call, Jun 17). Rolls on the EST
+                // slate day: "LIVE"/"TODAY" while today's games run, then "YESTERDAY".
                 if showRecordBox {
+                    if !leagueCells.isEmpty { formDivider }
                     Button(action: onYesterday) {
-                        formBox(label: recordLabel,
-                                record: yesterday.pushes > 0 ? "\(yesterday.wins)-\(yesterday.losses)-\(yesterday.pushes)" : "\(yesterday.wins)-\(yesterday.losses)",
-                                labelStyle: AnyShapeStyle(GaryColors.gold))
+                        formCell(label: recordLabel,
+                                 record: yesterday.pushes > 0 ? "\(yesterday.wins)-\(yesterday.losses)-\(yesterday.pushes)" : "\(yesterday.wins)-\(yesterday.losses)",
+                                 labelStyle: AnyShapeStyle(GaryColors.gold))
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.02)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
             .padding(.horizontal, 16)
         }
+    }
+
+    /// Hairline between the record cells inside the single form container.
+    private var formDivider: some View {
+        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 46)
     }
 
     /// MLB reads in its white-green-brown field gradient (user call, Jun 17); every
@@ -4864,7 +4875,9 @@ struct HomeFormSection: View {
             : AnyShapeStyle(Sport.from(league: league).accentColor)
     }
 
-    private func formBox(label: String, record: String, labelStyle: AnyShapeStyle) -> some View {
+    /// One record cell INSIDE the shared container — no own background/border
+    /// (the container carries those); cells are split by formDivider.
+    private func formCell(label: String, record: String, labelStyle: AnyShapeStyle) -> some View {
         VStack(spacing: 6) {
             Text(label)
                 .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
@@ -4876,9 +4889,8 @@ struct HomeFormSection: View {
                 .lineLimit(1).minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.02)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .padding(.vertical, 16)
+        .contentShape(Rectangle())
     }
 }
 
@@ -5384,12 +5396,12 @@ struct HomePropBoxSection: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .frame(height: min(CGFloat(max(currentRows.count, 1)) * 37, 374))
+                .frame(height: min(CGFloat(max(currentRows.count, 1)) * 41, 410))
                 .scrollIndicators(.visible)
             }
-            .background(Color(hex: "#181616"))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
+            // The Board's exact panel treatment (warm translucent fill + hairline),
+            // not the old solid #181616 — same look/feel as the slate board.
+            .quantPanel()
             .padding(.horizontal, 16)
         }
     }
@@ -5431,8 +5443,8 @@ struct HomePropBoxSection: View {
             }
             Spacer()
             Text(currentStatus)
-                .font(GaryFonts.mono(9, bold: true)).tracking(1.4)
-                .foregroundStyle(.white.opacity(0.35))
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
+                .foregroundStyle(.white.opacity(0.5))
         }
         .padding(.vertical, 11).padding(.horizontal, 14)
     }
@@ -5467,25 +5479,27 @@ struct HomePropBoxSection: View {
             Text(currentCols.2).frame(maxWidth: .infinity, alignment: .trailing)
             Text("✓").frame(width: 22, alignment: .center)
         }
-        .font(GaryFonts.mono(8.5)).tracking(1.2)
-        .foregroundStyle(.white.opacity(0.45))
+        .font(GaryFonts.mono(9.5)).tracking(1.2)
+        .foregroundStyle(.white.opacity(0.5))
         .padding(.vertical, 8).padding(.horizontal, 14)
     }
 
     private func boxRow(_ row: Row) -> some View {
         HStack(spacing: 8) {
+            // Mirror The Board's hierarchy: the name reads as bright words (sans,
+            // like a board matchup); the line + result stay mono (the data voice).
             Text(row.player)
-                .font(GaryFonts.mono(12, bold: true))
-                .foregroundStyle(Color(hex: "#CCC7C7"))
+                .font(GaryFonts.text(14.5, .semibold))
+                .foregroundStyle(.white.opacity(0.94))
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(width: 108, alignment: .leading)
+                .frame(width: 110, alignment: .leading)
             Text(row.line)
-                .font(GaryFonts.mono(10.5, bold: row.tint != nil))
-                .foregroundStyle(row.tint ?? .white.opacity(0.45))
+                .font(GaryFonts.mono(12, bold: row.tint != nil))
+                .foregroundStyle(row.tint ?? .white.opacity(0.62))   // readable, not the old 0.45 grey
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(width: 64, alignment: .leading)
+                .frame(width: 66, alignment: .leading)
             Text(row.actual)
-                .font(GaryFonts.mono(11.5, bold: true))
+                .font(GaryFonts.mono(13, bold: true))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1).minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -5496,10 +5510,10 @@ struct HomePropBoxSection: View {
                 default:     Text("–").foregroundStyle(.white.opacity(0.35))
                 }
             }
-            .font(.system(size: 11, weight: .bold))
+            .font(.system(size: 12, weight: .bold))
             .frame(width: 22, alignment: .center)
         }
-        .padding(.vertical, 9).padding(.horizontal, 14)
+        .padding(.vertical, 11).padding(.horizontal, 14)
     }
 }
 
@@ -10309,6 +10323,10 @@ struct TomorrowView {
     /// Home's ScrollView, so it returns a VStack (no ScrollView/background here).
     struct Body: View {
         let board: TomorrowBoard?
+        /// When set (e.g. "MLB" or "WC"), the countdown hero and Big Games show
+        /// only that sport. Used by the Hub so MLB tab → MLB countdown + MLB big
+        /// games, WC tab → WC countdown + WC big games. Home/Tomorrow pass nil.
+        var leagueFilter: String? = nil
         /// When true, render ONLY the "The Day Ahead" look-ahead table (Starters /
         /// Form / Run Profile / Weather + MLB/WC) — used on the Home page's TODAY
         /// section. The countdown hero, big games, and full board are hidden.
@@ -10357,7 +10375,23 @@ struct TomorrowView {
         // ── ① Countdown hero ───────────────────────────────────────────────
 
         private var countdownHero: some View {
-            let iso = board?.countdown_iso
+            // When leagueFilter is set (Hub), derive sport-specific countdown
+            // from the first big game of that league sorted by commence_time.
+            let filteredFirst: TomorrowBigGame? = leagueFilter.flatMap { lg in
+                (board?.big_games ?? [])
+                    .filter { ($0.league ?? "").uppercased() == lg.uppercased() }
+                    .sorted {
+                        (parseISO8601($0.commence_time ?? "") ?? .distantFuture)
+                        < (parseISO8601($1.commence_time ?? "") ?? .distantFuture)
+                    }
+                    .first
+            }
+            let filteredCount: Int? = leagueFilter.map { lg in
+                board?.board.filter { ($0.league ?? "").uppercased() == lg.uppercased() }.count ?? 0
+            }
+            let iso = leagueFilter != nil ? filteredFirst?.commence_time : board?.countdown_iso
+            let cdMatchup = leagueFilter != nil ? filteredFirst?.matchup : board?.countdown_matchup
+            let cdSport   = leagueFilter ?? board?.countdown_sport
             let anyLines = board?.any_lines ?? false
             let target = iso.flatMap { parseISO8601($0) }
             let isFuture = target.map { $0 > now } ?? false
@@ -10367,11 +10401,11 @@ struct TomorrowView {
             let started = (target != nil) && anyLines && !isFuture
             return VStack(alignment: .leading, spacing: 0) {
                 if hasClock, let target {
-                    Text(TomorrowView.countdownTerm(board?.countdown_sport))
+                    Text(TomorrowView.countdownTerm(cdSport))
                         .font(GaryFonts.mono(10, bold: true)).tracking(2)
                         .foregroundStyle(GaryColors.gold)
                     // Name the opening game(s) (founder) — what kicks the day off.
-                    if let m = board?.countdown_matchup, !m.isEmpty {
+                    if let m = cdMatchup, !m.isEmpty {
                         Text(m)
                             .font(GaryFonts.mono(15, bold: true)).tracking(0.5)
                             .foregroundStyle(.white.opacity(0.92))
@@ -10381,7 +10415,7 @@ struct TomorrowView {
                         .font(GaryFonts.mono(39)).monospacedDigit()
                         .foregroundStyle(.white)
                         .padding(.top, 6)
-                    Text(Self.heroSub(board: board, iso: iso))
+                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount))
                         .font(GaryFonts.text(13))
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.top, 8)
@@ -10390,7 +10424,7 @@ struct TomorrowView {
                     Text(dayLabel)
                         .font(GaryFonts.mono(10, bold: true)).tracking(2)
                         .foregroundStyle(GaryColors.gold)
-                    if let m = board?.countdown_matchup, !m.isEmpty {
+                    if let m = cdMatchup, !m.isEmpty {
                         Text(m)
                             .font(GaryFonts.mono(15, bold: true)).tracking(0.5)
                             .foregroundStyle(.white.opacity(0.92))
@@ -10400,7 +10434,7 @@ struct TomorrowView {
                         .font(GaryFonts.text(20, .semibold))
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.top, 6)
-                    Text(Self.heroSub(board: board, iso: iso))
+                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount))
                         .font(GaryFonts.text(13))
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.top, 6)
@@ -10415,7 +10449,7 @@ struct TomorrowView {
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.top, 8)
                     if iso != nil {
-                        Text(Self.heroSub(board: board, iso: iso))
+                        Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount))
                             .font(GaryFonts.text(13))
                             .foregroundStyle(.white.opacity(0.45))
                             .padding(.top, 6)
@@ -10442,8 +10476,8 @@ struct TomorrowView {
             return String(format: "%02d:%02d:%02d", h, m, s)
         }
 
-        private static func heroSub(board: TomorrowBoard?, iso: String?) -> String {
-            let count = board?.game_count ?? 0
+        private static func heroSub(board: TomorrowBoard?, iso: String?, gameCount: Int? = nil) -> String {
+            let count = gameCount ?? board?.game_count ?? 0
             // Tight subtitle (founder call): just the count + the short date, e.g.
             // "21 games · Sat Jun 27" — the start time was dropped to cut grey
             // words (the big timer above already counts down to first pitch).
@@ -10458,7 +10492,11 @@ struct TomorrowView {
         // ── ② Big games to watch ───────────────────────────────────────────
 
         @ViewBuilder private var bigGames: some View {
-            let games = (board?.big_games ?? []).sorted { $0.rank < $1.rank }.prefix(3)
+            let all = board?.big_games ?? []
+            let filtered = leagueFilter.map { lg in
+                all.filter { ($0.league ?? "").uppercased() == lg.uppercased() }
+            } ?? all
+            let games = filtered.sorted { $0.rank < $1.rank }.prefix(3)
             if !games.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     HubSectionHeader(eyebrow: "Big Games To Watch", sub: "")
@@ -21198,7 +21236,8 @@ struct PropsHubView: View {
                     // page uses (Starters / Form / Run Profile / Weather + MLB/WC),
                     // but for TODAY's slate (today_board). Founder: put it on the Hub.
                     if let tb = todayBoard {
-                        TomorrowView.Body(board: tb, includeBoard: false, dayLabel: "TODAY")
+                        let hubLeague: String? = sel == .mlb ? "MLB" : sel == .wc ? "WC" : nil
+                        TomorrowView.Body(board: tb, leagueFilter: hubLeague, includeBoard: false, dayLabel: "TODAY")
                             .id("dayAhead")
                     }
 
