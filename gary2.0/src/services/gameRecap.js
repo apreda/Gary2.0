@@ -88,31 +88,30 @@ function buildPrompt({ pick, result, evidence }) {
     `no cliches like "in a thrilling contest".\n` +
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
     `OUTPUT:\n` +
-    `- "headline": a headline FOR A BETTOR, framed like a betting-wire item (not a generic ESPN ` +
-    `recap) — LEAD with the bet's angle and weave in the result. 6-12 words. Put the betting lens ` +
-    `front and centre: whether the side COVERED / the ML CLEARED / the total went over-under, and ` +
-    `the PRICE or LINE from THE BET line (you MAY use that one price/line in the headline — e.g. ` +
-    `"-134 ML", "covers -1.5", "as a +130 dog" — but NEVER invent another number). Plain, sharp, ` +
-    `no hype verbs ("explodes", "erupts", "power show"), no clickbait, no exclamation. ` +
-    `Good (wire-style): "White Sox clear -134 ML in a 22-1 rout", ` +
-    `"Tigers cover -1.5 behind Keith's three homers", "France routs Norway 4-1, covers -1.5". ` +
-    `Bad (generic ESPN, no angle): "Tigers take down the Astros behind Colt Keith's three homers". ` +
-    `No ending period.\n` +
+    `- "headline": a betting-WIRE headline (not a generic ESPN recap). LEAD with the team + what ` +
+    `they actually did (the result), THEN the betting outcome — did the side cover, did the ML ` +
+    `clear, did the total go over/under. 6-12 words. You MAY use the price/line from THE BET line ` +
+    `("-196 ML", "the -1.5", "the 9.5 total") but NEVER invent another number. This is the GAME'S ` +
+    `betting story, NOT the bettor's bet — "Gary cashed" belongs on the receipt, never in the ` +
+    `headline. Plain, sharp, no hype verbs ("explodes", "erupts", "power show"), no clickbait, no ` +
+    `exclamation, no ending period. ` +
+    `Good: "Orioles fail to cover -196 in a 6-4 loss to the Nationals", ` +
+    `"Canada win 1-0 but fail to cover the 1.5 spread", "Brazil beat Japan 2-1 as the Over 2.5 hits". ` +
+    `Bad (bet-first): "Over 2.5 cashes in Brazil's 2-1 win". ` +
+    `Bad (ESPN, no betting angle): "Tigers take down the Astros behind Colt Keith's three homers".\n` +
     `- "recap": the 2-4 sentence body.\n` +
-    `- "bullets": 2-4 short stat lines from the game — the night's hard numbers. ` +
-    `Each bullet is at most ${MAX_BULLET_CHARS} characters. Facts STRICTLY from the evidence above. ` +
-    `Add the betting lens ONLY where that exact price appears in the evidence: ` +
-    `"Matt Olson 2 HR (+340 to homer)" is allowed only if a home-run prop price for Olson is ` +
-    `listed in the evidence — otherwise the bullet is just "Matt Olson 2 HR". ` +
-    `Other examples: "Burns 7 K over 5.1 IP"; "Over 9.5 cashed by 1.5 runs" (only if the total ` +
-    `line is the bet above). Never invent a price, a line, or a stat.\n` +
-    `- A player-prop bullet (shots, saves, goals, assists, tackles, K's, HR) may carry a ` +
-    `price ONLY if that exact player's prop price is printed in the evidence above. ` +
-    `SOCCER / WORLD CUP: there is NO per-player box score for these games, so do NOT write any ` +
-    `individual player stat line (no "X 7 shots", no "Y 5 saves", no "Z 1 goal") — you would be ` +
-    `inventing the number. A World Cup bullet must be a TEAM / result fact taken straight from the ` +
-    `evidence ("Switzerland 4, Bosnia & Herzegovina 1", "Switzerland win the group opener"). ` +
-    `Never invent a player's stat line or a market that is not in the evidence.\n\n` +
+    `- "bullets": 2-4 BETTING EVENTS that hit during the game — the markets that would have cashed: ` +
+    `a home run, a strikeout / total prop, a goal scorer, the over/under total result, a player ` +
+    `prop that landed. NOT the bettor's specific bet (the receipt covers that) — these are the ` +
+    `game's notable betting moments either way. Each at most ${MAX_BULLET_CHARS} characters, facts ` +
+    `STRICTLY from the evidence. Carry a price ONLY where that exact price is in the evidence ` +
+    `("Matt Olson 2 HR (+340 to homer)" only if Olson's HR prop price is listed; else "Matt Olson ` +
+    `2 HR"). The total is a fine bullet on its own: "Over 9.5 hit · 11 runs". Never invent a price, ` +
+    `line, or stat.\n` +
+    `- SOCCER / WORLD CUP: there is NO per-player box score, so do NOT invent an individual stat ` +
+    `line (no "X 7 shots", no "Y 5 saves"). Use TEAM / result betting facts ("Over 2.5 goals hit · ` +
+    `3 total", "Both teams to score: no", "Brazil 2, Japan 1") and a goal scorer ONLY if the ` +
+    `evidence names who scored. Never invent a player's stat line or a market not in the evidence.\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
     `{"headline":"...","recap":"...","bullets":["...","..."]}`
   );

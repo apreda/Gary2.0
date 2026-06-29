@@ -5911,11 +5911,15 @@ struct HomeSlateSection: View {
                                         // MLB wears the white-green-brown field
                                         // gradient (founder's call); every other
                                         // league wears its flat sport accent.
+                                        // fixedSize so the badge NEVER gets squeezed
+                                        // out by a long sub (was why WC rows lost their
+                                        // "WC" while MLB kept "MLB").
                                         Text(lg.uppercased())
                                             .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
                                             .foregroundStyle(lg.uppercased() == "MLB"
                                                 ? AnyShapeStyle(GaryColors.mlbFieldText)
                                                 : AnyShapeStyle(Sport.from(league: lg).accentColor.opacity(0.95)))
+                                            .fixedSize().layoutPriority(1)
                                     }
                                     // The line/pick rides small here when the
                                     // time owns the right column.
@@ -10420,7 +10424,7 @@ struct TomorrowView {
                         .font(GaryFonts.mono(39)).monospacedDigit()
                         .foregroundStyle(.white)
                         .padding(.top, 6)
-                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount))
+                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: dayLabel == "TODAY"))
                         .font(GaryFonts.text(13))
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.top, 8)
@@ -10439,7 +10443,7 @@ struct TomorrowView {
                         .font(GaryFonts.text(20, .semibold))
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.top, 6)
-                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount))
+                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: dayLabel == "TODAY"))
                         .font(GaryFonts.text(13))
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.top, 6)
@@ -10454,7 +10458,7 @@ struct TomorrowView {
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.top, 8)
                     if iso != nil {
-                        Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount))
+                        Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: dayLabel == "TODAY"))
                             .font(GaryFonts.text(13))
                             .foregroundStyle(.white.opacity(0.45))
                             .padding(.top, 6)
@@ -10481,17 +10485,19 @@ struct TomorrowView {
             return String(format: "%02d:%02d:%02d", h, m, s)
         }
 
-        private static func heroSub(board: TomorrowBoard?, iso: String?, gameCount: Int? = nil) -> String {
+        private static func heroSub(board: TomorrowBoard?, iso: String?, gameCount: Int? = nil, showTime: Bool = false) -> String {
             let count = gameCount ?? board?.game_count ?? 0
-            // Tight subtitle (founder call): just the count + the short date, e.g.
-            // "21 games · Sat Jun 27" — the start time was dropped to cut grey
-            // words (the big timer above already counts down to first pitch).
-            let day = TomorrowView.shortDateLabel(iso)
             if board?.any_lines == false || iso == nil {
                 return "lines open soon"
             }
             let plural = count == 1 ? "game" : "games"
-            return day.isEmpty ? "\(count) \(plural)" : "\(count) \(plural) · \(day)"
+            // TODAY's countdown (Hub/Today): the date is redundant (it's today), so
+            // show the actual first-pitch CLOCK time, e.g. "13 games · 1:05 PM ET"
+            // (founder). TOMORROW keeps the short date — there the day still matters.
+            let trailing = showTime
+                ? Formatters.formatCommenceTime(iso)
+                : TomorrowView.shortDateLabel(iso)
+            return trailing.isEmpty ? "\(count) \(plural)" : "\(count) \(plural) · \(trailing)"
         }
 
         // ── ② Big games to watch ───────────────────────────────────────────
@@ -11164,7 +11170,7 @@ struct TomorrowView {
                             Text(p.name ?? "—")
                                 .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.92)).lineLimit(1)
                             Text(teamName)
-                                .font(GaryFonts.mono(8.5)).tracking(0.5).foregroundStyle(.white.opacity(0.35))
+                                .font(GaryFonts.mono(10.5)).tracking(0.5).foregroundStyle(GaryColors.gold)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Text("\(p.goals ?? 0)")
