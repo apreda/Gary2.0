@@ -1896,6 +1896,14 @@ struct HomeView: View {
         }
     }
 
+    /// Does the page have anything to render below the header? Used to swap a
+    /// loading/empty placeholder in for the otherwise-blank scroll area on a
+    /// fresh account or a failed/empty fetch.
+    private var hasHomeContent: Bool {
+        !sevenDayForm.isEmpty || !todayPicks.isEmpty || !headlineStories.isEmpty
+            || !nightRecaps.isEmpty || marquee != nil || !wireItems.isEmpty
+    }
+
     var body: some View {
         ZStack {
             // Background
@@ -1925,7 +1933,15 @@ struct HomeView: View {
                     // games are on. TOMORROW is the only separate body.
                     switch effectivePhase {
                     case .morning, .pregame, .live:
-                        todaySections
+                        // Fresh account / no-network: never leave a blank scroll
+                        // area under the header (App Review runs empty states).
+                        // Show a loading state on first load, a friendly empty
+                        // message once the fetch resolves with nothing.
+                        if !hasHomeContent {
+                            HomeContentPlaceholder(loading: loading)
+                        } else {
+                            todaySections
+                        }
                     case .tomorrow:
                         TomorrowView.Body(board: tomorrowBoard)
                     }
@@ -5622,6 +5638,32 @@ struct HomeLiveTakeover: View {
 }
 
 /// Tonight's picks — by start time pre-game, by live status in-game.
+/// Fills the Home content area when there's nothing to show yet — a quiet
+/// loading state on first fetch, a friendly empty message once it resolves with
+/// no data. Keeps App Review (and a fresh user) from seeing a blank scroll area.
+struct HomeContentPlaceholder: View {
+    let loading: Bool
+    var body: some View {
+        VStack(spacing: 14) {
+            if loading {
+                ProgressView().tint(GaryColors.gold.opacity(0.85))
+                Text("Loading tonight's board…")
+                    .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6))
+            } else {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 30, weight: .light)).foregroundStyle(GaryColors.gold.opacity(0.7))
+                Text("Nothing on the board yet")
+                    .font(GaryFonts.text(15, .semibold)).foregroundStyle(.white.opacity(0.85))
+                Text("Gary posts his picks a few hours before games. Pull down to refresh.")
+                    .font(GaryFonts.text(12.5)).foregroundStyle(.white.opacity(0.55))
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32).padding(.vertical, 60)
+    }
+}
+
 struct HomeSlateSection: View {
     struct Row: Identifiable {
         let id: String
