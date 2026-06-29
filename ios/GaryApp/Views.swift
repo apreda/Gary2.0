@@ -1829,8 +1829,6 @@ struct HomeView: View {
     /// The Tomorrow look-ahead payload (tomorrow_board). nil until it loads /
     /// posts — the Tomorrow body shows its own honest-empty states meanwhile.
     @State private var tomorrowBoard: TomorrowBoard? = nil
-    /// Today's look-ahead board (today_board) — feeds the Home "The Day Ahead" section.
-    @State private var todayBoard: TomorrowBoard? = nil
     /// What the "TODAY" pill maps to: today's locked Home, time-aware (morning
     /// before noon ET, pregame after) — exactly the computed `phase` clock, so
     /// the Today pill drives selectedPhase to .morning/.pregame untouched. Live
@@ -2219,8 +2217,6 @@ struct HomeView: View {
                     // The TOMORROW look-ahead board (keyed on tomorrow's EST slate
                     // day) — feeds the Tomorrow pill's countdown + scoreboard.
                     tomorrowBoard = await SupabaseAPI.fetchTomorrowBoard(date: Self.tomorrowSlateDateEST())
-                    // TODAY's look-ahead board (today_board) — feeds the Home "The Day Ahead" section.
-                    todayBoard = await SupabaseAPI.fetchTodayBoard(date: SupabaseAPI.todayEST())
                     nightHighlights = await SupabaseAPI.fetchNightHighlights(date: recapDay ?? SupabaseAPI.hubGradedDateEST())
                     homeStreaks = await SupabaseAPI.fetchStreaks()
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
@@ -2456,15 +2452,9 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
 
-        // ── ②b The Day Ahead (TODAY) — the same look-ahead table the Tomorrow page
-        // uses (Starters / Form / Run Profile / Weather + MLB/WC), but for TODAY's
-        // slate. Reuses TomorrowView.Body in look-ahead-only mode (founder: put it
-        // on Today too, between the 7-Day Form and the Board).
-        if let tb = todayBoard {
-            TomorrowView.Body(board: tb, includeBoard: false, dayLabel: "TODAY")
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
-        }
+        // (The Day Ahead — countdown + big games + look-ahead table — lives on the
+        // Hub for TODAY now, not the Home Today page. The Tomorrow tab keeps its
+        // own full version. Removed from here per founder.)
 
         // ── ③ Tonight's Board — under the form + headlines (founder call). The
         // unified board: BOARD shows EVERY game on the slate with the live-score
