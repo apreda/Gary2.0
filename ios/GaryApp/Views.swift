@@ -3413,10 +3413,10 @@ struct HomeView: View {
             if AppFlags.hidesWorldCupRow(sport) { continue }
             let liveNow = live.contains { $0.isLive && ($0.league ?? "").uppercased() == sport }
             let (tw, tl, tp) = tally(slateDay, sport)
-            // Flip to today on the first GRADE (same gate as the LIVE record box);
-            // liveNow only decides the LIVE-vs-TODAY label, so we hold last night's
-            // final until today actually produces a result.
-            if tw + tl + tp > 0 {
+            // Flip to today the moment this sport's games are LIVE (underway) OR have
+            // graded — so MLB reads 0-0 LIVE once tonight's games start, not last
+            // night's record. Only holds last night when today hasn't started yet.
+            if tw + tl + tp > 0 || liveNow {
                 cells.append(DailyFormCell(league: sport, wins: tw, losses: tl, pushes: tp,
                                            state: liveNow ? .live : .today))
             } else {
