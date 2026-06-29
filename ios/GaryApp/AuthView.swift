@@ -96,6 +96,38 @@ struct AuthView: View {
                     }
 
                     // Email/Password Fields
+                    // Social sign-in leads — one-tap options on top (Apple first;
+                    // the modern standard, and the layout Apple favors). Email is
+                    // the fallback below the divider.
+                    VStack(spacing: 12) {
+                        AppleSignInButton(authManager: authManager)
+                        SocialSignInButton(
+                            title: "Continue with Google",
+                            iconName: "g.circle.fill",
+                            action: { handleOAuth(provider: .google) }
+                        )
+                        SocialSignInButton(
+                            title: "Continue with Facebook",
+                            iconName: "f.circle.fill",
+                            action: { handleOAuth(provider: .facebook) }
+                        )
+                    }
+                    .padding(.horizontal, 24)
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 20)
+                    .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+
+                    // Divider — email is the secondary path now.
+                    HStack {
+                        Rectangle().fill(Color.white.opacity(0.12)).frame(height: 0.5)
+                        Text("OR USE EMAIL")
+                            .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.4)).fixedSize()
+                        Rectangle().fill(Color.white.opacity(0.12)).frame(height: 0.5)
+                    }
+                    .padding(.horizontal, 24)
+                    .opacity(animateIn ? 1 : 0)
+                    .animation(.easeOut(duration: 0.6).delay(0.25), value: animateIn)
+
                     VStack(spacing: 14) {
                         AuthTextField(
                             icon: "envelope.fill",
@@ -186,47 +218,6 @@ struct AuthView: View {
                                 .foregroundStyle(GaryColors.lightGold)
                         }
                     }
-
-                    // Divider
-                    HStack {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(height: 0.5)
-                        Text("OR CONTINUE WITH")
-                            .font(GaryFonts.mono(10))
-                            .foregroundStyle(.white.opacity(0.4))
-                            .fixedSize()
-                        Rectangle()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(height: 0.5)
-                    }
-                    .padding(.horizontal, 24)
-                    .opacity(animateIn ? 1 : 0)
-                    .animation(.easeOut(duration: 0.6).delay(0.35), value: animateIn)
-
-                    // Social Sign-In Buttons
-                    VStack(spacing: 12) {
-                        // Apple Sign In
-                        AppleSignInButton(authManager: authManager)
-
-                        // Google Sign In
-                        SocialSignInButton(
-                            title: "Continue with Google",
-                            iconName: "g.circle.fill",
-                            action: { handleOAuth(provider: .google) }
-                        )
-
-                        // Facebook Sign In
-                        SocialSignInButton(
-                            title: "Continue with Facebook",
-                            iconName: "f.circle.fill",
-                            action: { handleOAuth(provider: .facebook) }
-                        )
-                    }
-                    .padding(.horizontal, 24)
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 30)
-                    .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
 
                     Spacer(minLength: 40)
                 }
