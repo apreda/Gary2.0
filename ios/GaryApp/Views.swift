@@ -3155,8 +3155,7 @@ struct HomeView: View {
                 abbrGameMatches($0.abbrGame, matchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
             }
             guard let ls = live else {
-                let sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
-                    .joined(separator: " · ").uppercased()
+                let sub = (Formatters.formatCommenceTime(p.displayTime) ?? "").uppercased()  // time only — no venue (matches MLB)
                 return HomeSlateSection.Row(id: p.id,
                                             title: "\(Self.shortTeam(p.awayTeam)) @ \(Self.shortTeam(p.homeTeam))",
                                             sub: sub, tone: nil, chip: p.pick ?? "")
@@ -3173,8 +3172,7 @@ struct HomeView: View {
                 sub = v == .covering ? "FINAL · CASHED ✓" : v == .trailing ? "FINAL · NO CASH" : "FINAL"
                 tone = v
             } else {
-                sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
-                    .joined(separator: " · ").uppercased()
+                sub = (Formatters.formatCommenceTime(p.displayTime) ?? "").uppercased()  // time only — no venue (matches MLB)
             }
             return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: tone, chip: Self.boardPickChip(p.pick ?? "", league: p.league))
         }
@@ -3225,8 +3223,9 @@ struct HomeView: View {
                     : v == .trailing ? "FINAL · NO CASH" : "FINAL"
                 tone = pick == nil ? nil : v
             } else {
-                sub = [Formatters.formatCommenceTime(g.commence_time), g.venue].compactMap { $0 }.filter { !$0.isEmpty }
-                    .joined(separator: " · ").uppercased()
+                // Just the time — no venue (matches the MLB rows, which never
+                // carry a stadium name); WC games dropped their "· Gillette Stadium".
+                sub = (Formatters.formatCommenceTime(g.commence_time) ?? "").uppercased()
             }
             return HomeSlateSection.Row(id: "lb-\(i)", title: title, sub: sub, tone: tone,
                                         chip: chip, league: g.league)
