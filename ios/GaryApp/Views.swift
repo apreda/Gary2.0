@@ -2504,22 +2504,8 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
         }
 
-        // ── ②b LIVE FORM — the old 7-Day Form, re-logic'd into a per-sport DAILY
-        // tracker (founder, Jun 29): each sport builds today's record live, then
-        // holds last night's final until the next day's games land. Tap → Winners,
-        // or last night's recap when the whole slate is settled.
-        if !dailyForm.isEmpty {
-            HomeFormSection(cells: dailyForm, onTap: {
-                let allSettled = dailyForm.allSatisfy { $0.state == .lastNight }
-                if allSettled {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDailyRecap = true }
-                } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-                }
-            })
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
-        }
+        // (LIVE FORM moved into the tab row — see phaseSwitcher/liveFormInline.
+        // No standalone section; the per-sport records ride beside TODAY/TOMORROW.)
 
         // ── ②c Big Games To Watch — below the form (countdown is now its own block
         // above). includeCountdown:false so this Body renders only Big Games.
@@ -2838,9 +2824,38 @@ struct HomeView: View {
         HStack(spacing: 26) {
             switcherTab("TODAY", pill: .today)
             switcherTab("TOMORROW", pill: .tomorrow)
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            // LIVE FORM rides in the tab row's dead space (founder): each sport's
+            // record for the live day — today as it grades, else last night held —
+            // shown only on TODAY. No section, no container.
+            if activePill == .today, !dailyForm.isEmpty {
+                liveFormInline
+            }
         }
         .padding(.horizontal, 16)
+    }
+
+    /// The per-sport live record, inline in the tab row: a hairline, then
+    /// "MLB 9-6  WC 2-0 ●" — league in its accent, record white, green pip when live.
+    private var liveFormInline: some View {
+        HStack(spacing: 10) {
+            Rectangle().fill(Color.white.opacity(0.10)).frame(width: 1, height: 15)
+            ForEach(dailyForm) { c in
+                HStack(spacing: 4) {
+                    Text(c.league == "WC" ? "WC" : c.league)
+                        .foregroundStyle(c.league == "MLB"
+                            ? AnyShapeStyle(Color(hex: "#63D17E"))
+                            : AnyShapeStyle(Sport.from(league: c.league).accentColor))
+                    Text(c.record).foregroundStyle(.white)
+                    if c.state == .live {
+                        Circle().fill(Color(hex: "#3FB950")).frame(width: 5, height: 5)
+                    }
+                }
+                .font(GaryFonts.mono(11, bold: true))
+                .fixedSize()
+            }
+        }
+        .lineLimit(1)
     }
 
     private func switcherTab(_ label: String, pill: SwitcherPill) -> some View {
@@ -3403,9 +3418,16 @@ struct HomeView: View {
                 cells.append(DailyFormCell(league: sport, wins: tw, losses: tl, pushes: tp,
                                            state: liveNow ? .live : .today))
             } else {
-                let (yw, yl, yp) = tally(anchor, sport)
-                if yw + yl + yp > 0 {
-                    cells.append(DailyFormCell(league: sport, wins: yw, losses: yl, pushes: yp, state: .lastNight))
+                // Hold THIS sport's last played day — NOT the global anchor, which can
+                // be today (e.g. WC graded but MLB hasn't), which would drop MLB.
+                let priorDays = games
+                    .filter { ($0.league ?? "").uppercased() == sport && ($0.game_date ?? "") < slateDay }
+                    .compactMap { $0.game_date }
+                if let lastDay = priorDays.max() {
+                    let (yw, yl, yp) = tally(lastDay, sport)
+                    if yw + yl + yp > 0 {
+                        cells.append(DailyFormCell(league: sport, wins: yw, losses: yl, pushes: yp, state: .lastNight))
+                    }
                 }
             }
         }
@@ -4905,79 +4927,6 @@ struct DailyFormCell: Identifiable {
         case .today:     return "TODAY"
         case .lastNight: return "LAST NIGHT"
         }
-    }
-}
-
-/// LIVE FORM — Gary's GAME-pick record for the live day, per sport (MLB / World
-/// Cup). The re-logic'd "7-Day Form" (founder, Jun 29): each cell builds today's
-/// record live and holds last night's final until the next slate lands, so it
-/// always mirrors what's actually happening in real life. No rolling window.
-struct HomeFormSection: View {
-    let cells: [DailyFormCell]
-    let onTap: () -> Void
-
-    private let liveDot = Color(hex: "#3FB950")   // active-green for the LIVE pip
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("LIVE FORM")
-                .font(GaryFonts.mono(10.5, bold: true)).tracking(1.6)
-                .foregroundStyle(GaryColors.gold)
-                .padding(.horizontal, 16)
-            Button(action: onTap) {
-                HStack(spacing: 0) {
-                    ForEach(Array(cells.enumerated()), id: \.element.id) { idx, c in
-                        if idx > 0 { formDivider }
-                        formCell(c)
-                    }
-                }
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.02)))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                .padding(.horizontal, 16)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    /// Hairline between the record cells inside the single form container.
-    private var formDivider: some View {
-        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 58)
-    }
-
-    private func leagueLabel(_ league: String) -> String { league == "WC" ? "WORLD CUP" : league }
-
-    /// MLB reads in its white-green-brown field gradient (user call, Jun 17); every
-    /// other league in its flat accent color.
-    private func leagueStyle(_ league: String) -> AnyShapeStyle {
-        (league == "MLB" || league == "MLB HR")
-            ? AnyShapeStyle(GaryColors.mlbFieldText)
-            : AnyShapeStyle(Sport.from(league: league).accentColor)
-    }
-
-    /// One record cell INSIDE the shared container — league label, the live/last-
-    /// night record, and the state line (a green pip when LIVE).
-    @ViewBuilder private func formCell(_ c: DailyFormCell) -> some View {
-        VStack(spacing: 5) {
-            Text(leagueLabel(c.league))
-                .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
-                .foregroundStyle(leagueStyle(c.league))
-                .lineLimit(1).minimumScaleFactor(0.7)
-            Text(c.record)
-                .font(GaryFonts.display(34))
-                .foregroundStyle(.white)
-                .lineLimit(1).minimumScaleFactor(0.6)
-            HStack(spacing: 4) {
-                if c.state == .live {
-                    Circle().fill(liveDot).frame(width: 5, height: 5)
-                }
-                Text(c.stateLabel)
-                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                    .foregroundStyle(c.state == .live ? AnyShapeStyle(liveDot) : AnyShapeStyle(.white.opacity(0.5)))
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 15)
-        .contentShape(Rectangle())
     }
 }
 
