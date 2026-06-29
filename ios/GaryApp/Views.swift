@@ -10374,6 +10374,11 @@ struct TomorrowView {
             // (Home TODAY + the Hub Day Ahead) that hero is hidden, so updating
             // `now` there just re-renders the whole table every second for nothing.
             .onReceive(ticker) { if !lookAheadOnly { now = $0 } }
+            // When the Hub switches league tabs, reset the look-ahead sport
+            // so WC tab opens on World Cup starters, MLB tab on MLB starters.
+            .task(id: leagueFilter) {
+                lookAheadSport = leagueFilter == "WC" ? .wc : .mlb
+            }
         }
 
         // ── ① Countdown hero ───────────────────────────────────────────────
@@ -10500,14 +10505,29 @@ struct TomorrowView {
             let filtered = leagueFilter.map { lg in
                 all.filter { ($0.league ?? "").uppercased() == lg.uppercased() }
             } ?? all
-            let games = filtered.sorted { $0.rank < $1.rank }.prefix(3)
-            if !games.isEmpty {
+
+            // When filtering by sport, board.board may have more games than
+            // big_games (cross-sport top-3 — WC games rarely fill all 3 slots).
+            // Use board rows only for small slates (≤6 games, e.g. WC) where
+            // big_games doesn't capture everything. MLB has 15+ games — keep
+            // the curated top-3 big_games view there.
+            let boardRows: [TomorrowBoardRow] = {
+                guard let lg = leagueFilter else { return [] }
+                let rows = (board?.board ?? []).filter {
+                    ($0.league ?? "").uppercased() == lg.uppercased()
+                }
+                guard rows.count > filtered.count, rows.count <= 6 else { return [] }
+                return rows
+            }()
+
+            if !boardRows.isEmpty {
+                let title = leagueFilter == "WC" ? "Today's Matches" : "Today's Games"
                 VStack(alignment: .leading, spacing: 10) {
-                    HubSectionHeader(eyebrow: "Big Games To Watch", sub: "")
+                    HubSectionHeader(eyebrow: title, sub: "")
                     VStack(spacing: 0) {
-                        ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
-                            bigGameRow(g)
-                            if idx < games.count - 1 {
+                        ForEach(Array(boardRows.enumerated()), id: \.offset) { idx, row in
+                            boardRow(row, alt: idx % 2 == 1)
+                            if idx < boardRows.count - 1 {
                                 Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
                             }
                         }
@@ -10515,6 +10535,24 @@ struct TomorrowView {
                     .padding(.vertical, 4)
                     .quantPanel()
                     .padding(.horizontal, 16)
+                }
+            } else {
+                let games = filtered.sorted { $0.rank < $1.rank }.prefix(3)
+                if !games.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HubSectionHeader(eyebrow: "Big Games To Watch", sub: "")
+                        VStack(spacing: 0) {
+                            ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
+                                bigGameRow(g)
+                                if idx < games.count - 1 {
+                                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .quantPanel()
+                        .padding(.horizontal, 16)
+                    }
                 }
             }
         }
@@ -10570,9 +10608,18 @@ struct TomorrowView {
                                         stat: starterStat(lastName: h, abbr: bRow?.home_abbr))
                         }
                         .padding(.top, 3)
+                    } else if let wc = wcMatch(g) {
+                        // WC parity — same LOOK as the pitcher rows, WC-appropriate
+                        // stats: each nation on its own row (abbr · name · L5 record,
+                        // form-coloured · goals/game), grounded from wc_lookahead.
+                        VStack(alignment: .leading, spacing: 5) {
+                            wcTeamLine(team: wc.away_team, form: wc.away?.form, league: g.league)
+                            wcTeamLine(team: wc.home_team, form: wc.home?.form, league: g.league)
+                        }
+                        .padding(.top, 3)
                     }
-                    // Market line — the favourite + total, betting context (MLB).
-                    if (g.league ?? "").uppercased() != "WC", let mkt = bigGameMarket(g) {
+                    // Market line — the favourite + total (MLB ML/total · WC ML/goals).
+                    if let mkt = bigGameMarket(g) {
                         Text(mkt)
                             .font(GaryFonts.mono(11.5))
                             .foregroundStyle(.white.opacity(0.6))
@@ -10611,6 +10658,52 @@ struct TomorrowView {
                     }
                 } else {
                     Text("ERA —")
+                        .font(GaryFonts.mono(11))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
+        }
+
+        /// The wc_lookahead entry for a WC big game, matched by matchup string.
+        private func wcMatch(_ g: TomorrowBigGame) -> TomorrowWcMatch? {
+            guard (g.league ?? "").uppercased() == "WC",
+                  let mu = g.matchup?.lowercased() else { return nil }
+            return board?.wc_lookahead?.first {
+                ($0.match ?? "").lowercased() == mu
+            }
+        }
+
+        /// One WC nation — abbr · name · L5 record (form-coloured) · goals/game. The
+        /// WC twin of pitcherLine: same shape, soccer stats (not ERA).
+        private func wcTeamLine(team: String?, form: TomorrowWcForm?, league: String?) -> some View {
+            let ab = teamAbbrevFromName(team ?? "", league: league)
+            let recColor: Color = {
+                guard let f = form, let w = f.w, let l = f.l else { return .white.opacity(0.9) }
+                if w > l { return GaryColors.win }
+                if l > w { return GaryColors.loss }
+                return Color(hex: "#E8B339")   // even form — amber
+            }()
+            return HStack(spacing: 8) {
+                Text(ab.uppercased())
+                    .font(GaryFonts.mono(10.5, bold: true))
+                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+                    .frame(width: 34, alignment: .leading)
+                Text(team ?? "")
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1).minimumScaleFactor(0.85)
+                Spacer(minLength: 8)
+                if let f = form, let rec = f.record {
+                    Text(rec)
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(recColor)
+                    if let gf = f.gf_per_game {
+                        Text("\(Self.trimNum(gf)) GF")
+                            .font(GaryFonts.mono(10.5))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                } else {
+                    Text("L5 —")
                         .font(GaryFonts.mono(11))
                         .foregroundStyle(.white.opacity(0.35))
                 }
@@ -10664,7 +10757,10 @@ struct TomorrowView {
             var parts: [String] = []
             if let mh = row.ml_home, let ma = row.ml_away {
                 let homeFav = mh <= ma
-                let favAbbr = (homeFav ? row.home_abbr : row.away_abbr) ?? abbr(homeFav ? row.home_team : row.away_team)
+                let favTeam = homeFav ? row.home_team : row.away_team
+                // Proper FIFA/league code (NED, MAR) — not the prefix(3) fallback (NET, MOR).
+                let favAbbr = (homeFav ? row.home_abbr : row.away_abbr)
+                    ?? (favTeam.map { teamAbbrevFromName($0, league: g.league) } ?? abbr(favTeam))
                 parts.append("\(favAbbr) \(Self.mlStr(homeFav ? mh : ma))")
             }
             if let t = row.total { parts.append("O/U \(Self.trimNum(t))") }
@@ -21282,7 +21378,10 @@ struct PropsHubView: View {
                     // but for TODAY's slate (today_board). Founder: put it on the Hub.
                     if let tb = todayBoard {
                         let hubLeague: String? = sel == .mlb ? "MLB" : sel == .wc ? "WC" : nil
-                        TomorrowView.Body(board: tb, leagueFilter: hubLeague, includeBoard: false, dayLabel: "TODAY")
+                        // WC tab: skip the look-ahead table (MLB pitcher starters/form/weather
+                        // are meaningless for soccer; WC lineups are already on each game page).
+                        TomorrowView.Body(board: tb, leagueFilter: hubLeague, includeBoard: false,
+                                         includeLookAhead: sel != .wc, dayLabel: "TODAY")
                             .id("dayAhead")
                     }
 
@@ -21295,13 +21394,123 @@ struct PropsHubView: View {
                         }
                     }
 
-                    // FEATURED — kept (founder), reformatted as the redesigned hero
-                    // cards, now sitting BELOW Player Edges. The highest-relevance mix
-                    // across lanes (top 2 per kind), a tight horizontal spotlight rail.
                     if !featured.isEmpty {
                         HubSectionTitle(title: "Featured").padding(.horizontal, 16)
                         FeaturedRibbon(signals: featured) { breakdownSignal = $0 }
                     }
+
+                    if sel == .wc {
+                        // ── WC Hub: purpose-built section order ──────────────────
+                        // Tournament context first — group standings / knockout
+                        // implications frame every today's match.
+                        if !items(.tournament).isEmpty {
+                            HubDisclosure(anchor: "tournament", eyebrow: "Tournament Stakes", count: items(.tournament).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("tournament")
+                        }
+                        if !items(.xgRegression).isEmpty {
+                            HubDisclosure(anchor: "xgRegression", eyebrow: "xG Regression", count: items(.xgRegression).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.xgRegression)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("xgRegression")
+                        }
+                        if !items(.advancement).isEmpty {
+                            HubDisclosure(anchor: "advancement", eyebrow: "Advancement", count: items(.advancement).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.advancement)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("advancement")
+                        }
+                        if !items(.xgRecap).isEmpty {
+                            HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("xgRecap")
+                        }
+                        if !selStreakRows.isEmpty {
+                            HubDisclosure(anchor: "streaks", eyebrow: "Streaks", count: selStreakRows.count, openSet: $openSections) {
+                                StreakBoard(rows: selStreakRows, onTapGame: { onSelectGame($0) })
+                                    .padding(.horizontal, 16)
+                            }
+                            .id("streaks")
+                        } else if !items(.streak).isEmpty {
+                            HubDisclosure(anchor: "streaks", eyebrow: "Streaks", count: items(.streak).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("streaks")
+                        }
+                        if !wcIntelSignals.isEmpty {
+                            HubDisclosure(anchor: "wcIntel", eyebrow: "Game Intel", count: wcIntelSignals.count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(wcIntelSignals) { s in SignalRow(s: s) { _ in wcIntel = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("wcIntel")
+                        }
+                        if !items(.h2h).isEmpty {
+                            HubDisclosure(anchor: "owned", eyebrow: "Head-to-Head", count: items(.h2h).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.h2h)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("owned")
+                        }
+                        if !items(.situational).isEmpty {
+                            HubDisclosure(anchor: "restFatigue", eyebrow: "Rest & Fatigue", count: items(.situational).count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("restFatigue")
+                        }
+                        if !selNightRows.isEmpty {
+                            HubDisclosure(anchor: "lastNight", eyebrow: "Last Night", count: selNightRows.count, openSet: $openSections) {
+                                NightBoard(rows: selNightRows).padding(.horizontal, 16)
+                            }
+                            .id("lastNight")
+                        }
+                        let wcExtras = leagueSignals.filter { ![.streak, .tournament, .xgRegression, .advancement, .xgRecap, .situational, .h2h].contains($0.kind) && $0.confirmedXI == nil }
+                        if !wcExtras.isEmpty {
+                            HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: wcExtras.count, openSet: $openSections) {
+                                VStack(spacing: 0) { ForEach(wcExtras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                    .quantPanel().padding(.horizontal, 16)
+                            }
+                            .id("moreEdges")
+                        }
+                        // WC pending — only WC-relevant sections
+                        let wcPending: [(anchor: String, eyebrow: String)] = {
+                            var defs: [(String, String)] = []
+                            if items(.tournament).isEmpty           { defs.append(("tournament", "Tournament Stakes")) }
+                            if items(.xgRegression).isEmpty        { defs.append(("xgRegression", "xG Regression")) }
+                            if items(.advancement).isEmpty         { defs.append(("advancement", "Advancement")) }
+                            if items(.xgRecap).isEmpty             { defs.append(("xgRecap", "xG Recap")) }
+                            if selStreakRows.isEmpty && items(.streak).isEmpty { defs.append(("streaks", "Streaks")) }
+                            if wcIntelSignals.isEmpty              { defs.append(("wcIntel", "Game Intel")) }
+                            if items(.h2h).isEmpty                 { defs.append(("owned", "Head-to-Head")) }
+                            if items(.situational).isEmpty         { defs.append(("restFatigue", "Rest & Fatigue")) }
+                            if selNightRows.isEmpty                { defs.append(("lastNight", "Last Night")) }
+                            return defs
+                        }()
+                        if !wcPending.isEmpty {
+                            HStack(spacing: 8) {
+                                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                                Text("COMING TODAY")
+                                    .font(GaryFonts.mono(9, bold: true))
+                                    .foregroundStyle(.white.opacity(0.2))
+                                    .fixedSize()
+                                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                            }
+                            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 2)
+                            ForEach(wcPending, id: \.anchor) { def in
+                                HubDisclosure(anchor: def.anchor, eyebrow: def.eyebrow, count: 0, openSet: $openSections) {
+                                    EmptyView()
+                                }
+                            }
+                        }
+                    } else {
+                    // ── MLB / NBA Hub: existing section order ────────────────────
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
                     if !items(.regression).isEmpty {
@@ -21311,13 +21520,9 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
-                    // GARY HOME RUN THREATS — Gary's homer picks for today, with
-                    // his two-sentence reason. Fed by gary_hr_threats.
                     if !items(.hrThreat).isEmpty {
                         HubDisclosure(anchor: "hrThreats", eyebrow: "Gary Home Run Threats", count: min(items(.hrThreat).count, 3), openSet: $openSections) {
                             VStack(spacing: 0) {
-                                // Cap the display at 3 (founder) — guards against the
-                                // additive-freeze writer accumulating more over a day.
                                 ForEach(Array(items(.hrThreat).prefix(3))) { s in
                                     SignalRow(s: s) { _ in
                                         if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
@@ -21328,9 +21533,6 @@ struct PropsHubView: View {
                         }
                         .id("hrThreats")
                     }
-                    // FANTASY PICKUPS — a two-column board: STREAM pitchers | ADD
-                    // hitters, availability-tiered (founder wanted a NEW display type;
-                    // widely-available pickups, not owned aces). Fed by fantasy_pickups.
                     if !items(.fantasyPickups).isEmpty {
                         HubSectionTitle(title: "Fantasy Pickups").padding(.horizontal, 16)
                             .id("fantasyPickups")
@@ -21338,7 +21540,6 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
-                    // OWNED — career batter-vs-pitcher history (NBA: season series)
                     if !items(.h2h).isEmpty {
                         HubDisclosure(anchor: "owned", eyebrow: "Owned", count: items(.h2h).count, openSet: $openSections) {
                             VStack(spacing: 0) {
@@ -21352,8 +21553,6 @@ struct PropsHubView: View {
                         }
                         .id("owned")
                     }
-                    // THE BENEFICIARY — transaction-style OUT → IN swap rows;
-                    // tapping a row opens the replacement's full player insights.
                     if !items(.injury).isEmpty {
                         HubDisclosure(anchor: "beneficiary", eyebrow: "The Beneficiary", count: items(.injury).count, openSet: $openSections) {
                             VStack(spacing: 0) {
@@ -21371,16 +21570,6 @@ struct PropsHubView: View {
                         }
                         .id("beneficiary")
                     }
-                    // WC GAME INTEL — tap a match → the Starting XI / The Read
-                    // dashboard (WC league toggle only).
-                    if sel == .wc, !wcIntelSignals.isEmpty {
-                        HubDisclosure(anchor: "wcIntel", eyebrow: "Game Intel", count: wcIntelSignals.count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(wcIntelSignals) { s in SignalRow(s: s) { _ in wcIntel = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("wcIntel")
-                    }
-                    // REST & FATIGUE — schedule spots and bullpen workload
                     if !items(.situational).isEmpty {
                         HubDisclosure(anchor: "restFatigue", eyebrow: "Rest & Fatigue", count: items(.situational).count, openSet: $openSections) {
                             VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
@@ -21388,8 +21577,6 @@ struct PropsHubView: View {
                         }
                         .id("restFatigue")
                     }
-                    // THE CONDITIONS — game-state reads, one tabbed section
-                    // (first inning / the running game / park & weather).
                     if !conditionLanes.isEmpty {
                         HubDisclosure(anchor: "conditions", eyebrow: "The Conditions", count: conditionLanes.reduce(0) { $0 + items($1).count }, openSet: $openSections) {
                             VStack(spacing: 0) {
@@ -21401,8 +21588,6 @@ struct PropsHubView: View {
                         }
                         .id("conditions")
                     }
-                    // STREAKS — the full board: teams on runs, hot and cold bats,
-                    // and which streaks are on the line tonight (league-scoped).
                     if !selStreakRows.isEmpty {
                         HubDisclosure(anchor: "streaks", eyebrow: "Streaks", count: selStreakRows.count, openSet: $openSections) {
                             StreakBoard(rows: selStreakRows, onTapGame: { onSelectGame($0) })
@@ -21416,14 +21601,13 @@ struct PropsHubView: View {
                         }
                         .id("streaks")
                     }
-                    // LAST NIGHT — the league-wide board.
                     if !selNightRows.isEmpty {
                         HubDisclosure(anchor: "lastNight", eyebrow: "Last Night", count: selNightRows.count, openSet: $openSections) {
                             NightBoard(rows: selNightRows).padding(.horizontal, 16)
                         }
                         .id("lastNight")
                     }
-                    // TOURNAMENT STAKES — group standings, title odds, market context (World Cup)
+                    // Tournament/xG sections may also appear on MLB tab if signals exist
                     if !items(.tournament).isEmpty {
                         HubDisclosure(anchor: "tournament", eyebrow: "Tournament Stakes", count: items(.tournament).count, openSet: $openSections) {
                             VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
@@ -21431,31 +21615,6 @@ struct PropsHubView: View {
                         }
                         .id("tournament")
                     }
-                    // xG REGRESSION — who's over/under-finishing their chances (World Cup forward read)
-                    if !items(.xgRegression).isEmpty {
-                        HubDisclosure(anchor: "xgRegression", eyebrow: "xG Regression", count: items(.xgRegression).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.xgRegression)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("xgRegression")
-                    }
-                    // ADVANCEMENT — "to qualify from group" odds for today's group fixtures (World Cup)
-                    if !items(.advancement).isEmpty {
-                        HubDisclosure(anchor: "advancement", eyebrow: "Advancement", count: items(.advancement).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.advancement)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("advancement")
-                    }
-                    // xG RECAP — the last match day's xG-vs-result story (World Cup)
-                    if !items(.xgRecap).isEmpty {
-                        HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                .quantPanel().padding(.horizontal, 16)
-                        }
-                        .id("xgRecap")
-                    }
-                    // Anything else → a compact list
                     let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression, .advancement, .xgRecap, .fantasyPickups].contains($0.kind) }
                     if !extras.isEmpty {
                         HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: extras.count, openSet: $openSections) {
@@ -21464,10 +21623,8 @@ struct PropsHubView: View {
                         }
                         .id("moreEdges")
                     }
-
-                    // PENDING sections — always visible below populated ones.
-                    // Each shows a placeholder message when tapped open.
-                    let pendingDefs: [(anchor: String, eyebrow: String)] = {
+                    // MLB/NBA pending — no WC sections here
+                    let mlbPending: [(anchor: String, eyebrow: String)] = {
                         var defs: [(String, String)] = []
                         if min(items(.hrThreat).count, 3) == 0 { defs.append(("hrThreats", "Gary Home Run Threats")) }
                         if items(.regression).isEmpty           { defs.append(("regression", "Regression Board")) }
@@ -21478,14 +21635,9 @@ struct PropsHubView: View {
                         if conditionLanes.isEmpty               { defs.append(("conditions", "The Conditions")) }
                         if selStreakRows.isEmpty && items(.streak).isEmpty { defs.append(("streaks", "Streaks")) }
                         if selNightRows.isEmpty                 { defs.append(("lastNight", "Last Night")) }
-                        if items(.tournament).isEmpty           { defs.append(("tournament", "Tournament Stakes")) }
-                        if sel == .wc && wcIntelSignals.isEmpty         { defs.append(("wcIntel", "Game Intel")) }
-                        if sel == .wc && items(.xgRegression).isEmpty   { defs.append(("xgRegression", "xG Regression")) }
-                        if sel == .wc && items(.advancement).isEmpty    { defs.append(("advancement", "Advancement")) }
-                        if sel == .wc && items(.xgRecap).isEmpty        { defs.append(("xgRecap", "xG Recap")) }
                         return defs
                     }()
-                    if !pendingDefs.isEmpty {
+                    if !mlbPending.isEmpty {
                         HStack(spacing: 8) {
                             Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
                             Text("COMING TODAY")
@@ -21494,15 +21646,14 @@ struct PropsHubView: View {
                                 .fixedSize()
                             Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .padding(.bottom, 2)
-                        ForEach(pendingDefs, id: \.anchor) { def in
+                        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 2)
+                        ForEach(mlbPending, id: \.anchor) { def in
                             HubDisclosure(anchor: def.anchor, eyebrow: def.eyebrow, count: 0, openSet: $openSections) {
                                 EmptyView()
                             }
                         }
                     }
+                    } // end MLB/NBA else branch
                 }
             }
             .padding(.top, 8)
