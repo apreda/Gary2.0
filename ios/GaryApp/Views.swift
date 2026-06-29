@@ -10331,6 +10331,9 @@ struct TomorrowView {
         /// only that sport. Used by the Hub so MLB tab → MLB countdown + MLB big
         /// games, WC tab → WC countdown + WC big games. Home/Tomorrow pass nil.
         var leagueFilter: String? = nil
+        /// When true, the WC match preview hides the full projected XI — used by
+        /// the Hub where lineups already live on each game's own page.
+        var hideWcXI: Bool = false
         /// When true, render ONLY the "The Day Ahead" look-ahead table (Starters /
         /// Form / Run Profile / Weather + MLB/WC) — used on the Home page's TODAY
         /// section. The countdown hero, big games, and full board are hidden.
@@ -10385,21 +10388,27 @@ struct TomorrowView {
 
         private var countdownHero: some View {
             // When leagueFilter is set (Hub), derive sport-specific countdown
-            // from the first big game of that league sorted by commence_time.
-            let filteredFirst: TomorrowBigGame? = leagueFilter.flatMap { lg in
-                (board?.big_games ?? [])
+            // from board.board — covers ALL games of the sport, not just the
+            // cross-sport top-3. Filter to FUTURE games only so already-started
+            // matches (e.g. Japan @ Brazil at 1pm after kickoff) fall off.
+            let (filteredIso, filteredMatchup, filteredCount): (String?, String?, Int?) = {
+                guard let lg = leagueFilter else { return (nil, nil, nil) }
+                let sportRows = (board?.board ?? [])
                     .filter { ($0.league ?? "").uppercased() == lg.uppercased() }
+                let count = sportRows.count
+                let futureRows = sportRows
+                    .filter { (parseISO8601($0.commence_time ?? "") ?? .distantPast) > now }
                     .sorted {
                         (parseISO8601($0.commence_time ?? "") ?? .distantFuture)
                         < (parseISO8601($1.commence_time ?? "") ?? .distantFuture)
                     }
-                    .first
-            }
-            let filteredCount: Int? = leagueFilter.map { lg in
-                board?.board.filter { ($0.league ?? "").uppercased() == lg.uppercased() }.count ?? 0
-            }
-            let iso = leagueFilter != nil ? filteredFirst?.commence_time : board?.countdown_iso
-            let cdMatchup = leagueFilter != nil ? filteredFirst?.matchup : board?.countdown_matchup
+                guard let first = futureRows.first else { return (nil, nil, count) }
+                let away = first.away_team ?? first.away_abbr ?? "?"
+                let home = first.home_team ?? first.home_abbr ?? "?"
+                return (first.commence_time, "\(away) @ \(home)", count)
+            }()
+            let iso = leagueFilter != nil ? filteredIso : board?.countdown_iso
+            let cdMatchup = leagueFilter != nil ? filteredMatchup : board?.countdown_matchup
             let cdSport   = leagueFilter ?? board?.countdown_sport
             let anyLines = board?.any_lines ?? false
             let target = iso.flatMap { parseISO8601($0) }
@@ -10697,13 +10706,14 @@ struct TomorrowView {
                     Text(rec)
                         .font(GaryFonts.mono(13, bold: true))
                         .foregroundStyle(recColor)
-                    if let gf = f.gf_per_game {
-                        Text("\(Self.trimNum(gf)) GF")
-                            .font(GaryFonts.mono(10.5))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    // Plain-language label so US fans (most don't follow soccer,
+                    // and the middle "draw" number is unfamiliar) can parse the record
+                    // — replaces the obscure "GF" goals-per-game stat.
+                    Text("W-D-L")
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.42))
                 } else {
-                    Text("L5 —")
+                    Text("—")
                         .font(GaryFonts.mono(11))
                         .foregroundStyle(.white.opacity(0.35))
                 }
@@ -10918,17 +10928,19 @@ struct TomorrowView {
         /// available sport renders alone (no orphan toggle).
         @ViewBuilder private var lookAheadTabs: some View {
             if hasMlbLookahead || hasWcLookahead {
-                // Resolve the effective sport: if the selected sport has no data,
-                // fall back to whichever does (so a WC-only tomorrow opens on WC).
+                // Resolve the effective sport. When leagueFilter locks the sport
+                // (e.g. Hub WC tab), skip the switcher and always use that sport.
+                let lockedSport: LookAheadSport? = leagueFilter == "WC" ? .wc : leagueFilter == "MLB" ? .mlb : nil
                 let sport: LookAheadSport = {
+                    if let locked = lockedSport { return locked }
                     if lookAheadSport == .wc, hasWcLookahead { return .wc }
                     if lookAheadSport == .mlb, hasMlbLookahead { return .mlb }
                     return hasMlbLookahead ? .mlb : .wc
                 }()
                 VStack(alignment: .leading, spacing: 6) {
                     HubSectionHeader(eyebrow: "The Day Ahead", sub: "")
-                    // MLB / WC switch — only when both have data.
-                    if hasMlbLookahead && hasWcLookahead {
+                    // MLB / WC switch — only when both have data AND sport isn't locked.
+                    if hasMlbLookahead && hasWcLookahead && lockedSport == nil {
                         HStack(spacing: 18) {
                             ForEach([LookAheadSport.mlb, .wc], id: \.self) { s in
                                 Button {
@@ -11101,14 +11113,16 @@ struct TomorrowView {
                     }
                 }
 
-                // Projected XI — wrapped name list.
-                let xiNames = wcXiNames(side?.xi)
-                if !xiNames.isEmpty {
-                    Text(xiNames.joined(separator: " · "))
-                        .font(GaryFonts.mono(9.5)).tracking(0.2)
-                        .foregroundStyle(.white.opacity(0.55))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .lineLimit(3)
+                // Projected XI — omit when Hub-mode (lineups on the game page).
+                if !hideWcXI {
+                    let xiNames = wcXiNames(side?.xi)
+                    if !xiNames.isEmpty {
+                        Text(xiNames.joined(separator: " · "))
+                            .font(GaryFonts.mono(9.5)).tracking(0.2)
+                            .foregroundStyle(.white.opacity(0.55))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(3)
+                    }
                 }
 
                 // Key players — leading scorers.
@@ -21378,10 +21392,10 @@ struct PropsHubView: View {
                     // but for TODAY's slate (today_board). Founder: put it on the Hub.
                     if let tb = todayBoard {
                         let hubLeague: String? = sel == .mlb ? "MLB" : sel == .wc ? "WC" : nil
-                        // WC tab: skip the look-ahead table (MLB pitcher starters/form/weather
-                        // are meaningless for soccer; WC lineups are already on each game page).
-                        TomorrowView.Body(board: tb, leagueFilter: hubLeague, includeBoard: false,
-                                         includeLookAhead: sel != .wc, dayLabel: "TODAY")
+                        // WC tab: show WC match previews (form + key players + odds)
+                        // but hide the full XI — lineups are already on each game page.
+                        TomorrowView.Body(board: tb, leagueFilter: hubLeague, hideWcXI: sel == .wc,
+                                         includeBoard: false, dayLabel: "TODAY")
                             .id("dayAhead")
                     }
 
