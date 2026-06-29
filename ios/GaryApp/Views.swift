@@ -6800,82 +6800,12 @@ struct PremiumPicksView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Tonight's Top Plays (moved here from Home, Jun 2026)
-    //
-    // The swipeable free-pick carousel — Gary's top few plays per sport, the
-    // strongest by confidence, LIVE games first then upcoming by start, settled
-    // games sinking to the back. Free for now; slots into the paid model later.
-    // Today's slate only (selectedDate == nil) — a chosen past day shows graded
-    // boards, not a "tonight" strip.
-
-    /// The plays that feed the carousel — pulled from the already-loaded game
-    /// shelves' TODAY picks (settled == false). Top 3 per league by confidence,
-    /// ordered LIVE → upcoming(by start) → final.
-    private var tonightTopPlays: [GaryPick] {
-        guard selectedDate == nil else { return [] }
-        var selected: [GaryPick] = []
-        for shelf in gameShelves where !shelf.settled {
-            selected.append(contentsOf:
-                shelf.picks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(3))
-        }
-        let live = LiveScoreCache.shared
-        func bucket(_ p: GaryPick) -> Int {
-            let mu = "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")"
-            guard let ls = live.status(forMatchup: mu) else { return 1 }
-            if ls.isFinal { return 2 }
-            if ls.isLive { return 0 }
-            return 1
-        }
-        func start(_ p: GaryPick) -> Date {
-            if let iso = p.commence_time, let d = parseISO8601(iso) { return d }
-            return .distantFuture
-        }
-        return selected.sorted {
-            let (a, b) = (bucket($0), bucket($1))
-            return a != b ? a < b : start($0) < start($1)
-        }
-    }
-
-    @ViewBuilder private var tonightTopPlaysSection: some View {
-        let plays = tonightTopPlays
-        if !plays.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("TONIGHT'S TOP PLAYS")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.5))
-                    Spacer()
-                    if plays.count > 1 {
-                        Text("SWIPE \u{2192}")
-                            .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
-                            .foregroundStyle(GaryColors.gold.opacity(0.55))
-                    }
-                }
-                .padding(.horizontal, 16)
-                let cardW = UIScreen.main.bounds.width - 44   // a sliver of the next card peeks
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(plays) { pick in
-                            FlippablePickCard(pick: pick,
-                                              eyebrowOverride: pick.id == plays.first?.id ? "FREE PICK" : nil,
-                                              gameResult: nil, showSportBadge: true)
-                                .frame(width: cardW)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-            }
-        }
-    }
-
     @ViewBuilder private var modeContent: some View {
         // Tighter inter-shelf rhythm (was 22) — the shelf headers already give
         // each rail vertical breathing room, so 22 over-spaced the board.
         VStack(alignment: .leading, spacing: 16) {
             if mode == .games {
-                // Tonight's Top Plays leads the games board (moved from Home —
-                // free now, paid later).
-                tonightTopPlaysSection
+                // (Tonight's Top Plays carousel removed from Winners per founder.)
                 // Paid boards lead with full cards. Locked boards with content
                 // follow as blurred previews — the user sees the real board
                 // exactly as members do, just unreadable (tap = checkout).
@@ -10331,9 +10261,6 @@ struct TomorrowView {
         /// only that sport. Used by the Hub so MLB tab → MLB countdown + MLB big
         /// games, WC tab → WC countdown + WC big games. Home/Tomorrow pass nil.
         var leagueFilter: String? = nil
-        /// When true, the WC match preview hides the full projected XI — used by
-        /// the Hub where lineups already live on each game's own page.
-        var hideWcXI: Bool = false
         /// When true, render ONLY the "The Day Ahead" look-ahead table (Starters /
         /// Form / Run Profile / Weather + MLB/WC) — used on the Home page's TODAY
         /// section. The countdown hero, big games, and full board are hidden.
@@ -10356,6 +10283,9 @@ struct TomorrowView {
         /// Profile · Weather). The giant inline list overflowed the screen — this
         /// is now a contained tabbed table that scrolls internally.
         @State private var lookAheadTab = 0
+        /// The active WC look-ahead lane (Form · Key Scorers · Lineups) — the WC
+        /// twin of lookAheadTab.
+        @State private var wcLookAheadTab = 0
         /// MLB / WC top-level switch for "The Day Ahead". MLB = the existing
         /// tabbed table; WC = the per-match World Cup look-ahead cards.
         @State private var lookAheadSport: LookAheadSport = .mlb
@@ -10922,10 +10852,10 @@ struct TomorrowView {
         private var hasWcLookahead: Bool { !wcMatches.isEmpty }
 
         /// "The Day Ahead" — an MLB / WC sport switch over the per-sport look-ahead.
-        /// MLB keeps the existing tabbed table (Starters · Form · Run Profile ·
-        /// Weather); WC gets its own built-out per-match cards. The switch only
-        /// appears when BOTH sports have look-ahead data — otherwise the single
-        /// available sport renders alone (no orphan toggle).
+        /// MLB = the tabbed table (Starters · Form · Run Profile · Weather); WC =
+        /// the soccer-tailored tabbed table (Form · Key Scorers · Lineups), same
+        /// style. The switch only appears when BOTH sports have look-ahead data —
+        /// otherwise the single available sport renders alone (no orphan toggle).
         @ViewBuilder private var lookAheadTabs: some View {
             if hasMlbLookahead || hasWcLookahead {
                 // Resolve the effective sport. When leagueFilter locks the sport
@@ -11016,191 +10946,211 @@ struct TomorrowView {
             }
         }
 
-        // ── WC look-ahead — one built-out card per tomorrow match ───────────
+        // ── WC look-ahead — the SAME tabbed-table style as MLB (founder call),
+        // tailored to soccer: Form · Key Scorers · Lineups. Fixed-height,
+        // internally scrolling, grouped by match. (Replaced the per-match cards.)
         @ViewBuilder private var wcLookAheadBody: some View {
-            VStack(alignment: .leading, spacing: 12) {
+            let lanes = wcLanesAvailable
+            if !lanes.isEmpty {
+                let active = lanes[min(wcLookAheadTab, lanes.count - 1)]
+                VStack(alignment: .leading, spacing: 6) {
+                    if lanes.count > 1 {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 18) {
+                                ForEach(Array(lanes.enumerated()), id: \.element) { i, lane in
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.15)) { wcLookAheadTab = i }
+                                    } label: {
+                                        Text(lane.label)
+                                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
+                                            .foregroundStyle(i == min(wcLookAheadTab, lanes.count - 1) ? GaryColors.gold : .white.opacity(0.4))
+                                            .frame(minHeight: 30)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 2)
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    VStack(spacing: 0) {
+                        wcLaneHeader(active)
+                        Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                        ScrollView(.vertical, showsIndicators: true) {
+                            wcLaneBody(active).frame(maxWidth: .infinity)
+                        }
+                        .frame(height: 300)
+                        .scrollIndicators(.visible)
+                    }
+                    .background(Color(hex: "#181616"))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+
+        /// Which WC lanes have data, in display order.
+        private var wcLanesAvailable: [WcLane] {
+            WcLane.allCases.filter { lane in
+                switch lane {
+                case .form:
+                    return wcMatches.contains { $0.away?.form != nil || $0.home?.form != nil }
+                case .scorers:
+                    return wcMatches.contains { !($0.away?.key_players ?? []).isEmpty || !($0.home?.key_players ?? []).isEmpty }
+                case .lineups:
+                    return wcMatches.contains { $0.away?.xi != nil || $0.home?.xi != nil }
+                }
+            }
+        }
+
+        /// Column headers per WC lane — gold, mirroring the MLB table.
+        @ViewBuilder private func wcLaneHeader(_ lane: WcLane) -> some View {
+            HStack(spacing: 8) {
+                switch lane {
+                case .form:
+                    Text("TEAM").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("LAST 5").frame(width: 58, alignment: .trailing)
+                    Text("GOALS/GM").frame(width: 72, alignment: .trailing)
+                    Text("OPP/GM").frame(width: 58, alignment: .trailing)
+                case .scorers:
+                    Text("PLAYER / TEAM").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("GOALS").frame(width: 52, alignment: .trailing)
+                    Text("ASSTS").frame(width: 52, alignment: .trailing)
+                case .lineups:
+                    Text("TEAM / PROJECTED XI").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("FORM.").frame(width: 86, alignment: .trailing)
+                }
+            }
+            .font(GaryFonts.mono(10.5)).tracking(1.2)
+            .foregroundStyle(GaryColors.gold)
+            .padding(.vertical, 8).padding(.horizontal, 14)
+        }
+
+        /// The scrolling rows for the active WC lane, grouped by match.
+        @ViewBuilder private func wcLaneBody(_ lane: WcLane) -> some View {
+            VStack(spacing: 0) {
                 ForEach(Array(wcMatches.enumerated()), id: \.offset) { _, m in
-                    wcMatchCard(m)
+                    wcMatchSubHeader(m)
+                    switch lane {
+                    case .form:
+                        wcFormRow(team: m.away_team, side: m.away)
+                        wcFormRow(team: m.home_team, side: m.home)
+                    case .scorers:
+                        wcScorerRows(team: m.away_team, side: m.away)
+                        wcScorerRows(team: m.home_team, side: m.home)
+                    case .lineups:
+                        wcLineupRow(team: m.away_team, side: m.away)
+                        wcLineupRow(team: m.home_team, side: m.home)
+                    }
                 }
             }
-            .padding(.horizontal, 16)
         }
 
-        /// One WC match: matchup + kickoff + group/stage/venue header, both sides'
-        /// formation + projected XI, the L5 form (record + GF/GA per game), key
-        /// scorers, and the lines (spread / total / ML). Grounded — empty fields
-        /// are omitted or read "—".
-        private func wcMatchCard(_ m: TomorrowWcMatch) -> some View {
-            VStack(alignment: .leading, spacing: 0) {
-                // ── Header: matchup, kickoff, group · stage · venue.
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(m.match ?? "\(m.away_team ?? "—") @ \(m.home_team ?? "—")")
-                            .font(GaryFonts.text(16, .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                        Spacer(minLength: 8)
-                        if let k = m.kickoff, !k.isEmpty {
-                            Text(k.uppercased())
-                                .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(wcAccent)
-                        }
-                    }
-                    let meta = [m.group, m.stage, m.venue]
-                        .compactMap { $0 }.filter { !$0.isEmpty }
-                        .joined(separator: " · ")
-                    if !meta.isEmpty {
-                        Text(meta.uppercased())
-                            .font(GaryFonts.mono(8.5)).tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.4))
-                            .lineLimit(1)
-                    }
-                }
-                .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 11)
-
-                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-
-                // ── Both sides — projected XI + formation, L5 form, key players.
-                wcSideBlock(side: m.away, fallbackName: m.away_team, label: "AWAY")
-                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
-                wcSideBlock(side: m.home, fallbackName: m.home_team, label: "HOME")
-
-                // ── Lines — spread / total / ML, straight off the board.
-                if let lines = m.lines, wcHasAnyLine(lines) {
-                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                    wcLinesRow(lines, m: m)
-                }
-            }
-            .background(Color(hex: "#181616"))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(wcAccent.opacity(0.18), lineWidth: 1))
-        }
-
-        /// One side of a WC match: team + formation, projected XI (wrapped), L5
-        /// form line, and key scorers. Any field with no grounded source is
-        /// omitted (the side still renders its name + whatever it has).
-        @ViewBuilder private func wcSideBlock(side: TomorrowWcSide?, fallbackName: String?, label: String) -> some View {
-            VStack(alignment: .leading, spacing: 7) {
-                // Team name + AWAY/HOME tag + formation.
-                HStack(spacing: 7) {
-                    Text(label)
-                        .font(GaryFonts.mono(7.5, bold: true)).tracking(0.8)
-                        .foregroundStyle(wcAccent.opacity(0.75))
-                    Text(side?.team ?? fallbackName ?? "—")
-                        .font(GaryFonts.text(13.5, .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: 6)
-                    if let f = side?.xi?.formation, !f.isEmpty {
-                        Text(f)
-                            .font(GaryFonts.mono(10.5, bold: true))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                }
-
-                // L5 form — record + GF/GA per game.
-                if let form = side?.form {
-                    HStack(spacing: 10) {
-                        if let rec = form.record, !rec.isEmpty {
-                            wcStat("L5", rec)
-                        }
-                        if let gf = form.gf_per_game {
-                            wcStat("GF/G", String(format: "%.1f", gf))
-                        }
-                        if let ga = form.ga_per_game {
-                            wcStat("GA/G", String(format: "%.1f", ga))
-                        }
-                    }
-                }
-
-                // Projected XI — omit when Hub-mode (lineups on the game page).
-                if !hideWcXI {
-                    let xiNames = wcXiNames(side?.xi)
-                    if !xiNames.isEmpty {
-                        Text(xiNames.joined(separator: " · "))
-                            .font(GaryFonts.mono(9.5)).tracking(0.2)
-                            .foregroundStyle(.white.opacity(0.55))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lineLimit(3)
-                    }
-                }
-
-                // Key players — leading scorers.
-                if let kps = side?.key_players, !kps.isEmpty {
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("KEY")
-                            .font(GaryFonts.mono(7.5, bold: true)).tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.35))
-                            .padding(.top, 1)
-                        Text(kps.compactMap { wcKeyPlayerLabel($0) }.joined(separator: "  ·  "))
-                            .font(GaryFonts.mono(9.5))
-                            .foregroundStyle(GaryColors.gold.opacity(0.85))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lineLimit(2)
-                    }
+        /// Match grouping header inside the WC table (teal matchup + kickoff).
+        private func wcMatchSubHeader(_ m: TomorrowWcMatch) -> some View {
+            HStack(spacing: 6) {
+                Text((m.match ?? "\(m.away_team ?? "") @ \(m.home_team ?? "")").uppercased())
+                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                    .foregroundStyle(wcAccent.opacity(0.9))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 6)
+                if let k = m.kickoff, !k.isEmpty {
+                    Text(k.uppercased())
+                        .font(GaryFonts.mono(9, bold: true))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14).padding(.vertical, 11)
+            .padding(.top, 9).padding(.bottom, 4).padding(.horizontal, 14)
         }
 
-        /// One labeled WC stat chip, e.g. "L5 3-1-1".
-        private func wcStat(_ label: String, _ value: String) -> some View {
-            HStack(spacing: 4) {
-                Text(label)
-                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
-                    .foregroundStyle(.white.opacity(0.4))
-                Text(value)
-                    .font(GaryFonts.mono(10.5, bold: true))
-                    .foregroundStyle(.white.opacity(0.85))
+        /// FORM lane row — team · L5 record (form-coloured) · goals/gm · opp goals/gm.
+        @ViewBuilder private func wcFormRow(team: String?, side: TomorrowWcSide?) -> some View {
+            let f = side?.form
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Text(side?.team ?? team ?? "—")
+                        .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1).minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(f?.record ?? "—")
+                        .font(GaryFonts.mono(13, bold: true)).foregroundStyle(wcFormColor(f))
+                        .frame(width: 58, alignment: .trailing)
+                    Text(f?.gf_per_game.map { Self.trimNum($0) } ?? "—")
+                        .font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.85))
+                        .frame(width: 72, alignment: .trailing)
+                    Text(f?.ga_per_game.map { Self.trimNum($0) } ?? "—")
+                        .font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 58, alignment: .trailing)
+                }
+                .padding(.vertical, 9).padding(.horizontal, 14)
+                hairline
             }
         }
 
-        /// The lines row — spread / total / ML home / ML away, "—" when a leg is
-        /// unposted. Shown only when at least one leg has a value.
-        private func wcLinesRow(_ lines: TomorrowWcLines, m: TomorrowWcMatch) -> some View {
-            let homeAbbr = abbr(m.home_team ?? m.home?.team)
-            let awayAbbr = abbr(m.away_team ?? m.away?.team)
-            return HStack(spacing: 0) {
-                wcLineCell("SPREAD", wcSpreadText(lines.spread))
-                wcLineDivider
-                wcLineCell("TOTAL", lines.total.map { String(format: "%.1f", $0) } ?? "—")
-                wcLineDivider
-                wcLineCell("\(awayAbbr) ML", wcMlText(lines.ml_away))
-                wcLineDivider
-                wcLineCell("\(homeAbbr) ML", wcMlText(lines.ml_home))
+        /// KEY SCORERS lane — a side's top scorers: name + team · goals · assists.
+        @ViewBuilder private func wcScorerRows(team: String?, side: TomorrowWcSide?) -> some View {
+            let teamName = side?.team ?? team ?? ""
+            let players = Array((side?.key_players ?? []).prefix(3))
+            ForEach(Array(players.enumerated()), id: \.offset) { _, p in
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(p.name ?? "—")
+                                .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.92)).lineLimit(1)
+                            Text(teamName)
+                                .font(GaryFonts.mono(8.5)).tracking(0.5).foregroundStyle(.white.opacity(0.35))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("\(p.goals ?? 0)")
+                            .font(GaryFonts.mono(13, bold: true)).foregroundStyle(GaryColors.gold)
+                            .frame(width: 52, alignment: .trailing)
+                        Text("\(p.assists ?? 0)")
+                            .font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 52, alignment: .trailing)
+                    }
+                    .padding(.vertical, 9).padding(.horizontal, 14)
+                    hairline
+                }
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-        }
-        private var wcLineDivider: some View {
-            Rectangle().fill(Color.white.opacity(0.06)).frame(width: 1, height: 22)
-        }
-        private func wcLineCell(_ label: String, _ value: String) -> some View {
-            VStack(spacing: 3) {
-                Text(label)
-                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.4))
-                Text(value)
-                    .font(GaryFonts.mono(11, bold: true))
-                    .foregroundStyle(value == "—" ? .white.opacity(0.35) : .white.opacity(0.9))
-            }
-            .frame(maxWidth: .infinity)
         }
 
-        // ── WC helpers ──────────────────────────────────────────────────────
-        private func wcHasAnyLine(_ l: TomorrowWcLines) -> Bool {
-            l.spread != nil || l.total != nil || l.ml_home != nil || l.ml_away != nil
+        /// LINEUPS lane row — a side's projected XI (wrapped) + formation.
+        @ViewBuilder private func wcLineupRow(team: String?, side: TomorrowWcSide?) -> some View {
+            let xi = side?.xi
+            let names = wcXiNames(xi)
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(side?.team ?? team ?? "—")
+                            .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.92)).lineLimit(1)
+                        if !names.isEmpty {
+                            Text(names.joined(separator: " · "))
+                                .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.45))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(xi?.formation ?? "—")
+                        .font(GaryFonts.mono(13, bold: true)).foregroundStyle(wcAccent)
+                        .frame(width: 86, alignment: .trailing)
+                }
+                .padding(.vertical, 9).padding(.horizontal, 14)
+                hairline
+            }
         }
-        private func wcSpreadText(_ s: Double?) -> String {
-            guard let s else { return "—" }
-            return s > 0 ? String(format: "+%.1f", s) : String(format: "%.1f", s)
+
+        /// Recent-form colour vs W/L: green winning, amber even, red losing.
+        private func wcFormColor(_ f: TomorrowWcForm?) -> Color {
+            guard let f = f, let w = f.w, let l = f.l else { return .white.opacity(0.85) }
+            if w > l { return GaryColors.win }
+            if l > w { return GaryColors.loss }
+            return Color(hex: "#E8B339")
         }
-        private func wcMlText(_ ml: Double?) -> String {
-            guard let ml else { return "—" }
-            return ml > 0 ? "+\(Int(ml))" : "\(Int(ml))"
-        }
-        /// Projected XI names — keeper first when present (and not already in the
-        /// outfield list), then the listed XI.
+
+        /// The projected XI names (keeper first), grounded — empty when no XI.
         private func wcXiNames(_ xi: TomorrowWcXI?) -> [String] {
             guard let xi else { return [] }
             var names = (xi.xi ?? []).compactMap { $0.n }.filter { !$0.isEmpty }
@@ -11208,12 +11158,6 @@ struct TomorrowView {
                 names.insert(gk, at: 0)
             }
             return names
-        }
-        /// "Mbappé 5" — name + goal count when scoring data exists.
-        private func wcKeyPlayerLabel(_ p: TomorrowWcKeyPlayer) -> String? {
-            guard let name = p.name, !name.isEmpty else { return nil }
-            if let g = p.goals, g > 0 { return "\(name) \(g)" }
-            return name
         }
 
         /// The fixed column-header row for the active lane.
@@ -11555,8 +11499,21 @@ enum LookAheadLane: CaseIterable, Hashable {
     }
 }
 
+/// WC "Day Ahead" lanes — the soccer-tailored twin of LookAheadLane (no pitcher
+/// concepts): recent form, top scorers, projected lineups.
+enum WcLane: CaseIterable, Hashable {
+    case form, scorers, lineups
+    var label: String {
+        switch self {
+        case .form:    return "FORM"
+        case .scorers: return "KEY SCORERS"
+        case .lineups: return "LINEUPS"
+        }
+    }
+}
+
 /// The top-level MLB / WC switch for "The Day Ahead" — MLB routes to the tabbed
-/// table, WC to the per-match World Cup look-ahead cards.
+/// table, WC to its own tabbed table (Form · Key Scorers · Lineups).
 enum LookAheadSport: Hashable {
     case mlb, wc
     var label: String {
@@ -21394,7 +21351,7 @@ struct PropsHubView: View {
                         let hubLeague: String? = sel == .mlb ? "MLB" : sel == .wc ? "WC" : nil
                         // WC tab: show WC match previews (form + key players + odds)
                         // but hide the full XI — lineups are already on each game page.
-                        TomorrowView.Body(board: tb, leagueFilter: hubLeague, hideWcXI: sel == .wc,
+                        TomorrowView.Body(board: tb, leagueFilter: hubLeague,
                                          includeBoard: false, dayLabel: "TODAY")
                             .id("dayAhead")
                     }
