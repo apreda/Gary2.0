@@ -2838,20 +2838,22 @@ struct HomeView: View {
     /// The per-sport live record, inline in the tab row: a hairline, then
     /// "MLB 9-6  WC 2-0 ●" — league in its accent, record white, green pip when live.
     private var liveFormInline: some View {
-        HStack(spacing: 10) {
-            Rectangle().fill(Color.white.opacity(0.10)).frame(width: 1, height: 15)
+        HStack(spacing: 12) {
+            Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 19)
             ForEach(dailyForm) { c in
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Text(c.league == "WC" ? "WC" : c.league)
+                        .font(GaryFonts.mono(12.5, bold: true))
                         .foregroundStyle(c.league == "MLB"
                             ? AnyShapeStyle(Color(hex: "#63D17E"))
                             : AnyShapeStyle(Sport.from(league: c.league).accentColor))
-                    Text(c.record).foregroundStyle(.white)
+                    Text(c.record)
+                        .font(GaryFonts.mono(16, bold: true))
+                        .foregroundStyle(.white)
                     if c.state == .live {
-                        Circle().fill(Color(hex: "#3FB950")).frame(width: 5, height: 5)
+                        Circle().fill(Color(hex: "#3FB950")).frame(width: 6, height: 6)
                     }
                 }
-                .font(GaryFonts.mono(11, bold: true))
                 .fixedSize()
             }
         }
