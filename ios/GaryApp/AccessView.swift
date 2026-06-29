@@ -14,8 +14,11 @@ struct AccessView: View {
             LiquidGlassBackground()
             
             VStack(spacing: 20) {
-                Spacer(minLength: 20)
-                
+                // Fixed top gap (not a flexible Spacer) so the ONLY expanding space
+                // is the one between the value chips and the bottom CTAs — that
+                // anchors the actions to the thumb zone and fills the page.
+                Spacer().frame(height: 24)
+
                 // The clean single-source Gary mark (not the raw transparent hero
                 // PNG, which showed a checkerboard) — rounded like the app icon.
                 VStack(spacing: 10) {
@@ -61,8 +64,11 @@ struct AccessView: View {
                 .opacity(animateIn ? 1 : 0)
                 .offset(y: animateIn ? 0 : 30)
                 .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
-                
-                // Action Buttons - tighter spacing
+
+                // The one flexible gap — pushes the CTAs down to the bottom.
+                Spacer(minLength: 24)
+
+                // Action Buttons — anchored to the bottom (thumb zone).
                 VStack(spacing: 14) {
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
@@ -110,8 +116,10 @@ struct AccessView: View {
                 .opacity(animateIn ? 1 : 0)
                 .offset(y: animateIn ? 0 : 40)
                 .animation(.easeOut(duration: 0.6).delay(0.6), value: animateIn)
-                
-                Spacer(minLength: 40)
+
+                // Small fixed bottom margin above the home indicator (not flexible,
+                // so it can't steal space from the gap above the CTAs).
+                Spacer().frame(height: 16)
             }
         }
         .onAppear {
