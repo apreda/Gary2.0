@@ -1829,6 +1829,9 @@ struct HomeView: View {
     /// The Tomorrow look-ahead payload (tomorrow_board). nil until it loads /
     /// posts — the Tomorrow body shows its own honest-empty states meanwhile.
     @State private var tomorrowBoard: TomorrowBoard? = nil
+    /// Today's look-ahead board (today_board) — feeds the Today page's countdown +
+    /// Big Games (the full Day Ahead table lives on the Hub, not here).
+    @State private var todayBoard: TomorrowBoard? = nil
     /// What the "TODAY" pill maps to: today's locked Home, time-aware (morning
     /// before noon ET, pregame after) — exactly the computed `phase` clock, so
     /// the Today pill drives selectedPhase to .morning/.pregame untouched. Live
@@ -2045,6 +2048,33 @@ struct HomeView: View {
                     let recentGameResults = (try? await gameResultsFetch) ?? []
                     let recentPropResults = (try? await propResultsFetch) ?? []
 
+                    // Fallback: if the separate 7-day fetch came back empty, build the
+                    // form from the reliable recentGameResults (the board's data, which
+                    // covers the window) so the 7-Day Form never silently vanishes.
+                    if sevenDayForm.isEmpty {
+                        let weekAgo = Self.shiftDate(SupabaseAPI.todayEST(), by: -7) ?? ""
+                        var byLeague: [String: (w: Int, l: Int, p: Int)] = [:]
+                        for r in recentGameResults where (r.game_date ?? "") >= weekAgo {
+                            let lg = (r.league ?? "OTHER").uppercased()
+                            var cur = byLeague[lg] ?? (0, 0, 0)
+                            switch (r.result ?? "").lowercased() {
+                            case "won", "win", "w": cur.w += 1
+                            case "lost", "loss", "l": cur.l += 1
+                            case "push", "p": cur.p += 1
+                            default: break
+                            }
+                            byLeague[lg] = cur
+                        }
+                        let rank: (String) -> Int = { $0 == "MLB" ? 0 : ($0 == "WC" ? 1 : 2) }
+                        sevenDayForm = byLeague
+                            .filter { $0.value.w + $0.value.l > 0 }
+                            .map { SupabaseAPI.SportRecord(league: $0.key, wins: $0.value.w, losses: $0.value.l, pushes: $0.value.p) }
+                            .sorted { a, b in
+                                rank(a.league) != rank(b.league) ? rank(a.league) < rank(b.league)
+                                    : (a.wins + a.losses) > (b.wins + b.losses)
+                            }
+                    }
+
                     // Rolling recap anchor: the most recent SETTLED day INCLUDING today, so the
                     // scorecard + prop box + highlights roll from yesterday into today as today's
                     // picks grade. recapLabel reads "TODAY" once we've crossed over.
@@ -2162,7 +2192,22 @@ struct HomeView: View {
                         yesterdayRecord = (w, l, p)
                         recordBoxLabel = liveRows.contains { $0.isLive } ? "LIVE" : "TODAY"
                     } else {
-                        recordBoxLabel = "YESTERDAY"   // keep the recordFetch fallback record
+                        // Today hasn't graded yet — show the most recent SETTLED day's
+                        // record, computed from the SAME recentGameResults the board uses
+                        // (the separate recordFetch can come back empty and hide the box).
+                        recordBoxLabel = "YESTERDAY"
+                        if let rd = recapDay {
+                            var yw = 0, yl = 0, yp = 0
+                            for r in recentGameResults where r.game_date == rd {
+                                switch (r.result ?? "").lowercased() {
+                                case "won", "win", "w": yw += 1
+                                case "lost", "loss", "l": yl += 1
+                                case "push", "p": yp += 1
+                                default: break
+                                }
+                            }
+                            if yw + yl + yp > 0 { yesterdayRecord = (yw, yl, yp) }
+                        }
                     }
                     // Keep the snapshot fresh — the tape/takeover re-render
                     // off the shared 90s poller once it starts.
@@ -2217,6 +2262,8 @@ struct HomeView: View {
                     // The TOMORROW look-ahead board (keyed on tomorrow's EST slate
                     // day) — feeds the Tomorrow pill's countdown + scoreboard.
                     tomorrowBoard = await SupabaseAPI.fetchTomorrowBoard(date: Self.tomorrowSlateDateEST())
+                    // TODAY's look-ahead board — feeds the Today page's countdown + Big Games.
+                    todayBoard = await SupabaseAPI.fetchTodayBoard(date: SupabaseAPI.todayEST())
                     nightHighlights = await SupabaseAPI.fetchNightHighlights(date: recapDay ?? SupabaseAPI.hubGradedDateEST())
                     homeStreaks = await SupabaseAPI.fetchStreaks()
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
@@ -2452,9 +2499,14 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
 
-        // (The Day Ahead — countdown + big games + look-ahead table — lives on the
-        // Hub for TODAY now, not the Home Today page. The Tomorrow tab keeps its
-        // own full version. Removed from here per founder.)
+        // ── ②b Countdown to today's first game + Big Games To Watch. The full
+        // Day Ahead TABLE lives on the Hub now (founder), but the countdown + big
+        // games stay on the Today page. includeLookAhead:false drops the table.
+        if let tb = todayBoard {
+            TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false, dayLabel: "TODAY")
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
+        }
 
         // ── ③ Tonight's Board — under the form + headlines (founder call). The
         // unified board: BOARD shows EVERY game on the slate with the live-score
@@ -3260,6 +3312,20 @@ struct HomeView: View {
             recordBoxLabel = liveScoresNow.contains { $0.isLive } ? "LIVE" : "TODAY"
         } else {
             recordBoxLabel = "YESTERDAY"
+            // Most recent settled day's record from the same `games` (the anchor),
+            // so the YESTERDAY box never empties + hides.
+            if let rd = anchor {
+                var yw = 0, yl = 0, yp = 0
+                for r in games where r.game_date == rd {
+                    switch (r.result ?? "").lowercased() {
+                    case "won", "win", "w": yw += 1
+                    case "lost", "loss", "l": yl += 1
+                    case "push", "p": yp += 1
+                    default: break
+                    }
+                }
+                if yw + yl + yp > 0 { yesterdayRecord = (yw, yl, yp) }
+            }
         }
     }
 
@@ -10267,6 +10333,10 @@ struct TomorrowView {
         /// Today page + Hub have their OWN board, so they pass false (countdown +
         /// big games + Day Ahead, no duplicate board).
         var includeBoard: Bool = true
+        /// Whether to render the "Day Ahead" look-ahead TABLE. The Today page passes
+        /// false (it wants only the countdown + big games — the full table lives on
+        /// the Hub); the Hub + Tomorrow page keep it.
+        var includeLookAhead: Bool = true
         /// Header word for the countdown / empty hero — "TODAY" for the today use.
         var dayLabel: String = "TOMORROW"
         /// 1Hz tick for the live countdown. Re-render every second.
@@ -10289,7 +10359,7 @@ struct TomorrowView {
                     countdownHero
                     bigGames
                 }
-                lookAheadTabs
+                if includeLookAhead { lookAheadTabs }
                 if !lookAheadOnly, includeBoard, let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
             }
             // The 1Hz tick drives ONLY the countdown hero. In lookAheadOnly mode
