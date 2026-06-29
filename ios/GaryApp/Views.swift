@@ -3037,6 +3037,24 @@ struct HomeView: View {
     /// STREAKS — live runs around the league that are in action again today
     /// (next_game posted). Team streaks lead, then by length desc; the chip
     /// encodes kind + length (W3 / L1 / O4 / U2 / 5G HIT / 0-FOR-7 / HR x3).
+    /// A streak's next game → "VS NYM · 7:07 PM": abbreviate the opponent (so it's
+    /// never truncated to "METS…") and drop the redundant " ET" (users read times
+    /// as Eastern already). Input shape: "vs Mets · 7:07 PM ET" / "at Blue Jays · …".
+    private static func streakNextGame(_ ng: String?, league: String?) -> String {
+        guard let ng = ng, !ng.isEmpty else { return "" }
+        let parts = ng.components(separatedBy: " · ")
+        let time = (parts.count >= 2 ? parts[1] : "")
+            .replacingOccurrences(of: " ET", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespaces)
+        let oppPart = parts.first ?? ng
+        let isAt = oppPart.lowercased().hasPrefix("at ")
+        let oppName = oppPart.replacingOccurrences(of: "^(?i)(vs|at)\\s+", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        let abbr = teamAbbrevFromName(oppName, league: league)
+        let read = time.isEmpty ? "\(isAt ? "at" : "vs") \(abbr)" : "\(isAt ? "at" : "vs") \(abbr) · \(time)"
+        return read.uppercased()
+    }
+
     private var streaksToContinueRows: [HomeSlateSection.Row] {
         let live = homeStreaks.filter { ($0.next_game?.isEmpty == false) }
         let sorted = live.sorted { a, b in
@@ -3057,13 +3075,14 @@ struct HomeView: View {
             case "hr":      chip = "HR x\(len)"
             default:        chip = "\(len)"
             }
-            // Team streaks title on the team; player streaks add the bat.
-            var title = Self.shortTeam(s.team ?? s.subject)
+            // Team streaks title on the team (full mascot — "Blue Jays", not the
+            // last-word "Jays"); player streaks add the bat.
+            var title = Formatters.shortTeamName(s.team ?? s.subject, league: s.league)
             if s.subject_type == "player", let subj = s.subject, !subj.isEmpty {
                 title += " · \(subj)"
             }
             return HomeSlateSection.Row(id: "stk-\(i)", title: title,
-                                        sub: (s.next_game ?? "").uppercased(),
+                                        sub: Self.streakNextGame(s.next_game, league: s.league),
                                         tone: nil, chip: chip, league: s.league)
         }
     }
