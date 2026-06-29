@@ -4100,35 +4100,20 @@ struct HomeMarqueeHero: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.trailing, 40)
                     .padding(.bottom, 9)
-                if let recap = story.recap, !recap.isEmpty {
-                    if isExpanded {
-                        // Expanded: the whole recap, no truncation — the carousel grows.
-                        Text(recap)
-                            .font(GaryFonts.text(12.5))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineSpacing(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(.top, 8)
-                    } else {
-                        // Adaptive: the recap fills ONLY the space left after the headline,
-                        // the bullets and the receipt stub, truncating to exactly what fits —
-                        // so "Gary Cashed" at the bottom is NEVER clipped, even on a long
-                        // 3-line headline. Full recap is one tap away via MORE.
-                        GeometryReader { geo in
-                            Text(recap)
-                                .font(GaryFonts.text(12.5))
-                                .foregroundStyle(.white.opacity(0.82))
-                                .lineSpacing(2)
-                                .lineLimit(max(1, Int(geo.size.height / 17)))
-                                .truncationMode(.tail)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        }
-                        .padding(.top, 8)
-                    }
-                }
+                // Headline → BULLETS lead the card (founder). The prose recap is
+                // hidden until MORE — most of the value is the headline + the stat
+                // lines; the write-up is optional depth.
                 if !story.bullets.isEmpty {
                     bulletList.padding(.top, 10)
+                }
+                if isExpanded, let recap = story.recap, !recap.isEmpty {
+                    Text(recap)
+                        .font(GaryFonts.text(13))
+                        .foregroundStyle(.white.opacity(0.82))
+                        .lineSpacing(2.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.top, 12)
                 }
                 if onToggleExpand != nil, story.recap?.isEmpty == false {
                     HStack(spacing: 4) {
@@ -4180,19 +4165,20 @@ struct HomeMarqueeHero: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
 
-    /// The night's stat lines — gold tick + mono, the data voice.
+    /// The night's stat lines — gold tick + mono, the data voice. Bigger + more
+    /// readable (founder); the stat line is the point of the card.
     private var bulletList: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(story.bullets.prefix(3)), id: \.self) { (b: String) in
-                HStack(alignment: .center, spacing: 9) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Rectangle()
-                        .fill(GaryColors.gold.opacity(0.8))
-                        .frame(width: 10, height: 1.5)
+                        .fill(GaryColors.gold.opacity(0.85))
+                        .frame(width: 11, height: 2)
                     Text(b)
-                        .font(GaryFonts.mono(13))
+                        .font(GaryFonts.mono(15))
                         .foregroundStyle(.white.opacity(0.96))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.88)
+                        .minimumScaleFactor(0.78)
                 }
             }
         }
