@@ -4097,6 +4097,7 @@ struct HomeMarqueeHero: View {
                 Text(story.headline)
                     .font(GaryFonts.display(26))
                     .foregroundStyle(.white.opacity(0.96))
+                    .lineLimit(2).minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.trailing, 40)
                     .padding(.bottom, 9)
@@ -4127,7 +4128,10 @@ struct HomeMarqueeHero: View {
                     .padding(.top, 8)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
+            // Center the (now shorter, prose-less) content in the card body so the
+            // slack is balanced — not dumped as a void between the bullets and the
+            // receipt (founder: removing the prose left the layout invalid).
+            .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .leading)
             .padding(14)
             // The bear is an overlaid corner stamp now — it no longer takes a layout
             // row that crowds the story (user call, Jun 18). The text may run beneath
@@ -4731,7 +4735,7 @@ struct HomeHeadlinesCarousel: View {
                     }
                     .padding(.horizontal, 20)
                 }
-                .frame(height: 282)
+                .frame(height: 236)
             }
         }
         .onReceive(slideTimer) { _ in
