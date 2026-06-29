@@ -21270,6 +21270,45 @@ struct PropsHubView: View {
                         }
                         .id("moreEdges")
                     }
+
+                    // PENDING sections — always visible below populated ones.
+                    // Each shows a placeholder message when tapped open.
+                    let pendingDefs: [(anchor: String, eyebrow: String)] = {
+                        var defs: [(String, String)] = []
+                        if min(items(.hrThreat).count, 3) == 0 { defs.append(("hrThreats", "Gary Home Run Threats")) }
+                        if items(.regression).isEmpty           { defs.append(("regression", "Regression Board")) }
+                        if items(.fantasyPickups).isEmpty       { defs.append(("fantasyPickups", "Fantasy Pickups")) }
+                        if items(.h2h).isEmpty                  { defs.append(("owned", "Owned")) }
+                        if items(.injury).isEmpty               { defs.append(("beneficiary", "The Beneficiary")) }
+                        if items(.situational).isEmpty          { defs.append(("restFatigue", "Rest & Fatigue")) }
+                        if conditionLanes.isEmpty               { defs.append(("conditions", "The Conditions")) }
+                        if selStreakRows.isEmpty && items(.streak).isEmpty { defs.append(("streaks", "Streaks")) }
+                        if selNightRows.isEmpty                 { defs.append(("lastNight", "Last Night")) }
+                        if items(.tournament).isEmpty           { defs.append(("tournament", "Tournament Stakes")) }
+                        if sel == .wc && wcIntelSignals.isEmpty         { defs.append(("wcIntel", "Game Intel")) }
+                        if sel == .wc && items(.xgRegression).isEmpty   { defs.append(("xgRegression", "xG Regression")) }
+                        if sel == .wc && items(.advancement).isEmpty    { defs.append(("advancement", "Advancement")) }
+                        if sel == .wc && items(.xgRecap).isEmpty        { defs.append(("xgRecap", "xG Recap")) }
+                        return defs
+                    }()
+                    if !pendingDefs.isEmpty {
+                        HStack(spacing: 8) {
+                            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                            Text("COMING TODAY")
+                                .font(GaryFonts.mono(9, bold: true))
+                                .foregroundStyle(.white.opacity(0.2))
+                                .fixedSize()
+                            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 2)
+                        ForEach(pendingDefs, id: \.anchor) { def in
+                            HubDisclosure(anchor: def.anchor, eyebrow: def.eyebrow, count: 0, openSet: $openSections) {
+                                EmptyView()
+                            }
+                        }
+                    }
                 }
             }
             .padding(.top, 8)
@@ -21732,6 +21771,7 @@ struct HubDisclosure<Content: View>: View {
     @Binding var openSet: Set<String>
     @ViewBuilder var content: () -> Content
     private var isOpen: Bool { openSet.contains(anchor) }
+    private var isEmpty: Bool { count == 0 }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -21741,6 +21781,7 @@ struct HubDisclosure<Content: View>: View {
             } label: {
                 HStack(spacing: 10) {
                     HubSectionTitle(title: eyebrow)
+                        .opacity(isEmpty ? 0.38 : 1.0)
                     Spacer(minLength: 8)
                     if count > 0 {
                         Text("\(count)")
@@ -21749,14 +21790,24 @@ struct HubDisclosure<Content: View>: View {
                     }
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(.white.opacity(isEmpty ? 0.15 : 0.3))
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
                 .padding(.horizontal, 16)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if isOpen { content().padding(.top, 10) }
+            if isOpen {
+                if isEmpty {
+                    Text("Checking the tape. Updating closer to game time.")
+                        .font(GaryFonts.mono(11, bold: false))
+                        .foregroundStyle(.white.opacity(0.32))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                } else {
+                    content().padding(.top, 10)
+                }
+            }
         }
     }
 }
@@ -21775,26 +21826,40 @@ struct FeaturedRibbon: View {
                 ForEach(Array(signals.enumerated()), id: \.element.id) { i, s in
                     Button { onTap(s) } label: { block(s) }.buttonStyle(.plain)
                     if i < signals.count - 1 {
-                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 50)
+                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 64)
                     }
                 }
             }
             .padding(.horizontal, 16)
         }
     }
+    /// The read under the big number — drop the value the number already shows
+    /// (so it doesn't repeat "6-2") and never truncate a name mid-word.
+    private func subject(_ s: Signal) -> String {
+        var t = (s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline)
+            .trimmingCharacters(in: .whitespaces)
+        if !s.value.isEmpty {
+            t = t.replacingOccurrences(of: " \(s.value) ", with: " ")
+                 .replacingOccurrences(of: "\(s.value) ", with: "")
+        }
+        return t
+    }
+
     @ViewBuilder private func block(_ s: Signal) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(s.value.isEmpty ? "—" : s.value)
-                .font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
-                .lineLimit(1).minimumScaleFactor(0.6)
-            Text((s.headline.components(separatedBy: CharacterSet(charactersIn: "(:")).first ?? s.headline).trimmingCharacters(in: .whitespaces))
-                .font(GaryFonts.text(12, .semibold)).foregroundStyle(.white.opacity(0.92))
+                .font(GaryFonts.mono(21, bold: true)).foregroundStyle(s.tone.color)
                 .lineLimit(1).minimumScaleFactor(0.7)
+            // Full size, up to 2 lines, NO shrink-to-fit — readable, never a
+            // mid-word "…" (founder: the ribbon read was unreadable).
+            Text(subject(s))
+                .font(GaryFonts.text(12.5, .semibold)).foregroundStyle(.white.opacity(0.92))
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             Text(s.kind.chip)
-                .font(GaryFonts.mono(7.5, bold: true)).tracking(1)
+                .font(GaryFonts.mono(8, bold: true)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.85)).lineLimit(1)
         }
-        .frame(width: 118, alignment: .leading)
+        .frame(width: 150, alignment: .leading)
         .padding(.vertical, 4).padding(.horizontal, 14)
         .contentShape(Rectangle())
     }
