@@ -3207,7 +3207,7 @@ struct HomeView: View {
                 sub = [Formatters.formatCommenceTime(p.displayTime), p.venue].compactMap { $0 }.filter { !$0.isEmpty }
                     .joined(separator: " · ").uppercased()
             }
-            return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: tone, chip: p.pick ?? "")
+            return HomeSlateSection.Row(id: p.id, title: title, sub: sub, tone: tone, chip: Self.boardPickChip(p.pick ?? "", league: p.league))
         }
     }
 
@@ -3230,7 +3230,7 @@ struct HomeView: View {
             // The chip: Gary's call once posted, else the home ML, else a dash.
             let chip: String
             if let p = pick?.pick, !p.isEmpty {
-                chip = p
+                chip = Self.boardPickChip(p, league: g.league)
             } else if let mlh = g.ml_home, abs(mlh) <= 2000 {
                 chip = String(format: "%@ %+.0f", Self.shortTeam(g.home_team).uppercased(), mlh)
             } else {
@@ -3269,6 +3269,27 @@ struct HomeView: View {
     static func shortTeam(_ name: String?) -> String {
         guard let last = name?.split(separator: " ").last else { return "—" }
         return String(last)
+    }
+
+    /// A board pick chip that ALWAYS fits the narrow pick column — abbreviates the
+    /// leading team ("PARAGUAY +0.5 -130" → "PAR +0.5 -130"), consistent with the
+    /// row's own abbreviated score. Totals (OVER/UNDER/DRAW) have no team and pass
+    /// through. This is why the pick never has to truncate to "...".
+    static func boardPickChip(_ pick: String, league: String?) -> String {
+        let trimmed = pick.trimmingCharacters(in: .whitespaces)
+        let tokens = trimmed.split(separator: " ").map(String.init)
+        guard tokens.count > 1 else { return trimmed }
+        if ["OVER", "UNDER", "O", "U", "DRAW"].contains(tokens[0].uppercased()) { return trimmed }
+        func isBetToken(_ t: String) -> Bool {
+            let u = t.uppercased()
+            return u == "ML" || u.range(of: "^[+\\-]?[0-9]", options: .regularExpression) != nil
+        }
+        var teamTokens: [String] = []
+        var i = 0
+        while i < tokens.count, !isBetToken(tokens[i]) { teamTokens.append(tokens[i]); i += 1 }
+        guard !teamTokens.isEmpty, i < tokens.count else { return trimmed }
+        let abbr = teamAbbrevFromName(teamTokens.joined(separator: " "), league: league)
+        return "\(abbr) \(tokens[i...].joined(separator: " "))"
     }
 
     /// Box-score-style prop results for the biggest settled game of the
@@ -6058,8 +6079,11 @@ struct HomeSlateSection: View {
                                             .foregroundStyle(.white.opacity(0.45))
                                     }
                                 }
-                                .lineLimit(1).minimumScaleFactor(0.8)
-                                .frame(maxWidth: 150, alignment: .trailing)
+                                // Shrink-to-fit hard before it would EVER truncate the
+                                // pick to "…" (founder: never cut a pick off). The
+                                // abbreviated chip already fits; this is the safety net.
+                                .lineLimit(1).minimumScaleFactor(0.5)
+                                .frame(maxWidth: 158, alignment: .trailing)
                             }
                         }
                         .padding(.vertical, 11).padding(.horizontal, 14)
