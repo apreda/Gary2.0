@@ -145,7 +145,7 @@ struct MLBGameIntelView: View {
 
     private func module(_ kinds: Set<SignalKind>) -> [Signal] { edges.filter { kinds.contains($0.kind) } }
     private var pitchingEdges: [Signal] { module([.starterForm, .firstInning, .runningGame]) }
-    private var batsEdges: [Signal] { module([.hot, .cold, .platoon, .regression, .hrThreat, .h2h, .streak]) }
+    private var batsEdges: [Signal] { module([.hot, .cold, .platoon, .regression, .hrThreat, .h2h, .streak]).filter { $0.h2h == nil } }
     private var parkEdges: [Signal] { module([.parkWeather, .ballpark]) }
     private var otherEdges: [Signal] {
         let claimed: Set<SignalKind> = [.starterForm, .firstInning, .runningGame, .hot, .cold, .platoon, .regression, .hrThreat, .h2h, .streak, .parkWeather, .ballpark]
@@ -172,6 +172,19 @@ struct MLBGameIntelView: View {
             if showHeader { header }
             stateTabs
             fieldCard
+            // Head-to-Head — the season-series dominance, right under the lineup
+            // (founder, Image #68). HeadToHeadRow carries the tug-of-war bar.
+            if let h2hEdge = edges.first(where: { $0.h2h != nil }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("HEAD-TO-HEAD")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.horizontal, 16).padding(.top, 4)
+                    HeadToHeadRow(s: h2hEdge) { _ in }
+                        .padding(.horizontal, 16)
+                }
+                .padding(.top, 8)
+            }
             // THE READ removed (Jun 19, founder) — redundant with the modules below.
             if !pitchingEdges.isEmpty { EdgesSection(title: "PITCHING", edges: pitchingEdges).padding(.top, 8) }
             if !batsEdges.isEmpty     { EdgesSection(title: "BATS", edges: batsEdges).padding(.top, 8) }
