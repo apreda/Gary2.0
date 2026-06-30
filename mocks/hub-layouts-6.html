@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Hub — 6 layout models</title>
+<style>
+  :root{--bg:#0b0a09;--card:#181615;--card2:#1e1b19;--line:rgba(255,255,255,.08);
+    --gold:#C9A227;--mlb:#63D17E;--teal:#3FB6A8;--win:#3FB950;--loss:#E5614D;--hot:#FF6A3D;--cold:#4FA9E8;--amber:#E8B339;
+    --txt:#F4EFE6;--dim:rgba(244,239,230,.62);--dim2:rgba(244,239,230,.40);
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;--disp:"Helvetica Neue",Arial,sans-serif;}
+  *{box-sizing:border-box}
+  body{background:#000;color:var(--txt);font-family:var(--disp);margin:0;padding:24px}
+  h1{font-family:var(--mono);color:var(--gold);font-size:15px;text-align:center;margin:0 0 22px}
+  .grid{display:grid;grid-template-columns:repeat(3,auto);gap:30px 22px;justify-content:center}
+  .col{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .cap{font-family:var(--mono);font-size:11px;color:var(--gold);text-align:center;max-width:300px}
+  .cap b{color:#fff} .cap i{color:var(--dim2);font-style:normal;font-size:10px}
+  .phone{width:300px;height:540px;background:var(--bg);border-radius:30px;border:8px solid #232120;overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.6)}
+  .scr{padding:16px 13px;height:100%;overflow:hidden}
+  .diamond{width:6px;height:6px;background:var(--gold);transform:rotate(45deg);display:inline-block}
+  .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+  .h-ttl{font-weight:800;font-size:16px} .h-sub{font-family:var(--mono);font-size:8px;color:var(--dim2)}
+  .rcpt{font-family:var(--mono);font-size:8px;color:var(--dim);text-align:right} .rcpt b{color:var(--win)}
+  .mono{font-family:var(--mono)} .meta{font-family:var(--mono);font-size:8.5px;color:var(--dim)}
+  .nm{font-weight:700;font-size:12px} .new{font-family:var(--mono);font-size:6.5px;color:#0b0a09;background:var(--gold);border-radius:3px;padding:1px 4px;font-weight:700}
+  .eye{display:flex;align-items:center;gap:6px;margin:13px 0 7px} .eye .t{font-weight:700;font-size:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px}
+  .card+.card{margin-top:7px}
+  .meter{height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:6px}
+  .meter>i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--amber),var(--hot));animation:fill 1.1s ease forwards}
+  @keyframes fill{from{width:0}}
+  .dom{height:16px;border-radius:5px;overflow:hidden;display:flex;font-family:var(--mono);font-weight:700;font-size:8px;margin-top:6px}
+  .dom .a{background:linear-gradient(90deg,rgba(99,209,126,.85),rgba(99,209,126,.5));color:#08160c;display:flex;align-items:center;padding:0 6px;animation:grow 1.1s ease forwards}
+  .dom .b{background:rgba(255,255,255,.08);color:var(--dim);flex:1;display:flex;align-items:center;justify-content:flex-end;padding:0 6px}
+  @keyframes grow{from{flex-basis:0}}
+  .gbar{display:flex;align-items:center;gap:6px;margin-top:4px}
+  .gt{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}.gt>i{display:block;height:100%;animation:fill 1s ease forwards}
+  .dots{display:flex;gap:3px;margin-top:6px}.d1{width:10px;height:10px;border-radius:50%}.dz{background:rgba(63,185,80,.2);border:1px solid rgba(63,185,80,.4)}.dr{background:rgba(229,97,77,.2)}
+  .heat{width:9px;height:9px;border-radius:50%}.hot{background:var(--hot);animation:ph 1.5s infinite}.cold{background:var(--cold)}
+  @keyframes ph{0%{box-shadow:0 0 0 0 rgba(255,106,61,.5)}70%{box-shadow:0 0 0 6px rgba(255,106,61,0)}100%{box-shadow:0 0 0 0 transparent}}
+  .ou{display:flex;gap:2px;margin-top:6px}.ou span{flex:1;height:6px;border-radius:1px}.o{background:var(--win)}.u{background:rgba(255,255,255,.12)}
+  /* layout-specific */
+  .tabbar{display:flex;gap:10px;font-family:var(--mono);font-size:8.5px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:10px;overflow:hidden}
+  .tabbar .on{color:#fff;border-bottom:2px solid var(--gold);padding-bottom:5px}.tabbar .off{color:var(--dim2)}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px;min-height:74px;display:flex;flex-direction:column;justify-content:space-between}
+  .tile .ti{font-family:var(--mono);font-size:8px;color:var(--dim2);display:flex;justify-content:space-between}
+  .tile .tv{font-weight:700;font-size:11px}
+  .acc{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700}
+  .acc+.acc{margin-top:6px} .acc .ct{font-family:var(--mono);font-size:9px;color:var(--dim2);font-weight:400}
+  .acc.open{border-color:rgba(201,162,39,.3)}
+  .rank{display:flex;gap:9px;align-items:flex-start}.rank .n{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--gold);width:16px}
+  .tag{font-family:var(--mono);font-size:6.5px;font-weight:700;border-radius:3px;padding:1px 4px;letter-spacing:.3px}
+  .gm{font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:7px;display:flex;justify-content:space-between}
+  .sigrow{display:flex;align-items:center;gap:6px;font-size:9.5px;padding:3px 0}.sigrow .k{font-family:var(--mono);font-size:7px;color:var(--dim2);width:42px}
+</style></head>
+<body>
+<h1>The Hub — 6 ways to lay out the same signals</h1>
+<div class="grid" id="g"></div>
+<script>
+const HEAD=`<div class="hd"><div><div style="display:flex;align-items:center;gap:6px"><span class="diamond"></span><span class="h-ttl">Today's Edges</span></div><div class="h-sub">MON JUN 29 · 14 GAMES</div></div><div class="rcpt">YESTERDAY<br><b>6 of 9</b> hit</div></div>`;
+
+const layouts=[
+["1","Digest scroll","every section stacked, open — scan top to bottom", `${HEAD}
+  <div class="card" style="background:linear-gradient(160deg,#221d16,#161311);border-color:rgba(201,162,39,.28)">
+    <div class="mono" style="font-size:7.5px;color:var(--gold);font-weight:700">★ THE EDGE OF THE DAY</div>
+    <div style="font-weight:800;font-size:13px;margin:5px 0 2px">Judge — prime HR threat in the Bronx</div>
+    <div class="meter"><i style="width:88%"></i></div></div>
+  <div class="eye"><span class="diamond"></span><span class="t">Regression Board</span></div>
+  <div class="card"><div class="nm">Hunter Greene <span class="meta">· CIN</span></div>
+    <div class="gbar"><span class="meta" style="width:24px">ERA</span><div class="gt"><i style="width:34%;background:var(--win)"></i></div><span class="mono" style="font-size:8px;color:var(--win)">2.18</span></div>
+    <div class="gbar"><span class="meta" style="width:24px">xERA</span><div class="gt"><i style="width:64%;background:var(--loss)"></i></div><span class="mono" style="font-size:8px;color:var(--loss)">3.85</span></div></div>
+  <div class="eye"><span class="diamond"></span><span class="t">Head-to-Head</span><span class="new">NEW</span></div>
+  <div class="card"><div class="nm">Brewers own Pirates <span class="meta">8-1</span></div><div class="dom"><div class="a" style="flex-basis:89%">MIL 8</div><div class="b">PIT 1</div></div></div>`],
+
+["2","Bet-type tabs","grouped by what you're betting — one tab at a time", `${HEAD}
+  <div class="tabbar"><span class="on">MATCHUP</span><span class="off">POWER</span><span class="off">TOTALS</span><span class="off">1ST INN</span><span class="off">FORM</span></div>
+  <div class="card"><div class="nm">Brewers own Pirates <span class="meta">8-1 · L9</span></div><div class="dom"><div class="a" style="flex-basis:89%">MIL 8</div><div class="b">PIT 1</div></div></div>
+  <div class="card"><div class="nm">Astros vs Twins <span class="meta">even 5-4</span></div><div class="dom"><div class="a" style="flex-basis:56%">HOU 5</div><div class="b">MIN 4</div></div></div>
+  <div class="card"><div class="nm">Nimmo <span class="meta">platoon vs LHP</span></div>
+    <div class="gbar"><span class="meta" style="width:24px">vs L</span><div class="gt"><i style="width:84%;background:var(--mlb)"></i></div><span class="mono" style="font-size:8px;color:var(--mlb)">.945</span></div></div>`],
+
+["3","Dashboard grid","glanceable tiles — counts up front, tap to open", `${HEAD}
+  <div class="tiles">
+    <div class="tile"><div class="ti">HR THREATS <span style="color:var(--hot)">6</span></div><div class="tv">Judge · Schwarber</div><div class="meter"><i style="width:84%"></i></div></div>
+    <div class="tile"><div class="ti">NRFI <span class="new">NEW</span></div><div class="tv" style="color:var(--win)">7 of 10 leans</div><div class="dots"><span class="d1 dz"></span><span class="d1 dz"></span><span class="d1 dr"></span><span class="d1 dz"></span><span class="d1 dz"></span></div></div>
+    <div class="tile"><div class="ti">HEAD-TO-HEAD <span class="new">NEW</span></div><div class="tv">MIL own PIT</div><div class="dom" style="height:11px"><div class="a" style="flex-basis:89%"></div><div class="b"></div></div></div>
+    <div class="tile"><div class="ti">OVER/UNDER <span class="new">NEW</span></div><div class="tv" style="color:var(--win)">Reds O 6-2</div><div class="ou"><span class="o"></span><span class="o"></span><span class="u"></span><span class="o"></span><span class="o"></span></div></div>
+    <div class="tile"><div class="ti">REGRESSION <span style="color:var(--dim2)">5</span></div><div class="tv">Greene due</div><div class="gbar"><div class="gt"><i style="width:34%;background:var(--win)"></i></div></div></div>
+    <div class="tile"><div class="ti">HOT / COLD</div><div class="tv" style="display:flex;align-items:center;gap:5px"><span class="heat hot"></span>Witt scorching</div></div>
+  </div>`],
+
+["4","Featured + accordion","hero up top, the rest collapsed — open what you want", `${HEAD}
+  <div class="card" style="background:linear-gradient(160deg,#221d16,#161311);border-color:rgba(201,162,39,.28);margin-bottom:11px">
+    <div class="mono" style="font-size:7.5px;color:var(--gold);font-weight:700">★ THE EDGE OF THE DAY</div>
+    <div style="font-weight:800;font-size:13px;margin:5px 0 2px">Judge — prime HR threat in the Bronx</div>
+    <div class="meter"><i style="width:88%"></i></div></div>
+  <div class="acc open"><span>Regression Board <span class="ct">due to regress</span></span><span class="ct">5 ▾</span></div>
+  <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;border-top:none"><div class="nm">Hunter Greene <span class="meta">· CIN</span></div>
+    <div class="gbar"><span class="meta" style="width:24px">xERA</span><div class="gt"><i style="width:64%;background:var(--loss)"></i></div><span class="mono" style="font-size:8px;color:var(--loss)">3.85</span></div></div>
+  <div class="acc"><span>Head-to-Head <span class="new">NEW</span></span><span class="ct">3 ▸</span></div>
+  <div class="acc"><span>Home Run Threats</span><span class="ct">6 ▸</span></div>
+  <div class="acc"><span>First Inning · NRFI <span class="new">NEW</span></span><span class="ct">6 ▸</span></div>`],
+
+["5","Ranked edge feed","one stream, strongest first, type-tagged", `${HEAD}
+  <div class="mono" style="font-size:8px;color:var(--gold);font-weight:700;margin-bottom:9px">TOP EDGES · RANKED BY CONVICTION</div>
+  <div class="card"><div class="rank"><span class="n">1</span><div style="flex:1"><span class="tag" style="background:rgba(255,106,61,.18);color:var(--hot)">HR</span> <span class="nm">Judge to go deep</span><div class="meter"><i style="width:88%"></i></div></div></div></div>
+  <div class="card"><div class="rank"><span class="n">2</span><div style="flex:1"><span class="tag" style="background:rgba(63,185,80,.16);color:var(--win)">REGRESSION</span> <span class="nm">Greene due to regress</span><div class="gbar"><div class="gt"><i style="width:64%;background:var(--loss)"></i></div><span class="mono" style="font-size:8px;color:var(--loss)">+1.67</span></div></div></div></div>
+  <div class="card"><div class="rank"><span class="n">3</span><div style="flex:1"><span class="tag" style="background:rgba(99,209,126,.16);color:var(--mlb)">H2H</span> <span class="nm">Brewers own Pirates</span><div class="dom"><div class="a" style="flex-basis:89%">8-1</div><div class="b"></div></div></div></div></div>`],
+
+["6","By-game","every signal grouped under its matchup", `${HEAD}
+  <div class="card"><div class="gm"><span>Padres @ Cubs</span><span style="color:var(--gold)">7:05</span></div>
+    <div class="sigrow"><span class="k">NRFI</span><span style="color:var(--win)" class="mono">7 of 10</span><span class="dots" style="margin:0"><span class="d1 dz"></span><span class="d1 dz"></span><span class="d1 dr"></span></span></div>
+    <div class="sigrow"><span class="k">HR</span><span>Tatís +260</span><div class="meter" style="flex:1;margin:0"><i style="width:70%"></i></div></div>
+    <div class="sigrow"><span class="k">TOTAL</span><span style="color:var(--win)" class="mono">UNDER 6 of 8</span></div></div>
+  <div class="card"><div class="gm"><span>Brewers @ Pirates</span><span style="color:var(--gold)">7:10</span></div>
+    <div class="sigrow"><span class="k">H2H</span><span class="mono" style="color:var(--mlb)">MIL own 8-1</span><div class="dom" style="flex:1;margin:0;height:11px"><div class="a" style="flex-basis:89%"></div><div class="b"></div></div></div>
+    <div class="sigrow"><span class="k">HOT</span><span style="display:flex;align-items:center;gap:5px"><span class="heat hot"></span>Contreras 12-for-26</span></div></div>`],
+];
+document.getElementById("g").innerHTML=layouts.map(([n,name,desc,body])=>`<div class="col"><div class="cap">OPTION ${n} — <b>${name}</b><br><i>${desc}</i></div><div class="phone"><div class="scr">${body}</div></div></div>`).join("");
+</script>
+</body></html>

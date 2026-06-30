@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LIVE FORM — 10 layouts on iPhone</title>
+<style>
+  :root{
+    --bg:#0b0a09; --card:#181616; --card2:#1d1b1a; --line:rgba(255,255,255,.09);
+    --gold:#C9A227; --teal:#3FB6A8; --mlb:#63D17E; --liveg:#3FB950;
+    --dim:rgba(255,255,255,.5); --dim2:rgba(255,255,255,.34);
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+    --disp:"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{background:#000;color:#fff;font-family:var(--disp);margin:0;padding:26px}
+  h1{font-family:var(--mono);font-weight:700;color:var(--gold);font-size:15px;text-align:center;margin:0 0 3px}
+  .sub{color:var(--dim);font-size:11.5px;text-align:center;margin:0 0 24px;font-family:var(--mono)}
+  .grid{display:grid;grid-template-columns:repeat(4,auto);gap:30px 22px;justify-content:center}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .cap{font-family:var(--mono);font-size:10px;color:var(--gold);text-align:center;max-width:232px}
+  .cap b{color:#fff} .cap i{color:var(--dim2);font-style:normal}
+
+  /* iPhone frame — content width ~232px maps to ~393pt (scale ~.59) so proportions are real */
+  .phone{width:232px;height:478px;background:#000;border-radius:34px;border:7px solid #232120;
+         padding:8px 9px 10px;position:relative;overflow:hidden;box-shadow:0 12px 34px rgba(0,0,0,.6)}
+  .screen{background:var(--bg);height:100%;border-radius:26px;overflow:hidden;position:relative}
+  .notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:64px;height:13px;background:#000;border-radius:8px;z-index:5}
+  .scr{padding:24px 11px 0}
+  .gary{display:flex;align-items:baseline;gap:6px}
+  .gary .wm{font-family:var(--mono);font-weight:700;letter-spacing:1.4px;color:var(--gold);font-size:14px}
+  .gary .dt{font-family:var(--mono);color:var(--dim2);font-size:7px}
+  .rule{border-top:1px dashed rgba(201,162,39,.3);margin:7px 1px 0}
+  .tabs{display:flex;gap:14px;padding:9px 1px 11px;font-family:var(--mono);font-size:8.5px;letter-spacing:.5px}
+  .tabs .on{color:#fff;border-bottom:1.5px solid var(--gold);padding-bottom:3px} .tabs .off{color:var(--dim2)}
+  .cd{margin-top:12px;border:1px dashed rgba(255,255,255,.1);border-radius:11px;height:62px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;color:var(--dim2)}
+
+  /* headline card */
+  .hcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px;display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .hcard .wc{position:absolute;top:9px;right:10px;font-family:var(--mono);font-weight:700;font-size:7px;color:var(--teal)}
+  .hcard .h{font-weight:800;font-size:13px;line-height:1.13;padding-right:16px}
+  .hcard .bl{margin-top:auto;display:flex;flex-direction:column;gap:5px;padding-top:8px}
+  .hcard .bl div{font-family:var(--mono);font-size:7.5px;color:rgba(255,255,255,.45)}
+
+  /* widget bits (small, content-sized) */
+  .mono{font-family:var(--mono)} .mlbc{color:var(--mlb)} .tealc{color:var(--teal)} .lvc{color:var(--liveg)} .qc{color:var(--dim2)}
+  .pip{width:4px;height:4px;border-radius:50%;display:inline-block;vertical-align:middle}
+  .wlab{font-family:var(--mono);font-weight:700;font-size:7.5px;letter-spacing:.4px}
+  .wnum{font-family:var(--mono);font-weight:700;font-size:12px}
+  .wst{font-family:var(--mono);font-size:6.5px;letter-spacing:.3px}
+
+  .stage{display:flex;gap:7px;align-items:flex-start}
+</style>
+</head>
+<body>
+<h1>LIVE FORM — 10 layouts, real iPhone scale</h1>
+<p class="sub">the widget container is sized to its content now · MLB 9-6 last night · WC 2-0 live</p>
+<div class="grid" id="g"></div>
+
+<script>
+const HCARD = (h=148)=>`<div class="hcard" style="height:${h}px">
+  <span class="wc">● WC</span><div class="h">Brazil beat Japan 2-1 as the Over 2.5 hits</div>
+  <div class="bl"><div>— Ayase Ueda 2 shots (-167)</div><div>— Over 2.5 hit · 3 total</div></div></div>`;
+
+// small reusable widget innards
+const twoLines = `
+  <div style="margin-bottom:9px"><div class="wlab mlbc">MLB</div><div class="wnum">9-6</div><div class="wst qc">LAST NIGHT</div></div>
+  <div><div class="wlab tealc">WORLD CUP</div><div class="wnum">2-0</div><div class="wst lvc">● LIVE</div></div>`;
+
+const layouts = {
+ A:{cap:`<b>A · Small card, top-right</b> <i>— widget hugs its content; headline tall beside it</i>`, body:`
+   <div class="stage">${HCARD(148)}
+     <div style="flex:0 0 34%;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px">${twoLines}</div>
+   </div><div class="cd">countdown · next game</div>`},
+
+ B:{cap:`<b>B · Two chips, top-right</b> <i>— tiny pills, no panel</i>`, body:`
+   <div class="stage">${HCARD(148)}
+     <div style="flex:0 0 34%;display:flex;flex-direction:column;gap:6px">
+       <div style="border:1px solid rgba(63,185,80,.4);background:rgba(63,185,80,.08);border-radius:14px;padding:6px 8px"><div class="wlab tealc">WC</div><div class="wnum">2-0 <span class="lvc" style="font-size:6.5px">●LIVE</span></div></div>
+       <div style="border:1px solid var(--line);background:var(--card2);border-radius:14px;padding:6px 8px"><div class="wlab mlbc">MLB</div><div class="wnum">9-6</div></div>
+     </div></div><div class="cd">countdown · next game</div>`},
+
+ C:{cap:`<b>C · Slim strip ABOVE headline</b> <i>— full-width, one line</i>`, body:`
+   <div style="display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px;margin-bottom:8px">
+     <span class="wlab" style="color:var(--gold);font-size:7px">LIVE FORM</span>
+     <span class="wlab mlbc">MLB</span><span class="wnum">9-6</span>
+     <span style="width:1px;height:11px;background:var(--line)"></span>
+     <span class="wlab tealc">WC</span><span class="wnum">2-0</span><span class="pip" style="background:var(--liveg)"></span>
+   </div>${HCARD(150)}<div class="cd">countdown · next game</div>`},
+
+ D:{cap:`<b>D · Slim strip BELOW headline</b>`, body:`
+   ${HCARD(150)}
+   <div style="display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px;margin-top:8px">
+     <span class="wlab mlbc">MLB</span><span class="wnum">9-6</span><span class="wst qc">LAST NT</span>
+     <span style="margin-left:auto"></span>
+     <span class="wlab tealc">WC</span><span class="wnum">2-0</span><span class="wst lvc">●LIVE</span>
+   </div><div class="cd">countdown · next game</div>`},
+
+ E:{cap:`<b>E · Eyebrow line, no box</b> <i>— records as text above the card</i>`, body:`
+   <div style="display:flex;align-items:baseline;gap:8px;padding:0 2px 7px">
+     <span class="wlab" style="color:var(--gold);font-size:7px">LIVE FORM</span>
+     <span class="mono" style="font-size:8.5px"><span class="mlbc">MLB</span> 9-6</span>
+     <span class="mono qc" style="font-size:8.5px">·</span>
+     <span class="mono" style="font-size:8.5px"><span class="tealc">WC</span> 2-0 <span class="lvc">●LIVE</span></span>
+   </div>${HCARD(152)}<div class="cd">countdown · next game</div>`},
+
+ F:{cap:`<b>F · Corner badge ON the card</b> <i>— overlaid chip</i>`, body:`
+   <div class="hcard" style="height:158px"><span class="wc">● WC</span>
+     <div style="position:absolute;top:9px;left:10px;display:flex;gap:6px;background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:10px;padding:4px 7px">
+       <span class="mono" style="font-size:8px"><span class="mlbc">MLB</span> 9-6</span><span class="mono" style="font-size:8px"><span class="tealc">WC</span> 2-0<span class="lvc">●</span></span></div>
+     <div class="h" style="margin-top:20px">Brazil beat Japan 2-1 as the Over 2.5 hits</div>
+     <div class="bl"><div>— Ayase Ueda 2 shots (-167)</div></div></div><div class="cd">countdown · next game</div>`},
+
+ G:{cap:`<b>G · Floating pills, headline wide</b>`, body:`
+   <div class="stage">${HCARD(148)}
+     <div style="flex:0 0 30%;display:flex;flex-direction:column;gap:7px;padding-top:2px">
+       <div style="text-align:center"><div class="wlab tealc">WC</div><div class="wnum">2-0</div><div class="wst lvc">●LIVE</div></div>
+       <div style="text-align:center;opacity:.7"><div class="wlab mlbc">MLB</div><div class="wnum">9-6</div></div>
+     </div></div><div class="cd">countdown · next game</div>`},
+
+ H:{cap:`<b>H · In the top header row</b> <i>— next to the date</i>`, body:`
+   <div style="display:flex;align-items:baseline;gap:6px;margin-top:-14px;margin-bottom:8px">
+     <span class="mono" style="font-size:7.5px"><span class="mlbc">MLB</span> 9-6</span>
+     <span class="mono" style="font-size:7.5px"><span class="tealc">WC</span> 2-0 <span class="lvc">●</span></span></div>
+   ${HCARD(154)}<div class="cd">countdown · next game</div>`},
+
+ I:{cap:`<b>I · Both compact, content rises</b> <i>— short cards, countdown right below</i>`, body:`
+   <div class="stage">${HCARD(96)}
+     <div style="flex:0 0 34%;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px;height:96px">${twoLines}</div>
+   </div><div class="cd" style="margin-top:8px">countdown · next game</div>`},
+
+ J:{cap:`<b>J · Own full-width slim row</b> <i>— not beside the headline</i>`, body:`
+   ${HCARD(150)}
+   <div style="display:flex;margin-top:9px;background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden">
+     <div style="flex:1;text-align:center;padding:9px 0"><div class="wlab mlbc">MLB</div><div class="wnum" style="font-size:15px">9-6</div><div class="wst qc">LAST NIGHT</div></div>
+     <div style="width:1px;background:var(--line)"></div>
+     <div style="flex:1;text-align:center;padding:9px 0"><div class="wlab tealc">WORLD CUP</div><div class="wnum" style="font-size:15px">2-0</div><div class="wst lvc">● LIVE</div></div>
+   </div>`},
+};
+
+document.getElementById("g").innerHTML = Object.entries(layouts).map(([k,o])=>`
+  <div class="cell">
+    <div class="phone"><div class="notch"></div><div class="screen"><div class="scr">
+      <div class="gary"><span class="wm">GARY</span><span class="dt">Mon Jun 29</span></div>
+      <div class="rule"></div>
+      <div class="tabs"><span class="on">TODAY</span><span class="off">TOMORROW</span></div>
+      ${o.body}
+    </div></div></div>
+    <div class="cap">${o.cap}</div>
+  </div>`).join("");
+</script>
+</body>
+</html>

@@ -185,17 +185,30 @@ ${scoutReport}
 
 </investigation_rules>
 
+<moneyline_pricing>
+## THE MONEYLINE IS A PRICE
+
+The moneyline is not a prediction of who wins — it is a price. A team at -190 is not "the team that wins"; it is a price that pays you less because the market is confident. A team at +160 is a price that pays you more because the market doubts them. Both prices are shaped by recent results, goaltender reputation, team brand, and public perception as much as by tonight's actual matchup.
+
+**DESCRIPTIVE vs CAUSAL:**
+- Descriptive factors (records, standings, streaks, reputation, a hot save percentage) explain WHY the price is set where it is. They are already IN the price.
+- Causal factors (tonight's goaltending, 5-on-5 play, special teams, matchup dynamics) explain how this specific game is likely to play.
+- When you cite a record, ranking, or season stat — ask yourself: "Is this describing what already happened, or explaining what matters tonight — and has the price already paid for it?"
+
+The moneyline and puck line are two ways to price the same read. A short price and a long price are two sides of one question: does the price match how you read this game?
+</moneyline_pricing>
+
 <instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
 
-Your job is to figure out who wins this game tonight. Investigate the full matchup — goaltending, 5-on-5 play, special teams, roster depth, injuries — and build your understanding of which team has the edge.
+Your job is to find the best bet on this game tonight — the side, and the price, that you would put your own money on. Sometimes that bet is the favorite, sometimes the underdog; the price is part of the bet, not just the question of who is the better team. Investigate the full matchup — goaltending, 5-on-5 play, special teams, roster depth, injuries — and build your understanding of which team has the edge, and whether the price reflects it.
 
 Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
 
 Before completing Pass 1, include BOTH sections:
-Case for ${homeTeam} winning tonight
-Case for ${awayTeam} winning tonight
-(Each case should be 2-3 paragraphs explaining why that team wins tonight.)
+Case for backing ${homeTeam} tonight
+Case for backing ${awayTeam} tonight
+(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — why it wins and why its price is one you'd take.)
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -906,12 +919,23 @@ ${mlbAwareness}
 </investigation_rules>
 
 <spread_evaluation>
+## THE MONEYLINE IS A PRICE
+
+The moneyline is not a prediction of who wins — it is a price. A team at -190 is not "the team that wins"; it is a price that pays you less because the market is confident. A team at +160 is a price that pays you more because the market doubts them. Both prices are shaped by recent results, pitcher reputation, team brand, and public perception as much as by tonight's actual matchup.
+
+**DESCRIPTIVE vs CAUSAL:**
+- Descriptive factors (records, standings, streaks, reputation, a shiny season ERA) explain WHY the price is set where it is. They are already IN the price.
+- Causal factors (tonight's pitching matchup, bullpen state, lineup handedness, park and weather) explain how this specific game is likely to play.
+- When you cite a record, ranking, or season stat — ask yourself: "Is this describing what already happened, or explaining what matters tonight — and has the price already paid for it?"
+
+A short price and a long price are two sides of the same question: does the price match how you read this game?
+
 ## MLB BET TYPES
 
-- **Moneyline (ML):** Pick a team to win outright. The price reflects the market's view of each team's win probability.
+- **Moneyline (ML):** Back a team to win outright. The price reflects the market's view of each team's win probability.
 - **Run Line (RL):** Standard -1.5 / +1.5. Favorite must win by 2+ runs. Underdog covers if they win or lose by exactly 1.
 
-Investigate the matchup. Decide who wins and by how much. Then choose ML or RL based on your conviction.${runLineSizeBlock}
+Investigate the matchup, read how the game plays out, and choose the side, the price, and the bet type (ML or RL) you would put your own money on.${runLineSizeBlock}
 
 ## RUN LINE EVALUATION FACTORS
 
@@ -923,7 +947,7 @@ ${factors}
 <instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
 
-Your job is to figure out who wins this game tonight. Investigate the full matchup — starting pitchers, lineups, bullpen availability, park factors, weather, series context, injuries — and build your understanding of which team has the edge.
+Your job is to find the best bet on this game tonight — the side, and the price, that you would put your own money on. Sometimes that bet is the favorite, sometimes the underdog; the price is part of the bet, not just the question of who is the better team. Investigate the full matchup — starting pitchers, lineups, bullpen availability, park factors, weather, series context, injuries — and build your understanding of which team has the edge, and whether the price reflects it.
 
 The moneyline tonight was set after the probable pitchers, schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the price reflects the actual matchup for THIS game. Records and standings describe what has happened — they are not reasons for or against a moneyline.
 
@@ -932,9 +956,9 @@ Beyond the stats, consider the feel of the game: which team is rolling right now
 Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
 
 Before completing Pass 1, include BOTH sections:
-Case for ${homeTeam} winning tonight
-Case for ${awayTeam} winning tonight
-(Each case should be 2-3 paragraphs explaining why that team wins. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture. If one side is a heavy favorite, note the price.)
+Case for backing ${homeTeam} tonight
+Case for backing ${awayTeam} tonight
+(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — the matchup reasons it wins and why its price is one you'd take. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture. Note the price on each side.)
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE

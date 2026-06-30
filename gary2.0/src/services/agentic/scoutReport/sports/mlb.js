@@ -119,7 +119,6 @@ export async function buildMlbScoutReport(game, options = {}) {
     homeRecentGames,
     awayRecentGames,
     gameContextGrounding,
-    rosterStorylineGrounding,
     confirmedLineups,
   ] = await Promise.all([
     homeTeamId ? getTeamRoster(homeTeamId).catch(e => { console.warn(`[Scout Report] Home roster error: ${e.message}`); return []; }) : Promise.resolve([]),
@@ -135,21 +134,14 @@ export async function buildMlbScoutReport(game, options = {}) {
     gamePk ? getProbablePitchers(gamePk).catch(e => { console.warn(`[Scout Report] Probable pitchers error: ${e.message}`); return null; }) : Promise.resolve(null),
     homeTeamId ? getMlbRecentGames(homeTeamId, 10).catch(e => { console.warn(`[Scout Report] Home recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
     awayTeamId ? getMlbRecentGames(awayTeamId, 10).catch(e => { console.warn(`[Scout Report] Away recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
-    // MEGA-QUERY 1: Game context and preview (odds + lineups come from BDL API now)
+    // BREAKING NEWS ONLY (tightened Jun 29 2026): same-day, actionable news for THIS game. Was two broad grounding
+    // blobs ("game preview/storylines" + "offseason moves/spring training/team outlook") that duplicated the structured
+    // sections (odds, lineups, standings, pitchers) and dragged in stale preseason narrative. The structured data carries
+    // the matchup; grounding now only adds what no API has: late-breaking, same-day news.
     geminiGroundingSearch(
-      `MLB 2026: ${awayTeam} vs ${homeTeam} game preview today. ` +
-      `Key storylines, series context, and any breaking news for this matchup. ` +
-      `Report facts only with names and details.`,
-      groundingOpts
-    ).then(r => r?.data || '').catch(() => ''),
-    // MEGA-QUERY 2: Current state of each team — offseason moves, spring training, storylines
-    geminiGroundingSearch(
-      `MLB 2026: ${homeTeam} and ${awayTeam} current state heading into ${new Date().getMonth() <= 3 ? 'the start of the season' : 'tonight\'s game'}. ` +
-      `Find ALL of the following: ` +
-      `(1) ${homeTeam}: key offseason acquisitions, spring training standouts, manager/coaching changes, projected lineup and rotation, team outlook and expectations. ` +
-      `(2) ${awayTeam}: same — offseason moves, spring training performance, roster changes, team outlook. ` +
-      `(3) Any storylines, rivalries, or context for this specific matchup. ` +
-      `Include player names, spring training stats where relevant, and concrete details.`,
+      `MLB ${season}: ${awayTeam} at ${homeTeam} TODAY — only same-day breaking news that affects this game: ` +
+      `late injuries or scratches, lineup or rotation changes, bullpen availability notes, and weather. ` +
+      `Report only concrete, same-day facts with names. If there is no breaking news, say so briefly.`,
       groundingOpts
     ).then(r => r?.data || '').catch(() => ''),
     // Lineups: BDL API first (pre-game, includes handedness + probable pitchers);
@@ -390,23 +382,6 @@ export async function buildMlbScoutReport(game, options = {}) {
   const smallSampleFlagsSection = smallSampleFlags.length
     ? smallSampleFlags.join('\n')
     : 'No small-sample concerns detected for tonight\'s starting pitchers.';
-
-  // ═══════════════════════════════════════════════════════════════════
-  // ROSTERS — FORMAT KEY PLAYERS
-  // ═══════════════════════════════════════════════════════════════════
-  function formatRoster(roster, teamName) {
-    if (!roster || roster.length === 0) return `${teamName}: Roster unavailable`;
-    const pitchers = roster.filter(p => p.positionType === 'Pitcher');
-    const position = roster.filter(p => p.positionType !== 'Pitcher');
-    const lines = [`${teamName} (${roster.length} players)`];
-    if (position.length > 0) {
-      lines.push(`Position Players: ${position.map(p => `${p.name} (${p.position})`).join(', ')}`);
-    }
-    if (pitchers.length > 0) {
-      lines.push(`Pitchers: ${pitchers.map(p => `${p.name} (${p.position})`).join(', ')}`);
-    }
-    return lines.join('\n');
-  }
 
   // ═══════════════════════════════════════════════════════════════════
   // STANDINGS / DIVISION RECORD (BDL GOAT-tier structured data)
@@ -809,9 +784,6 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
     oddsSection = lines.join('\n');
     console.log(`[Scout Report] MLB: Using structured BDL odds`);
-  } else if (gameContextGrounding) {
-    oddsSection = '(See Game Context section below — odds included in grounding results)';
-    console.log(`[Scout Report] MLB: Odds included in consolidated grounding`);
   } else {
     oddsSection = 'No odds data available.';
   }
@@ -1106,28 +1078,21 @@ ${xStatsSection || 'No xStats data available.'}
 ═══ INJURIES (BDL Structured) ═══
 ${injuriesSection || 'No structured injury data available.'}
 
-═══ RECENT PERFORMANCE (L1/L3/L5/L10) ═══
+═══ RECENT FORM ═══
+Rolling splits (L1/L3/L5/L10):
 ${recentPerformanceSection || 'No recent performance data.'}
 
-═══ RECENT RESULTS ═══
+Recent results:
 ${recentResults}
+
+Last game (inning detail):
+${lastGameSection}
 
 ═══ REST & SCHEDULE SITUATION ═══
 ${restScheduleSection}
 
-═══ LAST GAME (MLB Stats API — inning detail) ═══
-${lastGameSection}
-
-═══ GAME CONTEXT (odds, preview, pitchers) ═══
-${gameContextGrounding || 'No game context available.'}
-
-═══ SEASON CONTEXT (form, standings, player backgrounds) ═══
-${rosterStorylineGrounding || 'No season context available.'}
-
-═══ ROSTERS ═══
-${formatRoster(homeRoster, homeTeam)}
-
-${formatRoster(awayRoster, awayTeam)}
+═══ TODAY'S BREAKING NEWS ═══
+${gameContextGrounding || 'No same-day breaking news.'}
 `.trim();
 
   // Token menu for Flash

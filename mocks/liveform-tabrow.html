@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>LIVE FORM — in the tabs row · 10 ideas</title>
+<style>
+  :root{--bg:#0b0a09;--card:#181616;--line:rgba(255,255,255,.09);--gold:#C9A227;--teal:#3FB6A8;
+    --mlb:#63D17E;--liveg:#3FB950;--red:#FF5247;--dim:rgba(255,255,255,.5);--dim2:rgba(255,255,255,.34);
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;--disp:"Helvetica Neue",Arial,sans-serif;}
+  *{box-sizing:border-box}
+  body{background:#000;color:#fff;font-family:var(--disp);margin:0;padding:26px}
+  h1{font-family:var(--mono);font-weight:700;color:var(--gold);font-size:15px;text-align:center;margin:0 0 3px}
+  .sub{color:var(--dim);font-size:11.5px;text-align:center;margin:0 0 24px;font-family:var(--mono)}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 26px;max-width:780px;margin:0 auto}
+  .cell{display:flex;flex-direction:column;gap:7px}
+  .cap{font-family:var(--mono);font-size:11px;color:var(--gold)} .cap i{color:var(--dim2);font-style:normal}
+
+  /* a phone-top crop, real width */
+  .top{background:var(--bg);border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden;padding:14px 15px 0}
+  .gary{display:flex;align-items:baseline;gap:7px}
+  .wm{font-family:var(--mono);font-weight:700;letter-spacing:1.5px;color:var(--gold);font-size:15px}
+  .dt{font-family:var(--mono);color:var(--dim2);font-size:8px}
+  .rule{border-top:1px dashed rgba(201,162,39,.3);margin:8px 0 0}
+
+  /* the TAB ROW — tabs left, records right (the focus) */
+  .tabrow{display:flex;align-items:center;padding:11px 0 13px}
+  .tabs{display:flex;gap:14px;font-family:var(--mono);font-size:11px;letter-spacing:.6px}
+  .tabs .on{color:#fff;border-bottom:2px solid var(--gold);padding-bottom:4px}
+  .tabs .off{color:var(--dim2)}
+  .slot{margin-left:auto;display:flex;align-items:center}
+
+  /* headline sliver for context */
+  .sliver{background:var(--card);border:1px solid var(--line);border-top-left-radius:13px;border-top-right-radius:13px;margin:0 -15px;padding:13px 15px 22px;position:relative}
+  .sliver .wc{position:absolute;top:11px;right:14px;font-family:var(--mono);font-weight:700;font-size:8px;color:var(--teal)}
+  .sliver .h{font-weight:800;font-size:15px;line-height:1.12;padding-right:18px}
+
+  .mono{font-family:var(--mono)} .mlbc{color:var(--mlb)} .tealc{color:var(--teal)}
+  .lvc{color:var(--liveg)} .qc{color:var(--dim2)} .wt{color:#fff}
+  .pip{width:5px;height:5px;border-radius:50%;display:inline-block}
+  .num{font-family:var(--mono);font-weight:700}
+</style></head>
+<body>
+<h1>LIVE FORM — living in the tabs row</h1>
+<p class="sub">no container · right of TODAY/TOMORROW · MLB 9-6 last night · WC 2-0 live</p>
+<div class="grid" id="g"></div>
+<script>
+const TOP = (slot)=>`<div class="top">
+  <div class="gary"><span class="wm">GARY</span><span class="dt">Mon Jun 29</span></div>
+  <div class="rule"></div>
+  <div class="tabrow"><div class="tabs"><span class="on">TODAY</span><span class="off">TOMORROW</span></div>
+    <div class="slot">${slot}</div></div>
+  <div class="sliver"><span class="wc">● WC</span><div class="h">Brazil beat Japan 2-1 as the Over 2.5 hits</div></div>
+</div>`;
+
+const ideas = [
+ ["1","Inline mono, right-aligned",
+   `<span class="mono" style="font-size:11px"><span class="mlbc">MLB</span> <span class="num wt">9-6</span></span>
+    <span class="mono qc" style="font-size:11px;margin:0 7px">·</span>
+    <span class="mono" style="font-size:11px"><span class="tealc">WC</span> <span class="num wt">2-0</span> <span class="lvc">●</span></span>`],
+
+ ["2","Pill pair",
+   `<span style="border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:13px;padding:4px 9px;font-family:var(--mono);font-size:9.5px"><span class="mlbc">MLB</span> <span class="num wt">9-6</span></span>
+    <span style="border:1px solid rgba(63,185,80,.4);background:rgba(63,185,80,.1);border-radius:13px;padding:4px 9px;font-family:var(--mono);font-size:9.5px;margin-left:6px"><span class="tealc">WC</span> <span class="num wt">2-0</span> <span class="lvc">● LIVE</span></span>`],
+
+ ["3","Dot-led",
+   `<span class="pip" style="background:var(--mlb)"></span>
+    <span class="mono num wt" style="font-size:11px;margin:0 12px 0 5px">9-6</span>
+    <span class="pip" style="background:var(--liveg)"></span>
+    <span class="mono num wt" style="font-size:11px;margin-left:5px">2-0</span>`],
+
+ ["4","Apple-Sports live pill",
+   `<span class="mono qc" style="font-size:10px;margin-right:9px"><span class="mlbc">MLB</span> 9-6</span>
+    <span style="background:var(--red);color:#fff;font-family:var(--mono);font-weight:700;font-size:8px;letter-spacing:.5px;border-radius:4px;padding:2px 5px;margin-right:6px">LIVE</span>
+    <span class="mono" style="font-size:11px"><span class="tealc">WC</span> <span class="num wt">2-0</span></span>`],
+
+ ["5","Two-line micro",
+   `<div style="text-align:right;line-height:1.45">
+     <div class="mono" style="font-size:9px"><span class="mlbc">MLB</span> <span class="wt">9-6</span> <span class="qc">last night</span></div>
+     <div class="mono" style="font-size:9px"><span class="tealc">WC</span> <span class="wt">2-0</span> <span class="lvc">● live</span></div></div>`],
+
+ ["6","Eyebrow + records",
+   `<span class="mono" style="font-size:7.5px;letter-spacing:1px;color:var(--gold);margin-right:9px">FORM</span>
+    <span class="mono" style="font-size:10.5px"><span class="mlbc">MLB</span> <span class="num wt">9-6</span><span class="qc" style="margin:0 6px">·</span><span class="tealc">WC</span> <span class="num wt">2-0</span> <span class="lvc">●</span></span>`],
+
+ ["7","Vertical-divider structured",
+   `<span style="width:1px;height:16px;background:var(--line);margin-right:11px"></span>
+    <span class="mono" style="font-size:10.5px"><span class="mlbc">MLB</span> <span class="num wt">9-6</span>&nbsp;&nbsp;<span class="tealc">WC</span> <span class="num wt">2-0</span> <span class="lvc">●</span></span>`],
+
+ ["8","Numerals-forward",
+   `<div style="display:flex;gap:14px;text-align:center">
+     <div><div class="mono" style="font-size:6.5px;letter-spacing:.6px" class="mlbc"><span class="mlbc">MLB</span></div><div class="num wt" style="font-size:15px;font-family:var(--disp);font-weight:800">9-6</div></div>
+     <div><div class="mono" style="font-size:6.5px;letter-spacing:.6px"><span class="tealc">WC</span> <span class="lvc">●</span></div><div class="num wt" style="font-size:15px;font-family:var(--disp);font-weight:800">2-0</div></div></div>`],
+
+ ["9","Ticker tags",
+   `<span style="display:inline-flex;align-items:center;font-family:var(--mono);font-size:9.5px">
+     <span style="background:rgba(99,209,126,.16);color:var(--mlb);font-weight:700;padding:2px 5px;border-radius:3px 0 0 3px">MLB</span>
+     <span style="background:rgba(255,255,255,.06);color:#fff;padding:2px 6px;border-radius:0 3px 3px 0;font-weight:700">9-6</span></span>
+    <span style="display:inline-flex;align-items:center;font-family:var(--mono);font-size:9.5px;margin-left:7px">
+     <span style="background:rgba(63,182,168,.16);color:var(--teal);font-weight:700;padding:2px 5px;border-radius:3px 0 0 3px">WC</span>
+     <span style="background:rgba(255,255,255,.06);color:#fff;padding:2px 6px;border-radius:0 3px 3px 0;font-weight:700">2-0</span></span>
+    <span class="pip" style="background:var(--liveg);margin-left:6px"></span>`],
+
+ ["10","Ultra-minimal",
+   `<span class="pip" style="background:var(--mlb)"></span><span class="mono qc" style="font-size:10px;margin:0 10px 0 5px">9-6</span>
+    <span class="pip" style="background:var(--liveg)"></span><span class="mono qc" style="font-size:10px;margin-left:5px">2-0</span>`],
+];
+document.getElementById("g").innerHTML = ideas.map(([n,name,slot])=>`
+  <div class="cell"><div class="cap">OPTION ${n} — <b style="color:#fff">${name}</b></div>${TOP(slot)}</div>`).join("");
+</script>
+</body></html>

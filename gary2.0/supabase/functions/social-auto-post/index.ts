@@ -68,6 +68,15 @@ function yesterdayOf(today: string): string {
   return new Date(new Date(today + "T12:00:00Z").getTime() - 86400_000).toISOString().slice(0, 10);
 }
 
+// "2026-06-28" -> "June 28th" (ordinal suffix for the recap header).
+function ordinalDate(ymd: string): string {
+  const d = new Date(ymd + "T12:00:00Z");
+  const month = d.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+  const day = d.getUTCDate();
+  const suffix = (day % 100 >= 11 && day % 100 <= 13) ? "th" : (["th", "st", "nd", "rd"][day % 10] ?? "th");
+  return `${month} ${day}${suffix}`;
+}
+
 async function callLLM(system: string, user: string): Promise<string> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
     method: "POST",
@@ -343,40 +352,6 @@ function splitTweets(text: string, max = 270): string[] {
   flush();
   return out;
 }
-// The SINGLE reply under the WC card: just the link-in-bio handoff. We HOLD the depth (the full read lives in the app),
-// and the card + its punchy caption are the hook. Founder call: ONE reply only, never a multi-tweet rationale thread.
-function wcHandoffReply(): string[] {
-  return [APP_HANDOFF[0]];
-}
-
-// Punchy WC caption ABOVE the card: a useful, checkable fact + the key stat + a casual stance, pulled from Gary's
-// REAL rationale (ground truth) — same human voice as the MLB hooks, with scene-setting banned. The rationale always
-// opens with theater ("sets the stage…"), so the first sentence makes a weak caption; this surfaces the useful part
-// instead. Falls back to the rationale's first sentence if the model ever fails, so the tweet always has a caption.
-async function wcCaption(chosen: any, away: string, home: string): Promise<string> {
-  const rationale = String(chosen?.rationale ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").trim();
-  const firstSentence = () => { const s = splitSentences(clean(rationale)); return s.length ? (s[0].length <= 280 ? s[0] : (splitTweets(s[0], 270)[0] ?? "")) : ""; };
-  if (!rationale) return firstSentence();
-  try {
-    const user = `Write the X caption that goes ABOVE Gary's pick CARD for a World Cup bet. The card already shows the pick, matchup, and odds, so DO NOT restate the pick or a "teams . odds" line. Hook the reader with REAL, USEFUL info about THIS game and WHY it is the play, the way a sharp bettor texts a friend.
-Return ONLY JSON: {"angle":"...","edge":"..."}.
-PICK: ${chosen.pick} | ${away} at ${home} | World Cup
-Match this VOICE (a DIFFERENT sport, copy the style not the facts):
-ANGLE example: "Oakland's lineup is thin today with Zack Gelof on the IL and Jacob Wilson scratched right before first pitch."
-EDGE example: "A's starter Jeffrey Springs has surrendered 21 home runs in 16 starts. I'll take the Giants on the moneyline."
-ANGLE: ONE sentence. The single most useful, specific, checkable fact about THIS game (an injury, a qualification or motivation situation, a tactical reality, a recent result). Lead with the FACT. ABSOLUTELY NO scene-setting about the stadium, city, skyline, "sets the stage", "showdown", "clash", or "chess match". Under 150 characters.
-EDGE: ONE sentence. The single strongest checkable STAT or number from the rationale, then a short casual stance on the play (for example "I'm on the under." or "Give me Ecuador plus the half."). Do NOT restate the odds.
-RATIONALE (ground truth, pull the real facts from here):
-${rationale.slice(0, 4000)}`;
-    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
-    const caption = [clean(out.angle), clean(out.edge)].filter(Boolean).join("\n\n");
-    return caption || firstSentence();
-  } catch (e) {
-    console.error("wcCaption LLM failed, using first sentence: " + String(e));
-    return firstSentence();
-  }
-}
-
 // A GAME pick is a side/total (moneyline, total, spread, handicap) — NOT a player prop. Player props carry a player
 // name or a prop-style type; everything else is a game-level bet. Props are excluded from the per-game card tweet.
 function isGamePick(p: any): boolean {
@@ -401,162 +376,256 @@ function chooseGamePick(gPicks: any[]): any | null {
   return [...(sides.length ? sides : games)].sort(byConf)[0];
 }
 
-async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryRun: boolean) {
+// American-odds formatting: "200" -> "+200"; "-130" stays; "" -> "".
+function fmtOdds(o: any): string {
+  const s = String(o ?? "").trim();
+  if (!s) return "";
+  if (s.startsWith("+") || s.startsWith("-")) return s;
+  const n = parseInt(s, 10);
+  return isNaN(n) ? s : (n > 0 ? "+" : "") + n;
+}
+// Split a matchup string into its two team names (handles "A vs B", "A @ B", "A v B").
+function twoTeams(s: string): string[] {
+  return String(s ?? "").split(/\s+(?:@|vs\.?|v)\s+/i).map((t) => t.trim().toLowerCase()).filter(Boolean);
+}
+// Do two matchup strings refer to the same game? (cross-table key matching: daily_picks uses "A vs B", results/props use "A @ B")
+function sameGame(a: string, b: string): boolean {
+  const ta = twoTeams(a), tb = twoTeams(b);
+  if (ta.length < 2 || tb.length < 2) return false;
+  return ta.every((t) => tb.some((u) => u.includes(t) || t.includes(u)));
+}
+// Readable line for a WC PROP PICK (prop_picks JSON): "Florian Wirtz anytime goal +200", "Ayase Ueda over 1.5 shots".
+function wcPropPickLine(p: any): string {
+  const player = String(p.player ?? p.playerName ?? "").trim();
+  const raw = String(p.prop ?? p.prop_type ?? "").trim();               // "anytime_goal 1" | "shots 1.5"
+  const base = raw.replace(/\s*[\d.]+\s*$/, "").replace(/_/g, " ").trim(); // "anytime goal" | "shots"
+  const lineNum = raw.match(/([\d.]+)\s*$/)?.[1] ?? String(p.line ?? "").trim();
+  const bet = String(p.bet ?? "").toLowerCase().trim();
+  const odds = fmtOdds(p.odds);
+  const isAnytime = base.includes("anytime") || (base.includes("goal") && !lineNum);
+  const label = isAnytime ? `${player} ${base}` : `${player} ${bet || "over"} ${lineNum} ${base}`;
+  return `${label.replace(/\s+/g, " ").trim()}${odds ? " " + odds : ""}`;
+}
+// Readable line for a graded WC PROP RESULT (prop_results): "Ayase Ueda over 1.5 shots".
+function wcPropResultLine(r: any): string {
+  const base = String(r.prop_type ?? "").replace(/\s*[\d.]+\s*$/, "").replace(/_/g, " ").trim();
+  const lineNum = String(r.prop_type ?? "").match(/([\d.]+)\s*$/)?.[1] ?? String(r.line_value ?? "").trim();
+  const bet = String(r.bet ?? "over").toLowerCase().trim();
+  const isAnytime = base.includes("anytime") || (base.includes("goal") && !lineNum);
+  const label = isAnytime ? `${r.player_name} ${base}` : `${r.player_name} ${bet} ${lineNum} ${base}`;
+  return label.replace(/\s+/g, " ").trim();
+}
+
+// WC card caption: the 1-2 sentence grounded hook that goes ABOVE the pick card — the single strongest REAL
+// stat/fact from Gary's vetted rationale, then his casual lean on the play. The card already shows the pick,
+// matchup, and odds. Falls back to the rationale's first sentence if the model fails, so the card always has a caption.
+async function wcCaption(chosen: any, away: string, home: string): Promise<string> {
+  const rationale = String(chosen?.rationale ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").trim();
+  const firstSentence = () => { const s = splitSentences(clean(rationale)); return s.length ? (s[0].length <= 280 ? s[0] : (splitTweets(s[0], 270)[0] ?? "")) : ""; };
+  if (!rationale) return firstSentence();
+  try {
+    const user = `Write the ONE-OR-TWO sentence X caption that goes ABOVE Gary's pick CARD for a World Cup bet. The card already shows the pick, matchup, and odds, so DO NOT restate the odds or write a "teams . odds" line.
+Return ONLY JSON: {"caption":"..."}.
+PICK: ${chosen.pick} | ${away} at ${home} | World Cup
+One or two sentences. Lead with the single strongest checkable stat or fact from the rationale below (a real number, an injury, or a recent result about THIS game), then a short casual stance that ends on the play, the way a sharp bettor texts a friend.
+Match this VOICE (a DIFFERENT game, copy the style not the facts): "Morocco has conceded first in four straight, so I'm backing Croatia and the goal and a half."
+ABSOLUTELY NO scene-setting about the stadium, city, skyline, "sets the stage", "showdown", "clash", or "chess match". Under 240 characters. Use only REAL facts from the rationale, never invent a number.
+RATIONALE (ground truth, pull the real facts from here):
+${rationale.slice(0, 4000)}`;
+    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
+    const caption = clean(out.caption);
+    return caption || firstSentence();
+  } catch (e) {
+    console.error("wcCaption LLM failed, using first sentence: " + String(e));
+    return firstSentence();
+  }
+}
+
+// FINALS-DRIVEN WC posting (Jun 29 2026). Runs hourly. Two kinds of tweet, both idempotent via social_post_log:
+//   - wc_recap  : when a game goes FINAL, a text recap of that game's picks (game + props) with green-check / red-X.
+//   - wc_picks  : the NEXT game's picks (game + props list) + the pick card. Fires for the day's first game near its
+//                 kickoff, or for any later game once the PREVIOUS game is final. So games chain: each final tees up the next.
+// dryRun returns the queued actions (with text) without posting. `all` is unused now (kept for the param signature).
+async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryRun: boolean, push = false) {
+  const MIN = 60_000;
   const { data: dpRows, error: dpErr } = await sb.from("daily_picks").select("picks").eq("date", today);
   if (dpErr) throw dpErr;
-  const wcPicks: any[] = (dpRows?.[0]?.picks ?? []).filter(isWc);
-  if (!wcPicks.length) return { posted: false, reason: "no WC picks today" };
+  const wcGamePicks: any[] = (dpRows?.[0]?.picks ?? []).filter(isWc);
+  if (!wcGamePicks.length) return { posted: false, reason: "no WC picks today" };
 
-  // Already-posted WC plays today (covers both new game cards and any WC pick the old per-slot path posted earlier).
-  const { data: logRows } = await sb.from("social_post_log").select("pick_text").eq("post_date", today).eq("league", "WC");
-  const postedText = (logRows ?? []).map((r) => String(r.pick_text ?? ""));
+  const { data: ppRows } = await sb.from("prop_picks").select("picks").eq("date", today);
+  const wcPropPicks: any[] = (ppRows?.[0]?.picks ?? []).filter((p: any) => {
+    const sp = String(p?.sport ?? p?.league ?? "").toLowerCase();
+    return sp === "wc" || sp.includes("world");
+  });
 
+  const { data: gradedGames } = await sb.from("game_results").select("matchup, pick_text, result").eq("league", "WC").eq("game_date", today);
+  const { data: gradedProps } = await sb.from("prop_results").select("matchup, player_name, prop_type, line_value, bet, result").eq("game_date", today);
+
+  const { data: logRows } = await sb.from("social_post_log").select("pick_text, thread_format").eq("post_date", today).eq("league", "WC");
+  const log = logRows ?? [];
+  const recapLogged = (key: string) => log.some((r) => r.thread_format === "wc_recap" && sameGame(String(r.pick_text), key));
+  const picksLogged = (key: string) => log.some((r) => r.thread_format === "wc_picks" && sameGame(String(r.pick_text), key));
+
+  // Build the ordered game list (by kickoff).
   const gameKey = (p: any) => `${p.awayTeam ?? p.away ?? "?"} vs ${p.homeTeam ?? p.home ?? "?"}`;
-  const games = new Map<string, any[]>();
-  for (const p of wcPicks) { const k = gameKey(p); (games.get(k) ?? games.set(k, []).get(k)!).push(p); }
-
-  const MIN = 60_000;
-  // Candidate games: not yet posted, have a kickoff time, and inside the post window (from 150 min before to 20 min after).
-  const candidates: { key: string; gPicks: any[]; start: number }[] = [];
-  for (const [key, gPicks] of games) {
-    const cardAlready = postedText.some((t) => t.startsWith(key));
-    const allPicksPosted = gPicks.every((p) => postedText.some((t) => t.includes(String(p.pick))));
-    if (cardAlready || allPicksPosted) continue;
+  const gmap = new Map<string, any[]>();
+  for (const p of wcGamePicks) { const k = gameKey(p); (gmap.get(k) ?? gmap.set(k, []).get(k)!).push(p); }
+  type G = { key: string; away: string; home: string; start: number; gPicks: any[]; props: any[]; final: boolean };
+  const list: G[] = [];
+  for (const [key, gPicks] of gmap) {
     const ct = gPicks.find((p) => p.commence_time)?.commence_time;
-    if (!ct) continue;
-    const start = new Date(ct).getTime();
-    if (start > nowMs + 150 * MIN) continue; // too early
-    if (start < nowMs - 20 * MIN) continue;  // already underway past the grace window
-    candidates.push({ key, gPicks, start });
-  }
-  if (!candidates.length) return { posted: false, reason: "no WC game in the post window" };
-  candidates.sort((a, b) => a.start - b.start); // soonest kickoff first
-
-  const out: any[] = [];
-  for (const { key, gPicks, start } of candidates.slice(0, WC_MAX_PER_RUN)) {
+    const start = ct ? new Date(ct).getTime() : 0;
     const [away, home] = key.split(" vs ");
-    // ONE pick per game -> ONE image (X crops multi-image tweets). Feature a single GAME pick, no props.
-    const chosen = chooseGamePick(gPicks);
-    if (!chosen) { out.push({ game: key, skipped: "no game pick (props only)" }); continue; }
-    const oddsStr = (chosen.odds && !String(chosen.pick).includes(String(chosen.odds))) ? ` ${chosen.odds}` : "";
-    const pickLine = `${chosen.pick}${oddsStr}`.trim();
-    const timeLabel = new Date(start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true }) + " ET";
-    // One app-faithful card for the chosen pick.
-    const [h1, h2] = wcHeroLines(String(chosen.pick), chosen.type);
-    const opp = wcOpp(chosen, away, home);
-    const cardUrl = `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(chosen.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
-
-    // Caption above the card = a punchy useful-fact + why hook (wcCaption, LLM, same human voice as the MLB tweets,
-    // no scene-setting). The reply threads Gary's FULL real rationale (his words, the depth). Caption falls back to the
-    // rationale's first sentence if the LLM ever fails.
-    const caption = await wcCaption(chosen, away, home);
-    const replyChunks = wcHandoffReply();
-
-    if (dryRun) { out.push({ game: key, time: timeLabel, pick: pickLine, caption, reply_thread: replyChunks, card: cardUrl }); continue; }
-
-    // Main tweet = the game's card(s) + the one-line caption (fall back to a text list if the cards fail to render/post).
-    let mainId: string;
-    let usedCard = false;
-    try {
-      const ir = await fetch(cardUrl);
-      if (!ir.ok) throw new Error(`card fetch ${ir.status}`);
-      const b = new Uint8Array(await ir.arrayBuffer());
-      let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
-      const img = btoa(bin);
-      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, images_base64: [img] }) });
-      const j = await r.json();
-      if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 200)}`);
-      mainId = j.tweetId; usedCard = true;
-    } catch (e) {
-      console.error("WC card failed, falling back to text: " + String(e));
-      mainId = await postTweet(`${caption}\n\n${pickLine}`);
-    }
-    // ONE reply only: the link-in-bio handoff, chained under the card. We hold the depth (the full read is in the app).
-    const replyIds: string[] = [];
-    let prev = mainId;
-    for (const chunk of replyChunks) {
-      try { prev = await postTweet(chunk, prev); replyIds.push(prev); }
-      catch (e) { console.error("WC rationale reply chunk failed: " + String(e)); break; }
-    }
-    const replyId = replyIds[0] ?? null;          // first reply (metrics: reasoning)
-    const ctaId = replyIds.length > 1 ? replyIds[replyIds.length - 1] : null; // last reply / link-in-bio (metrics: cta)
-
-    const startEt = parseInt(new Date(start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" }));
-    const slot = startEt < 14 ? "morning" : startEt < 17 ? "afternoon" : startEt < 21 ? "evening" : "late";
-    await sb.from("social_post_log").insert({
-      post_date: today, slot, league: "WC", pick_text: `${key}: ${pickLine}`,
-      commence_time: new Date(start).toISOString(), thread_format: "wc_card",
-      hook_tweet_id: mainId, reasoning_tweet_id: replyId, cta_tweet_id: ctaId, thread_url: `https://x.com/BetwithGary/status/${mainId}`,
-    });
-    out.push({ game: key, posted: true, pick: pickLine, reply_tweets: replyIds.length, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${mainId}` });
+    const props = wcPropPicks.filter((p) => sameGame(String(p.matchup ?? `${p.awayTeam ?? ""} @ ${p.homeTeam ?? ""}`), key));
+    const final = (gradedGames ?? []).some((r) => sameGame(String(r.matchup), key));
+    list.push({ key, away, home, start, gPicks, props, final });
   }
-  const remaining = candidates.length - out.length;
-  return { posted: !dryRun && out.some((o) => o.posted), dry_run: dryRun || undefined, games: out, remaining_this_run: remaining > 0 ? remaining : undefined };
+  list.sort((a, b) => a.start - b.start);
+
+  const actions: any[] = [];
+
+  // 1) RECAPS — any final game whose recap hasn't posted yet.
+  for (const g of list) {
+    if (!g.final || recapLogged(g.key)) continue;
+    const gameLines = (gradedGames ?? []).filter((r) => sameGame(String(r.matchup), g.key))
+      .map((r) => `${r.pick_text} ${r.result === "won" ? "✓" : "✗"}`);
+    const propLines = (gradedProps ?? []).filter((r) => sameGame(String(r.matchup), g.key))
+      .map((r) => `${wcPropResultLine(r)} ${r.result === "won" ? "✓" : "✗"}`);
+    const lines = [...gameLines, ...propLines];
+    if (!lines.length) continue; // graded row exists but nothing readable yet
+    const allWon = !lines.some((l) => l.endsWith("✗"));
+    const header = allWon ? "We just cashed the following:" : "Final results:";
+    actions.push({ type: "recap", game: g.key, text: `WC Picks all day long.\n\n${header}\n\n${lines.join("\n")}` });
+  }
+
+  // 2) NEXT PICKS — first game near kickoff, or any game once the previous one is final.
+  for (let i = 0; i < list.length; i++) {
+    const g = list[i];
+    if (picksLogged(g.key) || g.final) continue;           // never tee up a game that's already over
+    if (!push && g.start <= nowMs - 10 * MIN) continue;    // already underway — too late to tee up (push=1 overrides for manual catch-up)
+    const firstReady = i === 0 && g.start <= nowMs + 150 * MIN;
+    const prevFinal = i > 0 && list[i - 1].final;
+    if (!firstReady && !prevFinal) continue;
+
+    const chosen = chooseGamePick(g.gPicks);
+    const timeLabel = new Date(g.start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true }) + " ET";
+    const gameLines = g.gPicks.map((p) => {
+      const od = (p.odds && !String(p.pick).includes(String(p.odds))) ? ` ${fmtOdds(p.odds)}` : "";
+      return `${p.pick}${od}`.trim();
+    });
+    // TWO tweets per game: (1) the card + a 1-2 sentence grounded rationale hook; (2) a text-only reply with the full picks list.
+    const caption = chosen ? await wcCaption(chosen, g.away, g.home) : "";
+    const listText = `Up next, ${g.away} vs ${g.home}, ${timeLabel}:\n\n${[...gameLines, ...g.props.map(wcPropPickLine)].join("\n")}`;
+    let cardUrl: string | null = null;
+    if (chosen) {
+      const [h1, h2] = wcHeroLines(String(chosen.pick), chosen.type);
+      const opp = wcOpp(chosen, g.away, g.home);
+      cardUrl = `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(chosen.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
+    }
+    actions.push({ type: "picks", game: g.key, caption, listText, cardUrl, start: g.start });
+  }
+
+  if (dryRun) return { posted: false, dry_run: true, actions };
+  if (!actions.length) return { posted: false, reason: "nothing due (no final-game recaps or next-game picks)" };
+
+  const done: any[] = [];
+  for (const a of actions.slice(0, WC_MAX_PER_RUN)) {
+    try {
+      let tweetId: string;
+      let usedCard = false;
+      if (a.type === "picks") {
+        // Tweet 1 = the card + the 1-2 sentence rationale hook (caption). If the card or caption is missing, fall back to the list.
+        const mainText = a.caption || a.listText;
+        if (a.cardUrl) {
+          try {
+            const ir = await fetch(a.cardUrl);
+            if (!ir.ok) throw new Error(`card fetch ${ir.status}`);
+            const b = new Uint8Array(await ir.arrayBuffer());
+            let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+            const img = btoa(bin);
+            const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: mainText, images_base64: [img] }) });
+            const j = await r.json();
+            if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 200)}`);
+            tweetId = j.tweetId; usedCard = true;
+          } catch (e) {
+            console.error("WC next-picks card failed, posting text only: " + String(e));
+            tweetId = await postTweet(mainText);
+          }
+        } else {
+          tweetId = await postTweet(mainText);
+        }
+        // Tweet 2 = text-only picks list, chained as a reply under the card (only when the card already carried the caption).
+        if (a.caption && a.listText) {
+          try { await postTweet(a.listText, tweetId); }
+          catch (e) { console.error("WC picks-list reply failed: " + String(e)); }
+        }
+      } else {
+        tweetId = await postTweet(a.text);
+      }
+      const startEt = a.start ? parseInt(new Date(a.start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" })) : 12;
+      const slot = startEt < 14 ? "morning" : startEt < 17 ? "afternoon" : startEt < 21 ? "evening" : "late";
+      await sb.from("social_post_log").insert({
+        post_date: today, slot, league: "WC",
+        pick_text: `${a.game}${a.type === "recap" ? " [recap]" : ""}`,
+        thread_format: a.type === "recap" ? "wc_recap" : "wc_picks",
+        commence_time: a.start ? new Date(a.start).toISOString() : null,
+        hook_tweet_id: tweetId, thread_url: `https://x.com/BetwithGary/status/${tweetId}`,
+      });
+      done.push({ type: a.type, game: a.game, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${tweetId}` });
+    } catch (e) {
+      console.error(`WC ${a.type} post failed for ${a.game}: ` + String(e));
+      done.push({ type: a.type, game: a.game, error: String(e) });
+    }
+  }
+  return { posted: done.some((d) => d.thread_url), actions: done };
 }
 
 async function runRecapMode(today: string, dryRun: boolean) {
-  // DISABLED Jun 25 2026: the daily results card moved to the LOCAL results-card job
-  // (gary2.0/results-card/post-daily.cjs via launchd com.gary2.results-card at 11am ET) — 7 rotating
-  // founder-picked designs + $100/pick P/L. Early-return prevents a duplicate 10am recap. To revert to
-  // the cloud recap, delete this line.
-  if (!dryRun) return { posted: false, reason: "recap moved to local results-card job (11am)" };
+  // Clean per-sport GAME recap (text only, Jun 29 2026). Replaces both the results-card IMAGE (the local
+  // com.gary2.results-card job, now paused) and the noon personality post. game_results is games-only
+  // (player props live in prop_results), so this is automatically "game picks, not props". Pure data, no
+  // LLM — one line per sport, most games first:
+  //   Results from June 28th
+  //
+  //   MLB 4-2
+  //   WC 3-0
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
   const y = yesterdayOf(today);
-  const { data: results, error } = await sb.from("game_results").select("league, result, pick_text, matchup, final_score").eq("game_date", y);
+  const { data: results, error } = await sb.from("game_results").select("league, result").eq("game_date", y);
   if (error) throw error;
-  const wins = (results ?? []).filter((r) => r.result === "won");
-  const losses = (results ?? []).filter((r) => r.result === "lost");
-  if (!wins.length && !losses.length) return { posted: false, reason: "no graded results for yesterday yet" };
+  const graded = (results ?? []).filter((r) => r.result === "won" || r.result === "lost");
+  if (!graded.length) return { posted: false, reason: "no graded game results for yesterday yet" };
 
-  // Running record: aggregate the last 7 days (through yesterday) for the "that puts the week at X-Y" line.
-  const weekAgo = new Date(new Date(today + "T12:00:00Z").getTime() - 7 * 86400_000).toISOString().slice(0, 10);
-  const { data: weekRows } = await sb.from("game_results").select("result").gte("game_date", weekAgo).lte("game_date", y);
-  const weekWins = (weekRows ?? []).filter((r) => r.result === "won").length;
-  const weekLosses = (weekRows ?? []).filter((r) => r.result === "lost").length;
-
-  // CLEANER RESULTS (Jun 18): post a branded results CARD (image) + a short human caption. The card IS the receipt
-  // (record + green-check wins / red-X losses), rendered by the Vercel OG route at betwithgary.ai/api/results-card.
-  // Wins shown longest-odds-first (underdog cashes lead), capped at 6; losses up to 4 (the record carries the full count).
-  // Honest receipts build the trust that drives installs; falls back to a text recap if the card ever fails to fetch/post.
-  const lastOdds = (s: string) => { const m = String(s ?? "").match(/([+-]\d+)\s*$/); return m ? parseInt(m[1]) : -1e9; };
-  const winPicks = [...wins].sort((a, b) => lastOdds(b.pick_text) - lastOdds(a.pick_text)).slice(0, 6).map((r) => r.pick_text);
-  const lossPicks = losses.slice(0, 4).map((r) => r.pick_text);
-  const dateLabel = new Date(y + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
-  const cardUrl = `${CARD_BASE}/api/results-card?record=${encodeURIComponent(`${wins.length}-${losses.length}`)}&date=${encodeURIComponent(dateLabel)}&w=${encodeURIComponent(winPicks.join("|"))}&l=${encodeURIComponent(lossPicks.join("|"))}`;
-
-  // Short human caption to accompany the card (the card already lists the picks, so the caption stays light).
-  const capUser = `Write ONE short caption for a results IMAGE that already shows yesterday's wins and losses. 1 to 2 sentences, under 180 characters. First person, casual, like a bettor in the group chat. Open with the record ${wins.length}-${losses.length}. Do NOT list the picks (the image does that). You may end pointing to the app once. No emojis, no dashes, no hashtags, no links, no hype. Week to date ${weekWins}-${weekLosses}. Return ONLY JSON: {"recap": "..."}.`;
-  const caption = clean(parseJsonBlock(await callLLM(VOICE_RULES, capUser)).recap);
-
-  if (dryRun) return { posted: false, dry_run: true, record: `${wins.length}-${losses.length}`, week: `${weekWins}-${weekLosses}`, card_url: cardUrl, caption };
-
-  let recapId: string;
-  let usedCard = false;
-  try {
-    const imgResp = await fetch(cardUrl);
-    if (!imgResp.ok) throw new Error(`card fetch ${imgResp.status}`);
-    const buf = new Uint8Array(await imgResp.arrayBuffer());
-    let bin = ""; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-    const cardB64 = btoa(bin);
-    const r = await fetch(`${SB_URL}/functions/v1/post-tweet-with-image`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, image_base64: cardB64 }) });
-    const j = await r.json();
-    if (!j.success || !j.tweetId) throw new Error(`post-tweet-with-image failed: ${JSON.stringify(j).slice(0, 200)}`);
-    recapId = j.tweetId; usedCard = true;
-  } catch (e) {
-    console.error("results card failed, falling back to text caption: " + String(e));
-    recapId = await postTweet(caption);
+  const byLeague = new Map<string, { w: number; l: number }>();
+  for (const r of graded) {
+    const rec = byLeague.get(r.league) ?? { w: 0, l: 0 };
+    if (r.result === "won") rec.w++; else rec.l++;
+    byLeague.set(r.league, rec);
   }
+  const lines = [...byLeague.entries()]
+    .sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l) || a[0].localeCompare(b[0]))
+    .map(([lg, rec]) => `${lg} ${rec.w}-${rec.l}`);
+  const text = `Results from ${ordinalDate(y)}\n\n${lines.join("\n")}`;
 
+  if (dryRun) return { posted: false, dry_run: true, text };
+
+  const tweetId = await postTweet(text);
   await sb.from("social_post_log").insert({
     post_date: today, slot: "recap", league: "RECAP", pick_text: `DAILY RECAP ${today}`, thread_format: "recap",
-    hook_tweet_id: recapId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${recapId}`,
+    hook_tweet_id: tweetId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${tweetId}`,
   });
-  return { posted: true, recap: `${wins.length}-${losses.length}`, week: `${weekWins}-${weekLosses}`, card: usedCard, thread_url: `https://x.com/BetwithGary/status/${recapId}` };
+  return { posted: true, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
 
 // Daily standalone CHARACTER post (Option A). Grounded in yesterday's mood + today's slate so it's earned, not random. No link, no hashtag.
 async function runPersonalityMode(today: string, dryRun: boolean) {
+  // RETIRED Jun 29 2026: the noon "words" character post (the "Ground out a 10 and 7 record... staring at
+  // Brazil ML" tweet) is killed — the only daily public post is now the clean per-sport recap (runRecapMode).
+  // Early-return keeps the noon slot quiet; the dry-run path below stays so it can still be previewed. To
+  // revert, delete this line.
+  if (!dryRun) return { posted: false, reason: "personality post retired (replaced by clean recap)" };
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "personality").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "personality already posted today" };
   const y = yesterdayOf(today);
@@ -590,6 +659,7 @@ Deno.serve(async (req) => {
     const preview = url.searchParams.get("preview") === "1";
     const dryRun = url.searchParams.get("dry_run") === "1" || preview;
     const force = url.searchParams.get("force_mode") ?? (preview ? "pick" : null);
+    const push = url.searchParams.get("push") === "1"; // manual catch-up: post a WC game's next-picks even if it just kicked off (overrides the underway guard)
     const metricsOnly = url.searchParams.get("metrics_only") === "1";
 
     // Always refresh KPI metrics first (cheap; keeps impressions/likes live 24/7). Never let it block posting.
@@ -607,7 +677,7 @@ Deno.serve(async (req) => {
     // force_mode=pick|recap|personality leaves WC out so the existing single-mode paths/tests are unchanged.
     let wc: any = undefined;
     if (!force || force === "wc") {
-      try { wc = await runWcCardMode(today, nowMs, hour, dryRun); }
+      try { wc = await runWcCardMode(today, nowMs, hour, dryRun, push); }
       catch (e) { console.error("wc card mode failed: " + String(e)); wc = { error: String(e) }; }
     }
     if (force === "wc") { console.log(JSON.stringify({ mode: "wc", wc }).slice(0, 500)); return Response.json({ mode: "wc", metrics, wc }); }

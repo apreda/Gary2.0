@@ -52,7 +52,12 @@
       "Bash(git pull:*)",
       "Bash(git stash:*)",
       "Bash(git rebase:*)",
-      "Bash(GIT_EDITOR=true git rebase:*)"
+      "Bash(GIT_EDITOR=true git rebase:*)",
+      "Bash(ps -o pid,etime,time,stat,command -p 31074)",
+      "Bash(cd /Users/adam.preda/Desktop/Gary2.0/gary2.0; echo \"===== which launchd jobs / who writes root logs/launchd-*.log =====\"; ls -la ~/Library/LaunchAgents/ 2>/dev/null | grep -iE \"gary|pick|scheduler|insight\" ; echo \"--- grep StandardOut paths in plists ---\"; grep -l -iE \"gary|launchd-stdout\" ~/Library/LaunchAgents/*.plist 2>/dev/null | head; echo; echo \"===== last 8 lines of root stdout with surrounding context for spend cap =====\"; grep -nE \"Including soccer_world_cup|stored to Supabase|STARTING WC|spending cap|FINAL SUMMARY\" logs/launchd-stdout.log 2>/dev/null | tail -20)",
+      "Bash(awk '/Running: node scripts\\\\/run-agentic-picks.js --wc --game-id 57/{f=1} f' logs/scheduler/launchd-stdout.log)",
+      "Bash(ps -o pid,etime,time,command -p 3471)",
+      "Bash(awk '/── WC: 8 game\\\\\\(s\\\\\\) ──/{n++} n>=2' logs/scheduler/launchd-stdout.log)"
     ]
   },
   "enabledMcpjsonServers": [

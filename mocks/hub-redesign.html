@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Hub — redesign</title>
+<style>
+  :root{
+    --bg:#0b0a09;--card:#181615;--card2:#1e1b19;--line:rgba(255,255,255,.08);
+    --gold:#C9A227;--goldbr:#E3BE45;--mlb:#63D17E;--teal:#3FB6A8;
+    --win:#3FB950;--loss:#E5614D;--hot:#FF6A3D;--cold:#4FA9E8;--amber:#E8B339;
+    --txt:#F4EFE6;--dim:rgba(244,239,230,.62);--dim2:rgba(244,239,230,.40);
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;--disp:"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{background:#000;color:var(--txt);font-family:var(--disp);margin:0;padding:26px;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .note{color:var(--dim);font-family:var(--mono);font-size:12px;max-width:380px;text-align:center;line-height:1.5}
+  .phone{width:390px;background:var(--bg);border-radius:30px;border:9px solid #232120;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  
+  .scr{height:auto;overflow:visible;padding:18px 0 30px}
+  .px{padding:0 16px}
+
+  /* header */
+  .hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px}
+  .eyebrow{display:flex;align-items:center;gap:7px}
+  .diamond{width:7px;height:7px;background:var(--gold);transform:rotate(45deg)}
+  .h-ttl{font-weight:800;font-size:21px;letter-spacing:-.3px}
+  .h-sub{font-family:var(--mono);font-size:10px;color:var(--dim2);margin-top:3px}
+  .receipt{font-family:var(--mono);font-size:10px;color:var(--dim);text-align:right;line-height:1.5}
+  .receipt b{color:var(--win)}
+
+  /* section header */
+  .sec{margin-top:22px}
+  .sec-h{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+  .sec-t{font-weight:700;font-size:15.5px;color:var(--txt)}
+  .sec-c{font-family:var(--mono);font-size:9px;color:var(--dim2);margin-left:auto;border:1px solid var(--line);border-radius:9px;padding:2px 7px}
+  .new{font-family:var(--mono);font-size:8px;color:#0b0a09;background:var(--gold);border-radius:4px;padding:2px 5px;font-weight:700;letter-spacing:.4px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .card+.card{margin-top:9px}
+  .row{display:flex;align-items:center;gap:12px}
+  .mono{font-family:var(--mono)} .b{font-weight:700}
+  .nm{font-weight:700;font-size:15px} .meta{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+  .big{font-family:var(--mono);font-weight:700;font-size:21px}
+
+  /* FEATURED */
+  .feat{background:linear-gradient(160deg,#221d16,#161311);border:1px solid rgba(201,162,39,.28);border-radius:16px;padding:16px;position:relative;overflow:hidden}
+  .feat .tag{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.8px}
+  .feat .hl{font-weight:800;font-size:18px;line-height:1.16;margin:7px 0 4px}
+  .feat .read{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.5}
+
+  /* power meter (HR threat) — animated fill */
+  .meter{height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;position:relative}
+  .meter > i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--amber),var(--hot));animation:fill 1.1s cubic-bezier(.3,.8,.3,1) forwards;transform-origin:left}
+  @keyframes fill{from{width:0}}
+  .pcap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--dim2);margin-top:5px}
+
+  /* ERA<->xERA gap bars (regression) */
+  .gap{display:flex;flex-direction:column;gap:6px;flex:1}
+  .gbar{display:flex;align-items:center;gap:8px}
+  .gbar .gl{font-family:var(--mono);font-size:9px;color:var(--dim2);width:30px}
+  .gtrack{flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+  .gtrack > i{display:block;height:100%;border-radius:3px;animation:fill 1s ease forwards}
+  .gv{font-family:var(--mono);font-size:11px;font-weight:700;width:34px;text-align:right}
+
+  /* dominance bar (H2H tug of war) — animated */
+  .dom{height:22px;border-radius:7px;overflow:hidden;display:flex;font-family:var(--mono);font-weight:700;font-size:11px}
+  .dom .a{background:linear-gradient(90deg,rgba(99,209,126,.85),rgba(99,209,126,.5));color:#08160c;display:flex;align-items:center;padding:0 8px;animation:grow 1.1s cubic-bezier(.3,.8,.3,1) forwards;white-space:nowrap;overflow:hidden}
+  .dom .b{background:rgba(255,255,255,.08);color:var(--dim);display:flex;align-items:center;justify-content:flex-end;padding:0 8px;flex:1}
+  @keyframes grow{from{flex-basis:0}}
+
+  /* inning-1 dots (NRFI) */
+  .dots{display:flex;gap:5px;align-items:center}
+  .d1{width:13px;height:13px;border-radius:50%;font-family:var(--mono);font-size:7px;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .d-z{background:rgba(63,185,80,.18);color:var(--win);border:1px solid rgba(63,185,80,.4)}  /* scoreless = NRFI hit */
+  .d-r{background:rgba(229,97,77,.16);color:var(--loss)}
+  .d1.last{animation:pop 1.4s ease-in-out infinite}
+  @keyframes pop{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+
+  /* over/under rate bar */
+  .ou{display:flex;gap:3px}
+  .ou span{flex:1;height:8px;border-radius:2px}
+  .ou .o{background:var(--win)} .ou .u{background:rgba(255,255,255,.12)}
+
+  /* heat meter (hot/cold) — pulsing glow */
+  .heat{width:11px;height:11px;border-radius:50%}
+  .heat.hot{background:var(--hot);box-shadow:0 0 0 0 rgba(255,106,61,.6);animation:pulseHot 1.5s infinite}
+  .heat.cold{background:var(--cold);box-shadow:0 0 0 0 rgba(79,169,232,.5);animation:pulseCold 1.8s infinite}
+  @keyframes pulseHot{0%{box-shadow:0 0 0 0 rgba(255,106,61,.55)}70%{box-shadow:0 0 0 7px rgba(255,106,61,0)}100%{box-shadow:0 0 0 0 rgba(255,106,61,0)}}
+  @keyframes pulseCold{0%{box-shadow:0 0 0 0 rgba(79,169,232,.5)}70%{box-shadow:0 0 0 7px rgba(79,169,232,0)}100%{box-shadow:0 0 0 0 rgba(79,169,232,0)}}
+
+  /* platoon split bars */
+  .split{display:flex;flex-direction:column;gap:5px;flex:1}
+  .sb{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9px;color:var(--dim2)}
+  .sbt{flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+  .sbt>i{display:block;height:100%;border-radius:3px;animation:fill 1s ease forwards}
+
+  /* lineup swap arrow */
+  .swap{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11px}
+  .swap .out{color:var(--dim2);text-decoration:line-through}
+  .swap .arr{color:var(--gold);animation:slide 1.6s ease-in-out infinite}
+  @keyframes slide{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+  .swap .in{color:var(--win);font-weight:700}
+
+  /* situational chips */
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;flex:1;min-width:96px}
+  .chip .ci{font-family:var(--mono);font-size:9px;color:var(--dim2)}
+  .chip .cv{font-weight:700;font-size:13px;margin-top:3px}
+
+  .disc{display:flex;align-items:center;gap:7px;color:var(--dim);font-family:var(--mono);font-size:10px;border-top:1px dashed var(--line);padding-top:13px;margin-top:18px}
+</style></head>
+<body>
+<div class="note">The Hub — full redesign · every section has a live visual that carries the stat · open in browser to see the motion</div>
+<div class="phone"><div class="scr">
+
+  <!-- HEADER -->
+  <div class="px hd">
+    <div><div class="eyebrow"><span class="diamond"></span><span class="h-ttl">Today's Edges</span></div>
+      <div class="h-sub">MON JUN 29 · 14 GAMES</div></div>
+    <div class="receipt">YESTERDAY<br><b>6 of 9</b> edges hit</div>
+  </div>
+
+  <!-- FEATURED -->
+  <div class="px sec" style="margin-top:16px">
+    <div class="feat">
+      <div class="tag">★ THE EDGE OF THE DAY</div>
+      <div class="hl">Aaron Judge is a prime HR threat in the Bronx tonight</div>
+      <div class="meter"><i style="width:88%"></i></div>
+      <div class="pcap"><span>HR LIKELIHOOD</span><span style="color:var(--hot)">88 · ELITE</span></div>
+      <div class="read" style="margin-top:9px">3 HR in his last 5 · faces fly-ball LHP Sears (1.7 HR/9) · wind out to RF 11mph. Anytime HR +280.</div>
+    </div>
+  </div>
+
+  <!-- REGRESSION BOARD -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Regression Board</span><span class="sec-c">5 tonight</span></div>
+    <div class="card"><div class="row">
+      <div><div class="nm">Hunter Greene</div><div class="meta">CIN · due to regress</div></div>
+      <div class="gap">
+        <div class="gbar"><span class="gl">ERA</span><div class="gtrack"><i style="width:34%;background:var(--win)"></i></div><span class="gv" style="color:var(--win)">2.18</span></div>
+        <div class="gbar"><span class="gl">xERA</span><div class="gtrack"><i style="width:64%;background:var(--loss)"></i></div><span class="gv" style="color:var(--loss)">3.85</span></div>
+      </div>
+    </div></div>
+    <div class="card"><div class="row">
+      <div><div class="nm">Cristopher Sánchez</div><div class="meta">PHI · due to improve</div></div>
+      <div class="gap">
+        <div class="gbar"><span class="gl">ERA</span><div class="gtrack"><i style="width:70%;background:var(--loss)"></i></div><span class="gv" style="color:var(--loss)">4.40</span></div>
+        <div class="gbar"><span class="gl">xERA</span><div class="gtrack"><i style="width:46%;background:var(--win)"></i></div><span class="gv" style="color:var(--win)">3.10</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- HEAD TO HEAD -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Head-to-Head</span><span class="new">NEW</span><span class="sec-c">this slate</span></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:9px"><div class="nm">Brewers <span class="meta">own the</span> Pirates</div><div class="mono b" style="color:var(--mlb)">8-1 · L9</div></div>
+      <div class="dom"><div class="a" style="flex-basis:89%">MIL 8</div><div class="b">PIT 1</div></div>
+      <div class="meta" style="margin-top:8px">Won the last 5 straight · MIL -150 tonight</div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:9px"><div class="nm">Astros <span class="meta">vs</span> Twins</div><div class="mono b" style="color:var(--dim)">5-4 · L9</div></div>
+      <div class="dom"><div class="a" style="flex-basis:56%">HOU 5</div><div class="b">MIN 4</div></div>
+      <div class="meta" style="margin-top:8px">Even series — no edge, fade the narrative</div>
+    </div>
+  </div>
+
+  <!-- FIRST INNING -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">First Inning · NRFI</span><span class="new">NEW</span><span class="sec-c">6 leans</span></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><div><div class="nm">Padres @ Cubs</div><div class="meta">Darvish (0.84 1st-inn ERA) vs Steele</div></div>
+        <div style="text-align:right"><div class="mono b" style="color:var(--win);font-size:15px">NRFI</div><div class="meta">7 of 10</div></div></div>
+      <div class="dots" style="margin-top:11px">
+        <span class="d1 d-z">0</span><span class="d1 d-z">0</span><span class="d1 d-r">1</span><span class="d1 d-z">0</span><span class="d1 d-z">0</span>
+        <span class="d1 d-z">0</span><span class="d1 d-r">2</span><span class="d1 d-z">0</span><span class="d1 d-z">0</span><span class="d1 d-z last">0</span>
+        <span class="meta" style="margin-left:6px">last 10 first innings →</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOME RUN THREATS -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Home Run Threats</span><span class="sec-c">tonight</span></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><div class="nm">Kyle Schwarber <span class="meta">· PHI</span></div><div class="mono" style="color:var(--hot)">+240</div></div>
+      <div class="meter" style="margin-top:9px"><i style="width:82%"></i></div>
+      <div class="pcap"><span>vs RHP · 18% barrel · CBP</span><span style="color:var(--hot)">82</span></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><div class="nm">Riley Greene <span class="meta">· DET</span></div><div class="mono" style="color:var(--amber)">+310</div></div>
+      <div class="meter" style="margin-top:9px"><i style="width:64%"></i></div>
+      <div class="pcap"><span>3 HR L7 · faces fly-ball RHP</span><span style="color:var(--amber)">64</span></div>
+    </div>
+  </div>
+
+  <!-- OVER / UNDER TRENDS -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Over / Under Trends</span><span class="new">NEW</span><span class="sec-c">hot totals</span></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><div class="nm">Reds games <span class="meta">· total 9.5</span></div><div class="mono b" style="color:var(--win)">OVER 6-2</div></div>
+      <div class="ou" style="margin-top:10px"><span class="o"></span><span class="o"></span><span class="u"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="u"></span><span class="o"></span></div>
+      <div class="meta" style="margin-top:7px">Over in 6 of last 8 · GABP + bullpen burn</div>
+    </div>
+  </div>
+
+  <!-- HOT & COLD -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Hot &amp; Cold</span><span class="sec-c">streaks</span></div>
+    <div class="card"><div class="row">
+      <span class="heat hot"></span>
+      <div style="flex:1"><div class="nm">Bobby Witt Jr. <span class="meta">· KC</span></div><div class="meta">scorching — 14-for-30, 1.420 OPS L7</div></div>
+    </div></div>
+    <div class="card"><div class="row">
+      <span class="heat cold"></span>
+      <div style="flex:1"><div class="nm">Mike Trout <span class="meta">· LAA</span></div><div class="meta">ice cold — 3-for-28 L7, draws a tough RHP</div></div>
+    </div></div>
+  </div>
+
+  <!-- PLATOON EDGES -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Platoon Edges</span><span class="sec-c">matchup</span></div>
+    <div class="card"><div class="row">
+      <div style="width:120px"><div class="nm">Brandon Nimmo</div><div class="meta">NYM · vs LHP today</div></div>
+      <div class="split">
+        <div class="sb"><span style="width:26px">vs L</span><div class="sbt"><i style="width:84%;background:var(--mlb)"></i></div><span style="color:var(--mlb)">.945</span></div>
+        <div class="sb"><span style="width:26px">vs R</span><div class="sbt"><i style="width:52%;background:rgba(255,255,255,.3)"></i></div><span>.690</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- LINEUP MOVES -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Lineup Moves</span><span class="sec-c">scratches</span></div>
+    <div class="card">
+      <div class="swap"><span class="out">Yelich</span><span class="arr">→</span><span class="in">Sal Frelick</span><span class="meta">starts vs RHP</span></div>
+      <div class="meta" style="margin-top:8px">Frelick .312 vs RHP this year — favorable platoon spot</div>
+    </div>
+  </div>
+
+  <!-- SITUATIONAL -->
+  <div class="px sec">
+    <div class="sec-h"><span class="diamond"></span><span class="sec-t">Situational</span><span class="sec-c">conditions</span></div>
+    <div class="chips">
+      <div class="chip"><div class="ci">BULLPEN BURN</div><div class="cv" style="color:var(--amber)">Reds pen · 4 days</div></div>
+      <div class="chip"><div class="ci">WIND</div><div class="cv" style="color:var(--win)">Out 11mph · Wrigley</div></div>
+      <div class="chip"><div class="ci">REST</div><div class="cv" style="color:var(--loss)">A's · getaway, west trip</div></div>
+    </div>
+    <div class="disc"><span class="diamond" style="width:5px;height:5px"></span>Umpire tendencies — coming once ump assignments wire in</div>
+  </div>
+
+</div></div>
+</body></html>
