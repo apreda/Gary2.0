@@ -61,6 +61,16 @@ const SPORTS = [
   { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: 'run-wc-props.js', dfs: false },
 ];
 
+// Within a shared trigger window, process lightweight/time-sensitive slates
+// (WC) before MLB's full picks+props block. Lower number = runs earlier.
+// Ordering only — execution stays strictly sequential.
+const SPORT_RUN_PRIORITY = {
+  soccer_world_cup: 0,
+  basketball_nba: 1,
+  icehockey_nhl: 2,
+  baseball_mlb: 3,
+};
+
 // Spaced retries for fixed-trigger sports, as minutes AFTER the fixed time
 // (10:00 → 10:45 → 11:30 ET). Like the lead-time tiers, every retry after a
 // successful pick hits run-agentic-picks.js's "already has pick" dedup and
@@ -461,7 +471,13 @@ async function executeSchedule(schedule) {
       sportsWithGames.add(entry.sport);
     }
 
-    for (const [sportKey, games] of bySport) {
+    // Process sports by SPORT_RUN_PRIORITY (WC first, MLB last) so a small WC
+    // slate isn't stuck behind MLB's full picks+props block in a shared window.
+    // Order only — still strictly sequential, still picks→props per sport.
+    const orderedSports = [...bySport.entries()].sort(
+      (a, b) => (SPORT_RUN_PRIORITY[a[0]] ?? 99) - (SPORT_RUN_PRIORITY[b[0]] ?? 99)
+    );
+    for (const [sportKey, games] of orderedSports) {
       const sport = games[0].sport;
       log(`\n── ${sport.label}: ${games.length} game(s) ──`);
 
