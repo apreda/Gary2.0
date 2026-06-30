@@ -24,7 +24,7 @@
 
 import { ballDontLieService } from '../ballDontLieService.js';
 import fifaWorldCupService from '../fifaWorldCupService.js';
-import { todayStr, gameLabel, clampScore } from './shared.js';
+import { todayStr, gameLabel, clampScore, etDateStr } from './shared.js';
 
 // MLB connection computers (one file per lane under ./computers/).
 import { computeHeatCheck } from './computers/heatCheck.js';
@@ -213,7 +213,16 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     } else if (leagueKey === 'nba') {
       games = (await ballDontLieService.getNbaGamesForDate(dateStr)) || [];
     } else {
-      games = (await ballDontLieService.getMlbGamesForDate(dateStr)) || [];
+      // BDL dates by UTC instant, so an 8pm+ ET game lands on the NEXT UTC day.
+      // Fetch BOTH UTC days and keep only this ET slate — otherwise the late games
+      // never get insights (same bug as poll-live-scores).
+      const nextUtc = (() => { const d = new Date(`${dateStr}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+      const seenG = new Set();
+      games = [
+        ...((await ballDontLieService.getMlbGamesForDate(dateStr)) || []),
+        ...((await ballDontLieService.getMlbGamesForDate(nextUtc)) || []),
+      ].filter((g) => { const id = String(g?.id); if (seenG.has(id)) return false; seenG.add(id); return true; })
+       .filter((g) => etDateStr(g?.date) === dateStr);
     }
   } catch (err) {
     console.error('[insights] Failed to load slate:', err?.message || err);
