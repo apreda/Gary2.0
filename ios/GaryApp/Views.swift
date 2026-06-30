@@ -22991,22 +22991,24 @@ struct RegressionBoard: View {
         (s.headline.components(separatedBy: ":").first ?? s.headline).trimmingCharacters(in: .whitespaces)
     }
     private func gapBar(_ era: Double, _ xera: Double) -> some View {
-        // ERA (red) over xERA (green) on a SHARED scale — the length difference
-        // between the two bars IS the regression read, so the gap pops at a glance
-        // (founder, Jun 30: "lean harder on the ERA↔xERA gap bar").
-        let maxV = max(era, xera, 0.1)
-        let W: CGFloat = 84
-        return VStack(alignment: .leading, spacing: 3) {
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.06)).frame(width: W, height: 6)
-                Capsule().fill(HubPalette.red).frame(width: max(4, CGFloat(era / maxV) * W), height: 6)
-            }
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.06)).frame(width: W, height: 6)
-                Capsule().fill(HubPalette.green).frame(width: max(4, CGFloat(xera / maxV) * W), height: 6)
-            }
+        // The GAP is the regression read, so the gap itself IS the bar — diverging
+        // from a center baseline (founder, Jun 30: "lean harder on the gap bar").
+        // Left + red  = ERA under xERA (overperforming → due to regress worse).
+        // Right + green = ERA over xERA (underperforming → due to bounce back).
+        // Length scales with the magnitude so a big divergence pops down the board.
+        let gap = era - xera
+        let W: CGFloat = 92
+        let half = W / 2
+        let len = min(CGFloat(abs(gap) / 2.0), 1.0) * (half - 4)
+        let toRight = gap > 0
+        return ZStack(alignment: .center) {
+            Capsule().fill(Color.white.opacity(0.07)).frame(width: W, height: 7)
+            Rectangle().fill(Color.white.opacity(0.22)).frame(width: 1.5, height: 14)   // "no gap" baseline
+            Capsule().fill(toRight ? HubPalette.green : HubPalette.red)
+                .frame(width: max(4, len), height: 7)
+                .offset(x: toRight ? len / 2 : -len / 2)
         }
-        .frame(width: W, alignment: .leading)
+        .frame(width: W, alignment: .center)
     }
 }
 
