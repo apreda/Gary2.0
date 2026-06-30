@@ -10382,6 +10382,11 @@ struct TomorrowView {
         var wcAdvancement: [Signal] = []
         var wcRest: [Signal] = []
         var onWcSignalTap: ((Signal) -> Void)? = nil
+        /// WC Streaks lane (also folded into the Day Ahead strip): the live W/L streak
+        /// board, with a signal-list fallback. Tap a streak row → that game's page.
+        var wcStreaks: [StreakRow] = []
+        var wcStreakSignals: [Signal] = []
+        var onWcStreakTap: ((String) -> Void)? = nil
         /// 1Hz tick for the live countdown. Re-render every second.
         @State private var now = Date()
         /// The active look-ahead tab (Starters · Key Returns · Form · Run
@@ -10944,10 +10949,77 @@ struct TomorrowView {
             return String(format: "%.1f", v)
         }
 
+        // ── Poisson match model (the "Team Strength" upgrade) ───────────────────
+        // Independent-Poisson goal model (the standard Dixon-Coles base): each side's
+        // projected goals is a Poisson mean (λ), and the joint scoreline grid gives
+        // true win / draw / loss + over probabilities and the single likeliest score.
+        struct MatchOdds {
+            let pHome: Double, pDraw: Double, pAway: Double
+            let pOver: Double?            // P(total > line); nil when no line
+            let likelyHome: Int, likelyAway: Int
+        }
+        /// Poisson PMF in log space (no factorial overflow): P(X = k | λ).
+        private static func poissonPMF(_ k: Int, _ lambda: Double) -> Double {
+            guard lambda > 0, k >= 0 else { return k == 0 ? 1 : 0 }
+            var logp = -lambda + Double(k) * log(lambda)
+            if k > 0 { for n in 1...k { logp -= log(Double(n)) } }
+            return exp(logp)
+        }
+        /// Score-grid (0…8 each side) → W/D/L, P(over line), and the modal scoreline.
+        private static func matchOdds(lambdaHome: Double, lambdaAway: Double, totalLine: Double?) -> MatchOdds {
+            let maxG = 8
+            var pH = 0.0, pD = 0.0, pA = 0.0, pOver = 0.0, mass = 0.0
+            var best = -1.0, bi = 0, bj = 0
+            let hPMF = (0...maxG).map { poissonPMF($0, lambdaHome) }
+            let aPMF = (0...maxG).map { poissonPMF($0, lambdaAway) }
+            for i in 0...maxG {
+                for j in 0...maxG {
+                    let p = hPMF[i] * aPMF[j]
+                    mass += p
+                    if i > j { pH += p } else if i == j { pD += p } else { pA += p }
+                    if let line = totalLine, Double(i + j) > line { pOver += p }
+                    if p > best { best = p; bi = i; bj = j }
+                }
+            }
+            let z = mass > 0 ? mass : 1   // normalize to captured mass (tail beyond 8 is tiny)
+            return MatchOdds(pHome: pH / z, pDraw: pD / z, pAway: pA / z,
+                             pOver: totalLine != nil ? pOver / z : nil, likelyHome: bi, likelyAway: bj)
+        }
+        private static func pct(_ v: Double) -> String { "\(Int((v * 100).rounded()))%" }
+
         private func abbr(_ team: String?) -> String {
             guard let team, !team.isEmpty else { return "—" }
             // Fallback only — server normally provides away_abbr/home_abbr.
             return String(team.prefix(3)).uppercased()
+        }
+
+        /// Proper FIFA 3-letter code for a WC nation. A naive first-3-letters slice
+        /// is both WRONG (Netherlands→NED not NET, Spain→ESP, Morocco→MAR) and, for
+        /// Japan, OFFENSIVE ("JAP") — so map the field explicitly. Unlisted → first 3.
+        private func wcCode(_ name: String?) -> String {
+            guard let name, !name.isEmpty else { return "—" }
+            let t = name.lowercased()
+            let map: [(String, String)] = [
+                ("japan","JPN"),("brazil","BRA"),("germany","GER"),("paraguay","PAR"),
+                ("argentina","ARG"),("france","FRA"),("spain","ESP"),("england","ENG"),
+                ("portugal","POR"),("netherlands","NED"),("belgium","BEL"),("croatia","CRO"),
+                ("italy","ITA"),("morocco","MAR"),("senegal","SEN"),("united states","USA"),
+                ("usa","USA"),("mexico","MEX"),("canada","CAN"),("uruguay","URU"),
+                ("colombia","COL"),("ecuador","ECU"),("south korea","KOR"),("korea republic","KOR"),
+                ("korea","KOR"),("australia","AUS"),("switzerland","SUI"),("denmark","DEN"),
+                ("poland","POL"),("serbia","SRB"),("ghana","GHA"),("nigeria","NGA"),
+                ("cameroon","CMR"),("ivory coast","CIV"),("côte","CIV"),("tunisia","TUN"),
+                ("algeria","ALG"),("egypt","EGY"),("saudi arabia","KSA"),("saudi","KSA"),
+                ("iran","IRN"),("qatar","QAT"),("austria","AUT"),("norway","NOR"),
+                ("sweden","SWE"),("scotland","SCO"),("wales","WAL"),("ukraine","UKR"),
+                ("peru","PER"),("chile","CHI"),("costa rica","CRC"),("panama","PAN"),
+                ("jamaica","JAM"),("uzbekistan","UZB"),("jordan","JOR"),("new zealand","NZL"),
+                ("türkiye","TUR"),("turkiye","TUR"),("turkey","TUR"),("south africa","RSA"),
+                ("cape verde","CPV"),("mali","MLI"),("dr congo","COD"),("venezuela","VEN"),
+                ("bolivia","BOL"),
+            ]
+            if let code = map.first(where: { t.contains($0.0) })?.1 { return code }
+            return String(name.uppercased().filter { $0.isLetter }.prefix(3))
         }
 
         // ── ④ Look-ahead tabs (Starters · Key Returns · Form · Run Profile ·
@@ -11105,19 +11177,25 @@ struct TomorrowView {
                         }
                         .padding(.horizontal, 16)
                     }
-                    VStack(spacing: 0) {
-                        wcLaneHeader(active)
-                        Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-                        ScrollView(.vertical, showsIndicators: true) {
-                            wcLaneBody(active).frame(maxWidth: .infinity)
+                    if active.isPerMatch {
+                        VStack(spacing: 0) {
+                            wcLaneHeader(active)
+                            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                            ScrollView(.vertical, showsIndicators: true) {
+                                wcLaneBody(active).frame(maxWidth: .infinity)
+                            }
+                            .frame(height: 300)
+                            .scrollIndicators(.visible)
                         }
-                        .frame(height: 300)
-                        .scrollIndicators(.visible)
+                        .background(Color(hex: "#181616"))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                        .padding(.horizontal, 16)
+                    } else {
+                        // Analytical lanes (xG Regression / Advancement / Rest) — their
+                        // own board/list, the Insights section folded into this strip.
+                        wcAnalyticLaneBody(active)
                     }
-                    .background(Color(hex: "#181616"))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
-                    .padding(.horizontal, 16)
                 }
             }
         }
@@ -11126,12 +11204,16 @@ struct TomorrowView {
         private var wcLanesAvailable: [WcLane] {
             WcLane.allCases.filter { lane in
                 switch lane {
+                case .matchup:
+                    return wcMatches.contains { $0.lines != nil || $0.away?.form != nil || $0.home?.form != nil }
                 case .form:
                     return wcMatches.contains { $0.away?.form != nil || $0.home?.form != nil }
                 case .scorers:
                     return wcMatches.contains { !($0.away?.key_players ?? []).isEmpty || !($0.home?.key_players ?? []).isEmpty }
-                case .lineups:
-                    return wcMatches.contains { $0.away?.xi != nil || $0.home?.xi != nil }
+                case .streak:       return !wcStreaks.isEmpty || !wcStreakSignals.isEmpty
+                case .xgRegression: return !wcRegression.isEmpty
+                case .advancement:  return !wcAdvancement.isEmpty
+                case .rest:         return !wcRest.isEmpty
                 }
             }
         }
@@ -11140,18 +11222,19 @@ struct TomorrowView {
         @ViewBuilder private func wcLaneHeader(_ lane: WcLane) -> some View {
             HStack(spacing: 8) {
                 switch lane {
+                case .matchup:
+                    Text("PROJECTION · WIN PROBABILITY").frame(maxWidth: .infinity, alignment: .leading)
                 case .form:
                     Text("TEAM").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("LAST 5").frame(width: 58, alignment: .trailing)
+                    Text("IN WC").frame(width: 58, alignment: .trailing)
                     Text("GOALS/GM").frame(width: 72, alignment: .trailing)
                     Text("OPP/GM").frame(width: 58, alignment: .trailing)
                 case .scorers:
                     Text("PLAYER / TEAM").frame(maxWidth: .infinity, alignment: .leading)
                     Text("GOALS").frame(width: 52, alignment: .trailing)
                     Text("ASSTS").frame(width: 52, alignment: .trailing)
-                case .lineups:
-                    Text("TEAM / PROJECTED XI").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("FORM.").frame(width: 86, alignment: .trailing)
+                case .streak, .xgRegression, .advancement, .rest:
+                    EmptyView()   // analytical lanes render their own board, no column header
                 }
             }
             .font(GaryFonts.mono(10.5)).tracking(1.2)
@@ -11163,19 +11246,48 @@ struct TomorrowView {
         @ViewBuilder private func wcLaneBody(_ lane: WcLane) -> some View {
             VStack(spacing: 0) {
                 ForEach(Array(wcMatches.enumerated()), id: \.offset) { _, m in
-                    wcMatchSubHeader(m)
-                    switch lane {
-                    case .form:
-                        wcFormRow(team: m.away_team, side: m.away)
-                        wcFormRow(team: m.home_team, side: m.home)
-                    case .scorers:
-                        wcScorerRows(team: m.away_team, side: m.away)
-                        wcScorerRows(team: m.home_team, side: m.home)
-                    case .lineups:
-                        wcLineupRow(team: m.away_team, side: m.away)
-                        wcLineupRow(team: m.home_team, side: m.home)
+                    if lane == .matchup {
+                        wcMatchupCard(m)
+                    } else {
+                        wcMatchSubHeader(m)
+                        switch lane {
+                        case .form:
+                            wcFormRow(team: m.away_team, side: m.away)
+                            wcFormRow(team: m.home_team, side: m.home)
+                        case .scorers:
+                            wcScorerRows(team: m.away_team, side: m.away)
+                            wcScorerRows(team: m.home_team, side: m.home)
+                        case .matchup, .streak, .xgRegression, .advancement, .rest:
+                            EmptyView()
+                        }
                     }
                 }
+            }
+        }
+
+        /// The analytical lanes (folded in from Insights) — each renders its own
+        /// board/list under the shared tab strip, NOT the per-match table card.
+        @ViewBuilder private func wcAnalyticLaneBody(_ lane: WcLane) -> some View {
+            switch lane {
+            case .streak:
+                // Live W/L streak board (primary), signal-list fallback.
+                if !wcStreaks.isEmpty {
+                    StreakBoard(rows: wcStreaks, onTapGame: { onWcStreakTap?($0) })
+                        .padding(.horizontal, 16)
+                } else {
+                    VStack(spacing: 0) { ForEach(wcStreakSignals) { s in SignalRow(s: s) { _ in onWcSignalTap?(s) } } }
+                        .quantPanel().padding(.horizontal, 16)
+                }
+            case .xgRegression:
+                WcRegressionBoard(signals: wcRegression) { onWcSignalTap?($0) }
+            case .advancement:
+                VStack(spacing: 0) { ForEach(wcAdvancement) { s in SignalRow(s: s) { _ in onWcSignalTap?(s) } } }
+                    .quantPanel().padding(.horizontal, 16)
+            case .rest:
+                VStack(spacing: 0) { ForEach(wcRest) { s in SignalRow(s: s) { _ in onWcSignalTap?(s) } } }
+                    .quantPanel().padding(.horizontal, 16)
+            default:
+                EmptyView()
             }
         }
 
@@ -11197,9 +11309,17 @@ struct TomorrowView {
             .padding(.top, 9).padding(.bottom, 4).padding(.horizontal, 14)
         }
 
-        /// FORM lane row — team · L5 record (form-coloured) · goals/gm · opp goals/gm.
+        /// FORM lane row — team · WC-only record (form-coloured) · goals/gm · opp goals/gm.
         @ViewBuilder private func wcFormRow(team: String?, side: TomorrowWcSide?) -> some View {
-            let f = side?.form
+            // WC-ONLY record — this tournament's games, not last-5 overall (founder).
+            // Falls back to "—" until a side has played a World Cup match.
+            let f = side?.form?.wc
+            let recColor: Color = {
+                guard let w = f?.w, let l = f?.l else { return .white.opacity(0.85) }
+                if w > l { return GaryColors.win }
+                if l > w { return GaryColors.loss }
+                return .white.opacity(0.85)
+            }()
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Text(side?.team ?? team ?? "—")
@@ -11207,7 +11327,7 @@ struct TomorrowView {
                         .lineLimit(1).minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(f?.record ?? "—")
-                        .font(GaryFonts.mono(13, bold: true)).foregroundStyle(wcFormColor(f))
+                        .font(GaryFonts.mono(13, bold: true)).foregroundStyle(recColor)
                         .frame(width: 58, alignment: .trailing)
                     Text(f?.gf_per_game.map { Self.trimNum($0) } ?? "—")
                         .font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.85))
@@ -11248,37 +11368,100 @@ struct TomorrowView {
             }
         }
 
-        /// LINEUPS lane row — a side's projected XI (wrapped) + formation.
-        @ViewBuilder private func wcLineupRow(team: String?, side: TomorrowWcSide?) -> some View {
-            let xi = side?.xi
-            let names = wcXiNames(xi)
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(side?.team ?? team ?? "—")
-                            .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.92)).lineLimit(1)
-                        if !names.isEmpty {
-                            Text(names.joined(separator: " · "))
-                                .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.45))
-                                .fixedSize(horizontal: false, vertical: true)
+        /// MATCHUP card — the predictive hero. Projected scoreline from each side's
+        /// attack rate (goals/gm) vs the opponent's defense rate (opp goals/gm), the
+        /// derived lean, and the market spread/total as context. WC-only rates when a
+        /// side has WC games, else its overall form. All grounded in board data.
+        @ViewBuilder private func wcMatchupCard(_ m: TomorrowWcMatch) -> some View {
+            let awayName = m.away?.team ?? m.away_team ?? "Away"
+            let homeName = m.home?.team ?? m.home_team ?? "Home"
+            let homeGf = m.home?.form?.wc?.gf_per_game ?? m.home?.form?.gf_per_game
+            let homeGa = m.home?.form?.wc?.ga_per_game ?? m.home?.form?.ga_per_game
+            let awayGf = m.away?.form?.wc?.gf_per_game ?? m.away?.form?.gf_per_game
+            let awayGa = m.away?.form?.wc?.ga_per_game ?? m.away?.form?.ga_per_game
+            // Projected goals = (own attack + opponent's concession) / 2.
+            let homeProj: Double? = (homeGf != nil && awayGa != nil) ? (homeGf! + awayGa!) / 2 : nil
+            let awayProj: Double? = (awayGf != nil && homeGa != nil) ? (awayGf! + homeGa!) / 2 : nil
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 6) {
+                    Text((m.match ?? "\(awayName) @ \(homeName)").uppercased())
+                        .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                        .foregroundStyle(wcAccent.opacity(0.9)).lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 6)
+                    if let k = m.kickoff, !k.isEmpty {
+                        Text(k.uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(.white.opacity(0.4))
+                    }
+                }
+                if let hp = homeProj, let ap = awayProj {
+                    // Projected scoreline — the higher number wears gold.
+                    HStack(spacing: 8) {
+                        Text("PROJECTED").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        Spacer(minLength: 4)
+                        Text(wcCode(awayName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
+                        Text(String(format: "%.1f", ap)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(ap >= hp ? GaryColors.gold : .white.opacity(0.88))
+                        Text("–").font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.35))
+                        Text(String(format: "%.1f", hp)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(hp >= ap ? GaryColors.gold : .white.opacity(0.88))
+                        Text(wcCode(homeName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
+                    }
+                    // WIN% — true W/D/L from the Poisson scoreline grid (the favorite golds).
+                    let odds = Self.matchOdds(lambdaHome: hp, lambdaAway: ap, totalLine: m.lines?.total)
+                    let topP = max(odds.pHome, odds.pDraw, odds.pAway)
+                    HStack(spacing: 6) {
+                        Text("WIN%").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        Spacer(minLength: 4)
+                        Text("\(wcCode(awayName)) \(Self.pct(odds.pAway))")
+                            .font(GaryFonts.mono(11, bold: true)).foregroundStyle(odds.pAway >= topP ? GaryColors.gold : .white.opacity(0.7))
+                        Text("Draw \(Self.pct(odds.pDraw))")
+                            .font(GaryFonts.mono(10, bold: true)).foregroundStyle(odds.pDraw >= topP ? GaryColors.gold : .white.opacity(0.5))
+                        Text("\(wcCode(homeName)) \(Self.pct(odds.pHome))")
+                            .font(GaryFonts.mono(11, bold: true)).foregroundStyle(odds.pHome >= topP ? GaryColors.gold : .white.opacity(0.7))
+                    }
+                    // Proportional 3-segment bar: away (teal) · draw (grey) · home (gold).
+                    GeometryReader { g in
+                        HStack(spacing: 1.5) {
+                            Capsule().fill(wcAccent).frame(width: max(2, g.size.width * odds.pAway))
+                            Capsule().fill(Color.white.opacity(0.22)).frame(width: max(2, g.size.width * odds.pDraw))
+                            Capsule().fill(GaryColors.gold).frame(width: max(2, g.size.width * odds.pHome))
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(xi?.formation ?? "—")
-                        .font(GaryFonts.mono(13, bold: true)).foregroundStyle(wcAccent)
-                        .frame(width: 86, alignment: .trailing)
+                    .frame(height: 5)
+                    // Modal scoreline (away–home, matching PROJECTED) + P(over the line).
+                    HStack(spacing: 6) {
+                        Text("LIKELY SCORE").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        Text("\(odds.likelyAway)–\(odds.likelyHome)").font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.92))
+                        Text("\(wcCode(awayName))–\(wcCode(homeName))").font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.4))
+                        if let po = odds.pOver, let t = m.lines?.total {
+                            Text("·").foregroundStyle(.white.opacity(0.3)).font(GaryFonts.mono(11))
+                            Text("Over \(Self.trimNum(t)) \(Self.pct(po))").font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.72))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                } else {
+                    Text("Projection posts as both sides log World Cup games.")
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.5))
                 }
-                .padding(.vertical, 9).padding(.horizontal, 14)
-                hairline
+                // Market context — the board's spread + total.
+                if m.lines?.spread != nil || m.lines?.total != nil {
+                    HStack(spacing: 10) {
+                        Text("MARKET").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        if let sp = m.lines?.spread { Text("spread \(Self.trimNum(abs(sp)))").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.6)) }
+                        if let t = m.lines?.total { Text("total \(Self.trimNum(t))").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.6)) }
+                        Spacer(minLength: 0)
+                    }
+                }
             }
+            .padding(.vertical, 11).padding(.horizontal, 14)
+            .overlay(hairline, alignment: .bottom)
         }
 
-        /// Recent-form colour vs W/L: green winning, amber even, red losing.
+        /// Recent-form colour vs W/L: green winning, neutral even, red losing.
         private func wcFormColor(_ f: TomorrowWcForm?) -> Color {
             guard let f = f, let w = f.w, let l = f.l else { return .white.opacity(0.85) }
             if w > l { return GaryColors.win }
             if l > w { return GaryColors.loss }
-            return Color(hex: "#E8B339")
+            // Even record (W == L): neutral white, NOT gold — gold is the brand accent,
+            // and reading an even record as highlighted was confusing (Paraguay 2-1-2).
+            return .white.opacity(0.85)
         }
 
         /// The projected XI names (keeper first), grounded — empty when no XI.
@@ -11633,12 +11816,28 @@ enum LookAheadLane: CaseIterable, Hashable {
 /// WC "Day Ahead" lanes — the soccer-tailored twin of LookAheadLane (no pitcher
 /// concepts): recent form, top scorers, projected lineups.
 enum WcLane: CaseIterable, Hashable {
-    case form, scorers, lineups
+    // Matchup leads (strength + projected shape — the predictive hero). Lineups
+    // dropped (founder) — they live on each game's own pick page. The analytical
+    // lanes (xG Regression / Advancement / Rest) are folded in from the old
+    // Insights section so the Day Ahead is ONE tab strip (founder Jun 29).
+    case matchup, form, scorers, streak, xgRegression, advancement, rest
     var label: String {
         switch self {
-        case .form:    return "FORM"
-        case .scorers: return "KEY SCORERS"
-        case .lineups: return "LINEUPS"
+        case .matchup:      return "MATCHUP"
+        case .form:         return "FORM"
+        case .scorers:      return "KEY SCORERS"
+        case .streak:       return "STREAKS"
+        case .xgRegression: return "xG REGRESSION"
+        case .advancement:  return "ADVANCEMENT"
+        case .rest:         return "REST"
+        }
+    }
+    /// Per-match lanes render in the fixed-height table card; the analytical lanes
+    /// (signal lists / boards) render their own content below the tab strip.
+    var isPerMatch: Bool {
+        switch self {
+        case .matchup, .form, .scorers: return true
+        case .streak, .xgRegression, .advancement, .rest: return false
         }
     }
 }
@@ -21169,8 +21368,6 @@ struct PropsHubView: View {
     @State private var laneTab: SignalKind? = nil
     /// Selected lane in THE CONDITIONS tab strip; nil = first non-empty lane.
     @State private var condTab: SignalKind? = nil
-    /// Selected lane in the WC INSIGHTS tab strip; nil = first non-empty lane.
-    @State private var wcLaneTab: SignalKind? = nil
     /// FEATURED ribbon — hidden on the Hub per founder (Jun 29 2026) for MLB + WC.
     /// Kept fully wired (computed + FeaturedRibbon) so it's a one-flag re-enable.
     private let showFeaturedOnHub = false
@@ -21489,10 +21686,19 @@ struct PropsHubView: View {
                     // but for TODAY's slate (today_board). Founder: put it on the Hub.
                     if let tb = todayBoard {
                         let hubLeague: String? = sel == .mlb ? "MLB" : sel == .wc ? "WC" : nil
-                        // WC tab: show WC match previews (form + key players + odds)
-                        // but hide the full XI — lineups are already on each game page.
+                        // WC tab: ONE Day Ahead tab strip — Matchup / Form / Key Scorers
+                        // PLUS the analytical lanes (xG Regression / Advancement / Rest)
+                        // folded in from the old Insights section. Tap routes to the
+                        // player card (playerId) or the generic edge sheet.
                         TomorrowView.Body(board: tb, leagueFilter: hubLeague,
-                                         includeBoard: false, dayLabel: "TODAY")
+                                         includeBoard: false, dayLabel: "TODAY",
+                                         wcRegression: sel == .wc ? items(.xgRegression) : [],
+                                         wcAdvancement: sel == .wc ? items(.advancement) : [],
+                                         wcRest: sel == .wc ? items(.situational) : [],
+                                         onWcSignalTap: { s in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } },
+                                         wcStreaks: sel == .wc ? selStreakRows : [],
+                                         wcStreakSignals: sel == .wc ? items(.streak) : [],
+                                         onWcStreakTap: { onSelectGame($0) })
                             .id("dayAhead")
                     }
 
@@ -21519,49 +21725,13 @@ struct PropsHubView: View {
                     }
 
                     if sel == .wc {
-                        // ── WC Hub: mirrors MLB — one Insights lane strip whose first
-                        // tab is the xG Regression board (the soccer twin of MLB's
-                        // Regression tab), then the supporting collapsibles. Built for
-                        // World Cup bettors, not ported from the MLB lanes.
-                        if !wcInsightLanes.isEmpty {
-                            HubSectionTitle(title: "Insights").padding(.horizontal, 16)
-                                .id("playerEdges")
-                            VStack(alignment: .leading, spacing: 8) {
-                                hubLaneStrip(lanes: wcInsightLanes, active: wcActiveLane, title: wcLaneTitle) { wcLaneTab = $0 }
-                                // xG Regression tab → the Goals-vs-xG board; every other
-                                // lane → its plain edge-row list.
-                                if wcActiveLane == .xgRegression {
-                                    WcRegressionBoard(signals: items(.xgRegression)) { s in
-                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
-                                    }
-                                } else {
-                                    VStack(spacing: 0) {
-                                        ForEach(items(wcActiveLane)) { s in
-                                            SignalRow(s: s) { _ in
-                                                if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
-                                            }
-                                        }
-                                    }
-                                    .quantPanel().padding(.horizontal, 16)
-                                }
-                            }
-                        }
-                        if !selStreakRows.isEmpty {
-                            HubDisclosure(anchor: "streaks", eyebrow: "Streaks", count: selStreakRows.count, openSet: $openSections) {
-                                StreakBoard(rows: selStreakRows, onTapGame: { onSelectGame($0) })
-                                    .padding(.horizontal, 16)
-                            }
-                            .id("streaks")
-                        } else if !items(.streak).isEmpty {
-                            HubDisclosure(anchor: "streaks", eyebrow: "Streaks", count: items(.streak).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                                    .quantPanel().padding(.horizontal, 16)
-                            }
-                            .id("streaks")
-                        }
+                        // ── WC Hub: the Day Ahead above is now the single tabbed surface
+                        // (Matchup / Form / Key Scorers / Streaks / xG Regression /
+                        // Advancement / Rest) — Insights + Streaks folded into it (founder
+                        // Jun 29). Below: the supporting collapsibles only.
                         if !items(.xgRecap).isEmpty {
                             HubDisclosure(anchor: "xgRecap", eyebrow: "xG Recap", count: items(.xgRecap).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                VStack(spacing: 0) { ForEach(items(.xgRecap)) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                                     .quantPanel().padding(.horizontal, 16)
                             }
                             .id("xgRecap")
@@ -21575,7 +21745,7 @@ struct PropsHubView: View {
                         }
                         if !items(.h2h).isEmpty {
                             HubDisclosure(anchor: "owned", eyebrow: "Head-to-Head", count: items(.h2h).count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(items(.h2h)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                VStack(spacing: 0) { ForEach(items(.h2h)) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                                     .quantPanel().padding(.horizontal, 16)
                             }
                             .id("owned")
@@ -21591,18 +21761,16 @@ struct PropsHubView: View {
                         let wcExtras = leagueSignals.filter { ![.tournament, .advancement, .situational, .ballpark, .xgRegression, .streak, .xgRecap, .h2h].contains($0.kind) && $0.confirmedXI == nil }
                         if !wcExtras.isEmpty {
                             HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: wcExtras.count, openSet: $openSections) {
-                                VStack(spacing: 0) { ForEach(wcExtras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                                VStack(spacing: 0) { ForEach(wcExtras) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                                     .quantPanel().padding(.horizontal, 16)
                             }
                             .id("moreEdges")
                         }
-                        // WC pending — only WC-relevant sections
+                        // WC pending — only WC-relevant sections (the Day Ahead handles
+                        // Matchup / Form / Scorers / Streaks / xG Regression / Advancement / Rest).
                         let wcPending: [(anchor: String, eyebrow: String)] = {
                             var defs: [(String, String)] = []
-                            if wcInsightLanes.isEmpty              { defs.append(("playerEdges", "Insights")) }
-                            if items(.xgRegression).isEmpty        { defs.append(("xgRegression", "xG Regression")) }
                             if items(.xgRecap).isEmpty             { defs.append(("xgRecap", "xG Recap")) }
-                            if selStreakRows.isEmpty && items(.streak).isEmpty { defs.append(("streaks", "Streaks")) }
                             if wcIntelSignals.isEmpty              { defs.append(("wcIntel", "Game Intel")) }
                             if items(.h2h).isEmpty                 { defs.append(("owned", "Head-to-Head")) }
                             if selNightRows.isEmpty                { defs.append(("lastNight", "Last Night")) }
@@ -21671,7 +21839,7 @@ struct PropsHubView: View {
                                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                                         }
                                     } else {
-                                        SignalRow(s: s) { _ in selectedSignal = s }
+                                        SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } }
                                     }
                                 }
                             }
@@ -21681,7 +21849,7 @@ struct PropsHubView: View {
                     }
                     if !items(.situational).isEmpty {
                         HubDisclosure(anchor: "restFatigue", eyebrow: "Rest & Fatigue", count: items(.situational).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                                 .quantPanel().padding(.horizontal, 16)
                         }
                         .id("restFatigue")
@@ -21691,7 +21859,7 @@ struct PropsHubView: View {
                             VStack(spacing: 0) {
                                 hubLaneStrip(lanes: conditionLanes, active: activeCondLane, title: condTitle) { condTab = $0 }
                                 Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
-                                ForEach(items(activeCondLane)) { s in SignalRow(s: s) { _ in selectedSignal = s } }
+                                ForEach(items(activeCondLane)) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } }
                             }
                             .quantPanel().padding(.horizontal, 16)
                         }
@@ -21705,7 +21873,7 @@ struct PropsHubView: View {
                         .id("streaks")
                     } else if !items(.streak).isEmpty {
                         HubDisclosure(anchor: "streaks", eyebrow: "Streaks", count: items(.streak).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                                 .quantPanel().padding(.horizontal, 16)
                         }
                         .id("streaks")
@@ -21719,7 +21887,7 @@ struct PropsHubView: View {
                     // Tournament/xG sections may also appear on MLB tab if signals exist
                     if !items(.tournament).isEmpty {
                         HubDisclosure(anchor: "tournament", eyebrow: "Tournament Stakes", count: items(.tournament).count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                                 .quantPanel().padding(.horizontal, 16)
                         }
                         .id("tournament")
@@ -21727,7 +21895,7 @@ struct PropsHubView: View {
                     let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat, .starterForm, .firstInning, .runningGame, .parkWeather, .xgRegression, .advancement, .xgRecap, .fantasyPickups].contains($0.kind) }
                     if !extras.isEmpty {
                         HubDisclosure(anchor: "moreEdges", eyebrow: "More Edges", count: extras.count, openSet: $openSections) {
-                            VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                                 .quantPanel().padding(.horizontal, 16)
                         }
                         .id("moreEdges")
@@ -21736,7 +21904,8 @@ struct PropsHubView: View {
                     let mlbPending: [(anchor: String, eyebrow: String)] = {
                         var defs: [(String, String)] = []
                         if min(items(.hrThreat).count, 3) == 0 { defs.append(("hrThreats", "Gary Home Run Threats")) }
-                        if items(.regression).isEmpty           { defs.append(("regression", "Regression Board")) }
+                        // Regression is now the first Insights tab — covered by the
+                        // Insights placeholder, not listed separately here.
                         if items(.fantasyPickups).isEmpty       { defs.append(("fantasyPickups", "Fantasy Pickups")) }
                         if items(.h2h).isEmpty                  { defs.append(("owned", "Owned")) }
                         if items(.injury).isEmpty               { defs.append(("beneficiary", "The Beneficiary")) }
@@ -21882,28 +22051,8 @@ struct PropsHubView: View {
         }
     }
 
-    // ---- WC Insights lane tabs (Stakes / Advancement / Rest / Venue) ----
-
-    /// The WC analog of `playerEdgeLanes`: today's team / tournament edges, shown in
-    /// the same lane-strip + row-list treatment MLB uses, filtered to lanes with rows.
-    private var wcInsightLanes: [SignalKind] {
-        // xG Regression leads — the hero board is the first Insights tab (founder).
-        [SignalKind.xgRegression, .tournament, .advancement, .situational, .ballpark].filter { !items($0).isEmpty }
-    }
-    private var wcActiveLane: SignalKind {
-        if let t = wcLaneTab, wcInsightLanes.contains(t) { return t }
-        return wcInsightLanes.first ?? .xgRegression
-    }
-    private func wcLaneTitle(_ k: SignalKind) -> String {
-        switch k {
-        case .xgRegression: return "xG REGRESSION"
-        case .tournament:   return "STAKES"
-        case .advancement:  return "ADVANCEMENT"
-        case .situational:  return "REST"
-        case .ballpark:     return "VENUE"
-        default:            return k.chip
-        }
-    }
+    // (Old WC Insights lane machinery removed Jun 29 — those lanes now live in the
+    //  Day Ahead tab strip, fed straight into TomorrowView.Body.)
 
     /// Shared lane-tab strip (Player Edges + The Conditions): plain mono text
     /// tabs — active wears gold, the rest dim. The app-wide colored-when-active
@@ -21995,12 +22144,12 @@ struct PropsHubView: View {
             } else {
                 if !edgeMatches.isEmpty {
                     HubSectionTitle(title: "Edges").padding(.horizontal, 16)
-                    VStack(spacing: 0) { ForEach(edgeMatches) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                    VStack(spacing: 0) { ForEach(edgeMatches) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                         .quantPanel().padding(.horizontal, 16)
                 }
                 if !receiptMatches.isEmpty {
                     HubSectionTitle(title: "Receipts").padding(.horizontal, 16)
-                    VStack(spacing: 0) { ForEach(receiptMatches) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                    VStack(spacing: 0) { ForEach(receiptMatches) { s in SignalRow(s: s) { _ in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } } } }
                         .quantPanel().padding(.horizontal, 16)
                 }
                 if !streakMatches.isEmpty {

@@ -148,6 +148,8 @@ async function platoonForGame(game, { season, bdl, gameLabel }) {
       value: pct3(c.favOps),
       tone: TONES.EDGE,
       spark: [round(c.offOps, 3), round(c.favOps, 3)],
+      // position drives the iOS Insights row's gold position tag (e.g. "SS").
+      meta: c.position ? { position: c.position } : undefined,
       relevance_score: c.score,
       player_id: c.playerId,
       team_id: c.teamId,
@@ -216,6 +218,7 @@ async function collectSide({ side, teamId, oppPitcher, oppThrows, season, bdl })
       playerId,
       teamId,
       name: b.name || 'Batter',
+      position: b.position || null,
       // Switch hitters: show the side they'll actually bat from tonight.
       batsLabel: bats === 'S' ? `switch (bats ${effSide} tonight)` : `bats ${bats}`,
       order,

@@ -336,6 +336,14 @@ export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
         duelsWon: n(s.duels?.won),
         // Defensive volume.
         tackles: n(s.tackles?.total),
+        interceptions: n(s.tackles?.interceptions),
+        blocks: n(s.tackles?.blocks),
+        // Carrying / 1v1 (attackers + wingers) — completed dribbles + attempts.
+        dribblesSuccess: n(s.dribbles?.success),
+        dribblesAttempts: n(s.dribbles?.attempts),
+        // Fouls drawn = gets fouled (dangerous carrier / target man); committed = risk.
+        foulsDrawn: n(s.fouls?.drawn),
+        foulsCommitted: n(s.fouls?.committed),
         // Discipline.
         yellow: n(s.cards?.yellow),
         red: n(s.cards?.red),

@@ -160,6 +160,7 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats }) {
         playerId,
         teamId,
         name,
+        position: b.position || null,
         recentOps,
         seasonOps,
         edge,
@@ -190,6 +191,8 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats }) {
       value: pct3(c.recentOps),
       tone: TONES.HOT,
       spark: [round(c.seasonOps, 3), round(c.recentOps, 3)],
+      // position drives the iOS Insights row's gold position tag (e.g. "2B").
+      meta: c.position ? { position: c.position } : undefined,
       relevance_score: scoreFromEdge(c.effectiveEdge, { scale: RELEVANCE_SCALE, base: 45 }),
       player_id: c.playerId,
       team_id: c.teamId,

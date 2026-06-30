@@ -523,6 +523,10 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     if (dt != null && dw != null && dt > 0) {
       out.push({ label: 'Duels won', value: `${dw}/${dt}`, detail: `${Math.round((dw / dt) * 100)}%` });
     }
+    const intc = num(s.interceptions);
+    if (intc != null && intc >= 2) out.push({ label: 'Interceptions', value: `${intc}`, detail: 'ball-winning' });
+    const dr = num(s.dribblesSuccess);
+    if (dr != null && dr >= 2) out.push({ label: 'Dribbles', value: `${dr}`, detail: 'completed' });
     pushOppMatchup(out, role, opp, oppForm);
     return out;
   }
@@ -538,6 +542,8 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     }
     const tk = num(s.tackles);
     if (tk != null) out.push({ label: 'Tackles', value: `${tk}`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
+    const intc = num(s.interceptions);
+    if (intc != null && intc >= 2) out.push({ label: 'Interceptions', value: `${intc}`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
     const y = num(s.yellow);
     const r = num(s.red);
     if (y != null || r != null) out.push({ label: 'Discipline', value: `${y ?? 0}Y / ${r ?? 0}R` });
@@ -558,6 +564,15 @@ function seasonSplitsByRole(s, role, { meta, opp, ownForm, oppForm } = {}) {
     // Conversion computed from grounded goals + shots — NOT xG (not groundable).
     out.push({ label: 'Conversion', value: `${Math.round((goals / shots) * 100)}%`, detail: `${goals} on ${shots} shots` });
   }
+  // Carrying + drawing fouls — the attacker reads that don't need xG (which intl
+  // feeds lack). Keeps a forward/winger card off the "thin" floor.
+  const dr = num(s.dribblesSuccess);
+  if (dr != null && dr >= 2) {
+    const att = num(s.dribblesAttempts);
+    out.push({ label: 'Dribbles', value: `${dr}`, detail: (att != null && att > 0) ? `${Math.round((dr / att) * 100)}% of ${att}` : 'completed' });
+  }
+  const fd = num(s.foulsDrawn);
+  if (fd != null && fd >= 3) out.push({ label: 'Fouls won', value: `${fd}`, detail: `over ${capsLabel(caps) || 'this cycle'}` });
   pushOppMatchup(out, role, opp, oppForm);
   // Form lives in RECENT (payload.form) — do NOT duplicate the nation last-5 here.
   return out;
@@ -695,6 +710,8 @@ function strengthsWeaknesses({ sstat, form, formRows, role, ownForm, oppForm, me
       if (involvement >= 3) strengths.push(`Goal involvement — ${g ?? 0}G/${a ?? 0}A in ${caps} cap${caps === 1 ? '' : 's'}`);
       const kp = num(sstat.keyPasses);
       if (kp != null && kp >= 6) strengths.push(`Creator — ${kp} key passes over ${caps} cap${caps === 1 ? '' : 's'}`);
+      const mintc = num(sstat.interceptions);
+      if (mintc != null && mintc >= 5) strengths.push(`Ball-winner — ${mintc} interceptions this cycle`);
       const dt = num(sstat.duelsTotal);
       const dw = num(sstat.duelsWon);
       if (dt != null && dw != null && dt >= 4) {
@@ -709,6 +726,8 @@ function strengthsWeaknesses({ sstat, form, formRows, role, ownForm, oppForm, me
       if (g != null && g >= 2) strengths.push(`Set-piece threat — ${g} goals from the back this cycle`);
       const tk = num(sstat.tackles);
       if (tk != null && tk >= 8) strengths.push(`Tackle volume — ${tk} tackles over ${caps} cap${caps === 1 ? '' : 's'}`);
+      const intc = num(sstat.interceptions);
+      if (intc != null && intc >= 5) strengths.push(`Reads the game — ${intc} interceptions this cycle`);
       const csInfo = cleanSheetsFromForm(ownForm);
       if (csInfo && csInfo.n >= 2) {
         const pct = Math.round((csInfo.cs / csInfo.n) * 100);
@@ -730,6 +749,11 @@ function strengthsWeaknesses({ sstat, form, formRows, role, ownForm, oppForm, me
         const conv = Math.round((g / shots) * 100);
         if (conv >= 25) strengths.push(`Clinical finisher — ${conv}% conversion (${g} on ${shots})`);
       }
+      // Player-specific carrier reads (no xG needed) — keep attackers off team-only copy.
+      const dr = num(sstat.dribblesSuccess);
+      if (dr != null && dr >= 5) strengths.push(`Carries the ball — ${dr} dribbles completed this cycle`);
+      const fd = num(sstat.foulsDrawn);
+      if (fd != null && fd >= 6) strengths.push(`Draws fouls — ${fd} won, a set-piece source`);
       if (involvement === 0 && caps >= 3) weaknesses.push(`No goals or assists in ${caps} caps this cycle`);
     }
   }

@@ -105,6 +105,9 @@ function buildRegressionRow(match, acc) {
     game: `${fifaCode(away)} @ ${fifaCode(home)}`,
     value: `xG ${hot ? '+' : '-'}${Math.abs(cand.gap).toFixed(1)}`,
     tone: hot ? TONES.CAUTION : TONES.EDGE,
+    // [goals/match, xG/match] — drives the iOS WC regression board's Goals-vs-xG
+    // gap bar (the soccer analog of the pitcher board's ERA→xERA bar).
+    spark: [Number(goalsPer), Number(xgPer)],
     relevance_score: clampScore(Math.min(SCORE_CAP, SCORE_BASE + SCORE_PER * Math.abs(cand.gap))),
     game_id: match.id,
   });

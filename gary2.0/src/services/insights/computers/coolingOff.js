@@ -137,6 +137,7 @@ async function coldForGame(game, { season, bdl, gameLabel, stats }) {
         playerId,
         teamId,
         name: b.name || seasonRec.player?.full_name || 'Batter',
+        position: b.position || null,
         recentOps,
         seasonOps,
         dip,
@@ -173,13 +174,18 @@ async function coldForGame(game, { season, bdl, gameLabel, stats }) {
       player_id: c.playerId,
       team_id: c.teamId,
       game_id: gameId,
-      meta: c.pitcherName ? {
-        kind: 'cold_context',
-        pitcher_name: c.pitcherName,
-        pitcher_hand: c.pitcherHand,
-        vs_hand_ops: round(c.vsHandOps, 3),
-        vs_hand_ab: c.vsHandAb,
-        side: c.sideWord || null,
+      // position drives the iOS Insights row's gold position tag; merged with the
+      // cold-context matchup payload when a probable pitcher is known.
+      meta: (c.position || c.pitcherName) ? {
+        ...(c.position ? { position: c.position } : {}),
+        ...(c.pitcherName ? {
+          kind: 'cold_context',
+          pitcher_name: c.pitcherName,
+          pitcher_hand: c.pitcherHand,
+          vs_hand_ops: round(c.vsHandOps, 3),
+          vs_hand_ab: c.vsHandAb,
+          side: c.sideWord || null,
+        } : {}),
       } : undefined,
     });
   });

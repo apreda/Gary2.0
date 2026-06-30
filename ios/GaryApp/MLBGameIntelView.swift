@@ -725,9 +725,16 @@ struct PlayerCardV4: View {
                 } else if let p = pack {
                     sections(p)
                 } else {
-                    Text("Full breakdown posts once this player's lineup is confirmed.")
-                        .font(GaryFonts.text(13)).foregroundStyle(PCV4.mut2)
-                        .padding(.horizontal, 24).padding(.vertical, 26)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("BUILDING THE BREAKDOWN")
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4).foregroundStyle(PCV4.gold).opacity(0.92)
+                        Text("\(name)'s full stat profile fills in as the lineup firms up — check back closer to kickoff.")
+                            .font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 26).padding(.vertical, 24)
+                    .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
                 }
             }
         }
@@ -913,16 +920,23 @@ struct PlayerCardV4: View {
         }
     }
 
-    // split row: vs RHP / vs LHP with a bar
+    // split row — a stat-sheet line: label left, the VALUE prominent on the right
+    // with its context beneath it (so a "Dribbles · 3 · 67% of 12" reads at a glance).
     private func splitRow(_ s: PlayerInsightPack.LabeledStat) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(s.label ?? "").font(GaryFonts.text(13, .bold)).foregroundStyle(PCV4.ink)
-                Spacer()
-                if let d = s.detail { Text(d).font(GaryFonts.mono(11)).foregroundStyle(PCV4.mut2) }
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(s.label ?? "").font(GaryFonts.text(13, .semibold)).foregroundStyle(PCV4.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(s.value ?? "—").font(GaryFonts.display(16)).foregroundStyle(PCV4.ink)
+                    .lineLimit(1).minimumScaleFactor(0.65)
+                if let d = s.detail {
+                    Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut2)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
             }
-            Text(s.value ?? "").font(GaryFonts.text(13)).foregroundStyle(PCV4.mut)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // recent: 3-up grid + headline

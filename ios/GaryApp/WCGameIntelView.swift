@@ -120,14 +120,12 @@ struct WCGameIntelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if showHeader { header }
+            // The projected/confirmed-XI pitch is the point of Game Intel — kept on
+            // BOTH the Picks game page and the Hub (founder likes the lineup pop-up).
             stateTabs
             pitchCard
-            // THE READ removed (Jun 19, founder) — redundant with the MORE INTEL modules
-            // below; the dashboard already carries the read.
             // Source Consensus card removed (Jun 18) — it had NO backend lane, so it
-            // only rendered hardcoded sample desks ("Almoez Ali · 3 START / 2 BENCH"),
-            // i.e. fake data. Restore with real data when the desk-lineup feed exists;
-            // until then show nothing rather than something wrong.
+            // only rendered hardcoded sample desks, i.e. fake data.
             if !edges.isEmpty {
                 EdgesSection(title: "MORE INTEL", edges: edges).padding(.top, 16)
             }
@@ -489,4 +487,158 @@ struct WCGameIntelView: View {
         XIPlayer(num: 10, name: "Mokoena", pos: "M"), XIPlayer(num: 7, name: "Nkosi", pos: "M"),
         XIPlayer(num: 9, name: "Sithole", pos: "F"), XIPlayer(num: 11, name: "Botha", pos: "F"),
     ]
+}
+
+// ======================== WC TODAY SECTION ========================
+// The World Cup treatment of the Picks → TODAY page's "TODAY'S EDGES" section.
+// PicksTodayPage swaps this in for WC ONLY (when the sport scope is "WC"); the
+// shared MLB EdgesSection / SignalRow are never touched, so the locked Picks
+// design can't regress. Backend is untouched — every field is read from the
+// Signal / SwapMeta already loaded into the page.
+//
+// What it fixes vs the generic component:
+//  • 8 auto-generated category tabs → 3 fixed, fan-legible lanes. No bubbles/capsules.
+//  • Lineups dropped entirely — the confirmedXI team sheets already live on each
+//    game's own pick page (WCGameIntelView), so the TODAY page never repeats them.
+//  • Raw .system() fonts + faint 0.3–0.7 grey → all GaryFonts, contrast to spec.
+// Lives here (not a new file) because the Xcode target isn't a synchronized
+// folder, and this keeps the WC view code cohesive + reuses the WCI palette above.
+
+/// The display lanes the backend's WC SignalKinds bucket into (lineups excluded).
+private enum WCLane: String, CaseIterable {
+    case form       = "FORM & xG"
+    case stakes     = "STAKES"
+    case conditions = "CONDITIONS"
+
+    var icon: String {
+        switch self {
+        case .form:       return "chart.line.uptrend.xyaxis"
+        case .stakes:     return "trophy.fill"
+        case .conditions: return "cloud.sun.fill"
+        }
+    }
+
+    /// Bucket a backend SignalKind into a display lane. Lineup rows (situational
+    /// confirmedXI) are filtered out upstream. Unmapped kinds fall into FORM so a
+    /// future WC lane can never silently vanish from the page.
+    static func lane(for kind: SignalKind) -> WCLane {
+        switch kind {
+        case .tournament, .advancement:  return .stakes
+        case .ballpark:                  return .conditions
+        default:                         return .form   // streak, h2h, xg, rest/situational
+        }
+    }
+}
+
+/// WC-only replacement for EdgesSection on the Picks TODAY page.
+struct WCTodaySection: View {
+    let edges: [Signal]
+    @State private var selectedLane: WCLane? = nil
+
+    /// Lineups (the confirmedXI team sheets) are dropped — they already live on each
+    /// game's own pick page, so the TODAY page never repeats them.
+    private var laneEdges: [Signal] { edges.filter { $0.confirmedXI == nil } }
+
+    /// Lanes with ≥1 row today, in fixed order (stable day to day, not feed order).
+    private var lanesPresent: [WCLane] {
+        let present = Set(laneEdges.map { WCLane.lane(for: $0.kind) })
+        return WCLane.allCases.filter { present.contains($0) }
+    }
+    private var activeLane: WCLane {
+        if let s = selectedLane, lanesPresent.contains(s) { return s }
+        return lanesPresent.first ?? .form
+    }
+    /// The active lane's rows, grouped by game in first-appearance order.
+    private var gamesInLane: [(game: String, rows: [Signal])] {
+        let laneRows = laneEdges.filter { WCLane.lane(for: $0.kind) == activeLane }
+        var order: [String] = []
+        var byGame: [String: [Signal]] = [:]
+        for s in laneRows {
+            if byGame[s.game] == nil { order.append(s.game) }
+            byGame[s.game, default: []].append(s)
+        }
+        return order.map { (game: $0, rows: byGame[$0] ?? []) }
+    }
+
+    var body: some View {
+        if !laneEdges.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("WORLD CUP · TODAY")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+                    .padding(.horizontal, 16).padding(.top, 4)
+                if lanesPresent.count > 1 { laneStrip }
+                VStack(spacing: 0) {
+                    ForEach(Array(gamesInLane.enumerated()), id: \.offset) { _, g in
+                        laneContent(for: g.game, rows: g.rows)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    /// Same idiom as EdgesSection.categoryTabBar — gold underline marks the active lane.
+    private var laneStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 22) {
+                ForEach(lanesPresent, id: \.self) { lane in
+                    let active = lane == activeLane
+                    Button { withAnimation(.easeInOut(duration: 0.15)) { selectedLane = lane } } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: lane.icon).font(.system(size: 11, weight: .bold))
+                            Text(lane.rawValue).font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
+                        }
+                        .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
+                        .padding(.bottom, 8)
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 2)
+        }
+    }
+
+    /// A small game header + that game's edge rows (copy verbatim).
+    private func laneContent(for game: String, rows: [Signal]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(game.uppercased())
+                .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                .foregroundStyle(.white.opacity(0.4))
+                .padding(.top, 12).padding(.bottom, 2)
+            ForEach(rows) { s in WCEdgeRow(signal: s) }
+        }
+    }
+}
+
+/// A WC edge row (FORM & xG / STAKES / CONDITIONS). Copy stays verbatim; all text
+/// through GaryFonts; NO bubbles — the value is plain colored text, not a capsule.
+private struct WCEdgeRow: View {
+    let signal: Signal
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(signal.headline).font(GaryFonts.text(14.5)).foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !signal.detail.isEmpty {
+                    Text(signal.detail).font(GaryFonts.text(12.5)).foregroundStyle(.white.opacity(0.62))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 6)
+            if !signal.value.isEmpty {
+                let numeric = signal.value.contains(where: { $0.isNumber })
+                Text(signal.value)
+                    .font(GaryFonts.mono(numeric ? 17 : 11, bold: true))
+                    .tracking(numeric ? 0 : 0.5)
+                    .foregroundStyle(signal.tone.color)
+            }
+        }
+        .padding(.vertical, 10)
+        .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
+    }
 }
