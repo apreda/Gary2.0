@@ -10389,6 +10389,8 @@ struct TomorrowView {
         var onWcStreakTap: ((String) -> Void)? = nil
         /// 1Hz tick for the live countdown. Re-render every second.
         @State private var now = Date()
+        /// Live scores drive the hero's countdown → live-score → next-game flip.
+        @ObservedObject private var liveCache = LiveScoreCache.shared
         /// The active look-ahead tab (Starters · Key Returns · Form · Run
         /// Profile · Weather). The giant inline list overflowed the screen — this
         /// is now a contained tabbed table that scrolls internally.
@@ -10425,6 +10427,27 @@ struct TomorrowView {
         }
 
         // ── ① Countdown hero ───────────────────────────────────────────────
+
+        /// LIVE state of the hero — the in-progress game's score in the same card
+        /// style as the countdown: green LIVE label + equalizer, the score big, the
+        /// clock/inning beneath.
+        @ViewBuilder private func liveScoreHero(_ s: LiveScore) -> some View {
+            HStack(spacing: 7) {
+                Text("\((s.league ?? "").uppercased()) · LIVE")
+                    .font(GaryFonts.mono(10, bold: true)).tracking(2)
+                    .foregroundStyle(GaryColors.gold)
+                LiveBars(color: Color(hex: "#3FB950"))
+            }
+            Text(s.scoreLine ?? s.abbrGame)
+                .font(GaryFonts.mono(30, bold: true))
+                .foregroundStyle(.white)
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .padding(.top, 6)
+            Text((s.detail ?? "").isEmpty ? "In progress" : (s.detail ?? ""))
+                .font(GaryFonts.text(13))
+                .foregroundStyle(.white.opacity(0.55))
+                .padding(.top, 7)
+        }
 
         private var countdownHero: some View {
             // When leagueFilter is set (Hub), derive sport-specific countdown
@@ -10475,8 +10498,23 @@ struct TomorrowView {
             // TODAY only: the first game already started, so a ticking 00:00:00
             // would be wrong — show an "underway" state instead.
             let started = (target != nil) && anyLines && !isFuture
+            // The hero follows the biggest game — WC-preferred (founder). A WC game
+            // in progress takes over the hero with a live score; a live non-WC game
+            // only features when there's no upcoming WC left to count down to. When
+            // it ends, liveFeature clears and the countdown resumes for the next one.
+            let liveFeature: LiveScore? = {
+                guard leagueFilter == nil, dayLabel == "TODAY" else { return nil }
+                let live = liveCache.scores.filter { $0.isLive }
+                if let wc = live.first(where: { ($0.league ?? "").uppercased() == "WC" }) { return wc }
+                let hasUpcomingWC = (board?.board ?? []).contains {
+                    ($0.league ?? "").uppercased() == "WC" && (parseISO8601($0.commence_time ?? "") ?? .distantPast) > now
+                }
+                return hasUpcomingWC ? nil : live.first
+            }()
             return VStack(alignment: .leading, spacing: 0) {
-                if hasClock, let target {
+                if let live = liveFeature {
+                    liveScoreHero(live)
+                } else if hasClock, let target {
                     Text(TomorrowView.countdownTerm(cdSport))
                         .font(GaryFonts.mono(10, bold: true)).tracking(2)
                         .foregroundStyle(GaryColors.gold)
