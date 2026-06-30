@@ -128,6 +128,22 @@ struct SwapMeta: Decodable {
     let batting_order: Int?  // lineup spot
     let opp_sp: String?      // opposing starter (hitter pickups)
     let opp_sp_era: Double?  // opposing starter xERA
+    // Head-to-head payload (kind == "h2h"): season series dominance + last meeting.
+    let dominant: String?
+    let opponent: String?
+    let dominant_name: String?
+    let opponent_name: String?
+    let wins: Int?
+    let losses: Int?
+    let games: Int?
+    let last_meeting: H2HLast?
+}
+
+/// The last meeting in a head-to-head series (revenge read).
+struct H2HLast: Decodable {
+    let score: String?
+    let winner: String?
+    let revenge: Bool?
 }
 
 /// One team's confirmed starting XI (WC Confirmed XI lane).

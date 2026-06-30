@@ -18800,6 +18800,8 @@ struct Signal: Identifiable {
     /// Regression payload (pitcher rows) — direction, ERA/xERA, peripherals and
     /// the verdict. `reg.day` ("tonight"/"tomorrow") splits the Regression Board.
     var reg: SwapMeta? = nil
+    /// Head-to-head payload (head_to_head lane) — season series dominance + last meeting.
+    var h2h: SwapMeta? = nil
     /// The row's own EST slate day (insight_connections.date). Lets surfaces
     /// like the Regression Board re-anchor "Today"/"Tomorrow" against the
     /// CURRENT EST slate day (todayEST) instead of trusting a baked string,
@@ -21039,6 +21041,7 @@ extension Connection {
             swap: (meta?.kind == "swap") ? meta : nil,
             confirmedXI: (meta?.kind == "confirmedXI") ? meta : nil,
             reg: (meta?.kind == "regression_pitcher") ? meta : nil,
+            h2h: (meta?.kind == "h2h") ? meta : nil,
             slateDate: date,
             weather: (meta?.kind == "park_weather") ? meta : nil,
             fantasy: (meta?.kind == "fantasy_pickup") ? meta : nil,
@@ -21853,10 +21856,19 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
-                    if !items(.h2h).isEmpty {
-                        HubDisclosure(anchor: "owned", eyebrow: "Owned", count: items(.h2h).count, openSet: $openSections) {
+                    let h2hRows = items(.h2h).filter { $0.h2h != nil }
+                    let ownedRows = items(.h2h).filter { $0.h2h == nil }
+                    if !h2hRows.isEmpty {
+                        HubDisclosure(anchor: "headToHead", eyebrow: "Head-to-Head", count: h2hRows.count, openSet: $openSections) {
+                            VStack(spacing: 0) { ForEach(h2hRows) { s in HeadToHeadRow(s: s) { _ in selectedSignal = s } } }
+                                .quantPanel().padding(.horizontal, 16)
+                        }
+                        .id("headToHead")
+                    }
+                    if !ownedRows.isEmpty {
+                        HubDisclosure(anchor: "owned", eyebrow: "Owned", count: ownedRows.count, openSet: $openSections) {
                             VStack(spacing: 0) {
-                                ForEach(items(.h2h)) { s in
+                                ForEach(ownedRows) { s in
                                     SignalRow(s: s) { _ in
                                         if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                                     }
@@ -23403,6 +23415,64 @@ struct PlayerInsightSheet: View {
 /// ESPN-transaction-style injury swap row: the OUT player struck through on
 /// top (red), tonight's replacement below (green) with his slot + season line.
 /// Tapping anywhere opens the replacement's full Player Insights.
+/// Head-to-Head row — season-series dominance as a tug-of-war bar + the last
+/// meeting (the revenge read). Reads the h2h meta off the Signal.
+struct HeadToHeadRow: View {
+    let s: Signal
+    var onTap: (Signal) -> Void
+    private let green = Color(hex: "#63D17E")
+
+    var body: some View {
+        let h = s.h2h
+        let wins = max(h?.wins ?? 0, 0)
+        let losses = max(h?.losses ?? 0, 0)
+        let total = max(wins + losses, 1)
+        let domName = h?.dominant_name ?? "Team"
+        let oppName = h?.opponent_name ?? "Opponent"
+        let domAbbr = h?.dominant ?? ""
+        let oppAbbr = h?.opponent ?? ""
+        let last = h?.last_meeting
+
+        Button { onTap(s) } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 6) {
+                    Text(domName).font(GaryFonts.text(14, .semibold)).foregroundStyle(.white)
+                    Text("own \(oppName)").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                    Spacer(minLength: 6)
+                    Text("\(wins)-\(losses)").font(GaryFonts.mono(15, bold: true)).foregroundStyle(green)
+                }
+                GeometryReader { geo in
+                    let w = max(geo.size.width * CGFloat(wins) / CGFloat(total), 30)
+                    HStack(spacing: 0) {
+                        Text("\(domAbbr) \(wins)")
+                            .font(GaryFonts.mono(10, bold: true)).foregroundStyle(Color(hex: "#0B160C"))
+                            .padding(.leading, 8)
+                            .frame(width: w, height: 20, alignment: .leading)
+                            .background(LinearGradient(colors: [green.opacity(0.9), green.opacity(0.5)], startPoint: .leading, endPoint: .trailing))
+                        Text("\(oppAbbr) \(losses)")
+                            .font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.55))
+                            .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 8)
+                            .frame(height: 20)
+                            .background(Color.white.opacity(0.08))
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .frame(height: 20)
+                if let last, let score = last.score {
+                    Text(last.revenge == true
+                         ? "\(oppAbbr) took the last meeting \(score) — revenge spot"
+                         : "\(domAbbr) won the last meeting \(score)")
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.5))
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct BeneficiarySwapRow: View {
     let s: Signal
     let onTap: () -> Void
