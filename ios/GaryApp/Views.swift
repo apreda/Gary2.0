@@ -2838,24 +2838,36 @@ struct HomeView: View {
     /// The per-sport live record, inline in the tab row: a hairline, then
     /// "MLB 9-6  WC 2-0 ●" — league in its accent, record white, green pip when live.
     private var liveFormInline: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 11) {
             Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 19)
             ForEach(dailyForm) { c in
-                HStack(spacing: 5) {
-                    Text(c.league == "WC" ? "WC" : c.league)
-                        .font(GaryFonts.mono(12.5, bold: true))
-                        .foregroundStyle(c.league == "MLB"
-                            ? AnyShapeStyle(Color(hex: "#63D17E"))
-                            : AnyShapeStyle(Sport.from(league: c.league).accentColor))
-                    Text(c.record)
-                        .font(GaryFonts.mono(16, bold: true))
-                        .foregroundStyle(.white)
-                    if c.state == .live {
-                        Circle().fill(Color(hex: "#3FB950")).frame(width: 6, height: 6)
+                Button {
+                    // Tap a sport → its picks (Winners board jumps to that shelf).
+                    PicksFocusState.shared.focusSport = c.league
+                    if reduceMotion { selectedTab = 1 }
+                    else { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 } }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(c.league == "WC" ? "WC" : c.league)
+                            .font(GaryFonts.mono(12.5, bold: true))
+                            .foregroundStyle(c.league == "MLB"
+                                ? AnyShapeStyle(Color(hex: "#63D17E"))
+                                : AnyShapeStyle(Sport.from(league: c.league).accentColor))
+                        Text(c.record)
+                            .font(GaryFonts.mono(16, bold: true))
+                            .foregroundStyle(.white)
+                        if c.state == .live {
+                            LiveBars(color: Color(hex: "#3FB950"), animate: !reduceMotion)
+                        }
                     }
+                    .fixedSize()
                 }
-                .fixedSize()
+                .buttonStyle(.plain)
             }
+            // The affordance: these records tap through to the picks.
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.white.opacity(0.32))
         }
         .lineLimit(1)
     }
@@ -4911,6 +4923,27 @@ struct HomeHeadlinesFeed: View {
     }
 }
 
+/// A tiny 3-bar equalizer that signals a sport is LIVE — bars bounce when
+/// animating, and sit at a static height under Reduce Motion.
+struct LiveBars: View {
+    var color: Color
+    var animate: Bool = true
+    @State private var up = false
+    private let lo: [CGFloat] = [3, 6, 4]
+    private let hi: [CGFloat] = [10, 7, 11]
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(0..<3, id: \.self) { i in
+                Capsule().fill(color)
+                    .frame(width: 2.5, height: !animate ? hi[i] : (up ? hi[i] : lo[i]))
+                    .animation(animate ? .easeInOut(duration: 0.42).repeatForever(autoreverses: true).delay(Double(i) * 0.13) : nil, value: up)
+            }
+        }
+        .frame(height: 12, alignment: .bottom)
+        .onAppear { if animate { up = true } }
+    }
+}
+
 /// One cell of the LIVE FORM — a single sport's GAME-pick record for the current
 /// active slate day. Built today as games settle (LIVE while in progress), then
 /// holds last night's final until the next day's results land.
@@ -6309,6 +6342,8 @@ struct PremiumPicksView: View {
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     /// Observe the live-score cache so cards flip to live/final without a relaunch.
     @ObservedObject private var liveCache = LiveScoreCache.shared
+    /// Deep-link from Home's LIVE FORM: jump to a tapped sport's shelf.
+    @ObservedObject private var picksFocus = PicksFocusState.shared
 
     @State private var loading = true
     // Per-sport shelves: each sport shows TODAY's pick if it has one, else its last graded result.
@@ -6492,6 +6527,8 @@ struct PremiumPicksView: View {
                     }
                 }
                 .refreshable { await reload() }
+                .onChange(of: picksFocus.focusSport) { _ in jumpToFocusSport(proxy) }
+                .onChange(of: loading) { _ in jumpToFocusSport(proxy) }
             }
         }
         .task { await reload() }
@@ -6553,6 +6590,20 @@ struct PremiumPicksView: View {
                 await MainActor.run { checkoutItem = CheckoutItem(url: url) }
             }
         }
+    }
+
+    /// Consume a deep-linked sport (Home LIVE FORM tap) once the board's loaded:
+    /// switch to the mode that has it, highlight the chip, scroll to its shelf.
+    private func jumpToFocusSport(_ proxy: ScrollViewProxy) {
+        guard let sport = picksFocus.focusSport, !loading else { return }
+        if gameShelves.contains(where: { $0.league == sport }) { mode = .games }
+        else if propShelves.contains(where: { $0.league == sport }) { mode = .props }
+        else { picksFocus.focusSport = nil; return }
+        jumpedLeague = sport
+        withAnimation(.easeInOut(duration: 0.35)) {
+            proxy.scrollTo((mode == .games ? "g-" : "p-") + sport, anchor: .top)
+        }
+        picksFocus.focusSport = nil
     }
 
     /// Sport chips that jump the page to a league's shelf in the active mode.

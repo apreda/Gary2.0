@@ -45,6 +45,8 @@ class PickDetailState: ObservableObject {
 class PicksFocusState: ObservableObject {
     static let shared = PicksFocusState()
     @Published var focusGame: String? = nil
+    /// Deep-link from Home's LIVE FORM tap → jump the Winners board to this sport's shelf.
+    @Published var focusSport: String? = nil
 }
 
 // MARK: - Main Tab View with Liquid Glass
