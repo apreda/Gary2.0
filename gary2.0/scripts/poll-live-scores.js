@@ -71,7 +71,15 @@ function normStatus(raw) {
 }
 
 async function mlbRows() {
-  const games = (await bdl.getMlbGamesForDate(targetDate)) || [];
+  // BDL dates games by their UTC instant, so an 8pm+ ET game lands on the NEXT UTC
+  // day. Fetch BOTH UTC days and keep only this ET slate below — otherwise tonight's
+  // late games (the "8pm+ starts show no live score" bug) are never polled.
+  const nextUtc = (() => { const d = new Date(`${targetDate}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  const seenIds = new Set();
+  const games = [
+    ...((await bdl.getMlbGamesForDate(targetDate)) || []),
+    ...((await bdl.getMlbGamesForDate(nextUtc)) || []),
+  ].filter((g) => { const id = String(g.id); if (seenIds.has(id)) return false; seenIds.add(id); return true; });
   const rows = games.map((g) => {
     const status = normStatus(g.status);
     const detail = status === 'live' && Number.isFinite(Number(g.period))
@@ -94,7 +102,7 @@ async function mlbRows() {
       _etDate: etDateStr(g.date),
       _bdl: g,
     };
-  });
+  }).filter((r) => r._etDate === targetDate);   // only THIS ET slate
 
   // Enrich LIVE games with outs + baserunners from the MLB Stats API linescore.
   // Match BDL games to statsapi gamePks by normalized team name (abbr formats
@@ -198,8 +206,16 @@ async function nhlRows() {
     });
 }
 
-function wcRows() {
-  return fifaWorldCup.getMatchesForDate(targetDate).then((matches) => (matches || []).map((m) => {
+async function wcRows() {
+  // Same UTC-instant issue as MLB — a 10pm-ET match is the next UTC day. Fetch both
+  // and keep only this ET slate below.
+  const nextUtc = (() => { const d = new Date(`${targetDate}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  const seenWc = new Set();
+  const matches = [
+    ...((await fifaWorldCup.getMatchesForDate(targetDate)) || []),
+    ...((await fifaWorldCup.getMatchesForDate(nextUtc)) || []),
+  ].filter((m) => { const id = String(m.id); if (seenWc.has(id)) return false; seenWc.add(id); return true; });
+  return matches.map((m) => {
     const raw = String(m.status || '').toLowerCase();
     const status = raw === 'completed' ? 'final' : raw === 'scheduled' ? 'scheduled' : 'live';
     return {
@@ -220,7 +236,7 @@ function wcRows() {
       // ET slate date (a 10pm ET match = next UTC day; keep it on its own day).
       _etDate: etDateStr(m.datetime || m.commence_time),
     };
-  }));
+  }).filter((r) => r._etDate === targetDate);
 }
 
 function numOrNull(v) {
@@ -346,6 +362,17 @@ async function run() {
       });
     } catch (e) { console.warn(`[live_scores] phantom-row cleanup (${lg}) failed: ${e?.message || e}`); }
   }
+
+  // Purge stale rows from PAST slate days — live_scores only holds the live/today
+  // slate (last night's finals come from game_results). Without this every game ever
+  // polled accumulated (a whole season of rows leaked in + caused stale matches).
+  try {
+    await axios({
+      method: 'DELETE',
+      url: `${REST_URL}?date=lt.${targetDate}`,
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}`, Prefer: 'return=minimal' },
+    });
+  } catch (e) { console.warn(`[live_scores] stale-day purge failed: ${e?.message || e}`); }
 
   // Grade any of TODAY's games that JUST went final — picks/props/insights now,
   // not at 6:45am. Only today's-date rows: a spillover game stamped to its own
