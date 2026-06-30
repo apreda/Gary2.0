@@ -144,7 +144,7 @@ struct MLBGameIntelView: View {
     private var shownTeam: SupabaseAPI.MLBTeamLineup? { homeUp ? realHome : realAway }
 
     private func module(_ kinds: Set<SignalKind>) -> [Signal] { edges.filter { kinds.contains($0.kind) } }
-    private var pitchingEdges: [Signal] { module([.starterForm, .firstInning, .runningGame]) }
+    private var pitchingEdges: [Signal] { module([.starterForm, .firstInning, .runningGame]).filter { $0.nrfi == nil } }
     private var batsEdges: [Signal] { module([.hot, .cold, .platoon, .regression, .hrThreat, .h2h, .streak]).filter { $0.h2h == nil } }
     private var parkEdges: [Signal] { module([.parkWeather, .ballpark]) }
     private var otherEdges: [Signal] {
@@ -181,6 +181,18 @@ struct MLBGameIntelView: View {
                         .foregroundStyle(.white.opacity(0.4))
                         .padding(.horizontal, 16).padding(.top, 4)
                     HeadToHeadRow(s: h2hEdge) { _ in }
+                        .padding(.horizontal, 16)
+                }
+                .padding(.top, 8)
+            }
+            // First Inning — the NRFI/YRFI dots (each side's recent first innings).
+            if let nrfiEdge = edges.first(where: { $0.nrfi != nil }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("FIRST INNING")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.horizontal, 16).padding(.top, 4)
+                    FirstInningRow(s: nrfiEdge) { _ in }
                         .padding(.horizontal, 16)
                 }
                 .padding(.top, 8)

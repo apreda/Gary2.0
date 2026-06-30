@@ -137,6 +137,21 @@ struct SwapMeta: Decodable {
     let losses: Int?
     let games: Int?
     let last_meeting: H2HLast?
+    // NRFI/YRFI payload (kind == "nrfi"): each side's recent 1st-inning sequence.
+    let side: String?         // "NRFI" | "YRFI"
+    let home_abbr: String?
+    let away_abbr: String?
+    let home_seq: [Int]?      // per game: 1 = run in the 1st, 0 = scoreless
+    let away_seq: [Int]?
+    let home_any: Int?
+    let home_n: Int?
+    let away_any: Int?
+    let away_n: Int?
+    // Single-team variant of the nrfi row (TEAM_HOT/TEAM_QUIET): one side's seq.
+    let team_abbr: String?
+    let team_seq: [Int]?
+    let team_scored: Int?
+    let team_n: Int?
 }
 
 /// The last meeting in a head-to-head series (revenge read).

@@ -18802,6 +18802,8 @@ struct Signal: Identifiable {
     var reg: SwapMeta? = nil
     /// Head-to-head payload (head_to_head lane) — season series dominance + last meeting.
     var h2h: SwapMeta? = nil
+    /// NRFI/YRFI payload — each side's recent first-inning sequence for the dots.
+    var nrfi: SwapMeta? = nil
     /// The row's own EST slate day (insight_connections.date). Lets surfaces
     /// like the Regression Board re-anchor "Today"/"Tomorrow" against the
     /// CURRENT EST slate day (todayEST) instead of trusting a baked string,
@@ -21042,6 +21044,7 @@ extension Connection {
             confirmedXI: (meta?.kind == "confirmedXI") ? meta : nil,
             reg: (meta?.kind == "regression_pitcher") ? meta : nil,
             h2h: (meta?.kind == "h2h") ? meta : nil,
+            nrfi: (meta?.kind == "nrfi") ? meta : nil,
             slateDate: date,
             weather: (meta?.kind == "park_weather") ? meta : nil,
             fantasy: (meta?.kind == "fantasy_pickup") ? meta : nil,
@@ -22988,12 +22991,22 @@ struct RegressionBoard: View {
         (s.headline.components(separatedBy: ":").first ?? s.headline).trimmingCharacters(in: .whitespaces)
     }
     private func gapBar(_ era: Double, _ xera: Double) -> some View {
+        // ERA (red) over xERA (green) on a SHARED scale — the length difference
+        // between the two bars IS the regression read, so the gap pops at a glance
+        // (founder, Jun 30: "lean harder on the ERA↔xERA gap bar").
         let maxV = max(era, xera, 0.1)
-        return HStack(spacing: 3) {
-            Capsule().fill(HubPalette.red).frame(width: max(3, CGFloat(era / maxV) * 38), height: 5)
-            Capsule().fill(HubPalette.green).frame(width: max(3, CGFloat(xera / maxV) * 38), height: 5)
+        let W: CGFloat = 84
+        return VStack(alignment: .leading, spacing: 3) {
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.06)).frame(width: W, height: 6)
+                Capsule().fill(HubPalette.red).frame(width: max(4, CGFloat(era / maxV) * W), height: 6)
+            }
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.06)).frame(width: W, height: 6)
+                Capsule().fill(HubPalette.green).frame(width: max(4, CGFloat(xera / maxV) * W), height: 6)
+            }
         }
-        .frame(width: 80, alignment: .leading)
+        .frame(width: W, alignment: .leading)
     }
 }
 
@@ -23415,6 +23428,51 @@ struct PlayerInsightSheet: View {
 /// ESPN-transaction-style injury swap row: the OUT player struck through on
 /// top (red), tonight's replacement below (green) with his slot + season line.
 /// Tapping anywhere opens the replacement's full Player Insights.
+/// First-Inning (NRFI/YRFI) row — recent first innings as scoreless-vs-run dots
+/// (green = scoreless). Handles the matchup row (both sides) and the single-team
+/// row (one side). Reads the nrfi meta; the headline carries the words.
+struct FirstInningRow: View {
+    let s: Signal
+    var onTap: (Signal) -> Void
+    private let green = Color(hex: "#3FB950")
+    private let red = Color(hex: "#E5614D")
+
+    var body: some View {
+        let m = s.nrfi
+        Button { onTap(s) } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                Text(s.headline)
+                    .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let teamSeq = m?.team_seq {
+                    dotRow(m?.team_abbr ?? "", teamSeq)
+                } else {
+                    dotRow(m?.away_abbr ?? "", m?.away_seq ?? [])
+                    dotRow(m?.home_abbr ?? "", m?.home_seq ?? [])
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private func dotRow(_ abbr: String, _ seq: [Int]) -> some View {
+        HStack(spacing: 4) {
+            Text(abbr).font(GaryFonts.mono(9.5, bold: true)).foregroundStyle(.white.opacity(0.55))
+                .frame(width: 34, alignment: .leading)
+            ForEach(Array(seq.enumerated()), id: \.offset) { _, v in
+                Circle().fill(v == 0 ? green.opacity(0.85) : red.opacity(0.5)).frame(width: 8, height: 8)
+            }
+            Spacer(minLength: 6)
+            Text("\(seq.filter { $0 == 0 }.count)/\(seq.count) clean")
+                .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.45))
+        }
+    }
+}
+
 /// Head-to-Head row — season-series dominance as a tug-of-war bar + the last
 /// meeting (the revenge read). Reads the h2h meta off the Signal.
 struct HeadToHeadRow: View {

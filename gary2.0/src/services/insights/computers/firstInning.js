@@ -144,6 +144,13 @@ export async function computeFirstInning(ctx) {
         tone: TONES.COLD,
         relevance_score: clampScore(58 + (NRFI_MAX * 2 - hAny - aAny) * 4),
         game_id: gameId,
+        meta: {
+          kind: 'nrfi', side: 'NRFI',
+          home_abbr: home.abbreviation, away_abbr: away.abbreviation,
+          home_seq: homeSample.map((f) => (f.any ? 1 : 0)),
+          away_seq: awaySample.map((f) => (f.any ? 1 : 0)),
+          home_any: hAny, home_n: hN, away_any: aAny, away_n: aN,
+        },
       }));
       continue;
     }
@@ -160,6 +167,13 @@ export async function computeFirstInning(ctx) {
         tone: TONES.HOT,
         relevance_score: clampScore(58 + (hAny + aAny - YRFI_MIN * 2) * 4),
         game_id: gameId,
+        meta: {
+          kind: 'nrfi', side: 'YRFI',
+          home_abbr: home.abbreviation, away_abbr: away.abbreviation,
+          home_seq: homeSample.map((f) => (f.any ? 1 : 0)),
+          away_seq: awaySample.map((f) => (f.any ? 1 : 0)),
+          home_any: hAny, home_n: hN, away_any: aAny, away_n: aN,
+        },
       }));
       continue;
     }
@@ -173,12 +187,13 @@ export async function computeFirstInning(ctx) {
     for (const { team, sample } of sides) {
       const scored = rate(sample, 'scored');
       const n = sample.length;
+      const seq = sample.map((f) => (f.scored ? 1 : 0));   // 1 = scored in the 1st
       if (scored >= TEAM_HOT) {
         const score = clampScore(50 + (scored - TEAM_HOT) * 6);
-        if (!best || score > best.score) best = { team, scored, n, hot: true, score };
+        if (!best || score > best.score) best = { team, scored, n, hot: true, score, seq };
       } else if (scored <= TEAM_COLD) {
         const score = clampScore(50 + (TEAM_COLD - scored) * 6);
-        if (!best || score > best.score) best = { team, scored, n, hot: false, score };
+        if (!best || score > best.score) best = { team, scored, n, hot: false, score, seq };
       }
     }
     if (best) {
@@ -197,6 +212,12 @@ export async function computeFirstInning(ctx) {
         relevance_score: best.score,
         team_id: best.team.id,
         game_id: gameId,
+        meta: {
+          kind: 'nrfi', side: best.hot ? 'TEAM_HOT' : 'TEAM_QUIET',
+          team_abbr: best.team.abbreviation,
+          team_seq: best.seq,
+          team_scored: best.scored, team_n: best.n,
+        },
       }));
     }
   }
