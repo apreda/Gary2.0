@@ -10496,24 +10496,22 @@ struct TomorrowView {
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.top, 8)
                 } else if started {
-                    // TODAY, first game underway — name it, no ticking clock.
+                    // For TODAY this only fires once EVERY game has already started
+                    // (no upcoming game left), so cdMatchup is the day's FIRST game —
+                    // naming it froze the hero on "Japan @ Brazil · 1:00 PM" hours
+                    // later (founder bug). Show a clean slate-underway line instead of
+                    // a stale matchup + stale start time.
                     Text(dayLabel)
                         .font(GaryFonts.mono(10, bold: true)).tracking(2)
                         .foregroundStyle(GaryColors.gold)
-                    if let m = cdMatchup, !m.isEmpty {
-                        Text(m)
-                            .font(GaryFonts.mono(15, bold: true)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.92))
-                            .padding(.top, 4)
-                    }
-                    Text("Games are underway")
+                    Text("Today's games are underway")
                         .font(GaryFonts.text(20, .semibold))
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.top, 6)
-                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: dayLabel == "TODAY"))
+                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: false))
                         .font(GaryFonts.text(13))
                         .foregroundStyle(.white.opacity(0.45))
-                        .padding(.top, 6)
+                        .padding(.top, 8)
                 } else {
                     // Honest-empty: no slate posted (iso nil) OR lines not open.
                     Text(dayLabel)
