@@ -534,8 +534,30 @@ Deno.serve(async () => {
   const propsCache = new Map<string, any[]>();
 
   // Pull MLB games + WC matches once (final-status only matters at grade time).
+  // MLB games are ET-filtered per date: BDL indexes by UTC instant, so a late-ET game
+  // (8pm+ ET) files under tomorrow's UTC date. Fetch BOTH UTC days per ET date and keep
+  // only games whose real ET date matches — otherwise last night's late game (e.g. an
+  // 8pm ET Padres@Cubs) grades onto TODAY's repeated matchup by name (phantom result).
+  const etDateOf = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const mlbForET = async (etDate: string) => {
+    const nx = new Date(etDate + "T00:00:00Z");
+    nx.setUTCDate(nx.getUTCDate() + 1);
+    const nxStr = nx.toISOString().slice(0, 10);
+    const [a, b] = await Promise.all([
+      bdlGet("/mlb/v1/games", { dates: [etDate], per_page: "50" }),
+      bdlGet("/mlb/v1/games", { dates: [nxStr], per_page: "50" }),
+    ]);
+    const seen = new Set<string>();
+    return [...((a as any[]) || []), ...((b as any[]) || [])].filter((g: any) => {
+      if (!g || g.id == null || seen.has(String(g.id)) || !g.date) return false;
+      if (etDateOf(g.date) !== etDate) return false;
+      seen.add(String(g.id));
+      return true;
+    });
+  };
   const [mlbGames, wcMatches] = await Promise.all([
-    Promise.all(dates.map((d) => bdlGet("/mlb/v1/games", { dates: [d], per_page: "50" }))).then((a) => a.flat()),
+    Promise.all(dates.map(mlbForET)).then((a) => a.flat()),
     bdlGet("/fifa/worldcup/v1/matches", { seasons: [String(WC_SEASON)], per_page: "100" }),
   ]);
 
@@ -575,6 +597,10 @@ Deno.serve(async () => {
         hScore = reg.home; vScore = reg.away;
       } else if (league === "MLB") {
         const g = mlbGames.find((x: any) => {
+          // Scope to THIS pick's ET date so a repeated matchup on an adjacent day
+          // (Padres@Cubs today vs last night) can't cross-match and grade the pick
+          // against the wrong game.
+          if (!x.date || etDateOf(x.date) !== date) return false;
           const gh = norm(x.home_team?.full_name ?? x.home_team?.name ?? "");
           const gv = norm(x.away_team?.full_name ?? x.away_team?.name ?? "");
           const ph = norm(pick.homeTeam ?? ""), pv = norm(pick.awayTeam ?? "");
