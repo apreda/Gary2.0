@@ -18232,21 +18232,26 @@ final class PropsSlateStore: ObservableObject {
 
     /// Loads props + game picks once. Safe to call from multiple views' `.task`;
     /// only the first call does the network work, the rest no-op (unless forced).
-    func loadIfNeeded(forceRefresh: Bool = false) async {
-        // Day-rollover guard: if the app sat open past the 3am ET slate rollover,
-        // `loaded` is still true but the board holds YESTERDAY. Detect the mismatch
-        // and reset the today-state so keep-last-good adopts today's slate instead
-        // of pinning yesterday's finished picks under a "Today" header.
+    /// Reset the TODAY-state when the EST slate day has rolled (app left open past
+    /// the 3am ET rollover). Called at the top of EVERY load path — loadIfNeeded AND
+    /// refresh (foreground) — so keep-last-good can never pin the board to yesterday
+    /// under a "Today" header. No-op on first load and within the same day.
+    private func resetIfDayRolled() async {
         let today = SupabaseAPI.todayEST()
-        let dayRolled = !loadedDate.isEmpty && loadedDate != today
-        if loaded && !forceRefresh && !dayRolled { return }
-        if dayRolled {
-            await MainActor.run {
+        guard loadedDate != today else { return }
+        await MainActor.run {
+            if !loadedDate.isEmpty {
                 allProps = []; gamePicks = []; slate = []
                 todayGameResults = [:]; todayPropResults = [:]
             }
+            loadedDate = today
         }
-        await MainActor.run { loadedDate = today }
+    }
+
+    func loadIfNeeded(forceRefresh: Bool = false) async {
+        let dayRolled = !loadedDate.isEmpty && loadedDate != SupabaseAPI.todayEST()
+        if loaded && !forceRefresh && !dayRolled { return }
+        await resetIfDayRolled()
         // Props + game picks share no data — fetch them concurrently instead of
         // props-then-games serially (was the Picks-tab first-paint delay).
         async let p: Void = loadProps(forceRefresh: forceRefresh)
@@ -18256,6 +18261,7 @@ final class PropsSlateStore: ObservableObject {
 
     func refresh() async {
         refreshTick &+= 1
+        await resetIfDayRolled()
         async let p: Void = loadProps(forceRefresh: true)
         async let gp: Void = loadGamePicks(forceRefresh: true)
         _ = await (p, gp)
