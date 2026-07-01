@@ -10467,12 +10467,10 @@ struct TomorrowView {
                 Text((s.detail ?? "").isEmpty ? "In progress" : (s.detail ?? ""))
                     .font(GaryFonts.text(13))
                     .foregroundStyle(.white.opacity(0.55))
-                // Gary's live verdict on THIS game — the simple phrase the founder asked
-                // for: "GARY COVERING" (green) or "GARY IN THE RED" (red). Only shown
-                // when there's a pick + a decided lean.
+                // Gary's live verdict on THIS game — short, the app's standard terms.
                 if let st = status, st.verdict != .neutral, !st.pick.isEmpty {
                     Text("·").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.25))
-                    Text(st.verdict == .covering ? "GARY COVERING" : "GARY IN THE RED")
+                    Text(st.verdict == .covering ? "COVERING" : "TRAILING")
                         .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                         .foregroundStyle(st.verdict == .covering ? Color(hex: "#3FB950") : Color(hex: "#E5614D"))
                 }
@@ -21957,6 +21955,18 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
+                    // Tonight's Starters — a dense 2-up: each starter's recent FORM
+                    // beside his team's RECORD in his starts. Two glance-tables (the
+                    // 2-up-split layout applied where paired plain lists actually fit).
+                    let starterForm = items(.starterForm)
+                    let teamRecord = items(.teamRecord)
+                    if !starterForm.isEmpty, !teamRecord.isEmpty {
+                        HubSectionTitle(title: "Tonight's Starters").padding(.horizontal, 16).id("starters2up")
+                        HubTwoUp(leftTitle: "FORM", left: starterForm, rightTitle: "TEAM RECORD", right: teamRecord) { s in
+                            if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                        }
+                        .padding(.top, 8).padding(.bottom, 4)
+                    }
                     let h2hRows = items(.h2h).filter { $0.h2h != nil }
                     let ownedRows = items(.h2h).filter { $0.h2h == nil }
                     if !h2hRows.isEmpty {
@@ -22889,6 +22899,61 @@ struct FantasyPickupsBoard: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+/// Two compact tables side by side — a dense "2-up" for paired plain name+value
+/// lists (e.g. tonight's starters' FORM | their teams' RECORD). Gold column headers,
+/// subject + tone-colored value per row. Reused wherever two complementary lists read
+/// better side-by-side than as two long stacked sections.
+struct HubTwoUp: View {
+    let leftTitle: String
+    let left: [Signal]
+    let rightTitle: String
+    let right: [Signal]
+    var onTap: (Signal) -> Void = { _ in }
+
+    /// A short subject from a headline: "Zac Gallen: 9.18 ERA…" → "Gallen" (last name
+    /// before the colon); team-style "Cubs 1-7 in Rea's starts" → "Cubs" (leading team).
+    private func subject(_ s: Signal) -> String {
+        let h = s.headline
+        if let colon = h.firstIndex(of: ":") {
+            let namePart = String(h[..<colon]).trimmingCharacters(in: .whitespaces)
+            return namePart.components(separatedBy: " ").last ?? namePart
+        }
+        return h.components(separatedBy: " ").first ?? h
+    }
+
+    @ViewBuilder private func column(_ title: String, _ rows: [Signal]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title).font(GaryFonts.mono(10, bold: true)).tracking(1.2)
+                .foregroundStyle(GaryColors.gold).padding(.bottom, 12)
+            ForEach(Array(rows.prefix(3).enumerated()), id: \.offset) { _, s in
+                Button { onTap(s) } label: {
+                    HStack(spacing: 8) {
+                        Text(subject(s)).font(GaryFonts.text(15)).foregroundStyle(.white).lineLimit(1)
+                        Spacer(minLength: 6)
+                        Text(s.value).font(GaryFonts.mono(15, bold: true)).foregroundStyle(s.tone.color)
+                    }
+                    .padding(.vertical, 7).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(.white.opacity(0.06), lineWidth: 1))
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            column(leftTitle, left)
+            column(rightTitle, right)
+        }
+        .padding(.horizontal, 16)
     }
 }
 
