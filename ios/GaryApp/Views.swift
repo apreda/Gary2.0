@@ -3431,22 +3431,12 @@ struct HomeView: View {
             // Flip to today the moment this sport's games are LIVE (underway) OR have
             // graded — so MLB reads 0-0 LIVE once tonight's games start, not last
             // night's record. Only holds last night when today hasn't started yet.
-            if tw + tl + tp > 0 || liveNow {
-                cells.append(DailyFormCell(league: sport, wins: tw, losses: tl, pushes: tp,
-                                           state: liveNow ? .live : .today))
-            } else {
-                // Hold THIS sport's last played day — NOT the global anchor, which can
-                // be today (e.g. WC graded but MLB hasn't), which would drop MLB.
-                let priorDays = games
-                    .filter { ($0.league ?? "").uppercased() == sport && ($0.game_date ?? "") < slateDay }
-                    .compactMap { $0.game_date }
-                if let lastDay = priorDays.max() {
-                    let (yw, yl, yp) = tally(lastDay, sport)
-                    if yw + yl + yp > 0 {
-                        cells.append(DailyFormCell(league: sport, wins: yw, losses: yl, pushes: yp, state: .lastNight))
-                    }
-                }
-            }
+            // ALWAYS today's slate-day record — 0-0 until tonight's games grade, LIVE
+            // once underway. Resets at the 3am ET slate roll. No more holding last
+            // night's record, which lingered stale all the next day (founder Jul 1:
+            // "MLB should be 0-0 since no MLB games are live for today").
+            cells.append(DailyFormCell(league: sport, wins: tw, losses: tl, pushes: tp,
+                                       state: liveNow ? .live : .today))
         }
         return cells
     }
