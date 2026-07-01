@@ -364,10 +364,16 @@ function freshAcc() {
  * (confirmed in ballDontLieOddsService.js / poll-live-scores.js).
  */
 async function buildMlb(date) {
-  const [games, oddsRows] = await Promise.all([
-    bdl.getMlbGamesForDate(date),
+  // BDL files late-ET (West-Coast) games under tomorrow's UTC date — fetch games via
+  // the ET-date helper, and odds for BOTH UTC days so those late games still carry
+  // totals/ML (oddsByGame is keyed by game_id, so extra rows are harmless).
+  const nextUtc = (() => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  const [games, oddsA, oddsB] = await Promise.all([
+    bdl.getMlbGamesForETDate(date),
     bdl.getMlbGameOdds({ dates: [date] }),
+    bdl.getMlbGameOdds({ dates: [nextUtc] }),
   ]);
+  const oddsRows = [...(oddsA || []), ...(oddsB || [])];
 
   // Multiple vendor rows per game → take the median closing number per field.
   const oddsByGame = new Map();

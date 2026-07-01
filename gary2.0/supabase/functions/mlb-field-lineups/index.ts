@@ -127,7 +127,26 @@ Deno.serve(async (req) => {
   const dateStr = url.searchParams.get("date") || estDate();
   const season = Number(dateStr.slice(0, 4));
 
-  const games = await bdlGet("/mlb/v1/games", { dates: [dateStr], per_page: "50" });
+  // BDL files late-ET (West-Coast) games under tomorrow's UTC date — fetch both UTC
+  // days and keep only games whose real ET date === dateStr (adds tonight's late games,
+  // drops last night's leaked-in). Mirrors JS bdl.getMlbGamesForETDate.
+  const _next = new Date(`${dateStr}T00:00:00Z`);
+  _next.setUTCDate(_next.getUTCDate() + 1);
+  const _nextStr = _next.toISOString().slice(0, 10);
+  const [_g1, _g2] = await Promise.all([
+    bdlGet("/mlb/v1/games", { dates: [dateStr], per_page: "50" }),
+    bdlGet("/mlb/v1/games", { dates: [_nextStr], per_page: "50" }),
+  ]);
+  const _seen = new Set<string>();
+  const games: any[] = [];
+  for (const g of [...((_g1 as any[]) || []), ...((_g2 as any[]) || [])]) {
+    if (!g || g.id == null || _seen.has(String(g.id))) continue;
+    const iso = g.date;
+    if (!iso) continue;
+    if (new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/New_York" }) !== dateStr) continue;
+    _seen.add(String(g.id));
+    games.push(g);
+  }
 
   // Real probable starters for the date, hydrated once from the MLB Stats API schedule
   // (?hydrate=probablePitcher). Used to fill the PROJECTED lineup's pitcher slot with the

@@ -4991,6 +4991,35 @@ const ballDontLieService = {
   },
 
   /**
+   * MLB games whose real ET calendar date === dateStr. BDL indexes games by UTC
+   * instant, so an 8pm+ ET (incl. West-Coast) game files under TOMORROW's UTC date;
+   * a single-date fetch drops those late games AND leaks last night's late games in.
+   * Fetch BOTH UTC days, dedupe by id, and keep only games whose ET date matches.
+   * (Same fix as poll-live-scores.js / generateInsightConnections.js — the shared
+   * home so every slate-anchored caller stays in sync.)
+   */
+  async getMlbGamesForETDate(dateStr) {
+    const next = new Date(`${dateStr}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    const nextStr = next.toISOString().slice(0, 10);
+    const [d1, d2] = await Promise.all([
+      this.getMlbGamesForDate(dateStr),
+      this.getMlbGamesForDate(nextStr),
+    ]);
+    const seen = new Set();
+    const out = [];
+    for (const g of [...(d1 || []), ...(d2 || [])]) {
+      if (!g || g.id == null || seen.has(g.id)) continue;
+      const iso = g.date;
+      if (!iso) continue;
+      if (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) !== dateStr) continue;
+      seen.add(g.id);
+      out.push(g);
+    }
+    return out;
+  },
+
+  /**
    * Get MLB pre-game lineups (batting order + probable pitchers) from BDL.
    * Returns { home: { batters: [...], pitcher: {...} }, away: { ... } }
    * Batters include: name, position, battingOrder, batsThrows

@@ -87,7 +87,7 @@ async function buildMlbPulse(date) {
   if (!bdl) return [];
 
   const season = seasonForDate(date);
-  const games = asArray(await safeCall(() => bdl.getMlbGamesForDate(date), []))
+  const games = asArray(await safeCall(() => bdl.getMlbGamesForETDate(date), []))
     .map(normalizeGame)
     .filter(Boolean);
   if (!games.length) {

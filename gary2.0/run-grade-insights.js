@@ -649,7 +649,7 @@ async function gradeMlb(rows) {
   // Final scores / winners for the slate (one cached call).
   let slate = [];
   try {
-    slate = (await bdl.getMlbGamesForDate(targetDate)) || [];
+    slate = (await bdl.getMlbGamesForETDate(targetDate)) || [];
   } catch (err) {
     console.error(`[grade-insights][MLB] slate fetch failed: ${err?.message || err}`);
     slate = [];

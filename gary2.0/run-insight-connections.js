@@ -348,7 +348,7 @@ async function buildAndStoreCards({ date, league, connections }) {
       const matches = (await fifaWorldCupService.getMatchesForDate(date)) || [];
       packs = await buildWcPlayerInsightCards({ date, league, connections, matches });
     } else {
-      const games = (await ballDontLieService.getMlbGamesForDate(date)) || [];
+      const games = (await ballDontLieService.getMlbGamesForETDate(date)) || [];
       packs = await buildPlayerInsightCards({ date, league, connections, games });
     }
 

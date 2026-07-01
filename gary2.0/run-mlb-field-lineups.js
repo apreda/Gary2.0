@@ -60,7 +60,7 @@ async function main() {
   if (!SUPABASE_URL || !SERVICE_KEY) { console.error('❌ Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY'); process.exit(1); }
   console.log(`[field-lineups] building ${dateStr} (season ${season})`);
 
-  const games = (await bdl.getMlbGamesForDate(dateStr)) || [];
+  const games = (await bdl.getMlbGamesForETDate(dateStr)) || [];
   console.log(`[field-lineups] ${games.length} MLB games`);
 
   // Real probable starters for the date, hydrated once from the MLB Stats API
