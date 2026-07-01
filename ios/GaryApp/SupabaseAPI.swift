@@ -622,15 +622,18 @@ enum SupabaseAPI {
         ])
         do {
             let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                print("[fetchTodayBoard] HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
-                return nil
+            if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+               let row = try JSONDecoder().decode([TomorrowBoard].self, from: data).first {
+                return row
             }
-            return try JSONDecoder().decode([TomorrowBoard].self, from: data).first
         } catch {
             print("[fetchTodayBoard] error \(date): \(error.localizedDescription)")
-            return nil
         }
+        // FALLBACK: today_board is unpopulated (nothing writes it) — the scheduler
+        // publishes the day's board to tomorrow_board keyed by GAME DATE, so today's
+        // row lives there. Read that so the Home countdown/board never vanishes on the
+        // 3am rollover instead of skipping the whole hero (todayBoard == nil).
+        return await fetchTomorrowBoard(date: date)
     }
 
     /// The night's betting recaps (game_recaps): headline + 2-4 sentence

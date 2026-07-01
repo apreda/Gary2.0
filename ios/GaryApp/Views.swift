@@ -2499,7 +2499,10 @@ struct HomeView: View {
         // Big Games renders below the form (includeBigGames:false here).
         if let tb = todayBoard {
             TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false,
-                              includeBigGames: false, dayLabel: "TODAY")
+                              includeBigGames: false, dayLabel: "TODAY",
+                              liveStatus: { live in
+                                  pickFor(live).map { p in (pick: p.pick ?? "", verdict: HomeLiveVerdict.evaluate(pick: p, live: live)) }
+                              })
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
         }
@@ -10387,6 +10390,10 @@ struct TomorrowView {
         var includeBigGames: Bool = true
         /// Header word for the countdown / empty hero — "TODAY" for the today use.
         var dayLabel: String = "TOMORROW"
+        /// Home-only: resolve Gary's pick text + live verdict for a featured live game,
+        /// so the live widget shows "GARY COVERING / IN THE RED". Passed from the Home
+        /// (which owns pickFor + HomeLiveVerdict.evaluate); nil elsewhere (no status).
+        var liveStatus: ((LiveScore) -> (pick: String, verdict: HomeLiveVerdict)?)? = nil
         /// WC analytical lanes folded into the Day Ahead tab strip (Hub only): the
         /// xG-regression / advancement / rest signals + a tap handler. Empty/nil on
         /// Home, so these tabs only appear on the Hub's WC Day Ahead.
@@ -10444,6 +10451,7 @@ struct TomorrowView {
         /// style as the countdown: green LIVE label + equalizer, the score big, the
         /// clock/inning beneath.
         @ViewBuilder private func liveScoreHero(_ s: LiveScore) -> some View {
+            let status = liveStatus?(s) ?? nil
             HStack(spacing: 7) {
                 Text("\((s.league ?? "").uppercased()) · LIVE")
                     .font(GaryFonts.mono(10, bold: true)).tracking(2)
@@ -10455,10 +10463,28 @@ struct TomorrowView {
                 .foregroundStyle(.white)
                 .lineLimit(1).minimumScaleFactor(0.6)
                 .padding(.top, 6)
-            Text((s.detail ?? "").isEmpty ? "In progress" : (s.detail ?? ""))
-                .font(GaryFonts.text(13))
-                .foregroundStyle(.white.opacity(0.55))
-                .padding(.top, 7)
+            HStack(spacing: 8) {
+                Text((s.detail ?? "").isEmpty ? "In progress" : (s.detail ?? ""))
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.55))
+                // Gary's live verdict on THIS game — the simple phrase the founder asked
+                // for: "GARY COVERING" (green) or "GARY IN THE RED" (red). Only shown
+                // when there's a pick + a decided lean.
+                if let st = status, st.verdict != .neutral, !st.pick.isEmpty {
+                    Text("·").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.25))
+                    Text(st.verdict == .covering ? "GARY COVERING" : "GARY IN THE RED")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
+                        .foregroundStyle(st.verdict == .covering ? Color(hex: "#3FB950") : Color(hex: "#E5614D"))
+                }
+            }
+            .padding(.top, 7)
+            // The pick line itself, so it's clear WHAT Gary's on.
+            if let st = status, !st.pick.isEmpty {
+                Text("Gary: \(st.pick)")
+                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.4))
+                    .lineLimit(1)
+                    .padding(.top, 3)
+            }
         }
 
         private var countdownHero: some View {
