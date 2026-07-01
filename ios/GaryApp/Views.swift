@@ -7561,12 +7561,23 @@ struct PremiumPicksView: View {
     // the date next to the "WINNERS" wordmark is now the day dropdown. The old "TODAY ▾"
     // pill and its `dateChipLabel`/`dateSelector` were retired here.
 
-    /// "yyyy-MM-dd" (EST) for today minus `offset` days.
+    /// ET-midnight of the 3am-anchored SLATE day (todayEST) — so offset 0 == today's
+    /// slate and offset 1 == yesterday's. NOT wall-clock now, which is a day AHEAD of
+    /// the slate between ET-midnight and 3am (that's what made "Yesterday" load today's
+    /// slate, force-stamped settled). Matches how load()/yesterdayEST() already anchor.
+    private func slateBaseDate() -> Date {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        return f.date(from: SupabaseAPI.todayEST()) ?? Date()
+    }
+
+    /// "yyyy-MM-dd" (EST) for the slate day minus `offset` days.
     private func dayDateString(_ offset: Int) -> String {
         var cal = Calendar(identifier: .gregorian)
         if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = cal.timeZone
-        return f.string(from: cal.date(byAdding: .day, value: -offset, to: Date()) ?? Date())
+        let base = slateBaseDate()
+        return f.string(from: cal.date(byAdding: .day, value: -offset, to: base) ?? base)
     }
 
     /// Dropdown row label: Today / Yesterday / "Sun, Jun 15".
@@ -7576,7 +7587,8 @@ struct PremiumPicksView: View {
         var cal = Calendar(identifier: .gregorian)
         if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
         let f = DateFormatter(); f.dateFormat = "EEE, MMM d"; f.timeZone = cal.timeZone
-        return f.string(from: cal.date(byAdding: .day, value: -offset, to: Date()) ?? Date())
+        let base = slateBaseDate()
+        return f.string(from: cal.date(byAdding: .day, value: -offset, to: base) ?? base)
     }
 
     private func load() async {
@@ -18243,6 +18255,11 @@ final class PropsSlateStore: ObservableObject {
             if !loadedDate.isEmpty {
                 allProps = []; gamePicks = []; slate = []
                 todayGameResults = [:]; todayPropResults = [:]
+                // Also drop the yesterday-fallback so a PRIOR day's fallback can't
+                // survive the roll before the fresh fetch resolves.
+                yesterdayProps = []; yesterdayPropsAll = []; yesterdayResultsMap = [:]
+                yesterdayGamePicks = []; yesterdayGamePicksAll = []; gameResultsMap = [:]
+                showingYesterdayResults = false; sportsWithFreshProps = []
             }
             loadedDate = today
         }
@@ -18287,11 +18304,20 @@ final class PropsSlateStore: ObservableObject {
         // happened — e.g. yesterday's props mis-dated under today's key — is not
         // today's slate and must never show as a live pick without a result; the
         // yesterday-results fallback below still surfaces graded recaps.
+        var freshCal = Calendar.current
+        freshCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        // Anchor freshness on the 3am-aware SLATE day (todayEST), NOT wall-clock
+        // midnight: between ET-midnight and 3am, todayEST() is still the prior calendar
+        // date, so its ET-midnight keeps that slate's night props visible instead of
+        // dropping the WHOLE board on a cold load in that window.
+        let slateFmt = DateFormatter()
+        slateFmt.timeZone = freshCal.timeZone
+        slateFmt.dateFormat = "yyyy-MM-dd"
+        let slateStart = slateFmt.date(from: SupabaseAPI.todayEST()).map { freshCal.startOfDay(for: $0) }
+            ?? freshCal.startOfDay(for: Date())
         props = props.filter { p in
             guard let iso = p.commence_time, let d = parseISO8601(iso) else { return true }
-            var cal = Calendar.current
-            cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-            return d >= cal.startOfDay(for: Date())
+            return d >= slateStart
         }
 
         let allResults = (try? await SupabaseAPI.fetchPropResults(since: SupabaseAPI.yesterdayEST(), forceRefresh: forceRefresh)) ?? []
@@ -18302,11 +18328,13 @@ final class PropsSlateStore: ObservableObject {
         var yPropsAll: [PropPick] = []
         var yMap: [String: String] = [:]
         var hasYesterday = false
+        var yFetchOK = false   // true = yesterday fetch SUCCEEDED (even if empty); false = threw
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
             let fetched = try await withTimeout(seconds: 20) {
                 try await SupabaseAPI.fetchPropPicks(date: yesterday, forceRefresh: forceRefresh)
             }
+            yFetchOK = true
             yPropsAll = fetched.filter { !$0.isTDPick }   // UNGATED — for the explicit Yesterday view
             let yesterdaySportsNeeded = fetched.filter { !freshSports.contains(($0.effectiveLeague ?? "").uppercased()) }
             if !yesterdaySportsNeeded.isEmpty {
@@ -18348,12 +18376,17 @@ final class PropsSlateStore: ObservableObject {
             allProps = props
             sportsWithFreshProps = freshSports
         }
-        if !yProps.isEmpty || yesterdayProps.isEmpty {
+        // Reset the fallback whenever the yesterday fetch SUCCEEDED (yFetchOK) — even
+        // when it now returns nothing needed (today covers every sport). Guarding on
+        // !yProps.isEmpty alone latched showingYesterdayResults ON, so settled yesterday
+        // props lingered on the Today board after today filled in. Only a THROWN fetch
+        // keeps last-good.
+        if yFetchOK || yesterdayProps.isEmpty {
             yesterdayProps = yProps
             yesterdayResultsMap = yMap
             showingYesterdayResults = hasYesterday
         }
-        if !yPropsAll.isEmpty || yesterdayPropsAll.isEmpty {
+        if yFetchOK || yesterdayPropsAll.isEmpty {
             yesterdayPropsAll = yPropsAll
         }
         if !tPropMap.isEmpty || todayPropResults.isEmpty { todayPropResults = tPropMap }
@@ -21451,6 +21484,14 @@ struct PropsHubView: View {
     @State private var fetchErrored = false
     /// Yesterday's graded-edge tally (hit, graded) for the track-record line.
     @State private var hitRate: (hit: Int, graded: Int)? = nil
+    /// Whether the graded surface (hitRate/nightRows/receipts) is actually YESTERDAY,
+    /// or an older day the morning-void walk-back (line ~21604) landed on. Drives every
+    /// graded label so a 2-days-ago board never says "Yesterday" / "HIT YDAY" / "Last
+    /// Night". gradedDayShort holds "Mon, Jun 30" when it's NOT yesterday.
+    @State private var gradedIsYesterday = true
+    @State private var gradedDayShort = ""
+    /// The graded-board section label: "Last Night" when it really is, else the date.
+    private var nightLabel: String { (gradedIsYesterday || gradedDayShort.isEmpty) ? "Last Night" : gradedDayShort }
     /// Yesterday's graded edges — fills the pre-lineup morning void.
     @State private var ydaySignals: [Signal] = []
     /// Live streaks (streaks table) — the full Streaks board.
@@ -21598,6 +21639,13 @@ struct PropsHubView: View {
             loadedDate = date
             fetchErrored = anyError && collected.isEmpty
             hitRate = rate
+            // Label the graded surface by whether the walk-back stayed on yesterday.
+            gradedIsYesterday = (gradedDate == gradedDate0)
+            if gradedIsYesterday { gradedDayShort = "" } else {
+                let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"; inF.timeZone = TimeZone(identifier: "America/New_York")
+                let outF = DateFormatter(); outF.dateFormat = "EEE, MMM d"; outF.timeZone = TimeZone(identifier: "America/New_York")
+                gradedDayShort = inF.date(from: gradedDate).map { outF.string(from: $0) } ?? ""
+            }
             streakRows = liveStreaks
             nightRows = night
             ydaySignals = yday
@@ -21738,7 +21786,7 @@ struct PropsHubView: View {
                             .padding(.horizontal, 16)
                     }
                     if !selNightRows.isEmpty {
-                        HubSectionTitle(title: "Last Night").padding(.horizontal, 16)
+                        HubSectionTitle(title: nightLabel).padding(.horizontal, 16)
                         NightBoard(rows: selNightRows).padding(.horizontal, 16)
                     }
                     gradedReceipts
@@ -21817,7 +21865,7 @@ struct PropsHubView: View {
                             .id("owned")
                         }
                         if !selNightRows.isEmpty {
-                            HubDisclosure(anchor: "lastNight", eyebrow: "Last Night", count: selNightRows.count, openSet: $openSections) {
+                            HubDisclosure(anchor: "lastNight", eyebrow: nightLabel, count: selNightRows.count, openSet: $openSections) {
                                 NightBoard(rows: selNightRows).padding(.horizontal, 16)
                             }
                             .id("lastNight")
@@ -21839,7 +21887,7 @@ struct PropsHubView: View {
                             if items(.xgRecap).isEmpty             { defs.append(("xgRecap", "xG Recap")) }
                             if wcIntelSignals.isEmpty              { defs.append(("wcIntel", "Game Intel")) }
                             if items(.h2h).isEmpty                 { defs.append(("owned", "Head-to-Head")) }
-                            if selNightRows.isEmpty                { defs.append(("lastNight", "Last Night")) }
+                            if selNightRows.isEmpty                { defs.append(("lastNight", nightLabel)) }
                             return defs
                         }()
                         if !wcPending.isEmpty {
@@ -21954,7 +22002,7 @@ struct PropsHubView: View {
                         .id("streaks")
                     }
                     if !selNightRows.isEmpty {
-                        HubDisclosure(anchor: "lastNight", eyebrow: "Last Night", count: selNightRows.count, openSet: $openSections) {
+                        HubDisclosure(anchor: "lastNight", eyebrow: nightLabel, count: selNightRows.count, openSet: $openSections) {
                             NightBoard(rows: selNightRows).padding(.horizontal, 16)
                         }
                         .id("lastNight")
@@ -21987,7 +22035,7 @@ struct PropsHubView: View {
                         if items(.situational).isEmpty          { defs.append(("restFatigue", "Rest & Fatigue")) }
                         if conditionLanes.isEmpty               { defs.append(("conditions", "The Conditions")) }
                         if selStreakRows.isEmpty && items(.streak).isEmpty { defs.append(("streaks", "Streaks")) }
-                        if selNightRows.isEmpty                 { defs.append(("lastNight", "Last Night")) }
+                        if selNightRows.isEmpty                 { defs.append(("lastNight", nightLabel)) }
                         return defs
                     }()
                     if !mlbPending.isEmpty {
@@ -22238,7 +22286,7 @@ struct PropsHubView: View {
                     .quantPanel().padding(.horizontal, 16)
                 }
                 if !nightMatches.isEmpty {
-                    HubSectionTitle(title: "Last Night").padding(.horizontal, 16)
+                    HubSectionTitle(title: nightLabel).padding(.horizontal, 16)
                     VStack(spacing: 0) {
                         ForEach(Array(nightMatches.enumerated()), id: \.offset) { i, r in
                             searchAuxRow(title: r.player_name ?? "", sub: r.detail ?? "", trail: r.team ?? "",
@@ -22333,7 +22381,7 @@ struct PropsHubView: View {
             // miss we derive it from the same rows we're about to render —
             // the real stat beats a slogan either way.
             HubSectionHeader(
-                eyebrow: "Yesterday · graded",
+                eyebrow: gradedIsYesterday ? "Yesterday · graded" : "\(gradedDayShort) · graded",
                 sub: {
                     let (hit, graded) = hitRate
                         ?? (ydaySignals.filter { $0.result == "hit" }.count, ydaySignals.count)
@@ -22391,7 +22439,7 @@ struct PropsHubView: View {
             title: "The Hub",
             // Track record once graded (>=5 edges), else today's date.
             accent: {
-                if let r = hitRate, r.graded >= 5 { return "\(r.hit) OF \(r.graded) HIT YDAY" }
+                if let r = hitRate, r.graded >= 5 { return gradedIsYesterday ? "\(r.hit) OF \(r.graded) HIT YDAY" : "\(r.hit) OF \(r.graded) · \(gradedDayShort)" }
                 return GaryPageHeader<EmptyView>.dateLabel()
             }()
         ) {
