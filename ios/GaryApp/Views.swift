@@ -18215,6 +18215,11 @@ final class PropsSlateStore: ObservableObject {
     /// time" placeholder + intel before Gary's picks actually post.
     @Published var slate: [DailySlateRow] = []
 
+    /// The EST slate day the TODAY-state (allProps/gamePicks/slate) was loaded for.
+    /// If the app sits open past the 3am ET rollover, keep-last-good would otherwise
+    /// pin the board to yesterday — a mismatch here forces a reset + refetch.
+    @Published var loadedDate: String = ""
+
     @Published var loading = true
     @Published var fetchFailed = false
     @Published var loaded = false   // first successful (or attempted) load completed
@@ -18228,7 +18233,20 @@ final class PropsSlateStore: ObservableObject {
     /// Loads props + game picks once. Safe to call from multiple views' `.task`;
     /// only the first call does the network work, the rest no-op (unless forced).
     func loadIfNeeded(forceRefresh: Bool = false) async {
-        if loaded && !forceRefresh { return }
+        // Day-rollover guard: if the app sat open past the 3am ET slate rollover,
+        // `loaded` is still true but the board holds YESTERDAY. Detect the mismatch
+        // and reset the today-state so keep-last-good adopts today's slate instead
+        // of pinning yesterday's finished picks under a "Today" header.
+        let today = SupabaseAPI.todayEST()
+        let dayRolled = !loadedDate.isEmpty && loadedDate != today
+        if loaded && !forceRefresh && !dayRolled { return }
+        if dayRolled {
+            await MainActor.run {
+                allProps = []; gamePicks = []; slate = []
+                todayGameResults = [:]; todayPropResults = [:]
+            }
+        }
+        await MainActor.run { loadedDate = today }
         // Props + game picks share no data — fetch them concurrently instead of
         // props-then-games serially (was the Picks-tab first-paint delay).
         async let p: Void = loadProps(forceRefresh: forceRefresh)

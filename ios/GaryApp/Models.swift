@@ -193,9 +193,11 @@ struct LiveScore: Decodable, Equatable {
     var isFinal: Bool { status == "final" }
     /// "SD @ PHI" — matches the hub/deep-link abbreviation format.
     var abbrGame: String { "\(away_abbr ?? "") @ \(home_abbr ?? "")" }
-    /// "SD 4 · PHI 6"
+    /// "SD 4 · PHI 6" — only for a game that has actually started (live/final).
+    /// A SCHEDULED live_scores row carries 0/0, not nil, so without this gate the
+    /// board renders a fake "SEN 0 · BEL 0" score for un-started games.
     var scoreLine: String? {
-        guard let a = away_score, let h = home_score else { return nil }
+        guard isLive || isFinal, let a = away_score, let h = home_score else { return nil }
         return "\(away_abbr ?? "AWY") \(a) · \(home_abbr ?? "HOM") \(h)"
     }
 
