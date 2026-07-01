@@ -14834,8 +14834,19 @@ struct CompactPickRow: View {
                                  awayPicked: awayIsPicked, homePicked: homeIsPicked,
                                  away: s.away, home: s.home)
     }
+    /// True once this game's start time has passed — an UPCOMING game can't be graded.
+    private var gameHasStarted: Bool {
+        guard let iso = pick.commence_time, let d = parseISO8601(iso) else { return true }
+        return d <= Date()
+    }
     /// Stored grade first (authoritative); else the live verdict on a FINAL board.
-    private var displayResult: String? { resolvedResult ?? liveGraded }
+    /// Gated on the game having STARTED: the result/score maps are matchup-keyed, so a
+    /// REPEATED matchup (same teams the next day — e.g. Padres@Cubs today vs last night)
+    /// would otherwise leak yesterday's LOST/FINAL onto today's not-yet-played game.
+    private var displayResult: String? {
+        guard gameHasStarted else { return nil }
+        return resolvedResult ?? liveGraded
+    }
 
     private static let bookDisplayNames: [String: String] = [
         "draftkings": "DraftKings",
