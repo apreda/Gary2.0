@@ -170,19 +170,16 @@ struct ContentView: View {
 /// Ship-level feature switches. Code behind an off flag stays in the
 /// codebase, ready to re-enable — it just loses its entry points.
 enum AppFlags {
-    /// Talk to Gary is parked until v3 — the Gary tab is Hub-only meanwhile.
-    static let talkToGaryEnabled = false
 }
 
 enum GaryPageMode: String, CaseIterable {
-    case hub = "Hub", talk = "Talk to Gary"
+    case hub = "Hub"
 
     /// Only flag-enabled modes get a switch entry; Hub is always on.
     static var enabled: [GaryPageMode] {
         allCases.filter {
             switch $0 {
             case .hub: return true
-            case .talk: return AppFlags.talkToGaryEnabled
             }
         }
     }
@@ -220,8 +217,6 @@ struct GaryPage: View {
                             PicksFocusState.shared.focusGame = game
                             selectedTab = 3
                         }
-                    case .talk:
-                        GaryChatView()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

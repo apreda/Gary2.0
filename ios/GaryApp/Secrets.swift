@@ -14,33 +14,4 @@ enum Secrets {
     // swiftlint:disable:next force_unwrapping
     static let siteBase = URL(string: "https://www.betwithgary.ai")!
 
-    // MARK: - Talk to Gary (Voice / Chat)
-
-    /// Supabase Edge Function endpoint for the "Talk to Gary" chat orchestrator.
-    /// The function handles persona + tools + pick context server-side; iOS just
-    /// posts user messages and receives Gary's text reply.
-    // swiftlint:disable:next force_unwrapping
-    static let garyChatEndpoint = URL(string: "https://xuttubsfgdcjfgmskcol.supabase.co/functions/v1/gary-chat")!
-
-    /// xAI Grok API key for TTS playback of Gary's voice.
-    ///
-    /// SETUP: The actual key lives in `SecretsLocal.swift` which is gitignored.
-    /// On a fresh clone you must create that file from `SecretsLocal.swift.example`:
-    ///   cp ios/GaryApp/SecretsLocal.swift.example ios/GaryApp/SecretsLocal.swift
-    /// then paste your key into the `xaiAPIKey` constant inside.
-    ///
-    /// SECURITY: Embedding the key in the binary is acceptable for TestFlight
-    /// testing but not for App Store production. For production, proxy TTS
-    /// through the Supabase Edge Function so the key never leaves the server.
-    static var xaiAPIKey: String { SecretsLocal.xaiAPIKey }
-
-    /// xAI TTS voice ID. Pick one from xAI's voice library:
-    ///   - "leo" — authoritative, older energy (closest to Gary's bookie character — DEFAULT)
-    ///   - "rex" — confident, clear (younger, business-y)
-    ///   - "sal" — smooth, balanced (versatile)
-    ///   - "ara" — warm, friendly (too soft for Gary)
-    ///   - "eve" — energetic, upbeat (too perky for Gary)
-    /// To clone a custom Gary voice later, POST a 60-second sample to
-    /// https://api.x.ai/v1/custom-voices and use the returned voice_id.
-    static let xaiVoiceID: String = "leo"
 }
