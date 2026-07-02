@@ -56,7 +56,7 @@ export async function buildScoutReport(game, sport, options = {}) {
     // Gary's report: pure data (no token menu, no tale of tape)
     garyText: result.text,
     // Flash's report: data + Tale of Tape + token menu (investigation-ready)
-    flashText: assembleFlashReport(result.text, result.verifiedTaleOfTape, result.tokenMenu),
+    flashText: assembleFlashReport(result.text, result.tokenMenu),
   };
 }
 

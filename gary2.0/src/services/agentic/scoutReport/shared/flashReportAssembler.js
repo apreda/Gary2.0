@@ -7,17 +7,16 @@
  * Changes here affect ONLY Flash's view. Gary's report is untouched.
  *
  * Currently adds:
- *   1. Tale of Tape — structured comparison table for systematic investigation
- *   2. Stat token menu — reference for fetch_stats tool calls
+ *   1. Stat token menu — reference for fetch_stats tool calls
+ *
+ * NOTE (Jun 29 2026): the Tale of Tape was removed from Flash's view. Every number in it (record,
+ * SP/goalie line, team stats) is already in the structured scout report Flash also reads, so sending
+ * the table too was a per-factor duplicate (Flash re-reads the report on each factor). The tape's
+ * `rows` still power the UI pick-card back — only Flash's redundant copy is gone.
  */
 
-export function assembleFlashReport(baseText, verifiedTaleOfTape, tokenMenu) {
+export function assembleFlashReport(baseText, tokenMenu) {
   const sections = [baseText];
-
-  // Tale of Tape — structured stat comparison for Flash's investigation
-  if (verifiedTaleOfTape?.text) {
-    sections.push(verifiedTaleOfTape.text);
-  }
 
   // Stat token menu — Flash needs this to know what stats to fetch
   if (tokenMenu) {

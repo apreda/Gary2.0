@@ -283,12 +283,34 @@ Deno.serve(async (req) => {
       globalReplies = count ?? 0;
     }
 
+    // Gary's OWN posted tweet IDs (last 7 days): his auto-posts (social_post_log) + his own prior replies
+    // (bot_mention_log). Any mention whose conversation ROOT is one of these is a comment ON Gary's post —
+    // a direct reply OR a reply to another commenter under it — never a fresh question. Used by GUARD C.
+    const garyTweetIds = new Set<string>();
+    {
+      const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const { data: sp } = await sb.from("social_post_log").select("hook_tweet_id, reasoning_tweet_id, cta_tweet_id").gte("posted_at", since);
+      for (const r of sp ?? []) for (const id of [r.hook_tweet_id, r.reasoning_tweet_id, r.cta_tweet_id]) if (id) garyTweetIds.add(String(id));
+      const { data: bl } = await sb.from("bot_mention_log").select("reply_tweet_id").eq("status", "replied").gte("created_at", since);
+      for (const r of bl ?? []) if (r.reply_tweet_id) garyTweetIds.add(String(r.reply_tweet_id));
+    }
+
     const results: any[] = [];
     for (const m of ordered) {
       const username = usersById[m.author_id]?.username ?? "";
       const age = m.created_at ? Date.now() - Date.parse(m.created_at) : 0;
       if (age > SKIP_OLDER_THAN_MS && !(dry && showAll)) { results.push({ id: m.id, status: "skipped-old" }); continue; }
       if (m.author_id === garyId) { results.push({ id: m.id, status: "skipped-self" }); continue; }
+
+      // GUARD C: never reply to a comment on one of GARY'S OWN posts. Every comment under Gary's post — a direct
+      // reply to it OR a reply to another commenter beneath it — shares the conversation ROOT id of Gary's tweet.
+      // So if the conversation_id is one of Gary's known tweet IDs, skip. This catches the nested comments that
+      // GUARD A (which only inspects the immediate parent) cannot.
+      if (m.conversation_id && garyTweetIds.has(String(m.conversation_id))) {
+        if (!dry) await logMention(m, username, "skipped", "comment-on-garys-post");
+        results.push({ id: m.id, status: "skipped-comment-on-gary" });
+        continue;
+      }
 
       // The tweet this mention replies to / quotes (its parent) — for context AND the no-back-and-forth guards.
       const ref = (m.referenced_tweets ?? []).find((r: any) => r.type === "replied_to" || r.type === "quoted");

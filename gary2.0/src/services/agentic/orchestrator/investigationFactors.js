@@ -133,15 +133,11 @@ export const INVESTIGATION_FACTORS = {
     H2H: ['H2H_HISTORY'],
     AVAILABILITY: ['LINEUPS'], // confirmed starting XI (structured); injuries/suspensions via grounding
   },
-  WC: {
-    FORM: ['TEAM_FORM', 'RECENT_FORM'],
-    ATTACK_XG: ['EXPECTED_GOALS', 'TEAM_MATCH_STATS', 'GOALS_PER_MATCH'],
-    DEFENSE: ['TEAM_MATCH_STATS', 'GOALS_CONCEDED'],
-    GROUP_CONTEXT: ['GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT'],
-    H2H: ['H2H_HISTORY'],
-    AVAILABILITY: ['LINEUPS'],
-  }
 };
+
+// 'WC' is an alias for the same World Cup factor set — two sport keys flow through the codebase for the
+// same tournament, so they share ONE definition and can never drift apart.
+INVESTIGATION_FACTORS.WC = INVESTIGATION_FACTORS.soccer_world_cup;
 
 /**
  * Get investigated factors based on tokens called
