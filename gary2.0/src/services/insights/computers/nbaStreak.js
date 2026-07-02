@@ -8,8 +8,8 @@
 //   - For each slate team we pull this season's completed games via
 //     getGames('basketball_nba', { seasons:[season], team_ids:[id], per_page })
 //     for BOTH postseason=false (regular season) and postseason=true (playoffs),
-//     then merge. This is the same call shape nbaPicksHandler.js uses in
-//     production, so the param support is verified, not assumed.
+//     then merge. This call shape is verified against the live BDL surface,
+//     so the param support is confirmed, not assumed.
 //   - If that returns nothing (e.g. SDK shape drift), we fall back to a
 //     day-by-day lookback over the last ~45 dates with getNbaGamesForDate.
 //   - From the merged, FINAL games sorted newest-first we compute the current
@@ -22,7 +22,7 @@
 //       { id, date, status, postseason, home_team_score, visitor_team_score,
 //         home_team:{id,abbreviation,full_name}, visitor_team:{...} }.
 //     Params {seasons, team_ids, postseason, per_page} are supported (see
-//     nbaPicksHandler.js getGames calls). A game is FINAL once both scores are
+//     the live BDL getGames surface). A game is FINAL once both scores are
 //     present; scheduled games carry null scores.
 //   * getNbaGamesForDate(dateStr) -> same game shape (fallback path).
 //

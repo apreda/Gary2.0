@@ -21,7 +21,7 @@
 //       { id, date, status, postseason, home_team_score, visitor_team_score,
 //         home_team:{id,abbreviation,full_name}, visitor_team:{...} }.
 //     Params {seasons, team_ids, postseason, per_page} are supported (see
-//     nbaPicksHandler.js). A game is FINAL once both scores are present.
+//     the live BDL surface). A game is FINAL once both scores are present.
 //   * getNbaGamesForDate(dateStr) -> same game shape (fallback path).
 //
 // Defensive contract: never throws; returns [] when data is missing; emits a

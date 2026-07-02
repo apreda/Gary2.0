@@ -17,7 +17,7 @@
 //     report's own `description` text (trimmed to ~140 chars), which frequently
 //     states the timeline or the next man up.
 //
-// Data path / field names (verified live + mirrored from nbaPicksHandler.js):
+// Data path / field names (verified live against the BDL surface):
 //   * getInjuriesGeneric('basketball_nba', { team_ids:[...] }) -> Array of:
 //       { player:{ id, full_name, position, team:{ id, abbreviation, full_name } },
 //         status, description, return_date, date }.
