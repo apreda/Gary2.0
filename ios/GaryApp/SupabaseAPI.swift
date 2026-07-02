@@ -1209,48 +1209,7 @@ enum SupabaseAPI {
         return result
     }
     
-    // MARK: - DFS Lineups (Gary's Fantasy)
-
-    /// Fetch DFS lineups for a specific date
-    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
-    /// Returns lineups for both platforms (DraftKings, FanDuel) and available sports
-    static func fetchDFSLineups(date: String, forceRefresh: Bool = false) async throws -> [DFSLineup] {
-        let cacheKey = "dfsLineups_\(date)"
-
-        // DFS lineups: 30-min cache. Lineups are generated once per day across all slates.
-        // Pull-to-refresh bypasses cache if user needs fresh data.
-        if !forceRefresh, let cached: [DFSLineup] = await APICache.shared.get(cacheKey, ttl: 60 * 30) {
-            return cached
-        }
-
-        let url = buildURL(table: "dfs_lineups", query: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "order", value: "platform.asc,sport.asc")
-        ])
-
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchDFSLineups failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
-
-        // Parse using JSONDecoder (DFSLineup is Decodable)
-        let decoder = JSONDecoder()
-        let result: [DFSLineup]
-        do {
-            result = try decoder.decode([DFSLineup].self, from: data)
-        } catch {
-            print("[SupabaseAPI] fetchDFSLineups: decode failed: \(error)")
-            return []
-        }
-
-        // Store in cache
-        await APICache.shared.set(cacheKey, value: result)
-
-        return result
-    }
+    // MARK: - Recent Results
 
     static func fetchRecentGameResults(limit: Int = 30, since dateFilter: String? = nil) async throws -> [GameResult] {
         var gameQuery = [
@@ -1291,51 +1250,6 @@ enum SupabaseAPI {
         }
 
         return try await fetchDecodablePage(table: "prop_results", query: query)
-    }
-    
-    /// Fetch DFS lineups for a specific platform
-    static func fetchDFSLineups(date: String, platform: DFSPlatform) async throws -> [DFSLineup] {
-        let url = buildURL(table: "dfs_lineups", query: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "platform", value: "eq.\(platform.rawValue)"),
-            URLQueryItem(name: "order", value: "sport.asc")
-        ])
-        
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchDFSLineups(platform) failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
-
-        // Parse as array of dictionaries
-        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-
-        return jsonArray.compactMap { DFSLineup.from(dict: $0) }
-    }
-
-    /// Fetch a specific DFS lineup by platform and sport
-    static func fetchDFSLineup(date: String, platform: DFSPlatform, sport: String) async throws -> DFSLineup? {
-        let url = buildURL(table: "dfs_lineups", query: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "platform", value: "eq.\(platform.rawValue)"),
-            URLQueryItem(name: "sport", value: "eq.\(sport)")
-        ])
-        
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchDFSLineup(single) failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return nil
-        }
-
-        // Parse as array of dictionaries
-        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
-              let first = jsonArray.first else { return nil }
-        
-        return DFSLineup.from(dict: first)
     }
     
     // MARK: - Parsing Helpers

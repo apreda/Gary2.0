@@ -172,21 +172,16 @@ struct ContentView: View {
 enum AppFlags {
     /// Talk to Gary is parked until v3 — the Gary tab is Hub-only meanwhile.
     static let talkToGaryEnabled = false
-    /// Gary's Daily Fantasy lineups (dfs_lineups) — fully wired (Hub | Fantasy
-    /// mode + GaryFantasyView + MLB pipeline validated Jun 2026) but parked on
-    /// the roadmap until DFS returns; flip with the scheduler's MLB dfs flag.
-    static let fantasyEnabled = false
 }
 
 enum GaryPageMode: String, CaseIterable {
-    case hub = "Hub", fantasy = "Fantasy", talk = "Talk to Gary"
+    case hub = "Hub", talk = "Talk to Gary"
 
     /// Only flag-enabled modes get a switch entry; Hub is always on.
     static var enabled: [GaryPageMode] {
         allCases.filter {
             switch $0 {
             case .hub: return true
-            case .fantasy: return AppFlags.fantasyEnabled
             case .talk: return AppFlags.talkToGaryEnabled
             }
         }
@@ -225,8 +220,6 @@ struct GaryPage: View {
                             PicksFocusState.shared.focusGame = game
                             selectedTab = 3
                         }
-                    case .fantasy:
-                        GaryFantasyView()
                     case .talk:
                         GaryChatView()
                     }
