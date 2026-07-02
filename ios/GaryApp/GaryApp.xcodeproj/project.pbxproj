@@ -23,13 +23,10 @@
 		3F2B427469774FD90FFA1825 /* GaryOrbShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 279B14D73F42DE6A4FDB1E64 /* GaryOrbShaders.metal */; };
 		40771064325B4E728A735AEA /* GaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49489C7FC0ABE55881B19E13 /* GaryApp.swift */; };
 		40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */; };
-		441BE2B6922A3812C65D954F /* Inter-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D0DDEAF25FAF906ADB81C854 /* Inter-SemiBold.ttf */; };
 		44FB25CBEB7324D5CDF9CAB7 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 19246C9DB6761505C046FD73 /* FirebaseMessaging */; };
 		5A432D05492831EB727B31A7 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE32BA2E5208CC9E994A26A /* Models.swift */; };
 		60CF1B9B3718AA56B8028E69 /* GoogleService-Info.plist.example in Resources */ = {isa = PBXBuildFile; fileRef = 00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */; };
 		70B734B97C884B1080B175B9 /* GaryVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0A820EE7B64FEC7838BC11 /* GaryVoiceService.swift */; };
-		70FD18E172094C92E59874A0 /* Inter-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7B4D200DBCE9B8531DE37A41 /* Inter-Regular.ttf */; };
-		7952780CCBD2FBEA1E03E535 /* Inter-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4D6E63516F9C3F3B50D206BE /* Inter-Medium.ttf */; };
 		8AD7EB3A84CDF85349AA63BF /* GaryChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 416FE7DEA9AA6C7BEE3B2F0C /* GaryChatView.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
 		8C34DF13E8B667CE889F3001 /* RacingSansOne.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */; };
@@ -46,7 +43,6 @@
 		C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */; };
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
 		CAF9190DE725143E36BFCD16 /* ci_post_clone.sh in Resources */ = {isa = PBXBuildFile; fileRef = 32B85EDA7E4476C638F6B871 /* ci_post_clone.sh */; };
-		D35C7F1C42547FDB46926826 /* Inter-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7A8B915EBAD81C09AA4018C5 /* Inter-Bold.ttf */; };
 		D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58C162EF98D65308171329E2 /* SupabaseAPI.swift */; };
 		DB25BB5C9570DD1B389E88A0 /* AppFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A18FEEB91BDCB14E4CF1398 /* AppFlags.swift */; };
 		DEE0FC026BC0A9A6683D4934 /* Anton-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6E42D646736ECC444CEB1436 /* Anton-Regular.ttf */; };
@@ -81,15 +77,12 @@
 		44D1E52AFB4EED7E97F55C36 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		4842B8C63C570D1C368D182A /* WCGameIntelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WCGameIntelView.swift; sourceTree = "<group>"; };
 		49489C7FC0ABE55881B19E13 /* GaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryApp.swift; sourceTree = "<group>"; };
-		4D6E63516F9C3F3B50D206BE /* Inter-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Medium.ttf"; sourceTree = "<group>"; };
 		4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AppStoreMetadata.md; sourceTree = "<group>"; };
 		4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ChakraPetch-Bold.ttf"; sourceTree = "<group>"; };
 		58C162EF98D65308171329E2 /* SupabaseAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAPI.swift; sourceTree = "<group>"; };
 		59D31FC0BB2E2B1218A6F65E /* GaryChatAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryChatAPI.swift; sourceTree = "<group>"; };
 		6E42D646736ECC444CEB1436 /* Anton-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Anton-Regular.ttf"; sourceTree = "<group>"; };
 		71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Teko-Bold.ttf"; sourceTree = "<group>"; };
-		7A8B915EBAD81C09AA4018C5 /* Inter-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Bold.ttf"; sourceTree = "<group>"; };
-		7B4D200DBCE9B8531DE37A41 /* Inter-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Regular.ttf"; sourceTree = "<group>"; };
 		7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SairaCondensed-Bold.ttf"; sourceTree = "<group>"; };
 		A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBBallparks.swift; sourceTree = "<group>"; };
 		A6B153703E9F452BFFC5A392 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -97,7 +90,6 @@
 		C0DAD9374914257AC6D8B7EC /* MLBGameIntelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBGameIntelView.swift; sourceTree = "<group>"; };
 		C20455738476664B4F69306C /* BebasNeue-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BebasNeue-Regular.ttf"; sourceTree = "<group>"; };
 		C76D962853397848F9631A85 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		D0DDEAF25FAF906ADB81C854 /* Inter-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-SemiBold.ttf"; sourceTree = "<group>"; };
 		DF7E972CC8D83F24D451BB7E /* JetBrainsMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Bold.ttf"; sourceTree = "<group>"; };
 		E22C3B2D38BB04B17570FDF1 /* GaryApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GaryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E402E6D99BBF5DF1B0ED9E77 /* GaryChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryChatViewModel.swift; sourceTree = "<group>"; };
@@ -203,10 +195,6 @@
 				3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */,
 				C20455738476664B4F69306C /* BebasNeue-Regular.ttf */,
 				4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */,
-				7A8B915EBAD81C09AA4018C5 /* Inter-Bold.ttf */,
-				4D6E63516F9C3F3B50D206BE /* Inter-Medium.ttf */,
-				7B4D200DBCE9B8531DE37A41 /* Inter-Regular.ttf */,
-				D0DDEAF25FAF906ADB81C854 /* Inter-SemiBold.ttf */,
 				DF7E972CC8D83F24D451BB7E /* JetBrainsMono-Bold.ttf */,
 				34634D1F59A3EC02C368C937 /* JetBrainsMono-Regular.ttf */,
 				F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */,
@@ -300,10 +288,6 @@
 				962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */,
 				FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */,
 				60CF1B9B3718AA56B8028E69 /* GoogleService-Info.plist.example in Resources */,
-				D35C7F1C42547FDB46926826 /* Inter-Bold.ttf in Resources */,
-				7952780CCBD2FBEA1E03E535 /* Inter-Medium.ttf in Resources */,
-				70FD18E172094C92E59874A0 /* Inter-Regular.ttf in Resources */,
-				441BE2B6922A3812C65D954F /* Inter-SemiBold.ttf in Resources */,
 				2D89A2B6672D88763469087D /* JetBrainsMono-Bold.ttf in Resources */,
 				3433EFC75CC07CD93065A1F0 /* JetBrainsMono-Regular.ttf in Resources */,
 				251ECC987D0245D3D5E87E0B /* Oswald-Bold.ttf in Resources */,
