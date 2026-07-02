@@ -964,16 +964,34 @@ function buildBigGames(board, { mlb }) {
     // Fallback so a 3+-game slate always fills three slots.
     weight += 1;
 
-    return { row, weight, reason, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
+    // LEAGUE TIER — the World Cup is a marquee global event; ANY WC match outranks
+    // ANY regular-season MLB game (founder: "these should be WC games, those are
+    // bigger than regular season MLB"). Tier sorts first, so WC leads Big Games
+    // whenever the slate has WC; the intra-league weights above only order within
+    // a tier (knockout ahead of group in WC; standings/rivalry/ace in MLB).
+    const tier = row.league === 'WC' ? 1 : 0;
+
+    return { row, weight, tier, reason, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
   });
 
   scored.sort((a, b) => {
+    if (b.tier !== a.tier) return b.tier - a.tier;      // WC ahead of regular-season MLB
     if (b.weight !== a.weight) return b.weight - a.weight;
     // tie-break by earliest start (the marquee opener leads)
     return new Date(a.row.commence_time || 0) - new Date(b.row.commence_time || 0);
   });
 
-  return scored.slice(0, 3).map((s, i) => {
+  // BIG GAMES SIZE + MIX — up to 5 (founder is fine with 4–5, not a hard 3), and
+  // always mix in at least one MLB game so a full WC slate doesn't crowd the
+  // domestic games out entirely. WC still leads (tier sort above); MLB rides along.
+  const MAX_BIG = 5;
+  const picked = scored.slice(0, MAX_BIG);
+  if (!picked.some((s) => s.row.league === 'MLB')) {
+    const bestMlb = scored.find((s) => s.row.league === 'MLB');
+    if (bestMlb) picked[picked.length - 1] = bestMlb;   // swap weakest slot for the top MLB
+  }
+
+  return picked.map((s, i) => {
     const item = {
       rank: i + 1,
       league: s.row.league,

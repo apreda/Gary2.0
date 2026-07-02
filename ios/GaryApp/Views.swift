@@ -10466,12 +10466,20 @@ struct TomorrowView {
                 }
             }
             .padding(.top, 7)
-            // The pick line itself, so it's clear WHAT Gary's on.
+            // The pick line itself, so it's clear WHAT Gary's on. Gold = Gary's
+            // voice (no "Gary:" prefix needed), odds ride grey — the app-wide chip.
             if let st = status, !st.pick.isEmpty {
-                Text("Gary: \(st.pick)")
-                    .font(GaryFonts.mono(10.5)).foregroundStyle(.white.opacity(0.4))
-                    .lineLimit(1)
-                    .padding(.top, 3)
+                let parts = Formatters.splitPickAndOdds(st.pick)
+                HStack(spacing: 5) {
+                    Text(parts.0)
+                        .foregroundStyle(GaryColors.gold)
+                    if !parts.1.isEmpty {
+                        Text(parts.1).foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+                .font(GaryFonts.mono(12, bold: true))
+                .lineLimit(1)
+                .padding(.top, 3)
             }
         }
 
@@ -10638,10 +10646,10 @@ struct TomorrowView {
             } ?? all
 
             // When filtering by sport, board.board may have more games than
-            // big_games (cross-sport top-3 — WC games rarely fill all 3 slots).
+            // big_games (cross-sport top-5, WC-led + at least one MLB mixed in).
             // Use board rows only for small slates (≤6 games, e.g. WC) where
             // big_games doesn't capture everything. MLB has 15+ games — keep
-            // the curated top-3 big_games view there.
+            // the curated big_games view there.
             let boardRows: [TomorrowBoardRow] = {
                 guard let lg = leagueFilter else { return [] }
                 let rows = (board?.board ?? []).filter {
@@ -10668,7 +10676,7 @@ struct TomorrowView {
                     .padding(.horizontal, 16)
                 }
             } else {
-                let games = filtered.sorted { $0.rank < $1.rank }.prefix(3)
+                let games = filtered.sorted { $0.rank < $1.rank }.prefix(5)
                 if !games.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         HubSectionHeader(eyebrow: "Big Games To Watch", sub: "")
