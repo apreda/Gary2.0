@@ -1700,16 +1700,6 @@ async function main() {
               console.log(`\n📤 [${config.name}] Storing ${picksForGame.length} pick(s) immediately: ${picksForGame.map(p => p.pick).join(' | ')}`);
               await storePicks(picksForGame);
               console.log(`✅ [${config.name}] Pick(s) stored to Supabase`);
-              // Persist investigation context so the "Talk to Gary" chat feature
-              // can speak from the actual depth Gary saw. Non-fatal on failure.
-              if (result._context) {
-                try {
-                  const { storePickContext } = await import('../src/services/picksService.js');
-                  await storePickContext(cleanPick, result._context);
-                } catch (ctxErr) {
-                  console.log(`⚠️  [${config.name}] pick_context store failed (non-fatal): ${ctxErr.message}`);
-                }
-              }
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }
