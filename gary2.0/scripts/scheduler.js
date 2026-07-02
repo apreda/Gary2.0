@@ -40,14 +40,9 @@ const LEAD_TIME_MINUTES = 90;       // Primary trigger (kept for any external re
 const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30, 15]; // First → fallbacks → final
 
 const SPORTS = [
-  { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
-  { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js', dfs: false },
-  // MLB DFS: deferred to the roadmap (user call, Jun 9 2026). The pipeline is
-  // validated end-to-end — dry run built 3/3 DK slates with real salaries — so
-  // re-enabling is dfs:true here (+ AppFlags.fantasyEnabled in iOS). Keep
-  // dfsArgs ['--limit','1'] when it returns: ~$0.54/lineup at MLB context size,
-  // so Main-only (~$33/mo) until the free labs feature earns full coverage.
-  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: false, dfsArgs: ['--limit', '1'] },
+  { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js' },
+  { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js' },
+  { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
   // 2026 FIFA World Cup — game picks only. Runs at a FIXED 10:00 AM ET (not the
   // per-game T-90/60/30/15 lead times). Rationale (user call, Jun 13 2026): the
   // T-90 cascade exists to wait out NBA/NHL/MLB lineup posts; soccer has no such
@@ -58,7 +53,7 @@ const SPORTS = [
   // injury news (both post ~2-2.5h pre-match, after a 10 AM run), and handles early
   // (e.g. midnight-ET) kickoffs that a fixed wall-clock trigger missed. Cost: WC picks
   // populate progressively through the day like MLB instead of all at the morning run.
-  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: 'run-wc-props.js', dfs: false },
+  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: 'run-wc-props.js' },
 ];
 
 // Within a shared trigger window, process lightweight/time-sensitive slates
@@ -385,20 +380,6 @@ function runScript(scriptPath, args = []) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// EXECUTE: Run DFS once per sport after all games for that sport are done
-// ═══════════════════════════════════════════════════════════════════════════
-async function runDFS(sport) {
-  if (!sport.dfs) return;
-  log(`\n🎯 Running ${sport.label} DFS lineups`);
-  try {
-    await runScript('scripts/run-dfs-lineups.js', [sport.flag, ...(sport.dfsArgs || [])]);
-    log(`✅ ${sport.label} DFS complete`);
-  } catch (e) {
-    log(`❌ ${sport.label} DFS error: ${e.message}`);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // EXECUTE: Process the full schedule
 // ═══════════════════════════════════════════════════════════════════════════
 async function executeSchedule(schedule) {
@@ -406,9 +387,6 @@ async function executeSchedule(schedule) {
     log('No games scheduled — nothing to run.');
     return;
   }
-
-  // Track which sports had games (for DFS at the end)
-  const sportsWithGames = new Set();
 
   // Group games that start within 15 min of each other (run them as a batch)
   // This avoids scheduling 8 NBA games individually when they all start at 7 PM
@@ -468,7 +446,6 @@ async function executeSchedule(schedule) {
       const key = entry.sport.key;
       if (!bySport.has(key)) bySport.set(key, []);
       bySport.get(key).push(entry);
-      sportsWithGames.add(entry.sport);
     }
 
     // Process sports by SPORT_RUN_PRIORITY (WC first, MLB last) so a small WC
@@ -529,11 +506,6 @@ async function executeSchedule(schedule) {
         }
       }
     }
-  }
-
-  // Run DFS after all games are done for each sport
-  for (const sport of sportsWithGames) {
-    await runDFS(sport);
   }
 
   log('\n🏁 All games complete for today.');

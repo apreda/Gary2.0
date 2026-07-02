@@ -36,7 +36,7 @@ const SB_NIGHT_MIN = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Name matching (mirrors run-all-results.js / backtest-dfs-lineups.js)
+// Name matching (mirrors run-all-results.js)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function normalizeName(name) {

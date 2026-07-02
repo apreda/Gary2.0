@@ -45,12 +45,6 @@ node scripts/run-all-results.js
 node scripts/run-results-for-date.js --date 2025-02-20
 ```
 
-### `run-dfs-lineups.js`
-Generates DFS lineup recommendations.
-```bash
-node scripts/run-dfs-lineups.js
-```
-
 ## Environment Variables
 
 All scripts require these env vars (set in `.env` or CI):
