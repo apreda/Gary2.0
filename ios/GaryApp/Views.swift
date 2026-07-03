@@ -15265,10 +15265,12 @@ struct CompactPickRow: View {
     /// rein themselves in per line via minimumScaleFactor, so the type is
     /// always as big as the name allows. D3's ghost mark rides BEHIND the type,
     /// so settled cards need no reserve for it.
-    private var heroFontSize: CGFloat { 76 }
+    /// Free/dark cards read at 64 (founder: 76 was too loud there, Jul 3);
+    /// the gold bar keeps its approved 76 base × 1.15 premium scale ≈ 87.
+    private var heroFontSize: CGFloat { premiumFinish ? 76 : 64 }
     /// Tight stacked leading (the mock's line-height .9) — all-caps display type
     /// has no descenders, so the lines pull together safely.
-    private var heroLineSpacing: CGFloat { -24 }
+    private var heroLineSpacing: CGFloat { premiumFinish ? -24 : -20 }
 
     /// Meta slot after the league token — opponent + time/live/final + odds.
     /// State-aware: live games show the live line, settled show the score.
@@ -20475,12 +20477,12 @@ struct TeasedPickCard: View {
                     Spacer()
                 }
 
-                VStack(alignment: .leading, spacing: -24) {
+                VStack(alignment: .leading, spacing: -20) {
                     Text("PICKS")
-                        .font(GaryFonts.display(76))
+                        .font(GaryFonts.display(64))
                         .foregroundStyle(.white)
                     Text("INCOMING")
-                        .font(GaryFonts.display(76))
+                        .font(GaryFonts.display(64))
                         .foregroundStyle(GaryColors.lightGold)
                         .lineLimit(1).minimumScaleFactor(0.5)
                 }
