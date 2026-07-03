@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 18 — The Verdict · 50</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --sil:#CBC7C1; --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08070a;color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  h2{font-family:var(--disp);font-weight:700;font-size:26px;text-transform:uppercase;margin:64px 0 6px;color:var(--gold-l)}
+  h2 small{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.1em;margin-left:14px;text-transform:none}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 30px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:44px;justify-items:center;margin-top:20px}
+  .slot{display:flex;flex-direction:column;gap:10px;align-items:center}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold);align-self:flex-start}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;max-width:370px;align-self:flex-start}
+
+  .card{position:relative;width:346px;height:232px;border-radius:20px;padding:18px;overflow:hidden;box-shadow:0 14px 26px rgba(0,0,0,.5)}
+  .eb{font-family:var(--mono);font-size:11px;letter-spacing:.22em;position:relative;z-index:3}
+  .hero{font-family:var(--disp);font-weight:700;font-size:50px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:8px;position:relative;z-index:3}
+  .hero .l2{display:block;font-size:26px;margin-top:4px}
+  .meta{font-family:var(--mono);font-size:12px;margin-top:10px;position:relative;z-index:3}
+  .meta b{font-weight:700}
+  .foot{position:absolute;left:18px;right:18px;bottom:12px;padding-top:10px;font-family:var(--mono);font-size:10.5px;display:flex;justify-content:space-between;z-index:3}
+
+  .gbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318);
+    box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7)}
+  .gbar .eb{color:#4a3a08}.gbar .hero{color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55)}
+  .gbar .meta{color:#5c4708}.gbar .meta b{color:#3a2c04}
+  .gbar .foot{color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)}
+
+  .tbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(240,240,244,.28),transparent 40%),
+    linear-gradient(158deg,#9a9ba1,#6e7077 34%,#55575d 52%,#8a8c93 74%,#4c4e54);
+    box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(240,240,244,.55),inset 0 -3px 0 rgba(10,11,13,.7)}
+  .tbar .eb{color:#26272c}.tbar .hero{color:#1a1b1f;text-shadow:0 1px 0 rgba(240,240,244,.35)}
+  .tbar .meta{color:#33343a}.tbar .meta b{color:#1a1b1f}
+  .tbar .foot{color:#26272c;border-top:1px solid rgba(20,21,25,.35)}
+
+  .dark{background:#121110;border:1px solid rgba(255,255,255,.10)}
+  .dark .eb{color:var(--gold)}.dark .hero{color:#fff}
+  .dark .meta{color:rgba(255,255,255,.55)}.dark .meta b{color:var(--gold)}
+  .dark .foot{color:var(--gold);border-top:1px solid rgba(255,255,255,.10)}
+  .sil .eb{color:var(--sil)}.sil .foot{color:var(--sil);border-top:1px solid rgba(203,199,193,.22)}
+
+  /* verdict kit */
+  .carve{font-family:var(--disp);font-weight:700;text-transform:uppercase;color:#6e5510;
+    text-shadow:0 1px 0 rgba(255,252,235,.85),0 2px 3px rgba(255,252,235,.28),0 -1px 1px rgba(35,26,2,.9)}
+  .carveL{font-family:var(--disp);font-weight:700;text-transform:uppercase;color:#5a2412;
+    text-shadow:0 1px 0 rgba(255,252,235,.7),0 -1px 1px rgba(30,10,4,.9)}
+  .stampbox{position:absolute;transform:rotate(-8deg);font-family:var(--mono);font-weight:700;letter-spacing:.16em;z-index:4;padding:5px 10px;border:2px solid currentColor}
+  .padr{padding-right:88px}
+</style>
+</head>
+<body>
+<h1>ROUND 18 — <span>the verdict</span> · 50 ways to say CASHED / LOST</h1>
+<p class="sub">The tag's one job: a user scanning a rail knows won-or-lost in under a second — that's why it exists. Every option keeps that; they differ in HOW the card says it. Three surfaces: the gold bar (V1–25), the dark game card (V26–40), the prop card (V41–50). True app size.</p>
+
+<h2>On the Gold Bar <small>V1–V25 · struck, carved, punched, tarnished</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>V1</b>Ink stamp (today, control)</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="stampbox" style="color:#3a2c04;right:14px;top:88px;font-size:17px">CASHED</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">The shipped stamp. Instant read, but ink-on-metal.</div></div>
+
+  <div class="slot"><div class="tag"><b>V2</b>Carved, tilted</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="carve" style="position:absolute;right:14px;top:92px;font-size:34px;letter-spacing:.1em;transform:rotate(-8deg);z-index:4">CASHED</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Wall-16's G1 — the engraved swap, same spot and tilt.</div></div>
+
+  <div class="slot"><div class="tag"><b>V3</b>Carved, level corner</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="carve" style="position:absolute;right:18px;top:16px;font-size:22px;letter-spacing:.16em;z-index:4">CASHED</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Bullion fineness mark — small, official, full hero width kept.</div></div>
+
+  <div class="slot"><div class="tag"><b>V4</b>Carved full-width</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="carve" style="position:absolute;left:18px;top:118px;font-size:56px;letter-spacing:.22em;z-index:4">CASHED</div>
+      <div class="hero">REDS MONEYLINE</div>
+      <div class="meta" style="margin-top:64px">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Verdict at hero scale — the second headline.</div></div>
+
+  <div class="slot"><div class="tag"><b>V5</b>Carved LOST</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="carveL" style="position:absolute;right:14px;top:92px;font-size:34px;letter-spacing:.14em;transform:rotate(-8deg);z-index:4">LOST</div>
+      <div class="hero padr">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>FINAL · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">Same cut, groove stained oxblood — red-family at a glance.</div></div>
+
+  <div class="slot"><div class="tag"><b>V6</b>Footer engraving</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span class="carve" style="font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.14em">CASHED · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Verdict lives in the footer line only. Cleanest card.</div></div>
+
+  <div class="slot"><div class="tag"><b>V7</b>Raised strike (embossed)</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:14px;top:92px;font-family:var(--disp);font-weight:700;font-size:34px;letter-spacing:.1em;transform:rotate(-8deg);z-index:4;color:#d9bc63;
+        text-shadow:0 -1px 0 rgba(255,252,235,.9),0 2px 2px rgba(35,26,2,.8)">CASHED</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Opposite of the carve: letters RAISED off the bar, lit from above.</div></div>
+
+  <div class="slot"><div class="tag"><b>V8</b>Assay seal</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:12px;top:72px;width:86px;height:86px;border-radius:50%;z-index:4;border:2.5px solid rgba(58,44,4,.85);display:flex;align-items:center;justify-content:center;transform:rotate(-10deg)">
+        <div style="position:absolute;inset:5px;border-radius:50%;border:1px solid rgba(58,44,4,.6)"></div>
+        <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;letter-spacing:.14em;color:rgba(58,44,4,.9)">CASHED</span></div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Double-ring assayer's mark — verified gold.</div></div>
+
+  <div class="slot"><div class="tag"><b>V9</b>The punch</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:26px;top:84px;width:34px;height:34px;border-radius:50%;background:#08070a;z-index:4;box-shadow:inset 0 2px 4px rgba(0,0,0,.9),0 1px 0 rgba(255,252,235,.5)"></div>
+      <div style="position:absolute;right:70px;top:94px;font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.18em;color:#3a2c04;z-index:4">CASHED</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Redeemed-ticket hole punched through the bar.</div></div>
+
+  <div class="slot"><div class="tag"><b>V10</b>Tarnish = LOST</div>
+    <div class="card tbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>NO CASH · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">No mark at all — the LOST bar loses its gold. On a rail, dead metal reads instantly.</div></div>
+
+  <div class="slot"><div class="tag"><b>V11</b>Tarnish + carved LOST</div>
+    <div class="card tbar"><div class="eb">GARY'S PICK</div>
+      <div class="carveL" style="position:absolute;right:14px;top:92px;font-size:34px;letter-spacing:.14em;transform:rotate(-8deg);z-index:4;color:#33141c">LOST</div>
+      <div class="hero padr">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>FINAL · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">Belt and suspenders: pewter card AND the carved word.</div></div>
+
+  <div class="slot"><div class="tag"><b>V12</b>Wax seal</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:16px;top:78px;width:74px;height:74px;border-radius:50% 46% 52% 48%;z-index:4;
+        background:radial-gradient(circle at 36% 30%,#a33324,#6e1d12 65%,#57150c);box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 2px 3px rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;transform:rotate(6deg)">
+        <span style="font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.1em;color:#f3d9c8">CASHED</span></div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Crimson wax pressed onto gold — notarized.</div></div>
+
+  <div class="slot"><div class="tag"><b>V13</b>Corner ribbon</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:-38px;top:24px;transform:rotate(45deg);background:#121110;color:var(--gold-l);font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.2em;padding:6px 46px;z-index:4;box-shadow:0 3px 8px rgba(0,0,0,.4)">CASHED</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Dark sash across the corner — high contrast on gold.</div></div>
+
+  <div class="slot"><div class="tag"><b>V14</b>Clipped corner</div>
+    <div class="card gbar" style="clip-path:polygon(0 0,calc(100% - 52px) 0,100% 52px,100% 100%,0 100%)"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:10px;top:44px;font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.16em;color:#3a2c04;transform:rotate(45deg);z-index:4">CASHED</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">The corner literally clipped off, like a validated ticket.</div></div>
+
+  <div class="slot"><div class="tag"><b>V15</b>Edge mill</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:0;top:0;bottom:0;width:26px;z-index:4;background:repeating-linear-gradient(180deg,#8a6d16 0 5px,#e3c56a 5px 10px)">
+        <span style="position:absolute;left:6px;top:50%;transform:translateY(-50%) rotate(90deg);transform-origin:center;font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:.3em;color:#2c2304;white-space:nowrap">CASHED</span></div>
+      <div class="hero" style="padding-right:30px">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot" style="right:52px"><span>FINAL · CIN 7 · MIL 2</span></div></div>
+    <div class="why">Reeded coin-edge strip down the right, verdict running along it.</div></div>
+
+  <div class="slot"><div class="tag"><b>V16</b>Verdict becomes the hero</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK · REDS ML · +172</div>
+      <div class="hero" style="font-size:64px">CASHED<span class="l2">CIN 7 · MIL 2 · FINAL</span></div>
+      <div class="foot"><span>REDS MONEYLINE</span><span>Nº 214</span></div></div>
+    <div class="why">Post-game inversion: the RESULT is the headline, the pick demotes to the eyebrow. The rail becomes a wall of giant CASHED.</div></div>
+
+  <div class="slot"><div class="tag"><b>V17</b>Sunburst carve</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:2px;top:60px;width:130px;height:130px;z-index:4;border-radius:50%;
+        background:repeating-conic-gradient(rgba(58,44,4,.25) 0deg 4deg,transparent 4deg 18deg)"></div>
+      <div class="carve" style="position:absolute;right:22px;top:112px;font-size:26px;letter-spacing:.1em;z-index:5">CASHED</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Engraved rays radiating from the word — a little celebration cut into the metal.</div></div>
+
+  <div class="slot"><div class="tag"><b>V18</b>Serial overstamp</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span class="carve" style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em">Nº 214 ✓ CASHED</span></div></div>
+    <div class="why">Verdict appended to the serial — bookkeeping voice, minimal.</div></div>
+
+  <div class="slot"><div class="tag"><b>V19</b>The carved check</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="carve" style="position:absolute;right:10px;top:44px;font-size:120px;z-index:4;font-family:Georgia,serif">✓</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">No word at all — one giant chiseled checkmark. Fastest possible read.</div></div>
+
+  <div class="slot"><div class="tag"><b>V20</b>The carved X (LOST)</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="carveL" style="position:absolute;right:22px;top:52px;font-size:110px;z-index:4">✕</div>
+      <div class="hero padr">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>FINAL · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">V19's partner — the oxblood X.</div></div>
+
+  <div class="slot"><div class="tag"><b>V21</b>Melted edge (LOST)</div>
+    <div class="card gbar" style="clip-path:polygon(0 0,100% 0,100% 82%,92% 96%,84% 84%,73% 99%,62% 86%,50% 98%,38% 87%,26% 99%,15% 88%,6% 97%,0 84%)">
+      <div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:16px;top:20px;font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.18em;color:#5a2412;z-index:4">LOST</div>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div></div>
+    <div class="why">The bar's bottom edge melted away — gold literally lost. Theatrical; maybe too sad, maybe perfect.</div></div>
+
+  <div class="slot"><div class="tag"><b>V22</b>Cracked bar (LOST)</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <svg style="position:absolute;inset:0;z-index:4" width="100%" height="100%" viewBox="0 0 346 232" preserveAspectRatio="none">
+        <polyline points="210,0 196,44 216,78 188,120 206,160 184,200 196,232" fill="none" stroke="rgba(35,26,2,.75)" stroke-width="2.5"/>
+        <polyline points="212,0 198,44 218,78 190,120 208,160 186,200 198,232" fill="none" stroke="rgba(255,252,235,.5)" stroke-width="1"/>
+      </svg>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>LOST · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">A fissure cracked through the bar. The pick broke.</div></div>
+
+  <div class="slot"><div class="tag"><b>V23</b>Top verdict strip</div>
+    <div class="card gbar"><div style="position:absolute;left:0;right:0;top:0;height:30px;background:rgba(20,15,2,.85);z-index:4;display:flex;align-items:center;justify-content:space-between;padding:0 18px">
+        <span style="font-family:var(--mono);font-weight:700;font-size:10.5px;letter-spacing:.2em;color:var(--gold-l)">✓ CASHED</span>
+        <span style="font-family:var(--mono);font-size:10px;color:rgba(232,212,139,.7)">CIN 7 · MIL 2</span></div>
+      <div class="eb" style="margin-top:24px">GARY'S PICK</div>
+      <div class="hero" style="margin-top:6px;font-size:44px">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div></div>
+    <div class="why">A dark verdict bar across the top edge — banner-clear, costs some hero room.</div></div>
+
+  <div class="slot"><div class="tag"><b>V24</b>Coin medallion</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:14px;top:76px;width:80px;height:80px;border-radius:50%;z-index:4;
+        background:radial-gradient(circle at 36% 30%,#f4e4ba,#c9a227 60%,#8a6d16);box-shadow:0 5px 12px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.7);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+        <img src="gary-chrome.png" style="width:38px;height:38px;object-fit:contain">
+        <span style="font-family:var(--mono);font-weight:700;font-size:8.5px;letter-spacing:.14em;color:#3a2c04">CASHED</span></div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">A minted coin laid on the bar — bear obverse, verdict legend.</div></div>
+
+  <div class="slot"><div class="tag"><b>V25</b>Glow rim (state edge)</div>
+    <div class="card gbar" style="box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7),0 0 24px rgba(63,185,80,.45)">
+      <div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:16px;top:18px;font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.18em;color:#1e6b33;z-index:4">CASHED ✓</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Win-green halo around the whole bar + small corner text. Reads at rail speed from the glow alone.</div></div>
+</div>
+
+<h2>On the Dark Card <small>V26–V40 · the free/standard surface</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>V26</b>Diagonal stamp (today, control)</div>
+    <div class="card dark"><div class="eb">GARY'S PICK</div>
+      <div class="stampbox" style="color:var(--gold);right:14px;top:88px;font-size:17px">CASHED</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">The shipped free-card stamp — the baseline the rest must beat.</div></div>
+
+  <div class="slot"><div class="tag"><b>V27</b>Foil letters, no box</div>
+    <div class="card dark"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:14px;top:90px;font-family:var(--disp);font-weight:700;font-size:34px;letter-spacing:.08em;transform:rotate(-8deg);z-index:4;
+        background:linear-gradient(170deg,#f7e7ae,#c9a227 55%,#8a6d16);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 3px rgba(0,0,0,.7))">CASHED</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">Drop the border, pour the letters in gold foil — same spot, richer.</div></div>
+
+  <div class="slot"><div class="tag"><b>V28</b>Eyebrow verdict</div>
+    <div class="card dark"><div class="eb">GARY'S PICK · <span style="color:#3FB950">CASHED ✓</span></div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">Plain text on the eyebrow row, win-green. Quietest possible; full hero width.</div></div>
+
+  <div class="slot"><div class="tag"><b>V29</b>Bold footer verdict</div>
+    <div class="card dark"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot" style="font-size:12.5px;font-weight:700"><span style="color:#3FB950">✓ CASHED · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">The footer carries it in green bold. Score and verdict in one glance-line.</div></div>
+
+  <div class="slot"><div class="tag"><b>V30</b>Type state (LOST dims)</div>
+    <div class="card dark"><div class="eb" style="opacity:.45">GARY'S PICK</div>
+      <div class="hero" style="color:rgba(255,255,255,.38)">CARDINALS -1.5</div>
+      <div class="meta" style="opacity:.5">MLB · vs Cubs · <b style="color:rgba(201,162,39,.5)">-125</b></div>
+      <div style="position:absolute;right:16px;top:18px;font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.18em;color:#C77A3A;z-index:4">LOST</div>
+      <div class="foot" style="opacity:.6"><span>FINAL · STL 2 · CHC 5</span><span>›</span></div></div>
+    <div class="why">Losses fade the whole card to 40% — wins stay bright. The rail self-sorts visually.</div></div>
+
+  <div class="slot"><div class="tag"><b>V31</b>Verdict rail (left edge)</div>
+    <div class="card dark" style="padding-left:34px"><div style="position:absolute;left:0;top:0;bottom:0;width:18px;background:linear-gradient(180deg,#3FB950,#1e6b33);z-index:4">
+        <span style="position:absolute;left:4px;top:50%;transform:translateY(-50%) rotate(90deg);font-family:var(--mono);font-weight:700;font-size:9px;letter-spacing:.3em;color:#08110a;white-space:nowrap">CASHED</span></div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot" style="left:34px"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">A green (or red) spine down the left edge — bank-statement clarity, scannable in a stack.</div></div>
+
+  <div class="slot"><div class="tag"><b>V32</b>Underline / strike</div>
+    <div class="card dark"><div class="eb">GARY'S PICK</div>
+      <div class="hero" style="display:inline-block;border-bottom:4px solid #3FB950;padding-bottom:2px">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span style="color:#3FB950">FINAL · CIN 7 · MIL 2 ✓</span><span>›</span></div></div>
+    <div class="why">Win = green rule UNDER the hero; loss = a red strike THROUGH it. The typography grades itself.</div></div>
+
+  <div class="slot"><div class="tag"><b>V33</b>Ghost check watermark</div>
+    <div class="card dark"><div style="position:absolute;right:-8px;top:-10px;font-size:210px;font-family:Georgia,serif;color:rgba(63,185,80,.13);z-index:1">✓</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">A giant green check ghosted behind everything — like the ember glyph, but it's the verdict.</div></div>
+
+  <div class="slot"><div class="tag"><b>V34</b>Gold fleck (win only)</div>
+    <div class="card dark" style="background:
+      radial-gradient(1.5px 1.5px at 20% 24%,rgba(232,212,139,.9),transparent 100%),
+      radial-gradient(1px 1px at 66% 14%,rgba(232,212,139,.7),transparent 100%),
+      radial-gradient(1.5px 1.5px at 82% 48%,rgba(232,212,139,.8),transparent 100%),
+      radial-gradient(1px 1px at 40% 66%,rgba(232,212,139,.6),transparent 100%),
+      radial-gradient(1.5px 1.5px at 70% 84%,rgba(232,212,139,.75),transparent 100%),#121110">
+      <div class="eb">GARY'S PICK · CASHED</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">Won cards get gold dust in the surface — subtle sparkle you notice scrolling.</div></div>
+
+  <div class="slot"><div class="tag"><b>V35</b>Score takeover footer</div>
+    <div class="card dark"><div class="eb">GARY'S PICK</div>
+      <div class="hero" style="font-size:44px">REDS<br>MONEYLINE</div>
+      <div class="foot" style="border-top:1px solid rgba(255,255,255,.10)">
+        <span style="font-family:var(--disp);font-weight:700;font-size:22px;color:#3FB950;letter-spacing:.04em">CIN 7 — MIL 2 · CASHED</span></div></div>
+    <div class="why">Post-game the meta line disappears and the SCORE gets display type. The card becomes a result.</div></div>
+
+  <div class="slot"><div class="tag"><b>V36</b>Corner fold reveal</div>
+    <div class="card dark"><div style="position:absolute;top:0;right:0;width:64px;height:64px;z-index:4;
+      background:linear-gradient(225deg,#08070a 50%,#e3c56a 50%,#b6952c 72%,#8a6d16);border-radius:0 20px 0 10px"></div>
+      <div style="position:absolute;top:34px;right:4px;transform:rotate(-45deg);font-family:var(--mono);font-size:7.5px;font-weight:700;letter-spacing:.1em;color:#3a2c04;z-index:5">CASHED</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">The corner peels back to show GOLD underneath — a wink at what winners' cards are made of.</div></div>
+
+  <div class="slot"><div class="tag"><b>V37</b>W coin sticker</div>
+    <div class="card dark"><div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:16px;top:74px;width:64px;height:64px;border-radius:50%;z-index:4;
+        background:radial-gradient(circle at 36% 30%,#f4e4ba,#c9a227 60%,#8a6d16);box-shadow:0 4px 10px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center">
+        <span style="font-family:var(--disp);font-weight:700;font-size:34px;color:#3a2c04">W</span></div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">A gold W coin, an L in gunmetal for losses. Sports-page shorthand.</div></div>
+
+  <div class="slot"><div class="tag"><b>V38</b>Edge glow state</div>
+    <div class="card dark" style="border:1px solid rgba(63,185,80,.55);box-shadow:0 14px 26px rgba(0,0,0,.5),0 0 20px rgba(63,185,80,.35)">
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span style="color:#3FB950">FINAL · CIN 7 · MIL 2 ✓</span><span>›</span></div></div>
+    <div class="why">Border + halo go win-green / loss-red. No object on the card at all.</div></div>
+
+  <div class="slot"><div class="tag"><b>V39</b>Receipt PAID</div>
+    <div class="card dark" style="border-bottom:2px dashed rgba(255,255,255,.25);border-radius:20px 20px 8px 8px">
+      <div class="eb">GARY'S PICK</div>
+      <div style="position:absolute;right:14px;top:88px;font-family:'Courier New',monospace;font-weight:700;font-size:26px;letter-spacing:.14em;color:rgba(63,185,80,.9);transform:rotate(-10deg);border:2.5px double rgba(63,185,80,.8);padding:4px 12px;z-index:4">PAID</div>
+      <div class="hero padr">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">Bookmaker voice: PAID in teller's green, perforated bottom edge.</div></div>
+
+  <div class="slot"><div class="tag"><b>V40</b>Ghost stamp, oversized</div>
+    <div class="card dark"><div style="position:absolute;left:8px;top:60px;font-family:var(--mono);font-weight:700;font-size:64px;letter-spacing:.1em;color:rgba(201,162,39,.10);transform:rotate(-8deg);border:6px solid rgba(201,162,39,.10);padding:4px 16px;z-index:1">CASHED</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span style="color:#3FB950">FINAL · CIN 7 · MIL 2 ✓</span><span>›</span></div></div>
+    <div class="why">Today's stamp blown up 3× and ghosted BEHIND the card content — presence without collision.</div></div>
+</div>
+
+<h2>On the Prop Card <small>V41–V50 · silver-language surface</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>V41</b>Prop stamp (today, control)</div>
+    <div class="card dark sil"><div class="eb">GARY'S PROP</div>
+      <div style="position:absolute;right:14px;top:44px;font-family:var(--mono);font-weight:700;font-size:14px;letter-spacing:.16em;color:var(--gold);border:2px solid var(--gold);padding:4px 9px;z-index:4">CASHED</div>
+      <div class="hero" style="font-size:40px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>FINAL · 2 HITS</span><span>›</span></div></div>
+    <div class="why">The shipped prop mark — smaller, straight, on the name line.</div></div>
+
+  <div class="slot"><div class="tag"><b>V42</b>Silver goes gold</div>
+    <div class="card dark" style="border:1px solid rgba(201,162,39,.5)"><div class="eb" style="color:var(--gold)">GARY'S PROP · CASHED</div>
+      <div class="hero" style="font-size:40px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS ✓</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot" style="color:var(--gold);border-top:1px solid rgba(201,162,39,.3)"><span>FINAL · 2 HITS</span><span>›</span></div></div>
+    <div class="why">The prop's silver chrome TURNS GOLD when it cashes — the finish is the verdict, no stamp.</div></div>
+
+  <div class="slot"><div class="tag"><b>V43</b>Check on the call</div>
+    <div class="card dark sil"><div class="eb">GARY'S PROP</div>
+      <div class="hero" style="font-size:40px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS <span style="color:#3FB950">✓</span></span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>FINAL · 2 HITS</span><span>›</span></div></div>
+    <div class="why">One green check appended to the call itself. Nothing else moves.</div></div>
+
+  <div class="slot"><div class="tag"><b>V44</b>Line circled</div>
+    <div class="card dark sil"><div class="eb">GARY'S PROP</div>
+      <div class="hero" style="font-size:40px">TURANG<span class="l2" style="color:var(--gold-l)">OVER <span style="border:2.5px solid #3FB950;border-radius:50%;padding:0 8px;display:inline-block">1.5</span> HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>FINAL · 2 HITS</span><span>›</span></div></div>
+    <div class="why">The number gets the teacher's circle when cleared — red slash through it when missed.</div></div>
+
+  <div class="slot"><div class="tag"><b>V45</b>Result owns the footer</div>
+    <div class="card dark sil"><div class="eb">GARY'S PROP</div>
+      <div class="hero" style="font-size:40px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot" style="font-weight:700;font-size:12px"><span style="color:#3FB950">✓ CASHED · 2 HITS · 2-FOR-4</span><span>›</span></div></div>
+    <div class="why">The stat line that settled it, bold and green, where the time used to be.</div></div>
+
+  <div class="slot"><div class="tag"><b>V46</b>Name lights up</div>
+    <div class="card dark sil"><div class="eb">GARY'S PROP</div>
+      <div class="hero" style="font-size:40px;color:var(--gold-l)">TURANG<span class="l2" style="color:#fff">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span style="color:#3FB950">FINAL · 2 HITS ✓</span><span>›</span></div></div>
+    <div class="why">The PLAYER goes gold when he delivers — he's the one who cashed it.</div></div>
+
+  <div class="slot"><div class="tag"><b>V47</b>Ash (prop LOST)</div>
+    <div class="card" style="background:#141414;border:1px solid rgba(255,255,255,.06)"><div class="eb" style="color:rgba(203,199,193,.4)">GARY'S PROP</div>
+      <div class="hero" style="font-size:40px;color:rgba(255,255,255,.35)">MONIAK<span class="l2" style="color:rgba(203,199,193,.35)">OVER 1.5 HITS</span></div>
+      <div class="meta" style="color:rgba(255,255,255,.3)">MLB · LAA @ TEX · <b style="color:rgba(201,162,39,.4)">+160</b></div>
+      <div class="foot" style="color:#C77A3A;border-top:1px solid rgba(255,255,255,.06)"><span>MISSED · 1 HIT</span><span>›</span></div></div>
+    <div class="why">A missed prop burns down to ash — everything grays except the quiet MISSED line.</div></div>
+
+  <div class="slot"><div class="tag"><b>V48</b>Tally strokes</div>
+    <div class="card dark sil"><div class="eb">GARY'S PROP</div>
+      <div style="position:absolute;right:22px;top:64px;display:flex;gap:8px;z-index:4">
+        <span style="width:5px;height:52px;background:var(--gold-l);border-radius:3px;transform:rotate(6deg)"></span>
+        <span style="width:5px;height:52px;background:var(--gold-l);border-radius:3px;transform:rotate(-4deg)"></span></div>
+      <div class="hero" style="font-size:40px;max-width:230px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>FINAL · 2 HITS ✓</span><span>›</span></div></div>
+    <div class="why">Two chalk tallies — one per hit. The count IS the verdict (needs ≥2 to exist).</div></div>
+
+  <div class="slot"><div class="tag"><b>V49</b>The big result number</div>
+    <div class="card dark sil"><div style="position:absolute;right:6px;top:-6px;font-family:var(--disp);font-weight:700;font-size:150px;line-height:1;color:rgba(63,185,80,.85);z-index:1">2</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero" style="font-size:40px;max-width:210px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>FINAL · NEEDED 2 · GOT 2</span><span>›</span></div></div>
+    <div class="why">The ACTUAL stat, huge, green when it clears the line, red when short. The most information per glance.</div></div>
+
+  <div class="slot"><div class="tag"><b>V50</b>Sweep strike</div>
+    <div class="card dark sil" style="background:linear-gradient(115deg,#121110 55%,rgba(201,162,39,.16) 75%,#121110 92%)">
+      <div class="eb">GARY'S PROP · <span style="color:var(--gold-l)">CASHED</span></div>
+      <div class="hero" style="font-size:40px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>FINAL · 2 HITS</span><span>›</span></div></div>
+    <div class="why">A gold light-sweep frozen mid-pass across the card — the moment it cashed, kept.</div></div>
+</div>
+
+</body>
+</html>

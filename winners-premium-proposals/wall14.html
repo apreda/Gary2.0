@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 14 — Fill the Card · 6</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08070a;color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:52px;justify-items:center}
+  .slot{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold);align-self:flex-start}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;max-width:400px;align-self:flex-start}
+
+  .phone{width:390px;background:radial-gradient(120% 90% at 50% 0%,#151210,#0A0908 60%);border-radius:52px;border:9px solid #1d1d20;box-shadow:0 26px 60px rgba(0,0,0,.65);padding:10px 0 16px;position:relative;overflow:hidden}
+  .island{width:118px;height:32px;background:#000;border-radius:18px;margin:4px auto 8px}
+  .phead{padding:8px 22px 0;display:flex;align-items:baseline;gap:10px}
+  .phead h3{font-family:var(--disp);font-weight:700;font-size:27px;letter-spacing:.04em;color:var(--gold)}
+  .phead span{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.45)}
+  .ptabs{display:flex;gap:26px;padding:12px 22px 0;font-family:var(--mono);font-size:12px}
+  .ptabs .off{color:rgba(255,255,255,.4)}
+  .ptabs .on{color:#fff;font-weight:700;border-bottom:2px solid var(--gold);padding-bottom:7px}
+  .shelf{padding:14px 22px 8px;font-family:var(--mono);font-size:10.5px;color:rgba(255,255,255,.65)}
+  .shelf i{font-style:normal;color:rgba(255,255,255,.35)}
+  .homebar{width:120px;height:4px;border-radius:3px;background:rgba(255,255,255,.3);margin:14px auto 0}
+
+  .card{position:relative;width:346px;height:232px;border-radius:20px;padding:18px;margin:0 auto;overflow:hidden;
+    background:#121110;border:1px solid rgba(255,255,255,.10);box-shadow:0 14px 26px rgba(0,0,0,.5)}
+  .eb{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--gold);position:relative;z-index:3}
+  .meta{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);position:relative;z-index:3}
+  .meta b{font-weight:700;color:var(--gold)}
+  .bigname{font-family:var(--disp);font-weight:700;line-height:.9;letter-spacing:-.01em;text-transform:uppercase;color:#fff;position:relative;z-index:3}
+  .bigcall{font-family:var(--disp);font-weight:700;line-height:.95;letter-spacing:0;text-transform:uppercase;color:var(--gold-l);position:relative;z-index:3}
+  .gl{position:absolute;font-family:var(--disp);font-weight:700;line-height:1;z-index:1;
+    color:rgba(232,212,139,.05);-webkit-text-stroke:1.5px rgba(201,162,39,.30)}
+  .tape{position:absolute;height:14px;z-index:2;
+    background:
+      repeating-linear-gradient(90deg,transparent 0 44px,rgba(232,212,139,.75) 44px 45.5px),
+      repeating-linear-gradient(90deg,transparent 0 8.8px,rgba(255,255,255,.30) 8.8px 9.8px)}
+  .mk{position:absolute;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid var(--gold);z-index:2;filter:drop-shadow(0 0 5px rgba(201,162,39,.6))}
+  .mklab{position:absolute;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--gold-l);z-index:2}
+  .bfoot{position:absolute;left:18px;right:18px;bottom:12px;font-family:var(--mono);font-size:10.5px;display:flex;justify-content:space-between;color:var(--gold);z-index:3}
+</style>
+</head>
+<body>
+<h1>ROUND 14 — <span>fill the card</span> · 6</h1>
+<p class="sub">Your call: the words should own the container. Each line now sizes itself to the full card width (the per-line Skyscraper code in the app already does this — these are real, buildable numbers). Plus P95 de-duplicated: the stat says its name ONCE. True app size — zoom ~75% for life-size.</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>F1</b>Full Bleed — type only</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card">
+        <div class="eb">GARY'S PROP</div>
+        <div class="bigname" style="font-size:79px;margin-top:6px">SKENES</div>
+        <div class="bigcall" style="font-size:41px;margin-top:2px">OVER 6.5 K</div>
+        <div class="meta" style="margin-top:10px">MLB · PIT @ STL · <b>-130</b> · 8:15 PM</div>
+      </div>
+      <div class="homebar"></div></div>
+    <div class="why">The ceiling: every line fit to the card's width, footer folded into one meta line. This is how big the type CAN go — 79px player, 41px call. Nothing else on the card.</div></div>
+
+  <div class="slot"><div class="tag"><b>F2</b>Full Bleed — long-name reality check</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card">
+        <div class="eb">GARY'S PROP</div>
+        <div class="bigname" style="font-size:54px;margin-top:8px">DE LA CRUZ</div>
+        <div class="bigcall" style="font-size:37px;margin-top:3px">OVER 1.5 TOTAL BASES</div>
+        <div class="meta" style="margin-top:12px">MLB · CIN @ MIL · <b>-115</b> · 7:40 PM</div>
+      </div>
+      <div class="homebar"></div></div>
+    <div class="why">Same rule, long name + long call: DE LA CRUZ fits at 54, the call at 37. The card self-balances — short names get huge, long names stay dignified.</div></div>
+
+  <div class="slot"><div class="tag"><b>F3</b>P95 De-Duped — glyph owns the stat</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="left:-30px;top:-24px;font-size:200px">TB</div>
+        <div style="position:relative;z-index:3;margin-left:104px">
+          <div class="eb">GARY'S PROP</div>
+          <div class="bigname" style="font-size:47px;margin-top:6px">DE LA<br>CRUZ</div>
+          <div class="bigcall" style="font-size:40px;margin-top:4px">OVER 1.5</div>
+          <div class="meta" style="margin-top:9px">CIN @ MIL · <b>-115</b></div></div>
+        <div class="bfoot" style="border-top:1px solid rgba(255,255,255,.10);padding-top:9px"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div>
+      </div>
+      <div class="homebar"></div></div>
+    <div class="why">The de-dupe you asked about: the glyph says TB, so the call is just OVER 1.5 — huge. Every fact appears exactly once: stat in the glyph, number in the call. No tape.</div></div>
+
+  <div class="slot"><div class="tag"><b>F4</b>P95 De-Duped — tape owns the number</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="left:-26px;top:-28px;font-size:195px">K</div>
+        <div style="position:relative;z-index:3;margin-left:92px">
+          <div class="eb">GARY'S PROP</div>
+          <div class="bigname" style="font-size:62px;margin-top:6px">SKENES</div>
+          <div class="bigcall" style="font-size:34px;margin-top:3px">OVER THE LINE</div>
+          <div class="meta" style="margin-top:8px">PIT @ STL · <b>-130</b></div></div>
+        <div class="mklab" style="left:38%;bottom:64px">6.5</div><div class="mk" style="left:40%;bottom:52px"></div><div class="tape" style="left:0;right:0;bottom:38px"></div>
+        <div class="bfoot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div>
+      </div>
+      <div class="homebar"></div></div>
+    <div class="why">Division of labor, fully strict: glyph = the stat (K), tape = the number (6.5), call = just the direction. Each element earns its spot or doesn't exist. The most opinionated version.</div></div>
+
+  <div class="slot"><div class="tag"><b>F5</b>P95 Big — glyph + full-fill type, tape, said once</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="left:-30px;top:-26px;font-size:205px">H</div>
+        <div style="position:relative;z-index:3;margin-left:86px">
+          <div class="eb">GARY'S PROP</div>
+          <div class="bigname" style="font-size:64px;margin-top:6px">TURANG</div>
+          <div class="bigcall" style="font-size:35px;margin-top:3px">OVER 1.5 HITS</div>
+          <div class="meta" style="margin-top:8px">MIL vs CIN · <b>+145</b></div></div>
+        <div class="mk" style="left:40%;bottom:52px"></div><div class="tape" style="left:0;right:0;bottom:38px"></div>
+        <div class="bfoot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div>
+      </div>
+      <div class="homebar"></div></div>
+    <div class="why">P95 kept whole — glyph, tape AND full call — but the number appears ONCE (the tape marker lost its label; the marker still points at 1.5's position). Type maxed to fill the indent.</div></div>
+
+  <div class="slot"><div class="tag"><b>F6</b>P95 Original, just bigger</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="left:-30px;top:-26px;font-size:205px">TB</div>
+        <div style="position:relative;z-index:3;margin-left:100px">
+          <div class="eb">GARY'S PROP</div>
+          <div class="bigname" style="font-size:44px;margin-top:6px">DE LA<br>CRUZ</div>
+          <div class="bigcall" style="font-size:29px;margin-top:4px">OVER 1.5 TOTAL BASES</div>
+          <div class="meta" style="margin-top:8px">CIN @ MIL · <b>-115</b></div></div>
+        <div class="mklab" style="left:36%;bottom:64px">1.5</div><div class="mk" style="left:38%;bottom:52px"></div><div class="tape" style="left:0;right:0;bottom:38px"></div>
+        <div class="bfoot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div>
+      </div>
+      <div class="homebar"></div></div>
+    <div class="why">Control card: P95 exactly as it was — duplication and all — only with the type block scaled to fill. Compare against F3/F4/F5 to decide if the repetition actually bothers you at full size.</div></div>
+
+</div>
+</body>
+</html>

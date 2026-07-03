@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 13 — P90 × P81 · 5</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08070a;color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:860px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:52px;justify-items:center}
+  .slot{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold);align-self:flex-start}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;max-width:400px;align-self:flex-start}
+
+  .phone{width:390px;background:radial-gradient(120% 90% at 50% 0%,#151210,#0A0908 60%);border-radius:52px;border:9px solid #1d1d20;box-shadow:0 26px 60px rgba(0,0,0,.65);padding:10px 0 16px;position:relative;overflow:hidden}
+  .island{width:118px;height:32px;background:#000;border-radius:18px;margin:4px auto 8px}
+  .phead{padding:8px 22px 0;display:flex;align-items:baseline;gap:10px}
+  .phead h3{font-family:var(--disp);font-weight:700;font-size:27px;letter-spacing:.04em;color:var(--gold)}
+  .phead span{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.45)}
+  .ptabs{display:flex;gap:26px;padding:12px 22px 0;font-family:var(--mono);font-size:12px}
+  .ptabs .off{color:rgba(255,255,255,.4)}
+  .ptabs .on{color:#fff;font-weight:700;border-bottom:2px solid var(--gold);padding-bottom:7px}
+  .shelf{padding:14px 22px 8px;font-family:var(--mono);font-size:10.5px;color:rgba(255,255,255,.65)}
+  .shelf i{font-style:normal;color:rgba(255,255,255,.35)}
+  .homebar{width:120px;height:4px;border-radius:3px;background:rgba(255,255,255,.3);margin:14px auto 0}
+
+  .card{position:relative;width:346px;height:232px;border-radius:20px;padding:18px;margin:0 auto;overflow:hidden;
+    background:#121110;border:1px solid rgba(255,255,255,.10);box-shadow:0 14px 26px rgba(0,0,0,.5)}
+  .eb{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--gold);position:relative;z-index:3}
+  .hero{font-family:var(--disp);font-weight:700;font-size:50px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:8px;color:#fff;position:relative;z-index:3}
+  .hero .l2{display:block;font-size:26px;margin-top:4px}
+  .meta{font-family:var(--mono);font-size:12px;margin-top:10px;color:rgba(255,255,255,.55);position:relative;z-index:3}
+  .meta b{font-weight:700;color:var(--gold)}
+  .foot{position:absolute;left:18px;right:18px;bottom:12px;padding-top:10px;font-family:var(--mono);font-size:10.5px;display:flex;justify-content:space-between;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);z-index:3}
+
+  /* ember glyph + tape (the P90 kit) */
+  .gl{position:absolute;font-family:var(--disp);font-weight:700;line-height:1;z-index:1;
+    color:rgba(232,212,139,.05);-webkit-text-stroke:1.5px rgba(201,162,39,.30)}
+  .tape{position:absolute;height:14px;z-index:2;
+    background:
+      repeating-linear-gradient(90deg,transparent 0 44px,rgba(232,212,139,.75) 44px 45.5px),
+      repeating-linear-gradient(90deg,transparent 0 8.8px,rgba(255,255,255,.30) 8.8px 9.8px)}
+  .mk{position:absolute;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid var(--gold);z-index:2;filter:drop-shadow(0 0 5px rgba(201,162,39,.6))}
+  .mklab{position:absolute;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--gold-l);z-index:2}
+  .vtape{position:absolute;width:14px;z-index:1;
+    background:
+      repeating-linear-gradient(180deg,transparent 0 40px,rgba(232,212,139,.7) 40px 41.5px),
+      repeating-linear-gradient(180deg,transparent 0 8px,rgba(255,255,255,.28) 8px 9px)}
+</style>
+</head>
+<body>
+<h1>ROUND 13 — <span>P90 × P81</span> · 5</h1>
+<p class="sub">Your two finalists — P90 (ember stat glyph + tape at the line + gold call) and P81 (type-specimen column) — five ways, all at true app size (346×232 in the 390pt frame). Zoom ~75% for life-size.</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P91</b>P90, Polished</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-10px;top:-24px;font-size:185px">H</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · 2B · MIL vs CIN · <b>+145</b></div>
+        <div class="mklab" style="left:34%;bottom:66px">1.5</div><div class="mk" style="left:36%;bottom:54px"></div><div class="tape" style="left:0;right:0;bottom:40px"></div>
+        <div class="foot" style="border-top:none;padding-top:14px"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The baseline: P90 exactly as picked — ember glyph, gold call line, tape at 1.5 replacing the footer divider.</div></div>
+
+  <div class="slot"><div class="tag"><b>P92</b>P81, Slim Column</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card" style="display:flex;gap:14px;align-items:stretch">
+        <div style="flex:0 0 88px;position:relative;border-right:1px solid rgba(255,255,255,.10)">
+          <div class="gl" style="left:-6px;top:-4px;font-size:120px;position:absolute">K</div>
+          <div style="position:absolute;bottom:6px;left:0;font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:rgba(232,212,139,.5);writing-mode:vertical-rl;transform:rotate(180deg);height:76px">STRIKEOUTS · 6.5</div></div>
+        <div style="flex:1;position:relative;z-index:2">
+          <div class="eb">GARY'S PROP</div>
+          <div class="hero" style="font-size:42px">SKENES<span class="l2" style="font-size:23px;color:var(--gold-l)">OVER 6.5 K</span></div>
+          <div class="meta" style="font-size:11.5px">PIT @ STL · <b>-130</b></div>
+          <div style="position:absolute;bottom:0;left:0;right:0;font-family:var(--mono);font-size:10px;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);padding-top:9px;display:flex;justify-content:space-between"><span>TONIGHT · 8:15 PM</span><span>›</span></div></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">P81 with its cost repaired: column slimmed 118→88, caption turned vertical, hero back up to 42px.</div></div>
+
+  <div class="slot"><div class="tag"><b>P93</b>Specimen + Tape Through Everything</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card" style="display:flex;gap:14px;align-items:stretch">
+        <div class="mklab" style="left:30%;bottom:60px">1.5</div><div class="mk" style="left:33%;bottom:48px"></div>
+        <div class="tape" style="left:0;right:0;bottom:34px"></div>
+        <div style="flex:0 0 92px;position:relative;border-right:1px solid rgba(255,255,255,.10)">
+          <div class="gl" style="left:-6px;top:-4px;font-size:125px;position:absolute">H</div>
+          <div style="position:absolute;bottom:26px;left:0;font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:rgba(232,212,139,.5)">HITS · 1.5</div></div>
+        <div style="flex:1;position:relative;z-index:2">
+          <div class="eb">GARY'S PROP</div>
+          <div class="hero" style="font-size:40px">TURANG<span class="l2" style="font-size:22px;color:var(--gold-l)">OVER 1.5 HITS</span></div>
+          <div class="meta" style="font-size:11.5px">MIL vs CIN · <b>+145</b></div>
+          <div style="position:absolute;bottom:0;left:0;right:0;font-family:var(--mono);font-size:10px;color:var(--gold);padding-top:9px;display:flex;justify-content:space-between"><span>TONIGHT · 7:40 PM</span><span>›</span></div></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The full fusion: specimen column left, and P90's tape runs the FULL width underneath both zones — one ruler binds the glyph and the bet.</div></div>
+
+  <div class="slot"><div class="tag"><b>P94</b>Specimen Right + Vertical Tape Spine</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card" style="display:flex;gap:14px;align-items:stretch">
+        <div style="flex:1;position:relative;z-index:2">
+          <div class="eb">GARY'S PROP</div>
+          <div class="hero" style="font-size:44px">SKENES<span class="l2" style="font-size:23px;color:var(--gold-l)">OVER 6.5 K</span></div>
+          <div class="meta" style="font-size:11.5px">PIT @ STL · <b>-130</b></div>
+          <div style="position:absolute;bottom:0;left:0;right:0;font-family:var(--mono);font-size:10px;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);padding-top:9px;display:flex;justify-content:space-between"><span>TONIGHT · 8:15 PM</span><span>›</span></div></div>
+        <div style="flex:0 0 100px;position:relative;overflow:visible">
+          <div class="vtape" style="left:0;top:-18px;bottom:-18px"></div>
+          <div class="mklab" style="left:18px;top:74px">6.5</div>
+          <div style="position:absolute;left:0px;top:86px;width:0;height:0;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:9px solid var(--gold);filter:drop-shadow(0 0 5px rgba(201,162,39,.6))"></div>
+          <div class="gl" style="right:-10px;top:-2px;font-size:128px;position:absolute">K</div>
+          <div style="position:absolute;bottom:6px;right:0;font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:rgba(232,212,139,.5)">Nº P-215</div></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Reading order fixed: bet first (left), glyph closes the card (right) — and the column DIVIDER is a vertical tape with the marker at 6.5. The ruler became architecture.</div></div>
+
+  <div class="slot"><div class="tag"><b>P95</b>P90, Specimen Ghost (no rule)</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="left:-34px;top:-26px;font-size:210px">TB</div>
+        <div style="position:relative;z-index:3;margin-left:96px">
+          <div class="eb">GARY'S PROP</div>
+          <div class="hero" style="font-size:40px">DE LA CRUZ<span class="l2" style="font-size:22px;color:var(--gold-l)">OVER 1.5 TOTAL BASES</span></div>
+          <div class="meta" style="font-size:11.5px">CIN @ MIL · <b>-115</b></div></div>
+        <div class="mklab" style="left:34%;bottom:66px">1.5</div><div class="mk" style="left:36%;bottom:54px"></div><div class="tape" style="left:0;right:0;bottom:40px"></div>
+        <div class="foot" style="border-top:none;padding-top:14px"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">P81's left-glyph composition WITHOUT the column rule — the ember TB half-cropped off the left edge, text block indented beside it, P90's tape underneath. Specimen feel, watermark weight.</div></div>
+
+</div>
+</body>
+</html>

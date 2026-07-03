@@ -1,22 +1,15 @@
 # Gary A.I. - Marketing Memory
 
-## Social Media Posting Rules
-
-### Hashtag Research (MANDATORY)
-- **Every single time** we post to X or Instagram, research the best hashtags FIRST
-- Do NOT default to generic hashtags — research what the betting community actually uses
-- For X: 2-3 hashtags max, place after content body, NEVER start with a hashtag
-- For Instagram: 3-5 targeted hashtags in caption
-- Use sport-specific community hashtags (e.g., #CBJ for Blue Jackets, #GamblingX for betting community)
-- **Researched hashtag picks (March 2026):** #GamblingX > #GamblingTwitter (platform is X now, verified accounts use #GamblingX), #CBB for college basketball, #MarchMadness during tournament, #WorldBaseballClassic during WBC
-- Source: Verified accounts like McBets use #CBB + #GamblingX combo
+> **⚠️ SUPERSEDED (June 16, 2026): posting rules below are OUTDATED.**
+> The operative posting policy is `X_CONVERSION_STRATEGY.md` + the `VOICE_RULES`
+> baked into `gary2.0/supabase/functions/social-auto-post/index.ts`. Key reversals:
+> **NO hashtags ever, NO emojis**, single conversion-first tweets (not threads),
+> and pick/results tweets now lead with branded card IMAGES (not text-only).
+> The Branding & Logo and Accounts sections below are still current.
 
 ### X (Twitter) Best Practices
-- **TEXT-ONLY tweets** — no images. Data shows text gets 10-20x more impressions (138-211 vs 10)
-- Links hurt impressions — use "betwithgary.ai" as plain text only when needed
 - Don't copy mood words from app screenshots
-- For pick tweets: 3-tweet THREAD (hook → paragraph reasoning → app CTA), NOT bullet points. Paragraph reasoning with 4-6 deep stats from the Supabase rationale. See `SESSION_HANDOFF.md` for the canonical format. (Superseded the old "3 bullet points" rule on June 3, 2026.)
-- For recap tweets: Vary creative style daily, own the losses with transparency
+- For recap tweets: own the losses with transparency (open-receipt recaps)
 
 ### Branding & Logo (MANDATORY)
 - **ALWAYS use the actual Gary logo / character files** — NEVER let AI generate its own version of the bear (Gary is a **bear**, not a lion).
@@ -30,8 +23,7 @@
 - No generic AI slop
 - Don't copy words from screenshots
 - Gary logo = small branding, not centerpiece
-- Tagline: "Every Game. Everyday. Always Free."
-- CTA: "Full slate of Gary's picks are live. Every game covered. Completely free."
+- ~~Tagline: "Every Game. Everyday. Always Free."~~ **OUTDATED — Winners is paid since June 8, 2026.** The free slate is the proof layer; don't market the whole product as free.
 
 ### Instagram Strategy (ON HOLD)
 - Static posts get zero non-follower reach — need Reels

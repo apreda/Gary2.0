@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Winners Premium — Proposal Wall</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-light:#E8D48B; --gold-warm:#F4E4BA; --cream:#FAF8F5;
+    --ink:#08080A; --card:#121110; --card2:#17150F; --line:rgba(255,255,255,.10);
+    --win:#41C97C; --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0A0908;color:var(--cream);font-family:-apple-system,'Helvetica Neue',sans-serif;padding:48px 40px 120px}
+  h1{font-family:var(--disp);font-weight:700;font-size:44px;letter-spacing:.02em;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 6px;max-width:760px;line-height:1.6}
+  h2{font-family:var(--mono);font-size:13px;letter-spacing:.18em;color:var(--gold);text-transform:uppercase;margin:56px 0 6px;border-top:1px dashed rgba(201,162,39,.35);padding-top:28px}
+  .h2sub{font-size:12.5px;color:rgba(255,255,255,.5);margin-bottom:24px;max-width:720px;line-height:1.55}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(390px,1fr));gap:34px}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .tag{font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.08em}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 7px;border-radius:4px;margin-right:8px;font-size:11px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;min-height:34px}
+
+  /* ── base card (mirrors CompactPickRow geometry) ─────────────────── */
+  .card{position:relative;width:100%;height:216px;border-radius:20px;background:var(--card);
+        border:1px solid var(--line);padding:20px 22px;overflow:hidden;
+        box-shadow:0 18px 30px rgba(0,0,0,.5)}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.28em;color:var(--gold)}
+  .hero{font-family:var(--disp);font-weight:700;font-size:40px;line-height:.95;text-transform:uppercase;margin-top:14px;color:#fff}
+  .meta{font-family:var(--mono);font-size:12.5px;margin-top:14px;color:rgba(255,255,255,.55)}
+  .meta .lg{color:#63D17E;font-weight:700}
+  .meta .odds{color:var(--gold)}
+  .foot{position:absolute;left:22px;right:22px;bottom:16px;border-top:1px solid var(--line);
+        padding-top:12px;font-family:var(--mono);font-size:11.5px;color:var(--gold);letter-spacing:.06em;display:flex;justify-content:space-between}
+  .bear{position:absolute;top:16px;right:18px;width:40px;height:40px;border-radius:9px;
+        background:radial-gradient(circle at 35% 30%,#E8D48B,#8a6d14);display:flex;align-items:center;justify-content:center;
+        font-family:var(--mono);font-size:8px;font-weight:700;color:#241c04}
+
+  /* ── 1 hairline (shipped) ── */ .f1{border-color:rgba(201,162,39,.30)}
+  /* ── 2 double seam ── */
+  .f2{border-color:rgba(201,162,39,.45)}
+  .f2::after{content:"";position:absolute;inset:5px;border:1px solid rgba(201,162,39,.18);border-radius:15px;pointer-events:none}
+  /* ── 3 certificate corners ── */
+  .f3 .corner{position:absolute;width:22px;height:22px;border-color:var(--gold);border-style:solid;border-width:0}
+  .f3 .c1{top:10px;left:10px;border-top-width:2px;border-left-width:2px;border-top-left-radius:8px}
+  .f3 .c2{top:10px;right:10px;border-top-width:2px;border-right-width:2px;border-top-right-radius:8px}
+  .f3 .c3{bottom:10px;left:10px;border-bottom-width:2px;border-left-width:2px;border-bottom-left-radius:8px}
+  .f3 .c4{bottom:10px;right:10px;border-bottom-width:2px;border-right-width:2px;border-bottom-right-radius:8px}
+  /* ── 4 foil sheen border ── */
+  .f4{border:none;padding:21px 23px}
+  .f4::before{content:"";position:absolute;inset:0;border-radius:20px;padding:1.5px;
+    background:linear-gradient(115deg,#6b5510,#E8D48B 18%,#8a6d14 38%,#F4E4BA 52%,#8a6d14 66%,#E8D48B 84%,#6b5510);
+    background-size:280% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;animation:sheen 5.5s linear infinite}
+  @keyframes sheen{to{background-position:280% 0}}
+  /* ── 5 serial plate ── */
+  .f5{border-color:rgba(201,162,39,.30)}
+  .f5 .plate{position:absolute;right:16px;bottom:44px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+    color:var(--gold-light);border:1px solid rgba(201,162,39,.5);border-radius:5px;padding:4px 8px;
+    background:linear-gradient(180deg,rgba(201,162,39,.14),rgba(201,162,39,.04))}
+  /* ── 6 wax seal ── */
+  .f6{border-color:rgba(201,162,39,.30)}
+  .f6 .seal{position:absolute;top:14px;right:64px;width:44px;height:44px;border-radius:50%;
+    background:radial-gradient(circle at 38% 32%,#E8D48B,#a07f16 60%,#6b5510);
+    box-shadow:0 3px 8px rgba(0,0,0,.6),inset 0 0 0 3px rgba(36,28,4,.35);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:7.5px;font-weight:700;color:#241c04;text-align:center;transform:rotate(-8deg)}
+  /* ── 7 ticket stub ── */
+  .f7{border-radius:14px;border-color:rgba(201,162,39,.35);
+    -webkit-mask:radial-gradient(circle 9px at 0 78%,transparent 96%,#000) left/51% 100% no-repeat,
+                 radial-gradient(circle 9px at 100% 78%,transparent 96%,#000) right/51% 100% no-repeat}
+  .f7 .perf{position:absolute;left:14px;right:14px;bottom:44px;border-top:2px dashed rgba(201,162,39,.4)}
+  .f7 .barcode{position:absolute;right:20px;bottom:12px;width:110px;height:22px;
+    background:repeating-linear-gradient(90deg,var(--gold-light) 0 2px,transparent 2px 5px,var(--gold-light) 5px 6px,transparent 6px 10px);opacity:.8}
+  .f7 .foot{border:none;bottom:14px;right:150px}
+  /* ── 8 blackout vault ── */
+  .f8{background:#070604;border:1px solid rgba(201,162,39,.55)}
+  .f8 .hero{color:var(--gold-light);text-shadow:0 0 22px rgba(201,162,39,.25)}
+  .f8 .eyebrow{color:rgba(232,212,139,.8)}
+  /* ── 9 gilded room ── */
+  .f9{background:linear-gradient(160deg,#231a06,#171106 55%,#100b04);border:1px solid rgba(232,212,139,.5)}
+  .f9 .hero{color:var(--gold-warm)} .f9 .meta{color:rgba(244,228,186,.6)}
+  /* ── 10 embossed watermark ── */
+  .f10{border-color:rgba(201,162,39,.30)}
+  .f10 .mark{position:absolute;right:-26px;bottom:-34px;font-family:var(--disp);font-weight:700;font-size:150px;
+    color:transparent;-webkit-text-stroke:1px rgba(201,162,39,.13);transform:rotate(-10deg);pointer-events:none}
+  /* ── 11 ribbon corner ── */
+  .f11{border-color:rgba(201,162,39,.30)}
+  .f11 .ribbon{position:absolute;top:17px;left:-38px;transform:rotate(-45deg);width:150px;text-align:center;
+    background:linear-gradient(180deg,#E8D48B,#a07f16);color:#241c04;font-family:var(--mono);font-size:9px;
+    font-weight:700;letter-spacing:.2em;padding:5px 0;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+  /* ── 12 date-stamped issue ── */
+  .f12{border-color:rgba(201,162,39,.30)}
+  .f12 .issue{position:absolute;top:58px;right:-14px;transform:rotate(9deg);font-family:var(--mono);
+    font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--gold);border:2px solid var(--gold);
+    border-radius:6px;padding:5px 26px 5px 12px;opacity:.85}
+  /* ── 13 pinstripe ── */
+  .f13{border-color:rgba(201,162,39,.35);
+    background:repeating-linear-gradient(115deg,var(--card) 0 14px,#161310 14px 15px)}
+  /* ── 14 championship (deliberately too far) ── */
+  .f14{border:4px double var(--gold);box-shadow:0 0 0 1.5px #6b5510,0 18px 30px rgba(0,0,0,.5)}
+  .f14::after{content:"◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆";position:absolute;top:4px;left:0;right:0;text-align:center;
+    color:rgba(201,162,39,.5);font-size:8px;letter-spacing:14px}
+  /* ── 15 holo prism hero ── */
+  .f15{border-color:rgba(201,162,39,.35)}
+  .f15 .hero{background:linear-gradient(100deg,#E8D48B 10%,#fff 28%,#C9A227 45%,#F4E4BA 60%,#fff 78%,#E8D48B);
+    background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:holo 4.5s ease-in-out infinite alternate}
+  @keyframes holo{to{background-position:100% 0}}
+  /* ── 16 velvet case ── */
+  .case{background:linear-gradient(180deg,#141007,#0c0a05);border:1px solid rgba(201,162,39,.35);
+    border-radius:26px;padding:12px;box-shadow:inset 0 0 34px rgba(201,162,39,.10),0 22px 36px rgba(0,0,0,.55)}
+  .case .card{box-shadow:0 8px 18px rgba(0,0,0,.55);border-color:rgba(201,162,39,.28);height:192px}
+
+  /* ── reveal stage ─────────────────────────────────────────────── */
+  .stage{position:relative;width:100%;height:236px;border-radius:22px;background:#0D0B08;
+    border:1px dashed rgba(201,162,39,.25);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .stage .card{width:86%;height:196px}
+  .hint{position:absolute;bottom:8px;right:14px;font-family:var(--mono);font-size:9.5px;color:rgba(255,255,255,.35)}
+  /* A wrap tear */
+  .wrapA{position:absolute;inset:0;border-radius:22px;overflow:hidden;pointer-events:none}
+  .wrapA .half{position:absolute;top:0;bottom:0;width:52%;
+    background:linear-gradient(135deg,#a07f16,#E8D48B 30%,#8a6d14 55%,#F4E4BA 80%,#a07f16);
+    background-size:34px 34px, cover;}
+  .wrapA .half::after{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(45deg,rgba(0,0,0,.12) 0 3px,transparent 3px 17px)}
+  .wrapA .L{left:0;clip-path:polygon(0 0,100% 0,86% 100%,0 100%)}
+  .wrapA .R{right:0;clip-path:polygon(14% 0,100% 0,100% 100%,0 100%)}
+  .play .wrapA .L{animation:tearL 1.05s cubic-bezier(.6,.02,.4,1) .25s forwards}
+  .play .wrapA .R{animation:tearR 1.05s cubic-bezier(.6,.02,.4,1) .25s forwards}
+  @keyframes tearL{60%{transform:translateX(-30%) rotate(-7deg)}100%{transform:translateX(-130%) rotate(-13deg);opacity:0}}
+  @keyframes tearR{60%{transform:translateX(30%) rotate(7deg)}100%{transform:translateX(130%) rotate(13deg);opacity:0}}
+  /* B foil corner peel */
+  .peel{position:absolute;inset:0;border-radius:22px;pointer-events:none;
+    background:linear-gradient(115deg,#8a6d14,#E8D48B 40%,#F4E4BA 55%,#8a6d14);
+    clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}
+  .play .peel{animation:peel 1.3s cubic-bezier(.55,.05,.35,1) .2s forwards}
+  @keyframes peel{
+    35%{clip-path:polygon(0 0,100% 0,100% 100%,0 100%);transform:translate(4%,-5%) rotate(-3deg)}
+    100%{clip-path:polygon(0 0,18% 0,0 22%,0 22%);transform:translate(-68%,-74%) rotate(-24deg);opacity:.0}}
+  /* C vault doors */
+  .door{position:absolute;top:0;bottom:0;width:50%;background:#070604;pointer-events:none;
+    border-top:1px solid rgba(201,162,39,.5);border-bottom:1px solid rgba(201,162,39,.5)}
+  .door.L{left:0;border-radius:22px 0 0 22px;border-left:1px solid rgba(201,162,39,.5);
+    background-image:radial-gradient(circle at 88% 50%,rgba(201,162,39,.35) 5px,transparent 6px)}
+  .door.R{right:0;border-radius:0 22px 22px 0;border-right:1px solid rgba(201,162,39,.5);
+    background-image:radial-gradient(circle at 12% 50%,rgba(201,162,39,.35) 5px,transparent 6px)}
+  .play .door.L{animation:doorL 1.2s cubic-bezier(.7,0,.3,1) .35s forwards}
+  .play .door.R{animation:doorR 1.2s cubic-bezier(.7,0,.3,1) .35s forwards}
+  @keyframes doorL{to{transform:translateX(-102%)}}
+  @keyframes doorR{to{transform:translateX(102%)}}
+  /* D scratch-off */
+  .scratch{position:absolute;inset:0;border-radius:22px;pointer-events:none;
+    background:repeating-linear-gradient(55deg,#3a3a3c 0 6px,#4a4a4e 6px 12px)}
+  .scratch::after{content:"WINNERS · SCRATCH TO REVEAL";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:11px;letter-spacing:.25em;color:rgba(255,255,255,.45)}
+  .play .scratch{animation:scr 1.4s ease-in .2s forwards}
+  @keyframes scr{to{clip-path:circle(0% at 30% 40%);opacity:0}}
+  /* E ticket print */
+  .slotE{position:absolute;left:6%;right:6%;top:12px;height:14px;border-radius:8px;background:#070604;
+    border:1px solid rgba(201,162,39,.5);pointer-events:none;z-index:2}
+  .stE .card{transform:translateY(-115%);opacity:0}
+  .stE.play .card{animation:printE 1.5s cubic-bezier(.2,.9,.25,1) .25s forwards}
+  @keyframes printE{15%{opacity:1}55%{transform:translateY(4%)}75%{transform:translateY(-2%)}100%{transform:translateY(0);opacity:1}}
+  /* F shimmer unveil */
+  .stF .card .hero,.stF .card .meta,.stF .card .foot{filter:blur(9px);transition:filter .5s ease .95s}
+  .stF.play .card .hero,.stF.play .card .meta,.stF.play .card .foot{filter:blur(0)}
+  .glint{position:absolute;inset:0;border-radius:22px;overflow:hidden;pointer-events:none}
+  .glint::after{content:"";position:absolute;top:-40%;bottom:-40%;width:34%;left:-40%;transform:rotate(18deg);
+    background:linear-gradient(90deg,transparent,rgba(232,212,139,.5),transparent)}
+  .play .glint::after{animation:glide 1.15s ease .25s forwards}
+  @keyframes glide{to{left:130%}}
+</style>
+</head>
+<body>
+<h1>WINNERS <span>PREMIUM</span> — the proposal wall</h1>
+<p class="sub">16 finish treatments + 6 reveal animations. Same geometry as the shipped card (uniform-height law respected) — only the FINISH changes. Click any reveal stage to replay its animation. Tell me by number: e.g. "finish 5 + 9, reveal A with F's blur".</p>
+
+<h2>Part I — Finishes (static premium treatments)</h2>
+<p class="h2sub">#1 is what shipped tonight, for reference. #14 is deliberately one step too far so the ceiling is visible.</p>
+<div class="wall" id="wallF"></div>
+
+<h2>Part II — The Reveal (pick-drop moment, click to replay)</h2>
+<p class="h2sub">What a paying user sees the moment a Winner unlocks. Each of these can stack ON any finish above. Push notification lands → user opens Winners → this plays once per pick.</p>
+<div class="wall" id="wallR"></div>
+
+<script>
+const picks=[
+ ["REDS","MONEYLINE","MLB","@ Brewers","+172","FINAL · CIN 7 · MIL 2"],
+ ["PORTUGAL","MONEYLINE","WC","vs Croatia","-145","FINAL · CRO 1 · POR 2"],
+ ["GUARDIANS","MONEYLINE","MLB","vs White Sox","-108","TONIGHT · 6:40 PM ET"],
+ ["SPAIN","-1.5","WC","vs Austria","-120","FINAL · AUT 0 · ESP 3"],
+ ["MARINERS","-1.5","MLB","vs Angels","-102","TONIGHT · 9:40 PM ET"],
+];
+function cardHTML(i,extra=""){const p=picks[i%picks.length];return `
+  <div class="eyebrow">GARY'S PICK</div>
+  <div class="bear">GARY<br>A.I.</div>
+  <div class="hero">${p[0]}<br>${p[1]}</div>
+  <div class="meta"><span class="lg">${p[2]}</span> &nbsp;${p[3]} · <span class="odds">${p[4]}</span></div>
+  <div class="foot"><span>${p[5]}</span><span>›</span></div>${extra}`}
+const finishes=[
+ ["1","Hairline Seam (SHIPPED)","f1","Tonight's baseline: one gold hairline. The control.",""],
+ ["2","Double Seam","f2","Museum matting: outer seam + inset inner frame. Quietly expensive.",""],
+ ["3","Certificate Corners","f3","Gold corner brackets — reads 'authenticated document'.",`<i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i>`],
+ ["4","Living Foil Border","f4","The border is real foil — light travels around it slowly, forever.",""],
+ ["5","Serial Plate","f5","Engraved plate: every Winner is ISSUED, not listed. Collectible energy.",`<span class="plate">WINNER Nº 214 · 2026</span>`],
+ ["6","Wax Seal","f6","A pressed gold seal by the bear. Sealed-for-members.",`<span class="seal">GARY<br>SEAL</span>`],
+ ["7","Ticket Stub","f7","Perforation + notches + barcode. It's a betting slip you were handed.",`<i class="perf"></i><i class="barcode"></i>`],
+ ["8","Blackout Vault","f8","Darker-than-app black, gold-lit type. The private room.",""],
+ ["9","Gilded Room","f9","The surface itself is warm gold-black. Instantly not-free.",""],
+ ["10","Embossed Mark","f10","Giant debossed GARY ghosted into the surface. Branded stock.",`<span class="mark">G</span>`],
+ ["11","Ribbon Corner","f11","Corner sash. Loud but familiar (premium apps use it).",`<span class="ribbon">WINNER</span>`],
+ ["12","Issue Stamp","f12","Rotated ISSUED stamp w/ date — pairs with your CASHED/LOST stamps.",`<span class="issue">ISSUED · JUL 2</span>`],
+ ["13","Pinstripe","f13","Faint diagonal pinstripes. The suit Gary wears.",""],
+ ["14","Championship (TOO FAR)","f14","Double border + studs. Included to mark the ceiling — vetoable.",""],
+ ["15","Holo Hero","f15","The PICK TEXT itself is prismatic foil that shifts. Eyes go to the call.",""],
+ ["16","Velvet Case","case","Card sits inside a lined display case — presentation, not decoration.",""],
+];
+const wf=document.getElementById('wallF');
+finishes.forEach((f,i)=>{
+  const s=document.createElement('div');s.className='slot';
+  const inner = f[2]==='case'
+    ? `<div class="case"><div class="card f1">${cardHTML(i)}</div></div>`
+    : `<div class="card ${f[2]}">${cardHTML(i,f[4])}</div>`;
+  s.innerHTML=`<div class="tag"><b>#${f[0]}</b>${f[1]}</div>${inner}<div class="why">${f[3]}</div>`;
+  wf.appendChild(s);
+});
+const reveals=[
+ ["A","Wrapping-Paper Tear","", `<div class="wrapA"><div class="half L"></div><div class="half R"></div></div>`,"Your ask: gold gift-wrap tears down the middle and falls away. Pure dopamine."],
+ ["B","Foil Peel","", `<div class="peel"></div>`,"A full-face gold sticker peels from the corner. Tactile, ASMR-adjacent."],
+ ["C","Vault Doors","", `<div class="door L"></div><div class="door R"></div>`,"Black doors with gold bolts part to reveal the pick. Matches Blackout finish."],
+ ["D","Scratch-Off","", `<div class="scratch"></div>`,"Lottery scratcher wipe. Bettor-native metaphor, instantly understood."],
+ ["E","Ticket Prints","stE",`<div class="slotE"></div>`,"The card PRINTS downward out of a slot with a settle-bounce. Pairs with #7."],
+ ["F","Shimmer Unveil","stF",`<div class="glint"></div>`,"Subtlest: pick is blurred, one gold glint sweeps, blur lifts. The 'quiet luxury' option."],
+];
+const wr=document.getElementById('wallR');
+reveals.forEach((r,i)=>{
+  const s=document.createElement('div');s.className='slot';
+  s.innerHTML=`<div class="tag"><b>${r[0]}</b>${r[1]}</div>
+    <div class="stage ${r[2]}"><div class="card f1">${cardHTML(i+1)}</div>${r[3]}<span class="hint">click to replay</span></div>
+    <div class="why">${r[4]}</div>`;
+  wr.appendChild(s);
+  const st=s.querySelector('.stage');
+  const go=()=>{st.classList.remove('play');void st.offsetWidth;st.classList.add('play')};
+  st.addEventListener('click',go);setTimeout(go,600+i*350);
+});
+</script>
+</body>
+</html>

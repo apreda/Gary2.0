@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 12 — Ember × Tape at App Size</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08070a;color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:52px;justify-items:center}
+  .slot{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold);align-self:flex-start}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;max-width:400px;align-self:flex-start}
+
+  /* ── iPhone frame (390pt logical) ── */
+  .phone{width:390px;background:radial-gradient(120% 90% at 50% 0%,#151210,#0A0908 60%);border-radius:52px;border:9px solid #1d1d20;box-shadow:0 26px 60px rgba(0,0,0,.65),inset 0 0 0 1.5px rgba(255,255,255,.05);padding:10px 0 16px;position:relative;overflow:hidden}
+  .island{width:118px;height:32px;background:#000;border-radius:18px;margin:4px auto 8px}
+  .phead{padding:8px 22px 0;display:flex;align-items:baseline;gap:10px}
+  .phead h3{font-family:var(--disp);font-weight:700;font-size:27px;letter-spacing:.04em;color:var(--gold)}
+  .phead span{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.45)}
+  .ptabs{display:flex;gap:26px;padding:12px 22px 0;font-family:var(--mono);font-size:12px}
+  .ptabs .off{color:rgba(255,255,255,.4)}
+  .ptabs .on{color:#fff;font-weight:700;border-bottom:2px solid var(--gold);padding-bottom:7px}
+  .shelf{padding:14px 22px 8px;font-family:var(--mono);font-size:10.5px;color:rgba(255,255,255,.65)}
+  .shelf i{font-style:normal;color:rgba(255,255,255,.35)}
+  .homebar{width:120px;height:4px;border-radius:3px;background:rgba(255,255,255,.3);margin:14px auto 0}
+
+  /* ── THE CARD at true app metrics: 346×232, padding 18 ── */
+  .card{position:relative;width:346px;height:232px;border-radius:20px;padding:18px;margin:0 auto;overflow:hidden;
+    background:#121110;border:1px solid rgba(255,255,255,.10);box-shadow:0 14px 26px rgba(0,0,0,.5)}
+  .eb{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--gold);position:relative;z-index:3}
+  .hero{font-family:var(--disp);font-weight:700;font-size:50px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:8px;color:#fff;position:relative;z-index:3}
+  .hero .l2{display:block;font-size:26px;margin-top:4px}
+  .meta{font-family:var(--mono);font-size:12px;margin-top:10px;color:rgba(255,255,255,.55);position:relative;z-index:3}
+  .meta b{font-weight:700;color:var(--gold)}
+  .foot{position:absolute;left:18px;right:18px;bottom:12px;padding-top:10px;font-family:var(--mono);font-size:10.5px;display:flex;justify-content:space-between;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);z-index:3}
+
+  /* gold 21B-S bar for the context frame */
+  .gbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318);
+    border:none;box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7)}
+  .gbar .eb{color:#4a3a08}.gbar .hero{color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55)}
+  .gbar .meta{color:#5c4708}.gbar .meta b{color:#3a2c04}
+  .gbar .foot{color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)}
+
+  .gl{position:absolute;font-family:var(--disp);font-weight:700;line-height:1;z-index:1;
+    color:rgba(232,212,139,.05);-webkit-text-stroke:1.5px rgba(201,162,39,.30)}
+  .tape{position:absolute;height:14px;z-index:2;
+    background:
+      repeating-linear-gradient(90deg,transparent 0 44px,rgba(232,212,139,.75) 44px 45.5px),
+      repeating-linear-gradient(90deg,transparent 0 8.8px,rgba(255,255,255,.30) 8.8px 9.8px)}
+  .mk{position:absolute;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid var(--gold);z-index:2;filter:drop-shadow(0 0 5px rgba(201,162,39,.6))}
+  .mklab{position:absolute;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--gold-l);z-index:2}
+
+  .p73g{background:
+      repeating-linear-gradient(90deg,rgba(232,212,139,.55) 0 2px,transparent 2px 10px),
+      repeating-linear-gradient(0deg,rgba(232,212,139,.25) 0 1px,transparent 1px 12px);
+    -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1.5px rgba(201,162,39,.45)}
+  .p74g{background:linear-gradient(0deg,rgba(201,162,39,.65) 0 58%,rgba(232,212,139,.06) 58%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1.5px rgba(201,162,39,.35)}
+  .p74line{position:absolute;right:6px;width:125px;border-top:1.5px dashed rgba(255,255,255,.55);z-index:2}
+  .p78g{color:rgba(20,14,6,.9);-webkit-text-stroke:1px rgba(255,170,60,.55);
+    text-shadow:0 0 15px rgba(255,150,40,.45),0 0 34px rgba(255,120,20,.22)}
+  .p80grid{background:
+    repeating-linear-gradient(90deg,rgba(232,212,139,.05) 0 1px,transparent 1px 20px),
+    repeating-linear-gradient(0deg,rgba(232,212,139,.05) 0 1px,transparent 1px 20px),
+    #121110}
+  .dim{position:absolute;font-family:var(--mono);font-size:9px;color:var(--gold-l);z-index:2;display:flex;align-items:center;gap:5px}
+  .dim::before,.dim::after{content:"";flex:1;min-width:16px;border-top:1px solid rgba(232,212,139,.6)}
+  .p82g{color:rgba(201,162,39,.10);-webkit-text-stroke:0;transform:skewX(-24deg) scaleY(.9)}
+  .win83{position:absolute;z-index:2;background:#0a0a0c;border-radius:7px;box-shadow:inset 0 3px 7px rgba(0,0,0,.95),0 1px 0 rgba(255,255,255,.08);
+    display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;color:var(--gold-l)}
+  .guide{position:absolute;left:0;right:0;border-top:1px dashed rgba(232,212,139,.22);z-index:1}
+  .guide i{position:absolute;right:6px;top:-12px;font-style:normal;font-family:var(--mono);font-size:7.5px;color:rgba(232,212,139,.45);letter-spacing:.1em}
+  .p87g{background:
+      linear-gradient(90deg,rgba(232,212,139,.5) 30%,transparent 75%),
+      repeating-linear-gradient(90deg,rgba(232,212,139,.5) 0 2px,transparent 2px 8px);
+    -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1px rgba(201,162,39,.3)}
+  .p89g{color:transparent;-webkit-text-stroke:0;background:
+      radial-gradient(140% 120% at 30% 30%,rgba(201,162,39,.75),rgba(201,162,39,.35) 60%,rgba(201,162,39,.6));
+    -webkit-background-clip:text;background-clip:text;transform:rotate(-7deg)}
+</style>
+</head>
+<body>
+<h1>ROUND 12 — <span>ember × tape</span> at real app size</h1>
+<p class="sub">Every wall-11 option re-set at TRUE app metrics: 346×232 card, 18px padding, real type scale, inside a 390pt iPhone frame with the Winners chrome. TIP: set your browser zoom to ~75% and the phone is life-size in your hand.</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>CTX</b>Context — gold game card + prop card (P71) stacked</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="shelf">MLB <i>· 3 plays</i></div>
+      <div class="card gbar"><div class="eb">GARY'S PICK</div>
+        <div class="hero">REDS<br>MONEYLINE</div>
+        <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+        <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+      <div class="shelf">PROPS <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-10px;top:-22px;font-size:195px">H</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="mklab" style="left:34%;bottom:66px">1.5</div><div class="mk" style="left:36%;bottom:54px"></div><div class="tape" style="left:0;right:0;bottom:40px"></div>
+        <div class="foot" style="border-top:none;padding-top:14px"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">How the two live together on the page: gold bar for the game pick, ember-glyph dark card for the prop. Judge the family resemblance here first.</div></div>
+
+  <div class="slot"><div class="tag"><b>P71</b>The Brief, Verbatim</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-10px;top:-22px;font-size:195px">K</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+        <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+        <div class="mklab" style="left:34%;bottom:66px">6.5</div><div class="mk" style="left:36%;bottom:54px"></div><div class="tape" style="left:0;right:0;bottom:40px"></div>
+        <div class="foot" style="border-top:none;padding-top:14px"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Ember K + tape at 6.5, at the size your thumb will actually see.</div></div>
+
+  <div class="slot"><div class="tag"><b>P72</b>The Full Line Glyph</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-6px;top:10px;font-size:120px;letter-spacing:-.04em">6.5K</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">SKENES<span class="l2">OVER · STRIKEOUTS</span></div>
+        <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+        <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The whole bet as the watermark. At real size the "6.5K" still reads from across the room.</div></div>
+
+  <div class="slot"><div class="tag"><b>P73</b>Glyph Made of Ruler</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl p73g" style="right:-8px;top:-20px;font-size:195px">H</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The tick-built letterform — checking the texture survives 346pt. It does.</div></div>
+
+  <div class="slot"><div class="tag"><b>P74</b>The Filling Glyph</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl p74g" style="right:-8px;top:-20px;font-size:195px">TB</div>
+        <div class="p74line" style="bottom:104px"></div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+        <div class="meta">MLB · CIN @ MIL · <b>-115</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Gold risen past the dashed line inside the letters. Live-fill version is the same CSS with a var.</div></div>
+
+  <div class="slot"><div class="tag"><b>P75</b>Count the Letters</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:96px;top:4px;font-size:120px;color:rgba(201,162,39,.42);-webkit-text-stroke:1.5px rgba(201,162,39,.5)">H</div>
+        <div class="gl" style="right:-2px;top:4px;font-size:120px">H</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero" style="max-width:180px">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">One lit, one ember — needs two knocks. Tighter at real size but both letters still land.</div></div>
+
+  <div class="slot"><div class="tag"><b>P76</b>Tailor's Measure</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-10px;top:-22px;font-size:195px">K</div>
+        <div class="tape" style="left:-16px;right:-16px;top:108px;transform:rotate(-14deg)"></div>
+        <div class="mklab" style="right:78px;top:76px">6.5</div><div class="mk" style="right:86px;top:90px;transform:rotate(-14deg)"></div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">SKENES<span class="l2">OVER 6.5 K</span></div>
+        <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+        <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The diagonal tape across the glyph — at real size it crosses right under the call line. Dramatic without stealing legibility.</div></div>
+
+  <div class="slot"><div class="tag"><b>P77</b>Weights on the Ruler</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="eb">GARY'S PROP</div>
+        <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="gl" style="left:20px;bottom:46px;font-size:36px;color:rgba(201,162,39,.4);-webkit-text-stroke:1px rgba(201,162,39,.5)">H</div>
+        <div class="gl" style="left:44%;bottom:46px;font-size:36px">H</div>
+        <div class="gl" style="right:64px;bottom:46px;font-size:36px">H</div>
+        <div class="mklab" style="left:34%;bottom:86px">1.5</div><div class="mk" style="left:36%;bottom:74px"></div>
+        <div class="tape" style="left:0;right:0;bottom:40px"></div>
+        <div class="foot" style="border-top:none;padding-top:14px"><span>TONIGHT · 7:40 PM</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The H's standing at 1, 2, 3 on the ruler — small but readable at true size.</div></div>
+
+  <div class="slot"><div class="tag"><b>P78</b>Burn-Through</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">WC <i>· 2 plays</i></div>
+      <div class="card"><div class="gl p78g" style="right:-10px;top:-22px;font-size:195px">G</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+        <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+        <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The live-coal G — the glow reads even better small; it's the brightest thing on the dark page.</div></div>
+
+  <div class="slot"><div class="tag"><b>P79</b>Foil Chop</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:16px;top:14px;font-size:54px;color:transparent;-webkit-text-stroke:0;background:linear-gradient(170deg,var(--gold-w),var(--gold) 55%,#8a6d16);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))">K</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+        <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+        <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The quiet one — solid gold chop where the bear sits on game cards. Cleanest at small size.</div></div>
+
+  <div class="slot"><div class="tag"><b>P80</b>Blueprint</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card p80grid"><div class="gl" style="right:-6px;top:-18px;font-size:185px;-webkit-text-stroke:1px rgba(232,212,139,.4);color:transparent">H</div>
+        <div class="dim" style="right:12px;top:136px;width:120px">1.5</div>
+        <div class="eb">GARY'S PROP · DRAFT Nº 214</div>
+        <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Grid + construction-line glyph + the 1.5 dimension callout. The grid stays subtle at 346pt — no noise.</div></div>
+
+  <div class="slot"><div class="tag"><b>P81</b>Type Specimen</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card" style="display:flex;gap:14px;align-items:stretch">
+        <div style="flex:0 0 118px;position:relative;border-right:1px solid rgba(255,255,255,.10)">
+          <div class="gl" style="left:-4px;top:-6px;font-size:150px;position:absolute">K</div>
+          <div style="position:absolute;bottom:6px;left:0;font-family:var(--mono);font-size:8px;letter-spacing:.16em;color:rgba(232,212,139,.5)">STRIKEOUT · 6.5</div></div>
+        <div style="flex:1;position:relative;z-index:2">
+          <div class="eb">GARY'S PROP</div>
+          <div class="hero" style="font-size:34px">SKENES<span class="l2" style="font-size:21px">OVER 6.5 K</span></div>
+          <div class="meta" style="font-size:11px">PIT @ STL · <b>-130</b></div>
+          <div style="position:absolute;bottom:0;left:0;right:0;font-family:var(--mono);font-size:10px;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);padding-top:9px;display:flex;justify-content:space-between"><span>TONIGHT · 8:15</span><span>›</span></div></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The split layout at real width — the hero gives up size for the specimen column. Honest trade-off, judge it here.</div></div>
+
+  <div class="slot"><div class="tag"><b>P82</b>Cast Shadow</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl p82g" style="left:96px;top:32px;font-size:155px">H</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The skewed gold shadow behind the type — at app size it reads as light falling across the card.</div></div>
+
+  <div class="slot"><div class="tag"><b>P83</b>Counter in the Glyph</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-10px;top:-22px;font-size:195px">K</div>
+        <div class="win83" style="right:48px;top:84px;width:66px;height:46px;font-size:29px">4<span style="font-size:14px;color:rgba(255,255,255,.4);margin-left:5px">/7</span></div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero" style="max-width:190px">SKENES<span class="l2">OVER 6.5 K</span></div>
+        <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+        <div class="foot"><span>LIVE · 5TH INNING</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Shown mid-game: 4/7 in the window punched into the K. This is the one that earns its keep LIVE.</div></div>
+
+  <div class="slot"><div class="tag"><b>P84</b>Lettering Guides</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="guide" style="top:52px"><i>CAP</i></div><div class="guide" style="top:96px"><i>MEAN</i></div><div class="guide" style="top:116px"><i>BASE</i></div>
+        <div class="gl" style="right:-8px;top:-20px;font-size:190px">TB</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+        <div class="meta">MLB · CIN @ MIL · <b>-115</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The cap/mean/base guides at true size — very quiet; you feel them more than see them.</div></div>
+
+  <div class="slot"><div class="tag"><b>P85</b>Seismograph</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-10px;top:-22px;font-size:195px">H</div>
+        <svg style="position:absolute;left:0;right:0;bottom:36px;z-index:2" width="100%" height="62" viewBox="0 0 430 70" preserveAspectRatio="none">
+          <line x1="0" y1="22" x2="430" y2="22" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="5 5"/>
+          <polyline points="0,58 40,56 70,60 95,34 110,58 150,55 185,12 205,58 250,57 285,60 320,18 345,58 395,56 430,58" fill="none" stroke="#C9A227" stroke-width="2.4" style="filter:drop-shadow(0 0 5px rgba(201,162,39,.6))"/>
+        </svg>
+        <div style="position:absolute;left:18px;bottom:74px;font-family:var(--mono);font-size:9.5px;color:#E8D48B;z-index:2">1.5</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The needle trace at real width — spikes over the dashed line still pop at thumb distance.</div></div>
+
+  <div class="slot"><div class="tag"><b>P86</b>Constellation</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card">
+        <svg style="position:absolute;right:2px;top:0;z-index:1" width="165" height="185" viewBox="0 0 200 220">
+          <g stroke="rgba(201,162,39,.45)" stroke-width="1">
+            <line x1="40" y1="20" x2="40" y2="200"/><line x1="160" y1="20" x2="160" y2="200"/><line x1="40" y1="110" x2="160" y2="110"/></g>
+          <g fill="#E8D48B">
+            <circle cx="40" cy="20" r="3.5"/><circle cx="40" cy="65" r="2.5"/><circle cx="40" cy="110" r="3.5"/><circle cx="40" cy="155" r="2.5"/><circle cx="40" cy="200" r="3.5"/>
+            <circle cx="160" cy="20" r="3.5"/><circle cx="160" cy="65" r="2.5"/><circle cx="160" cy="110" r="3.5"/><circle cx="160" cy="155" r="2.5"/><circle cx="160" cy="200" r="3.5"/>
+            <circle cx="100" cy="110" r="2.5"/></g>
+        </svg>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero" style="max-width:190px">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Star-chart H at real size — delicate; the faint join-lines matter more here than on the big wall.</div></div>
+
+  <div class="slot"><div class="tag"><b>P87</b>Dissolving to Ticks</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl p87g" style="right:-8px;top:-20px;font-size:195px">K</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+        <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+        <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The letter disintegrating into measurement — the effect holds at real size, reads left-to-right like a progress state.</div></div>
+
+  <div class="slot"><div class="tag"><b>P88</b>Draftsman's Corner</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">WC <i>· 2 plays</i></div>
+      <div class="card"><div class="gl" style="right:26px;top:-14px;font-size:165px">G</div>
+        <div style="position:absolute;right:-34px;bottom:-34px;width:110px;height:110px;border-radius:50%;border:1.5px solid rgba(232,212,139,.4);z-index:2;
+          background:repeating-conic-gradient(from -90deg,rgba(232,212,139,.4) 0deg 1deg,transparent 1deg 15deg)"></div>
+        <div class="tape" style="left:0;right:0;bottom:0;height:10px"></div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+        <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+        <div class="foot" style="bottom:18px;border-top:none"><span>TOMORROW · 3:00 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Protractor + edge ruler at true scale — the corner instruments stay out of the type's way.</div></div>
+
+  <div class="slot"><div class="tag"><b>P89</b>Rubber Stamp</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl p89g" style="right:0;top:0;font-size:150px">H</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero" style="max-width:200px">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+        <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The gold ink stamp at app size — uneven inking reads as intentional, not dirty.</div></div>
+
+  <div class="slot"><div class="tag"><b>P90</b>The Composite v2</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="ptabs"><span class="off">GAMES 9</span><span class="on">PROPS 10</span></div>
+      <div class="shelf">MLB <i>· 4 plays</i></div>
+      <div class="card"><div class="gl" style="right:-10px;top:-26px;font-size:185px">H</div>
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+        <div class="meta">MLB · 2B · MIL vs CIN · <b>+145</b></div>
+        <div class="mklab" style="left:34%;bottom:66px">1.5</div><div class="mk" style="left:36%;bottom:54px"></div><div class="tape" style="left:0;right:0;bottom:40px"></div>
+        <div class="foot" style="border-top:none;padding-top:14px"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">P71 + the light-gold call line, at true size. Still my pick — everything earns its place at 346pt.</div></div>
+
+</div>
+</body>
+</html>

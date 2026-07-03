@@ -1,5 +1,6 @@
-// social-auto-post — server-side @BetwithGary auto-poster (picks drip + daily recap + daily personality + metrics refresh)
-// Cron: every hour at :45 UTC. Function decides by ET hour: 10 → recap, 12 → personality, 11/14/17/20 → MLB pick slot.
+// social-auto-post — server-side @BetwithGary auto-poster (picks drip + daily recap + metrics refresh)
+// Cron: every hour at :45 UTC. Function decides by ET hour: 10 → recap, 11/14/17/20 → MLB pick slot.
+// (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
 // World Cup is separate: EVERY hour also runs runWcCardMode, which tweets each WC game once in the window around its
 // kickoff. The whole thread is Gary's REAL rationale, his actual words, NO LLM: the FIRST sentence is the MAIN caption
 // above the app pick card(s) (/api/pick-card-app); the rest threads as the plain-text REPLY, ending with a link-in-bio

@@ -133,7 +133,7 @@ export function PricingPlans({
         }`}
       >
         <span className="absolute -top-2.5 left-4 rounded-md bg-wc px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
-          Kicks off June 11
+          Knockout rounds live
         </span>
         <Radio on={isSel('world_cup')} />
         <div className="min-w-0 flex-1">

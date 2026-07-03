@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 20 — Dim & Ghost Systems · 4 + 4</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08070a;color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  h2{font-family:var(--disp);font-weight:700;font-size:26px;text-transform:uppercase;margin:64px 0 6px;color:var(--gold-l)}
+  h2 small{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.1em;margin-left:14px;text-transform:none}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 30px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:48px;justify-items:center;margin-top:20px}
+  .slot{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold);align-self:flex-start}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;max-width:370px;align-self:flex-start}
+  .state{font-family:var(--mono);font-size:9px;letter-spacing:.28em;color:rgba(255,255,255,.4);align-self:flex-start;margin-left:2px}
+
+  .card{position:relative;width:346px;height:232px;border-radius:20px;padding:18px;overflow:hidden;box-shadow:0 14px 26px rgba(0,0,0,.5)}
+  .eb{font-family:var(--mono);font-size:11px;letter-spacing:.22em;position:relative;z-index:3}
+  .hero{font-family:var(--disp);font-weight:700;font-size:50px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:8px;position:relative;z-index:3}
+  .meta{font-family:var(--mono);font-size:12px;margin-top:10px;position:relative;z-index:3}
+  .meta b{font-weight:700}
+  .foot{position:absolute;left:18px;right:18px;bottom:12px;padding-top:10px;font-family:var(--mono);font-size:10.5px;display:flex;justify-content:space-between;z-index:3}
+
+  .dark{background:#121110;border:1px solid rgba(255,255,255,.10)}
+  .dark .eb{color:var(--gold)}.dark .hero{color:#fff}
+  .dark .meta{color:rgba(255,255,255,.55)}.dark .meta b{color:var(--gold)}
+  .dark .foot{color:var(--gold);border-top:1px solid rgba(255,255,255,.10)}
+
+  .gbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318);
+    box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7)}
+  .gbar .eb{color:#4a3a08}.gbar .hero{color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55)}
+  .gbar .meta{color:#5c4708}.gbar .meta b{color:#3a2c04}
+  .gbar .foot{color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)}
+
+  .ghost{position:absolute;font-family:Georgia,serif;line-height:1;z-index:1}
+</style>
+</head>
+<body>
+<h1>ROUND 20 — <span>dim & ghost</span> · the verdict as state</h1>
+<p class="sub">Your V30 × V33 direction: the card's own brightness carries win/lose, ghost marks confirm it. Each option shows BOTH states stacked — you're picking a system, not a sticker. Same system runs on props (per your call: props = game language; Winners vs free is the only split).</p>
+
+<h2>Dark Cards <small>D1–D4 · the free/standard surface</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>D1</b>Pure Brightness (V30 straight)</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card dark"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span style="color:#3FB950;font-weight:700">✓ CASHED · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card dark"><div class="eb" style="opacity:.4">GARY'S PICK</div>
+      <div class="hero" style="color:rgba(255,255,255,.35)">CARDINALS -1.5</div>
+      <div class="meta" style="opacity:.45">MLB · vs Cubs · <b style="color:rgba(201,162,39,.45)">-125</b></div>
+      <div class="foot" style="opacity:.85"><span style="color:#C77A3A;font-weight:700">LOST · STL 2 · CHC 5</span><span style="opacity:.5">›</span></div></div>
+    <div class="why">Winners keep full voltage with a green footer line; losses drop to ~40% with only the lostTint verdict left at full strength. The rail self-sorts — your eye finds wins without reading.</div></div>
+
+  <div class="slot"><div class="tag"><b>D2</b>Ghost Marks (V33 straight)</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card dark"><div class="ghost" style="right:-8px;top:-10px;font-size:210px;color:rgba(63,185,80,.13)">✓</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card dark"><div class="ghost" style="right:2px;top:-2px;font-size:190px;color:rgba(229,72,77,.10)">✕</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>FINAL · STL 2 · CHC 5</span><span>›</span></div></div>
+    <div class="why">Full brightness both ways — the giant ghost ✓/✕ floats behind like the ember glyph. Democratic (losses aren't punished), but win/loss reads slower than D1 at rail speed.</div></div>
+
+  <div class="slot"><div class="tag"><b>D3</b>The Combo — celebrate wins, dim losses</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card dark"><div class="ghost" style="right:-8px;top:-10px;font-size:210px;color:rgba(63,185,80,.14)">✓</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span style="color:#3FB950;font-weight:700">✓ CASHED · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card dark"><div class="ghost" style="right:2px;top:-2px;font-size:190px;color:rgba(229,72,77,.07)">✕</div>
+      <div class="eb" style="opacity:.4">GARY'S PICK</div>
+      <div class="hero" style="color:rgba(255,255,255,.35)">CARDINALS -1.5</div>
+      <div class="meta" style="opacity:.45">MLB · vs Cubs · <b style="color:rgba(201,162,39,.45)">-125</b></div>
+      <div class="foot"><span style="color:#C77A3A;font-weight:700">LOST · STL 2 · CHC 5</span><span style="opacity:.5">›</span></div></div>
+    <div class="why">V30 + V33 married: wins stay bright AND wear the green ghost check; losses dim AND their ✕ fades with them. Two signals, zero collision with hero or glyph. My pick.</div></div>
+
+  <div class="slot"><div class="tag"><b>D4</b>Gold Ghost — brand owns the record</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card dark"><div class="ghost" style="right:-8px;top:-10px;font-size:210px;color:rgba(201,162,39,.16)">✓</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span style="color:var(--gold-l);font-weight:700">CASHED · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card dark"><div class="ghost" style="right:2px;top:-2px;font-size:190px;color:rgba(255,255,255,.05)">✕</div>
+      <div class="eb" style="opacity:.4">GARY'S PICK</div>
+      <div class="hero" style="color:rgba(255,255,255,.35)">CARDINALS -1.5</div>
+      <div class="meta" style="opacity:.45">MLB · vs Cubs · <b style="color:rgba(201,162,39,.45)">-125</b></div>
+      <div class="foot" style="opacity:.85"><span style="color:#C77A3A;font-weight:700">LOST · STL 2 · CHC 5</span><span style="opacity:.5">›</span></div></div>
+    <div class="why">Same structure as D3 but no green/red anywhere: the win check is GOLD (the brand celebrates, not a traffic light), the lost ✕ is barely-there grey. Losses whispered, wins in Gary's color.</div></div>
+</div>
+
+<h2>Gold Bar — New Round <small>GV1–GV4 · luster is the verdict</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>GV1</b>Pressed Ghost Check</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card gbar"><div class="ghost" style="right:-6px;top:-14px;font-size:215px;color:rgba(58,44,4,.15);text-shadow:0 1px 0 rgba(255,252,235,.35)">✓</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>CASHED · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card gbar" style="filter:brightness(.72) saturate(.75)"><div class="ghost" style="right:4px;top:-6px;font-size:195px;color:rgba(58,44,4,.16)">✕</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>LOST · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">V33's ghost mark translated into the metal — a huge check PRESSED into the bar (dark with a light kick, like the hero's stamping). Losses dim the whole bar and press the ✕. One language on both surfaces.</div></div>
+
+  <div class="slot"><div class="tag"><b>GV2</b>The Light Leaves</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card gbar" style="box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7),0 0 26px rgba(232,212,139,.28)">
+      <div style="position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(255,252,235,.4) 42%,transparent 56%);z-index:1"></div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>CASHED · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card" style="background:linear-gradient(158deg,#b09134,#96781a 50%,#8a6d16);box-shadow:0 14px 26px rgba(0,0,0,.5)">
+      <div class="eb" style="color:#4a3a08">GARY'S PICK</div>
+      <div class="hero" style="color:#2c2304">CARDINALS -1.5</div>
+      <div class="meta" style="color:#5c4708">MLB · vs Cubs · <b style="color:#3a2c04">-125</b></div>
+      <div class="foot" style="color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)"><span>LOST · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">No marks at all — pure physics. A win holds its poured light plus a soft outer halo; a loss goes MATTE: radials gone, bevel gone, flat unlit gold. Still gold (it's still a Winners pick), but the light left it.</div></div>
+
+  <div class="slot"><div class="tag"><b>GV3</b>Smoked Glass</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span style="font-weight:700">✓ CASHED · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card gbar"><div style="position:absolute;inset:0;background:rgba(10,8,4,.5);z-index:2"></div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot" style="z-index:3;color:#d9bc63;border-top-color:rgba(217,188,99,.3)"><span style="font-weight:700">LOST · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">Wins stay untouched; a loss slides behind smoked glass — the gold is visibly still there, just shaded, with the verdict line staying legible on top. The most literal "dim" of the four.</div></div>
+
+  <div class="slot"><div class="tag"><b>GV4</b>Ghost Word in the Metal</div>
+    <div class="state">CASHED STATE</div>
+    <div class="card gbar"><div style="position:absolute;left:-8px;top:64px;font-family:var(--disp);font-weight:700;font-size:92px;letter-spacing:.06em;transform:rotate(-8deg);z-index:1;color:rgba(255,252,235,.22);text-shadow:0 1px 0 rgba(58,44,4,.25)">CASHED</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="state">LOST STATE</div>
+    <div class="card gbar" style="filter:brightness(.78) saturate(.8)"><div style="position:absolute;left:14px;top:64px;font-family:var(--disp);font-weight:700;font-size:92px;letter-spacing:.1em;transform:rotate(-8deg);z-index:1;color:rgba(58,44,4,.18)">LOST</div>
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>FINAL · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">The verdict WORD at V40 ghost-scale, rendered in the metal itself: CASHED rises in light across a bright bar, LOST sinks in shadow across a dimmed one. Diagonal drama kept, sticker gone.</div></div>
+</div>
+
+</body>
+</html>

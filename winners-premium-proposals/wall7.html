@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 7 — 50 Prop Card Options</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(120% 100% at 50% 0%,#151210,#0A0908 55%);color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  h2{font-family:var(--disp);font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;margin:64px 0 6px;color:var(--gold-l)}
+  h2 small{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.1em;margin-left:14px;text-transform:none}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 30px;max-width:860px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:44px;margin-top:22px}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold)}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .tag.ref b{background:#fff}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5}
+
+  .card{position:relative;width:100%;height:232px;border-radius:20px;padding:20px 22px;overflow:hidden;box-shadow:0 18px 34px rgba(0,0,0,.55)}
+  .eb{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;position:relative;z-index:2}
+  .hero{font-family:var(--disp);font-weight:700;font-size:56px;line-height:.9;letter-spacing:-.01em;text-transform:uppercase;margin-top:10px;position:relative;z-index:2}
+  .hero .l2{display:block;font-size:29px;letter-spacing:.01em;margin-top:4px}
+  .meta{font-family:var(--mono);font-size:12.5px;margin-top:12px;position:relative;z-index:2}
+  .meta b{font-weight:700}
+  .foot{position:absolute;left:22px;right:22px;bottom:14px;padding-top:11px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;display:flex;justify-content:space-between;z-index:2}
+
+  /* ── locked references ── */
+  .freecard{background:#121110;border:1px solid rgba(255,255,255,.10)}
+  .freecard .eb{color:var(--gold)}.freecard .hero{color:#fff}
+  .freecard .meta{color:rgba(255,255,255,.55)}.freecard .meta b{color:var(--gold)}
+  .freecard .foot{color:var(--gold);border-top:1px solid rgba(255,255,255,.10)}
+  .gbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318);
+    box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7),inset 2px 0 0 rgba(255,252,235,.45),inset -2px 0 0 rgba(90,66,8,.6)}
+  /* dark-on-gold reads optically smaller than white-on-black (irradiation illusion) — +6% compensates */
+  .gbar .eb{color:#4a3a08}.gbar .hero{color:#2c2304;font-size:60px;text-shadow:0 1px 0 rgba(255,252,235,.55)}
+  .gbar .meta{color:#5c4708}.gbar .meta b{color:#3a2c04}
+  .gbar .foot{color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)}
+
+  /* ── shared silver text scheme + bevel ── */
+  .sbar .eb{color:#3c3f47}.sbar .hero{color:#17191f;text-shadow:0 1px 0 rgba(255,255,255,.6)}
+  .sbar .meta{color:#33363e}.sbar .meta b{color:#101216}
+  .sbar .foot{color:#3c3f47;border-top:1px solid rgba(30,32,38,.35)}
+  .sbev{box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.9),inset 0 -3px 0 rgba(40,42,48,.7),inset 2px 0 0 rgba(255,255,255,.45),inset -2px 0 0 rgba(70,73,80,.6)}
+  /* shared dark text scheme */
+  .dtx .eb{color:#c8ccd6}.dtx .hero{color:#e9ebf0}
+  .dtx .meta{color:rgba(233,235,240,.6)}.dtx .meta b{color:var(--gold-l)}
+  .dtx .foot{color:rgba(233,235,240,.55);border-top:1px solid rgba(255,255,255,.12)}
+
+  /* ════ A · METAL FAMILY ════ */
+  .p1{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,255,255,.55),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(30,32,38,.5),transparent 48%),
+    linear-gradient(158deg,#e9eaee,#b6bac2 34%,#8e929b 52%,#d8dadf 74%,#7f838c)}
+  .p2{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,255,255,.7),transparent 42%),
+    radial-gradient(110% 90% at 85% 92%,rgba(60,68,88,.4),transparent 48%),
+    linear-gradient(158deg,#f2f4f8,#c8cdd8 34%,#9aa2b2 52%,#e2e6ee 74%,#8d95a6)}
+  .p3{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,255,255,.14),transparent 40%),
+    linear-gradient(158deg,#4a4e58,#2b2e35 40%,#1c1e24 60%,#3a3e47 82%,#181a1f);
+    box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.25),inset 0 -3px 0 rgba(0,0,0,.85),inset 2px 0 0 rgba(255,255,255,.12),inset -2px 0 0 rgba(0,0,0,.6)}
+  .p3 .eb{color:#9aa0ad}.p3 .hero{color:#e8eaef}.p3 .meta{color:#8b91a0}.p3 .meta b{color:#dfe3ea}
+  .p3 .foot{color:#8b91a0;border-top:1px solid rgba(255,255,255,.14)}
+  .p4{background:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.07) 0 1px,transparent 1px 3px),
+    linear-gradient(158deg,#c6c2ba,#a29e96 38%,#807c74 56%,#b5b1a9 78%,#767268)}
+  .p5{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,255,250,.6),transparent 40%),
+    linear-gradient(158deg,#efe9dc,#c9c0aa 34%,#9d9480 52%,#e3dcc8 74%,#8e8570)}
+  .p5 .eb{color:#4a4434}.p5 .hero{color:#211c10}.p5 .meta{color:#4a4434}.p5 .meta b{color:#191408}
+  .p5 .foot{color:#4a4434;border-top:1px solid rgba(60,54,38,.35)}
+  .p6{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,244,238,.6),transparent 40%),
+    linear-gradient(158deg,#f0cdbd,#cf9a85 34%,#a96f5b 52%,#e4b7a4 74%,#9c614c)}
+  .p6 .eb{color:#5c3222}.p6 .hero{color:#33160c}.p6 .meta{color:#5c3222}.p6 .meta b{color:#2a1108}
+  .p6 .foot{color:#5c3222;border-top:1px solid rgba(80,42,26,.35)}
+  .p7{background:linear-gradient(180deg,#fdfdfe 0%,#c7ccd4 18%,#6d7480 38%,#eef1f5 50%,#7e8592 64%,#d9dde3 84%,#9aa0ac)}
+  .p8{background:linear-gradient(158deg,#9d9da2,#84848a 55%,#74747a);box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 0 rgba(40,40,46,.5)}
+  .p8 .eb{color:#3a3a40}.p8 .hero{color:#1e1e24;text-shadow:none}
+  .p9{background:
+    radial-gradient(60% 80% at 28% 22%,#f4f5f8,transparent 60%),
+    radial-gradient(70% 90% at 76% 78%,#666b78,transparent 55%),
+    radial-gradient(40% 50% at 62% 30%,#ffffff,transparent 55%),
+    linear-gradient(158deg,#c3c7d0,#9599a4)}
+  .p10{background:
+    repeating-linear-gradient(115deg,rgba(255,255,255,.22) 0 5px,rgba(30,32,40,.25) 5px 8px,transparent 8px 15px),
+    radial-gradient(120% 100% at 20% 10%,rgba(255,255,255,.4),transparent 45%),
+    linear-gradient(158deg,#b9bcc4,#8a8e98 50%,#a8acb5)}
+
+  /* ════ B · OVER/UNDER AS STRUCTURE ════ */
+  .p11{background:#101013}
+  .p11 .zone-o{position:absolute;inset:0 0 50% 0;background:
+    radial-gradient(120% 160% at 16% 10%,rgba(255,252,235,.5),transparent 45%),
+    linear-gradient(158deg,#eccf78,#b6952c 44%,#96781a 70%,#c8ab52)}
+  .p11 .zone-u{position:absolute;inset:50% 0 0 0;background:linear-gradient(160deg,#3c3f47,#25272d 55%,#1b1d22);filter:brightness(.85)}
+  .p11 .seam{position:absolute;left:0;right:0;top:calc(50% - 1px);height:2px;background:linear-gradient(90deg,rgba(255,252,235,.9),rgba(58,44,4,.9));z-index:1}
+  .p11 .eb{color:#4a3a08}.p11 .hero{color:#2c2304;margin-top:6px;font-size:44px}
+  .p11 .hero .l2{font-size:26px}
+  .p11 .dim{position:absolute;left:22px;top:60%;font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.35);z-index:2;letter-spacing:.08em}
+  .p11 .meta{position:absolute;left:22px;bottom:44px;color:rgba(255,255,255,.55)}.p11 .meta b{color:var(--gold-l)}
+  .p11 .foot{color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.12)}
+  .p12{composes:p1}
+  .p12x{position:absolute;left:0;right:0;bottom:0;height:34%;z-index:1;
+    background:linear-gradient(158deg,#eccf78,#b6952c 44%,#96781a 78%);
+    border-top:2px solid rgba(58,44,4,.55);box-shadow:inset 0 2px 0 rgba(255,252,235,.7)}
+  .p13ch{position:absolute;left:0;right:0;top:112px;height:36px;z-index:1;
+    background:linear-gradient(158deg,#dcbd60,#a8892a 50%,#8a6d16);
+    box-shadow:inset 0 2px 3px rgba(58,44,4,.6),inset 0 -2px 3px rgba(58,44,4,.6),inset 0 0 0 1px rgba(255,252,235,.25)}
+  .p13 .hero .l2{color:#241c04;position:relative;z-index:2;padding-top:7px;text-shadow:0 1px 0 rgba(255,252,235,.4)}
+  .p14a{position:absolute;right:-6px;top:6px;font-size:210px;line-height:1;font-family:var(--disp);font-weight:700;color:rgba(150,120,26,.16);z-index:0;
+    text-shadow:0 2px 1px rgba(255,255,255,.4),0 -2px 2px rgba(30,32,38,.3)}
+  .p15{box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 #f4e4ba,inset 0 -3px 0 #6b5410,inset 2px 0 0 rgba(244,228,186,.75),inset -2px 0 0 rgba(107,84,16,.75);border:1px solid rgba(201,162,39,.8)}
+  .p16{background:
+    radial-gradient(120% 100% at 16% 10%,rgba(255,252,235,.4),transparent 42%),
+    linear-gradient(158deg,#eccf78,#b6952c 28%,#96781a 47%,#9ba0aa 53%,#c6c9d0 76%,#84878f)}
+  .p16 .hero{color:#1d1a10}
+  .p17 .hero{background:linear-gradient(170deg,#f7e7ae,#c9a227 45%,#8a6d16 70%,#e3c56a);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 0 rgba(255,255,255,.5))}
+  .p18::before,.p18::after{content:"";position:absolute;top:0;bottom:0;width:9px;z-index:1;
+    background:repeating-linear-gradient(180deg,#585c66 0 4px,#e6e8ec 4px 8px)}
+  .p18::before{left:0;border-radius:20px 0 0 20px}.p18::after{right:0;border-radius:0 20px 20px 0}
+
+  /* ════ C · PLAYER-FIRST ════ */
+  .p19{background:#141519}
+  .p19 .plate{position:relative;margin:-2px -4px 0;padding:10px 14px 9px;border-radius:8px;
+    background:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,transparent 1px 3px),linear-gradient(172deg,#b9bcc4,#8b8f99 60%,#a4a8b1);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -2px 0 rgba(40,42,48,.6),0 3px 8px rgba(0,0,0,.5)}
+  .p19 .plate .nm{font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:.14em;color:#22242b;text-shadow:0 1px 0 rgba(255,255,255,.55)}
+  .p19 .plate i{position:absolute;width:5px;height:5px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f2f3f5,#6d727d);box-shadow:0 1px 1px rgba(0,0,0,.6)}
+  .p19 .plate i:nth-child(1){left:5px;top:5px}.p19 .plate i:nth-child(2){right:5px;top:5px}
+  .p19 .plate i:nth-child(3){left:5px;bottom:5px}.p19 .plate i:nth-child(4){right:5px;bottom:5px}
+  .p19 .hero{font-size:46px;color:var(--gold-l);margin-top:12px}
+  .p20n{position:absolute;right:2px;top:-18px;font-family:var(--disp);font-weight:700;font-size:220px;line-height:1;color:transparent;-webkit-text-stroke:2px rgba(232,212,139,.20);z-index:0}
+  .p21{background:#f5efe2;border:3px solid #1c1e24;box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 0 0 2px #f5efe2,inset 0 0 0 4px #b3392f}
+  .p21 .ph{position:absolute;left:20px;top:20px;width:86px;height:118px;border:2px solid #1c1e24;border-radius:4px;
+    background:linear-gradient(180deg,#cfd8de,#9fb0bc);overflow:hidden}
+  .p21 .ph::after{content:"";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:64px;height:84px;border-radius:32px 32px 0 0;background:#3a4650}
+  .p21 .ph::before{content:"";position:absolute;left:50%;top:22px;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:#3a4650;z-index:1}
+  .p21 .eb{color:#b3392f;margin-left:106px}.p21 .hero{color:#1c1e24;font-size:40px;margin-left:106px}
+  .p21 .hero .l2{font-size:24px;color:#b3392f}
+  .p21 .meta{color:#5a5344;margin-left:106px}.p21 .meta b{color:#1c1e24}
+  .p21 .foot{color:#5a5344;border-top:2px solid #1c1e24}
+  .p22{border-radius:30px;background:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 4px),
+    linear-gradient(165deg,#6a6e78,#4a4d55 55%,#3c3f46)}
+  .p22::before{content:"";position:absolute;left:20px;top:18px;width:16px;height:16px;border-radius:50%;background:#0c0d10;
+    box-shadow:inset 0 2px 3px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.25)}
+  .p22 .eb{margin-left:32px;color:rgba(255,255,255,.5)}
+  .p22 .hero,.p22 .meta,.p22 .foot{font-family:var(--mono)}
+  .p22 .hero{font-size:30px;letter-spacing:.1em;font-weight:700;color:rgba(255,255,255,.82);
+    text-shadow:0 1.5px 0 rgba(0,0,0,.85),0 -1px 0 rgba(255,255,255,.12);margin-top:16px}
+  .p22 .hero .l2{font-size:20px;letter-spacing:.1em}
+  .p22 .meta{color:rgba(255,255,255,.45)}.p22 .meta b{color:rgba(255,255,255,.8)}
+  .p22 .foot{color:rgba(255,255,255,.4);border-top:1px dashed rgba(255,255,255,.25)}
+  .p23{background:linear-gradient(170deg,#efe1b8,#e4d3a2);border-radius:6px 20px 20px 20px}
+  .p23::before{content:"CONFIDENTIAL";position:absolute;left:0;top:0;padding:4px 16px;background:#d9c58c;border-radius:6px 0 8px 0;
+    font-family:'Courier New',monospace;font-size:10px;letter-spacing:.2em;color:#6b5a30}
+  .p23 .eb,.p23 .hero,.p23 .meta,.p23 .foot{font-family:'Courier New',monospace;color:#2e2718}
+  .p23 .eb{margin-top:18px;font-weight:700}.p23 .hero{font-size:30px;font-weight:700;line-height:1.1}
+  .p23 .hero .l2{font-size:22px}
+  .p23 .meta{color:#5a4c28}.p23 .meta b{color:#2e2718}
+  .p23 .foot{color:#5a4c28;border-top:1px solid rgba(70,58,28,.4)}
+  .p23 .stamp{position:absolute;right:16px;top:52px;transform:rotate(-11deg);border:3px double #b3392f;color:#b3392f;
+    font-family:'Courier New',monospace;font-weight:700;font-size:15px;letter-spacing:.18em;padding:6px 12px;opacity:.85}
+  .p24{background:linear-gradient(180deg,#f7f2e4,#efe8d4);border:1px solid #cfc4a4}
+  .p24 .eb{color:#8a7c52}
+  .p24 .hero{font-family:'Marker Felt','Comic Sans MS',cursive;font-size:34px;color:#2b2b2e;text-transform:none;transform:rotate(-1.2deg)}
+  .p24 .hero .l2{font-size:26px;color:#b3392f}
+  .p24 .meta{color:#8a7c52}.p24 .meta b{color:#2b2b2e}
+  .p24 .foot{color:#8a7c52;border-top:2px solid #2b2b2e}
+  .p24 .rules{position:absolute;inset:0;background:repeating-linear-gradient(180deg,transparent 0 30px,rgba(120,140,180,.25) 30px 31px);pointer-events:none}
+  .p25{background:#f7f4ea}
+  .p25 .rules{position:absolute;inset:0;background:
+    repeating-linear-gradient(180deg,transparent 0 27px,rgba(70,110,160,.3) 27px 28px);pointer-events:none}
+  .p25::before{content:"";position:absolute;left:52px;top:0;bottom:0;width:2px;background:rgba(179,57,47,.55)}
+  .p25 .eb{color:#8a2f27;margin-left:44px}
+  .p25 .hero,.p25 .meta,.p25 .foot{font-family:var(--mono)}
+  .p25 .hero{font-size:27px;font-weight:700;color:#1e2430;margin-left:44px;line-height:1.05}
+  .p25 .hero .l2{font-size:20px;color:#8a2f27}
+  .p25 .meta{color:#5a6272;margin-left:44px}.p25 .meta b{color:#1e2430}
+  .p25 .foot{color:#5a6272;border-top:1px solid rgba(70,110,160,.4);left:66px}
+  .p26{background:#15130e}
+  .p26 .frame{margin-top:8px;display:inline-block;padding:12px 18px;border-radius:12px;border:3px dotted var(--gold-l);
+    box-shadow:0 0 22px rgba(232,212,139,.25),inset 0 0 18px rgba(232,212,139,.12)}
+  .p26 .hero{margin-top:0;color:#fff;text-shadow:0 0 14px rgba(232,212,139,.8);font-size:44px}
+  .p26 .hero .l2{color:var(--gold-l);font-size:26px}
+  .p26 .eb{color:var(--gold-l)}
+  .p27{background:
+    repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 2px,transparent 2px 4px),
+    repeating-linear-gradient(-45deg,rgba(255,255,255,.035) 0 2px,transparent 2px 4px),
+    linear-gradient(180deg,#1d2126,#14171b)}
+  .p27 .hero{text-align:center;font-size:34px;letter-spacing:.3em;color:#e9ebf0;margin-top:4px;
+    text-shadow:2px 2px 0 #8b6f14,-1px -1px 0 rgba(255,255,255,.15)}
+  .p27 .num{text-align:center;font-family:var(--disp);font-weight:700;font-size:88px;line-height:.9;color:var(--gold-l);
+    text-shadow:3px 3px 0 #8b6f14}
+  .p27 .meta{text-align:center}
+
+  /* ════ D · THE LINE AS OBJECT ════ */
+  .p28{background:#121114}
+  .p28 .big{font-family:var(--disp);font-weight:700;font-size:118px;line-height:.82;color:var(--gold-l);letter-spacing:-.03em}
+  .p28 .side{position:absolute;left:196px;top:56px;font-family:var(--disp);font-weight:700;font-size:34px;line-height:.95;color:#fff;text-transform:uppercase}
+  .p28 .side small{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.24em;color:rgba(255,255,255,.5);margin-top:6px}
+  .p29{background:#101013}
+  .p29 .lbl{font-family:var(--disp);font-weight:700;text-transform:uppercase;font-size:40px;line-height:1}
+  .p29 .over{color:var(--gold-l);margin-top:12px}
+  .p29 .under{color:rgba(255,255,255,.22);margin-top:14px}
+  .p29 .rule{position:relative;margin-top:14px;height:2px;background:linear-gradient(90deg,var(--gold),rgba(201,162,39,.15))}
+  .p29 .pill{position:absolute;left:0;top:-13px;background:var(--gold);color:#0f0d06;font-family:var(--mono);font-weight:700;font-size:13px;padding:4px 12px;border-radius:999px}
+  .p30 .dial{position:absolute;right:20px;top:34px;width:150px;height:75px;border-radius:150px 150px 0 0;overflow:hidden}
+  .p30 .dial::before{content:"";position:absolute;inset:0;
+    background:conic-gradient(from -90deg at 50% 100%,#3a3325 0deg,var(--gold) 118deg,rgba(255,255,255,.12) 122deg 180deg,transparent 180deg)}
+  .p30 .dial::after{content:"";position:absolute;left:12px;right:12px;bottom:-32px;top:12px;border-radius:150px 150px 0 0;background:#121114}
+  .p30 .ndl{position:absolute;right:94px;top:104px;width:62px;height:2.5px;background:#fff;transform-origin:right center;transform:rotate(-56deg);box-shadow:0 0 6px rgba(255,255,255,.6)}
+  .p30{background:#121114}
+  .p30 .hero{font-size:44px;max-width:230px}
+  .p31{background:#131316}
+  .p31 .flaps{margin-top:12px;display:flex;gap:4px}
+  .p31 .f{font-family:var(--disp);font-weight:700;font-size:42px;line-height:1;color:#f4efdf;background:linear-gradient(180deg,#26272b 0 49%,#1a1b1e 51% 100%);
+    padding:8px 7px 10px;border-radius:5px;min-width:34px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 2px 4px rgba(0,0,0,.6)}
+  .p31 .f.g{color:var(--gold-l)}
+  .p32{background:#121114}
+  .p32 .win{margin-top:10px;display:inline-flex;align-items:center;gap:10px;background:#0a0a0c;border-radius:10px;padding:8px 16px;
+    box-shadow:inset 0 3px 8px rgba(0,0,0,.9),inset 0 -2px 4px rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.08)}
+  .p32 .win b{font-family:var(--disp);font-weight:700;font-size:52px;color:var(--gold-l)}
+  .p32 .win span{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:rgba(255,255,255,.5)}
+  .p33{background:#14130f}
+  .p33 .ruler{position:absolute;left:0;right:0;bottom:40px;height:20px;
+    background:repeating-linear-gradient(90deg,transparent 0 11px,rgba(232,212,139,.5) 11px 12px)}
+  .p33 .mark{position:absolute;left:38%;bottom:58px;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:12px solid var(--gold)}
+  .p33 .mlab{position:absolute;left:33%;bottom:74px;font-family:var(--mono);font-size:11px;color:var(--gold-l);letter-spacing:.1em}
+  .p34{background:#101116}
+  .p34 .tube{position:absolute;right:34px;top:22px;bottom:44px;width:16px;border-radius:10px;background:#1d1f26;box-shadow:inset 0 2px 6px rgba(0,0,0,.8)}
+  .p34 .fill{position:absolute;left:3px;right:3px;bottom:3px;height:68%;border-radius:8px;background:linear-gradient(180deg,var(--gold-l),var(--gold))}
+  .p34 .tick{position:absolute;right:54px;top:96px;font-family:var(--mono);font-size:10.5px;color:rgba(255,255,255,.6);letter-spacing:.1em;border-top:1px dashed rgba(255,255,255,.5);padding-top:2px;width:52px;text-align:right}
+  .p34 .hero{max-width:250px;font-size:44px}
+  .p35{background:#121114}
+  .p35 .lvl{position:relative;margin-top:16px;height:34px;border-radius:999px;background:linear-gradient(180deg,#1c1d22,#101114);
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.8),0 1px 0 rgba(255,255,255,.07)}
+  .p35 .lvl::before,.p35 .lvl::after{content:"";position:absolute;top:4px;bottom:4px;width:1.5px;background:rgba(255,255,255,.35)}
+  .p35 .lvl::before{left:46%}.p35 .lvl::after{left:54%}
+  .p35 .bub{position:absolute;left:62%;top:6px;width:52px;height:22px;border-radius:999px;
+    background:radial-gradient(60% 100% at 35% 30%,#f7e7ae,var(--gold));box-shadow:0 0 12px rgba(201,162,39,.5)}
+
+  /* ════ E · TICKET & PAPER ════ */
+  .p36{background:#fdfdf8;border-radius:8px}
+  .p36::before,.p36::after{content:"";position:absolute;left:0;right:0;height:8px;
+    background:repeating-linear-gradient(90deg,#fdfdf8 0 10px,transparent 10px 18px)}
+  .p36::before{top:-4px}.p36::after{bottom:-4px}
+  .p36 .eb,.p36 .hero,.p36 .meta,.p36 .foot{font-family:var(--mono);color:#26262a}
+  .p36 .eb{text-align:center;letter-spacing:.2em}
+  .p36 .hero{font-size:26px;font-weight:700;text-align:center;line-height:1.15;margin-top:14px}
+  .p36 .hero .l2{font-size:19px}
+  .p36 .meta{text-align:center;color:#55555c}.p36 .meta b{color:#26262a}
+  .p36 .bc{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;width:210px;height:30px;
+    background:repeating-linear-gradient(90deg,#26262a 0 2px,transparent 2px 5px,#26262a 5px 6px,transparent 6px 11px,#26262a 11px 14px,transparent 14px 17px)}
+  .p36 .foot{display:none}
+  .p37{background:linear-gradient(170deg,#f0e4c6,#e7d7ae);border:2px solid #7a6a3c;box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 0 0 5px #f0e4c6,inset 0 0 0 6px #7a6a3c}
+  .p37 .eb{color:#8a2f27;text-align:center;font-weight:700}
+  .p37 .hero{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;text-align:center;color:#2c2410;line-height:1.1;letter-spacing:.02em}
+  .p37 .hero .l2{font-size:21px;color:#8a2f27}
+  .p37 .meta{text-align:center;color:#6b5a30}.p37 .meta b{color:#2c2410}
+  .p37 .foot{color:#6b5a30;border-top:1px solid rgba(122,106,60,.6);font-family:Georgia,serif;letter-spacing:.12em}
+  .p37 .hole{position:absolute;right:24px;top:22px;width:15px;height:15px;border-radius:50%;background:#0A0908;box-shadow:inset 0 2px 3px rgba(0,0,0,.8),0 0 0 3px #d9c58c}
+  .p38{background:#141416;display:flex}
+  .p38 .main{flex:1;position:relative;padding-right:14px}
+  .p38 .stub{width:96px;border-left:2px dashed rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center}
+  .p38 .stub .rot{transform:rotate(90deg);white-space:nowrap;font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--gold-l)}
+  .p38 .eb{color:var(--gold)}.p38 .hero{color:#fff;font-size:42px}
+  .p38 .hero .l2{color:var(--gold-l);font-size:25px}
+  .p38 .meta{color:rgba(255,255,255,.55)}.p38 .meta b{color:var(--gold-l)}
+  .p39{background:#e9dfbd}
+  .p39 .grid{position:absolute;inset:64px 22px 46px;
+    background:
+      repeating-linear-gradient(90deg,rgba(90,76,40,.22) 0 7px,transparent 7px 16px),
+      repeating-linear-gradient(180deg,rgba(90,76,40,.22) 0 3px,transparent 3px 14px)}
+  .p39 .punch{position:absolute;width:9px;height:14px;background:#26221a;border-radius:2px}
+  .p39 .eb,.p39 .meta,.p39 .foot{font-family:'Courier New',monospace;color:#4a3f22}
+  .p39 .hero{font-family:'Courier New',monospace;font-weight:700;font-size:24px;color:#26221a;line-height:1.15;position:relative;z-index:2}
+  .p39 .foot{border-top:1px solid rgba(90,76,40,.5)}
+  .p40{background:#f3e28a}
+  .p40 .eb,.p40 .hero,.p40 .meta,.p40 .foot{font-family:var(--mono);color:#3a3a7a}
+  .p40 .hero{font-size:27px;font-weight:700;line-height:1.15;text-shadow:1.5px 1.5px 0 rgba(58,58,122,.3)}
+  .p40 .hero .l2{font-size:20px}
+  .p40 .meta{color:rgba(58,58,122,.75)}
+  .p40 .foot{border-top:1px dashed rgba(58,58,122,.5)}
+  .p40 .wm{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%) rotate(-18deg);font-family:var(--mono);font-size:26px;letter-spacing:.3em;color:rgba(58,58,122,.14);white-space:nowrap}
+
+  /* ════ F · DARK PREMIUM (Winners props) ════ */
+  .p41{background:radial-gradient(130% 110% at 20% 0%,#1c1d22,#0b0b0e 60%)}
+  .p41 .hero{background:linear-gradient(175deg,#ffffff,#c8ccd6 40%,#787e8c 62%,#e8ebf1);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 3px rgba(0,0,0,.8))}
+  .p41 .eb{color:#c8ccd6}
+  .p41 .meta{color:rgba(233,235,240,.55)}.p41 .meta b{color:#e8ebf1}
+  .p41 .foot{color:rgba(233,235,240,.5);border-top:1px solid rgba(255,255,255,.14)}
+  .p42{background:linear-gradient(165deg,#1b1c21,#141519 60%,#191a1f);
+    box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 rgba(230,233,240,.5),inset 0 -3px 0 rgba(0,0,0,.95),inset 2px 0 0 rgba(230,233,240,.22),inset -2px 0 0 rgba(0,0,0,.8)}
+  .p42 .eb{color:#aeb3bf}.p42 .hero{color:#dfe2e8;text-shadow:0 1px 0 rgba(0,0,0,.8)}
+  .p42 .meta{color:#8b91a0}.p42 .meta b{color:var(--gold-l)}
+  .p42 .foot{color:#8b91a0;border-top:1px solid rgba(255,255,255,.14)}
+  .p43{background:
+    radial-gradient(1.5px 1.5px at 18% 22%,rgba(255,255,255,.9),transparent 100%),
+    radial-gradient(1px 1px at 64% 12%,rgba(255,255,255,.7),transparent 100%),
+    radial-gradient(1.5px 1.5px at 84% 46%,rgba(255,255,255,.8),transparent 100%),
+    radial-gradient(1px 1px at 38% 64%,rgba(255,255,255,.6),transparent 100%),
+    radial-gradient(1.5px 1.5px at 72% 82%,rgba(255,255,255,.75),transparent 100%),
+    radial-gradient(1px 1px at 10% 86%,rgba(255,255,255,.55),transparent 100%),
+    radial-gradient(1px 1px at 50% 38%,rgba(255,255,255,.5),transparent 100%),
+    linear-gradient(170deg,#15161c,#0b0c11)}
+  .p44{background:
+    linear-gradient(115deg,rgba(255,255,255,.35) 0%,transparent 22%),
+    linear-gradient(150deg,#dfe9f2,#b7c8d8 55%,#a3b7ca)}
+  .p44 .eb{color:#3c586e}.p44 .hero{color:#16222c}
+  .p44 .meta{color:#3c586e}.p44 .meta b{color:#10405e}
+  .p44 .foot{color:#3c586e;border-top:1px solid rgba(30,60,84,.3)}
+  .p45{background:
+    radial-gradient(90% 80% at 24% 18%,rgba(245,208,220,.35),transparent 55%),
+    radial-gradient(90% 80% at 78% 76%,rgba(196,230,214,.35),transparent 55%),
+    linear-gradient(158deg,#f6f3f1,#e9e2e6 34%,#d9e3e9 56%,#f2ece2 80%)}
+  .p45 .eb{color:#75655a}.p45 .hero{color:#241f1a}
+  .p45 .meta{color:#75655a}.p45 .meta b{color:#241f1a}
+  .p45 .foot{color:#75655a;border-top:1px solid rgba(90,74,60,.25)}
+  .p46{background:#101013}
+  .p46 .band{position:absolute;left:0;right:0;top:70px;height:78px;z-index:0;
+    background:linear-gradient(180deg,#fdfdfe 0%,#c7ccd4 22%,#6d7480 46%,#eef1f5 58%,#7e8592 76%,#b9bec6 100%);opacity:.92}
+  .p46 .hero{color:#101013;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+  .p47{background:linear-gradient(170deg,#08131c,#050b12);border:6px solid #04070c;border-radius:14px}
+  .p47 .eb{color:#7fd4e8;letter-spacing:.34em}
+  .p47 .hero{color:#eafcff;text-shadow:0 0 18px rgba(127,212,232,.9),0 0 40px rgba(127,212,232,.4)}
+  .p47 .meta{color:rgba(127,212,232,.65)}.p47 .meta b{color:#eafcff}
+  .p47 .foot{color:rgba(127,212,232,.6);border-top:1px solid rgba(127,212,232,.25)}
+  .p48{background:
+    repeating-linear-gradient(45deg,#1b1c1f 0 5px,#26272b 5px 10px),
+    #1b1c1f}
+  .p48::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg,transparent 0 5px,rgba(0,0,0,.45) 5px 10px)}
+  .p48 .hero{color:#dfe2e8}
+  .p49{background:
+    repeating-linear-gradient(92deg,#f4f4f6 0 3px,#dcdce2 3px 5px,#eceef2 5px 9px),
+    #eceef2}
+  .p49 .eb{color:#5c5f6a}.p49 .hero{color:#1c1e26}
+  .p49 .meta{color:#5c5f6a}.p49 .meta b{color:#1c1e26}
+  .p49 .foot{color:#5c5f6a;border-top:1px solid rgba(60,64,76,.3)}
+  .p50s{position:absolute;top:16px;right:16px;font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;color:#2c2f38;border:1px solid rgba(44,47,56,.6);padding:4px 8px;border-radius:4px;z-index:2}
+  .p50e::before{content:"";position:absolute;inset:0;opacity:.45;pointer-events:none;z-index:1;
+    background:
+      repeating-radial-gradient(circle at 110% 120%,transparent 0 4px,rgba(30,32,40,.25) 4px 5px),
+      repeating-radial-gradient(circle at -10% -20%,transparent 0 4px,rgba(255,255,255,.35) 4px 5px)}
+  .p50sig{font-family:'Snell Roundhand','Brush Script MT',cursive;font-size:20px;color:#2c2f38;display:inline-block;transform:rotate(-2deg);margin-top:2px;position:relative;z-index:2}
+</style>
+</head>
+<body>
+<h1>ROUND 7 — <span>the prop card</span> · 50 options</h1>
+<p class="sub">Locked context up top: Winners game picks = 21B-S solid gold · standard picks = dark + Skyscraper. The prop card has two things a game card doesn't — a PLAYER and a DIRECTION (over/under) — so these 50 exploit material (your prop=silver language), structure, layout, and object metaphors. Six families. Judge each against the two locked cards.</p>
+
+<div class="wall">
+  <div class="slot"><div class="tag ref"><b>REF</b>LOCKED · Winners game card (21B-S)</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Your chosen premium game card. Prop options below should read as family — but never be mistaken for it.</div></div>
+
+  <div class="slot"><div class="tag ref"><b>REF</b>LOCKED · standard game card (Skyscraper)</div>
+    <div class="card freecard"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">The free/standard game card with the type bump.</div></div>
+</div>
+
+<h2>A · Metal Family <small>if games are gold, props are a different metal — 10 metals</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P1</b>Sterling Pour</div>
+    <div class="card sbar sbev p1"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">The exact twin of 21B-S cast in sterling silver — same bevel, same machining. Instant read: gold = game, silver = prop. The safest, strongest system answer.</div></div>
+
+  <div class="slot"><div class="tag"><b>P2</b>Platinum</div>
+    <div class="card sbar sbev p2"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Whiter, colder, more expensive-feeling than sterling. Platinum outranks gold in the real world — nice story if props are the sharper product.</div></div>
+
+  <div class="slot"><div class="tag"><b>P3</b>Gunmetal</div>
+    <div class="card p3"><div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>Nº P-215</span></div></div>
+    <div class="why">Dark steel bar with the machined bevel. Sits between the dark free card and the gold bar — clearly metal, clearly not gold.</div></div>
+
+  <div class="slot"><div class="tag"><b>P4</b>Brushed Titanium</div>
+    <div class="card sbar sbev p4"><div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+      <div class="meta">MLB · CIN @ MIL · <b>-115</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-216</span></div></div>
+    <div class="why">Visible vertical grain — a tooled, aerospace surface vs the poured gold. Matte where gold is liquid.</div></div>
+
+  <div class="slot"><div class="tag"><b>P5</b>White Gold</div>
+    <div class="card p5 sbev"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Warm silver — halfway between the gold bar and sterling. Closest family resemblance while staying distinct.</div></div>
+
+  <div class="slot"><div class="tag"><b>P6</b>Rose Gold</div>
+    <div class="card p6 sbev"><div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>Nº P-217</span></div></div>
+    <div class="why">The third metal in the set. Warmer and softer — probably too fashion-forward for Gary, but it's a real direction.</div></div>
+
+  <div class="slot"><div class="tag"><b>P7</b>Chrome Mirror</div>
+    <div class="card sbar p7"><div class="eb">GARY'S PROP</div>
+      <div class="hero">RONALDO<span class="l2">OVER 1.5 SHOTS ON TARGET</span></div>
+      <div class="meta">WC · POR vs CRO · <b>-120</b></div>
+      <div class="foot"><span>FINAL · WON ✓</span><span>Nº P-212</span></div></div>
+    <div class="why">Hard horizontal mirror bands — a reflective horizon instead of poured light. Flashier, more automotive.</div></div>
+
+  <div class="slot"><div class="tag"><b>P8</b>Matte Pewter</div>
+    <div class="card sbar p8"><div class="eb">GARY'S PROP</div>
+      <div class="hero">ARRAEZ<span class="l2">OVER 0.5 HITS</span></div>
+      <div class="meta">MLB · SD @ LAD · <b>-180</b></div>
+      <div class="foot"><span>TONIGHT · 10:10 PM ET</span><span>Nº P-218</span></div></div>
+    <div class="why">All sheen removed — flat, quiet, workmanlike metal. Props as the grinder's product; the gold bar stays the trophy.</div></div>
+
+  <div class="slot"><div class="tag"><b>P9</b>Mercury</div>
+    <div class="card sbar p9"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Liquid silver — soft pooled highlights instead of a directional pour. Where gold is cast solid, this still moves.</div></div>
+
+  <div class="slot"><div class="tag"><b>P10</b>Damascus Steel</div>
+    <div class="card sbar p10"><div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>Nº P-215</span></div></div>
+    <div class="why">Folded, layered blade-steel banding. Pattern IS the material — no ornament added on top.</div></div>
+</div>
+
+<h2>B · Over/Under As Structure <small>direction built into the card itself — 8 options</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P11</b>The Split — Gary's side lit</div>
+    <div class="card p11"><div class="zone-o"></div><div class="zone-u"></div><div class="seam"></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS · +145</span></div>
+      <div class="dim">UNDER 1.5 · -170</div>
+      <div class="meta">MLB · MIL vs CIN</div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">The market's two sides ARE the card: OVER half poured gold, UNDER half dead steel. Gary took the lit side. Flips when he takes the under.</div></div>
+
+  <div class="slot"><div class="tag"><b>P12</b>Gold-Dipped</div>
+    <div class="card sbar sbev p1"><div class="p12x"></div><div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+      <div class="meta">MLB · CIN @ MIL · <b>-115</b></div>
+      <div class="foot" style="color:#3a2c04;border-top-color:rgba(58,44,4,.4)"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-216</span></div></div>
+    <div class="why">A silver bar dipped in gold to the waterline. One object, two metals — prop body, Gary-gold base.</div></div>
+
+  <div class="slot"><div class="tag"><b>P13</b>Gold Inlay Channel</div>
+    <div class="card sbar sbev p1 p13"><div class="p13ch"></div><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">A machined channel cut into the silver, filled with poured gold — and the CALL sits in it. The bet itself is the gold part.</div></div>
+
+  <div class="slot"><div class="tag"><b>P14</b>Embossed Arrow</div>
+    <div class="card sbar sbev p1"><div class="p14a">▲</div><div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>Nº P-215</span></div></div>
+    <div class="why">Direction stamped INTO the metal — a giant embossed ▲ (or ▼) pressed into the silver, gold-tinted. Read the side from across the room.</div></div>
+
+  <div class="slot"><div class="tag"><b>P15</b>Gilded Rim</div>
+    <div class="card sbar p1 p15"><div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>Nº P-217</span></div></div>
+    <div class="why">Silver bar, but the machined bevel lip is pure gold — like a coin with a gilded edge. Family bond lives in the rim only.</div></div>
+
+  <div class="slot"><div class="tag"><b>P16</b>Two-Tone Diagonal</div>
+    <div class="card sbar p16"><div class="eb" style="color:#4a3a08">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Gold and silver fused at a hard 158° seam — the card is literally half game-family, half prop-family.</div></div>
+
+  <div class="slot"><div class="tag"><b>P17</b>Gold-Filled Type</div>
+    <div class="card sbar sbev p1 p17"><div class="eb">GARY'S PROP</div>
+      <div class="hero">RONALDO<span class="l2">OVER 1.5 SHOTS ON TARGET</span></div>
+      <div class="meta">WC · POR vs CRO · <b>-120</b></div>
+      <div class="foot"><span>FINAL · WON ✓</span><span>Nº P-212</span></div></div>
+    <div class="why">Silver bar, but the stamped letters are filled with molten gold. The pick is the only gold in the object.</div></div>
+
+  <div class="slot"><div class="tag"><b>P18</b>Coin Edge</div>
+    <div class="card sbar sbev p1 p18"><div class="eb" style="margin-left:12px">GARY'S PROP</div>
+      <div class="hero" style="margin-left:12px">ARRAEZ<span class="l2">OVER 0.5 HITS</span></div>
+      <div class="meta" style="margin-left:12px">MLB · SD @ LAD · <b>-180</b></div>
+      <div class="foot" style="left:34px;right:34px"><span>TONIGHT · 10:10 PM ET</span><span>Nº P-218</span></div></div>
+    <div class="why">Reeded (milled) rails down both edges — the anti-counterfeit edge of a silver coin. Tactile difference you can almost feel.</div></div>
+</div>
+
+<h2>C · Player-First <small>props are about a PERSON — 9 layouts game cards can't do</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P19</b>Locker Nameplate</div>
+    <div class="card p19 dtx"><div class="eb">GARY'S PROP</div>
+      <div class="plate"><i></i><i></i><i></i><i></i><div class="nm">B. TURANG · 2B</div></div>
+      <div class="hero">OVER 1.5 HITS</div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Riveted steel locker-room nameplate carries the player; the bet hangs under it in gold. Clubhouse, not casino.</div></div>
+
+  <div class="slot"><div class="tag"><b>P20</b>Ghost Number</div>
+    <div class="card freecard" style="overflow:hidden"><div class="p20n">2</div><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">The player's jersey number as a huge outlined watermark. One glance says "this card is about a guy."</div></div>
+
+  <div class="slot"><div class="tag"><b>P21</b>Baseball Card</div>
+    <div class="card p21"><div class="ph"></div><div class="eb">GARY'S PROP · 2026</div>
+      <div class="hero">JJ BLEDAY<span class="l2">UNDER 0.5 HITS</span></div>
+      <div class="meta">MLB · MIA @ ATL · <b>+130</b></div>
+      <div class="foot"><span>TONIGHT · 7:20 PM ET</span><span>SERIES 2026</span></div></div>
+    <div class="why">Vintage cardboard: portrait frame, double-rule border, red ink. Props as collectible player cards — a whole different shelf from the metal game cards.</div></div>
+
+  <div class="slot"><div class="tag"><b>P22</b>Dog Tag</div>
+    <div class="card p22"><div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES, P.<span class="l2">OVER 6.5 K · -130</span></div>
+      <div class="meta">PIT @ STL · MLB</div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>T-215</span></div></div>
+    <div class="why">Stamped-steel tag: punched hole, debossed letterpress type, extra corner radius. The pick as an issued ID for one player.</div></div>
+
+  <div class="slot"><div class="tag"><b>P23</b>Scout File</div>
+    <div class="card p23"><div class="stamp">GARY PLAYED IT</div><div class="eb">SCOUTING REPORT</div>
+      <div class="hero">BLEDAY, JJ — OF<span class="l2">VERDICT: UNDER 0.5 HITS</span></div>
+      <div class="meta">MIA @ ATL · PRICE <b>+130</b></div>
+      <div class="foot"><span>FILED 7:20 PM ET</span><span>Nº P-219</span></div></div>
+    <div class="why">Manila folder, typewriter type, red verdict stamp. The prop as Gary's classified scouting call on one player.</div></div>
+
+  <div class="slot"><div class="tag"><b>P24</b>Dugout Lineup Card</div>
+    <div class="card p24"><div class="rules"></div><div class="eb">GARY'S PROP · LINEUP CARD</div>
+      <div class="hero">3. Turang, 2B<span class="l2">over 1½ hits ✓</span></div>
+      <div class="meta">MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Handwritten on the ruled dugout card — the only handwriting in the whole app, so props are unmistakable. (Would be a real scrawl font in SwiftUI.)</div></div>
+
+  <div class="slot"><div class="tag"><b>P25</b>Stat Ledger</div>
+    <div class="card p25"><div class="rules"></div><div class="eb">GARY'S PROP LEDGER</div>
+      <div class="hero">ARRAEZ, L.<span class="l2">OVER 0.5 HITS · -180</span></div>
+      <div class="meta">SD @ LAD · MLB</div>
+      <div class="foot"><span>TONIGHT · 10:10 PM ET</span><span>ENTRY 214</span></div></div>
+    <div class="why">Accountant's ruled ledger with the red margin line — the prop as a booked entry. Nerdy in the right way for stat bets.</div></div>
+
+  <div class="slot"><div class="tag"><b>P26</b>Marquee</div>
+    <div class="card p26"><div class="eb">GARY'S PROP · TONIGHT ONLY</div>
+      <div class="frame"><div class="hero">RONALDO<span class="l2">OVER 1.5 SOT</span></div></div>
+      <div class="meta" style="color:rgba(255,255,255,.5)">WC · POR vs CRO · <b style="color:var(--gold-l)">-120</b></div>
+      <div class="foot" style="color:rgba(232,212,139,.7);border-top:1px solid rgba(232,212,139,.25)"><span>KICKOFF · 3:00 PM ET</span><span>Nº P-212</span></div></div>
+    <div class="why">The player on the theater marquee, bulbs and glow. Props as the nightly headliner act.</div></div>
+
+  <div class="slot"><div class="tag"><b>P27</b>Back of the Jersey</div>
+    <div class="card p27"><div class="eb" style="text-align:center;color:rgba(255,255,255,.5)">GARY'S PROP</div>
+      <div class="hero">TURANG</div>
+      <div class="num">2</div>
+      <div class="meta" style="color:rgba(255,255,255,.55)">OVER 1.5 HITS · <b style="color:var(--gold-l)">+145</b> · MIL vs CIN</div>
+      <div class="foot" style="color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.12)"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Knit fabric texture, arched twill name, giant gold number. The card IS the player's back.</div></div>
+</div>
+
+<h2>D · The Line As Object <small>the number is the product — 8 instrument treatments</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P28</b>The Big Number</div>
+    <div class="card p28 dtx"><div class="eb">GARY'S PROP</div>
+      <div style="display:flex;align-items:flex-start;gap:0;margin-top:8px"><div class="big">1.5</div></div>
+      <div class="side">OVER<br>HITS<small>B. TURANG · MIL</small></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Inverted hierarchy: the LINE is the 118px hero, player demoted to support. No game card ever leads with a number.</div></div>
+
+  <div class="slot"><div class="tag"><b>P29</b>The Threshold</div>
+    <div class="card p29"><div class="eb" style="color:var(--gold)">GARY'S PROP · TURANG HITS · MIL vs CIN</div>
+      <div class="lbl over">OVER · +145 ◄ GARY</div>
+      <div class="rule"><div class="pill">1.5</div></div>
+      <div class="lbl under">UNDER · -170</div>
+      <div class="foot" style="color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.12)"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">A literal line across the card with both sides priced — Gary's side full gold, the other ghosted. The bet's geometry, drawn.</div></div>
+
+  <div class="slot"><div class="tag"><b>P30</b>The Gauge</div>
+    <div class="card p30 dtx"><div class="dial"></div><div class="ndl"></div><div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2" style="color:var(--gold-l)">OVER 6.5 K</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">An instrument-cluster dial, needle past the line into the gold zone. Live version could sweep as the player racks up Ks.</div></div>
+
+  <div class="slot"><div class="tag"><b>P31</b>Split-Flap Board</div>
+    <div class="card p31 dtx"><div class="eb">GARY'S PROP · B. TURANG · MIL vs CIN</div>
+      <div class="flaps"><span class="f g">O</span><span class="f">1</span><span class="f">.</span><span class="f">5</span><span class="f g">H</span><span class="f g">+</span><span class="f g">1</span><span class="f g">4</span><span class="f g">5</span></div>
+      <div class="meta">OVER 1.5 HITS · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Departure-board tiles spell the line — each prop clacks in when it drops. Built for the pick-by-pick unlock moment.</div></div>
+
+  <div class="slot"><div class="tag"><b>P32</b>Odometer Window</div>
+    <div class="card p32 dtx"><div class="eb">GARY'S PROP</div>
+      <div class="win"><b>6.5</b><span>OVER<br>STRIKEOUTS</span></div>
+      <div class="meta" style="margin-top:14px">P. SKENES · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>Nº P-215</span></div></div>
+    <div class="why">The line sits behind glass in a recessed counter window — a machine that could roll live as stats accrue.</div></div>
+
+  <div class="slot"><div class="tag"><b>P33</b>Tape Measure</div>
+    <div class="card p33 dtx"><div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2" style="color:var(--gold-l)">OVER 1.5 TOTAL BASES</span></div>
+      <div class="mlab">1.5</div><div class="mark"></div><div class="ruler"></div>
+      <div class="foot" style="border-top:none"><span>CIN @ MIL · -115</span><span>Nº P-216</span></div></div>
+    <div class="why">Ruled ticks along the bottom with a gold marker planted at the line. Measurement, not decoration.</div></div>
+
+  <div class="slot"><div class="tag"><b>P34</b>The Column</div>
+    <div class="card p34 dtx"><div class="tube"><div class="fill"></div></div><div class="tick">1.5 —</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">A gold column filled past the dashed line. Live: the fill rises with each hit. The card is a thermometer for the bet.</div></div>
+
+  <div class="slot"><div class="tag"><b>P35</b>Spirit Level</div>
+    <div class="card p35 dtx"><div class="eb">GARY'S PROP · L. ARRAEZ · SD @ LAD</div>
+      <div class="hero" style="font-size:40px;margin-top:8px">OVER 0.5 HITS</div>
+      <div class="lvl"><div class="bub"></div></div>
+      <div class="foot"><span>-180 · TONIGHT 10:10 PM ET</span><span>Nº P-218</span></div></div>
+    <div class="why">The bubble settles on Gary's side of the center marks. Quiet, tool-bench metaphor for which way the bet leans.</div></div>
+</div>
+
+<h2>E · Ticket & Paper <small>the bet as a physical artifact — 5 options</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P36</b>Thermal Slip</div>
+    <div class="card p36"><div class="eb">— GARY · PROP TICKET —</div>
+      <div class="hero">JJ BLEDAY<span class="l2">UNDER 0.5 HITS @ +130</span></div>
+      <div class="meta">MIA @ ATL · 07/02/26 · 7:20 PM</div>
+      <div class="bc"></div></div>
+    <div class="why">Printed betting-shop receipt: perforated edges, thermal ink, barcode. The most literal "this is a bet" object in the wall.</div></div>
+
+  <div class="slot"><div class="tag"><b>P37</b>Pari-Mutuel</div>
+    <div class="card p37"><div class="hole"></div><div class="eb">GARY'S PROP · WINDOW Nº 7</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOALSCORER</span></div>
+      <div class="meta">ESP vs SUI · $100 TO WIN <b>$160</b></div>
+      <div class="foot"><span>POST · 3:00 PM ET</span><span>SERIES 2026</span></div></div>
+    <div class="why">Racetrack ticket — aged stock, letterpress inks, punched hole. Old-money gambling romance vs the metal cards' banker cool.</div></div>
+
+  <div class="slot"><div class="tag"><b>P38</b>Tear-Off Stub</div>
+    <div class="card p38"><div class="main"><div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL</div>
+      <div class="foot" style="right:0;color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.12)"><span>TONIGHT · 8:15 PM</span></div></div>
+      <div class="stub"><div class="rot">-130 · Nº P-215</div></div></div>
+    <div class="why">Perforated stub carries the price and serial, rotated like a real ticket edge. Tear-away = cash-it energy.</div></div>
+
+  <div class="slot"><div class="tag"><b>P39</b>Punch Card</div>
+    <div class="card p39"><div class="grid"></div>
+      <div class="punch" style="left:38%;top:84px"></div><div class="punch" style="left:52%;top:112px"></div><div class="punch" style="left:66%;top:98px"></div>
+      <div class="eb">GARY'S PROP · IBM-STYLE ENTRY</div>
+      <div class="hero" style="margin-top:10px">TURANG · OVER 1.5 HITS<br>MIL vs CIN · +145</div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Mainframe punch card — the bet encoded in punched holes. Retro-quant: the machine spoke, here's its card.</div></div>
+
+  <div class="slot"><div class="tag"><b>P40</b>Carbon Copy</div>
+    <div class="card p40"><div class="wm">CUSTOMER COPY</div><div class="eb">GARY'S PROP — DUPLICATE</div>
+      <div class="hero">ARRAEZ · OVER 0.5 HITS<span class="l2">SD @ LAD · -180</span></div>
+      <div class="meta">KEEP THIS COPY FOR YOUR RECORDS</div>
+      <div class="foot"><span>TONIGHT · 10:10 PM ET</span><span>Nº P-218</span></div></div>
+    <div class="why">Canary carbonless duplicate with ghosted double-strike ink. "Gary kept the original" — you hold the copy.</div></div>
+</div>
+
+<h2>F · Dark Premium <small>silver-on-dark for entitled prop cards — 10 finishes</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P41</b>Silver Foil Type</div>
+    <div class="card p41"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Obsidian card, hero letters stamped in silver foil. The dark twin of P17 — metal lives only in the type.</div></div>
+
+  <div class="slot"><div class="tag"><b>P42</b>Graphite Machined</div>
+    <div class="card p42"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">The 21B-S bevel geometry exactly, cast in graphite with steel edges. Unmistakable sibling of the gold bar; unmistakably a different metal. Strongest dark-mode answer.</div></div>
+
+  <div class="slot"><div class="tag"><b>P43</b>Starlight</div>
+    <div class="card p43 dtx"><div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>Nº P-217</span></div></div>
+    <div class="why">Near-black with fine silver flecks — Rolex "starlight dial" energy. Quietest possible premium tell.</div></div>
+
+  <div class="slot"><div class="tag"><b>P44</b>Ice</div>
+    <div class="card p44"><div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+      <div class="meta">MLB · CIN @ MIL · <b>-115</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-216</span></div></div>
+    <div class="why">Frosted pale glass, cold slate ink. Gold is warm/game; ice is cold/prop — a temperature system instead of a metal system.</div></div>
+
+  <div class="slot"><div class="tag"><b>P45</b>Pearl</div>
+    <div class="card p45"><div class="eb">GARY'S PROP</div>
+      <div class="hero">ARRAEZ<span class="l2">OVER 0.5 HITS</span></div>
+      <div class="meta">MLB · SD @ LAD · <b>-180</b></div>
+      <div class="foot"><span>TONIGHT · 10:10 PM ET</span><span>Nº P-218</span></div></div>
+    <div class="why">Mother-of-pearl iridescence — faint pink/green sheen drifting across white. The one light-mode luxury option.</div></div>
+
+  <div class="slot"><div class="tag"><b>P46</b>Chrome Band</div>
+    <div class="card p46"><div class="band"></div><div class="eb" style="color:#c8ccd6">GARY'S PROP</div>
+      <div class="hero">RONALDO<span class="l2">OVER 1.5 SHOTS ON TARGET</span></div>
+      <div class="meta" style="color:rgba(233,235,240,.6)">WC · POR vs CRO · <b style="color:var(--gold-l)">-120</b></div>
+      <div class="foot" style="color:rgba(233,235,240,.55);border-top:1px solid rgba(255,255,255,.12)"><span>FINAL · WON ✓</span><span>Nº P-212</span></div></div>
+    <div class="why">One mirror-chrome stripe across a dark card, and the hero prints ON the metal. Metal as a zone, not a whole surface.</div></div>
+
+  <div class="slot"><div class="tag"><b>P47</b>X-Ray</div>
+    <div class="card p47"><div class="eb">GARY'S PROP · FILM 214</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>RADIOLOGY · GARY</span></div></div>
+    <div class="why">Deep-blue film, glowing white type, film border. "Gary sees inside the player." The most out-there option here on purpose.</div></div>
+
+  <div class="slot"><div class="tag"><b>P48</b>Carbon Fiber</div>
+    <div class="card p48 dtx"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>Nº P-214</span></div></div>
+    <div class="why">Woven carbon twill — engineered composite vs poured metal. Performance-car material story for performance bets.</div></div>
+
+  <div class="slot"><div class="tag"><b>P49</b>Selenite</div>
+    <div class="card p49"><div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>Nº P-217</span></div></div>
+    <div class="why">White crystal striations, vertical light. Bright, mineral, cool — a stone family instead of a metal family.</div></div>
+
+  <div class="slot"><div class="tag"><b>P50</b>Silver Certificate</div>
+    <div class="card sbar sbev p1 p50e"><div class="p50s">Nº P-000214</div><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="p50sig">Gary A.I.</div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>SERIES 2026</span></div></div>
+    <div class="why">21D's guilloché mint engraving struck in silver — serial, signature, lathe-work. If game cards are gold bullion, props are silver certificates.</div></div>
+</div>
+
+</body>
+</html>

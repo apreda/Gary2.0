@@ -50,15 +50,28 @@ async function sbGet(table: string, query: string): Promise<any[]> {
   if (!res.ok) throw new Error(`${table} GET ${res.status}`);
   return await res.json();
 }
+// Follows meta.next_cursor so multi-page results aren't truncated at page 1 —
+// the WC season has 104 matches and a multi-match day's lineups/stats exceed
+// one 100-row page, which silently left late-tournament props ungraded.
 async function bdlGet(path: string, params: Record<string, string | string[]>): Promise<any[]> {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (Array.isArray(v)) v.forEach((x) => qs.append(`${k}[]`, x)); else qs.append(k, v);
+  const all: any[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 50; page++) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (Array.isArray(v)) v.forEach((x) => qs.append(`${k}[]`, x)); else qs.append(k, v);
+    }
+    if (cursor != null) qs.append("cursor", cursor);
+    const res = await fetch(`${BDL_BASE}${path}?${qs.toString()}`, { headers: { Authorization: BDL_KEY } });
+    if (!res.ok) throw new Error(`BDL ${path} ${res.status}`);
+    const json = await res.json();
+    const rows = Array.isArray(json?.data) ? json.data : [];
+    all.push(...rows);
+    const next = json?.meta?.next_cursor;
+    if (next == null || String(next) === cursor || rows.length === 0) break;
+    cursor = String(next);
   }
-  const res = await fetch(`${BDL_BASE}${path}?${qs.toString()}`, { headers: { Authorization: BDL_KEY } });
-  if (!res.ok) throw new Error(`BDL ${path} ${res.status}`);
-  const json = await res.json();
-  return Array.isArray(json?.data) ? json.data : [];
+  return all;
 }
 
 // ── grading core (ported from run-all-results.js) ────────────────────────────
@@ -197,12 +210,23 @@ Deno.serve(async (req) => {
   if (mlb.length) {
     const games = (await Promise.all(dates.map((d) => bdlGet("/mlb/v1/games", { dates: [d], per_page: "50" })))).flat();
     const finalById = new Map<string, boolean>();
-    for (const g of games) finalById.set(String(g.id), String(g.status ?? "").toUpperCase().includes("FINAL"));
+    const etDateById = new Map<string, string>();
+    const etDateOf = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    for (const g of games) {
+      finalById.set(String(g.id), String(g.status ?? "").toUpperCase().includes("FINAL"));
+      if (g.date) etDateById.set(String(g.id), etDateOf(String(g.date)));
+    }
 
     const byGame: Record<string, Flat[]> = {};
     for (const f of mlb) {
       const gid = String(f.p.game_id ?? "");
       if (!finalById.get(gid)) { stats.skippedNotFinal++; continue; }
+      // DATE GUARD: a pick whose game_id points at an ADJACENT day's game (the
+      // BDL midnight-UTC artifact that mis-attributed generation-side ids) must
+      // not grade against that game's final — tonight's Bleday prop graded
+      // "won" off YESTERDAY'S box while his real game hadn't started (Jul 2).
+      const gDate = etDateById.get(gid);
+      if (gDate && gDate !== f.date) { stats.skippedNotFinal++; continue; }
       (byGame[gid] ||= []).push(f);
     }
     for (const gid of Object.keys(byGame)) {

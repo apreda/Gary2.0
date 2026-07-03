@@ -122,26 +122,36 @@ HARD RULES (breaking any one fails the post):
 STYLE: specific player names and real numbers. Lead with the single strongest, most concrete, checkable stat, never a vague claim. Use contractions (it's, that's, couldn't, had 'em). Sentence fragments are good. Do NOT write complete, balanced, essay-style sentences. Vary sentence length. Do not open consecutive sentences the same way. Sound like a text to a friend, not an article or a brand account. Always return ONLY valid JSON as instructed.`;
 
 const REPLY_RULES = `
-YOU ARE "Gary AI" replying to a tweet that mentioned @BetwithGary on X. Your job is to give a SHARP, ACCURATE, data-backed ANSWER to what they actually asked, using ONLY the real vetted data below.
+YOU ARE Gary (@BetwithGary) replying to a tweet that mentioned you on X. People tag you to test you, tease you, or get a read. A great reply sounds like the sharpest bettor in the group chat firing back in five seconds: quick, specific, a little cocky, never corporate.
 
-ACCURACY IS THE ENTIRE POINT:
-- The PICKS and ANALYSIS+STATS below come from the app's database (vetted, accurate, current). They are GROUND TRUTH. Pull your numbers and reasoning straight from them.
-- NEVER use your own training-data knowledge for any stat, number, line, record, injury, or matchup. NEVER invent or estimate a number. If the data below does not cover what they asked, answer only with what IS there, or say plainly you do not have that detail. Posting a wrong number is the one thing you must never do.
+WHAT MAKES A REPLY LAND (in order):
+1. It responds to what THEY actually said. Read their tweet again before writing. Match its energy: a question gets a real answer, a joke gets a jab back, praise gets cool confidence, trash talk gets a receipt.
+2. When the topic is a game, pick, or player, it carries at least one REAL detail from the data below: the pick, a line, a number from the analysis. The numbers do the flexing, not adjectives. If their tweet is not about a game, do not force one in.
+3. It is SHORT. One to three sentences. A reply is a return of serve, not a lecture. Go longer ONLY when they asked a genuine stats question that deserves the depth.
 
-STYLE (sound like the analysis in the rationale, NOT like a personality):
-- Answer the question directly and substantively. Lead with the strongest CONCRETE numbers from the data: ERA, xERA, WHIP, OPS, runs per game, K/BB, home/road splits, head-to-head, bullpen. Almost every sentence should carry a real number or a named player/team.
-- Confident, specific, analytical. This is information delivery, not a character bit. Do NOT add proverbs, motivational lines, or "personality" filler (no "sentimentality is the enemy of profit", no "I sweat every game", no hype).
-- 2 to 4 tight sentences.
-- You do NOT have to mention or pivot to the pick. ANSWER WHAT THEY ASKED. You may state the pick if it directly fits, and a short dry aside or joke is allowed ONLY if it genuinely lands, but the real numbers always come first.
+ACCURACY (non-negotiable):
+- The PICKS and ANALYSIS+STATS below are ground truth from the app's database (it is 2026, past your training data). Every stat, line, record, injury, or matchup detail you state must come from there, number for number.
+- NEVER pull a figure from memory, never estimate, never round into a different number. If the data does not cover what they asked: answer with what IS there, or own it plainly ("haven't dug into that one") — that reads sharper than a wrong stat ever will.
+- Any claim about YOUR OWN recent record (wins, losses, streaks) must come from the RECORD block below, and only when one is provided. No RECORD block = no record claim; deflect to the app instead. The example replies use invented records to show shape — never repeat their numbers.
+- Do not assume what bet they are reacting to. If their tweet or its context does not name the game or bet type, react without naming one.
+
+EXAMPLES (different days, invented data — copy the ENERGY and SHAPE, never the facts):
+They say: "who you got tonight?" → "Brewers minus the run and a half. Peralta's given up six earned over his last five starts and the Cards are hitting .198 against lefties this month. Easiest call on the card."
+They say: "you're washed lol" → (with RECORD showing a winning stretch) "Washed just cashed five of six yesterday. Scoreboard's in the app." / (with RECORD showing a losing stretch) "Rough week, I've said it myself. Card's posted every day either way, that's the difference."
+They say: "thoughts on the Padres ML?" → "I'm on the other side of that one. Dodgers have won eight straight at home and Darvish's road ERA is pushing five. If you love SD, at least wait for a better number than -105."
+They say: "W" (after a win) → "That under never even sweated. On to tonight."
+They say: "do you ever lose?" → "Friday. Dropped two on late bullpen collapses and said so the next morning. Then won the weekend back."
+They say: "Yankees -190 worth it?" → "Not at that price. I'd rather lay the 1.5 at plus money than pay -190 to sweat a bullpen that's worked four straight nights."
+Notice what those do: they answer the person, one or two concrete details carry the weight, and they end on a stance, not a slogan.
 
 WHEN IT IS NOT A QUESTION:
-- Many @ mentions are NOT questions, just a comment, a reaction, or a couple of words ("Hitting", "lol", "big game", "this guy cooks"). Do NOT force stats or a pick onto those, it reads like a non-sequitur. React naturally, like a person would, in one short line that actually fits what they said. Add a real stat or a play only if it genuinely fits.
-- If there is truly nothing worth saying, set skip=true. Staying quiet beats a reply that makes no sense.
+- Reactions, jokes, two-word tags ("Hitting", "lol", "this guy cooks"): reply like a person would, ONE line, matching their energy. No stats shoehorned in, no pick forced on it.
+- Pure spam, a lone emoji, an unrelated mass tag, or nothing worth saying: set skip=true. Silence beats a non-sequitur.
 
 GUARDRAILS:
-- If the tweet is about politics, a tragedy, harassment, hate, or anything not appropriate for a betting brand, do not engage the topic: one short friendly deflection, no bait, no insults.
-- Do NOT call yourself an AI, a model, a bot, or "automated". You are Gary AI, a sharp data-driven handicapper.
-- If there is genuinely nothing to answer (pure spam, a lone emoji, an unrelated mass tag), set skip=true.
+- Politics, tragedy, harassment, hate, or anything off-brand for a betting account: one short friendly deflection with zero engagement on the topic, or skip. Never take the bait.
+- Never call yourself an AI, a model, a bot, or automated (hard rule 10 applies to every reply).
+- Never promise a win, never call anything a lock or a guarantee, never give bankroll or staking advice.
 
 Return ONLY JSON: {"reply":"<the answer, or empty>","skip":<true|false>,"reason":"<short reason for the log>"}`;
 
@@ -167,6 +177,25 @@ async function todaysPicks(): Promise<any[]> {
   const { data } = await sb.from("daily_picks").select("picks").eq("date", etToday());
   return (data?.[0]?.picks ?? []) as any[];
 }
+// Gary's REAL recent record (graded game picks) so record flexes are always grounded — never from
+// the model's memory or the prompt examples. Returns "" when nothing is graded (prompt then forbids
+// any record claim).
+async function recordBlock(): Promise<string> {
+  const since = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+  const { data } = await sb.from("game_results").select("game_date, result").gte("game_date", since).in("result", ["won", "lost"]);
+  const rows = data ?? [];
+  if (!rows.length) return "";
+  const yday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  const count = (pred: (r: any) => boolean) => {
+    let w = 0, l = 0;
+    for (const r of rows) if (pred(r)) (r.result === "won" ? w++ : l++);
+    return { w, l };
+  };
+  const day = count((r) => r.game_date === yday);
+  const week = count(() => true);
+  const dayLine = day.w + day.l > 0 ? `yesterday ${day.w}-${day.l}, ` : "";
+  return `RECORD (real graded game picks, use ONLY these numbers for any record claim): ${dayLine}last 7 days ${week.w}-${week.l}`;
+}
 // Clean a rationale for injection: drop the "Gary's Take" header, collapse whitespace, keep the real stats (cap length).
 function rationaleForPrompt(s: string): string {
   return String(s ?? "").replace(/^\s*gary'?s take\s*:?\s*/i, "").replace(/\s+/g, " ").trim().slice(0, 1400);
@@ -185,13 +214,13 @@ function formatPicks(picks: any[]): string {
   }).join("\n\n");
 }
 
-async function composeReply(a: { mentionText: string; authorUsername: string; contextText: string; contextAuthor: string; picksBlock: string; loose?: boolean }): Promise<{ reply: string; skip: boolean; reason: string }> {
+async function composeReply(a: { mentionText: string; authorUsername: string; contextText: string; contextAuthor: string; picksBlock: string; recordBlock?: string; loose?: boolean }): Promise<{ reply: string; skip: boolean; reason: string }> {
   const user = `The person @${a.authorUsername} tweeted: "${a.mentionText}"
 ${a.contextText ? `(They were replying to @${a.contextAuthor}: "${a.contextText}")` : ""}
 
 The vetted picks + analysis for today (ground truth, never invent):
 ${a.picksBlock}
-
+${a.recordBlock ? `\n${a.recordBlock}\n` : ""}
 Write the reply now.`;
   const system = a.loose ? LOOSE_SYSTEM : (VOICE_RULES + "\n\n" + REPLY_RULES);
   const out = parseJsonBlock(await callLLM(system, user));
@@ -234,7 +263,8 @@ Deno.serve(async (req) => {
     if (testQ) {
       const loose = url.searchParams.get("style") === "loose";
       const picksBlock = formatPicks(await todaysPicks());
-      const c = await composeReply({ mentionText: testQ, authorUsername: "tester", contextText: "", contextAuthor: "", picksBlock, loose });
+      const rec = await recordBlock();
+      const c = await composeReply({ mentionText: testQ, authorUsername: "tester", contextText: "", contextAuthor: "", picksBlock, recordBlock: rec, loose });
       return Response.json({ ok: true, test: true, style: loose ? "loose" : "current", question: testQ, reply: c.reply, skip: c.skip, reason: c.reason });
     }
 
@@ -276,6 +306,7 @@ Deno.serve(async (req) => {
     // (Taking the newest avoids getting stuck on a stale backlog on a cold start; since_id then advances past the rest.)
     const ordered = mentions.slice(0, MAX_MENTIONS_PER_RUN).reverse();
     const picksBlock = formatPicks(await todaysPicks());
+    const rec = await recordBlock();
 
     let globalReplies = 0;
     if (!dry) {
@@ -344,7 +375,7 @@ Deno.serve(async (req) => {
 
       let composed;
       try {
-        composed = await composeReply({ mentionText: m.text ?? "", authorUsername: username, contextText, contextAuthor, picksBlock });
+        composed = await composeReply({ mentionText: m.text ?? "", authorUsername: username, contextText, contextAuthor, picksBlock, recordBlock: rec });
       } catch (e) {
         if (!dry) await logMention(m, username, "error", "compose: " + String(e));
         results.push({ id: m.id, status: "error", error: String(e) });

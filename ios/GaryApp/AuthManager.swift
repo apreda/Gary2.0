@@ -17,10 +17,17 @@ final class AuthManager: ObservableObject {
     /// Non-error guidance (e.g. "confirm your email") — shown gold, not red.
     @Published var infoMessage: String?
 
-    // MARK: - Token Storage (Keychain-backed via UserDefaults for now)
+    // MARK: - Token Storage
+    //
+    // Tokens live in the KEYCHAIN (2.18) — they're the credentials, and
+    // UserDefaults is plaintext in backups. KeychainStorage silently migrates
+    // any pre-2.18 UserDefaults value on first read, so sessions survive the
+    // update. gary_user_id / gary_user_email stay in UserDefaults on purpose:
+    // SupabaseAPI.identityId reads gary_user_id straight from UserDefaults
+    // for entitlement/checkout identity.
 
-    @AppStorage("gary_access_token") private var accessToken: String = ""
-    @AppStorage("gary_refresh_token") private var refreshToken: String = ""
+    @KeychainStorage("gary_access_token") private var accessToken: String
+    @KeychainStorage("gary_refresh_token") private var refreshToken: String
     @AppStorage("gary_user_id") private var userId: String = ""
     @AppStorage("gary_user_email") private var userEmail: String = ""
 

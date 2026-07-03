@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Winners Premium — Round 2: Material Worlds</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --cream:#FAF8F5; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0A0908;color:var(--cream);font-family:-apple-system,'Helvetica Neue',sans-serif;padding:48px 40px 120px}
+  h1{font-family:var(--disp);font-weight:700;font-size:44px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 34px;max-width:780px;line-height:1.6}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:38px}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .tag{font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.08em}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;min-height:32px}
+
+  .card{position:relative;width:100%;height:224px;border-radius:20px;padding:20px 22px;overflow:hidden;
+        box-shadow:0 18px 34px rgba(0,0,0,.55)}
+  .eb{font-family:var(--mono);font-size:10.5px;letter-spacing:.28em}
+  .hero{font-family:var(--disp);font-weight:700;font-size:40px;line-height:.95;text-transform:uppercase;margin-top:13px}
+  .meta{font-family:var(--mono);font-size:12.5px;margin-top:13px}
+  .foot{position:absolute;left:22px;right:22px;bottom:14px;padding-top:11px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;display:flex;justify-content:space-between}
+
+  /* 21 GOLD BAR */
+  .m21{background:linear-gradient(160deg,#E8D48B,#b8922a 30%,#9a7818 50%,#d4b45a 72%,#8a6d14);}
+  .m21::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.35) 45%,transparent 60%);animation:barSheen 4s ease-in-out infinite}
+  @keyframes barSheen{0%,100%{transform:translateX(-30%)}50%{transform:translateX(30%)}}
+  .m21 .eb,.m21 .meta{color:#4a3a08}.m21 .hero{color:#241c04;text-shadow:0 1px 0 rgba(255,255,255,.35)}
+  .m21 .foot{color:#4a3a08;border-top:1px solid rgba(36,28,4,.3)}
+  .m21 .mint{position:absolute;top:14px;right:16px;font-family:var(--mono);font-size:9px;color:#4a3a08;border:1.5px solid #4a3a08;border-radius:50%;width:46px;height:46px;display:flex;align-items:center;justify-content:center;text-align:center;transform:rotate(12deg)}
+  /* 22 CENTURION BLACK METAL */
+  .m22{background:linear-gradient(150deg,#1c1c1f,#0c0c0e 55%,#18181b);border:1px solid #2c2c30}
+  .m22::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px)}
+  .m22 .eb{color:#9a9aa2;letter-spacing:.34em}.m22 .hero{color:#e8e8ec;letter-spacing:.01em}
+  .m22 .meta{color:#7c7c84}.m22 .meta .odds{color:var(--gold-l)}
+  .m22 .foot{color:#9a9aa2;border-top:1px solid #26262a}
+  .m22 .chip{position:absolute;top:16px;right:18px;width:44px;height:32px;border-radius:6px;background:linear-gradient(140deg,#d8b95a,#8a6d14);box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
+  .m22 .chip::after{content:"";position:absolute;inset:6px 8px;border:1px solid rgba(0,0,0,.35);border-radius:3px}
+  /* 23 CASINO FELT */
+  .m23{background:radial-gradient(120% 140% at 30% 20%,#14432c,#0b2c1c 60%,#072015);border:10px solid transparent;
+    border-image:repeating-linear-gradient(45deg,#c9a227 0 7px,#8a6d14 7px 14px) 10}
+  .m23 .eb{color:var(--gold-l)}.m23 .hero{color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+  .m23 .meta{color:rgba(255,255,255,.72)}.m23 .meta .odds{color:var(--gold-l)}
+  .m23 .foot{color:var(--gold-l);border-top:1px dashed rgba(201,162,39,.4)}
+  .m23 .chipStack{position:absolute;top:12px;right:14px;width:46px;height:46px;border-radius:50%;
+    background:repeating-conic-gradient(#C9A227 0 25deg,#0b2c1c 25deg 45deg);box-shadow:0 0 0 4px #E8D48B inset,0 4px 10px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:700;color:#E8D48B}
+  /* 24 TERMINAL */
+  .m24{background:#050805;border:1px solid #123312}
+  .m24::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,255,120,.05) 0 2px,transparent 2px 4px)}
+  .m24 .eb{color:#37d67a}.m24 .eb::before{content:"$ unlock --winner "}
+  .m24 .hero{color:#5cff9d;font-family:var(--mono);font-size:29px;font-weight:700;text-shadow:0 0 14px rgba(60,255,140,.45)}
+  .m24 .hero::after{content:"▌";animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .m24 .meta{color:#2f9e5d}.m24 .meta .odds{color:#5cff9d}
+  .m24 .foot{color:#2f9e5d;border-top:1px solid #123312}
+  /* 25 CHAMPAGNE */
+  .m25{background:linear-gradient(170deg,#f7e8c3,#ecd28e 45%,#d9b45f)}
+  .m25 .bub{position:absolute;bottom:-10px;border-radius:50%;border:1px solid rgba(138,109,20,.5);animation:rise linear infinite}
+  @keyframes rise{to{transform:translateY(-260px)}}
+  .m25 .eb{color:#8a6d14}.m25 .hero{color:#3a2c06}.m25 .meta{color:#6b5510}
+  .m25 .foot{color:#6b5510;border-top:1px solid rgba(107,85,16,.35)}
+  /* 26 VEGAS MARQUEE */
+  .m26{background:#160f04;border:12px solid #241a08}
+  .m26 .bulbs{position:absolute;inset:-9px;pointer-events:none}
+  .m26 .bulbs i{position:absolute;width:7px;height:7px;border-radius:50%;background:#5a4a1a}
+  .m26 .bulbs i.on{background:#ffe9a8;box-shadow:0 0 8px 2px rgba(255,225,150,.8)}
+  .m26 .eb{color:var(--gold-l);text-align:center;letter-spacing:.4em}
+  .m26 .hero{color:#fff;text-align:center;font-size:37px;text-shadow:0 0 18px rgba(255,220,140,.5)}
+  .m26 .meta{color:rgba(255,255,255,.65);text-align:center}.m26 .meta .odds{color:var(--gold-l)}
+  .m26 .foot{color:var(--gold-l);border-top:none;justify-content:center}
+  /* 27 BANKNOTE */
+  .m27{background:#ece5cf;border:2px solid #6b5b34}
+  .m27::before{content:"";position:absolute;inset:6px;border:1px solid #6b5b34;border-radius:12px;
+    background:repeating-radial-gradient(circle at 110% 130%,transparent 0 5px,rgba(107,91,52,.14) 5px 6px)}
+  .m27::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(115deg,transparent 0 3px,rgba(107,91,52,.06) 3px 4px)}
+  .m27 .eb{color:#6b5b34;letter-spacing:.3em}.m27 .hero{color:#2c2410;font-size:36px}
+  .m27 .meta{color:#5a4c28}.m27 .foot{color:#5a4c28;border-top:1px solid rgba(107,91,52,.4)}
+  .m27 .denom{position:absolute;top:10px;right:14px;font-family:var(--disp);font-weight:700;font-size:34px;color:rgba(107,91,52,.55)}
+  /* 28 RARE HOLO */
+  .m28{background:#0c0a12;border:1px solid rgba(201,162,39,.4)}
+  .m28::before{content:"";position:absolute;inset:0;opacity:.5;
+    background:linear-gradient(115deg,#ff6ec7 0%,#ffc36e 18%,#6eff8f 36%,#6ec3ff 54%,#b06eff 72%,#ff6ec7 90%);
+    background-size:300% 100%;mix-blend-mode:color-dodge;animation:holo2 5s linear infinite}
+  @keyframes holo2{to{background-position:300% 0}}
+  .m28 .eb{color:var(--gold-l)}.m28 .hero{color:#fff}.m28 .meta{color:rgba(255,255,255,.7)}
+  .m28 .foot{color:var(--gold-l);border-top:1px solid rgba(255,255,255,.18)}
+  /* 29 CIGAR LOUNGE */
+  .m29{background:linear-gradient(160deg,#3a2214,#241208 60%,#180b04);border:3px solid #5a3820}
+  .m29::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(100deg,rgba(0,0,0,.25) 0 12px,transparent 12px 26px)}
+  .m29::after{content:"";position:absolute;inset:7px;border:1px dashed rgba(201,162,39,.5);border-radius:12px}
+  .m29 .eb{color:var(--gold-l)}.m29 .hero{color:#f4e4ba}.m29 .meta{color:rgba(244,228,186,.65)}
+  .m29 .foot{color:var(--gold-l);border-top:none}
+  /* 30 NEON */
+  .m30{background:#140e12 radial-gradient(140% 100% at 50% 0%,#1c1218,#0c0709)}
+  .m30::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 22px,transparent 22px 44px)}
+  .m30 .eb{color:#ff9dd6;text-shadow:0 0 12px #ff4db8}
+  .m30 .hero{color:#fff;text-shadow:0 0 8px #ffd76e,0 0 26px #C9A227,0 0 60px #C9A227;animation:flick 3.5s infinite}
+  @keyframes flick{0%,94%,98%,100%{opacity:1}96%{opacity:.5}}
+  .m30 .meta{color:#c9a0e8}.m30 .meta .odds{color:#ffd76e;text-shadow:0 0 12px #C9A227}
+  .m30 .foot{color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.12)}
+  /* 31 MARBLE & GOLD */
+  .m31{background:
+    radial-gradient(90% 60% at 15% 20%,rgba(255,255,255,.12),transparent 50%),
+    radial-gradient(70% 50% at 85% 75%,rgba(255,255,255,.08),transparent 55%),
+    linear-gradient(150deg,#1a1a1c,#0e0e10)}
+  .m31::before{content:"";position:absolute;inset:0;opacity:.6;background:
+    linear-gradient(105deg,transparent 42%,rgba(232,212,139,.4) 45%,transparent 47%),
+    linear-gradient(75deg,transparent 68%,rgba(255,255,255,.2) 70%,transparent 73%),
+    linear-gradient(115deg,transparent 22%,rgba(255,255,255,.14) 24%,transparent 27%)}
+  .m31 .hero{background:linear-gradient(160deg,#F4E4BA,#C9A227 60%,#8a6d14);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .m31 .eb{color:rgba(255,255,255,.6)}.m31 .meta{color:rgba(255,255,255,.6)}
+  .m31 .foot{color:var(--gold-l);border-top:1px solid rgba(255,255,255,.15)}
+  /* 32 STADIUM NIGHT */
+  .m32{background:radial-gradient(130% 90% at 50% 115%,#20351c 0%,#101b0e 45%,#070a06 100%)}
+  .m32 .flare{position:absolute;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(255,244,214,.55),transparent 65%);top:-58px}
+  .m32 .f1{left:8%}.m32 .f2{left:42%}.m32 .f3{right:8%}
+  .m32 .eb{color:var(--gold-l)}.m32 .hero{color:#fff;text-shadow:0 4px 24px rgba(0,0,0,.8)}
+  .m32 .meta{color:rgba(255,255,255,.7)}.m32 .foot{color:var(--gold-l);border-top:1px solid rgba(255,255,255,.14)}
+  /* 33 VIP VELVET */
+  .m33{background:radial-gradient(120% 130% at 30% 10%,#4a0d1c,#320813 55%,#20050c);border:2px solid #C9A227}
+  .m33::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 40% at 70% 80%,rgba(255,255,255,.06),transparent)}
+  .m33 .rope{position:absolute;top:12px;right:16px;font-size:26px}
+  .m33 .eb{color:var(--gold-l);letter-spacing:.34em}.m33 .hero{color:#f7dfa8}
+  .m33 .meta{color:rgba(247,223,168,.6)}.m33 .foot{color:var(--gold-l);border-top:1px dashed rgba(201,162,39,.4)}
+  /* 34 STOCK CERTIFICATE */
+  .m34{background:#f6efdc;border:3px double #2c3e2c}
+  .m34::before{content:"";position:absolute;inset:8px;border:1px solid #2c3e2c;border-radius:10px;
+    background:repeating-linear-gradient(0deg,transparent 0 6px,rgba(44,62,44,.05) 6px 7px)}
+  .m34 .eb{color:#2c3e2c;letter-spacing:.3em}.m34 .hero{color:#1c2a1c;font-size:34px}
+  .m34 .meta{color:#4a5c4a}.m34 .foot{color:#4a5c4a;border-top:1px solid rgba(44,62,44,.4)}
+  .m34 .sig{position:absolute;bottom:40px;right:22px;font-family:'Snell Roundhand','Brush Script MT',cursive;font-size:19px;color:#2c3e2c;transform:rotate(-3deg)}
+  /* 35 DEBOSS SOFT-TOUCH */
+  .m35{background:#0e0d0b}
+  .m35 .hero{color:#0e0d0b;text-shadow:0 1px 1px rgba(255,255,255,.09),0 -1px 1px rgba(0,0,0,.9);
+    -webkit-text-stroke:.5px rgba(201,162,39,.55)}
+  .m35 .eb{color:rgba(201,162,39,.75)}.m35 .meta{color:rgba(255,255,255,.4)}
+  .m35 .foot{color:rgba(201,162,39,.75);border-top:1px solid rgba(255,255,255,.07)}
+  /* 36 CARBON FIBER */
+  .m36{background:
+    linear-gradient(45deg,#151517 25%,transparent 25%,transparent 75%,#151517 75%) 0 0/14px 14px,
+    linear-gradient(45deg,#151517 25%,#0b0b0d 25%,#0b0b0d 75%,#151517 75%) 7px 7px/14px 14px}
+  .m36{border:1px solid #26262a}
+  .m36 .eb{color:var(--gold)}.m36 .hero{color:#e8e8ec}.m36 .meta{color:rgba(255,255,255,.55)}
+  .m36 .foot{color:var(--gold);border-top:1px solid rgba(255,255,255,.12)}
+  .m36 .hex{position:absolute;top:14px;right:16px;font-family:var(--mono);font-size:9px;color:#5a5a62;letter-spacing:.1em}
+  /* 37 ART DECO */
+  .m37{background:#0d1410;border:2px solid var(--gold)}
+  .m37::before{content:"";position:absolute;inset:6px;border:1px solid rgba(201,162,39,.6);border-radius:12px}
+  .m37 .fan{position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);width:220px;height:110px;
+    background:repeating-conic-gradient(from -90deg at 50% 100%,rgba(201,162,39,.35) 0 4deg,transparent 4deg 12deg);
+    border-radius:220px 220px 0 0;opacity:.5}
+  .m37 .eb{color:var(--gold-l);text-align:center;letter-spacing:.44em}
+  .m37 .hero{color:#F4E4BA;text-align:center;font-size:36px;letter-spacing:.06em}
+  .m37 .meta{color:rgba(244,228,186,.6);text-align:center}
+  .m37 .foot{color:var(--gold-l);justify-content:center;border-top:none}
+  /* 38 SAFE DEPOSIT */
+  .m38{background:linear-gradient(160deg,#3c3c40,#26262a 50%,#333338);border:1px solid #4a4a50}
+  .m38::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.045) 0 1px,transparent 1px 4px)}
+  .m38 .keys{position:absolute;top:14px;right:16px;display:flex;gap:8px}
+  .m38 .keys i{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E8D48B,#8a6d14);display:block;position:relative}
+  .m38 .keys i::after{content:"";position:absolute;left:50%;top:6px;bottom:6px;width:3px;margin-left:-1.5px;background:#26262a;border-radius:2px}
+  .m38 .eb{color:#c9c9d0}.m38 .hero{color:#f0f0f4}.m38 .meta{color:#9a9aa2}.m38 .meta .odds{color:var(--gold-l)}
+  .m38 .foot{color:#c9c9d0;border-top:1px solid #4a4a50}
+  .odds{font-weight:700}
+</style>
+</head>
+<body>
+<h1>WINNERS <span>PREMIUM</span> — round 2: material worlds</h1>
+<p class="sub">You were right — round 1 was sixteen shades of the same card. These are 18 DIFFERENT CARDS: each one owns its surface, palette, and texture. Same size and content slots only. Numbering continues from round 1 (#21–#38). Several animate on their own — gold-bar sheen, terminal cursor, champagne bubbles, marquee bulbs, holo shift, neon flicker.</p>
+<div class="wall" id="wall"></div>
+
+<script>
+const picks=[
+ ["REDS","MONEYLINE","MLB","@ Brewers","+172","FINAL · CIN 7 · MIL 2"],
+ ["PORTUGAL","MONEYLINE","WC","vs Croatia","-145","FINAL · CRO 1 · POR 2"],
+ ["GUARDIANS","MONEYLINE","MLB","vs White Sox","-108","TONIGHT · 6:40 PM ET"],
+ ["SPAIN","-1.5","WC","vs Austria","-120","FINAL · AUT 0 · ESP 3"],
+ ["MARINERS","-1.5","MLB","vs Angels","-102","TONIGHT · 9:40 PM ET"],
+ ["DODGERS","MONEYLINE","MLB","vs Padres","-198","TONIGHT · 10:10 PM ET"],
+];
+function inner(i,extra=""){const p=picks[i%picks.length];return `
+  <div class="eb">GARY'S PICK</div>
+  <div class="hero">${p[0]}<br>${p[1]}</div>
+  <div class="meta">${p[2]} · ${p[3]} · <span class="odds">${p[4]}</span></div>
+  <div class="foot"><span>${p[5]}</span><span>WINNER Nº 214</span></div>${extra}`}
+const cards=[
+ ["21","Gold Bar","m21","The card IS the ingot. Stamped ink-dark type on moving metal.",`<span class="mint">999.9<br>FINE</span>`],
+ ["22","Centurion","m22","Anodized black metal, brushed grain, gold chip. The Amex-black of picks.",`<i class="chip"></i>`],
+ ["23","Casino Felt","m23","Table felt + rope border + a real chip. You're AT the table.",`<i class="chipStack">$1K</i>`],
+ ["24","The Terminal","m24","Bloomberg-for-degens: phosphor green, command prompt, blinking cursor.",""],
+ ["25","Champagne","m25","Light card! Warm champagne field with bubbles rising forever.",""],
+ ["26","Vegas Marquee","m26","Chasing bulb border, centered showbill. Tonight's headliner.",`<div class="bulbs"></div>`],
+ ["27","Banknote","m27","Engraved currency: guilloché rings, hatch lines, denomination corner.",`<span class="denom">100</span>`],
+ ["28","Rare Holo","m28","Full-face trading-card holo drifting across. The 1/1 parallel.",""],
+ ["29","Cigar Lounge","m29","Mahogany + stitched leather border. Gary's actual office.",""],
+ ["30","Neon Sign","m30","The pick is a neon tube on dark brick — flickers occasionally.",""],
+ ["31","Marble & Gold","m31","Black marble veining, pick text in poured gold gradient.",""],
+ ["32","Stadium Night","m32","Floodlights bloom over the pitch-dark field behind the call.",`<i class="flare f1"></i><i class="flare f2"></i><i class="flare f3"></i>`],
+ ["33","VIP Velvet","m33","Deep burgundy velvet + gold frame + the rope. Members only.",`<span class="rope">🥂</span>`],
+ ["34","Stock Certificate","m34","Ivory engraved certificate — with Gary's signature. Huge contrast in-app.",`<span class="sig">Gary A.I.</span>`],
+ ["35","Debossed","m35","Type PRESSED into soft-touch black; gold only on the stroke. Quietest flex.",""],
+ ["36","Carbon Fiber","m36","Woven carbon + hex plate. The supercar dash.",`<span class="hex">SPEC 07 · GA-214</span>`],
+ ["37","Art Deco","m37","Gatsby frame + fan motif, centered. The Grand Casino, 1928.",`<i class="fan"></i>`],
+ ["38","Safe Deposit","m38","Brushed steel drawer + twin gold keyholes. Your box at the bank.",`<span class="keys"><i></i><i></i></span>`],
+];
+const w=document.getElementById('wall');
+cards.forEach((c,i)=>{
+  const s=document.createElement('div');s.className='slot';
+  s.innerHTML=`<div class="tag"><b>#${c[0]}</b>${c[1]}</div><div class="card ${c[2]}">${inner(i,c[4])}</div><div class="why">${c[3]}</div>`;
+  w.appendChild(s);
+});
+/* champagne bubbles */
+document.querySelectorAll('.m25').forEach(card=>{
+  for(let i=0;i<14;i++){const b=document.createElement('i');b.className='bub';
+    const sz=3+Math.random()*6;b.style.cssText=`left:${5+Math.random()*90}%;width:${sz}px;height:${sz}px;animation-duration:${3+Math.random()*4}s;animation-delay:${Math.random()*4}s`;
+    card.appendChild(b);}
+});
+/* marquee bulbs */
+document.querySelectorAll('.m26 .bulbs').forEach(bl=>{
+  const r=bl.getBoundingClientRect();const per=18,pv=8;const bulbs=[];
+  for(let i=0;i<per;i++){const b=document.createElement('i');b.style.cssText=`top:-3px;left:${(i+.5)/per*100}%`;bl.appendChild(b);bulbs.push(b);
+    const b2=document.createElement('i');b2.style.cssText=`bottom:-3px;left:${(i+.5)/per*100}%`;bl.appendChild(b2);bulbs.push(b2);}
+  for(let i=0;i<pv;i++){const b=document.createElement('i');b.style.cssText=`left:-3px;top:${(i+.5)/pv*100}%`;bl.appendChild(b);bulbs.push(b);
+    const b2=document.createElement('i');b2.style.cssText=`right:-3px;top:${(i+.5)/pv*100}%`;bl.appendChild(b2);bulbs.push(b2);}
+  let t=0;setInterval(()=>{t++;bulbs.forEach((b,i)=>b.classList.toggle('on',(i+t)%3===0))},280);
+});
+</script>
+</body>
+</html>

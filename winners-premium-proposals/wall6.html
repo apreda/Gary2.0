@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 6 — Skyscraper Type on 21B / 21D / Free</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(120% 100% at 50% 0%,#151210,#0A0908 55%);color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:800px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:44px}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold)}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5}
+
+  .card{position:relative;width:100%;height:232px;border-radius:20px;padding:20px 22px;overflow:hidden;box-shadow:0 18px 34px rgba(0,0,0,.55)}
+  .eb{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em}
+  /* SKYSCRAPER hero (#39): max condensed, max size */
+  .hero{font-family:var(--disp);font-weight:700;font-size:58px;line-height:.9;letter-spacing:-.01em;text-transform:uppercase;margin-top:10px}
+  .meta{font-family:var(--mono);font-size:12.5px;margin-top:12px}
+  .meta b{font-weight:700}
+  .foot{position:absolute;left:22px;right:22px;bottom:14px;padding-top:11px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;display:flex;justify-content:space-between}
+  .bearimg{position:absolute;top:14px;right:16px;width:44px;height:44px;object-fit:contain}
+
+  /* FREE card + skyscraper */
+  .freecard{background:#121110;border:1px solid rgba(255,255,255,.10)}
+  .freecard .eb{color:var(--gold)}
+  .freecard .hero{color:#fff}
+  .freecard .meta{color:rgba(255,255,255,.55)}
+  .freecard .meta b{color:var(--gold)}
+  .freecard .foot{color:var(--gold);border-top:1px solid rgba(255,255,255,.10)}
+
+  /* gold bar substrate */
+  .bar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318)}
+  .bar .eb{color:#4a3a08}.bar .meta{color:#5c4708}.bar .meta b{color:#3a2c04}
+  .bar .foot{color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)}
+  .bar .hero{color:#241c04}
+
+  /* 21B POURED */
+  .b21{box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7),inset 2px 0 0 rgba(255,252,235,.45),inset -2px 0 0 rgba(90,66,8,.6)}
+  .b21::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(105deg,transparent 20%,rgba(255,252,235,.55) 34%,rgba(255,252,235,.1) 44%,transparent 58%);
+    background-size:260% 100%;animation:pour 4.2s cubic-bezier(.45,.1,.4,.9) infinite;pointer-events:none}
+  @keyframes pour{0%{background-position:130% 0}100%{background-position:-130% 0}}
+  .b21 .hero{color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55)}
+
+  /* 21D GUILLOCHÉ */
+  .d21::before{content:"";position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background:
+      repeating-radial-gradient(circle at 110% 120%,transparent 0 4px,rgba(58,44,4,.22) 4px 5px),
+      repeating-radial-gradient(circle at -10% -20%,transparent 0 4px,rgba(255,250,225,.28) 4px 5px)}
+  .d21 .wm{position:absolute;right:6px;bottom:2px;width:130px;height:130px;object-fit:contain;opacity:.14;
+    filter:sepia(1) brightness(.55) contrast(1.3)}
+  .d21 .sig{font-family:'Snell Roundhand','Brush Script MT',cursive;font-size:20px;color:#4a3a08;display:inline-block;transform:rotate(-2deg);margin-top:2px}
+  .d21 .serial{position:absolute;top:16px;right:16px;font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;color:#4a3a08;border:1px solid rgba(74,58,8,.6);padding:4px 8px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>ROUND 6 — <span>skyscraper type</span> on 21B · 21D · free</h1>
+<p class="sub">The #39 Skyscraper hero (max condensed, 58px, tight leading) applied to your two finalists AND to the current free card, so you can judge: does the type upgrade belong to everyone, or is big-type part of what premium buys?</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>FREE</b>Current card + Skyscraper hero</div>
+    <div class="card freecard"><div class="eb">GARY'S PICK</div><img class="bearimg" src="gary.png">
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>›</span></div></div>
+    <div class="why">Today's free card, hero bumped 40→58. The call fills the card; nothing else changes.</div></div>
+
+  <div class="slot"><div class="tag"><b>21B</b>Poured + Skyscraper</div>
+    <div class="card bar b21"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Solid gold, machined bevel lip, the light pour crossing giant stamped type.</div></div>
+
+  <div class="slot"><div class="tag"><b>21D</b>Guilloché Mint + Skyscraper</div>
+    <div class="card bar d21"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="sig">Gary A.I.</div>
+      <img class="wm" src="gary.png">
+      <div class="serial">Nº 000214</div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>SERIES 2026</span></div></div>
+    <div class="why">Engraved lathe-work + watermark + serial + signature under giant type. The issued gold note.</div></div>
+
+  <div class="slot"><div class="tag"><b>21B-S</b>Poured — STILL (no light effect)</div>
+    <div class="card bar" style="box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7),inset 2px 0 0 rgba(255,252,235,.45),inset -2px 0 0 rgba(90,66,8,.6)">
+      <div class="eb">GARY'S PICK</div>
+      <div class="hero" style="color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55)">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">Same solid gold + machined bevel edges, zero animation. The metal does all the work, quietly.</div></div>
+
+  <div class="slot"><div class="tag"><b>21B-L</b>Poured + Skyscraper · longer pick test</div>
+    <div class="card bar b21"><div class="eb">GARY'S PICK</div>
+      <div class="hero" style="font-size:44px">GUARDIANS<br>MONEYLINE</div>
+      <div class="meta">MLB · vs White Sox · <b>-108</b></div>
+      <div class="foot"><span>TONIGHT · 6:40 PM ET</span><span>Nº 215</span></div></div>
+    <div class="why">Reality check: long team names auto-shrink (58→44 here) — SwiftUI does this with minimumScaleFactor, so the type is as big as the name allows.</div></div>
+
+</div>
+</body>
+</html>

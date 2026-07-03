@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 15 — The Verdict · 8</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08070a;color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:48px;justify-items:center}
+  .slot{display:flex;flex-direction:column;gap:11px;align-items:center}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold);align-self:flex-start}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;max-width:370px;align-self:flex-start}
+
+  /* true app card: 346×232, padding 18 */
+  .card{position:relative;width:346px;height:232px;border-radius:20px;padding:18px;overflow:hidden;box-shadow:0 14px 26px rgba(0,0,0,.5)}
+  .eb{font-family:var(--mono);font-size:11px;letter-spacing:.22em;position:relative;z-index:3}
+  .hero{font-family:var(--disp);font-weight:700;font-size:50px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:8px;position:relative;z-index:3}
+  .hero .l2{display:block;font-size:26px;margin-top:4px}
+  .meta{font-family:var(--mono);font-size:12px;margin-top:10px;position:relative;z-index:3}
+  .meta b{font-weight:700}
+  .foot{position:absolute;left:18px;right:18px;bottom:12px;padding-top:10px;font-family:var(--mono);font-size:10.5px;display:flex;justify-content:space-between;z-index:3}
+
+  .gbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318);
+    box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7)}
+  .gbar .eb{color:#4a3a08}.gbar .hero{color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55)}
+  .gbar .meta{color:#5c4708}.gbar .meta b{color:#3a2c04}
+  .gbar .foot{color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)}
+
+  /* tarnished (LOST) bar */
+  .tbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(240,240,244,.28),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(14,15,18,.5),transparent 48%),
+    linear-gradient(158deg,#9a9ba1,#6e7077 34%,#55575d 52%,#8a8c93 74%,#4c4e54);
+    box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(240,240,244,.55),inset 0 -3px 0 rgba(10,11,13,.7)}
+  .tbar .eb{color:#26272c}.tbar .hero{color:#1a1b1f;text-shadow:0 1px 0 rgba(240,240,244,.35)}
+  .tbar .meta{color:#33343a}.tbar .meta b{color:#1a1b1f}
+  .tbar .foot{color:#26272c;border-top:1px solid rgba(20,21,25,.35)}
+
+  .dark{background:#121110;border:1px solid rgba(255,255,255,.10)}
+  .dark .eb{color:var(--gold)}.dark .hero{color:#fff}
+  .dark .meta{color:rgba(255,255,255,.55)}.dark .meta b{color:var(--gold)}
+  .dark .foot{color:var(--gold);border-top:1px solid rgba(255,255,255,.10)}
+  .gl{position:absolute;font-family:var(--disp);font-weight:700;line-height:1;z-index:1;
+    color:rgba(232,212,139,.05);-webkit-text-stroke:1.5px rgba(201,162,39,.30)}
+
+  /* verdict treatments */
+  .stampbox{position:absolute;right:14px;top:86px;transform:rotate(-8deg);font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:.16em;z-index:4;
+    padding:5px 10px;border:2px solid currentColor}
+  .struck{position:absolute;right:16px;top:92px;transform:rotate(-8deg);font-family:var(--disp);font-weight:700;font-size:34px;letter-spacing:.1em;z-index:4;
+    color:rgba(44,35,4,.9);text-shadow:0 1.5px 0 rgba(255,252,235,.65),0 -1px 1px rgba(30,23,2,.5)}
+  .seal{position:absolute;right:12px;top:70px;width:86px;height:86px;border-radius:50%;z-index:4;
+    border:2.5px solid rgba(58,44,4,.85);display:flex;align-items:center;justify-content:center;transform:rotate(-10deg)}
+  .seal::before{content:"";position:absolute;inset:5px;border-radius:50%;border:1px solid rgba(58,44,4,.6)}
+  .seal span{font-family:var(--mono);font-weight:700;font-size:12.5px;letter-spacing:.14em;color:rgba(58,44,4,.9)}
+  .punch{position:absolute;right:26px;top:84px;width:34px;height:34px;border-radius:50%;background:#08070a;z-index:4;
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.9),0 1px 0 rgba(255,252,235,.5)}
+</style>
+</head>
+<body>
+<h1>ROUND 15 — <span>the verdict</span> · 8</h1>
+<p class="sub">CASHED/LOST rethought for the gold era. The one rule: win/loss must read in under a second on a rail. True app size (346×232). S1 and S6 are today's stamps for control.</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>S1</b>Control — today's stamp on gold</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="stampbox" style="color:#3a2c04">CASHED</div>
+      <div class="hero" style="padding-right:86px">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">What ships right now: the bordered rubber stamp in ink. Works, but it's a PRINT gesture on MACHINED metal — and it costs the hero 86pt of width.</div></div>
+
+  <div class="slot"><div class="tag"><b>S2</b>Struck Countermark</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="struck">CASHED</div>
+      <div class="hero" style="padding-right:86px">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">No box, no ink — the word STRUCK into the metal like a coin countermark, condensed face matching the hero. Same position, premium physics.</div></div>
+
+  <div class="slot"><div class="tag"><b>S3</b>The Metal Is the Verdict (LOST)</div>
+    <div class="card tbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero">CARDINALS -1.5</div>
+      <div class="meta">MLB · vs Cubs · <b>-125</b></div>
+      <div class="foot"><span>NO CASH · STL 2 · CHC 5</span><span>Nº 213</span></div></div>
+    <div class="why">The system answer: a LOST pick's gold TARNISHES to pewter — no stamp at all, full hero width back. On the rail, winners glow and losers literally lose their shine. CASHED cards stay pure gold + S2's countermark.</div></div>
+
+  <div class="slot"><div class="tag"><b>S4</b>Verdict Owns the Footer</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot" style="font-size:13px;font-weight:700"><span>✓ CASHED · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">No stamp anywhere — the footer becomes the verdict line, bold with the score. Cleanest card; costs the diagonal drama.</div></div>
+
+  <div class="slot"><div class="tag"><b>S5</b>Assay Seal</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="seal"><span>CASHED</span></div>
+      <div class="hero" style="padding-right:92px">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">A double-ring assayer's seal pressed into the bar — the mark a mint puts on verified gold. Reads official rather than loud.</div></div>
+
+  <div class="slot"><div class="tag"><b>S6</b>Redeemed — the punch</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="punch"></div>
+      <div style="position:absolute;right:70px;top:94px;font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.18em;color:#3a2c04;z-index:4">CASHED</div>
+      <div class="hero" style="padding-right:92px">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>FINAL · CIN 7 · MIL 2</span><span>Nº 214</span></div></div>
+    <div class="why">A hole PUNCHED clean through the card, like a redeemed ticket. Physical, irreversible, a little cheeky. The punch appears with a thunk haptic.</div></div>
+
+  <div class="slot"><div class="tag"><b>S7</b>Control — today's stamp vs the glyph (prop)</div>
+    <div class="card dark"><div class="gl" style="left:-30px;top:-26px;font-size:205px">H</div>
+      <div class="stampbox" style="color:var(--gold);right:12px;top:88px">CASHED</div>
+      <div style="position:relative;z-index:3;margin-left:86px">
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero" style="font-size:54px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+        <div class="meta">MIL vs CIN · <b>+145</b></div></div>
+      <div class="foot"><span>FINAL · 2 HITS ✓</span><span>›</span></div></div>
+    <div class="why">The collision you'd ship blind: stamp + ember glyph + big type all fighting in one corner. This is why props need their own verdict answer.</div></div>
+
+  <div class="slot"><div class="tag"><b>S8</b>Prop verdict — the glyph settles it</div>
+    <div class="card dark"><div class="gl" style="left:-30px;top:-26px;font-size:205px;color:rgba(201,162,39,.32);-webkit-text-stroke:1.5px rgba(201,162,39,.6)">H</div>
+      <div style="position:relative;z-index:3;margin-left:86px">
+        <div class="eb">GARY'S PROP · <span style="color:#E8D48B">CASHED ✓</span></div>
+        <div class="hero" style="font-size:54px">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+        <div class="meta">MIL vs CIN · <b>+145</b></div></div>
+      <div class="foot"><span>FINAL · 2 HITS · 2-FOR-4</span><span>›</span></div></div>
+    <div class="why">No stamp: the ember glyph IGNITES to solid gold when it cashes (stays ember when pending, goes ash-grey on a miss) + a plain CASHED ✓ on the eyebrow row. The watermark was the scoreboard all along.</div></div>
+
+</div>
+</body>
+</html>

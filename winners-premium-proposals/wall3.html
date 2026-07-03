@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Winners Premium — Round 3: 50 Studies + Wrappers + Covers</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --cream:#FAF8F5; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+    --serif:'Didot','Bodoni 72','Playfair Display',Georgia,serif;
+    --metal:linear-gradient(150deg,#1c1c1f,#0c0c0e 55%,#18181b);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0A0908;color:var(--cream);font-family:-apple-system,'Helvetica Neue',sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 8px;max-width:800px;line-height:1.6}
+  h2{font-family:var(--mono);font-size:13px;letter-spacing:.18em;color:var(--gold);text-transform:uppercase;margin:54px 0 4px;border-top:1px dashed rgba(201,162,39,.35);padding-top:26px}
+  .h2sub{font-size:12.5px;color:rgba(255,255,255,.5);margin-bottom:22px;max-width:760px;line-height:1.55}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(370px,1fr));gap:30px}
+  .slot{display:flex;flex-direction:column;gap:8px}
+  .tag{font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.06em}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 7px;border-radius:4px;margin-right:7px}
+  .why{font-size:11.5px;color:rgba(255,255,255,.48);line-height:1.45;min-height:18px}
+
+  /* base card — dark metal (the lane he picked) */
+  .card{position:relative;width:100%;height:210px;border-radius:20px;padding:19px 21px;overflow:hidden;
+        background:var(--metal);border:1px solid #2c2c30;box-shadow:0 16px 30px rgba(0,0,0,.55)}
+  .card::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.02) 0 1px,transparent 1px 3px);pointer-events:none}
+  .eb{font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:#9a9aa2;position:relative}
+  .hero{font-family:var(--disp);font-weight:700;font-size:38px;line-height:.96;text-transform:uppercase;margin-top:12px;color:#e9e9ee;position:relative}
+  .meta{font-family:var(--mono);font-size:12px;margin-top:12px;color:#8a8a92;position:relative}
+  .meta .odds{color:var(--gold-l);font-weight:700}
+  .foot{position:absolute;left:21px;right:21px;bottom:13px;padding-top:10px;border-top:1px solid #26262a;
+        font-family:var(--mono);font-size:10.5px;color:#9a9aa2;letter-spacing:.06em;display:flex;justify-content:space-between}
+
+  /* ═══ LANE A · TYPOGRAPHY (39-50) ═══ */
+  .t39 .hero{font-size:58px;letter-spacing:-.01em;line-height:.9}
+  .t40 .hero{font-family:-apple-system;font-weight:800;font-size:21px;letter-spacing:.34em}
+  .t41 .hero{font-family:var(--serif);font-weight:400;font-size:37px;text-transform:none;line-height:1.02}
+  .t42 .hero{font-family:var(--mono);font-weight:700;font-size:27px;color:var(--gold-l)}
+  .t43 .hero .a{font-weight:300;font-family:'Avenir Next Condensed';display:block}
+  .t43 .hero .b{font-weight:800;color:var(--gold-l)}
+  .t44 .hero{color:transparent;-webkit-text-stroke:1.4px #e9e9ee}
+  .t45 .hero{font-size:46px;background:linear-gradient(170deg,#F4E4BA 10%,#C9A227 55%,#7d621２ 95%);background:linear-gradient(170deg,#F4E4BA 10%,#C9A227 55%,#7d6212 95%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .t46 .hero{font-size:16px;letter-spacing:.2em;color:#8a8a92}
+  .t46 .bigodds{font-family:var(--disp);font-weight:700;font-size:74px;color:var(--gold-l);line-height:.9;margin-top:2px}
+  .t47 .hero{font-size:31px;text-align:center;margin-top:34px}
+  .t47 .eb,.t47 .meta{text-align:center}
+  .t48{padding:26px 28px}.t48 .eb{font-size:8.5px;opacity:.7}
+  .t48 .hero{font-size:47px;margin-top:20px}.t48 .meta{position:absolute;bottom:16px;left:28px;margin:0}
+  .t48 .foot{display:none}
+  .t49 .hero{font-family:var(--serif);font-size:23px;text-align:center;letter-spacing:.12em;margin-top:26px;color:var(--gold-w)}
+  .t49 .eb{text-align:center}.t49 .meta{text-align:center;font-size:11px}
+  .t50 .hero{text-transform:lowercase;font-family:-apple-system;font-weight:700;font-size:33px;letter-spacing:-.02em}
+
+  /* ═══ LANE B · METAL FINISHES (51-62) ═══ */
+  .m51{background:linear-gradient(90deg,#8a6d14,#E8D48B 12%,#a8871e 26%,#d9bc63 40%,#96781a 54%,#E8D48B 70%,#8a6d14 88%)}
+  .m51::before{background:repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 1px,transparent 1px 3px)}
+  .m51 .hero,.m51 .eb,.m51 .meta{color:#2c2306}.m51 .meta .odds{color:#4a3a08}
+  .m51 .foot{color:#4a3a08;border-color:rgba(44,35,6,.35)}
+  .m52{background:#a8871e;}
+  .m52::before{background:radial-gradient(circle at 20% 30%,rgba(255,255,255,.25) 2px,transparent 4px),radial-gradient(circle at 65% 60%,rgba(0,0,0,.2) 3px,transparent 5px),radial-gradient(circle at 40% 80%,rgba(255,255,255,.18) 2px,transparent 5px),radial-gradient(circle at 85% 25%,rgba(0,0,0,.16) 3px,transparent 5px);background-size:34px 34px,42px 42px,38px 38px,30px 30px}
+  .m52 .hero,.m52 .eb,.m52 .meta{color:#241c04}.m52 .foot{color:#3a2c06;border-color:rgba(36,28,4,.3)}
+  .m53{border:none;box-shadow:0 16px 30px rgba(0,0,0,.55),inset 0 0 0 1px #3a3a40,inset 0 0 0 3px #0c0c0e,inset 0 0 0 4px rgba(201,162,39,.8)}
+  .m54{background:linear-gradient(150deg,#2b1d1a,#1a100e 55%,#241614);border-color:#4a2e28}
+  .m54 .hero{color:#f0cfc2}.m54 .meta .odds{color:#e8a88f}.m54 .eb{color:#b08578}
+  .m55{background:linear-gradient(150deg,#2e2e33,#1a1a1e 50%,#28282d)}
+  .m55 .hero{color:#e8e8f0;text-shadow:0 1px 0 rgba(255,255,255,.15)}
+  .m55 .eb{color:#c9c9d4}.m55 .foot{border-color:#3c3c44;color:var(--gold-l)}
+  .m56{background:linear-gradient(150deg,#26231e,#141210 55%,#201d18);border-color:#3c362c}
+  .m56 .hero{color:#d9d2c2}
+  .m57 .hero{color:#101013;text-shadow:0 1px 1px rgba(255,255,255,.14),0 0 18px rgba(255,255,255,.06);-webkit-text-stroke:.4px #2e2e34}
+  .m57{background:#0c0c0e}
+  .m58{background:linear-gradient(150deg,#4a3d1c,#2c2410 50%,#3c3016);border-color:#5c4c22}
+  .m58::before{background:radial-gradient(circle at 70% 20%,rgba(96,140,110,.16),transparent 40%),radial-gradient(circle at 25% 75%,rgba(96,140,110,.13),transparent 35%)}
+  .m58 .hero{color:#d9c98f}.m58 .eb{color:#a08f5c}
+  .m59{background:#16130c}
+  .m59::before{background:repeating-radial-gradient(ellipse 160% 30% at 50% -10%,rgba(201,162,39,.16) 0 2px,transparent 2px 11px)}
+  .m59 .hero{color:var(--gold-w)}
+  .m60{background:linear-gradient(155deg,#131316 30%,#050506 60%,#0e0e11)}
+  .m60::before{background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.14) 42%,rgba(255,255,255,.03) 48%,transparent 60%)}
+  .m60 .hero{color:#f2f2f6}
+  .m61{background:radial-gradient(140% 120% at 30% 15%,#2c1a10,#180d06 60%)}
+  .m61::before{background:repeating-linear-gradient(100deg,rgba(0,0,0,.28) 0 10px,transparent 10px 22px)}
+  .m61 .plate{position:absolute;top:14px;right:16px;background:linear-gradient(150deg,#2e2e33,#151518);border:1px solid #4a4a52;border-radius:6px;padding:5px 10px;font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;color:var(--gold-l)}
+  .m61 .hero{color:#f0dcc0}
+  .m62{background:#0b0a08}
+  .m62::before{background:radial-gradient(circle at 12% 20%,rgba(232,212,139,.5) 1px,transparent 2px),radial-gradient(circle at 78% 35%,rgba(232,212,139,.4) 1px,transparent 2px),radial-gradient(circle at 45% 70%,rgba(232,212,139,.45) 1px,transparent 2px),radial-gradient(circle at 88% 82%,rgba(232,212,139,.4) 1px,transparent 2px),radial-gradient(circle at 25% 88%,rgba(232,212,139,.35) 1px,transparent 2px);background-size:90px 90px,110px 110px,100px 100px,120px 120px,80px 80px}
+  .m62 .hero{color:var(--gold-w)}
+
+  /* ═══ LANE C · GOLD-HOLO & LIGHT (63-70) ═══ */
+  .h63::before{background:linear-gradient(115deg,#7d6212 0%,#E8D48B 20%,#F4E4BA 32%,#a8871e 48%,#fff3cf 62%,#C9A227 78%,#7d6212 100%);background-size:300% 100%;opacity:.32;mix-blend-mode:screen;animation:drift 6s linear infinite}
+  @keyframes drift{to{background-position:300% 0}}
+  .h63 .hero{color:#fff}
+  .h64::before{background:radial-gradient(70% 90% at 50% 45%,rgba(201,162,39,.34),transparent 60%)}
+  .h64 .hero{color:var(--gold-w);text-align:center;margin-top:20px}.h64 .eb,.h64 .meta{text-align:center}
+  .h65 .hero{position:relative;color:#e9e9ee;overflow:hidden}
+  .h65 .hero::after{content:"";position:absolute;top:0;bottom:0;width:36%;left:-50%;transform:skewX(-18deg);background:linear-gradient(90deg,transparent,rgba(244,228,186,.75),transparent);animation:heroGlint 3.6s ease-in-out infinite}
+  @keyframes heroGlint{0%,55%{left:-50%}85%,100%{left:130%}}
+  .h66::before{background:radial-gradient(45% 60% at 20% 30%,rgba(201,162,39,.30),transparent 60%),radial-gradient(50% 70% at 80% 70%,rgba(232,212,139,.22),transparent 65%);animation:liquid 7s ease-in-out infinite alternate}
+  @keyframes liquid{to{transform:translate(6%,-8%) scale(1.15)}}
+  .h66 .hero{color:var(--gold-w)}
+  .h67 .hero{background:linear-gradient(105deg,#c9a227 0 6%,#f4e4ba 6% 9%,#a8871e 9% 17%,#e8d48b 17% 21%,#8a6d14 21% 30%,#f4e4ba 30% 34%,#c9a227 34% 45%,#fff3cf 45% 48%,#a8871e 48% 60%,#e8d48b 60% 66%,#c9a227 66% 78%,#f4e4ba 78% 82%,#8a6d14 82% 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .h68{border:none}
+  .h68::after{content:"";position:absolute;inset:0;border-radius:20px;padding:2px;background:linear-gradient(115deg,#E8D48B,#fff 18%,#C9A227 36%,#F4E4BA 52%,#8a6d14 70%,#E8D48B 88%);background-size:250% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:drift 5s linear infinite}
+  .h69::before{background:radial-gradient(80% 100% at 50% 100%,rgba(201,140,40,.28),transparent 65%);animation:candle 3.2s ease-in-out infinite}
+  @keyframes candle{0%,100%{opacity:.75}50%{opacity:1}}
+  .h69 .hero{color:#f4dfb0}
+  .h70::before{background:linear-gradient(100deg,transparent 15%,rgba(201,162,39,.20) 30%,transparent 45%,rgba(232,212,139,.13) 60%,transparent 75%);background-size:220% 100%;animation:drift 9s ease-in-out infinite}
+  .h70 .hero{color:#efe6cd}
+
+  /* ═══ LANE D · ANIMATION BEHAVIORS (71-78) ═══ */
+  .a71 .meta .odds{display:inline-block;animation:beat 2.4s ease-in-out infinite}
+  @keyframes beat{0%,88%,100%{transform:scale(1)}92%{transform:scale(1.16)}96%{transform:scale(.98)}}
+  .a72 .hero{font-family:var(--mono);font-size:26px;color:var(--gold-l);white-space:nowrap;overflow:hidden;width:0;animation:type 4.5s steps(22) infinite}
+  @keyframes type{0%{width:0}55%,92%{width:100%}100%{width:100%}}
+  .a73{border-color:rgba(201,162,39,.55);animation:breathe 3.4s ease-in-out infinite}
+  @keyframes breathe{0%,100%{box-shadow:0 16px 30px rgba(0,0,0,.55),0 0 0 0 rgba(201,162,39,0)}50%{box-shadow:0 16px 30px rgba(0,0,0,.55),0 0 22px 1px rgba(201,162,39,.25)}}
+  .a74::before{background:conic-gradient(from 0deg at 50% 50%,transparent 0 70deg,rgba(232,212,139,.11) 90deg,transparent 110deg 360deg);animation:spin 7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .a75 .meta .odds::after{content:"+172"}
+  .a75 .meta .odds i{display:none}
+  .a76 .foot span:first-child{background:linear-gradient(90deg,#9a9aa2 40%,#F4E4BA 50%,#9a9aa2 60%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:drift 3.5s linear infinite}
+  .a77 .stamp{position:absolute;top:48px;right:14px;font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.2em;color:var(--gold);border:2.5px solid var(--gold);border-radius:7px;padding:6px 14px;transform:rotate(-9deg) scale(3);opacity:0;animation:slam 4.5s cubic-bezier(.6,-0.28,.5,1.4) infinite}
+  @keyframes slam{8%,80%{transform:rotate(-9deg) scale(3);opacity:0}16%,78%{transform:rotate(-9deg) scale(1);opacity:1}90%,100%{opacity:0}}
+  .a78{transition:transform .25s ease,box-shadow .25s ease;transform-style:preserve-3d}
+  .a78:hover{transform:rotateX(7deg) rotateY(-9deg) scale(1.02);box-shadow:0 30px 50px rgba(0,0,0,.65)}
+  .a78 .hero{transition:transform .25s ease}.a78:hover .hero{transform:translateZ(30px) translateX(4px)}
+
+  /* ═══ LANE E · POLISH DETAILS (79-88) ═══ */
+  .p79::after{content:"";position:absolute;inset:7px;border-radius:13px;border:5px solid transparent;
+    border-image:repeating-linear-gradient(90deg,rgba(201,162,39,.55) 0 8px,transparent 8px 12px,rgba(201,162,39,.55) 12px 14px,transparent 14px 22px) 5;opacity:.5;pointer-events:none}
+  .p80 .riv{position:absolute;width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E8D48B,#7d6212);box-shadow:0 1px 2px rgba(0,0,0,.7)}
+  .p81::after{content:"";position:absolute;inset:8px;border-radius:12px;border:1.5px dashed rgba(232,212,139,.55);pointer-events:none}
+  .p82 .strip{position:absolute;top:0;bottom:0;right:0;width:26px;background:linear-gradient(180deg,#1f1f23,#141417);border-left:1px solid #2e2e34;display:flex;align-items:center;justify-content:center}
+  .p82 .strip span{font-family:var(--mono);font-size:8.5px;letter-spacing:.3em;color:var(--gold-l);writing-mode:vertical-rl}
+  .p83 .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:150px;opacity:.05;pointer-events:none}
+  .p84{box-shadow:0 16px 30px rgba(0,0,0,.55),inset 0 -26px 34px -22px rgba(201,162,39,.45)}
+  .p85 .plateH{background:linear-gradient(150deg,#232327,#121215);border:1px solid #35353b;border-radius:12px;padding:10px 14px;display:inline-block;margin-top:10px;box-shadow:0 3px 8px rgba(0,0,0,.5)}
+  .p85 .plateH .hero{margin:0;font-size:32px}
+  .p86 .panel{position:absolute;left:0;right:0;bottom:0;height:58px;background:rgba(201,162,39,.10);border-top:1px solid rgba(201,162,39,.4)}
+  .p86 .meta{position:absolute;bottom:32px;left:21px}.p86 .foot{border:none}
+  .p87{border:none}
+  .p87::after{content:"";position:absolute;inset:0;border-radius:20px;padding:3px;background:repeating-linear-gradient(90deg,#C9A227 0 3px,#5c4a10 3px 6px);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+  .p88 .sig{font-family:'Snell Roundhand','Brush Script MT',cursive;font-size:21px;color:var(--gold-l);margin-top:6px;transform:rotate(-2deg);display:inline-block}
+
+  /* ═══ WRAPPERS (W1-W10) ═══ */
+  .stage{position:relative;width:100%;height:224px;border-radius:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#0D0B08;border:1px dashed rgba(201,162,39,.2)}
+  .stage .card{width:88%;height:192px}
+  .hint{position:absolute;bottom:7px;right:12px;font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.35);z-index:5}
+  .wrap{position:absolute;inset:0;border-radius:22px;overflow:hidden;z-index:3}
+  /* W1 — HIS IDEA: gold paper + ribbon + bear-bow */
+  .w1paper{background:
+    repeating-linear-gradient(45deg,rgba(255,255,255,.10) 0 2px,transparent 2px 16px),
+    repeating-linear-gradient(-45deg,rgba(0,0,0,.10) 0 2px,transparent 2px 16px),
+    linear-gradient(135deg,#d9b45a,#a8871e 40%,#E8D48B 70%,#96781a)}
+  .ribV{position:absolute;top:0;bottom:0;left:50%;width:44px;margin-left:-22px;background:linear-gradient(90deg,#7d6212,#F4E4BA 30%,#c9a227 55%,#7d6212);box-shadow:0 0 10px rgba(0,0,0,.3)}
+  .ribH{position:absolute;left:0;right:0;top:50%;height:44px;margin-top:-22px;background:linear-gradient(180deg,#7d6212,#F4E4BA 30%,#c9a227 55%,#7d6212);box-shadow:0 0 10px rgba(0,0,0,.3)}
+  .bow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:74px;height:74px;border-radius:50%;z-index:4;
+    background:radial-gradient(circle at 35% 30%,#F4E4BA,#a8871e 55%,#6b5510);
+    box-shadow:0 6px 16px rgba(0,0,0,.55),inset 0 0 0 3px rgba(107,85,16,.55);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:11px;color:#241c04;text-align:center;line-height:1.15}
+  .bow::before,.bow::after{content:"";position:absolute;top:50%;width:46px;height:30px;background:linear-gradient(90deg,#c9a227,#8a6d14);z-index:-1}
+  .bow::before{left:-38px;transform:translateY(-50%) rotate(16deg);border-radius:20px 4px 4px 20px}
+  .bow::after{right:-38px;transform:translateY(-50%) rotate(-16deg);border-radius:4px 20px 20px 4px}
+  .play .w1L{animation:tearL 1s cubic-bezier(.6,.02,.4,1) .15s forwards}
+  .play .w1R{animation:tearR 1s cubic-bezier(.6,.02,.4,1) .15s forwards}
+  .w1L,.w1R{position:absolute;top:0;bottom:0;width:52%}
+  .w1L{left:0;clip-path:polygon(0 0,100% 0,88% 100%,0 100%)}
+  .w1R{right:0;clip-path:polygon(12% 0,100% 0,100% 100%,0 100%)}
+  .play .bow{animation:bowPop .8s cubic-bezier(.5,-.4,.4,1.6) .1s forwards}
+  @keyframes bowPop{40%{transform:translate(-50%,-50%) scale(1.15)}100%{transform:translate(-50%,-160%) scale(.6) rotate(20deg);opacity:0}}
+  @keyframes tearL{60%{transform:translateX(-26%) rotate(-6deg)}100%{transform:translateX(-130%) rotate(-14deg);opacity:0}}
+  @keyframes tearR{60%{transform:translateX(26%) rotate(6deg)}100%{transform:translateX(130%) rotate(14deg);opacity:0}}
+  /* W2 matte black + gold ribbon */
+  .w2paper{background:#121110 radial-gradient(120% 100% at 30% 20%,rgba(255,255,255,.05),transparent)}
+  /* W3 gold + crimson ribbon */
+  .w3 .ribV,.w3 .ribH{background:linear-gradient(90deg,#5c1010,#c0392b 35%,#8a1e14 60%,#5c1010)}
+  .w3 .ribH{background:linear-gradient(180deg,#5c1010,#c0392b 35%,#8a1e14 60%,#5c1010)}
+  .w3 .bow{background:radial-gradient(circle at 35% 30%,#e57368,#8a1e14 60%,#4a0c08);color:#f7dede;box-shadow:0 6px 16px rgba(0,0,0,.55),inset 0 0 0 3px rgba(74,12,8,.55)}
+  .w3 .bow::before,.w3 .bow::after{background:linear-gradient(90deg,#8a1e14,#4a0c08)}
+  /* W4 kraft + wax seal */
+  .w4paper{background:repeating-linear-gradient(90deg,rgba(0,0,0,.045) 0 2px,transparent 2px 5px),#b89468}
+  .twine{position:absolute;top:0;bottom:0;left:50%;width:5px;margin-left:-2.5px;background:repeating-linear-gradient(180deg,#6b543a 0 7px,#8a6f4c 7px 14px)}
+  .twineH{position:absolute;left:0;right:0;top:50%;height:5px;margin-top:-2.5px;background:repeating-linear-gradient(90deg,#6b543a 0 7px,#8a6f4c 7px 14px)}
+  .waxseal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-7deg);width:58px;height:58px;border-radius:50% 47% 52% 49%;
+    background:radial-gradient(circle at 38% 32%,#E8D48B,#a07f16 60%,#6b5510);box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 0 0 4px rgba(36,28,4,.3);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;font-weight:700;color:#241c04}
+  /* W5 velvet pouch */
+  .w5paper{background:radial-gradient(120% 130% at 35% 15%,#4a0d1c,#2a0710 60%);border-radius:22px 22px 40% 40%/22px 22px 16% 16%}
+  .draw{position:absolute;top:26px;left:8%;right:8%;height:14px;border-radius:8px;background:#20050c;border:1px solid rgba(201,162,39,.5)}
+  .draw::after{content:"";position:absolute;left:50%;top:12px;width:44px;height:24px;margin-left:-22px;border:3px solid #C9A227;border-top:none;border-radius:0 0 24px 24px}
+  .w5label{position:absolute;bottom:26px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--gold-l)}
+  /* W6 envelope */
+  .w6paper{background:linear-gradient(180deg,#17130a,#100d06)}
+  .flap{position:absolute;left:0;right:0;top:0;height:52%;background:linear-gradient(180deg,#241c0a,#17130a);clip-path:polygon(0 0,100% 0,50% 100%);border-bottom:1px solid rgba(201,162,39,.4)}
+  .w6 .waxseal{top:46%;width:48px;height:48px}
+  .w6edge{position:absolute;inset:0;border:1.5px solid rgba(201,162,39,.45);border-radius:22px;pointer-events:none}
+  /* W7 foil pack */
+  .w7paper{background:linear-gradient(115deg,#8a6d14,#E8D48B 22%,#a8871e 40%,#F4E4BA 58%,#96781a 76%,#E8D48B 94%);}
+  .w7paper::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.08) 0 1px,transparent 1px 7px),repeating-linear-gradient(90deg,rgba(255,255,255,.09) 0 1px,transparent 1px 9px)}
+  .crimpT,.crimpB{position:absolute;left:0;right:0;height:16px;background:repeating-linear-gradient(90deg,rgba(0,0,0,.22) 0 4px,transparent 4px 8px)}
+  .crimpT{top:0}.crimpB{bottom:0}
+  .notch{position:absolute;top:22px;right:10px;font-family:var(--mono);font-size:8.5px;color:#3a2c06;letter-spacing:.1em}
+  .packbear{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:var(--disp);font-weight:700;font-size:30px;color:#241c04;letter-spacing:.04em;text-align:center;line-height:1}
+  /* W8 vault plate */
+  .w8paper{background:linear-gradient(160deg,#3a3a3e,#232327 55%,#303034)}
+  .w8paper::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 4px)}
+  .keyhole{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E8D48B,#8a6d14);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.6)}
+  .keyhole::after{content:"";width:10px;height:20px;background:#232327;border-radius:5px 5px 2px 2px;clip-path:polygon(20% 0,80% 0,100% 40%,65% 40%,80% 100%,20% 100%,35% 40%,0 40%)}
+  .w8bolts i{position:absolute;width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#c9c9d0,#5a5a62)}
+  /* W9 gold scratch */
+  .w9paper{background:repeating-linear-gradient(55deg,#a8871e 0 6px,#c9a227 6px 12px)}
+  .w9paper::after{content:"SCRATCH TO REVEAL · WINNERS";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;letter-spacing:.28em;color:rgba(36,28,4,.6)}
+  /* W10 silk cloth */
+  .w10paper{background:linear-gradient(145deg,#1c1408 10%,#3a2c10 28%,#17110a 45%,#33260e 62%,#120d06 80%,#241a0a)}
+  .w10paper::after{content:"";position:absolute;inset:0;background:radial-gradient(60% 40% at 30% 30%,rgba(244,228,186,.09),transparent 60%),radial-gradient(50% 35% at 75% 65%,rgba(244,228,186,.07),transparent 60%)}
+  .w10tag{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:9.5px;letter-spacing:.3em;color:var(--gold-l)}
+  /* generic unwrap for W2-W10 */
+  .play .wrapfade{animation:unwrapFade .9s ease .15s forwards}
+  @keyframes unwrapFade{40%{transform:translateY(-4%) scale(1.02)}100%{transform:translateY(-120%) rotate(4deg);opacity:0}}
+  .lockrow{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;color:rgba(0,0,0,.55);z-index:4}
+  .dark .lockrow{color:rgba(255,255,255,.5)}
+
+  /* ═══ PICKS-PAGE COVERS (P1-P6) ═══ */
+  .pcover .bow{background:radial-gradient(circle at 35% 30%,#e2e2e8,#7a7a84 60%,#4a4a52);color:#1c1c20;box-shadow:0 6px 16px rgba(0,0,0,.55),inset 0 0 0 3px rgba(28,28,32,.4)}
+  .pcover .bow::before,.pcover .bow::after{background:linear-gradient(90deg,#8a8a94,#4a4a52)}
+  .pcover .ribV{background:linear-gradient(90deg,#3c3c44,#c9c9d2 30%,#8a8a94 55%,#3c3c44)}
+  .pcover .ribH{background:linear-gradient(180deg,#3c3c44,#c9c9d2 30%,#8a8a94 55%,#3c3c44)}
+  .p1paper{background:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 2px,transparent 2px 16px),repeating-linear-gradient(-45deg,rgba(0,0,0,.14) 0 2px,transparent 2px 16px),linear-gradient(135deg,#4a4a52,#2e2e34 45%,#5a5a64 75%,#33333a)}
+  .p2paper{background:repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 2px,transparent 2px 16px),linear-gradient(135deg,#2a2318,#1a1610 50%,#241e14)}
+  .p2 .bow{background:radial-gradient(circle at 35% 30%,#E8D48B,#8a6d14 60%);color:#241c04;width:64px;height:64px;font-size:9px}
+  .ptime{position:absolute;bottom:16px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;color:rgba(255,255,255,.7);z-index:4}
+  .p3paper{background:#121110}
+  .p3ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:84px;height:84px;border-radius:50%;border:2px solid rgba(201,162,39,.25)}
+  .p3ring i{position:absolute;inset:-2px;border-radius:50%;border:2px solid transparent;border-top-color:var(--gold);animation:spin 2.6s linear infinite}
+  .p3ring span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;color:var(--gold-l)}
+  .p4paper{background:repeating-linear-gradient(90deg,rgba(0,0,0,.05) 0 2px,transparent 2px 5px),#8d8d96}
+  .p4stamp{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-7deg);font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.2em;color:#2e2e34;border:2.5px solid #2e2e34;border-radius:7px;padding:7px 16px;opacity:.8}
+  .p5paper{background:linear-gradient(135deg,#17130a,#100d06)}
+  .p5tape{position:absolute;top:50%;left:-6%;right:-6%;height:34px;margin-top:-17px;transform:rotate(-4deg);background:repeating-linear-gradient(115deg,rgba(201,162,39,.85) 0 22px,rgba(138,109,20,.85) 22px 44px);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.3em;color:#241c04}
+  .p6paper{background:linear-gradient(115deg,#8a6d14,#E8D48B 22%,#a8871e 40%,#F4E4BA 58%,#96781a 76%);opacity:.35}
+  .p6paper::after{content:"";position:absolute;inset:0;backdrop-filter:blur(0px);background:rgba(10,9,8,.55)}
+  .p6ghost{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;z-index:4}
+  .p6ghost .clock{font-size:26px}
+  .p6ghost .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.26em;color:rgba(255,255,255,.75)}
+</style>
+</head>
+<body>
+<h1>WINNERS <span>PREMIUM</span> — round 3</h1>
+<p class="sub">Your lane: #21/#22/#36/#28-but-gold. 50 studies on that dark-metal base — type, finish, light, motion, detail — then the WRAPPERS (your gold-paper + bear-bow idea is W1, click any wrapper to unwrap) and the PICKS-page pre-game covers in the same family. Mix freely: "hero type from #45, finish #53, glint #65, wrapper W1, cover P2".</p>
+
+<h2>Lane A · Typography (39–50)</h2>
+<p class="h2sub">Same card, twelve different voices. Type is the cheapest place to feel expensive.</p>
+<div class="wall" id="laneA"></div>
+
+<h2>Lane B · Metal &amp; Surface Finishes (51–62)</h2>
+<p class="h2sub">Twelve materials in the metal family — brushed, hammered, satin, rose, platinum, patina, obsidian…</p>
+<div class="wall" id="laneB"></div>
+
+<h2>Lane C · Gold Light &amp; Holo (63–70)</h2>
+<p class="h2sub">#28 redone in GOLD-ONLY spectrums, plus light behaviors: sunburst, liquid, candle, aurora.</p>
+<div class="wall" id="laneC"></div>
+
+<h2>Lane D · Motion Behaviors (71–78)</h2>
+<p class="h2sub">Living cards: heartbeat odds, typing reveal, breathing border, rotating sheen, stamp slam, 3D tilt (hover #78).</p>
+<div class="wall" id="laneD"></div>
+
+<h2>Lane E · Polish Details (79–88)</h2>
+<p class="h2sub">The last 5%: etched borders, rivets, stitching, serial strip, watermark, edge-light, plates, reeded coin edge, signature.</p>
+<div class="wall" id="laneE"></div>
+
+<h2>Part II · The Wrappers (W1–W10) — click to unwrap</h2>
+<p class="h2sub">Winners page, pick posted: paying users tap to unwrap; non-payers tap → plans sheet. W1 is your idea: gold paper, crossed ribbon, the bear as the bow.</p>
+<div class="wall" id="wallW"></div>
+
+<h2>Part III · Picks-Page Pre-Game Covers (P1–P6)</h2>
+<p class="h2sub">Same family as the wrapper you choose, but clearly TIME not MONEY: silver ribbon, countdowns, "drops at" stamps. Free page, so the cover opens by itself when the pick lands.</p>
+<div class="wall" id="wallP"></div>
+
+<script>
+const picks=[
+ ["REDS","MONEYLINE","MLB · @ Brewers","+172","FINAL · CIN 7 · MIL 2"],
+ ["PORTUGAL","MONEYLINE","WC · vs Croatia","-145","FINAL · CRO 1 · POR 2"],
+ ["GUARDIANS","MONEYLINE","MLB · vs White Sox","-108","TONIGHT · 6:40 PM ET"],
+ ["SPAIN","-1.5","WC · vs Austria","-120","FINAL · AUT 0 · ESP 3"],
+ ["MARINERS","-1.5","MLB · vs Angels","-102","TONIGHT · 9:40 PM ET"],
+ ["DODGERS","MONEYLINE","MLB · vs Padres","-198","TONIGHT · 10:10 PM ET"],
+];
+function inner(i,opt={}){const p=picks[i%picks.length];
+  const hero = opt.hero!==undefined?opt.hero:`${p[0]}<br>${p[1]}`;
+  return `<div class="eb">GARY'S PICK</div>
+  <div class="hero">${hero}</div>${opt.after||""}
+  <div class="meta">${p[2]} · <span class="odds"><i>${p[3]}</i>${p[3]}</span></div>
+  <div class="foot"><span>${p[4]}</span><span>Nº 214</span></div>${opt.extra||""}`}
+/* fix double odds: default hide <i> */
+document.write('<style>.meta .odds i{display:none}</style>');
+
+function slot(wall,num,name,cls,why,html){
+  const s=document.createElement('div');s.className='slot';
+  s.innerHTML=`<div class="tag"><b>#${num}</b>${name}</div><div class="card ${cls}">${html}</div><div class="why">${why}</div>`;
+  document.getElementById(wall).appendChild(s);
+}
+/* LANE A */
+const A=[[39,"Skyscraper","t39","Max condensed, max size — the call fills the card"],
+[40,"Tracked Caps","t40","Small, wide, engraved-plate energy"],
+[41,"Fashion Serif","t41","Didot luxury — the Vogue cover of picks"],
+[42,"Gold Mono","t42","Terminal type, gold ink"],
+[43,"Thin/Black Split","t43","Team whispers, the bet SHOUTS"],
+[44,"Wireframe","t44","Outline-only hero — engraved before the gold pour"],
+[45,"Poured Gold","t45","Gradient gold fill, larger"],
+[46,"The Price Is The Hero","t46","Odds at 74px — bettors think in prices"],
+[47,"Dead Center","t47","Symmetric, plaque-like"],
+[48,"Editorial Air","t48","Huge type, huge whitespace, no footer"],
+[49,"Engraved Invitation","t49","Centered serif caps — wedding-invitation formality"],
+[50,"Lowercase Modern","t50","The contrarian: soft, current, anti-shouty"]];
+A.forEach((c,i)=>{
+  let o={};
+  if(c[2]==='t43')o.hero=`<span class="a">REDS</span><span class="b">MONEYLINE</span>`;
+  if(c[2]==='t46')o={hero:"REDS MONEYLINE",after:`<div class="bigodds">+172</div>`};
+  if(c[2]==='t41')o.hero=`Reds<br>Moneyline`;
+  if(c[2]==='t50')o.hero=`reds<br>moneyline`;
+  slot('laneA',c[0],c[1],c[2],c[3],inner(i,o));
+});
+/* LANE B */
+const B=[[51,"Brushed Gold","m51","Vertical-grain solid gold"],
+[52,"Hammered Gold","m52","Hand-beaten surface, artisan"],
+[53,"Satin + Gold Bevel","m53","Black satin, machined gold inner edge"],
+[54,"Rose Gold","m54","Warmer, softer metal world"],
+[55,"Platinum","m55","Silver-white metal, gold reserved for odds"],
+[56,"Bronze Smoke","m56","Warm gunmetal — quietest of the metals"],
+[57,"Spot-UV Black","m57","Gloss-black hero ON matte black — print-shop flex"],
+[58,"Aged Brass","m58","Patina greens creeping at the edges"],
+[59,"Damascus","m59","Folded-metal wave grain in gold"],
+[60,"Obsidian Glass","m60","Polished volcanic glass w/ one hard reflection"],
+[61,"Leather + Plate","m61","Saddle leather, riveted metal nameplate"],
+[62,"Onyx Fleck","m62","Deep black stone with gold mineral flecks"]];
+B.forEach((c,i)=>{let e="";if(c[2]==='m61')e=`<span class="plate">EST. 2026 · GARY</span>`;
+  slot('laneB',c[0],c[1],c[2],c[3],inner(i,{extra:e}));});
+/* LANE C */
+const C=[[63,"Gold Holo Drift","h63","#28's idea, gold-spectrum only"],
+[64,"Sunburst","h64","Radial gold light breathing behind centered type"],
+[65,"Hero Glint","h65","One glint crosses ONLY the pick text, every few sec"],
+[66,"Liquid Gold","h66","Molten pools slowly moving under the surface"],
+[67,"Crinkled Foil Text","h67","Hero filled with irregular foil facets"],
+[68,"Prism Edge","h68","Holo lives ONLY in the border; card stays calm"],
+[69,"Candlelit","h69","Warm glow pulsing gently from below"],
+[70,"Aurora","h70","Soft gold bands drifting like northern lights"]];
+C.forEach((c,i)=>{let o={};if(c[2]==='h64')o.hero="REDS<br>MONEYLINE";slot('laneC',c[0],c[1],c[2],c[3],inner(i,o));});
+/* LANE D */
+const D=[[71,"Heartbeat Odds","a71","The price has a pulse"],
+[72,"Types Itself","a72","Hero types out like the pick is being written"],
+[73,"Breathing Border","a73","Gold aura inhales/exhales"],
+[74,"Lighthouse","a74","A soft beam sweeps the card continuously"],
+[75,"Count-Up Odds","a75","(concept) odds roll 0→+172 on card entry"],
+[76,"Live Shimmer Meta","a76","Footer status shimmers while game is LIVE"],
+[77,"Stamp Slam","a77","CASHED slams down with weight (loops for demo)"],
+[78,"3D Tilt — HOVER ME","a78","Parallax tilt; hero floats above surface"]];
+D.forEach((c,i)=>{let o={};if(c[2]==='a72')o.hero="REDS MONEYLINE +172";if(c[2]==='a77')o.extra=`<span class="stamp">CASHED</span>`;
+  slot('laneD',c[0],c[1],c[2],c[3],inner(i,o));});
+/* LANE E */
+const E=[[79,"Greek Key Etch","p79","Micro-etched meander border"],
+[80,"Corner Rivets","p80","Four gold rivets — built, not printed"],
+[81,"Gold Stitch","p81","Tailor's stitch inside the edge"],
+[82,"Serial Spine","p82","Vertical serial strip on the card's edge"],
+[83,"Watermark Bear","p83","8% bear watermark — visible when you look"],
+[84,"Edge-Lit","p84","Gold light leaking from under the bottom edge"],
+[85,"Raised Plate Hero","p85","Pick sits on its own machined plate"],
+[86,"Split Panel","p86","Gold-tinted status band anchors the base"],
+[87,"Coin Edge","p87","Reeded/milled border like a coin's rim"],
+[88,"Signed","p88","Gary's signature under every premium call"]];
+E.forEach((c,i)=>{
+  let o={},cls=c[2];
+  if(cls==='p80')o.extra=`<span class="riv" style="top:8px;left:8px"></span><span class="riv" style="top:8px;right:8px"></span><span class="riv" style="bottom:8px;left:8px"></span><span class="riv" style="bottom:8px;right:8px"></span>`;
+  if(cls==='p82')o.extra=`<div class="strip"><span>GA-2026-Nº214</span></div>`;
+  if(cls==='p83')o.extra=`<div class="wm">🐻</div>`;
+  if(cls==='p85')o.hero="";
+  if(cls==='p88')o.after=`<span class="sig">Gary A.I.</span>`;
+  let html=inner(i,o);
+  if(cls==='p85')html=html.replace('<div class="hero"></div>',`<div class="plateH"><div class="hero">REDS<br>MONEYLINE</div></div>`);
+  if(cls==='p86')html=html.replace('<div class="meta"','<div class="panel"></div><div class="meta"');
+  slot('laneE',c[0],c[1],cls,c[3],html);
+});
+
+/* WRAPPERS */
+const W=[
+ ["W1","Gold Paper + Bear Bow (YOUR IDEA)",`<div class="wrap"><div class="w1L w1paper"></div><div class="w1R w1paper"></div><div class="ribV"></div><div class="ribH"></div><div class="bow">GARY<br>A.I.</div></div>`,"Foil gift-wrap, crossed ribbon, bear medallion bow. Tap: ribbon pops, paper tears away."],
+ ["W2","Black Paper / Gold Ribbon",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="w2paper"></div><div class="ribV"></div><div class="ribH"></div><div class="bow">GARY<br>A.I.</div><span class="lockrow dark">TAP TO UNWRAP</span></div>`,"Same gift, tuxedo edition — matte black paper."],
+ ["W3","Gold Paper / Crimson Ribbon",`<div class="wrap wrapfade w3"><div style="position:absolute;inset:0" class="w1paper"></div><div class="ribV"></div><div class="ribH"></div><div class="bow">GARY<br>A.I.</div></div>`,"Warmer, gift-under-the-tree energy."],
+ ["W4","Kraft + Wax Seal",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="w4paper"></div><div class="twine"></div><div class="twineH"></div><div class="waxseal">GARY<br>SEAL</div><span class="lockrow">SEALED · TAP TO OPEN</span></div>`,"Hand-packed parcel; the seal cracks on open."],
+ ["W5","Velvet Pouch",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="w5paper"></div><div class="draw"></div><div class="w5label">WINNERS</div></div>`,"Jewelry-pouch; drawstring loosens on tap."],
+ ["W6","Sealed Envelope",`<div class="wrap wrapfade w6"><div style="position:absolute;inset:0" class="w6paper"></div><div class="flap"></div><div class="waxseal">G</div><div class="w6edge"></div><span class="lockrow dark">BREAK THE SEAL</span></div>`,"The pick arrives as correspondence."],
+ ["W7","Foil Pack",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="w7paper"></div><div class="crimpT"></div><div class="crimpB"></div><span class="notch">◂ TEAR HERE</span><div class="packbear">WINNERS<br>SERIES · 2026</div></div>`,"Trading-card pack rip — collectors know this feeling."],
+ ["W8","Vault Plate",`<div class="wrap wrapfade w8bolts"><div style="position:absolute;inset:0" class="w8paper"></div><i style="top:10px;left:12px"></i><i style="top:10px;right:12px"></i><i style="bottom:10px;left:12px"></i><i style="bottom:10px;right:12px"></i><div class="keyhole"></div><span class="lockrow dark">MEMBERS · TAP TO UNLOCK</span></div>`,"Steel plate + gold keyhole; slides open."],
+ ["W9","Gold Scratcher",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="w9paper"></div></div>`,"Lottery-native: thumb-scratch the gold film."],
+ ["W10","Silk Reveal",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="w10paper"></div><div class="w10tag">PULL</div></div>`,"Gold silk draped over the card; slides off like a car cover."],
+];
+W.forEach((w,i)=>{
+  const s=document.createElement('div');s.className='slot';
+  s.innerHTML=`<div class="tag"><b>${w[0]}</b>${w[1]}</div>
+    <div class="stage"><div class="card">${inner(i)}</div>${w[2]}<span class="hint">click to unwrap</span></div>
+    <div class="why">${w[3]}</div>`;
+  document.getElementById('wallW').appendChild(s);
+  const st=s.querySelector('.stage');
+  st.addEventListener('click',()=>{st.classList.remove('play');void st.offsetWidth;st.classList.add('play')});
+});
+/* COVERS */
+const P=[
+ ["P1","Silver Paper + Steel Bow",`<div class="wrap wrapfade pcover"><div style="position:absolute;inset:0" class="p1paper"></div><div class="ribV"></div><div class="ribH"></div><div class="bow">SOON</div><div class="ptime">UNVEILS ~90 MIN BEFORE</div></div>`,"W1's twin in silver — same language, clearly TIME not money."],
+ ["P2","Midnight Paper / Gold Bow",`<div class="wrap wrapfade p2"><div style="position:absolute;inset:0" class="p2paper"></div><div class="bow">9:30<br>PM</div><div class="ptime">GUARDIANS PICK · DROPS 5:10 PM ET</div></div>`,"Dark paper, small gold bow that IS the drop time."],
+ ["P3","Countdown Ring",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="p3paper"></div><div class="p3ring"><i></i><span>1:24</span></div><div class="ptime">COOKING · T-90 REVEAL</div></div>`,"A live ring ticks down to the pick's unveil."],
+ ["P4","Unprinted Stock",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="p4paper"></div><div class="p4stamp">NOT YET ISSUED</div></div>`,"Blank card stock, 'NOT YET ISSUED' — prints when Gary calls it."],
+ ["P5","Sealed With Tape",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="p5paper"></div><div class="p5tape">GARY AT WORK · DO NOT CROSS</div></div>`,"Caution-tape but in brand gold — playful scarcity."],
+ ["P6","Dimmed Wrap + Clock",`<div class="wrap wrapfade"><div style="position:absolute;inset:0" class="p6paper"></div><div class="p6ghost"><span class="clock">🕐</span><span class="lbl">UNVEILS 5:10 PM ET</span></div></div>`,"The gold wrap is THERE but dimmed — anticipation of the real thing."],
+];
+P.forEach((p,i)=>{
+  const s=document.createElement('div');s.className='slot';
+  s.innerHTML=`<div class="tag"><b>${p[0]}</b>${p[1]}</div>
+    <div class="stage"><div class="card">${inner(i+2)}</div>${p[2]}<span class="hint">click to preview open</span></div>
+    <div class="why">${p[3]}</div>`;
+  document.getElementById('wallP').appendChild(s);
+  const st=s.querySelector('.stage');
+  st.addEventListener('click',()=>{st.classList.remove('play');void st.offsetWidth;st.classList.add('play')});
+});
+</script>
+</body>
+</html>

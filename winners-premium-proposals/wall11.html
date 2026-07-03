@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 11 — Ember Glyph × Tape · 20 Creative</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(120% 100% at 50% 0%,#151210,#0A0908 55%);color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:44px}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold)}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5}
+
+  .card{position:relative;width:100%;height:232px;border-radius:20px;padding:20px 22px;overflow:hidden;
+    background:#121110;border:1px solid rgba(255,255,255,.10);box-shadow:0 18px 34px rgba(0,0,0,.55)}
+  .eb{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;color:var(--gold);position:relative;z-index:3}
+  .hero{font-family:var(--disp);font-weight:700;font-size:52px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:10px;color:#fff;position:relative;z-index:3}
+  .hero .l2{display:block;font-size:29px;margin-top:4px}
+  .meta{font-family:var(--mono);font-size:12.5px;margin-top:12px;color:rgba(255,255,255,.55);position:relative;z-index:3}
+  .meta b{font-weight:700;color:var(--gold)}
+  .foot{position:absolute;left:22px;right:22px;bottom:14px;padding-top:11px;font-family:var(--mono);font-size:11px;display:flex;justify-content:space-between;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);z-index:3}
+
+  /* THE EMBER GLYPH — P63 letterform × P53 finish */
+  .gl{position:absolute;font-family:var(--disp);font-weight:700;line-height:1;z-index:1;
+    color:rgba(232,212,139,.05);-webkit-text-stroke:1.5px rgba(201,162,39,.30)}
+  /* the tape */
+  .tape{position:absolute;height:16px;z-index:2;
+    background:
+      repeating-linear-gradient(90deg,transparent 0 55px,rgba(232,212,139,.75) 55px 56.5px),
+      repeating-linear-gradient(90deg,transparent 0 11px,rgba(255,255,255,.30) 11px 12px)}
+  .mk{position:absolute;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:11px solid var(--gold);z-index:2;filter:drop-shadow(0 0 6px rgba(201,162,39,.6))}
+  .mklab{position:absolute;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--gold-l);z-index:2}
+
+  /* P73 glyph filled with ruler ticks */
+  .p73g{background:
+      repeating-linear-gradient(90deg,rgba(232,212,139,.55) 0 2px,transparent 2px 12px),
+      repeating-linear-gradient(0deg,rgba(232,212,139,.25) 0 1px,transparent 1px 14px);
+    -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1.5px rgba(201,162,39,.45)}
+  /* P74 rising fill */
+  .p74g{background:linear-gradient(0deg,rgba(201,162,39,.65) 0 58%,rgba(232,212,139,.06) 58%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1.5px rgba(201,162,39,.35)}
+  .p74line{position:absolute;right:8px;width:150px;border-top:1.5px dashed rgba(255,255,255,.55);z-index:2}
+  /* P78 burn */
+  .p78g{color:rgba(20,14,6,.9);-webkit-text-stroke:1px rgba(255,170,60,.55);
+    text-shadow:0 0 18px rgba(255,150,40,.45),0 0 40px rgba(255,120,20,.22)}
+  /* P80 blueprint */
+  .p80{background:
+    repeating-linear-gradient(90deg,rgba(232,212,139,.05) 0 1px,transparent 1px 24px),
+    repeating-linear-gradient(0deg,rgba(232,212,139,.05) 0 1px,transparent 1px 24px),
+    #121110}
+  .dim{position:absolute;font-family:var(--mono);font-size:10px;color:var(--gold-l);z-index:2;display:flex;align-items:center;gap:6px}
+  .dim::before,.dim::after{content:"";flex:1;min-width:22px;border-top:1px solid rgba(232,212,139,.6)}
+  /* P82 cast shadow */
+  .p82g{color:rgba(201,162,39,.10);-webkit-text-stroke:0;transform:skewX(-24deg) scaleY(.9)}
+  /* P83 counter window */
+  .win83{position:absolute;z-index:2;background:#0a0a0c;border-radius:8px;box-shadow:inset 0 3px 8px rgba(0,0,0,.95),0 1px 0 rgba(255,255,255,.08);
+    display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;color:var(--gold-l)}
+  /* P84 lettering guides */
+  .guide{position:absolute;left:0;right:0;border-top:1px dashed rgba(232,212,139,.22);z-index:1}
+  .guide i{position:absolute;right:8px;top:-14px;font-style:normal;font-family:var(--mono);font-size:8px;color:rgba(232,212,139,.45);letter-spacing:.1em}
+  /* P87 dissolve to ticks */
+  .p87g{background:
+      linear-gradient(90deg,rgba(232,212,139,.5) 30%,transparent 75%),
+      repeating-linear-gradient(90deg,rgba(232,212,139,.5) 0 2px,transparent 2px 9px);
+    -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1px rgba(201,162,39,.3)}
+  /* P89 stamp */
+  .p89g{color:transparent;-webkit-text-stroke:0;background:
+      radial-gradient(140% 120% at 30% 30%,rgba(201,162,39,.75),rgba(201,162,39,.35) 60%,rgba(201,162,39,.6));
+    -webkit-background-clip:text;background-clip:text;transform:rotate(-7deg)}
+</style>
+</head>
+<body>
+<h1>ROUND 11 — <span>ember glyph × tape</span> · 20</h1>
+<p class="sub">Your brief: P63's giant stat letter, wearing P53's ember finish, plus the tape measure — pushed as far as it goes. Every card is still the standard dark card. The glyph is always the STAT being counted (K = strikeouts, H = hits, TB = total bases, G = goals, SOT = shots on target).</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P71</b>The Brief, Verbatim</div>
+    <div class="card"><div class="gl" style="right:-12px;top:-26px;font-size:240px">K</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="mklab" style="left:34%;bottom:74px">6.5</div><div class="mk" style="left:36%;bottom:60px"></div><div class="tape" style="left:0;right:0;bottom:44px"></div>
+      <div class="foot" style="border-top:none;padding-top:16px"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">Exactly what you asked for: ember K + tape footer with the marker at 6.5. The baseline the other 19 have to beat.</div></div>
+
+  <div class="slot"><div class="tag"><b>P72</b>The Full Line Glyph</div>
+    <div class="card"><div class="gl" style="right:-8px;top:6px;font-size:150px;letter-spacing:-.04em">6.5K</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER · STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">Not just the unit — the whole line "6.5K" as one ember mark. The bet itself burned into the card.</div></div>
+
+  <div class="slot"><div class="tag"><b>P73</b>Glyph Made of Ruler</div>
+    <div class="card"><div class="gl p73g" style="right:-10px;top:-24px;font-size:240px">H</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">Fusion, literally: the letterform is CUT FROM tape-measure ticks. Your two favorite ideas are one object now.</div></div>
+
+  <div class="slot"><div class="tag"><b>P74</b>The Filling Glyph</div>
+    <div class="card"><div class="gl p74g" style="right:-10px;top:-24px;font-size:240px">TB</div>
+      <div class="p74line" style="bottom:118px"></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+      <div class="meta">MLB · CIN @ MIL · <b>-115</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">P34's column poured INSIDE the letter — gold rises through the glyph as bases pile up, dashed line marking 1.5. The live version writes itself.</div></div>
+
+  <div class="slot"><div class="tag"><b>P75</b>Count the Letters</div>
+    <div class="card"><div class="gl" style="right:118px;top:-2px;font-size:150px;color:rgba(201,162,39,.42);-webkit-text-stroke:1.5px rgba(201,162,39,.5)">H</div>
+      <div class="gl" style="right:-4px;top:-2px;font-size:150px">H</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero" style="max-width:210px">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">TWO H's because he needs two hits — first one lit, second still ember. The watermark is also the scoreboard.</div></div>
+
+  <div class="slot"><div class="tag"><b>P76</b>Tailor's Measure</div>
+    <div class="card"><div class="gl" style="right:-12px;top:-26px;font-size:240px">K</div>
+      <div class="tape" style="left:-20px;right:-20px;top:118px;transform:rotate(-14deg)"></div>
+      <div class="mklab" style="right:96px;top:84px">6.5</div><div class="mk" style="right:104px;top:100px;transform:rotate(-14deg)"></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 K</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">The tape thrown diagonally ACROSS the glyph like a tailor sizing it up — Gary measuring the stat for tonight.</div></div>
+
+  <div class="slot"><div class="tag"><b>P77</b>Weights on the Ruler</div>
+    <div class="card"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="gl" style="left:24px;bottom:52px;font-size:44px;color:rgba(201,162,39,.4);-webkit-text-stroke:1px rgba(201,162,39,.5)">H</div>
+      <div class="gl" style="left:44%;bottom:52px;font-size:44px">H</div>
+      <div class="gl" style="right:80px;bottom:52px;font-size:44px">H</div>
+      <div class="mklab" style="left:34%;bottom:96px">1.5</div><div class="mk" style="left:36%;bottom:84px"></div>
+      <div class="tape" style="left:0;right:0;bottom:44px"></div>
+      <div class="foot" style="border-top:none;padding-top:16px"><span>TONIGHT · 7:40 PM</span><span>›</span></div></div>
+    <div class="why">Small ember H's standing ON the ruler at 1, 2, 3 — the ones past the marker are what he's chasing. The instrument grew inhabitants.</div></div>
+
+  <div class="slot"><div class="tag"><b>P78</b>Burn-Through</div>
+    <div class="card"><div class="gl p78g" style="right:-12px;top:-26px;font-size:240px">G</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>›</span></div></div>
+    <div class="why">The glyph as a live coal — near-black body, edges glowing orange like it's burning through the card from behind.</div></div>
+
+  <div class="slot"><div class="tag"><b>P79</b>Foil Chop</div>
+    <div class="card"><div class="gl" style="right:20px;top:18px;font-size:64px;color:transparent;-webkit-text-stroke:0;background:linear-gradient(170deg,var(--gold-w),var(--gold) 55%,#8a6d16);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))">K</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">The letter small and SOLID — hot-foil stamped top-right like an artist's chop mark. Quietest of the twenty.</div></div>
+
+  <div class="slot"><div class="tag"><b>P80</b>Blueprint</div>
+    <div class="card p80"><div class="gl" style="right:-8px;top:-22px;font-size:230px;-webkit-text-stroke:1px rgba(232,212,139,.4);color:transparent">H</div>
+      <div class="dim" style="right:16px;top:150px;width:150px">1.5</div>
+      <div class="dim" style="right:150px;top:60px;width:60px;transform:rotate(90deg)">Ø H</div>
+      <div class="eb">GARY'S PROP · DRAFT Nº 214</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The card as an engineer's drawing: grid paper, construction-line glyph, dimension callouts measuring it at 1.5. The tape measure became a draftsman.</div></div>
+
+  <div class="slot"><div class="tag"><b>P81</b>Type Specimen</div>
+    <div class="card" style="display:flex;gap:18px;align-items:stretch">
+      <div style="flex:0 0 150px;position:relative;border-right:1px solid rgba(255,255,255,.10)">
+        <div class="gl" style="left:-6px;top:-8px;font-size:190px;position:absolute">K</div>
+        <div style="position:absolute;bottom:8px;left:0;font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;color:rgba(232,212,139,.5)">STRIKEOUT · 6.5</div></div>
+      <div style="flex:1;position:relative;z-index:2">
+        <div class="eb">GARY'S PROP</div>
+        <div class="hero" style="font-size:40px">SKENES<span class="l2" style="font-size:24px">OVER 6.5 K</span></div>
+        <div class="meta">PIT @ STL · <b>-130</b></div>
+        <div style="position:absolute;bottom:0;left:0;right:0;font-family:var(--mono);font-size:11px;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);padding-top:10px;display:flex;justify-content:space-between"><span>TONIGHT · 8:15 PM</span><span>›</span></div></div></div>
+    <div class="why">A type-foundry specimen page: the glyph owns the left column with its own caption, the bet reads beside it. Most editorial of the set.</div></div>
+
+  <div class="slot"><div class="tag"><b>P82</b>Cast Shadow</div>
+    <div class="card"><div class="gl p82g" style="left:120px;top:36px;font-size:190px">H</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The hero casts the stat as its SHADOW — skewed gold wash falling across the card. The pick and its consequence.</div></div>
+
+  <div class="slot"><div class="tag"><b>P83</b>Counter in the Glyph</div>
+    <div class="card"><div class="gl" style="right:-12px;top:-26px;font-size:240px">K</div>
+      <div class="win83" style="right:64px;top:92px;width:74px;height:52px;font-size:34px">0<span style="font-size:16px;color:rgba(255,255,255,.4);margin-left:6px">/7</span></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero" style="max-width:230px">SKENES<span class="l2">OVER 6.5 K</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">A counter window punched into the ember letter — 0/7 ticks up live inside the glyph. The watermark becomes the scoreboard machine.</div></div>
+
+  <div class="slot"><div class="tag"><b>P84</b>Lettering Guides</div>
+    <div class="card"><div class="guide" style="top:58px"><i>CAP</i></div><div class="guide" style="top:106px"><i>MEAN</i></div><div class="guide" style="top:128px"><i>BASE</i></div>
+      <div class="gl" style="right:-10px;top:-24px;font-size:238px">TB</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+      <div class="meta">MLB · CIN @ MIL · <b>-115</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">Faint dashed cap/mean/baseline guides across the whole card, like the sheet the glyph was drawn on — the ruler became typographic.</div></div>
+
+  <div class="slot"><div class="tag"><b>P85</b>Seismograph</div>
+    <div class="card"><div class="gl" style="right:-12px;top:-26px;font-size:240px">H</div>
+      <svg style="position:absolute;left:0;right:0;bottom:40px;z-index:2" width="100%" height="70" viewBox="0 0 430 70" preserveAspectRatio="none">
+        <line x1="0" y1="22" x2="430" y2="22" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="5 5"/>
+        <text x="6" y="16" font-family="SF Mono,monospace" font-size="10" fill="#E8D48B">1.5</text>
+        <polyline points="0,58 40,56 70,60 95,34 110,58 150,55 185,12 205,58 250,57 285,60 320,18 345,58 395,56 430,58" fill="none" stroke="#C9A227" stroke-width="2" style="filter:drop-shadow(0 0 5px rgba(201,162,39,.6))"/>
+      </svg>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div></div>
+    <div class="why">His hit pulse as a seismograph needle across the card — every spike over the dashed line is a knock. Live, the needle keeps drawing.</div></div>
+
+  <div class="slot"><div class="tag"><b>P86</b>Constellation</div>
+    <div class="card">
+      <svg style="position:absolute;right:6px;top:2px;z-index:1" width="200" height="220" viewBox="0 0 200 220">
+        <g stroke="rgba(201,162,39,.45)" stroke-width="1">
+          <line x1="40" y1="20" x2="40" y2="200"/><line x1="160" y1="20" x2="160" y2="200"/><line x1="40" y1="110" x2="160" y2="110"/></g>
+        <g fill="#E8D48B">
+          <circle cx="40" cy="20" r="3.5"/><circle cx="40" cy="65" r="2.5"/><circle cx="40" cy="110" r="3.5"/><circle cx="40" cy="155" r="2.5"/><circle cx="40" cy="200" r="3.5"/>
+          <circle cx="160" cy="20" r="3.5"/><circle cx="160" cy="65" r="2.5"/><circle cx="160" cy="110" r="3.5"/><circle cx="160" cy="155" r="2.5"/><circle cx="160" cy="200" r="3.5"/>
+          <circle cx="100" cy="110" r="2.5"/></g>
+        <g fill="none" stroke="rgba(232,212,139,.2)"><circle cx="40" cy="20" r="7"/><circle cx="160" cy="110" r="7"/></g>
+      </svg>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero" style="max-width:230px">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The H drawn as a constellation — gold stars joined by faint lines, each star one of his last 10 games. The glyph is made of evidence.</div></div>
+
+  <div class="slot"><div class="tag"><b>P87</b>Dissolving to Ticks</div>
+    <div class="card"><div class="gl p87g" style="right:-10px;top:-24px;font-size:240px">K</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">The glyph solid on its left edge, disintegrating into ruler ticks as it crosses the card — the letter becoming measurement.</div></div>
+
+  <div class="slot"><div class="tag"><b>P88</b>Draftsman's Corner</div>
+    <div class="card"><div class="gl" style="right:34px;top:-18px;font-size:200px">G</div>
+      <div style="position:absolute;right:-40px;bottom:-40px;width:130px;height:130px;border-radius:50%;border:1.5px solid rgba(232,212,139,.4);z-index:2;
+        background:repeating-conic-gradient(from -90deg,rgba(232,212,139,.4) 0deg 1deg,transparent 1deg 15deg)"></div>
+      <div class="tape" style="left:0;right:0;bottom:0;height:12px"></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot" style="bottom:22px;border-top:none"><span>TOMORROW · 3:00 PM ET</span><span>›</span></div></div>
+    <div class="why">Protractor arc in the corner, ruler along the bottom edge, glyph under it all — the whole card is Gary's drafting desk.</div></div>
+
+  <div class="slot"><div class="tag"><b>P89</b>Rubber Stamp</div>
+    <div class="card"><div class="gl p89g" style="right:2px;top:0px;font-size:180px">H</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero" style="max-width:240px">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The glyph slammed on in gold ink — rotated, unevenly inked like a real hand stamp. Gary marked this one himself.</div></div>
+
+  <div class="slot"><div class="tag"><b>P90</b>The Composite v2</div>
+    <div class="card"><div class="gl" style="right:-12px;top:-30px;font-size:225px">H</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · 2B · MIL vs CIN · <b>+145</b></div>
+      <div class="mklab" style="left:34%;bottom:74px">1.5</div><div class="mk" style="left:36%;bottom:60px"></div><div class="tape" style="left:0;right:0;bottom:44px"></div>
+      <div class="foot" style="border-top:none;padding-top:16px"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">P71 plus the gold call line — ember glyph, tape at 1.5, the call in light gold. If P71 is the brief, this is the brief dressed for dinner.</div></div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 9 — 50 Wrappers · Members Only</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+    --serif:Georgia,'Times New Roman',serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(120% 100% at 50% 0%,#151210,#0A0908 55%);color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  h2{font-family:var(--disp);font-weight:700;font-size:26px;text-transform:uppercase;margin:64px 0 6px;color:var(--gold-l)}
+  h2 small{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.1em;margin-left:14px;text-transform:none}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 30px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:44px;margin-top:22px}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold)}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5}
+
+  .card{position:relative;width:100%;height:232px;border-radius:20px;overflow:hidden;box-shadow:0 18px 34px rgba(0,0,0,.55)}
+  .mono{font-family:var(--mono)}
+  .ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:3}
+
+  /* matte black base + fine grain */
+  .blk{background:
+    repeating-linear-gradient(45deg,rgba(255,255,255,.012) 0 2px,transparent 2px 4px),
+    linear-gradient(165deg,#1a1a1c,#0d0d0f 60%,#121214)}
+  .blk2{background:linear-gradient(165deg,#161618,#0a0a0c)}
+
+  /* the gold 21B-S bar (for reveal-tease wrappers) */
+  .gbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318);
+    box-shadow:0 18px 34px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7)}
+  .gbar .eb{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;color:#4a3a08;position:absolute;left:22px;top:20px}
+  .gbar .hero{font-family:var(--disp);font-weight:700;font-size:56px;line-height:.92;text-transform:uppercase;color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55);position:absolute;left:22px;top:48px}
+  .gbar .meta{font-family:var(--mono);font-size:12.5px;color:#5c4708;position:absolute;left:22px;top:168px}
+  .gbar .meta b{color:#3a2c04}
+  .gbar .foot{position:absolute;left:22px;right:22px;bottom:14px;padding-top:11px;font-family:var(--mono);font-size:11px;color:#4a3a08;border-top:1px solid rgba(58,44,4,.35);display:flex;justify-content:space-between}
+
+  .lock{width:15px;height:12px;border:2px solid currentColor;border-radius:3px;position:relative;display:inline-block}
+  .lock::before{content:"";position:absolute;left:1.5px;top:-8px;width:8px;height:8px;border:2px solid currentColor;border-bottom:none;border-radius:6px 6px 0 0}
+
+  /* ═══ A · MEMBERS ONLY / BLACK CARD ═══ */
+  .w1 .mo{font-family:var(--mono);font-size:13px;letter-spacing:.5em;color:#c8c8cc;text-indent:.5em}
+  .w1 .bear{width:64px;height:64px;object-fit:contain;filter:grayscale(1) brightness(2.4);opacity:.16}
+  .w1 .sn{font-family:var(--mono);font-size:9.5px;letter-spacing:.28em;color:rgba(255,255,255,.35)}
+  .w2 .em{position:absolute;inset:0;background-image:url(gary.png);background-size:56px;background-repeat:repeat;filter:grayscale(1) brightness(3);opacity:.05}
+  .w2 .mo{font-family:var(--serif);font-size:15px;letter-spacing:.4em;color:#d8d8dc;text-indent:.4em}
+  .w3 .foil{position:absolute;right:0;top:0;width:150px;height:150px;background:linear-gradient(225deg,transparent 48%,rgba(201,162,39,.9) 48%,#8a6d16 74%,transparent 74%)}
+  .w3 .foil span{position:absolute;top:34px;right:-10px;transform:rotate(45deg);font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;color:#0d0d0f;font-weight:700}
+  .w4{background:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.02) 0 1px,transparent 1px 3px),
+    linear-gradient(165deg,#232326,#101013)}
+  .w4 .etch{font-family:var(--mono);font-size:11px;letter-spacing:.34em;color:rgba(255,255,255,.55);text-shadow:0 1px 0 rgba(0,0,0,.9)}
+  .w4 .etch2{font-family:var(--mono);font-size:9px;letter-spacing:.22em;color:rgba(255,255,255,.3)}
+  .chip{width:44px;height:32px;border-radius:6px;background:linear-gradient(160deg,var(--gold-w),var(--gold) 55%,#8a6d16);box-shadow:inset 0 1px 0 rgba(255,255,255,.6)}
+  .chip::after{content:"";display:block;margin:7px auto;width:26px;height:16px;border:1px solid rgba(58,44,4,.5);border-radius:3px}
+  .w5 .stripe{position:absolute;left:0;right:0;top:38px;height:44px;background:#000}
+  .w5 .sig{position:absolute;left:22px;right:110px;bottom:58px;height:30px;background:repeating-linear-gradient(0deg,#e9e4d8 0 30px)}
+  .w5 .sig span{font-family:'Snell Roundhand',cursive;font-size:19px;color:#2a2a30;margin-left:10px;line-height:30px}
+  .w5 .cvv{position:absolute;right:22px;bottom:58px;width:70px;height:30px;background:#e9e4d8;color:#2a2a30;font-family:var(--mono);font-size:12px;text-align:center;line-height:30px}
+  .w6 .uv{font-family:var(--disp);font-weight:700;font-size:52px;line-height:.92;text-transform:uppercase;color:#151517;text-shadow:0 1px 1px rgba(255,255,255,.06),0 -1px 1px rgba(0,0,0,.9);position:absolute;left:22px;top:52px}
+  .w6 .gloss{position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.075) 42%,transparent 55%)}
+  .w7{border:none;box-shadow:0 18px 34px rgba(0,0,0,.55),0 0 0 3px #0d0d0f,0 0 0 5px var(--gold)}
+  .w8 .flap{position:absolute;inset:0;background:linear-gradient(180deg,#1c1c1f 0%,#111113 100%);clip-path:polygon(0 0,100% 0,100% 38%,50% 72%,0 38%)}
+  .w8 .flap2{position:absolute;inset:0;background:#151517;z-index:-1}
+  .seal{width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e3c56a,var(--gold) 55%,#8a6d16);box-shadow:0 3px 10px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center}
+  .seal img{width:40px;height:40px;object-fit:contain;filter:sepia(1) brightness(.6) contrast(1.4);opacity:.85}
+  .w9{background:
+    radial-gradient(80% 60% at 30% 20%,rgba(255,255,255,.05),transparent 55%),
+    linear-gradient(165deg,#171719,#0b0b0d)}
+  .w9 .rope{position:absolute;left:-10px;right:-10px;top:104px;height:14px;border-radius:8px;background:repeating-linear-gradient(60deg,#d9bc63 0 7px,#a8892a 7px 14px);box-shadow:0 3px 8px rgba(0,0,0,.6)}
+  .w9 .post{position:absolute;top:76px;width:9px;height:70px;background:linear-gradient(90deg,#e3c56a,#8a6d16);border-radius:4px}
+  .w10{background:
+    repeating-linear-gradient(90deg,transparent 0 26px,rgba(255,255,255,.05) 26px 27px),
+    linear-gradient(165deg,#141416,#0c0c0e)}
+  .w10 .pocket{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:170px;height:74px;background:#0f0f11;border-radius:14px 14px 0 0;border:1px solid rgba(255,255,255,.08);border-bottom:none}
+  .w10 .square{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);width:120px;height:52px;background:linear-gradient(135deg,var(--gold-l),var(--gold));clip-path:polygon(8% 100%,30% 22%,52% 78%,74% 8%,94% 100%)}
+  .w11 .ln{width:70%;border-bottom:1px solid rgba(255,255,255,.18);padding:7px 2px;font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.4);text-align:left}
+  .w11 .ln.you{color:var(--gold-l);border-color:var(--gold)}
+  .w12 .slot2{width:180px;height:10px;border-radius:6px;background:#000;box-shadow:inset 0 2px 4px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.07)}
+  .w12 .kh{width:40px;height:40px;border-radius:50%;background:radial-gradient(circle,#000 34%,transparent 35%),radial-gradient(circle at 50% 72%,#000 12%,transparent 13%);border:2px solid rgba(201,162,39,.7)}
+
+  /* ═══ B · VAULT / SAFE ═══ */
+  .stl{background:
+    radial-gradient(110% 130% at 30% 20%,rgba(255,255,255,.09),transparent 50%),
+    linear-gradient(165deg,#33353b,#1b1d22 55%,#25272d)}
+  .bolt{position:absolute;width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#c9ccd4,#5d626c 70%);box-shadow:0 1px 2px rgba(0,0,0,.8)}
+  .dial{width:104px;height:104px;border-radius:50%;position:relative;
+    background:
+      repeating-conic-gradient(rgba(255,255,255,.35) 0deg 1.6deg,transparent 1.6deg 30deg),
+      radial-gradient(circle at 38% 32%,#4a4e58,#22242a 70%);
+    box-shadow:0 6px 16px rgba(0,0,0,.7),inset 0 2px 0 rgba(255,255,255,.25)}
+  .dial::after{content:"";position:absolute;inset:26px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#3a3d45,#191b20);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+  .dial .ptr{position:absolute;left:50%;top:-3px;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid var(--gold);z-index:2}
+  .spoke{position:absolute;left:50%;top:50%;width:120px;height:9px;border-radius:5px;background:linear-gradient(180deg,#b9bcc4,#6a6e78);box-shadow:0 2px 4px rgba(0,0,0,.6)}
+  .w14 .keyplate{width:120px;height:64px;border-radius:8px;background:linear-gradient(165deg,#3d4047,#25272c);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 3px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:space-around}
+  .w14 .kh2{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle,#000 30%,transparent 31%),radial-gradient(circle at 50% 74%,#000 10%,transparent 11%);border:1.5px solid rgba(255,255,255,.3)}
+  .numplate{font-family:var(--mono);font-size:11px;letter-spacing:.24em;color:#d9bc63;background:#101114;padding:6px 14px;border-radius:5px;box-shadow:inset 0 2px 5px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.08)}
+  .w17 .count{font-family:var(--mono);font-size:30px;font-weight:700;letter-spacing:.12em;color:#ff9f43;background:#0a0a0c;padding:10px 22px;border-radius:8px;box-shadow:inset 0 3px 8px rgba(0,0,0,.95),0 1px 0 rgba(255,255,255,.08);text-shadow:0 0 14px rgba(255,159,67,.6)}
+  .w18 .door{position:absolute;inset:0;width:88%;background:
+    radial-gradient(110% 130% at 30% 20%,rgba(255,255,255,.08),transparent 50%),
+    linear-gradient(165deg,#2e3036,#191b20);border-right:3px solid #0a0a0c;z-index:2}
+  .w18 .leak{position:absolute;right:0;top:0;bottom:0;width:12%;background:linear-gradient(90deg,#f7e7ae,#c9a227);z-index:1}
+  .w18 .glow{position:absolute;right:9%;top:0;bottom:0;width:16%;background:linear-gradient(90deg,transparent,rgba(247,231,174,.5));z-index:2;filter:blur(6px)}
+  .w19 .ingot{width:150px;height:44px;background:linear-gradient(165deg,#eccf78,#b6952c 50%,#8f7318);clip-path:polygon(8% 0,92% 0,100% 100%,0 100%);box-shadow:0 4px 12px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;letter-spacing:.3em;color:#3a2c04;font-weight:700}
+  .w20 .stripe2{position:absolute;left:0;right:0;height:34px;background:repeating-linear-gradient(-45deg,#d9bc63 0 22px,#101114 22px 44px);opacity:.9}
+  .w22 .hasp{position:absolute;left:0;right:0;top:96px;height:40px;background:linear-gradient(180deg,#4a4e58,#2b2e35);box-shadow:0 3px 8px rgba(0,0,0,.6);z-index:2}
+  .w22 .pad{position:absolute;left:50%;top:88px;transform:translateX(-50%);width:56px;height:44px;border-radius:10px;background:linear-gradient(160deg,var(--gold-l),var(--gold) 60%,#8a6d16);box-shadow:0 4px 10px rgba(0,0,0,.7);z-index:3}
+  .w22 .pad::before{content:"";position:absolute;left:50%;top:-24px;transform:translateX(-50%);width:34px;height:34px;border:7px solid #b9bcc4;border-bottom:none;border-radius:20px 20px 0 0}
+  .w22 .pad::after{content:"";position:absolute;left:50%;top:16px;transform:translateX(-50%);width:9px;height:14px;background:radial-gradient(circle at 50% 30%,#3a2c04 40%,transparent 41%),linear-gradient(180deg,transparent 40%,#3a2c04 40%)}
+
+  /* ═══ C · FASHION HOUSE ═══ */
+  .w23 .zip{position:absolute;left:50%;top:0;bottom:0;width:3px;background:#0a0a0c;transform:translateX(-50%)}
+  .w23 .teeth{position:absolute;left:50%;top:0;bottom:0;width:11px;transform:translateX(-50%);background:repeating-linear-gradient(180deg,#8f939c 0 5px,#3a3d44 5px 10px)}
+  .w23 .pull{position:absolute;left:50%;top:96px;transform:translateX(-50%);width:16px;height:34px;border-radius:8px;background:linear-gradient(160deg,var(--gold-l),#8a6d16);box-shadow:0 3px 8px rgba(0,0,0,.7);z-index:2}
+  .lbl{font-family:var(--serif);font-size:12px;letter-spacing:.5em;color:#d8d8dc;text-indent:.5em}
+  .w24{background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px),
+    linear-gradient(165deg,#1d1c1a,#121110)}
+  .w24 .draw{position:absolute;left:0;right:0;top:30px;height:16px;background:repeating-linear-gradient(75deg,#3d3b36 0 10px,#2a2926 10px 20px);border-radius:8px}
+  .w24 .cinch{position:absolute;left:0;right:0;top:0;height:46px;background:radial-gradient(60% 130% at 50% -40%,#000,transparent 70%)}
+  .w25{background:
+    repeating-linear-gradient(23deg,rgba(0,0,0,.028) 0 3px,transparent 3px 9px),
+    repeating-linear-gradient(-31deg,rgba(0,0,0,.02) 0 2px,transparent 2px 11px),
+    linear-gradient(160deg,#f2ede2,#e5dfd2)}
+  .w25 .fold{position:absolute;left:-20%;top:52%;width:140%;height:2px;background:linear-gradient(90deg,transparent,rgba(0,0,0,.12),transparent);transform:rotate(-7deg)}
+  .w26 .mgrid{position:absolute;inset:0;background-image:url(gary.png);background-size:44px;background-repeat:repeat;filter:sepia(1) brightness(1.2);opacity:.10}
+  .w26 .name{font-family:var(--serif);font-size:22px;letter-spacing:.6em;color:var(--gold-l);text-indent:.6em}
+  .w27 .handle{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:120px;height:52px;border:7px solid #a8892a;border-bottom:none;border-radius:60px 60px 0 0}
+  .w28 .rib{position:absolute;top:0;bottom:0;left:76px;width:44px;background:
+    repeating-linear-gradient(90deg,rgba(58,44,4,.18) 0 2px,transparent 2px 5px),
+    linear-gradient(90deg,#a8892a,#e3c56a 50%,#a8892a);box-shadow:0 0 14px rgba(0,0,0,.5)}
+  .w28 .knot{position:absolute;left:64px;top:92px;width:68px;height:46px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f0d98a,#b6952c 70%);box-shadow:0 4px 10px rgba(0,0,0,.6)}
+  .w29{border:1px solid rgba(201,162,39,.35);background:
+    repeating-linear-gradient(45deg,rgba(255,255,255,.012) 0 3px,transparent 3px 6px),
+    linear-gradient(165deg,#191512,#0e0c0a)}
+  .w29 .stitchbox{position:absolute;inset:10px;border:1.5px dashed rgba(201,162,39,.4);border-radius:14px}
+  .w29 .clasp{position:absolute;left:50%;top:-2px;transform:translateX(-50%);width:56px;height:20px;border-radius:0 0 10px 10px;background:linear-gradient(180deg,var(--gold-l),#8a6d16)}
+  .w30 .rule{width:66%;height:1px;background:var(--gold)}
+  .w30 .n{font-family:var(--serif);font-size:13px;letter-spacing:.34em;color:#d8d8dc;text-indent:.34em}
+  .w31{background:
+    repeating-linear-gradient(90deg,transparent 0 22px,rgba(255,255,255,.06) 22px 23px),
+    linear-gradient(165deg,#131316,#0b0b0d)}
+  .w31 .lapel{position:absolute;left:0;top:0;bottom:0;width:56%;background:linear-gradient(115deg,#1b1b1e 60%,transparent 60%)}
+  .w31 .lapel2{position:absolute;right:0;top:0;bottom:0;width:56%;background:linear-gradient(-115deg,#1b1b1e 60%,transparent 60%)}
+  .w31 .btn{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e3c56a,#8a6d16)}
+  .w32 .lid{position:absolute;inset:0 0 46% 0;background:linear-gradient(165deg,#1c1c1f,#101012);border-bottom:2px solid #000}
+  .w32 .tissue{position:absolute;left:0;right:0;top:52%;height:14px;background:linear-gradient(180deg,#f4e9c8,#dcc98e);clip-path:polygon(0 40%,6% 0,13% 55%,22% 10%,31% 60%,40% 5%,52% 58%,61% 12%,72% 62%,81% 8%,90% 55%,100% 20%,100% 100%,0 100%)}
+
+  /* ═══ D · CLASSIFIED ═══ */
+  .w33 .clasp2{position:absolute;right:26px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e3c56a,#8a6d16);box-shadow:0 3px 8px rgba(0,0,0,.6)}
+  .w33 .tab{position:absolute;left:26px;top:-1px;width:130px;height:26px;background:#1d1d20;border-radius:0 0 8px 8px;font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center}
+  .w34{background:linear-gradient(165deg,#f2ede0,#e7e1d2)}
+  .w34 .hd{font-family:var(--mono);font-size:10px;letter-spacing:.26em;color:#8a2f27;font-weight:700}
+  .w34 .bar{height:20px;background:#111;border-radius:3px;margin:5px 0}
+  .w34 .txt{font-family:var(--mono);font-size:12px;color:#3a362c}
+  .w36 .line{width:72%;border-bottom:1.5px solid rgba(255,255,255,.5);height:30px;position:relative}
+  .w36 .x{position:absolute;left:-18px;bottom:4px;color:var(--gold);font-size:15px;font-family:var(--serif);font-style:italic}
+  .w37 .slot3{width:180px;height:36px;background:#050505;border-radius:5px;box-shadow:inset 0 3px 8px rgba(0,0,0,.95),0 1px 0 rgba(255,255,255,.08);overflow:hidden;position:relative}
+  .w37 .eyes{position:absolute;inset:0;background:linear-gradient(90deg,transparent 22%,rgba(247,231,174,.28) 40%,rgba(247,231,174,.45) 50%,rgba(247,231,174,.28) 60%,transparent 78%)}
+  .w38 .cipher{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:.14em;color:var(--gold-l)}
+  .w39 .tape{position:absolute;left:-30px;right:-30px;top:96px;height:38px;background:repeating-linear-gradient(-35deg,var(--gold) 0 30px,#0d0d0f 30px 60px);transform:rotate(-4deg);display:flex;align-items:center;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.5)}
+  .w39 .tape span{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.3em;color:#0d0d0f;white-space:nowrap;background:var(--gold);padding:3px 10px;margin-left:110px}
+  .w40{background:
+    repeating-linear-gradient(15deg,rgba(0,0,0,.15) 0 2px,transparent 2px 6px),
+    linear-gradient(165deg,#241a12,#140e08)}
+  .w40 .stitch{position:absolute;inset:9px;border:1.5px dashed rgba(201,162,39,.45);border-radius:14px}
+  .w40 .hndl{position:absolute;left:50%;top:8px;transform:translateX(-50%);width:110px;height:30px;border:8px solid #1c130b;border-bottom:none;border-radius:40px 40px 0 0}
+  .w40 .lk{position:absolute;top:84px;width:52px;height:34px;border-radius:6px;background:linear-gradient(160deg,var(--gold-l),#8a6d16);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 7px rgba(0,0,0,.6)}
+  .w40 .lk i{display:block;margin:11px auto;width:30px;height:9px;background:repeating-linear-gradient(90deg,#3a2c04 0 7px,#c9a227 7px 10px)}
+
+  /* ═══ E · CONCEAL THE WORDS ═══ */
+  .blurwords{filter:blur(11px);opacity:.85}
+  .w44 .redact{position:absolute;background:#0d0b06;border-radius:4px;box-shadow:0 1px 0 rgba(255,252,235,.35)}
+  .w45 .scr{color:#2c2304!important}
+  .w47 .latex{position:absolute;left:16px;top:44px;width:74%;height:96px;border-radius:10px;background:
+    repeating-linear-gradient(115deg,rgba(255,255,255,.14) 0 3px,transparent 3px 7px),
+    linear-gradient(160deg,#c6c9d0,#8f939c 60%,#b3b7bf);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 2px 8px rgba(0,0,0,.3);z-index:4}
+  .w47 .latex::after{content:"SCRATCH TO REVEAL";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:#4a4e58}
+  .w47 .scratched{position:absolute;left:24px;top:118px;width:110px;height:20px;border-radius:8px;background:transparent;box-shadow:none;z-index:5}
+  .w48 .static{position:absolute;left:16px;top:44px;width:76%;height:100px;border-radius:10px;z-index:4;opacity:.92;
+    background:
+      repeating-linear-gradient(0deg,rgba(255,255,255,.16) 0 1px,rgba(0,0,0,.5) 1px 3px),
+      repeating-linear-gradient(90deg,rgba(120,120,130,.5) 0 2px,rgba(20,20,24,.7) 2px 3px)}
+  .w49 .smear{position:absolute;left:18px;top:52px;width:70%;height:84px;border-radius:40px;z-index:4;filter:blur(16px);
+    background:radial-gradient(60% 70% at 40% 50%,rgba(255,252,235,.95),rgba(201,162,39,.55) 60%,transparent)}
+  .w50 .dots{position:absolute;left:16px;top:44px;width:78%;height:100px;z-index:4;
+    background:radial-gradient(circle,#0d0b06 34%,transparent 35%);background-size:11px 11px;
+    -webkit-mask-image:linear-gradient(90deg,#000 42%,transparent 88%);mask-image:linear-gradient(90deg,#000 42%,transparent 88%)}
+</style>
+</head>
+<body>
+<h1>ROUND 9 — <span>the wrapper</span> · 50 options</h1>
+<p class="sub">The pre-reveal state for Winners picks — what a member sees before the card drops (and what a locked user covets). Your brief: Members Only black card, improved vault, fashion-house, Black Suit, secretive — plus a family of smarter conceals (blur the WORDS, not the card). Every card is the same 232 footprint; the reveal animation peels/opens it into the gold 21B-S bar.</p>
+
+<h2>A · Members Only / Black Card <small>the card you get, not the box it came in — 12</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>WR1</b>Centurion</div>
+    <div class="card blk"><div class="ctr">
+      <img class="bear" src="gary.png" style="width:64px;height:64px;object-fit:contain;filter:grayscale(1) brightness(2.4);opacity:.16">
+      <div class="w1x mo mono" style="font-size:13px;letter-spacing:.5em;color:#c8c8cc;text-indent:.5em">MEMBERS ONLY</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.28em;color:rgba(255,255,255,.35)">Nº 214 · TAP WHEN READY</div></div></div>
+    <div class="why">Matte black, ghosted bear, three words. The Amex-black of pick cards — tap and it pours into gold.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR2</b>Embossed Monogram</div>
+    <div class="card blk2"><div class="w2x em" style="position:absolute;inset:0;background-image:url(gary.png);background-size:56px;background-repeat:repeat;filter:grayscale(1) brightness(3);opacity:.05"></div>
+      <div class="ctr"><div style="font-family:var(--serif);font-size:15px;letter-spacing:.4em;color:#d8d8dc;text-indent:.4em">GARY</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.26em;color:rgba(255,255,255,.32)">PRIVATE · MEMBERS ONLY</div></div></div>
+    <div class="why">Tone-on-tone bear monogram pressed into the black — you only catch it when the light moves. Fashion-house restraint.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR3</b>Foil Corner</div>
+    <div class="card blk w3"><div class="foil"><span>RESERVED</span></div>
+      <div class="ctr"><div class="mono" style="font-size:12px;letter-spacing:.4em;color:#d8d8dc">MEMBERS ONLY</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.24em;color:rgba(255,255,255,.35)">PICK Nº 214 · SEALED</div></div></div>
+    <div class="why">One gold-foil corner on pure black — the single flash of the metal waiting underneath.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR4</b>Laser-Etched Steel</div>
+    <div class="card w4"><div class="ctr">
+      <div class="etch">GARY · PREMIUM</div>
+      <div class="etch">HOLDER SINCE 2026</div>
+      <div class="etch2">SERIAL 000214 · DO NOT DUPLICATE</div></div></div>
+    <div class="why">Brushed black metal with engraved type, no color at all. The most bank-vault of the black cards.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR5</b>The Credit Card</div>
+    <div class="card blk w5"><div class="stripe"></div>
+      <div class="chip" style="position:absolute;left:22px;top:100px"></div>
+      <div class="sig"><span>Gary A.I.</span></div><div class="cvv">2-1-4</div></div>
+    <div class="why">Full card grammar: mag stripe, gold chip, his signature on the strip, the pick number as the CVV. Playful but premium.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR6</b>Spot-UV (black on black)</div>
+    <div class="card blk2 w6"><div class="mono" style="position:absolute;left:22px;top:20px;font-size:10.5px;letter-spacing:.3em;color:rgba(255,255,255,.35)">GARY'S PICK</div>
+      <div class="uv">REDS<br>MONEYLINE</div>
+      <div class="gloss"></div></div>
+    <div class="why">The actual pick printed gloss-black on matte-black — it's THERE, you just can't quite read it until it unlocks. The cruelest tease on the wall.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR7</b>Gilt Edge</div>
+    <div class="card blk w7"><div class="ctr">
+      <div class="mono" style="font-size:12px;letter-spacing:.42em;color:#d8d8dc">MEMBERS ONLY</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.24em;color:rgba(255,255,255,.35)">TONIGHT'S Nº 214</div></div></div>
+    <div class="why">Painted gold edges like a luxury business card — black face, gold rim. The gold is literally around the edge of the reveal.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR8</b>Black Envelope + Seal</div>
+    <div class="card blk2 w8"><div class="flap"></div>
+      <div class="seal" style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:3"><img src="gary.png"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;bottom:20px;text-align:center;font-size:9.5px;letter-spacing:.3em;color:rgba(255,255,255,.4)">DO NOT SHARE · Nº 214</div></div>
+    <div class="why">Black envelope, gold bear wax seal on the flap. Breaking the seal IS the reveal animation.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR9</b>Velvet Rope</div>
+    <div class="card w9"><div class="post" style="left:30px"></div><div class="post" style="right:30px"></div><div class="rope"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;top:36px;text-align:center;font-size:11.5px;letter-spacing:.4em;color:#d8d8dc">MEMBERS ONLY</div>
+      <div class="mono" style="position:absolute;left:0;right:0;bottom:30px;text-align:center;font-size:9.5px;letter-spacing:.24em;color:rgba(232,212,139,.7)">THE ROPE DROPS AT 7:05 PM ET</div></div>
+    <div class="why">A gold rope across a dark room. Copy does the work: "the rope drops" when the pick posts.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR10</b>Black Suit</div>
+    <div class="card w10"><div class="lapel"></div><div class="lapel2"></div><div class="square"></div><div class="pocket"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;top:22px;text-align:center;font-size:10px;letter-spacing:.34em;color:rgba(255,255,255,.45)">DRESSED FOR TONIGHT</div></div>
+    <div class="why">Pinstripe, lapels, a gold pocket square where the pick sits. "Black Suit Esq." — the card is wearing the tux.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR11</b>The List</div>
+    <div class="card blk w11"><div class="ctr" style="gap:0;align-items:flex-start;padding-left:70px">
+      <div class="mono" style="font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.45);margin-bottom:10px">TONIGHT'S LIST</div>
+      <div class="ln">M. ██████████</div>
+      <div class="ln you">YOU · Nº 214 ✓</div>
+      <div class="ln">J. ████████</div></div></div>
+    <div class="why">The bouncer's clipboard — your line glows gold. You're on the list; the door opens when the pick drops.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR12</b>Key Card</div>
+    <div class="card blk w12"><div class="ctr">
+      <div class="kh"></div>
+      <div class="mono" style="font-size:10.5px;letter-spacing:.3em;color:#d8d8dc">PRIVATE ROOM · Nº 214</div>
+      <div class="slot2"></div></div></div>
+    <div class="why">Hotel key card to a private room — gold keyhole, black slot. Insert (tap) to enter.</div></div>
+</div>
+
+<h2>B · The Vault, Improved <small>locked until it isn't — 10</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>WR13</b>Vault Door v2</div>
+    <div class="card stl">
+      <i class="bolt" style="left:12px;top:12px"></i><i class="bolt" style="right:12px;top:12px"></i><i class="bolt" style="left:12px;bottom:12px"></i><i class="bolt" style="right:12px;bottom:12px"></i><i class="bolt" style="left:12px;top:50%"></i><i class="bolt" style="right:12px;top:50%"></i>
+      <div class="ctr"><div class="dial"><div class="ptr"></div></div>
+      <div class="numplate">Nº 214 · LOCKED</div></div></div>
+    <div class="why">Your G3 rebuilt: brushed steel, bolts, a real combination dial with a gold pointer. The dial spins on reveal.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR14</b>Safe-Deposit Box</div>
+    <div class="card stl w14"><div class="ctr">
+      <div class="keyplate"><div class="kh2"></div><div class="kh2"></div></div>
+      <div class="numplate">BOX Nº 214</div></div></div>
+    <div class="why">Two keyholes — the bank holds one key, you hold the other. Entitlement = your key turning.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR15</b>The Combination</div>
+    <div class="card stl" style="overflow:hidden">
+      <div class="dial" style="position:absolute;right:-26px;top:50%;transform:translateY(-50%) scale(1.5)"><div class="ptr"></div></div>
+      <div style="position:absolute;left:22px;top:50%;transform:translateY(-50%)">
+        <div class="mono" style="font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.45)">GARY'S PICK</div>
+        <div class="mono" style="font-size:15px;font-weight:700;letter-spacing:.14em;color:#e8eaef;margin-top:8px">LOCKED</div>
+        <div class="mono" style="font-size:10.5px;color:rgba(232,212,139,.85);margin-top:8px">OPENS 7:05 PM ET</div></div></div>
+    <div class="why">The dial as the hero object, half off-frame — cinematic crop instead of a literal door.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR16</b>Wheel Vault</div>
+    <div class="card stl">
+      <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%)">
+        <div class="spoke" style="transform:translate(-50%,-50%) rotate(0deg)"></div>
+        <div class="spoke" style="transform:translate(-50%,-50%) rotate(60deg)"></div>
+        <div class="spoke" style="transform:translate(-50%,-50%) rotate(120deg)"></div>
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--gold-l),#8a6d16);box-shadow:0 3px 8px rgba(0,0,0,.7)"></div></div>
+      <div class="mono" style="position:absolute;left:0;right:0;bottom:18px;text-align:center;font-size:10px;letter-spacing:.28em;color:rgba(255,255,255,.45)">SPIN AT 7:05 PM ET · Nº 214</div></div>
+    <div class="why">The three-spoke bank wheel with a gold hub — grab and spin is the reveal gesture.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR17</b>Time Lock</div>
+    <div class="card stl w17"><div class="ctr">
+      <div class="mono" style="font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.45)">TIME-LOCKED VAULT</div>
+      <div class="count">02:14:36</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.22em;color:rgba(255,255,255,.35)">UNTIL FIRST PITCH · Nº 214</div></div></div>
+    <div class="why">A literal time-lock: amber countdown on steel. Nobody — not even Gary — opens it early. Great for pre-game props too.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR18</b>Vault Ajar</div>
+    <div class="card"><div class="leak"></div><div class="glow"></div>
+      <div class="door">
+        <i class="bolt" style="left:12px;top:12px"></i><i class="bolt" style="left:12px;bottom:12px"></i>
+        <div class="dial" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.8)"><div class="ptr"></div></div></div></div>
+    <div class="why">The door's already cracked — gold light leaking out the edge. The strongest "it's IN there" image; door swings on tap.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR19</b>The Ingot Slot</div>
+    <div class="card stl w19"><div class="ctr">
+      <div class="mono" style="font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.45)">DEPOSITORY · Nº 214</div>
+      <div style="width:190px;height:14px;border-radius:7px;background:#0a0a0c;box-shadow:inset 0 3px 7px rgba(0,0,0,.95)"></div>
+      <div class="ingot">GARY · FINE GOLD · 999.9</div></div></div>
+    <div class="why">The gold bar half-delivered through the slot — the wrapper admits what the product is: bullion.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR20</b>Blast Door</div>
+    <div class="card stl w20"><div class="stripe2" style="top:0"></div><div class="stripe2" style="bottom:0"></div>
+      <div class="ctr"><div class="mono" style="font-size:11px;letter-spacing:.3em;color:#e8eaef;font-weight:700">AUTHORIZED MEMBERS ONLY</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.22em;color:rgba(255,255,255,.4)">CLEARANCE: PREMIUM · Nº 214</div></div></div>
+    <div class="why">Hazard-striped blast door — industrial instead of banker. Loudest of the vault family.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR21</b>The Keyhole</div>
+    <div class="card blk2"><div class="ctr">
+      <div style="width:54px;height:54px;border-radius:50%;background:radial-gradient(circle,#f7e7ae 32%,transparent 33%),radial-gradient(circle at 50% 76%,#f7e7ae 12%,transparent 13%);filter:blur(1px) drop-shadow(0 0 18px rgba(247,231,174,.65))"></div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.3em;color:rgba(255,255,255,.4)">LOOK CLOSER · Nº 214</div></div></div>
+    <div class="why">Pure black card, one gold-lit keyhole. The gold card is what's glowing through it. Minimal, mysterious, cheap to animate.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR22</b>Hasp & Padlock</div>
+    <div class="card blk w22"><div class="hasp"></div><div class="pad"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;top:24px;text-align:center;font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.45)">GARY'S PICK · Nº 214</div>
+      <div class="mono" style="position:absolute;left:0;right:0;bottom:20px;text-align:center;font-size:9.5px;letter-spacing:.22em;color:rgba(232,212,139,.7)">UNLOCKS AT 7:05 PM ET</div></div>
+    <div class="why">A gold padlock through a steel hasp, straight across the card. The shackle pops on reveal — crowd-pleaser physics.</div></div>
+</div>
+
+<h2>C · Fashion House <small>the drop, not the deposit — 10</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>WR23</b>Garment Bag</div>
+    <div class="card blk2 w23"><div class="teeth"></div><div class="zip"></div><div class="pull"></div>
+      <div class="lbl" style="position:absolute;left:0;right:0;bottom:24px;text-align:center">GARY</div></div>
+    <div class="why">Black garment bag, gold zipper pull mid-run. Unzip = reveal. The suit inside is gold.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR24</b>Dust Bag</div>
+    <div class="card w24"><div class="cinch"></div><div class="draw"></div>
+      <div class="ctr"><img src="gary.png" style="width:56px;height:56px;object-fit:contain;filter:sepia(1) saturate(2.4) brightness(1.1);opacity:.8">
+      <div class="lbl" style="font-size:10px">GARY · MEMBERS ONLY</div></div></div>
+    <div class="why">The cloth dust bag luxury goods sleep in, bear embroidered. Softest texture on the wall — nice contrast in a rail of metal.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR25</b>Tissue + Seal</div>
+    <div class="card w25"><div class="fold"></div><div class="fold" style="top:30%;transform:rotate(5deg)"></div>
+      <div class="seal" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)"><img src="gary.png"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;bottom:16px;text-align:center;font-size:9px;letter-spacing:.26em;color:rgba(90,74,50,.6)">SEALED · Nº 214 · DO NOT OPEN BEFORE 7:05</div></div>
+    <div class="why">Cream tissue folded over the card, gold sticker-seal unbroken. The only LIGHT wrapper — reads instantly as "unopened purchase."</div></div>
+
+  <div class="slot"><div class="tag"><b>WR26</b>Monogram Canvas</div>
+    <div class="card blk2 w26"><div class="mgrid"></div>
+      <div class="ctr"><div class="name">GARY</div></div></div>
+    <div class="why">The repeating bear-monogram canvas — our LV toile. Instantly reads as a HOUSE, not an app.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR27</b>The Shopping Bag</div>
+    <div class="card blk w27"><div class="handle"></div>
+      <div class="ctr" style="padding-top:30px"><div style="font-family:var(--serif);font-size:26px;letter-spacing:.5em;color:var(--gold-l);text-indent:.5em">GARY</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.26em;color:rgba(255,255,255,.35)">ONE ITEM · Nº 214</div></div></div>
+    <div class="why">Black boutique bag with gold rope handles. "One item" — tonight's pick, wrapped downstairs.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR28</b>Ribbon Band</div>
+    <div class="card blk2 w28"><div class="rib"></div><div class="knot"></div>
+      <div class="mono" style="position:absolute;right:22px;top:22px;font-size:10px;letter-spacing:.26em;color:rgba(255,255,255,.4)">Nº 214</div>
+      <div class="mono" style="position:absolute;right:22px;bottom:20px;font-size:9.5px;letter-spacing:.22em;color:rgba(232,212,139,.7)">PULL AT 7:05 PM ET</div></div>
+    <div class="why">One gold grosgrain ribbon and a knot — off-center like a real atelier wrap. Pull the ribbon, card pours gold.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR29</b>Watch Box</div>
+    <div class="card w29"><div class="stitchbox"></div><div class="clasp"></div>
+      <div class="ctr"><div class="lbl" style="font-size:11px">GARY · GENEVE</div>
+      <div class="mono" style="font-size:9px;letter-spacing:.24em;color:rgba(255,255,255,.3)">CERTIFIED · Nº 214</div></div></div>
+    <div class="why">Stitched leather watch box with a gold clasp. Says heirloom; the pick inside is the movement.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR30</b>Maison Minimal</div>
+    <div class="card blk2 w30"><div class="ctr" style="gap:14px">
+      <div class="n">GARY</div><div class="rule"></div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.3em;color:rgba(255,255,255,.35)">Nº 214 — PARFUM DE CONVICTION</div></div></div>
+    <div class="why">Perfume-box minimalism: serif name, one gold rule, a joke only fashion people will catch.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR31</b>The Tux</div>
+    <div class="card w31"><div class="lapel"></div><div class="lapel2"></div><div class="btn"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;top:20px;text-align:center;font-size:10px;letter-spacing:.32em;color:rgba(255,255,255,.4)">BLACK TIE · Nº 214</div></div>
+    <div class="why">Satin lapels meeting at a single gold button. Undo the button = reveal. Sibling of WR10, dressier.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR32</b>Box + Tissue Peek</div>
+    <div class="card blk2 w32"><div class="lid"></div><div class="tissue"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;top:38px;text-align:center;font-size:11px;letter-spacing:.4em;color:#d8d8dc">G A R Y</div></div>
+    <div class="why">The lid's already lifting — gold tissue crinkling out of the seam. Anticipation without showing anything.</div></div>
+</div>
+
+<h2>D · Classified <small>secretive, not decorative — 8</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>WR33</b>The Dossier</div>
+    <div class="card blk w33"><div class="tab">GARY EYES ONLY</div><div class="clasp2"></div>
+      <div class="ctr" style="align-items:flex-start;padding-left:40px">
+      <div class="mono" style="font-size:13px;font-weight:700;letter-spacing:.22em;color:#e8eaef">CLASSIFIED</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.2em;color:rgba(255,255,255,.4)">CASE Nº 214 · TONIGHT</div></div></div>
+    <div class="why">Black folder, gold clasp, tab label. Flip the cover — the gold card is the first page.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR34</b>Redacted Memo</div>
+    <div class="card w34" style="padding:20px 22px">
+      <div class="hd">MEMORANDUM — GARY / MEMBERS</div>
+      <div class="txt" style="margin-top:12px">RE: tonight's play.</div>
+      <div class="bar" style="width:82%"></div>
+      <div class="bar" style="width:60%"></div>
+      <div class="txt" style="margin-top:8px">Odds: <b style="color:#8a2f27">████</b> · Confidence: HIGH</div>
+      <div class="mono" style="position:absolute;bottom:14px;left:22px;font-size:9px;color:#8a2f27;letter-spacing:.2em">DECLASSIFIED 7:05 PM ET</div></div>
+    <div class="why">A paper memo with the pick physically redacted. The bars slide off at post time. Funny AND on-brand secretive.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR35</b>Wax-Sealed Letter</div>
+    <div class="card blk2"><div style="position:absolute;inset:0;background:linear-gradient(180deg,#19191c 0%,#101012 100%);clip-path:polygon(0 0,100% 0,100% 30%,50% 62%,0 30%)"></div>
+      <div class="seal" style="position:absolute;left:50%;top:40%;transform:translate(-50%,-50%)"><img src="gary.png"></div>
+      <div class="mono" style="position:absolute;left:0;right:0;bottom:22px;text-align:center;font-size:10px;letter-spacing:.3em;color:rgba(232,212,139,.75)">FOR THE MEMBER · Nº 214</div></div>
+    <div class="why">WR8's dressier cousin — deeper flap, seal riding the fold, addressed "for the member."</div></div>
+
+  <div class="slot"><div class="tag"><b>WR36</b>Sign to Reveal</div>
+    <div class="card blk w36"><div class="ctr" style="gap:6px">
+      <div class="mono" style="font-size:10px;letter-spacing:.28em;color:rgba(255,255,255,.45)">NON-DISCLOSURE · Nº 214</div>
+      <div class="line"><span class="x">✕</span></div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.2em;color:rgba(232,212,139,.7)">SIGN HERE TO OPEN</div></div></div>
+    <div class="why">An NDA with a signature line — the user literally swipes their finger across it to reveal. Gesture IS the wrapper.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR37</b>Speakeasy Slot</div>
+    <div class="card blk2 w37"><div class="ctr">
+      <div class="mono" style="font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.4)">KNOCK TWICE</div>
+      <div class="slot3"><div class="eyes"></div></div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.22em;color:rgba(255,255,255,.3)">PASSWORD: Nº 214</div></div></div>
+    <div class="why">The sliding peep-slot on a speakeasy door, gold light behind it. "Knock twice" = double-tap to open.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR38</b>The Cipher</div>
+    <div class="card blk w38"><div class="ctr" style="gap:8px">
+      <div class="mono" style="font-size:10px;letter-spacing:.3em;color:rgba(255,255,255,.4)">ENCRYPTED PICK</div>
+      <div class="cipher">XKQ4 · MB7Z · Δ214</div>
+      <div class="mono" style="font-size:9.5px;letter-spacing:.22em;color:rgba(255,255,255,.35)">KEY ARRIVES 7:05 PM ET</div></div></div>
+    <div class="why">The pick as ciphertext in gold — the characters unscramble into REDS MONEYLINE at post time. Very animatable.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR39</b>Evidence Bag</div>
+    <div class="card blk2 w39"><div class="tape"><span>SEALED · DO NOT TAMPER</span></div>
+      <div class="mono" style="position:absolute;left:22px;top:22px;font-size:10px;letter-spacing:.26em;color:rgba(255,255,255,.4)">EXHIBIT Nº 214</div>
+      <div class="mono" style="position:absolute;left:22px;bottom:20px;font-size:9.5px;letter-spacing:.2em;color:rgba(232,212,139,.7)">OPENS IN COURT · 7:05 PM ET</div></div>
+    <div class="why">Gold tamper tape across the card. Tearing it is satisfying and irreversible — like the bet.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR40</b>The Briefcase</div>
+    <div class="card w40"><div class="stitch"></div><div class="hndl"></div>
+      <div class="lk" style="left:56px"><i></i></div><div class="lk" style="right:56px"><i></i></div>
+      <div class="mono" style="position:absolute;left:0;right:0;bottom:20px;text-align:center;font-size:9.5px;letter-spacing:.26em;color:rgba(232,212,139,.75)">COMBINATION: 2·1·4</div></div>
+    <div class="why">Leather attaché with two gold combination locks set to the pick number. Latches snap open on reveal.</div></div>
+</div>
+
+<h2>E · Conceal the Words <small>the card stays beautiful — only the pick hides — 10</small></h2>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>WR41</b>Baseline: today's blur</div>
+    <div class="card" style="background:#121110;border:1px solid rgba(255,255,255,.10)">
+      <div style="position:absolute;inset:0;filter:blur(4.5px);opacity:.7;padding:20px 22px">
+        <div class="mono" style="font-size:10.5px;letter-spacing:.3em;color:var(--gold)">GARY'S PICK</div>
+        <div style="font-family:var(--disp);font-weight:700;font-size:52px;line-height:.92;color:#fff;margin-top:10px">REDS<br>MONEYLINE</div></div>
+      <div class="ctr"><span style="color:var(--gold)" class="lock"></span></div></div>
+    <div class="why">Reference — the current whole-card blur + lock. Everything below beats it.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR42</b>Words-Only Blur</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero blurwords">REDS<br>MONEYLINE</div>
+      <div class="meta">MLB · <span class="blurwords" style="filter:blur(7px)">@ Brewers</span> · <b class="blurwords" style="filter:blur(7px)">+172</b></div>
+      <div class="foot"><span>UNLOCKS 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">Your idea, straight: the gold card fully crisp and gorgeous — ONLY the pick words are smeared. The product sells itself while withholding.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR43</b>Frosted Strip</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero" style="opacity:.25;filter:blur(3px)">REDS<br>MONEYLINE</div>
+      <div style="position:absolute;left:14px;top:46px;width:76%;height:104px;border-radius:12px;background:rgba(255,252,235,.22);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:inset 0 1px 0 rgba(255,255,255,.5);z-index:4;display:flex;align-items:center;justify-content:center">
+        <span class="mono" style="font-size:10px;letter-spacing:.3em;color:#4a3a08">TAP TO WIPE</span></div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>TONIGHT · 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">A pane of frosted glass over just the hero — "tap to wipe" like a steamed mirror. Matchup and odds stay readable (tease policy decides which).</div></div>
+
+  <div class="slot"><div class="tag"><b>WR44</b>Redaction Bars</div>
+    <div class="card gbar w44"><div class="eb">GARY'S PICK</div>
+      <div class="redact" style="left:20px;top:56px;width:190px;height:44px"></div>
+      <div class="redact" style="left:20px;top:106px;width:300px;height:44px;transform:rotate(-.6deg)"></div>
+      <div class="meta">MLB · @ Brewers · <b>████</b></div>
+      <div class="foot"><span>DECLASSIFIED 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">Ink-black government bars stamped over the hero on the gold bar. The bars SLIDE OFF on reveal. Strong with the memo copy voice.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR45</b>Scrambled Type</div>
+    <div class="card gbar w45"><div class="eb">GARY'S PICK</div>
+      <div class="hero scr">DRSE<br>NYEMONLIE</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>UNSCRAMBLES 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">Same letters, wrong order — the anagram sits in plain sight and shuffles into place at post time. Fans will try to solve it (that's engagement).</div></div>
+
+  <div class="slot"><div class="tag"><b>WR46</b>Block Glyphs</div>
+    <div class="card gbar"><div class="eb">GARY'S PICK</div>
+      <div class="hero" style="letter-spacing:.06em">████<br>█████████</div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>UNLOCKS 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">The hero typed in solid blocks — you can count the letters, nothing more. Zero effects budget, ships in an hour.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR47</b>Scratch-Off</div>
+    <div class="card gbar w47"><div class="eb">GARY'S PICK</div>
+      <div class="hero">REDS<br>MONEYLINE</div>
+      <div class="latex"></div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>TONIGHT · 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">Silver lottery latex over the hero — thumb-scratch to reveal (real particle shavings in the app). The most fun a reveal can physically be.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR48</b>Signal Static</div>
+    <div class="card gbar w48"><div class="eb">GARY'S PICK</div>
+      <div class="hero" style="opacity:.2">REDS<br>MONEYLINE</div>
+      <div class="static"></div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>SIGNAL AT 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">TV static over the words — the broadcast hasn't started. Static dissolves at post time.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR49</b>Gold Smear</div>
+    <div class="card gbar w49"><div class="eb">GARY'S PICK</div>
+      <div class="smear"></div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>CONDENSES 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">The pick as a smear of molten light — not hidden BY something, just not condensed into letters yet. Pure 21B-S lore: the pour hasn't set.</div></div>
+
+  <div class="slot"><div class="tag"><b>WR50</b>Halftone Dissolve</div>
+    <div class="card gbar w50"><div class="eb">GARY'S PICK</div>
+      <div class="hero" style="opacity:.55">REDS<br>MONEYLINE</div>
+      <div class="dots"></div>
+      <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+      <div class="foot"><span>RESOLVES 7:05 PM ET</span><span>Nº 214</span></div></div>
+    <div class="why">The hero materializing out of halftone dots, left to right — frozen mid-print. The reveal finishes the printing.</div></div>
+</div>
+
+</body>
+</html>

@@ -5,6 +5,9 @@ packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
     version: 12.9.0
+  Lottie:
+    url: https://github.com/airbnb/lottie-ios
+    from: 4.5.0
 settings:
   base:
     DEVELOPMENT_TEAM: SFBTX6KPLM
@@ -12,8 +15,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     INFOPLIST_FILE: Info.plist
     IPHONEOS_DEPLOYMENT_TARGET: 16.0
-    MARKETING_VERSION: 2.17
-    CURRENT_PROJECT_VERSION: 5
+    MARKETING_VERSION: 2.18
+    CURRENT_PROJECT_VERSION: 6
 targets:
   GaryApp:
     type: application
@@ -27,6 +30,8 @@ targets:
     dependencies:
       - package: Firebase
         product: FirebaseMessaging
+      - package: Lottie
+        product: Lottie
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

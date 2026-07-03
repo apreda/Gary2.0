@@ -1883,8 +1883,8 @@ INVESTIGATION COMPLETE`
           earlyPick.rawAnalysis = message.content;
           // Attach the same narrative + briefing fields the normal final-return
           // path at the bottom of this loop attaches, so the pick object's
-          // downstream consumers (pick_context / Talk to Gary / cost tracking)
-          // see identical metadata regardless of which path produced the pick.
+          // downstream consumers (logs / cost tracking) see identical metadata
+          // regardless of which path produced the pick.
           try {
             earlyPick._fullAssistantNarrative = messages
               .filter(m => m.role === 'assistant' && m.content && typeof m.content === 'string')

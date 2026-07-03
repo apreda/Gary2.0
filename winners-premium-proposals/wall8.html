@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 8 — Prop Cards, Grounded · 20 More</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --ink:#08080A;
+    --sil:#CBC7C1; --sil-l:#DCD7D0; --sil-d:#B4AEA6;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(120% 100% at 50% 0%,#151210,#0A0908 55%);color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:860px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:44px}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold)}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5}
+
+  /* THE STANDARD CARD — every option below is this card + one prop idea */
+  .card{position:relative;width:100%;height:232px;border-radius:20px;padding:20px 22px;overflow:hidden;
+    background:#121110;border:1px solid rgba(255,255,255,.10);box-shadow:0 18px 34px rgba(0,0,0,.55)}
+  .eb{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;color:var(--gold);position:relative;z-index:2}
+  .hero{font-family:var(--disp);font-weight:700;font-size:52px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:10px;color:#fff;position:relative;z-index:2}
+  .hero .l2{display:block;font-size:29px;letter-spacing:.01em;margin-top:4px}
+  .meta{font-family:var(--mono);font-size:12.5px;margin-top:12px;color:rgba(255,255,255,.55);position:relative;z-index:2}
+  .meta b{font-weight:700;color:var(--gold)}
+  .foot{position:absolute;left:22px;right:22px;bottom:14px;padding-top:11px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;display:flex;justify-content:space-between;color:var(--gold);border-top:1px solid rgba(255,255,255,.10);z-index:2}
+
+  /* P51 silver twin type */
+  .p51 .eb{color:var(--sil)}.p51 .hero .l2{color:var(--sil-l)}.p51 .foot{color:var(--sil)}
+  /* P52 ghost number, gold outline */
+  .gnum{position:absolute;right:-4px;top:-22px;font-family:var(--disp);font-weight:700;font-size:225px;line-height:1;color:transparent;z-index:1}
+  .p52 .gnum{-webkit-text-stroke:2px rgba(201,162,39,.28)}
+  /* P53 ghost number, filled ember */
+  .p53 .gnum{-webkit-text-stroke:1.5px rgba(232,212,139,.16);color:rgba(232,212,139,.05)}
+  /* P54 tape-measure footer */
+  .p54 .foot{border-top:none;padding-top:16px}
+  .p54 .ruler{position:absolute;left:0;right:0;bottom:44px;height:16px;z-index:1;
+    background:
+      repeating-linear-gradient(90deg,transparent 0 55px,rgba(232,212,139,.75) 55px 56.5px),
+      repeating-linear-gradient(90deg,transparent 0 11px,rgba(255,255,255,.30) 11px 12px)}
+  .p54 .mark{position:absolute;left:37%;bottom:60px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:11px solid var(--gold);z-index:2;filter:drop-shadow(0 0 6px rgba(201,162,39,.6))}
+  .p54 .mlab{position:absolute;left:34%;bottom:74px;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--gold-l);z-index:2}
+  /* P55 vertical ruler right edge */
+  .p55 .vr{position:absolute;top:0;bottom:0;right:16px;width:16px;z-index:1;
+    background:
+      repeating-linear-gradient(180deg,transparent 0 44px,rgba(232,212,139,.7) 44px 45.5px),
+      repeating-linear-gradient(180deg,transparent 0 11px,rgba(255,255,255,.28) 11px 12px)}
+  .p55 .vmark{position:absolute;right:36px;top:96px;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--gold-l);z-index:2}
+  .p55 .vtri{position:absolute;right:33px;top:100px;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:9px solid var(--gold);z-index:2}
+  /* P56 slim column */
+  .p56 .tube{position:absolute;right:26px;top:24px;bottom:48px;width:12px;border-radius:8px;background:#1d1f24;box-shadow:inset 0 2px 5px rgba(0,0,0,.8);z-index:1}
+  .p56 .fill{position:absolute;left:2.5px;right:2.5px;bottom:2.5px;height:64%;border-radius:6px;background:linear-gradient(180deg,var(--gold-l),var(--gold));box-shadow:0 0 10px rgba(201,162,39,.45)}
+  .p56 .tick{position:absolute;right:42px;top:100px;width:44px;text-align:right;font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.6);border-top:1px dashed rgba(255,255,255,.5);padding-top:2px;z-index:2}
+  /* P57 segment meter */
+  .segs{display:flex;gap:5px;margin-top:12px;position:relative;z-index:2;width:78%}
+  .segs i{flex:1;height:9px;border-radius:3px;background:rgba(255,255,255,.10);font-style:normal;position:relative}
+  .segs i.g{background:linear-gradient(180deg,var(--gold-l),var(--gold));box-shadow:0 0 8px rgba(201,162,39,.4)}
+  .segs i b{position:absolute;left:-2px;top:12px;font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.45);font-weight:400}
+  .segs .lin{position:absolute;left:calc(50% - 1px);top:-5px;bottom:-5px;width:2px;background:#fff;border-radius:2px}
+  /* P58 line chip */
+  .p58 .hero{display:flex;align-items:flex-start;gap:14px}
+  .p58 .chipn{font-family:var(--disp);font-weight:700;font-size:52px;color:var(--ink);background:linear-gradient(170deg,var(--gold-l),var(--gold));border-radius:14px;padding:2px 12px 0;line-height:1.05;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 4px 10px rgba(0,0,0,.5)}
+  .p58 .stack{line-height:.92}
+  /* P59 two-tone hero */
+  .p59 .hero .l2{color:var(--gold-l);font-size:34px}
+  /* P60 chevrons */
+  .p60 .chev{position:absolute;right:22px;top:78px;display:flex;align-items:flex-end;gap:3px;z-index:1}
+  .p60 .chev s{text-decoration:none;color:var(--gold);font-size:20px;opacity:.35}
+  .p60 .chev s:nth-child(2){font-size:27px;opacity:.6}
+  .p60 .chev s:nth-child(3){font-size:34px;opacity:1;text-shadow:0 0 12px rgba(201,162,39,.5)}
+  /* P61 player demoted, call is hero */
+  .p61 .pl{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--sil);margin-top:14px;position:relative;z-index:2}
+  .p61 .pl b{color:#fff;font-weight:700}
+  .p61 .hero{margin-top:6px;font-size:58px}
+  /* P62 silver seam */
+  .p62{border:1px solid rgba(203,199,193,.38)}
+  .p62 .eb{color:var(--sil)}.p62 .foot{color:var(--sil);border-top:1px solid rgba(203,199,193,.22)}
+  /* P63 stat-unit watermark */
+  .p63 .gu{position:absolute;right:-14px;bottom:-40px;font-family:var(--disp);font-weight:700;font-size:250px;line-height:1;color:transparent;-webkit-text-stroke:2px rgba(203,199,193,.14);z-index:1}
+  /* P64 sparkline */
+  .p64 .spark{position:absolute;right:22px;bottom:52px;display:flex;align-items:flex-end;gap:4px;height:54px;z-index:1}
+  .p64 .spark i{width:9px;border-radius:2px 2px 0 0;background:rgba(255,255,255,.18)}
+  .p64 .spark i.g{background:linear-gradient(180deg,var(--gold-l),var(--gold))}
+  .p64 .lline{position:absolute;right:18px;bottom:78px;width:132px;border-top:1.5px dashed rgba(255,255,255,.55);z-index:1}
+  .p64 .llab{position:absolute;right:154px;bottom:72px;font-family:var(--mono);font-size:9.5px;color:rgba(255,255,255,.6);z-index:1}
+  /* P65 to-cash dots */
+  .p65 .dots{display:flex;gap:10px;align-items:center;margin-top:14px;position:relative;z-index:2}
+  .p65 .dots i{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--gold);box-shadow:0 0 10px rgba(201,162,39,.35)}
+  .p65 .dots span{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;color:var(--gold-l)}
+  /* P66 corner gauge */
+  .p66 .dial{position:absolute;right:20px;bottom:50px;width:108px;height:54px;border-radius:108px 108px 0 0;overflow:hidden;z-index:1}
+  .p66 .dial::before{content:"";position:absolute;inset:0;background:conic-gradient(from -90deg at 50% 100%,rgba(255,255,255,.14) 0deg,var(--gold) 112deg,rgba(255,255,255,.10) 116deg 180deg,transparent 180deg)}
+  .p66 .dial::after{content:"";position:absolute;left:9px;right:9px;top:9px;bottom:-26px;border-radius:108px 108px 0 0;background:#121110}
+  .p66 .ndl{position:absolute;right:74px;bottom:50px;width:44px;height:2px;background:#fff;transform-origin:right center;transform:rotate(-58deg);z-index:2;box-shadow:0 0 6px rgba(255,255,255,.6)}
+  /* P67 odds rail */
+  .p67 .rail{position:absolute;right:22px;top:56px;text-align:right;font-family:var(--mono);font-size:12px;line-height:2;z-index:1;padding-right:12px;border-right:2px solid rgba(201,162,39,.6)}
+  .p67 .rail .on{color:var(--gold-l);font-weight:700}
+  .p67 .rail .off{color:rgba(255,255,255,.28)}
+  /* P68 dog-ear */
+  .p68::before{content:"";position:absolute;top:0;right:0;width:56px;height:56px;background:linear-gradient(225deg,#0A0908 50%,rgba(203,199,193,.9) 50%,rgba(160,156,150,.9));border-radius:0 20px 0 8px;z-index:3}
+  .p68::after{content:"PROP";position:absolute;top:29px;right:3px;transform:rotate(-45deg);font-family:var(--mono);font-size:7.5px;letter-spacing:.14em;color:#121110;font-weight:700;z-index:4}
+  /* P69 ruled call underline */
+  .rule-under{width:64%;height:12px;margin-top:8px;position:relative;z-index:2;
+    background:
+      repeating-linear-gradient(90deg,transparent 0 40px,rgba(232,212,139,.8) 40px 41.5px),
+      repeating-linear-gradient(90deg,transparent 0 8px,rgba(255,255,255,.30) 8px 9px)}
+  .rule-under i{position:absolute;left:41%;top:-6px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--gold)}
+  /* P70 composite */
+  .p70 .gnum{-webkit-text-stroke:1.5px rgba(203,199,193,.18);font-size:210px;top:-14px}
+  .p70 .eb{color:var(--sil)}
+</style>
+</head>
+<body>
+<h1>ROUND 8 — <span>prop cards, grounded</span> · 20 more</h1>
+<p class="sub">All 20 are the STANDARD dark pick card — same bg, border, Skyscraper type, gold odds — plus exactly one prop idea. Built from what you flagged: P20's ghost number, P33's tape measure + contrast, P34's column. P70 is the marriage of your three.</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>P51</b>Silver Type Twin</div>
+    <div class="card p51"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The minimum viable difference: eyebrow, call line and footer go silver, odds stay gold. Today's silver language, skyscraper size.</div></div>
+
+  <div class="slot"><div class="tag"><b>P52</b>Ghost Number — gold wire</div>
+    <div class="card"><div class="gnum p52g" style="-webkit-text-stroke:2px rgba(201,162,39,.28)">2</div><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · 2B · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">P20 refined: jersey number as gold wireframe, position added to the meta. The number glows instead of hiding.</div></div>
+
+  <div class="slot"><div class="tag"><b>P53</b>Ghost Number — ember fill</div>
+    <div class="card p53"><div class="gnum">44</div><div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+      <div class="meta">MLB · SS · CIN @ MIL · <b>-115</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">Same idea, softer: faint warm fill + hairline stroke. Reads as heat coming off the number.</div></div>
+
+  <div class="slot"><div class="tag"><b>P54</b>Tape Footer</div>
+    <div class="card p54"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="mlab">1.5</div><div class="mark"></div><div class="ruler"></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">P33 tightened: the footer divider IS the ruler now — white ticks, gold inch-marks, glowing marker planted at the line.</div></div>
+
+  <div class="slot"><div class="tag"><b>P55</b>Vertical Ruler</div>
+    <div class="card p55"><div class="vr"></div><div class="vmark">6.5</div><div class="vtri"></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot" style="right:56px"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">The same ruler stood on end along the right edge — K count climbs it live. Quieter than the footer version.</div></div>
+
+  <div class="slot"><div class="tag"><b>P56</b>Slim Column</div>
+    <div class="card p56"><div class="tube"><div class="fill"></div></div><div class="tick">1.5 —</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot" style="right:56px"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">P34 slimmed to a pencil column — gold fill past the dashed line, soft glow. Live: rises with each hit.</div></div>
+
+  <div class="slot"><div class="tag"><b>P57</b>Segment Meter</div>
+    <div class="card"><div class="eb">GARY'S PROP</div>
+      <div class="hero">DE LA CRUZ<span class="l2">OVER 1.5 TOTAL BASES</span></div>
+      <div class="segs"><i><b>0</b></i><i><b>1</b></i><i class="g"><b>2</b></i><i class="g"><b>3</b></i><span class="lin"></span></div>
+      <div class="meta" style="margin-top:16px">MLB · CIN @ MIL · <b>-115</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The line drawn as a white gate on a segment bar — everything right of it is gold (Gary's side). Segments light live.</div></div>
+
+  <div class="slot"><div class="tag"><b>P58</b>Line Chip</div>
+    <div class="card p58"><div class="eb">GARY'S PROP</div>
+      <div class="hero"><span class="chipn">1.5</span><span class="stack">OVER<br><span style="font-size:29px">TURANG HITS</span></span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The line struck as a solid gold token beside the call — the number is the only gold object on the card.</div></div>
+
+  <div class="slot"><div class="tag"><b>P59</b>Two-Tone Hero</div>
+    <div class="card p59"><div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>›</span></div></div>
+    <div class="why">Purely typographic: player white, call gold (UNDER calls would go silver). Zero furniture — the type system carries it.</div></div>
+
+  <div class="slot"><div class="tag"><b>P60</b>Rising Chevrons</div>
+    <div class="card p60"><div class="chev"><s>▲</s><s>▲</s><s>▲</s></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">Direction as a crescendo — three gold chevrons stepping up (down + silver for unders). Small, legible from across the room.</div></div>
+
+  <div class="slot"><div class="tag"><b>P61</b>Call-First</div>
+    <div class="card p61"><div class="eb">GARY'S PROP</div>
+      <div class="pl"><b>BRICE TURANG</b> · 2B · MIL vs CIN</div>
+      <div class="hero">OVER 1.5 HITS</div>
+      <div class="meta">MLB · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">Layout inversion: player demoted to a silver ID line, the CALL is the skyscraper. Instantly different silhouette from game cards.</div></div>
+
+  <div class="slot"><div class="tag"><b>P62</b>Silver Seam</div>
+    <div class="card p62"><div class="eb">GARY'S PROP</div>
+      <div class="hero">ARRAEZ<span class="l2">OVER 0.5 HITS</span></div>
+      <div class="meta">MLB · SD @ LAD · <b>-180</b></div>
+      <div class="foot"><span>TONIGHT · 10:10 PM ET</span><span>›</span></div></div>
+    <div class="why">The old premium-seam trick in silver: brighter silver hairline border + silver chrome. Subtlest option on the wall.</div></div>
+
+  <div class="slot"><div class="tag"><b>P63</b>Stat-Unit Watermark</div>
+    <div class="card p63"><div class="gu">K</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 STRIKEOUTS</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot"><span>TONIGHT · 8:15 PM ET</span><span>›</span></div></div>
+    <div class="why">Not the player's number — the STAT's letter (K, H, TB, G) as a giant silver wireframe. The card wears what's being counted.</div></div>
+
+  <div class="slot"><div class="tag"><b>P64</b>Last-10 Sparkline</div>
+    <div class="card p64">
+      <div class="llab">1.5</div><div class="lline"></div>
+      <div class="spark"><i style="height:18px"></i><i class="g" style="height:38px"></i><i style="height:12px"></i><i class="g" style="height:46px"></i><i class="g" style="height:30px"></i><i style="height:16px"></i><i class="g" style="height:52px"></i><i style="height:10px"></i><i class="g" style="height:40px"></i><i class="g" style="height:34px"></i></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot" style="right:170px"><span>TONIGHT · 7:40 PM</span></div></div>
+    <div class="why">His last 10 games as bars against the dashed line — gold where he cleared it. Real evidence baked into the card (data exists in the prop tape).</div></div>
+
+  <div class="slot"><div class="tag"><b>P65</b>To-Cash Dots</div>
+    <div class="card p65"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="dots"><i></i><i></i><span>2 TO CASH</span></div>
+      <div class="meta" style="margin-top:14px">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The bet as empty gold rings — one fills per hit. The most "sweat with me" version; feels like a game.</div></div>
+
+  <div class="slot"><div class="tag"><b>P66</b>Corner Gauge</div>
+    <div class="card p66"><div class="dial"></div><div class="ndl"></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">SKENES<span class="l2">OVER 6.5 K</span></div>
+      <div class="meta">MLB · PIT @ STL · <b>-130</b></div>
+      <div class="foot" style="right:140px"><span>TONIGHT · 8:15 PM</span></div></div>
+    <div class="why">The wall-7 gauge shrunk to a corner instrument — needle into the gold zone, nothing else changed.</div></div>
+
+  <div class="slot"><div class="tag"><b>P67</b>Both Sides Priced</div>
+    <div class="card p67">
+      <div class="rail"><div class="on">O 1.5 · +145</div><div class="off">U 1.5 · -170</div></div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · MIL vs CIN</div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">The market's two prices on a right rail, Gary's side lit gold, the fade ghosted. Shows the read AND the pass.</div></div>
+
+  <div class="slot"><div class="tag"><b>P68</b>Dog-Ear</div>
+    <div class="card p68"><div class="eb">GARY'S PROP</div>
+      <div class="hero">OYARZABAL<span class="l2">ANYTIME GOAL</span></div>
+      <div class="meta">WC · ESP vs SUI · <b>+160</b></div>
+      <div class="foot"><span>TOMORROW · 3:00 PM ET</span><span>›</span></div></div>
+    <div class="why">A silver folded corner, like the page you saved. Physical, small, unmistakable at rail speed.</div></div>
+
+  <div class="slot"><div class="tag"><b>P69</b>Ruled Underline</div>
+    <div class="card"><div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2">OVER 1.5 HITS</span></div>
+      <div class="rule-under"><i></i></div>
+      <div class="meta" style="margin-top:14px">MLB · MIL vs CIN · <b>+145</b></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">P33 fused into the typography — the call is underlined BY the ruler, marker on the line. No separate instrument zone.</div></div>
+
+  <div class="slot"><div class="tag"><b>P70</b>The Composite (P20 × P33)</div>
+    <div class="card p70 p54"><div class="gnum">2</div>
+      <div class="eb">GARY'S PROP</div>
+      <div class="hero">TURANG<span class="l2" style="color:var(--gold-l)">OVER 1.5 HITS</span></div>
+      <div class="meta">MLB · 2B · MIL vs CIN · <b>+145</b></div>
+      <div class="mlab">1.5</div><div class="mark"></div><div class="ruler"></div>
+      <div class="foot"><span>TONIGHT · 7:40 PM ET</span><span>›</span></div></div>
+    <div class="why">Your favorites married, restrained: silver ghost number + gold call line + tape-measure footer with the marker at 1.5. My pick of the wall.</div></div>
+
+</div>
+</body>
+</html>

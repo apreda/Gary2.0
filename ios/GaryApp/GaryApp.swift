@@ -73,10 +73,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         request.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "p_device_token": token,
             "p_platform": "ios"
         ]
+        // Identity (auth user, else install UUID) rides along so pick-drop pushes
+        // can tier payers (full pick) vs free users (tease). Server COALESCEs, so
+        // a later signed-in re-register upgrades the token's identity.
+        body["p_identity"] = SupabaseAPI.identityId
 
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)

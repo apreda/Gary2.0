@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 17 — Wrapper Systems + 5 New</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-l:#E8D48B; --gold-w:#F4E4BA; --ink:#08080A;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    --disp:'Avenir Next Condensed','Arial Narrow',Impact,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08070a;color:#FAF8F5;font-family:-apple-system,sans-serif;padding:48px 40px 140px}
+  h1{font-family:var(--disp);font-weight:700;font-size:42px;text-transform:uppercase}
+  h1 span{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.55);margin:10px 0 40px;max-width:880px;line-height:1.65}
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:52px;justify-items:center}
+  .slot{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--gold);align-self:flex-start}
+  .tag b{background:var(--gold);color:var(--ink);padding:1px 8px;border-radius:4px;margin-right:8px}
+  .why{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;max-width:400px;align-self:flex-start}
+
+  .phone{width:390px;background:radial-gradient(120% 90% at 50% 0%,#151210,#0A0908 60%);border-radius:52px;border:9px solid #1d1d20;box-shadow:0 26px 60px rgba(0,0,0,.65);padding:10px 0 16px;position:relative;overflow:hidden}
+  .island{width:118px;height:32px;background:#000;border-radius:18px;margin:4px auto 8px}
+  .phead{padding:8px 22px 0;display:flex;align-items:baseline;gap:10px}
+  .phead h3{font-family:var(--disp);font-weight:700;font-size:27px;letter-spacing:.04em;color:var(--gold)}
+  .phead span{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.45)}
+  .shelf{padding:12px 22px 8px;font-family:var(--mono);font-size:10.5px;color:rgba(255,255,255,.65)}
+  .shelf i{font-style:normal;color:rgba(255,255,255,.35)}
+  .step{padding:8px 22px 6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:rgba(232,212,139,.6);text-align:center}
+  .homebar{width:120px;height:4px;border-radius:3px;background:rgba(255,255,255,.3);margin:14px auto 0}
+
+  .card{position:relative;width:346px;height:232px;border-radius:20px;padding:18px;margin:0 auto;overflow:hidden;box-shadow:0 14px 26px rgba(0,0,0,.5)}
+  .eb{font-family:var(--mono);font-size:11px;letter-spacing:.22em;position:relative;z-index:3}
+  .hero{font-family:var(--disp);font-weight:700;font-size:50px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase;margin-top:8px;position:relative;z-index:3}
+  .meta{font-family:var(--mono);font-size:12px;margin-top:10px;position:relative;z-index:3}
+  .meta b{font-weight:700}
+  .foot{position:absolute;left:18px;right:18px;bottom:12px;padding-top:10px;font-family:var(--mono);font-size:10.5px;display:flex;justify-content:space-between;z-index:3}
+
+  .gbar{background:
+    radial-gradient(130% 100% at 16% 10%,rgba(255,252,235,.5),transparent 40%),
+    radial-gradient(110% 90% at 85% 92%,rgba(56,40,4,.45),transparent 48%),
+    linear-gradient(158deg,#eccf78,#b6952c 34%,#96781a 52%,#d9bc63 74%,#8f7318);
+    box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,252,235,.9),inset 0 -3px 0 rgba(58,44,4,.7)}
+  .gbar .eb{color:#4a3a08}.gbar .hero{color:#2c2304;text-shadow:0 1px 0 rgba(255,252,235,.55)}
+  .gbar .meta{color:#5c4708}.gbar .meta b{color:#3a2c04}
+  .gbar .foot{color:#4a3a08;border-top:1px solid rgba(58,44,4,.35)}
+
+  .blk{background:
+    repeating-linear-gradient(45deg,rgba(255,255,255,.012) 0 2px,transparent 2px 4px),
+    linear-gradient(165deg,#1a1a1c,#0d0d0f 60%,#121214)}
+  .stl{background:
+    radial-gradient(110% 130% at 30% 20%,rgba(255,255,255,.09),transparent 50%),
+    linear-gradient(165deg,#33353b,#1b1d22 55%,#25272d)}
+  .ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;z-index:3}
+  .bolt{position:absolute;width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#c9ccd4,#5d626c 70%);box-shadow:0 1px 2px rgba(0,0,0,.8)}
+  .mono2{font-family:var(--mono)}
+</style>
+</head>
+<body>
+<h1>ROUND 17 — <span>wrapper systems</span> + 5 new ideas</h1>
+<p class="sub">Top two: the full flow (wrapped state → tap → gold bar) for Members Only and Vault. Below: five NEW wrapper concepts that weren't in the 50. All true app size.</p>
+<div class="wall">
+
+  <div class="slot"><div class="tag"><b>M1</b>MEMBERS ONLY — the full flow</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="step">1 · PICK DROPS — WRAPPED</div>
+      <div class="card blk"><div class="ctr">
+        <img src="gary-chrome.png" style="width:84px;height:84px;object-fit:contain;filter:drop-shadow(0 6px 12px rgba(0,0,0,.8))">
+        <div class="mono2" style="font-size:12px;letter-spacing:.5em;color:#c8c8cc;text-indent:.5em">MEMBERS ONLY</div>
+        <div class="mono2" style="font-size:9.5px;letter-spacing:.26em;color:rgba(255,255,255,.35)">Nº 214 · TAP TO REVEAL</div></div></div>
+      <div class="step">2 · TAP — POURS INTO THE BAR</div>
+      <div class="card gbar"><div class="eb">GARY'S PICK</div>
+        <div class="hero">REDS<br>MONEYLINE</div>
+        <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+        <div class="foot"><span>TONIGHT · 7:05 PM ET</span><span>Nº 214</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The black card sits in the rail until you tap; the reveal is a light-sweep dissolve — black burns away, gold pours in (SwiftUI: opacity+mask sweep, cheap and smooth). Chrome bear is the crest of the wrapped state only.</div></div>
+
+  <div class="slot"><div class="tag"><b>M2</b>THE VAULT — the full flow</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="step">1 · PICK DROPS — LOCKED</div>
+      <div class="card stl">
+        <i class="bolt" style="left:12px;top:12px"></i><i class="bolt" style="right:12px;top:12px"></i><i class="bolt" style="left:12px;bottom:12px"></i><i class="bolt" style="right:12px;bottom:12px"></i>
+        <div class="ctr">
+          <div style="width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 38% 32%,#4a4e58,#22242a 70%);box-shadow:0 6px 14px rgba(0,0,0,.7),inset 0 2px 0 rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center">
+            <img src="gary-chrome.png" style="width:76px;height:76px;object-fit:contain"></div>
+          <div class="mono2" style="font-size:10.5px;letter-spacing:.22em;color:#d9bc63;background:#101114;padding:5px 12px;border-radius:5px;box-shadow:inset 0 2px 5px rgba(0,0,0,.9)">Nº 214 · LOCKED</div></div></div>
+      <div class="step">2 · TAP — MEDALLION SPINS, DOOR SWINGS</div>
+      <div class="card gbar"><div class="eb">GARY'S PICK</div>
+        <div class="hero">REDS<br>MONEYLINE</div>
+        <div class="meta">MLB · @ Brewers · <b>+172</b></div>
+        <div class="foot"><span>TONIGHT · 7:05 PM ET</span><span>Nº 214</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Steel door with the bear medallion as the dial. Tap: medallion spins 270°, thunk haptic, door swings on a 3D hinge (rotation3DEffect — same mechanic as the existing card flip). Heavier build, bigger payoff.</div></div>
+
+  <div class="slot"><div class="tag"><b>N1</b>NEW — The Ingot Mold</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="shelf">MLB <i>· pick incoming</i></div>
+      <div class="card" style="background:linear-gradient(165deg,#1b1c21,#141519 60%,#191a1f);box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(230,233,240,.4),inset 0 -3px 0 rgba(0,0,0,.9)">
+        <div style="position:absolute;left:34px;right:34px;top:52px;bottom:64px;border-radius:10px;background:#0c0c0f;box-shadow:inset 0 4px 12px rgba(0,0,0,.95),inset 0 -1px 0 rgba(255,255,255,.08)"></div>
+        <div class="mono2" style="position:absolute;left:0;right:0;top:22px;text-align:center;font-size:10px;letter-spacing:.3em;color:#aeb3bf;z-index:3">GARY'S MINT</div>
+        <div class="mono2" style="position:absolute;left:0;right:0;bottom:22px;text-align:center;font-size:9.5px;letter-spacing:.22em;color:rgba(232,212,139,.75);z-index:3">CASTING Nº 214 · POURS AT 7:05 PM ET</div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The card is an EMPTY ingot mold — a dark recess waiting. At post time molten gold pours in (animated fill rising in the recess), sets, and the whole card becomes the bar. The purest extension of "Poured — Still."</div></div>
+
+  <div class="slot"><div class="tag"><b>N2</b>NEW — Awaiting the Number</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="shelf">MLB <i>· pick incoming</i></div>
+      <div class="card" style="background:#0c0d10;border:1px solid rgba(232,212,139,.18)">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px);z-index:1"></div>
+        <div class="eb" style="color:rgba(232,212,139,.6)">GARY / TAPE — LIVE</div>
+        <div class="mono2" style="font-size:19px;color:var(--gold-l);margin-top:34px;position:relative;z-index:3">AWAITING GARY'S<br>NUMBER<span style="display:inline-block;width:11px;height:20px;background:var(--gold-l);margin-left:8px;vertical-align:-2px;animation:bl 1s steps(1) infinite"></span></div>
+        <div class="foot" style="color:rgba(232,212,139,.55);border-top:1px solid rgba(232,212,139,.18)"><span>SLATE 9 GAMES · Nº 214 QUEUED</span><span>▮▮▯</span></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">Quant Terminal language: a live tape screen with a blinking cursor. On drop, the pick TYPES itself out character by character, then the screen flips to the gold bar. Ties the reveal to the app's terminal DNA.</div></div>
+  <style>@keyframes bl{50%{opacity:0}}</style>
+
+  <div class="slot"><div class="tag"><b>N3</b>NEW — The Cigar Band</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="shelf">MLB <i>· pick incoming</i></div>
+      <div class="card blk">
+        <div style="position:absolute;left:0;right:0;top:78px;height:76px;z-index:3;
+          background:linear-gradient(180deg,#8a6d16,#c9a227 18%,#e8d48b 50%,#c9a227 82%,#8a6d16);box-shadow:0 4px 14px rgba(0,0,0,.6)">
+          <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:92px;height:60px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#12100a,#241d0c);border:2.5px solid #f4e4ba;display:flex;align-items:center;justify-content:center">
+            <img src="gary-chrome.png" style="width:44px;height:44px;object-fit:contain"></div>
+          <div class="mono2" style="position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:8.5px;letter-spacing:.2em;color:#3a2c04;font-weight:700">GARY</div>
+          <div class="mono2" style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:8.5px;letter-spacing:.2em;color:#3a2c04;font-weight:700">Nº 214</div></div>
+        <div style="position:absolute;right:30px;top:8px;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle,rgba(200,200,205,.14),transparent 65%);filter:blur(6px);z-index:2"></div>
+        <div style="position:absolute;right:60px;top:-14px;width:44px;height:70px;border-radius:50%;background:radial-gradient(circle,rgba(200,200,205,.10),transparent 65%);filter:blur(8px);z-index:2"></div>
+        <div class="mono2" style="position:absolute;left:0;right:0;bottom:20px;text-align:center;font-size:9.5px;letter-spacing:.24em;color:rgba(232,212,139,.7);z-index:3">SLIDE THE BAND OFF AT 7:05 PM ET</div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The most GARY idea on the wall: the pick wearing his cigar band — ornate gold band, bear medallion, smoke drifting off the top. Reveal: the band slides off and the smoke clears to the gold bar. Nobody else can ship this; it's his mascot's own prop.</div></div>
+
+  <div class="slot"><div class="tag"><b>N4</b>NEW — The Betting Window</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="shelf">MLB <i>· pick incoming</i></div>
+      <div class="card" style="background:repeating-linear-gradient(180deg,#2e3036 0 14px,#22242a 14px 16px,#3a3d44 16px 28px);box-shadow:0 14px 26px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.15)">
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#101114;border:1.5px solid rgba(232,212,139,.5);border-radius:8px;padding:12px 22px;text-align:center;z-index:3;box-shadow:0 4px 14px rgba(0,0,0,.6)">
+          <div class="mono2" style="font-size:10px;letter-spacing:.24em;color:var(--gold-l);font-weight:700">WINDOW Nº 214</div>
+          <div class="mono2" style="font-size:9px;letter-spacing:.18em;color:rgba(255,255,255,.5);margin-top:6px">OPENS 7:05 PM ET</div></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(180deg,#4a4e58,#1b1d22);z-index:2"></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">A rolled-down teller shutter — the racetrack betting window, closed. At post time the shutter ROLLS UP (slats collapsing upward) revealing the gold bar behind the glass. Betting heritage instead of luxury heritage.</div></div>
+
+  <div class="slot"><div class="tag"><b>N5</b>NEW — Face-Down Card</div>
+    <div class="phone"><div class="island"></div>
+      <div class="phead"><h3>WINNERS</h3><span>Friday, July 3</span></div>
+      <div class="shelf">MLB <i>· pick incoming</i></div>
+      <div class="card blk" style="border:1px solid rgba(201,162,39,.4)">
+        <div style="position:absolute;inset:10px;border:1.5px solid rgba(201,162,39,.55);border-radius:12px;z-index:2"></div>
+        <div style="position:absolute;inset:22px;border-radius:8px;z-index:2;opacity:.5;
+          background-image:url(gary-chrome.png);background-size:46px;background-repeat:repeat"></div>
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;background:rgba(13,13,15,.85);padding:8px 18px;border-radius:8px">
+          <div class="mono2" style="font-size:10.5px;letter-spacing:.4em;color:var(--gold-l);text-indent:.4em;font-weight:700">GARY</div></div></div>
+      <div class="homebar"></div></div>
+    <div class="why">The pick dealt FACE-DOWN — a casino card back in our monogram. Reveal: it flips over, and the flip already exists in the app (FlippablePickCard's rotation3DEffect). The cheapest build of all seven, and the most gambling-native metaphor there is.</div></div>
+
+</div>
+</body>
+</html>

@@ -22,7 +22,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 })
 
 // Service-role client for server-side pipeline writes that RLS blocks for the
-// anon key (e.g. pick_context — written only by the pipeline, never the app).
+// anon key (pipeline-only tables the app never touches).
 // daily_picks already bypasses RLS via the direct-REST storeDailyPicks helper;
 // this gives the supabase-js write paths the same admin access. Falls back to
 // the anon client when no service key is set (writes will then hit RLS).

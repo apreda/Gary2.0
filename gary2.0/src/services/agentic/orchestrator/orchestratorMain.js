@@ -298,8 +298,9 @@ context for player-level evaluation. Investigate the game thoroughly first.
     result.homeTeam = homeTeam;
     result.awayTeam = awayTeam;
 
-    // Attach investigation artifacts so the picks pipeline can persist them to
-    // pick_context for the "Talk to Gary" chat feature. We capture:
+    // Attach investigation artifacts for downstream logging/debugging (the
+    // pick_context table + Talk-to-Gary feature that once consumed these was
+    // removed Jul 2 2026; kept because logs and cost tracking still read them):
     //   - Gary's data scout report (what he saw)
     //   - Flash's investigation-ready scout report
     //   - Flash research briefing (the per-factor findings)

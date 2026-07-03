@@ -805,16 +805,21 @@ enum SupabaseAPI {
     /// Active Stripe-purchased entitlements ("MLB", "ALL", ...). Union of
     /// account and device grants, so a board bought signed-out (keyed to the
     /// install) stays unlocked after signing in.
+    ///
+    /// Reads via the `get_entitlements` SECURITY DEFINER RPC (2.18): the anon
+    /// key can ask about ids it already holds but can never enumerate the
+    /// table — the old direct SELECT let anyone dump every installation_id
+    /// and impersonate one for a free unlock.
     static func fetchEntitlements() async -> Set<String> {
         struct Row: Decodable { let product_key: String? }
-        let ids = Set([identityId, installationId])
-        let orFilter = ids.map { "installation_id.eq.\($0)" }.joined(separator: ",")
-        let url = buildURL(table: "user_entitlements", query: [
-            URLQueryItem(name: "select", value: "product_key"),
-            URLQueryItem(name: "or", value: "(\(orFilter))"),
-            URLQueryItem(name: "status", value: "eq.active")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/get_entitlements") else { return [] }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_ids": Array(Set([identityId, installationId]))])
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([Row].self, from: data) else { return [] }
         return Set(rows.compactMap { $0.product_key })

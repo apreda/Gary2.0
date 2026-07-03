@@ -522,11 +522,15 @@ async function writeRecap(args: {
   return res.ok ? "recap" : "fail";
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   if (!BDL_KEY) return new Response(JSON.stringify({ ok: false, error: "BALLDONTLIE_API_KEY not set" }),
     { status: 500, headers: { "Content-Type": "application/json" } });
 
-  const dates = [estDate(0), estDate(-1)]; // today + yesterday (late finals)
+  // ?date=YYYY-MM-DD re-grades ONE specific ET day (backfill/repair — used
+  // Jul 2 2026 to heal rows the pre-ET-filter deploy cross-graded against
+  // adjacent-day series games). Default: today + yesterday (late finals).
+  const dateParam = new URL(req.url).searchParams.get("date");
+  const dates = /^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "") ? [dateParam!] : [estDate(0), estDate(-1)];
   const stats = { insert: 0, update: 0, noop: 0, fail: 0, skipped: 0,
     recap: 0, recap_exists: 0, recap_fail: 0 };
   // Per-run evidence caches shared across recaps (BDL box score + prop_results).
