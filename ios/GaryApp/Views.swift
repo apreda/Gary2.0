@@ -6561,8 +6561,8 @@ struct PremiumPicksView: View {
                                 .font(GaryFonts.mono(13, bold: true))
                                 .foregroundStyle(GaryColors.gold)
                             Text("\(GaryPricing.trialDays)-DAY FREE TRIAL")
-                                .font(.system(size: 8.5, weight: .semibold)).tracking(0.8)
-                                .foregroundStyle(.white.opacity(0.5))
+                                .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.6))
                         }
                         Text("Start ›")
                             .font(.system(size: 12, weight: .semibold))
@@ -6906,8 +6906,8 @@ struct PremiumPicksView: View {
                                     .font(GaryFonts.mono(15, bold: true))
                                     .foregroundStyle(rec.w >= rec.l ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
                                 Text("LAST 10")
-                                    .font(.system(size: 8.5, weight: .semibold)).tracking(0.8)
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                                    .foregroundStyle(.white.opacity(0.6))
                             }
                         }
                         Text(preorder ? "Pre-order ›" : "Unlock ›")
@@ -22905,19 +22905,25 @@ struct PropsHubView: View {
                     ForEach(availableLeagues, id: \.self) { l in
                         let on = l == sel
                         Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l } } label: {
-                            Text(l.label)
-                                .font(GaryFonts.mono(10.5, bold: on)).tracking(0.8)
-                                // Pin to one line at intrinsic width so a long date
-                                // accent can't squeeze "NBA" into stacked letters
-                                // (the broken-pill bug, Jun 13 2026).
-                                .lineLimit(1)
-                                .fixedSize()
-                                .foregroundStyle(on ? GaryColors.selectedText : Color.white.opacity(0.5))
-                                .padding(.horizontal, 11).padding(.vertical, 5)
-                                .background(
-                                    Capsule().fill(on ? GaryColors.selectedFill : Color.white.opacity(0.05))
-                                        .overlay(Capsule().stroke(on ? Color.white.opacity(0.25) : Color.white.opacity(0.08), lineWidth: 1))
-                                )
+                            // Colored-when-active, no bubbles (founder rule): active
+                            // league = white over a gold underline, the rest plain
+                            // quiet text — the app-wide tab language.
+                            VStack(spacing: 4) {
+                                Text(l.label)
+                                    .font(GaryFonts.mono(10.5, bold: on)).tracking(0.8)
+                                    // Pin to one line at intrinsic width so a long date
+                                    // accent can't squeeze "NBA" into stacked letters
+                                    // (the broken-pill bug, Jun 13 2026).
+                                    .lineLimit(1)
+                                    .fixedSize()
+                                    .foregroundStyle(on ? GaryColors.selectedText : Color.white.opacity(0.55))
+                                Capsule()
+                                    .fill(GaryColors.gold)
+                                    .frame(height: 2)
+                                    .opacity(on ? 1 : 0)
+                            }
+                            .padding(.horizontal, 5).padding(.vertical, 3)
+                            .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                 }
