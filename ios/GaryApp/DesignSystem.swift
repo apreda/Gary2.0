@@ -56,9 +56,12 @@ enum GaryColors {
     /// Section sub-heads (replaces the gold mono eyebrows).
     static let sectionHead = GaryColors.gold.opacity(0.92)   // sections speak gold, like the web
     /// Section descriptions and quiet supporting labels.
-    static let sectionSub = Color.white.opacity(0.45)
-    /// Metadata: times, game tags, fine print.
-    static let meta = Color.white.opacity(0.35)
+    /// (Lifted 0.45→0.62 Jul 3 — founder's standing rule: secondary text on the
+    /// near-black bg must sit ≥~0.6 white; 0.4-grey-on-black is a recurring gripe.)
+    static let sectionSub = Color.white.opacity(0.62)
+    /// Metadata: times, game tags, fine print. (Lifted 0.35→0.55, same rule —
+    /// kept a step below sectionSub so the hierarchy survives.)
+    static let meta = Color.white.opacity(0.55)
     /// Selected state for toggles/tabs/chips — a bright neutral fill.
     static let selectedText = Color.white.opacity(0.95)
     static let selectedFill = Color.white.opacity(0.12)

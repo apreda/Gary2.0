@@ -2789,7 +2789,7 @@ struct HomeView: View {
             // The affordance: these records tap through to the picks.
             Image(systemName: "chevron.right")
                 .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(.white.opacity(0.32))
+                .foregroundStyle(.white.opacity(0.45))
         }
         .lineLimit(1)
     }
@@ -4241,7 +4241,7 @@ struct HomeMarqueeHero: View {
                     Spacer()
                     Text("BEFORE THE GAME")
                         .font(GaryFonts.mono(9, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .padding(.bottom, 14)
 
@@ -4265,7 +4265,7 @@ struct HomeMarqueeHero: View {
                     VStack(alignment: .leading, spacing: 7) {
                         Text("THE FACT CHECK")
                             .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.35))
+                            .foregroundStyle(.white.opacity(0.5))
                         ForEach(Array(story.claims.prefix(4).enumerated()), id: \.offset) { _, c in
                             HStack(alignment: .top, spacing: 8) {
                                 Text(c.verdict == "right" ? "✓" : "✗")
@@ -4287,7 +4287,7 @@ struct HomeMarqueeHero: View {
                         HStack(spacing: 6) {
                             Text("CONVICTION")
                                 .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
-                                .foregroundStyle(.white.opacity(0.35))
+                                .foregroundStyle(.white.opacity(0.5))
                             Text(tier)
                                 .font(GaryFonts.mono(11, bold: true))
                                 .foregroundStyle(.white.opacity(0.85))
@@ -4307,7 +4307,7 @@ struct HomeMarqueeHero: View {
 
                 Text("tap to flip back  ↺")
                     .font(GaryFonts.mono(9, bold: false))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .foregroundStyle(.white.opacity(0.45))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.bottom, 8)
             }
@@ -4594,13 +4594,13 @@ struct HomeCompactStrip: View {
                     .font(GaryFonts.mono(11.5, bold: true))
                     .foregroundStyle(.white.opacity(0.92))
                 if let net {
-                    Text("·").foregroundStyle(.white.opacity(0.3))
+                    Text("·").foregroundStyle(.white.opacity(0.45))
                     Text(String(format: "%+.1fu", net))
                         .font(GaryFonts.mono(11.5, bold: true))
                         .foregroundStyle(net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
                 }
                 if let suffix {
-                    Text("·").foregroundStyle(.white.opacity(0.3))
+                    Text("·").foregroundStyle(.white.opacity(0.45))
                     Text(suffix)
                         .font(GaryFonts.mono(11)).tracking(0.6)
                         .foregroundStyle(.white.opacity(0.45))
@@ -4608,7 +4608,7 @@ struct HomeCompactStrip: View {
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(.white.opacity(0.5))
             }
             .padding(.vertical, 12).padding(.horizontal, 14)
             .contentShape(Rectangle())
@@ -4825,7 +4825,7 @@ struct HomeGarysForm: View {
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(.white.opacity(0.45))
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
                 }
@@ -4896,7 +4896,7 @@ struct HomeWorldCupModule: View {
                 Circle().fill(teal).frame(width: 6, height: 6)
                 Text(compact ? "WORLD CUP · WIRE" : "HEADLINE")
                     .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(.white.opacity(0.5))
             }
             Text(item.headline ?? "")
                 .font(.system(size: compact ? 14.5 : 17, weight: compact ? .semibold : .bold))
@@ -5182,7 +5182,7 @@ struct HomePropBoxSection: View {
                 switch row.state {
                 case "won":  Text("✓").foregroundStyle(Color(hex: "#3FB950"))
                 case "lost": Text("✗").foregroundStyle(Color(hex: "#E5484D"))
-                default:     Text("–").foregroundStyle(.white.opacity(0.35))
+                default:     Text("–").foregroundStyle(.white.opacity(0.5))
                 }
             }
             .font(.system(size: 12, weight: .bold))
@@ -5226,7 +5226,7 @@ struct HomeLiveTape: View {
                                 }
                                 Text(cell.eyebrow)
                                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                                    .foregroundStyle(.white.opacity(0.35))
+                                    .foregroundStyle(.white.opacity(0.5))
                             }
                             Text(cell.line)
                                 .font(GaryFonts.mono(13, bold: true))
@@ -5293,7 +5293,7 @@ struct HomeLiveTakeover: View {
                     if let detail = live.detail {
                         Text(detail.uppercased())
                             .font(GaryFonts.mono(9, bold: true)).tracking(0.4)
-                            .foregroundStyle(.white.opacity(0.35))
+                            .foregroundStyle(.white.opacity(0.5))
                     }
                 }
                 HStack(alignment: .center) {
@@ -6504,7 +6504,7 @@ struct PremiumPicksView: View {
             } else {
                 Button { withAnimation { isPremium = false } } label: {
                     Text("✓ Premium active · tap to reset preview")
-                        .font(GaryFonts.mono(10)).tracking(1).foregroundStyle(.white.opacity(0.3))
+                        .font(GaryFonts.mono(10)).tracking(1).foregroundStyle(.white.opacity(0.45))
                 }
                 .frame(maxWidth: .infinity).padding(.top, 12)
             }
@@ -6562,7 +6562,7 @@ struct PremiumPicksView: View {
                                 .foregroundStyle(GaryColors.gold)
                             Text("\(GaryPricing.trialDays)-DAY FREE TRIAL")
                                 .font(.system(size: 8.5, weight: .semibold)).tracking(0.8)
-                                .foregroundStyle(.white.opacity(0.35))
+                                .foregroundStyle(.white.opacity(0.5))
                         }
                         Text("Start ›")
                             .font(.system(size: 12, weight: .semibold))
@@ -6611,7 +6611,7 @@ struct PremiumPicksView: View {
         if authManager.isAuthenticated {
             Text("SIGNED IN AS \((authManager.currentUser?.email ?? "—").uppercased())")
                 .font(GaryFonts.mono(10)).tracking(1)
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.white.opacity(0.5))
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 4)
@@ -6630,7 +6630,7 @@ struct PremiumPicksView: View {
                 .buttonStyle(.plain)
                 Text("Unlocks follow your account once you're signed in.")
                     .font(GaryFonts.text(11))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(.white.opacity(0.5))
                     .frame(maxWidth: .infinity)
             }
         }
@@ -6907,7 +6907,7 @@ struct PremiumPicksView: View {
                                     .foregroundStyle(rec.w >= rec.l ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
                                 Text("LAST 10")
                                     .font(.system(size: 8.5, weight: .semibold)).tracking(0.8)
-                                    .foregroundStyle(.white.opacity(0.35))
+                                    .foregroundStyle(.white.opacity(0.5))
                             }
                         }
                         Text(preorder ? "Pre-order ›" : "Unlock ›")
@@ -7493,7 +7493,7 @@ struct PlansSheetView: View {
                     .font(GaryFonts.mono(10, bold: true)).tracking(1.6)
                     .foregroundStyle(GaryColors.gold.opacity(0.92))
                 (Text("\(s.allW.formatted())")
-                    + Text("–").foregroundColor(.white.opacity(0.3))
+                    + Text("–").foregroundColor(.white.opacity(0.45))
                     + Text("\(s.allL.formatted())"))
                     .font(GaryFonts.mono(42, bold: true))
                     .foregroundStyle(.white.opacity(0.96))
@@ -7650,7 +7650,7 @@ struct PlansSheetView: View {
     private var legalFooter: some View {
         Text("Plans bill through Stripe and cancel anytime. The \(GaryPricing.trialPhrase) requires a card and converts to \(GaryPricing.allAccessMonthly)/mo unless cancelled. An account keeps your boards across devices.")
             .font(GaryFonts.text(10))
-            .foregroundStyle(.white.opacity(0.3))
+            .foregroundStyle(.white.opacity(0.45))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 16)
     }
@@ -7841,7 +7841,7 @@ struct PlansSheetView: View {
                         .foregroundStyle(GaryColors.gold)
                     Text(per)
                         .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
             }
             .padding(16)
@@ -8317,10 +8317,10 @@ struct GaryPicksView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "clock.arrow.counterclockwise")
                                         .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.35))
+                                        .foregroundStyle(.white.opacity(0.5))
                                     Text("Yesterday's Results")
                                         .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(.white.opacity(0.35))
+                                        .foregroundStyle(.white.opacity(0.5))
                                     Text(yesterdayRecord)
                                         .font(.system(size: 12, weight: .bold))
                                         .foregroundStyle(GaryColors.gold)
@@ -9356,7 +9356,7 @@ struct GaryPropsView: View {
             Text("").frame(width: 22)
         }
         .font(GaryFonts.mono(8, bold: true)).tracking(1)
-        .foregroundStyle(.white.opacity(0.35))
+        .foregroundStyle(.white.opacity(0.5))
         .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 9)
     }
 
@@ -9398,7 +9398,7 @@ struct GaryPropsView: View {
                         resultChip(result)
                     } else {
                         Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.3))
+                            .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.45))
                     }
                 }
                 .frame(width: 22)
@@ -9793,7 +9793,7 @@ struct QuantKpiTile: View {
             if let sub {
                 Text(sub)
                     .font(GaryFonts.mono(8, bold: false)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.32)).lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(.white.opacity(0.45)).lineLimit(1).minimumScaleFactor(0.7)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -10358,7 +10358,7 @@ struct TomorrowView {
                 } else {
                     Text("ERA —")
                         .font(GaryFonts.mono(11))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
             }
         }
@@ -10411,7 +10411,7 @@ struct TomorrowView {
                 } else {
                     Text("—")
                         .font(GaryFonts.mono(11))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
             }
         }
@@ -11029,7 +11029,7 @@ struct TomorrowView {
                         Spacer(minLength: 4)
                         Text(wcCode(awayName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
                         Text(String(format: "%.1f", ap)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(ap >= hp ? GaryColors.gold : .white.opacity(0.88))
-                        Text("–").font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.35))
+                        Text("–").font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.5))
                         Text(String(format: "%.1f", hp)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(hp >= ap ? GaryColors.gold : .white.opacity(0.88))
                         Text(wcCode(homeName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
                     }
@@ -11061,7 +11061,7 @@ struct TomorrowView {
                         Text("\(odds.likelyAway)–\(odds.likelyHome)").font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.92))
                         Text("\(wcCode(awayName))–\(wcCode(homeName))").font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.4))
                         if let po = odds.pOver, let t = m.lines?.total {
-                            Text("·").foregroundStyle(.white.opacity(0.3)).font(GaryFonts.mono(11))
+                            Text("·").foregroundStyle(.white.opacity(0.45)).font(GaryFonts.mono(11))
                             Text("Over \(Self.trimNum(t)) \(Self.pct(po))").font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.72))
                         }
                         Spacer(minLength: 0)
@@ -11178,7 +11178,7 @@ struct TomorrowView {
                                         if parts.count == 2 {
                                             Text(parts[0])
                                                 .foregroundStyle(parts[0] == teamAbbr ? GaryColors.gold : .white.opacity(0.4))
-                                            Text("@").foregroundStyle(.white.opacity(0.3))
+                                            Text("@").foregroundStyle(.white.opacity(0.45))
                                             Text(parts[1])
                                                 .foregroundStyle(parts[1] == teamAbbr ? GaryColors.gold : .white.opacity(0.4))
                                         } else {
@@ -11263,7 +11263,7 @@ struct TomorrowView {
                                 if let t = p.team, !t.isEmpty {
                                     Text(t)
                                         .font(GaryFonts.mono(8.5)).tracking(0.5)
-                                        .foregroundStyle(.white.opacity(0.35))
+                                        .foregroundStyle(.white.opacity(0.5))
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -12223,8 +12223,8 @@ struct BillfoldView: View {
 
             chartTimeframeRow
             Text("Flat-stake tracking \u{00B7} hypothetical, not investment results")
-                .font(GaryFonts.mono(8.5))
-                .foregroundStyle(.white.opacity(0.3))
+                .font(GaryFonts.mono(9.5))
+                .foregroundStyle(.white.opacity(0.55))
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 2)
         }
@@ -12236,14 +12236,22 @@ struct BillfoldView: View {
     private var chartHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
+                // Quant Terminal labels (mono, never .system) — one line each,
+                // scale before EVER wrapping ("HYPOTHETICA/L" was wrapping mid-word).
                 Text(chartMode == .sports ? "BY SPORT \u{00B7} NET" : "EQUITY CURVE")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(GaryFonts.mono(9.5, bold: true))
                     .tracking(1)
-                    .foregroundStyle(ink.opacity(0.55))
-                Text(showDollarResults ? "$100/BET \u{00B7} HYPOTHETICAL" : "FLAT STAKES \u{00B7} 1U/BET")
-                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(ink.opacity(0.7))
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                // Stake mode only — the "hypothetical, not investment results"
+                // disclaimer already rides under the chart, and the long form
+                // truncated to "HYP…" against the LINE/CANDLES/SPORTS toggles.
+                Text(showDollarResults ? "$100/BET" : "1U/BET")
+                    .font(GaryFonts.mono(9.5, bold: true))
                     .tracking(1)
-                    .foregroundStyle(ink.opacity(0.38))
+                    .foregroundStyle(ink.opacity(0.58))
+                    .lineLimit(1)
 
                 Spacer()
 
@@ -14328,7 +14336,7 @@ struct MembersOnlyCardFace: View {
             if let footnote {
                 Text(footnote)
                     .font(GaryFonts.mono(9, bold: false)).tracking(2.4)
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(.white.opacity(0.5))
             }
         }
         .frame(maxWidth: .infinity)
@@ -15265,12 +15273,18 @@ struct CompactPickRow: View {
     /// rein themselves in per line via minimumScaleFactor, so the type is
     /// always as big as the name allows. D3's ghost mark rides BEHIND the type,
     /// so settled cards need no reserve for it.
-    /// Free/dark cards read at 64 (founder: 76 was too loud there, Jul 3);
-    /// the gold bar keeps its approved 76 base × 1.15 premium scale ≈ 87.
-    private var heroFontSize: CGFloat { premiumFinish ? 76 : 64 }
+    /// Free/dark cards read at 58 (founder walked 76→64→58, Jul 3); the gold
+    /// bar keeps its approved 76 base × 1.15 premium scale ≈ 87.
+    private var heroFontSize: CGFloat { premiumFinish ? 76 : 58 }
     /// Tight stacked leading (the mock's line-height .9) — all-caps display type
     /// has no descenders, so the lines pull together safely.
-    private var heroLineSpacing: CGFloat { premiumFinish ? -24 : -20 }
+    private var heroLineSpacing: CGFloat { premiumFinish ? -24 : -18 }
+    // Optical spacing (Jul 3 spacing pass): Barlow smuggles ~0.22em of invisible
+    // leading above the caps and ~0.25em below the baseline. These pads target a
+    // TRUE 12pt gap eyebrow→hero and hero→meta at ANY size or finish — no more
+    // hand-tuned magic numbers drifting when the type scale changes.
+    private var heroTopPad: CGFloat { 12 - 0.22 * heroFontSize * pf }
+    private var metaTopPad: CGFloat { 12 - 0.25 * heroFontSize * pf }
 
     /// Meta slot after the league token — opponent + time/live/final + odds.
     /// State-aware: live games show the live line, settled show the score.
@@ -15402,10 +15416,7 @@ struct CompactPickRow: View {
                     // off the bottom edge of the dark letters.
                     .shadow(color: premiumFinish ? GoldBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
                     .opacity(d3Dim(0.36))
-                    // Negative: Barlow carries ~0.22em of invisible leading above
-                    // the caps — the mock's line-height .9 crops it, SwiftUI can't,
-                    // so the optical gap is restored by pulling the box up.
-                    .padding(.top, -8)
+                    .padding(.top, heroTopPad)
                     // A WON gold bar carries the check + payout block down its right
                     // side — reserve that column so long picks wrap clear of the
                     // money. Dark cards only keep the bear's corner clear (the D3
@@ -15439,7 +15450,7 @@ struct CompactPickRow: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share this pick")
                 }
-                .padding(.top, -8)
+                .padding(.top, metaTopPad)
                 .opacity(d3Dim(0.45))
 
                 // Footer — the live line while the game runs (teams + score + COVERING/
@@ -15857,7 +15868,7 @@ struct ScoreboardPickCard: View {
                         Text(sig.uppercased())
                             .font(GaryFonts.mono(9, bold: true))
                             .tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.35))
+                            .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
                     Spacer()
@@ -15897,7 +15908,7 @@ struct ScoreboardPickCard: View {
                     Text("CONVICTION")
                         .font(GaryFonts.mono(8.5, bold: true))
                         .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.white.opacity(0.08))
@@ -16066,7 +16077,7 @@ struct SportsbookLinesDropdown: View {
                         .foregroundStyle(GaryColors.gold)
                     Text("(\(odds.count))")
                         .font(GaryFonts.mono(9.5, bold: false))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(GaryColors.gold).rotationEffect(.degrees(open ? 90 : 0))
@@ -16100,7 +16111,7 @@ struct SportsbookLinesDropdown: View {
                                     Text(String(format: "%+.1f", s) + juice)
                                         .foregroundStyle(.white.opacity(0.75))
                                 } else {
-                                    Text("—").foregroundStyle(.white.opacity(0.3))
+                                    Text("—").foregroundStyle(.white.opacity(0.45))
                                 }
                             }
                             .font(GaryFonts.mono(11.5))
@@ -16109,7 +16120,7 @@ struct SportsbookLinesDropdown: View {
                                 if let ml = o.ml, !ml.isEmpty, ml != "-" {
                                     Text(ml).foregroundStyle(GaryColors.gold.opacity(0.9))
                                 } else {
-                                    Text("—").foregroundStyle(.white.opacity(0.3))
+                                    Text("—").foregroundStyle(.white.opacity(0.45))
                                 }
                             }
                             .font(GaryFonts.mono(11.5, bold: true))
@@ -16484,7 +16495,7 @@ struct ShareCardView: View {
                     Spacer()
                     Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
                         .font(GaryFonts.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .frame(width: cardWidth)
             }
@@ -16674,7 +16685,7 @@ struct SharePropCardView: View {
                     Spacer()
                     Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
                         .font(GaryFonts.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .frame(width: cardWidth)
             }
@@ -17307,7 +17318,7 @@ struct PickCardBack: View {
 
             Text("tap to flip back  ↺")
                 .font(GaryFonts.mono(9, bold: false))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.white.opacity(0.5))
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(14)
@@ -18036,7 +18047,7 @@ struct PropCardMobile: View {
                 if let team = prop.team, prop.player != nil {
                     Text(team)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
             }
 
@@ -18060,7 +18071,7 @@ struct PropCardMobile: View {
                 if let ev = Formatters.computeEV(confidence: prop.confidence, american: prop.odds) {
                     HStack(spacing: 3) {
                         Text("EV")
-                            .foregroundStyle(.white.opacity(0.35))
+                            .foregroundStyle(.white.opacity(0.5))
                         Text(String(format: "+%.1f%%", ev))
                             .foregroundStyle(.green)
                     }
@@ -19388,7 +19399,7 @@ struct EdgesSection: View {
             }
             if edges.isEmpty {
                 Text(note)
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
                     .padding(.horizontal, 16).padding(.vertical, 8)
             } else {
                 if tabbed && kinds.count > 1 { categoryTabBar }
@@ -20477,22 +20488,22 @@ struct TeasedPickCard: View {
                     Spacer()
                 }
 
-                VStack(alignment: .leading, spacing: -20) {
+                VStack(alignment: .leading, spacing: -18) {
                     Text("PICKS")
-                        .font(GaryFonts.display(64))
+                        .font(GaryFonts.display(58))
                         .foregroundStyle(.white)
                     Text("INCOMING")
-                        .font(GaryFonts.display(64))
+                        .font(GaryFonts.display(58))
                         .foregroundStyle(GaryColors.lightGold)
                         .lineLimit(1).minimumScaleFactor(0.5)
                 }
-                .padding(.top, -6)
+                .padding(.top, -1)
                 .padding(.trailing, 52)
 
                 Text("Gary posts his call ~90 minutes before first pitch")
                     .font(GaryFonts.text(13.5, .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .padding(.top, -8)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.top, -3)
 
                 Rectangle()
                     .fill(.white.opacity(0.12))
@@ -20887,7 +20898,7 @@ struct PulseTable: View {
             Divider().background(Color.white.opacity(0.07))
             if cells.isEmpty {
                 Text("No data yet.")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 12)
             } else {
@@ -20906,7 +20917,7 @@ struct PulseTable: View {
             ForEach(Array(columns.enumerated()), id: \.offset) { _, col in
                 Text(col.label.uppercased())
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(.white.opacity(0.5))
                     .frame(maxWidth: .infinity, alignment: alignment(col))
             }
         }
@@ -21355,7 +21366,7 @@ struct PropSlipBack: View {
 
             Text("tap to flip back  ↺")
                 .font(GaryFonts.mono(9, bold: false)).tracking(0.6)
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(.white.opacity(0.45))
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(14)
@@ -21668,7 +21679,7 @@ struct NightBoard: View {
                 switch r.gary_result {
                 case "won":  Text("✓").foregroundStyle(GaryColors.win)
                 case "lost": Text("✗").foregroundStyle(GaryColors.loss)
-                default:     Text("–").foregroundStyle(.white.opacity(0.35))
+                default:     Text("–").foregroundStyle(.white.opacity(0.5))
                 }
             }
             .font(.system(size: 11, weight: .bold))
@@ -21851,7 +21862,7 @@ struct StreakBoard: View {
                 if game != nil {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(.white.opacity(0.45))
                 }
             }
         }
@@ -22652,7 +22663,7 @@ struct PropsHubView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.white.opacity(0.5))
             TextField("Search players, teams, edges", text: $searchText)
                 .font(GaryFonts.mono(12.5))
                 .foregroundStyle(.white)
@@ -22664,7 +22675,7 @@ struct PropsHubView: View {
             if !searchText.isEmpty {
                 Button { searchText = ""; searchFocused = false } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.3))
+                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.45))
                 }.buttonStyle(.plain)
             }
         }
@@ -22706,7 +22717,7 @@ struct PropsHubView: View {
                         .font(GaryFonts.mono(11, bold: true)).tracking(1)
                         .foregroundStyle(.white.opacity(0.5))
                     Text("Try a player, a team, or a lane like \"platoon\".")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
+                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity).padding(.top, 36)
             } else {
@@ -22775,7 +22786,7 @@ struct PropsHubView: View {
             ProgressView().tint(GaryColors.gold)
             Text("PULLING TONIGHT'S BOARD")
                 .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.white.opacity(0.5))
         }
         .frame(maxWidth: .infinity).padding(.top, 110)
     }
@@ -22997,7 +23008,7 @@ struct HubDisclosure<Content: View>: View {
                 if isEmpty {
                     Text("Checking the tape. Updating closer to game time.")
                         .font(GaryFonts.mono(11, bold: false))
-                        .foregroundStyle(.white.opacity(0.32))
+                        .foregroundStyle(.white.opacity(0.45))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                 } else {
@@ -23136,7 +23147,7 @@ struct EdgeCardBack: View {
                 .minimumScaleFactor(0.85)
             Spacer(minLength: 0)
             HStack(spacing: 8) {
-                Text("flip back ↺").font(GaryFonts.mono(8.5)).tracking(0.5).foregroundStyle(.white.opacity(0.3))
+                Text("flip back ↺").font(GaryFonts.mono(8.5)).tracking(0.5).foregroundStyle(.white.opacity(0.45))
                 Spacer()
                 if s.playerId != nil {
                     Button(action: onBreakdown) {
@@ -23504,7 +23515,7 @@ struct RegressionBoard: View {
                 HStack(spacing: 12) {
                     Text("\(i + 1)")
                         .font(GaryFonts.mono(12, bold: true))
-                        .foregroundStyle(.white.opacity(0.3)).frame(width: 18)
+                        .foregroundStyle(.white.opacity(0.45)).frame(width: 18)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(boardName(s)).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6)
                         Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).foregroundStyle(.white.opacity(0.45))
@@ -23612,7 +23623,7 @@ struct WcRegressionBoard: View {
             HStack(spacing: 12) {
                 Text("\(i + 1)")
                     .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(.white.opacity(0.3)).frame(width: 18)
+                    .foregroundStyle(.white.opacity(0.45)).frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(team(s)).font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6)
@@ -23750,7 +23761,7 @@ struct EdgeList: View {
                         .fixedSize()
                 }
                 Image(systemName: isOpen ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.35))
+                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.5))
             }
             if !s.game.isEmpty {
                 Text(s.game.uppercased())
@@ -23897,7 +23908,7 @@ struct EdgeDetailSheet: View {
                             .padding(.trailing, 6)
                     }
                     Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.3))
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.45))
                     }.buttonStyle(.plain)
                 }
                 Text(signal.game.uppercased()).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.55))
@@ -24121,7 +24132,7 @@ struct BeneficiarySwapRow: View {
                         Spacer()
                         Text(s.game.uppercased())
                             .font(GaryFonts.mono(8, bold: false)).tracking(0.6)
-                            .foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                            .foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                     }
 
                     // OUT
@@ -24278,7 +24289,7 @@ struct ConfirmedXISheetView: View {
                     HStack(alignment: .top, spacing: 5) {
                         Text(lineLabel(line))
                             .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(.white.opacity(0.45))
                             .frame(width: 24, alignment: .leading).padding(.top, 1)
                         Text(men.map { surname($0.n) }.joined(separator: ", "))
                             .font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
@@ -24355,6 +24366,12 @@ struct CompactPropRow: View {
     private func d3Dim(_ lostOpacity: Double) -> Double { (isPropLost && !premiumFinish) ? lostOpacity : 1 }
     /// Premium type scale — everything on the metal reads ~15% larger (gold parity).
     private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
+    /// Prop hero cap — matches the free game card (both lines run long and
+    /// self-scale, so the cap mostly sets the ceiling for short names).
+    private var propHeroSize: CGFloat { 58 }
+    // Optical spacing (Jul 3 spacing pass) — see CompactPickRow.heroTopPad.
+    private var heroTopPad: CGFloat { 12 - 0.22 * propHeroSize * pf }
+    private var metaTopPad: CGFloat { 12 - 0.25 * propHeroSize * pf }
     private var eyebrowTint: Color { premiumFinish ? SilverBar.inkSoft : GaryColors.gold }
     private var heroTint: Color { premiumFinish ? SilverBar.inkHero : .white }
     private var propLeagueTint: Color { premiumFinish ? SilverBar.inkStrong : (isMLBProp ? GaryColors.mlbGrass : accentColor) }
@@ -24583,13 +24600,11 @@ struct CompactPropRow: View {
                 .opacity(d3Dim(0.4))
 
                 // Skyscraper hero (game-card parity): one Text per line with tight
-                // leading. Prop lines run long and BOTH usually scale down, so the
-                // cap sits at 64 (not the game's 76) — otherwise the leading math
-                // drifts and the meta line crowds the hero (founder bug, Jul 3).
-                VStack(alignment: .leading, spacing: -20) {
+                // leading; both prop lines run long and self-scale.
+                VStack(alignment: .leading, spacing: -18 * pf) {
                     ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
                         Text(line)
-                            .font(GaryFonts.display(64 * pf))
+                            .font(GaryFonts.display(propHeroSize * pf))
                             .lineLimit(1)
                             .minimumScaleFactor(0.4)
                     }
@@ -24597,7 +24612,7 @@ struct CompactPropRow: View {
                     .foregroundStyle(heroTint)
                     .shadow(color: premiumFinish ? SilverBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
                     .opacity(d3Dim(0.36))
-                    .padding(.top, -6)
+                    .padding(.top, heroTopPad)
                     .padding(.trailing, premiumFinish ? (isSilverWon ? 96 : 60) : 52)
 
                 HStack(alignment: .center, spacing: 8) {
@@ -24627,7 +24642,7 @@ struct CompactPropRow: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share this prop pick")
                 }
-                .padding(.top, -4)
+                .padding(.top, metaTopPad)
                 .opacity(d3Dim(0.45))
 
                 // Footer — live line (teams + score + situation) or start time on
@@ -24950,7 +24965,7 @@ struct PropDetailPopup: View {
                                         Text("Confidence").font(.system(size: 9, weight: .medium))
                                         Spacer()
                                     }
-                                    .foregroundStyle(.white.opacity(0.3))
+                                    .foregroundStyle(.white.opacity(0.45))
 
                                     GeometryReader { geo in
                                         ZStack(alignment: .leading) {
