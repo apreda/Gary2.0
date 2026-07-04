@@ -774,6 +774,32 @@ enum SupabaseAPI {
         return graded > 0 ? (hit, graded) : nil
     }
 
+    /// Rolling graded record for the Hub masthead: every graded edge across
+    /// the last `days` EST slate days (pushes excluded). Returns nil when the
+    /// window has nothing graded (or on any failure) — the masthead falls back
+    /// to yesterday's tally, then the plain date.
+    static func fetchInsightRecord(days: Int) async -> (hit: Int, miss: Int)? {
+        struct ResultRow: Decodable { let result: String? }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        guard let today = f.date(from: todayEST()),
+              let since = cal.date(byAdding: .day, value: -days, to: today) else { return nil }
+        let url = buildURL(table: "insight_connections", query: [
+            URLQueryItem(name: "select", value: "result"),
+            URLQueryItem(name: "date", value: "gte.\(f.string(from: since))"),
+            URLQueryItem(name: "result", value: "not.is.null")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([ResultRow].self, from: data) else { return nil }
+        let hit = rows.filter { $0.result == "hit" }.count
+        let miss = rows.filter { $0.result == "miss" }.count
+        return (hit + miss) > 0 ? (hit, miss) : nil
+    }
+
     /// One ledger row per insight card (league/category/result) — fuels the
     /// Home front page: per-lane Receipts records (graded days) and the
     /// "edges posted tonight" door count (today). Returns [] on any failure.

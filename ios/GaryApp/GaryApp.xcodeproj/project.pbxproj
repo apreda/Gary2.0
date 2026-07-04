@@ -13,6 +13,7 @@
 		0D809CA674D78F140C6117B8 /* ChangelogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24536929674F3304E9497C4 /* ChangelogView.swift */; };
 		0EB2F8BCD130889212D87639 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DCCF76D59A117BC61451DE6 /* AuthView.swift */; };
 		11082D2682BC0FFD484F133E /* AccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04419532DA2B9AE61A7A7B47 /* AccessView.swift */; };
+		2508CFF6E864FC968DD3FFC7 /* HubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B069FA2D1F2F173C8F4EB9F /* HubView.swift */; };
 		251ECC987D0245D3D5E87E0B /* Oswald-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */; };
 		267600A11B006CB6E5273D50 /* Rajdhani-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3B00BB7C471BD1CE60801A0F /* Rajdhani-Bold.ttf */; };
 		2AC44BD89F056DF4FCA691AD /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008FA1BAD0680B6769DD9D2A /* AuthManager.swift */; };
@@ -74,6 +75,7 @@
 		4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AppStoreMetadata.md; sourceTree = "<group>"; };
 		4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ChakraPetch-Bold.ttf"; sourceTree = "<group>"; };
 		58C162EF98D65308171329E2 /* SupabaseAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAPI.swift; sourceTree = "<group>"; };
+		5B069FA2D1F2F173C8F4EB9F /* HubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubView.swift; sourceTree = "<group>"; };
 		6E42D646736ECC444CEB1436 /* Anton-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Anton-Regular.ttf"; sourceTree = "<group>"; };
 		71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Teko-Bold.ttf"; sourceTree = "<group>"; };
 		7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SairaCondensed-Bold.ttf"; sourceTree = "<group>"; };
@@ -141,6 +143,7 @@
 				8AF21EE7054E8EF36A963E61 /* GaryTour.swift */,
 				423887686C6839DEC44C0DEA /* GoogleService-Info.plist */,
 				00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */,
+				5B069FA2D1F2F173C8F4EB9F /* HubView.swift */,
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
 				C98E3F91D643EAE8E4199E0A /* KeychainStorage.swift */,
 				A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */,
@@ -314,6 +317,7 @@
 				E6905D0BB1424B9D57295179 /* DesignSystem.swift in Sources */,
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
 				AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */,
+				2508CFF6E864FC968DD3FFC7 /* HubView.swift in Sources */,
 				848433E84732600F7F27F78B /* KeychainStorage.swift in Sources */,
 				C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */,
 				0B397BC2A4AF390C22016E57 /* MLBGameIntelView.swift in Sources */,

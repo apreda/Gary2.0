@@ -219,7 +219,10 @@ struct GaryPage: View {
                         // the tapped matchup (via PicksFocusState). isVisible
                         // drives the Hub's staleness refetch + deep-link consume
                         // (tabs are kept alive, so onAppear never re-fires).
-                        PropsHubView(isVisible: selectedTab == 2) { game in
+                        // HubView (HubView.swift) is the July 2026 front-page
+                        // redesign; PropsHubView remains in Views.swift for
+                        // rollback until the founder signs off.
+                        HubView(isVisible: selectedTab == 2) { game in
                             PicksFocusState.shared.focusGame = game
                             selectedTab = 3
                         }
