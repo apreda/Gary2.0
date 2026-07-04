@@ -14947,7 +14947,12 @@ struct LockedPickCard: View {
 struct CrackShape: Shape {
     func path(in rect: CGRect) -> Path {
         let main: [(CGFloat, CGFloat)] = [(252, 0), (240, 38), (258, 72), (234, 116), (250, 158), (230, 200), (240, 232)]
-        let branch: [(CGFloat, CGFloat)] = [(240, 116), (214, 132), (222, 150)]
+        // Forks off main[3] exactly (234,116) so it reads as a real split, not a
+        // floating fragment. Bug fix (Jul 4): the old branch reversed direction
+        // partway (moved left then back right) inside a tiny bounding box, which
+        // stroked as a stray "hook" spur. x and y now each move ONE way only —
+        // geometrically impossible to double back on itself.
+        let branch: [(CGFloat, CGFloat)] = [(234, 116), (222, 136), (212, 158), (200, 182)]
         func pt(_ p: (CGFloat, CGFloat)) -> CGPoint {
             CGPoint(x: p.0 / 346 * rect.width, y: p.1 / 232 * rect.height)
         }
@@ -15530,7 +15535,10 @@ struct CompactPickRow: View {
                     // Stamped-in-metal read on the gold bar: a hairline of light kicked
                     // off the bottom edge of the dark letters.
                     .shadow(color: premiumFinish ? GoldBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
-                    .opacity(d3Dim(0.36))
+                    // A lost GOLD bar mutes the pick words specifically (not just
+                    // the whole-card saturation pass) — the words recede so the
+                    // crack reads with more depth/density against them (Jul 4).
+                    .opacity(isGoldLost ? 0.5 : d3Dim(0.36))
                     .padding(.top, heroTopPad)
                     // A WON premium bar carries the payout block down its right
                     // side — reserve that column so long picks wrap clear of the
@@ -24563,9 +24571,12 @@ struct CompactPropRow: View {
     private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
     /// Prop hero cap — matches the free game card (both lines run long and
     /// self-scale, so the cap mostly sets the ceiling for short names).
-    /// Premium base MATCHES the gold game card (65 × pf ≈ 75) — parity law:
-    /// metal + words are the only differences between Winners cards.
-    private var propHeroSize: CGFloat { premiumFinish ? 65 : 44 }
+    /// EXACT same constant as the game card's heroFontSize, both finishes
+    /// (founder law, Jul 4 — "the only thing different should be the pick
+    /// itself"). Any extra length is handled ONLY by minimumScaleFactor, never
+    /// a different base size — that's what was drifting the two cards' hero
+    /// block height, and with it every pinned-to-bottom part beneath it.
+    private var propHeroSize: CGFloat { premiumFinish ? 65 : 52 }
     // Optical spacing (Jul 3 spacing pass) — see CompactPickRow.heroTopPad.
     private var heroTopPad: CGFloat { 12 - 0.22 * propHeroSize * pf }
     private var metaTopPad: CGFloat { 12 - 0.25 * propHeroSize * pf }
@@ -24828,7 +24839,9 @@ struct CompactPropRow: View {
                 }
                     .foregroundStyle(heroTint)
                     .shadow(color: premiumFinish ? SilverBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
-                    .opacity(d3Dim(0.36))
+                    // Silver-parity with the gold bar: a lost card mutes the pick
+                    // words specifically so the crack reads with more depth.
+                    .opacity(isSilverLost ? 0.5 : d3Dim(0.36))
                     .padding(.top, heroTopPad)
                     // Only a WON premium card reserves the payout column —
                     // corner marks are gone on every finish (game-card parity).
