@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Rethink — Assessment + Two Directions</title>
+<style>
+  :root {
+    --bg: #08080A; --card: #121214; --gold: #C9A227; --lightgold: #E8D48B;
+    --warm: #F6F1E7; --green: #9cc88a; --red: #cf6b5b; --win: #3FB950; --loss: #E5484D;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #141416; color: var(--warm); font-family: -apple-system, system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+  .sub { color: rgba(255,255,255,.62); font-size: 14px; max-width: 860px; line-height: 1.5; }
+  .assess { background: var(--card); border: 1px solid rgba(246,241,231,.08); border-radius: 14px; padding: 22px 26px; margin: 26px 0 40px; max-width: 980px; }
+  .assess h2 { font-size: 15px; color: var(--gold); margin-bottom: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .assess li { margin: 0 0 10px 18px; font-size: 13.5px; line-height: 1.55; color: rgba(255,255,255,.82); }
+  .assess b { color: var(--warm); }
+  .dir { margin: 46px 0 10px; }
+  .dir h2 { font-size: 20px; margin-bottom: 4px; }
+  .dir .tag { display: inline-block; font-family: ui-monospace, monospace; font-size: 11px; color: var(--gold); letter-spacing: .12em; margin-bottom: 4px; }
+  .dir p { color: rgba(255,255,255,.66); font-size: 13.5px; max-width: 900px; line-height: 1.55; margin-bottom: 20px; }
+  .phones { display: flex; gap: 28px; flex-wrap: wrap; }
+  .phone { width: 340px; background: var(--bg); border: 1px solid rgba(246,241,231,.14); border-radius: 34px; padding: 18px 16px 26px; box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+  .phone .plabel { text-align: center; font-family: ui-monospace, monospace; font-size: 10px; color: rgba(255,255,255,.45); letter-spacing: .14em; margin-bottom: 12px; text-transform: uppercase; }
+  /* shared app chrome */
+  .mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+  .kick { font-family: ui-monospace, monospace; font-size: 9px; letter-spacing: .14em; color: var(--gold); text-transform: uppercase; }
+  .quiet { color: rgba(255,255,255,.6); }
+  .panel { background: rgba(246,241,231,.03); border: 1px solid rgba(246,241,231,.07); border-radius: 12px; }
+  .hr { height: 1px; background: rgba(255,255,255,.07); margin: 0; }
+  .goldhr { height: 2px; background: linear-gradient(90deg, rgba(201,162,39,.55), rgba(201,162,39,.15)); border-radius: 2px; }
+  .chip { display:inline-block; font-family: ui-monospace, monospace; font-size: 10px; padding: 3px 10px; border-radius: 999px; background: var(--gold); color: #0C0B0B; font-weight: 700; letter-spacing: .06em; }
+  .g { color: var(--green); } .r { color: var(--red); } .w { color: var(--win); } .l { color: var(--loss); }
+  .goldc { color: var(--gold); }
+  .note { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 14px; max-width: 900px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Home Rethink — assessment + two directions</h1>
+<div class="sub">Mocks to react to, nothing built. Both keep the things you've called perfect (results-first mornings, the live sweat leading during games, the recap voice) and differ in what the page fundamentally <i>is</i>.</div>
+
+<div class="assess">
+  <h2>My read on the current Home</h2>
+  <ul>
+    <li><b>The trust signal is buried.</b> For a picks product, the record IS the brand — but the scorecard sits below the prop box, and Gary's rolling record (the 55% L7 the Hub masthead now carries) appears nowhere on Home. A new user's first question — "is he actually good?" — goes unanswered above the fold.</li>
+    <li><b>No new-user path.</b> Day-0 users land on last night's recap carousel with zero framing: who Gary is, what's free (the daily free pick is the hook), where to start. The intro sheet only fires from other tabs.</li>
+    <li><b>Home duplicates the other tabs instead of routing to them.</b> Today's Board ≈ Picks, the prop box ≈ props surfaces, Big Games ≈ Tomorrow page. Six ~equal modules stack with no hierarchy — it reads as "everything, again" rather than a front door with a point of view.</li>
+    <li><b>The day-arc is implicit.</b> The code re-orders blocks by morning/pregame/live, which is the right instinct — but the page never <i>says</i> what moment it is. The fan's day is a story: last night → today's slate → the sweat → back to results. The page should tell it.</li>
+    <li><b>What's genuinely working:</b> the live-sweat takeover, the recap headlines voice, the countdown hero, results-first mornings. All four survive in both directions below.</li>
+  </ul>
+</div>
+
+<!-- ══════════════════ DIRECTION A ══════════════════ -->
+<div class="dir">
+  <div class="tag">DIRECTION A · RECOMMENDED</div>
+  <h2>“The Ledger” — one identity block, one moment, clear doors</h2>
+  <p>Home becomes three fixed acts. <b>Act 1</b> is a permanent identity/trust header — Gary's record, always, for everyone. <b>Act 2</b> is ONE time-aware hero (morning story / free-pick + countdown / live sweat) instead of a stack of six modules. <b>Act 3</b> is the day's accountability feed — every pick Gary posted today with a status chip (pending → live → ✓/✗) — plus three doors to the tabs that own the depth. Everything else Home currently renders gets cut or demoted to its owning tab.</p>
+  <div class="phones">
+
+    <!-- A · morning -->
+    <div class="phone">
+      <div class="plabel">A · Morning (results first)</div>
+      <div style="display:flex; align-items:baseline; gap:8px;">
+        <div style="font-size:24px; font-weight:800; letter-spacing:.02em;">GARY <span style="color:var(--gold)">A.I.</span></div>
+        <div class="mono quiet" style="font-size:10px;">SAT, JUL 4</div>
+      </div>
+      <!-- ACT 1: the ledger -->
+      <div class="panel" style="margin-top:12px; padding:12px 14px;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <span class="kick">The Record</span>
+          <span class="mono quiet" style="font-size:9px;">EVERY PICK GRADED</span>
+        </div>
+        <div style="display:flex; gap:18px; margin-top:8px;">
+          <div><div class="mono" style="font-size:20px; font-weight:700;">321–266</div><div class="mono quiet" style="font-size:9px;">LAST 7 DAYS · 55%</div></div>
+          <div><div class="mono g" style="font-size:20px; font-weight:700;">5–2</div><div class="mono quiet" style="font-size:9px;">LAST NIGHT</div></div>
+          <div><div class="mono g" style="font-size:20px; font-weight:700;">+$310</div><div class="mono quiet" style="font-size:9px;">NET · $100/PICK</div></div>
+        </div>
+      </div>
+      <!-- ACT 2: the moment = last night's story -->
+      <div style="margin-top:18px;">
+        <span class="kick">Last Night</span>
+        <div style="font-size:19px; font-weight:800; line-height:1.25; margin-top:6px;">Pirates maul the Nationals, 7–1 — Gary had PIT ML</div>
+        <div class="quiet" style="font-size:12.5px; margin-top:6px; line-height:1.5;">Ashcraft went seven, the pen never blinked. Third straight cash on Pittsburgh road starts…</div>
+        <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+          <span class="mono" style="font-size:10px; color:var(--win); font-weight:700;">CASHED · PIRATES ML</span>
+          <span class="mono quiet" style="font-size:10px;">1 of 6 stories ›</span>
+        </div>
+      </div>
+      <!-- ACT 3: today's ledger feed -->
+      <div style="margin-top:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <span class="kick">Gary's Day · 8 picks</span>
+          <span class="mono quiet" style="font-size:9px;">DROPS ~T-90</span>
+        </div>
+        <div class="panel" style="margin-top:8px;">
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Twins @ Yankees <span class="quiet mono" style="font-size:10px;">1:35</span></span><span class="mono w" style="font-size:11px; font-weight:700;">✓ CASHED</span></div>
+          <div class="hr"></div>
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Rays @ Astros <span class="quiet mono" style="font-size:10px;">7:10</span></span><span class="mono goldc" style="font-size:11px; font-weight:700;">PICK LIVE ›</span></div>
+          <div class="hr"></div>
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Padres @ Dodgers <span class="quiet mono" style="font-size:10px;">10:10</span></span><span class="mono quiet" style="font-size:11px;">POSTS 8:40 ›</span></div>
+        </div>
+      </div>
+      <!-- doors -->
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <div class="panel" style="flex:1; padding:10px; text-align:center;"><div class="kick">Free Pick</div><div class="mono" style="font-size:11px; margin-top:4px;">TODAY ›</div></div>
+        <div class="panel" style="flex:1; padding:10px; text-align:center;"><div class="kick">The Hub</div><div class="mono" style="font-size:11px; margin-top:4px;">68 EDGES ›</div></div>
+        <div class="panel" style="flex:1; padding:10px; text-align:center;"><div class="kick">Winners</div><div class="mono" style="font-size:11px; margin-top:4px;">5 SEALED ›</div></div>
+      </div>
+    </div>
+
+    <!-- A · live -->
+    <div class="phone">
+      <div class="plabel">A · 8 PM (the sweat leads)</div>
+      <div style="display:flex; align-items:baseline; gap:8px;">
+        <div style="font-size:24px; font-weight:800;">GARY <span style="color:var(--gold)">A.I.</span></div>
+        <div class="mono quiet" style="font-size:10px;">SAT, JUL 4</div>
+      </div>
+      <div class="panel" style="margin-top:12px; padding:12px 14px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span class="kick">The Record</span><span class="mono g" style="font-size:11px; font-weight:700;">2–0 TONIGHT</span>
+        </div>
+        <div style="display:flex; gap:18px; margin-top:8px;">
+          <div><div class="mono" style="font-size:20px; font-weight:700;">321–266</div><div class="mono quiet" style="font-size:9px;">LAST 7 DAYS · 55%</div></div>
+          <div><div class="mono goldc" style="font-size:20px; font-weight:700;">3</div><div class="mono quiet" style="font-size:9px;">LIVE SWEATS</div></div>
+        </div>
+      </div>
+      <!-- ACT 2: live takeover -->
+      <div style="margin-top:18px;">
+        <span class="kick" style="color:var(--win);">● Live · Gary covering</span>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:8px;">
+          <div style="font-size:19px; font-weight:800;">TB 3 · HOU 1</div>
+          <div class="mono quiet" style="font-size:11px;">BOT 6 · 2 OUT</div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
+          <span class="mono goldc" style="font-size:11px; font-weight:700;">RAYS ML −118</span>
+          <span class="mono w" style="font-size:10px;">IN THE GREEN</span>
+        </div>
+        <div class="hr" style="margin:12px 0;"></div>
+        <div style="display:flex; justify-content:space-between;"><span style="font-size:13px;">SD @ LAD <span class="mono quiet" style="font-size:10px;">▶ TOP 2</span></span><span class="mono quiet" style="font-size:11px;">LAD −1.5 · EVEN</span></div>
+      </div>
+      <!-- ACT 3 -->
+      <div style="margin-top:20px;">
+        <span class="kick">Gary's Day · 8 picks</span>
+        <div class="panel" style="margin-top:8px;">
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Twins @ Yankees</span><span class="mono w" style="font-size:11px; font-weight:700;">✓ CASHED</span></div>
+          <div class="hr"></div>
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Phillies @ Royals</span><span class="mono l" style="font-size:11px; font-weight:700;">✗ LOST</span></div>
+          <div class="hr"></div>
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Rays @ Astros</span><span class="mono w" style="font-size:11px; font-weight:700;">● COVERING</span></div>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <div class="panel" style="flex:1; padding:10px; text-align:center;"><div class="kick">The Hub</div><div class="mono" style="font-size:11px; margin-top:4px;">TONIGHT ›</div></div>
+        <div class="panel" style="flex:1; padding:10px; text-align:center;"><div class="kick">Billfold</div><div class="mono" style="font-size:11px; margin-top:4px;">LEDGER ›</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Why I like it: one anchor (the record) that serves trust for new users and standings for fans; ONE hero per moment instead of six stacked modules; and "Gary's Day" makes accountability the content — every pick, pending → live → graded, on the front page. The board/prop-box/big-games duplication gets cut; Picks, Hub, and Winners own their depth.</div>
+</div>
+
+<!-- ══════════════════ DIRECTION B ══════════════════ -->
+<div class="dir">
+  <div class="tag">DIRECTION B</div>
+  <h2>“SportsCenter Open” — story-led rundown</h2>
+  <p>Keeps today's DNA (the headlines carousel stays the lead) but reframes the page as a broadcast rundown: scores ticker on top, TOP STORIES bigger and story-first, then GARY'S DAY (same accountability feed as A), record as the sign-off. On day 0 the first story card is "Meet Gary" — the intro + record — so new users get framing inside the format instead of a separate sheet.</p>
+  <div class="phones">
+
+    <!-- B · morning -->
+    <div class="phone">
+      <div class="plabel">B · Morning</div>
+      <!-- ticker -->
+      <div class="mono quiet" style="font-size:10px; white-space:nowrap; overflow:hidden; border-bottom:1px solid rgba(255,255,255,.08); padding-bottom:8px;">PIT 7 · WSH 1 F&nbsp;&nbsp;|&nbsp;&nbsp;MIN 11 · NYY 4 F&nbsp;&nbsp;|&nbsp;&nbsp;<span class="w">DET 3 · TEX 0 ▶</span>&nbsp;&nbsp;|&nbsp;&nbsp;TB @ H…</div>
+      <div style="display:flex; align-items:baseline; gap:8px; margin-top:12px;">
+        <div style="font-size:24px; font-weight:800;">GARY <span style="color:var(--gold)">A.I.</span></div>
+      </div>
+      <div style="margin-top:14px;"><span class="kick">Top Stories</span></div>
+      <!-- big story card -->
+      <div class="panel" style="margin-top:8px; padding:14px;">
+        <div class="mono quiet" style="font-size:9px;">MLB · LAST NIGHT</div>
+        <div style="font-size:18px; font-weight:800; line-height:1.3; margin-top:6px;">Pirates maul the Nationals, 7–1</div>
+        <div class="quiet" style="font-size:12px; margin-top:6px; line-height:1.5;">Ashcraft went seven; Gary rode PIT ML for the third straight Pittsburgh road cash…</div>
+        <div style="margin-top:8px;"><span class="mono" style="font-size:10px; color:var(--win); font-weight:700;">GARY CASHED · PIRATES ML</span></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <div class="panel" style="flex:1; padding:10px;"><div class="mono quiet" style="font-size:9px;">STORY 2</div><div style="font-size:12px; font-weight:600; margin-top:4px;">Yankees pen implodes late…</div></div>
+        <div class="panel" style="flex:1; padding:10px;"><div class="mono quiet" style="font-size:9px;">STORY 3</div><div style="font-size:12px; font-weight:600; margin-top:4px;">Judge stays scorching…</div></div>
+      </div>
+      <!-- gary's day -->
+      <div style="margin-top:18px;">
+        <span class="kick">Gary's Day</span>
+        <div class="panel" style="margin-top:8px;">
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Free pick of the day</span><span class="mono goldc" style="font-size:11px; font-weight:700;">UNLOCKED ›</span></div>
+          <div class="hr"></div>
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">Rays @ Astros <span class="quiet mono" style="font-size:10px;">7:10</span></span><span class="mono goldc" style="font-size:11px;">PICK LIVE ›</span></div>
+          <div class="hr"></div>
+          <div style="padding:10px 12px; display:flex; justify-content:space-between;"><span style="font-size:13px;">5 more post by 8:40</span><span class="mono quiet" style="font-size:11px;">WINNERS ›</span></div>
+        </div>
+      </div>
+      <!-- record sign-off -->
+      <div style="display:flex; justify-content:space-between; margin-top:16px; padding:12px 14px;" class="panel">
+        <span class="kick">The Record</span>
+        <span class="mono" style="font-size:12px;">L7 <b>321–266</b> · <span class="g">55%</span> · last night <span class="g">5–2</span></span>
+      </div>
+    </div>
+
+    <!-- B · day zero -->
+    <div class="phone">
+      <div class="plabel">B · Day 0 (new user)</div>
+      <div class="mono quiet" style="font-size:10px; border-bottom:1px solid rgba(255,255,255,.08); padding-bottom:8px;">TODAY'S SLATE · 15 GAMES · FIRST PITCH 1:05</div>
+      <div style="display:flex; align-items:baseline; gap:8px; margin-top:12px;">
+        <div style="font-size:24px; font-weight:800;">GARY <span style="color:var(--gold)">A.I.</span></div>
+      </div>
+      <div style="margin-top:14px;"><span class="kick">Start Here</span></div>
+      <div class="panel" style="margin-top:8px; padding:16px; border-color:rgba(201,162,39,.35);">
+        <div style="font-size:18px; font-weight:800; line-height:1.3;">Gary picks every game. Every pick gets graded by morning.</div>
+        <div class="quiet" style="font-size:12.5px; margin-top:8px; line-height:1.5;">Research first, picks ~90 minutes before first pitch, results stamped on the record — wins and losses both.</div>
+        <div style="display:flex; gap:14px; margin-top:12px;">
+          <div><div class="mono" style="font-size:18px; font-weight:700;">321–266</div><div class="mono quiet" style="font-size:9px;">LAST 7 DAYS</div></div>
+          <div><div class="mono g" style="font-size:18px; font-weight:700;">55%</div><div class="mono quiet" style="font-size:9px;">HIT RATE</div></div>
+        </div>
+        <div style="margin-top:14px;"><span class="chip">SEE TODAY'S FREE PICK →</span></div>
+      </div>
+      <div style="margin-top:18px;"><span class="kick">Top Stories</span></div>
+      <div class="panel" style="margin-top:8px; padding:12px;">
+        <div class="mono quiet" style="font-size:9px;">HOW IT WORKS</div>
+        <div style="font-size:13px; font-weight:600; margin-top:4px;">Last night Gary went 5–2. Here's the tape ›</div>
+      </div>
+      <div class="panel" style="margin-top:8px; padding:12px;">
+        <div class="mono quiet" style="font-size:9px;">THE HUB</div>
+        <div style="font-size:13px; font-weight:600; margin-top:4px;">68 edges posted for tonight's slate ›</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Why you might prefer it: it's the smaller change — the carousel stays the lead, and the new-user problem is solved <i>inside</i> the format (a Start Here story) rather than by restructuring the page. Weakness: the page stays content-first, so the record/trust block stays secondary, and the module-stack problem is reduced rather than solved.</div>
+</div>
+
+<div class="assess" style="margin-top:52px;">
+  <h2>What I'd cut in either direction (and where it goes)</h2>
+  <ul>
+    <li><b>Today's Board (all-games table)</b> → the Hub's slate strip + game sheets now do this job; Picks owns pick-by-game.</li>
+    <li><b>Prop Box</b> → Winners/props surfaces own it; Home links to it from Gary's Day.</li>
+    <li><b>Big Games To Watch</b> → merges into the hero (morning story / countdown) instead of a third standalone module.</li>
+    <li><b>Keep untouched:</b> live-sweat takeover logic, DailyRecapOverlay, the recap voice, TOMORROW's look-ahead page.</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>

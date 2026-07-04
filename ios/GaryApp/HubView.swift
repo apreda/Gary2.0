@@ -15,9 +15,9 @@ import SwiftUI
 // Palette stays Gary: warm black, gold signature, HubPalette green/red tones.
 //
 // Data machinery (staleness gates, 3am EST rollover, graded-date walk-back,
-// kept-alive-tab visibility flips) is carried over from PropsHubView — that
+// kept-alive-tab visibility flips) is carried over from the original Hub page
+// (PropsHubView, removed Jul 4 2026 once the founder approved this one) — that
 // plumbing encodes weeks of fixed production bugs and is presentation-free.
-// PropsHubView remains in Views.swift for instant rollback.
 // ============================================================================
 
 // MARK: - Type + chrome system
@@ -204,7 +204,7 @@ struct HubView: View {
         (gradedIsYesterday || gradedDayShort.isEmpty) ? "Last Night" : gradedDayShort
     }
 
-    // ---- data plumbing (carried from PropsHubView — hardened in production) ----
+    // ---- data plumbing (carried from the original Hub page — hardened in production) ----
 
     private static func buildItemsIndex(_ all: [Signal]) -> [HubLeagueSel: [SignalKind: [Signal]]] {
         var idx: [HubLeagueSel: [SignalKind: [Signal]]] = [:]
