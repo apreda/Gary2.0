@@ -15494,14 +15494,23 @@ struct CompactPickRow: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
+                // UNIFORM eyebrow (founder law, Jul 4): mark + GARY'S PICK, same
+                // slot on EVERY pick card — game/prop, gold/silver/dark alike.
                 HStack(alignment: .top, spacing: 10) {
+                    Image(GaryBrand.mark)
+                        .resizable().scaledToFit()
+                        .frame(width: 22, height: 22)
+                        // Optical centering with the text (6pt top pad) — offset,
+                        // not padding, so the row height never moves.
+                        .offset(y: 3)
+                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 1.5, y: 1)
                     Text(eyebrowLabel)
                         .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
                         .foregroundStyle(eyebrowTint)
                         .padding(.top, 6)
-                        .opacity(d3Dim(0.4))
                     Spacer()
                 }
+                .opacity(d3Dim(0.4))
 
                 // Skyscraper hero: one Text per line so tight (negative) leading is
                 // possible in SwiftUI and each line scales independently — the team
@@ -15522,11 +15531,16 @@ struct CompactPickRow: View {
                     .shadow(color: premiumFinish ? GoldBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
                     .opacity(d3Dim(0.36))
                     .padding(.top, heroTopPad)
-                    // A WON gold bar carries the check + payout block down its right
+                    // A WON premium bar carries the payout block down its right
                     // side — reserve that column so long picks wrap clear of the
-                    // money. Dark cards only keep the bear's corner clear (the D3
-                    // ghost rides BEHIND the type).
-                    .padding(.trailing, premiumFinish ? (isGoldWon ? 96 : 0) : 52)
+                    // money. Everything else rides full width (the D3 ghost and
+                    // the corner bear are gone/behind the type).
+                    .padding(.trailing, (premiumFinish && isGoldWon) ? 96 : 0)
+
+                // LOCKED GEOMETRY (founder law, Jul 4): meta + divider + score
+                // pin to the card BOTTOM — a hero that scales down for a long
+                // name can never float the lower parts upward.
+                Spacer(minLength: 0)
 
                 HStack(alignment: .center, spacing: 8) {
                     Text(significanceTag ?? (pick.league ?? "").uppercased())
@@ -15601,18 +15615,8 @@ struct CompactPickRow: View {
             }
             .padding(18)
 
-            // Bear rides as an overlay (not a row member) so the Skyscraper hero
-            // gets its vertical space back. The gold bar goes without it — the
-            // metal IS the brand there (approved 21B-S mock carries no mark).
-            if !premiumFinish {
-                Image(GaryBrand.mark)
-                    .resizable().scaledToFit()
-                    .frame(width: 44, height: 44)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 14).padding(.trailing, 16)
-                    .opacity(d3Dim(0.4))
-                    .allowsHitTesting(false)
-            }
+            // (Corner bear retired Jul 4 — the mark lives in the eyebrow row on
+            // every card now, so the top-right corner stays clean everywhere.)
 
             // Brand mark on the bar (A/B, Jul 3): micro-engraved GARY A.I. text
             // or the crest badge — top-right corner, ceded to the win block.
@@ -24793,22 +24797,18 @@ struct CompactPropRow: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
+                // UNIFORM eyebrow (founder law, Jul 4): mark + GARY'S PICK — the
+                // EXACT slot the game card uses, every finish, every page.
                 HStack(alignment: .top, spacing: 10) {
-                    if premiumFinish {
-                        // Props' ONLY layout difference from the gold game card
-                        // (founder call, Jul 4): the mark REPLACES the eyebrow words
-                        // in the same slot — 22pt matches the eyebrow row's height,
-                        // so the hero below sits exactly where the game card's does.
-                        Image(GaryBrand.mark)
-                            .resizable().scaledToFit()
-                            .frame(width: 22, height: 22)
-                            .shadow(color: Color(hex: "#26262E").opacity(0.45), radius: 1.5, y: 1)
-                    } else {
-                        Text(eyebrowLabel)
-                            .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
-                            .foregroundStyle(eyebrowTint)
-                            .padding(.top, 6)
-                    }
+                    Image(GaryBrand.mark)
+                        .resizable().scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .offset(y: 3)
+                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 1.5, y: 1)
+                    Text(eyebrowLabel)
+                        .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
+                        .foregroundStyle(eyebrowTint)
+                        .padding(.top, 6)
                     Spacer()
                 }
                 .opacity(d3Dim(0.4))
@@ -24828,9 +24828,14 @@ struct CompactPropRow: View {
                     .shadow(color: premiumFinish ? SilverBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
                     .opacity(d3Dim(0.36))
                     .padding(.top, heroTopPad)
-                    // Badge retired from the corner — parity with the gold bar:
-                    // only a WON card reserves the payout column.
-                    .padding(.trailing, premiumFinish ? (isSilverWon ? 96 : 0) : 52)
+                    // Only a WON premium card reserves the payout column —
+                    // corner marks are gone on every finish (game-card parity).
+                    .padding(.trailing, (premiumFinish && isSilverWon) ? 96 : 0)
+
+                // LOCKED GEOMETRY (founder law, Jul 4): meta + divider + score
+                // pin to the card BOTTOM, identical to the game card — a hero
+                // that scales down for a long name can never float them up.
+                Spacer(minLength: 0)
 
                 HStack(alignment: .center, spacing: 8) {
                     Text(((prop.effectiveLeague ?? "") + " · PROP").uppercased())
@@ -24896,19 +24901,8 @@ struct CompactPropRow: View {
             }
             .padding(18)
 
-            // Crest overlay — the gold bear rides the dark cards' corner. The
-            // silver bar carries the normal mark IN its eyebrow row instead
-            // (founder call, Jul 3 PM: real logo, left corner — badge retired),
-            // so its top-right stays clean like the gold bar's.
-            if !premiumFinish {
-                Image(GaryBrand.mark)
-                    .resizable().scaledToFit()
-                    .frame(width: 44, height: 44)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 14).padding(.trailing, 16)
-                    .opacity(d3Dim(0.4))
-                    .allowsHitTesting(false)
-            }
+            // (Corner bear retired Jul 4 — the mark lives in the eyebrow row on
+            // every card now, so the top-right corner stays clean everywhere.)
 
             // SILVER WIN (gold parity): ghost check behind the type carries the
             // win (corner ✓ retired Jul 4); the corner keeps the money.
