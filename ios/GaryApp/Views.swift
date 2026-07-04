@@ -15362,8 +15362,10 @@ struct CompactPickRow: View {
     /// always as big as the name allows. D3's ghost mark rides BEHIND the type,
     /// so settled cards need no reserve for it.
     /// Free/dark cards read at 58 (founder walked 76→64→58, Jul 3); the gold
-    /// bar keeps its approved 76 base × 1.15 premium scale ≈ 87.
-    private var heroFontSize: CGFloat { premiumFinish ? 76 : 58 }
+    /// bar walked down too (Jul 4, "−15%"): 76→65 base × 1.15 scale ≈ 75.
+    /// PARITY LAW: the silver prop card uses the SAME premium base — the only
+    /// visible differences between Winners cards are the metal and the words.
+    private var heroFontSize: CGFloat { premiumFinish ? 65 : 58 }
     /// Tight stacked leading (the mock's line-height .9) — all-caps display type
     /// has no descenders, so the lines pull together safely.
     private var heroLineSpacing: CGFloat { premiumFinish ? -24 : -18 }
@@ -15475,12 +15477,17 @@ struct CompactPickRow: View {
         ZStack {
             // D3 ghost verdict — a giant serif check/cross floating behind the
             // content (win green at 14%, loss red at 7% — the loss whispers).
-            // The card's clipShape contains the overflow.
-            if let verdict = displayResult, !premiumFinish, verdict != "push" {
+            // The card's clipShape contains the overflow. The METAL cards carry
+            // the same giant check on a WIN (founder call, Jul 4 — the free-card
+            // look), struck in deep win-green ink; a premium LOSS keeps the
+            // crack fracture instead, no ghost.
+            if let verdict = displayResult, verdict != "push",
+               !premiumFinish || verdict == "won" {
                 Text(verdict == "won" ? "✓" : "✕")
                     .font(.system(size: verdict == "won" ? 200 : 185, weight: .regular, design: .serif))
-                    .foregroundStyle(verdict == "won" ? GaryColors.win.opacity(0.14)
-                                                      : GaryColors.loss.opacity(0.07))
+                    .foregroundStyle(premiumFinish ? Self.goldWinGreen.opacity(0.18)
+                                     : (verdict == "won" ? GaryColors.win.opacity(0.14)
+                                                         : GaryColors.loss.opacity(0.07)))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .offset(x: 12, y: -14)
                     .allowsHitTesting(false)
@@ -15634,23 +15641,17 @@ struct CompactPickRow: View {
             // GOLD WIN (X1+X4): struck green check + payout counting up own the
             // eyebrow row's right corner — the hero starts a row lower, so the
             // pick words can never collide with the money.
-            if isGoldWon {
-                HStack(alignment: .top, spacing: 8) {
-                    Text("✓")
-                        .font(.system(size: 27, weight: .semibold, design: .serif))
-                        .foregroundStyle(Self.goldWinGreen)
-                        .shadow(color: GoldBar.sheen.opacity(0.7), radius: 0, y: 1)
-                    if payoutPer100 != nil {
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text("+$\(shownPayout)")
-                                .font(GaryFonts.display(30))
-                                .foregroundStyle(GoldBar.inkHero)
-                                .shadow(color: GoldBar.sheen.opacity(0.6), radius: 0, y: 1)
-                            Text("PER $100 · PAID")
-                                .font(GaryFonts.mono(8.5, bold: true)).tracking(1.6)
-                                .foregroundStyle(GoldBar.inkSoft)
-                        }
-                    }
+            // The corner ✓ retired Jul 4 — the giant ghost check behind the type
+            // (free-card look) carries the win now; the corner keeps the money.
+            if isGoldWon, payoutPer100 != nil {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("+$\(shownPayout)")
+                        .font(GaryFonts.display(30))
+                        .foregroundStyle(GoldBar.inkHero)
+                        .shadow(color: GoldBar.sheen.opacity(0.6), radius: 0, y: 1)
+                    Text("PER $100 · PAID")
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(1.6)
+                        .foregroundStyle(GoldBar.inkSoft)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, 12).padding(.trailing, 16)
@@ -24557,7 +24558,9 @@ struct CompactPropRow: View {
     private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
     /// Prop hero cap — matches the free game card (both lines run long and
     /// self-scale, so the cap mostly sets the ceiling for short names).
-    private var propHeroSize: CGFloat { 58 }
+    /// Premium base MATCHES the gold game card (65 × pf ≈ 75) — parity law:
+    /// metal + words are the only differences between Winners cards.
+    private var propHeroSize: CGFloat { premiumFinish ? 65 : 58 }
     // Optical spacing (Jul 3 spacing pass) — see CompactPickRow.heroTopPad.
     private var heroTopPad: CGFloat { 12 - 0.22 * propHeroSize * pf }
     private var metaTopPad: CGFloat { 12 - 0.25 * propHeroSize * pf }
@@ -24774,13 +24777,16 @@ struct CompactPropRow: View {
     var body: some View {
         ZStack {
             // D3 ghost verdict — same object as the game card's (win ✓ green 14%,
-            // loss ✕ red 7%), clipped by the card shape. Dark cards only — the
-            // silver bar speaks the gold bar's verdict physics instead.
-            if let verdict = resolvedResult, verdict != "push", !premiumFinish {
+            // loss ✕ red 7%), clipped by the card shape. The silver bar carries
+            // the giant check on a WIN too (game-card parity, Jul 4); a premium
+            // LOSS keeps the crack fracture instead, no ghost.
+            if let verdict = resolvedResult, verdict != "push",
+               !premiumFinish || verdict == "won" {
                 Text(verdict == "won" ? "✓" : "✕")
                     .font(.system(size: verdict == "won" ? 200 : 185, weight: .regular, design: .serif))
-                    .foregroundStyle(verdict == "won" ? GaryColors.win.opacity(0.14)
-                                                      : GaryColors.loss.opacity(0.07))
+                    .foregroundStyle(premiumFinish ? Color(hex: "#1E6B33").opacity(0.16)
+                                     : (verdict == "won" ? GaryColors.win.opacity(0.14)
+                                                         : GaryColors.loss.opacity(0.07)))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .offset(x: 12, y: -14)
                     .allowsHitTesting(false)
@@ -24789,29 +24795,28 @@ struct CompactPropRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: 10) {
                     if premiumFinish {
-                        // The normal Gary mark anchors the silver bar's left corner
-                        // (founder call, Jul 3 PM) — eyebrow cap-height so the row's
-                        // rhythm (and the hero below it) doesn't move.
+                        // Props' ONLY layout difference from the gold game card
+                        // (founder call, Jul 4): the mark REPLACES the eyebrow words
+                        // in the same slot — 22pt matches the eyebrow row's height,
+                        // so the hero below sits exactly where the game card's does.
                         Image(GaryBrand.mark)
                             .resizable().scaledToFit()
                             .frame(width: 22, height: 22)
-                            // Optical centering against the eyebrow text (which sits on
-                            // a 6pt top pad) — offset, not padding, so the row's layout
-                            // height stays identical to the gold bar's.
-                            .offset(y: 3)
                             .shadow(color: Color(hex: "#26262E").opacity(0.45), radius: 1.5, y: 1)
+                    } else {
+                        Text(eyebrowLabel)
+                            .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
+                            .foregroundStyle(eyebrowTint)
+                            .padding(.top, 6)
                     }
-                    Text(eyebrowLabel)
-                        .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
-                        .foregroundStyle(eyebrowTint)
-                        .padding(.top, 6)
                     Spacer()
                 }
                 .opacity(d3Dim(0.4))
 
                 // Skyscraper hero (game-card parity): one Text per line with tight
-                // leading; both prop lines run long and self-scale.
-                VStack(alignment: .leading, spacing: -18 * pf) {
+                // leading; both prop lines run long and self-scale. Premium leading
+                // matches the gold bar's fixed −24 (leading does not scale with pf).
+                VStack(alignment: .leading, spacing: premiumFinish ? -24 : -18) {
                     ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
                         Text(line)
                             .font(GaryFonts.display(propHeroSize * pf))
@@ -24823,7 +24828,9 @@ struct CompactPropRow: View {
                     .shadow(color: premiumFinish ? SilverBar.sheen.opacity(0.55) : .clear, radius: 0, y: 1)
                     .opacity(d3Dim(0.36))
                     .padding(.top, heroTopPad)
-                    .padding(.trailing, premiumFinish ? (isSilverWon ? 96 : 60) : 52)
+                    // Badge retired from the corner — parity with the gold bar:
+                    // only a WON card reserves the payout column.
+                    .padding(.trailing, premiumFinish ? (isSilverWon ? 96 : 0) : 52)
 
                 HStack(alignment: .center, spacing: 8) {
                     Text(((prop.effectiveLeague ?? "") + " · PROP").uppercased())
@@ -24903,24 +24910,17 @@ struct CompactPropRow: View {
                     .allowsHitTesting(false)
             }
 
-            // SILVER WIN (gold parity): struck green check + payout counter.
-            if isSilverWon {
-                HStack(alignment: .top, spacing: 8) {
-                    Text("✓")
-                        .font(.system(size: 27, weight: .semibold, design: .serif))
-                        .foregroundStyle(Color(hex: "#1E6B33"))
-                        .shadow(color: SilverBar.sheen.opacity(0.7), radius: 0, y: 1)
-                    if payoutPer100 != nil {
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text("+$\(shownPayout)")
-                                .font(GaryFonts.display(30))
-                                .foregroundStyle(SilverBar.inkHero)
-                                .shadow(color: SilverBar.sheen.opacity(0.6), radius: 0, y: 1)
-                            Text("PER $100 · PAID")
-                                .font(GaryFonts.mono(8.5, bold: true)).tracking(1.6)
-                                .foregroundStyle(SilverBar.inkSoft)
-                        }
-                    }
+            // SILVER WIN (gold parity): ghost check behind the type carries the
+            // win (corner ✓ retired Jul 4); the corner keeps the money.
+            if isSilverWon, payoutPer100 != nil {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("+$\(shownPayout)")
+                        .font(GaryFonts.display(30))
+                        .foregroundStyle(SilverBar.inkHero)
+                        .shadow(color: SilverBar.sheen.opacity(0.6), radius: 0, y: 1)
+                    Text("PER $100 · PAID")
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(1.6)
+                        .foregroundStyle(SilverBar.inkSoft)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, 12).padding(.trailing, 16)
