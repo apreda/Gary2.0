@@ -14946,21 +14946,15 @@ struct LockedPickCard: View {
 /// Authored on the 346×232 mock, scaled to whatever the card measures.
 struct CrackShape: Shape {
     func path(in rect: CGRect) -> Path {
+        // Single jagged fracture, top to bottom — no fork (founder call, Jul 4:
+        // the branch off the main line, even fixed, wasn't wanted at all).
         let main: [(CGFloat, CGFloat)] = [(252, 0), (240, 38), (258, 72), (234, 116), (250, 158), (230, 200), (240, 232)]
-        // Forks off main[3] exactly (234,116) so it reads as a real split, not a
-        // floating fragment. Bug fix (Jul 4): the old branch reversed direction
-        // partway (moved left then back right) inside a tiny bounding box, which
-        // stroked as a stray "hook" spur. x and y now each move ONE way only —
-        // geometrically impossible to double back on itself.
-        let branch: [(CGFloat, CGFloat)] = [(234, 116), (222, 136), (212, 158), (200, 182)]
         func pt(_ p: (CGFloat, CGFloat)) -> CGPoint {
             CGPoint(x: p.0 / 346 * rect.width, y: p.1 / 232 * rect.height)
         }
         var path = Path()
         path.move(to: pt(main[0]))
         for p in main.dropFirst() { path.addLine(to: pt(p)) }
-        path.move(to: pt(branch[0]))
-        for p in branch.dropFirst() { path.addLine(to: pt(p)) }
         return path
     }
 }
@@ -15067,9 +15061,11 @@ struct CompactPickRow: View {
     /// Premium type scale (founder call, Jul 3): EVERYTHING on the gold bar
     /// reads ~15% larger — the paid card is the most legible object in the app.
     private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
-    /// Element opacity under D3 — 1.0 everywhere except a lost dark card.
-    /// (A lost GOLD card dims whole-card via saturation/brightness instead.)
-    private func d3Dim(_ lostOpacity: Double) -> Double { isDarkLost ? lostOpacity : 1 }
+    /// No-op (founder call, Jul 4): the free Picks-page card no longer dims a
+    /// loss at all — full brightness, the ✕ ghost still tells the story. The
+    /// Winners metal keeps ITS loss treatment entirely separately (whole-bar
+    /// saturation/brightness + the hero-specific dim on isGoldLost).
+    private func d3Dim(_ lostOpacity: Double) -> Double { 1 }
     /// Struck-green — the win color that belongs on gold (traffic-green vanishes).
     private static let goldWinGreen = Color(hex: "#1E6B33")
     /// Footer verdict color on settled cards: win green / lostTint / push gold —
@@ -24565,8 +24561,11 @@ struct CompactPropRow: View {
     private var isPropLost: Bool { resolvedResult == "lost" }
     private var isSilverLost: Bool { premiumFinish && resolvedResult == "lost" }
     private var isSilverWon: Bool { premiumFinish && resolvedResult == "won" }
-    /// Dark-card loss dim only — the silver bar dims whole-card like gold does.
-    private func d3Dim(_ lostOpacity: Double) -> Double { (isPropLost && !premiumFinish) ? lostOpacity : 1 }
+    /// No-op (founder call, Jul 4, game-card parity): the free Picks-page prop
+    /// card no longer dims a loss — full brightness, the ✕ ghost still tells
+    /// the story. The silver bar keeps its OWN loss treatment separately
+    /// (whole-bar saturation/brightness + the hero-specific dim on isSilverLost).
+    private func d3Dim(_ lostOpacity: Double) -> Double { 1 }
     /// Premium type scale — everything on the metal reads ~15% larger (gold parity).
     private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
     /// Prop hero cap — matches the free game card (both lines run long and
