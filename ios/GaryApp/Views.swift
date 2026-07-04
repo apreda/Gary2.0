@@ -1882,6 +1882,14 @@ struct HomeView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+        .onGaryTour { verb, _ in
+            // The recap modal isn't a presented VC, so the generic "dismiss"
+            // can't reach it — close it here (same ledger write as a real tap).
+            if verb == "dismiss", showDailyRecap {
+                dailyRecapShownDate = SupabaseAPI.todayEST()
+                withAnimation(.easeOut(duration: 0.2)) { showDailyRecap = false }
+            }
+        }
         .task(id: homeNonce) {
             // Keep the prop box current as games finish through the day — the live
             // SCORES poll via LiveScoreCache, but prop RESULTS grade server-side, so
@@ -5923,6 +5931,8 @@ struct PremiumPicksView: View {
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
+    @State private var gameScoresMap: [String: String] = [:]    // same key -> "away-home" final score
+    @State private var matchupScoresMap: [String: String] = [:] // matchup-only key -> final (props share the game's score)
     @State private var propResultsMap: [String: String] = [:]   // player name -> won/lost/push
 
     // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
@@ -6115,6 +6125,22 @@ struct PremiumPicksView: View {
             }
         }
         .task { await reload() }
+        .onGaryTour { verb, arg in
+            switch verb {
+            case "winners":
+                let parts = arg.split(separator: " ").map(String.init)
+                switch parts.first {
+                case "props": withAnimation { mode = .props }
+                case "games": withAnimation { mode = .games }
+                case "today": withAnimation { selectedDate = nil }
+                case "date": if parts.count > 1 { withAnimation { selectedDate = parts[1] } }
+                default: break
+                }
+            case "plans": showPlansSheet = true
+            case "auth": showAuthSheet = true
+            default: break
+            }
+        }
         .onChange(of: selectedDate) { _ in Task { await reload() } }
         .onChange(of: scenePhase) { phase in
             // Returning from Stripe checkout — pick up new grants; and silently
@@ -6713,6 +6739,7 @@ struct PremiumPicksView: View {
                                         FlippablePickCard(pick: pick,
                                                           alwaysShowStartTime: true,
                                                           gameResult: shelf.settled ? gamePickResult(pick) : nil,
+                                                          finalScore: shelf.settled ? gamePickScore(pick) : nil,
                                                           showSportBadge: false,
                                                           backHeight: UIScreen.main.bounds.height * 0.68,
                                                           premiumFinish: true)
@@ -6739,6 +6766,13 @@ struct PremiumPicksView: View {
     private func propResult(for prop: PropPick) -> String? {
         guard let name = prop.player?.lowercased(), !name.isEmpty else { return nil }
         return propResultsMap[name]
+    }
+
+    /// The prop's game final ("away-home") — props borrow their matchup's score
+    /// so their settled footers match the game cards on historical boards.
+    private func propScore(for prop: PropPick) -> String? {
+        guard let k = gpKey(from: prop.matchup) else { return nil }
+        return matchupScoresMap[k]
     }
 
     /// Props grouped by game, first-appearance order. THE RULE, automatic:
@@ -6805,6 +6839,7 @@ struct PremiumPicksView: View {
                                         if group.count == 1, let only = group.first {
                                             FlippablePropCard(prop: only,
                                                               gameResult: shelf.settled ? propResult(for: only) : nil,
+                                                              finalScore: shelf.settled ? propScore(for: only) : nil,
                                                               showSportBadge: false,
                                                               alwaysShowStartTime: true,
                                                               backHeight: UIScreen.main.bounds.height * 0.68,
@@ -6816,6 +6851,7 @@ struct PremiumPicksView: View {
                                                 ForEach(group) { p in
                                                     FlippablePropCard(prop: p,
                                                                       gameResult: shelf.settled ? propResult(for: p) : nil,
+                                                                      finalScore: shelf.settled ? propScore(for: p) : nil,
                                                                       showSportBadge: false,
                                                                       alwaysShowStartTime: true,
                                                                       backHeight: UIScreen.main.bounds.height * 0.68,
@@ -6882,7 +6918,9 @@ struct PremiumPicksView: View {
     }
 
     private func storefrontRow(_ b: (league: String, count: Int, unit: String, live: Bool)) -> some View {
-                    let preorder = b.league == "WC" && b.count == 0
+                    // "Pre-order · kicks off June 11" only while that's still true —
+                    // mid-tournament an empty WC night is just a night off.
+                    let preorder = b.league == "WC" && b.count == 0 && worldCupPhase() == .preTournament
                     return HStack(spacing: 12) {
                         Image(systemName: Sport.from(league: b.league).icon)
                             .font(.system(size: 13, weight: .semibold))
@@ -6945,7 +6983,7 @@ struct PremiumPicksView: View {
     }
 
     private func placeholderRow(for league: String) -> some View {
-        let msg: String = (league == "WC")
+        let msg: String = (league == "WC" && worldCupPhase() == .preTournament)
             ? "World Cup kicks off June 11 — picks drop with the slate."
             : "No \(league) pick yet — next slate posts ~90 min before tip."
         return Text(msg)
@@ -6997,6 +7035,13 @@ struct PremiumPicksView: View {
         let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
         guard !away.isEmpty, !home.isEmpty else { return nil }
         return gameResultsMap[garyGameResultKey(matchupKey: "\(away)@\(home)", pickText: pick.pick)]
+    }
+    /// The stored "away-home" final score for a settled pick — feeds the card
+    /// footer directly so historical boards don't depend on the live cache.
+    private func gamePickScore(_ pick: GaryPick) -> String? {
+        let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
+        guard !away.isEmpty, !home.isEmpty else { return nil }
+        return gameScoresMap[garyGameResultKey(matchupKey: "\(away)@\(home)", pickText: pick.pick)]
     }
     private func gpTeamKey(_ value: String?) -> String {
         (value ?? "").lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
@@ -7066,9 +7111,16 @@ struct PremiumPicksView: View {
         let propResults = (try? await propResF) ?? []
 
         var rMap: [String: String] = [:]
+        var sMap: [String: String] = [:]
+        var mMap: [String: String] = [:]
         for r in results where r.game_date == date {
             guard let k = gpKey(from: r.matchup), let o = r.result else { continue }
-            rMap[garyGameResultKey(matchupKey: k, pickText: r.pick_text)] = o.lowercased()
+            let key = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
+            rMap[key] = o.lowercased()
+            if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty {
+                sMap[key] = s
+                mMap[k] = s   // matchup-only: props borrow their game's final
+            }
         }
         var pMap: [String: String] = [:]
         for r in propResults where r.game_date == date {
@@ -7099,6 +7151,8 @@ struct PremiumPicksView: View {
 
         await MainActor.run {
             gameResultsMap = rMap
+            gameScoresMap = sMap
+            matchupScoresMap = mMap
             propResultsMap = pMap
             gameShelves = gShelves
             propShelves = pShelves
@@ -7172,9 +7226,16 @@ struct PremiumPicksView: View {
 
         // Yesterday's result map for settled (last-result) shelves.
         var rMap: [String: String] = [:]
+        var sMap: [String: String] = [:]
+        var mMap: [String: String] = [:]
         for r in results.filter({ $0.game_date == yesterday }) {
             guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
-            rMap[garyGameResultKey(matchupKey: k, pickText: r.pick_text)] = outcome.lowercased()
+            let key = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
+            rMap[key] = outcome.lowercased()
+            if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty {
+                sMap[key] = s
+                mMap[k] = s   // matchup-only: props borrow their game's final
+            }
         }
 
         let todayByLeague = Dictionary(grouping: todayGame, by: { leagueKey($0) })
@@ -7275,6 +7336,8 @@ struct PremiumPicksView: View {
 
         await MainActor.run {
             gameResultsMap = rMap
+            gameScoresMap = sMap
+            matchupScoresMap = mMap
             propResultsMap = pMap
             gameShelves = gShelves
             propShelves = pShelves
@@ -7591,12 +7654,15 @@ struct PlansSheetView: View {
     private var wcRowSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "Limited", sub: "One-time, no renewal")
+            let phase = worldCupPhase()
             planCard(selected: selection == .worldCup,
-                     ribbon: "Kicks off June 11", ribbonTeal: true,
+                     ribbon: phase == .preTournament ? "Kicks off June 11" : "Tournament live now",
+                     ribbonTeal: true,
                      title: "WORLD CUP PASS",
-                     sub: "All 104 matches · one-time, no renewal",
+                     sub: phase == .preTournament ? "All 104 matches · one-time, no renewal"
+                                                  : "Every match through the final · one-time, no renewal",
                      price: GaryPricing.worldCup, per: "ONE-TIME",
-                     a11y: "World Cup Pass. \(GaryPricing.worldCup), one time. All 104 matches." + (selection == .worldCup ? " Selected." : "")) {
+                     a11y: "World Cup Pass. \(GaryPricing.worldCup), one time. Every match through the final." + (selection == .worldCup ? " Selected." : "")) {
                 select(.worldCup)
             }
             .padding(.horizontal, 16)
@@ -11774,6 +11840,11 @@ struct BillfoldView: View {
         .onChange(of: sportTimeframe) { _ in onTimeframeChange() }
         .onChange(of: spreadSport) { _ in recomputeCache() }
         .onChange(of: topdTimeframe) { _ in onTimeframeChange() }
+        .onGaryTour { verb, arg in
+            if verb == "billfold", let m = ChartMode(rawValue: arg.uppercased()) {
+                withAnimation { chartMode = m }
+            }
+        }
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
         }
@@ -14177,10 +14248,10 @@ enum GoldBar {
     /// "GARY A.I." text vs the black/gold crest badge. Hidden on WON cards
     /// (the check + payout own that corner).
     enum BrandMark { case none, text, badge }
-    /// Founder A/B (Jul 3): text won — the badge reads as gold-on-gold mud at
-    /// 44pt; the engraved wordmark reads like a hallmark. `.badge` stays wired
-    /// for one flip if he overrules.
-    static let brandMark: BrandMark = .text
+    /// Founder call (Jul 3 PM): NO mark on the gold bar — the metal and the
+    /// type ARE the brand; the corner stays clean (the win check + payout
+    /// still claim it). `.text` / `.badge` stay wired if he ever overrules.
+    static let brandMark: BrandMark = .none
 
     // TRUE gold (founder call, Jul 3 — "real clean solid gold, not yellow, no
     // white"): a rich #C9A227-family metal in a tight range, one soft golden
@@ -14249,9 +14320,12 @@ enum SilverBar {
                         .init(color: .clear, location: 0.62)
                     ], startPoint: UnitPoint(x: 0, y: 0.1), endPoint: UnitPoint(x: 1, y: 0.9))))
             .overlay(
+                // GOLD trim on the silver metal (founder call, Jul 3 PM): the
+                // machined lip is gold, so the card still reads Gary before it
+                // reads silver — lit gold above, deep bronze below.
                 RoundedRectangle(cornerRadius: r, style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [sheen.opacity(0.85),
-                                                          Color(hex: "#26262E").opacity(0.7)],
+                    .strokeBorder(LinearGradient(colors: [Color(hex: "#E8C95A").opacity(0.9),
+                                                          Color(hex: "#4A3A08").opacity(0.75)],
                                                  startPoint: .top, endPoint: .bottom),
                                   lineWidth: 2))
             .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
@@ -14279,6 +14353,11 @@ enum RevealedPicks {
         if arr.count > 400 { arr.removeFirst(arr.count - 400) }
         UserDefaults.standard.set(arr, forKey: key)
     }
+    /// Tour harness: wipe the ledger so sealed faces can be re-reviewed.
+    static func clearAll() {
+        cache.removeAll()
+        UserDefaults.standard.removeObject(forKey: key)
+    }
 }
 
 /// Per-device ledger of which WON picks already played their celebration —
@@ -14294,6 +14373,11 @@ enum CelebratedWins {
         arr.append(id)
         if arr.count > 400 { arr.removeFirst(arr.count - 400) }
         UserDefaults.standard.set(arr, forKey: key)
+    }
+    /// Tour harness: wipe the ledger so the win celebration can re-fire.
+    static func clearAll() {
+        cache.removeAll()
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }
 
@@ -14410,6 +14494,10 @@ struct MembersWrap<Content: View>: View {
         .scaleEffect(opening ? 1.03 : 1)
         .contentShape(Rectangle())
         .onTapGesture { openInPlace() }
+        .onGaryTour { verb, _ in
+            if verb == "reveal", !revealed, GaryTour.claimReveal() { openInPlace() }
+            if verb == "reseal" { opening = false; revealed = false }
+        }
     }
 
     /// The six beats compressed into the card's own slot: anticipation pinch →
@@ -15352,9 +15440,19 @@ struct CompactPickRow: View {
         // first, then the stored final score; bare "FINAL" only when neither carries
         // a score. This is the one place the final state lives on every card now.
         if displayResult != nil {
-            if let ls = liveFinal, ls.away_score != nil, ls.home_score != nil { return liveSlotText(ls, label: "FINAL") }
-            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(finalScoreLine(matchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")", raw: fs))" }
-            if let g = liveCache.gradedScore(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")") { return "FINAL · \(finalScoreLine(matchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")", raw: g))" }
+            let mk = "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")"
+            // The rich cache line only when it can NAME the teams — a bare
+            // "17-1" slot line reads like a fragment on a settled card, so
+            // abbr-less cache rows fall through to the formatted paths below.
+            if let ls = liveFinal, ls.away_score != nil, ls.home_score != nil,
+               ls.away_abbr != nil, ls.home_abbr != nil {
+                return liveLineRich(ls, label: "FINAL")
+            }
+            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(finalScoreLine(matchup: mk, raw: fs, league: pick.league))" }
+            if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(finalScoreLine(matchup: mk, raw: g, league: pick.league))" }
+            if let ls = liveFinal, let a = ls.away_score, let h = ls.home_score {
+                return "FINAL · \(finalScoreLine(matchup: mk, raw: "\(a)-\(h)", league: pick.league))"
+            }
             return "FINAL"
         }
         guard let ls = liveStatus else { return nil }
@@ -15608,6 +15706,15 @@ struct CompactPickRow: View {
             // Ask for a review. Heavily gated (once per app version, >=3 sessions) + Apple-throttled
             // to ~3/365 days, so it can never nag even though winning cards appear all over the app.
             if displayResult == "won", ReviewPrompt.shouldRequestAfterWin() { requestReview() }
+        }
+        // The card can be ON SCREEN when the result lands (live → won via a
+        // background reload): onAppear has already fired, so the transition
+        // itself must start the win moment — otherwise the payout counter
+        // renders its initial $0 and the confetti never plays.
+        .onChange(of: isGoldWon) { won in
+            guard won else { return }
+            runWinMoment()
+            if ReviewPrompt.shouldRequestAfterWin() { requestReview() }
         }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
@@ -16034,6 +16141,9 @@ struct FlippablePickCard: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
         .onTapGesture { hasEverFlipped = true; flipped.toggle() }
+        .onGaryTour { verb, _ in
+            if verb == "flip" { hasEverFlipped = true; flipped.toggle() }
+        }
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -17237,7 +17347,7 @@ struct PickCardBack: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(pick.pick ?? "")
-                    .font(.system(size: 19, weight: .heavy))
+                    .font(GaryFonts.text(19, .heavy))
                     .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if pick.confidence != nil {
@@ -17292,7 +17402,7 @@ struct PickCardBack: View {
                     }
                     if let rest = parts.rest {
                         Text(rest)
-                            .font(.system(size: 14.5))
+                            .font(GaryFonts.text(14.5))
                             .foregroundStyle(.white.opacity(0.72))
                             .lineSpacing(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -17314,6 +17424,14 @@ struct PickCardBack: View {
                         )
                     }
                 }
+            }
+            // The case scrolls INSIDE the card — without a fade the viewport
+            // edge cuts a sentence mid-line and reads as truncation.
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 24)
+                    .allowsHitTesting(false)
             }
 
             Text("tap to flip back  ↺")
@@ -17379,6 +17497,9 @@ func cleanPropAnalysis(_ text: String) -> String {
 struct FlippablePropCard: View {
     let prop: PropPick
     var gameResult: String? = nil
+    /// Stored "away-home" final for the settled footer — same plumbing as the
+    /// game card, so historical boards don't depend on the live cache.
+    var finalScore: String? = nil
     var showSportBadge: Bool = false
     var liveInSlot: Bool = true
     /// Passed straight to the front card — Winners shows the start time on settled
@@ -17406,7 +17527,7 @@ struct FlippablePropCard: View {
             // Front pinned to the shared uniform height so prop cards match the
             // game cards exactly (fixedHeight on CompactPropRow) — no per-card
             // measuring, which is what let content-length drive different sizes.
-            CompactPropRow(prop: prop, gameResult: gameResult, showSportBadge: showSportBadge, liveInSlot: liveInSlot, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish)
+            CompactPropRow(prop: prop, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish)
                 .opacity(flipped ? 0 : 1)
 
             // ONE back design for prop cards everywhere — the slip's back
@@ -17424,6 +17545,9 @@ struct FlippablePropCard: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
         .onTapGesture { hasEverFlipped = true; flipped.toggle() }
+        .onGaryTour { verb, _ in
+            if verb == "flip" { hasEverFlipped = true; flipped.toggle() }
+        }
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -19601,6 +19725,19 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
 
 /// A settled score WITH team labels ("CHC 10 · NYM 3") from a matchup + a raw "10-3".
 /// Falls back to the raw score if it can't parse. Global — shared by every card footer.
+/// 2026 World Cup phase (ET calendar) — keeps storefront copy honest as the
+/// tournament moves: "kicks off June 11" is a lie by June 12.
+enum WCPhase { case preTournament, live, done }
+func worldCupPhase(now: Date = Date()) -> WCPhase {
+    var cal = Calendar(identifier: .gregorian)
+    if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
+    let kickoff = DateComponents(calendar: cal, year: 2026, month: 6, day: 11).date ?? .distantFuture
+    let dayAfterFinal = DateComponents(calendar: cal, year: 2026, month: 7, day: 20).date ?? .distantFuture
+    if now < kickoff { return .preTournament }
+    if now < dayAfterFinal { return .live }
+    return .done
+}
+
 func finalScoreLine(matchup: String, raw: String, league: String? = nil) -> String {
     let parts = raw.components(separatedBy: CharacterSet(charactersIn: "-\u{2013}")).map { $0.trimmingCharacters(in: .whitespaces) }
     let teams = matchup.components(separatedBy: " @ ")
@@ -20043,6 +20180,14 @@ struct PicksCarouselView: View {
             // !hasContent, so existing data stays put while fresh rows load underneath).
             if phase == .active { Task { await store.refresh() } }
         }
+        .onGaryTour { verb, arg in
+            switch verb {
+            case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
+            case "picksday": withAnimation { pickDay = arg == "yesterday" ? .yesterday : .today }
+            case "picksport": withAnimation { sport = arg.uppercased() }
+            default: break
+            }
+        }
     }
 
     /// A cheap Equatable digest of every input the memoized game set + edge index
@@ -20474,8 +20619,13 @@ struct TeasedPickCard: View {
     var league: String? = nil
     /// Start time copy for the footer's left corner ("7:05 PM ET"), if known.
     var time: String? = nil
+    /// Kickoff/first pitch — once it passes, "incoming" would be a lie (the
+    /// window closed), so the card switches to the honest no-pick state.
+    var commence: Date? = nil
     /// Optional footer-right action (the game pages link back to yesterday).
     var onSeeYesterday: (() -> Void)? = nil
+
+    private var gameStarted: Bool { commence.map { $0 <= Date() } ?? false }
 
     var body: some View {
         ZStack {
@@ -20489,10 +20639,10 @@ struct TeasedPickCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: -18) {
-                    Text("PICKS")
+                    Text(gameStarted ? "NO PICK" : "PICKS")
                         .font(GaryFonts.display(58))
                         .foregroundStyle(.white)
-                    Text("INCOMING")
+                    Text(gameStarted ? "THIS GAME" : "INCOMING")
                         .font(GaryFonts.display(58))
                         .foregroundStyle(GaryColors.lightGold)
                         .lineLimit(1).minimumScaleFactor(0.5)
@@ -20500,9 +20650,12 @@ struct TeasedPickCard: View {
                 .padding(.top, -1)
                 .padding(.trailing, 52)
 
-                Text("Gary posts his call ~90 minutes before first pitch")
+                Text(gameStarted
+                     ? "Gary's call didn't post for this one. The rest of the board is live."
+                     : "Gary posts his call ~90 minutes before first pitch")
                     .font(GaryFonts.text(13.5, .medium))
                     .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1).minimumScaleFactor(0.8)
                     .padding(.top, -3)
 
                 Rectangle()
@@ -20636,6 +20789,10 @@ struct PicksGamePage: View {
                 // page's design language intact and links back to last night.
                 TeasedPickCard(league: group.props.first?.effectiveLeague ?? entries.first?.pick.league,
                                time: group.time.isEmpty ? nil : group.time,
+                               // The upcoming-game guard above leans on the live cache,
+                               // which can MISS a game entirely — the card checks the
+                               // real clock itself and flips to the honest no-pick state.
+                               commence: parseISO8601(group.props.first?.commence_time ?? ""),
                                onSeeYesterday: onSeeYesterday)
                     .padding(.horizontal, 16)
             }
@@ -21115,6 +21272,12 @@ struct PropSlipCard: View {
         .onPreferenceChange(PickCardHeightKey.self) { h in if h > 1, !flipped { frontH = h } }
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
+        .onGaryTour { verb, _ in
+            if verb == "flip" {
+                if backProp == nil { backProp = props.first }
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped.toggle() }
+            }
+        }
     }
 
     private func resultCapsule(_ r: (String, Color)) -> some View {
@@ -21311,12 +21474,12 @@ struct PropSlipBack: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(prop.player ?? "")
-                    .font(.system(size: 19, weight: .heavy))
+                    .font(GaryFonts.text(19, .heavy))
                     .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if let team = prop.team, !team.isEmpty {
                     Text(Formatters.shortTeamName(team, league: prop.effectiveLeague).uppercased())
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(GaryFonts.text(10, .semibold))
                         .foregroundStyle(GaryColors.silver.opacity(0.7))
                 }
             }
@@ -21344,7 +21507,7 @@ struct PropSlipBack: View {
                                     Circle().fill(GaryColors.silver.opacity(0.7))
                                         .frame(width: 4, height: 4).padding(.top, 7)
                                     Text(s)
-                                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.85))
+                                        .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.85))
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -21356,12 +21519,20 @@ struct PropSlipBack: View {
                                 .font(GaryFonts.display(15))
                                 .foregroundStyle(GaryColors.sectionHead)
                             Text(cleanPropAnalysis(a))
-                                .font(.system(size: 14.5)).foregroundStyle(.white.opacity(0.75))
+                                .font(GaryFonts.text(14.5)).foregroundStyle(.white.opacity(0.75))
                                 .lineSpacing(3)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
+            }
+            // Scroll-affordance fade (game-back parity): the read continues
+            // below the fold — never let a hard cut look like truncation.
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 24)
+                    .allowsHitTesting(false)
             }
 
             Text("tap to flip back  ↺")
@@ -22533,6 +22704,15 @@ struct PropsHubView: View {
         .onChange(of: scenePhase) { phase in
             guard phase == .active, isVisible else { return }
             Task { await reloadIfStale() }
+        }
+        .onGaryTour { verb, arg in
+            guard verb == "hub" else { return }
+            switch arg.lowercased() {
+            case "mlb": withAnimation { sel = .mlb }
+            case "nba": withAnimation { sel = .nba }
+            case "wc": withAnimation { sel = .wc }
+            default: break
+            }
         }
         .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
@@ -24328,6 +24508,9 @@ struct ConfirmedXISheetView: View {
 struct CompactPropRow: View {
     let prop: PropPick
     var gameResult: String? = nil
+    /// Stored "away-home" final for the settled footer (game-card parity) —
+    /// historical boards pass it so the score never depends on the live cache.
+    var finalScore: String? = nil
     var showSportBadge: Bool = false
     /// Game pages carry the score in the page hero (LiveScoreStrip), so their
     /// cards keep the plain start time in the slot. Everywhere else stays state-aware.
@@ -24567,11 +24750,19 @@ struct CompactPropRow: View {
         // Settled — the FINAL score with team names rides the footer's left corner, exactly
         // like the game card (the prop's own CASHED/LOST stamp sits separately in the corner).
         if resolvedResult != nil {
-            if let ls = liveCache.status(forMatchup: prop.matchup ?? ""),
-               ls.isFinal, ls.away_score != nil, ls.home_score != nil {
+            let mk = prop.matchup ?? ""
+            // Game-card parity: rich cache line only when it names the teams,
+            // else the formatted score paths (never a bare "17-1" fragment).
+            if let ls = liveCache.status(forMatchup: mk),
+               ls.isFinal, ls.away_score != nil, ls.home_score != nil,
+               ls.away_abbr != nil, ls.home_abbr != nil {
                 return liveLineRich(ls, label: "FINAL")
             }
-            if let g = liveCache.gradedScore(forMatchup: prop.matchup ?? "") { return "FINAL · \(finalScoreLine(matchup: prop.matchup ?? "", raw: g))" }
+            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(finalScoreLine(matchup: mk, raw: fs, league: prop.effectiveLeague))" }
+            if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(finalScoreLine(matchup: mk, raw: g, league: prop.effectiveLeague))" }
+            if let ls = liveCache.status(forMatchup: mk), ls.isFinal, let a = ls.away_score, let h = ls.home_score {
+                return "FINAL · \(finalScoreLine(matchup: mk, raw: "\(a)-\(h)", league: prop.effectiveLeague))"
+            }
             return "FINAL"
         }
         guard let ls = liveStatus else { return nil }
@@ -24597,6 +24788,19 @@ struct CompactPropRow: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: 10) {
+                    if premiumFinish {
+                        // The normal Gary mark anchors the silver bar's left corner
+                        // (founder call, Jul 3 PM) — eyebrow cap-height so the row's
+                        // rhythm (and the hero below it) doesn't move.
+                        Image(GaryBrand.mark)
+                            .resizable().scaledToFit()
+                            .frame(width: 22, height: 22)
+                            // Optical centering against the eyebrow text (which sits on
+                            // a 6pt top pad) — offset, not padding, so the row's layout
+                            // height stays identical to the gold bar's.
+                            .offset(y: 3)
+                            .shadow(color: Color(hex: "#26262E").opacity(0.45), radius: 1.5, y: 1)
+                    }
                     Text(eyebrowLabel)
                         .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
                         .foregroundStyle(eyebrowTint)
@@ -24685,20 +24889,11 @@ struct CompactPropRow: View {
             }
             .padding(18)
 
-            // Crest overlay — the gold bear on dark cards; the BLACK Gary badge
-            // on the silver bar (founder call, Jul 3). The badge cedes the corner
-            // to the check + payout when the prop cashes.
-            if premiumFinish {
-                if !isSilverWon {
-                    Image("GaryBadgeBlack")
-                        .resizable().scaledToFit()
-                        .frame(width: 46, height: 46)
-                        .shadow(color: Color(hex: "#26262E").opacity(0.55), radius: 3, y: 2)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .padding(.top, 14).padding(.trailing, 16)
-                        .allowsHitTesting(false)
-                }
-            } else {
+            // Crest overlay — the gold bear rides the dark cards' corner. The
+            // silver bar carries the normal mark IN its eyebrow row instead
+            // (founder call, Jul 3 PM: real logo, left corner — badge retired),
+            // so its top-right stays clean like the gold bar's.
+            if !premiumFinish {
                 Image(GaryBrand.mark)
                     .resizable().scaledToFit()
                     .frame(width: 44, height: 44)
@@ -24773,6 +24968,11 @@ struct CompactPropRow: View {
         .onAppear {
             LiveScoreCache.shared.startIfNeeded()
             if isSilverWon { runWinMoment() }
+        }
+        // Same transition gap as the gold bar: a live card graded WON while on
+        // screen must start its win moment here — onAppear won't fire again.
+        .onChange(of: isSilverWon) { won in
+            if won { runWinMoment() }
         }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }

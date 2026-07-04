@@ -175,13 +175,14 @@ enum GaryFonts {
     }
 
     enum TextWeight {
-        case regular, medium, semibold, bold
+        case regular, medium, semibold, bold, heavy
         var sfWeight: Font.Weight {
             switch self {
             case .regular:  return .regular
             case .medium:   return .medium
             case .semibold: return .semibold
             case .bold:     return .bold
+            case .heavy:    return .heavy
             }
         }
     }

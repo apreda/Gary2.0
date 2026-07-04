@@ -117,8 +117,14 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSettingsMenu"))) { _ in
             showingSettings = true
         }
+        .onGaryTour { verb, arg in
+            if verb == "tab", let idx = Int(arg), (0...lastValidTabIndex).contains(idx) {
+                selectedTab = idx
+            }
+        }
         .task {
             #if DEBUG
+            GaryTour.start()
             // Screenshot tooling: simctl launch ... --args -forceTab 0
             if UserDefaults.standard.object(forKey: "forceTab") != nil {
                 let forced = UserDefaults.standard.integer(forKey: "forceTab")
