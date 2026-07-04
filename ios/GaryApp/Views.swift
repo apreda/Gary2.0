@@ -15042,7 +15042,8 @@ struct CompactPickRow: View {
     private var eyebrowTint: Color { premiumFinish ? GoldBar.inkSoft : GaryColors.gold }
     private var heroTint: Color { premiumFinish ? GoldBar.inkHero : .white }
     private var leagueTint: Color { premiumFinish ? GoldBar.inkStrong : metaAccent }
-    private var metaBodyTint: Color { premiumFinish ? GoldBar.inkBody : .white.opacity(0.55) }
+    /// Team name reads gold (founder call, Jul 4).
+    private var metaBodyTint: Color { premiumFinish ? GoldBar.inkBody : GaryColors.gold }
     private var metaDotTint: Color { premiumFinish ? GoldBar.inkBody.opacity(0.7) : .white.opacity(0.4) }
     private var oddsTint: Color { premiumFinish ? GoldBar.inkStrong : GaryColors.gold }
     private var footerTint: Color { premiumFinish ? GoldBar.inkSoft : GaryColors.gold }
@@ -15365,7 +15366,7 @@ struct CompactPickRow: View {
     /// bar walked down too (Jul 4, "−15%"): 76→65 base × 1.15 scale ≈ 75.
     /// PARITY LAW: the silver prop card uses the SAME premium base — the only
     /// visible differences between Winners cards are the metal and the words.
-    private var heroFontSize: CGFloat { premiumFinish ? 65 : 58 }
+    private var heroFontSize: CGFloat { premiumFinish ? 65 : 52 }
     /// Tight stacked leading (the mock's line-height .9) — all-caps display type
     /// has no descenders, so the lines pull together safely.
     private var heroLineSpacing: CGFloat { premiumFinish ? -24 : -18 }
@@ -24564,14 +24565,15 @@ struct CompactPropRow: View {
     /// self-scale, so the cap mostly sets the ceiling for short names).
     /// Premium base MATCHES the gold game card (65 × pf ≈ 75) — parity law:
     /// metal + words are the only differences between Winners cards.
-    private var propHeroSize: CGFloat { premiumFinish ? 65 : 58 }
+    private var propHeroSize: CGFloat { premiumFinish ? 65 : 44 }
     // Optical spacing (Jul 3 spacing pass) — see CompactPickRow.heroTopPad.
     private var heroTopPad: CGFloat { 12 - 0.22 * propHeroSize * pf }
     private var metaTopPad: CGFloat { 12 - 0.25 * propHeroSize * pf }
     private var eyebrowTint: Color { premiumFinish ? SilverBar.inkSoft : GaryColors.gold }
     private var heroTint: Color { premiumFinish ? SilverBar.inkHero : .white }
     private var propLeagueTint: Color { premiumFinish ? SilverBar.inkStrong : (isMLBProp ? GaryColors.mlbGrass : accentColor) }
-    private var metaBodyTint: Color { premiumFinish ? SilverBar.inkBody : .white.opacity(0.55) }
+    /// Team name reads gold (game-card parity, Jul 4 — founder call).
+    private var metaBodyTint: Color { premiumFinish ? SilverBar.inkBody : GaryColors.gold }
     private var metaDotTint: Color { premiumFinish ? SilverBar.inkBody.opacity(0.7) : .white.opacity(0.4) }
     private var oddsTint: Color { premiumFinish ? SilverBar.inkStrong : GaryColors.gold }
     private var footerTint: Color { premiumFinish ? SilverBar.inkSoft : GaryColors.gold }
@@ -24838,7 +24840,9 @@ struct CompactPropRow: View {
                 Spacer(minLength: 0)
 
                 HStack(alignment: .center, spacing: 8) {
-                    Text(((prop.effectiveLeague ?? "") + " · PROP").uppercased())
+                    // Game-card parity, Jul 4: just the league — "· PROP" doesn't
+                    // exist on the game card's token, so it doesn't exist here either.
+                    Text((prop.effectiveLeague ?? "").uppercased())
                         .font(GaryFonts.mono(11 * pf, bold: true)).tracking(1.2)
                         .foregroundStyle(propLeagueTint)
                         .lineLimit(1)
