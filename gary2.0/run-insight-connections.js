@@ -271,16 +271,23 @@ async function insertRows(rows) {
 /**
  * Stable identity of a connection within a day+league — the ENTITY it describes,
  * so a re-run never replaces or duplicates an already-posted card. Entity cards
- * (a player in a game, a team) key on their ids; id-less lanes (group/tournament)
- * key on the headline. Keying on the entity (not the value/headline) means a card
- * is frozen even if a later run would recompute its number slightly differently —
- * the morning's card stays put, no churn.
+ * (a player in a game, a team) key on their ids; id-less lanes (group/tournament,
+ * regression_tomorrow) key on the headline + game. Keying on the entity (not the
+ * value/headline) means a card is frozen even if a later run would recompute its
+ * number slightly differently — the morning's card stays put, no churn.
+ *
+ * Digits are STRIPPED from the headline part of the id-less key: those headlines
+ * embed the recomputed number ("France head the title market at +170" → "+175",
+ * "Ryan Johnson: 7.4 ERA vs 4.33 xERA" → "4.3"), so keying on the raw headline
+ * minted a "new" story every time the number drifted between runs — the exact
+ * duplicate class found live on Jul 4 2026. The game field disambiguates two
+ * same-shaped headlines from different matchups.
  */
 function rowKey(r) {
   const hasEntity = r.player_id || r.team_id || r.game_id;
   return hasEntity
     ? `${r.category}|${r.player_id || ''}|${r.team_id || ''}|${r.game_id || ''}`
-    : `${r.category}|${r.headline}`;
+    : `${r.category}|${(r.headline || '').replace(/[0-9]/g, '')}|${r.game || ''}`;
 }
 
 /**
@@ -295,7 +302,7 @@ async function existingKeys(date, league) {
     params: {
       date: `eq.${date}`,
       league: `eq.${league}`,
-      select: 'category,headline,player_id,team_id,game_id',
+      select: 'category,headline,game,player_id,team_id,game_id',
     },
   });
   const set = new Set();

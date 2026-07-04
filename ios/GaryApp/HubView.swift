@@ -92,6 +92,28 @@ fileprivate struct HubRule: View {
     }
 }
 
+/// The page-wide "See all n / Show less" expander control.
+fileprivate struct HubSeeAllButton: View {
+    let isOpen: Bool
+    let total: Int
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Text(isOpen ? "Show less" : "See all \(total)")
+                    .font(HubFont.kicker(10.5)).tracking(1.2)
+                    .foregroundStyle(GaryColors.gold)
+                Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(GaryColors.gold)
+            }
+            .padding(.horizontal, 18)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 fileprivate enum HubFmt {
     /// Compact stat formatting: .851 for sub-1 rates, 8.53 for ERAs, 14.7 for IP.
     static func stat(_ v: Double) -> String {
@@ -149,6 +171,9 @@ struct HubView: View {
     @State private var selectedSignal: Signal? = nil
     @State private var breakdownSignal: Signal? = nil
     @State private var wcIntel: Signal? = nil
+    /// Slate-strip tap → the in-place game sheet (everything the Hub knows
+    /// about that matchup). Picks is a CTA inside it, not a forced jump.
+    @State private var gameSheet: HubGameSel? = nil
     @State private var searchOpen = false
     @State private var searchText: String = ""
     @FocusState private var searchFocused: Bool
@@ -385,6 +410,30 @@ struct HubView: View {
     private var wcIntelSignals: [Signal] { fetched.filter { $0.league == .wc && $0.confirmedXI != nil } }
     private func wcEdges(for game: String) -> [Signal] { fetched.filter { $0.league == .wc && $0.game == game } }
 
+    /// Every edge the Hub carries for one slate game (abbr-exact, then the
+    /// name-keyword fallback). Look-ahead regression rows are excluded — their
+    /// `game` names TOMORROW's matchup, which collides on series nights.
+    private func edgesFor(_ r: TomorrowBoardRow) -> [Signal] {
+        let full = "\(r.away_team ?? "") @ \(r.home_team ?? "")"
+        let abbr = "\(r.away_abbr ?? "") @ \(r.home_abbr ?? "")".uppercased()
+        return leagueSignals.filter { s in
+            guard s.confirmedXI == nil, s.reg?.day != "tomorrow" else { return false }
+            return s.game.uppercased() == abbr || abbrGameMatches(s.game, matchup: full)
+        }
+    }
+
+    /// Streaks on the line in this game — either side's team (or a bat on it).
+    private func streaksFor(_ r: TomorrowBoardRow) -> [StreakRow] {
+        let full = "\(r.away_team ?? "") @ \(r.home_team ?? "")".lowercased()
+        guard full.count > 3 else { return [] }
+        return selStreakRows.filter { st in
+            guard st.next_game != nil else { return false }
+            let team = (st.team ?? st.subject ?? "").lowercased()
+            guard let nick = team.split(separator: " ").last.map(String.init), nick.count > 2 else { return false }
+            return full.contains(nick)
+        }
+    }
+
     // ---- the front page ranking ----
 
     /// Relevance-ranked stories across every lane (rows arrive relevance-
@@ -468,6 +517,7 @@ struct HubView: View {
                     searchText: $searchText,
                     searchFocused: $searchFocused
                 )
+                .id("top")
 
                 if !didLoad {
                     hubLoading
@@ -486,7 +536,9 @@ struct HubView: View {
                     hubError
                 } else {
                     if !slateRows.isEmpty {
-                        HubSlateStrip(rows: slateRows, onTap: { onSelectGame($0) })
+                        HubSlateStrip(rows: slateRows) { r in
+                            gameSheet = HubGameSel(row: r)
+                        }
                     }
 
                     if leagueSignals.isEmpty {
@@ -558,6 +610,7 @@ struct HubView: View {
                                 VStack(spacing: 0) {
                                     ForEach(wcIntelSignals) { s in
                                         HubStoryRow(s: s, kicker: kickerText(s), expandable: false,
+                                                    showsChevron: true,
                                                     onTap: { wcIntel = s }, onProfile: nil)
                                         HubRule(inset: 18)
                                     }
@@ -625,6 +678,14 @@ struct HubView: View {
             Task { await reloadIfStale() }
         }
         .onGaryTour { verb, arg in
+            // "hubgame 1" — open the game sheet for slate index 1 (sim QA:
+            // the tour harness can't tap, so the sheet gets its own verb).
+            if verb == "hubgame" {
+                if let i = Int(arg), slateRows.indices.contains(i) {
+                    gameSheet = HubGameSel(row: slateRows[i])
+                }
+                return
+            }
             guard verb == "hub" else { return }
             switch arg.lowercased() {
             case "mlb": withAnimation { sel = .mlb }
@@ -635,6 +696,13 @@ struct HubView: View {
         }
         .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+        .sheet(item: $gameSheet) { sel in
+            HubGameSheet(row: sel.row,
+                         edges: edgesFor(sel.row),
+                         streaks: streaksFor(sel.row),
+                         kickerFor: kickerText,
+                         onViewGame: { onSelectGame($0) })
+        }
         .fullScreenCover(item: $wcIntel) { s in
             ZStack(alignment: .top) {
                 GaryColors.darkBg.ignoresSafeArea()
@@ -653,6 +721,11 @@ struct HubView: View {
                 withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
                 pendingScrollAnchor = nil
             }
+        }
+        // Switching leagues rebuilds the whole page — land the reader back at
+        // the masthead instead of mid-scroll into shorter content.
+        .onChange(of: sel) { _ in
+            withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo("top", anchor: .top) }
         }
         }
         }
@@ -864,9 +937,23 @@ fileprivate struct HubMasthead: View {
 
 // MARK: - Tonight's slate strip
 
+/// Identifiable wrapper for the slate-strip → game-sheet presentation.
+fileprivate struct HubGameSel: Identifiable {
+    let row: TomorrowBoardRow
+    var id: String { "\(row.away_team ?? row.away_abbr ?? "") @ \(row.home_team ?? row.home_abbr ?? "")" }
+}
+
+/// WC board rows carry no abbreviations — fall back to the first three
+/// letters of the team name ("France" → FRA) so labels never read "—".
+fileprivate func hubSideLabel(_ abbr: String?, _ team: String?) -> String {
+    if let a = abbr, !a.isEmpty { return a }
+    guard let t = team, !t.isEmpty else { return "—" }
+    return String(t.uppercased().filter { $0.isLetter }.prefix(3))
+}
+
 fileprivate struct HubSlateStrip: View {
     let rows: [TomorrowBoardRow]
-    let onTap: (String) -> Void
+    let onTap: (TomorrowBoardRow) -> Void
     /// Live scores overlay the scheduled time once a game starts — the strip
     /// reads scheduled → ▶ live score → final across the day.
     @ObservedObject private var live = LiveScoreCache.shared
@@ -875,7 +962,7 @@ fileprivate struct HubSlateStrip: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
-                    Button { onTap("\(side(r.away_abbr, r.away_team)) @ \(side(r.home_abbr, r.home_team))") } label: { block(r) }
+                    Button { onTap(r) } label: { block(r) }
                         .buttonStyle(.plain)
                     if i < rows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
@@ -886,13 +973,7 @@ fileprivate struct HubSlateStrip: View {
         }
     }
 
-    /// WC board rows carry no abbreviations — fall back to the first three
-    /// letters of the team name ("France" → FRA) so the strip never reads "—".
-    private func side(_ abbr: String?, _ team: String?) -> String {
-        if let a = abbr, !a.isEmpty { return a }
-        guard let t = team, !t.isEmpty else { return "—" }
-        return String(t.uppercased().filter { $0.isLetter }.prefix(3))
-    }
+    private func side(_ abbr: String?, _ team: String?) -> String { hubSideLabel(abbr, team) }
 
     @ViewBuilder private func block(_ r: TomorrowBoardRow) -> some View {
         let marquee = r.is_marquee == true
@@ -949,6 +1030,21 @@ fileprivate struct HubLeadStory: View {
         return count == 2 ? String(d[..<idx]).trimmingCharacters(in: .whitespaces) : d
     }
 
+    /// What the hero number is measured against — spark[0]'s meaning differs
+    /// per lane, so the label names it (a generic "from X" misreads a platoon
+    /// split as a trend). Lanes without a known baseline shape show nothing.
+    private var baseline: String? {
+        guard s.spark.count >= 2 else { return nil }
+        let base = HubFmt.stat(s.spark[0])
+        switch s.kind {
+        case .hot, .cold, .starterForm: return "season \(base)"
+        case .ballpark:                 return "\(base) elsewhere"
+        case .platoon:                  return "\(base) other side"
+        case .regression:               return "\(base) ERA"
+        default:                        return nil
+        }
+    }
+
     var body: some View {
         Button { onTap(s) } label: {
             VStack(alignment: .leading, spacing: 0) {
@@ -976,8 +1072,8 @@ fileprivate struct HubLeadStory: View {
                             .font(HubFont.data(40))
                             .foregroundStyle(s.tone.color)
                             .lineLimit(1).minimumScaleFactor(0.6)
-                        if s.spark.count >= 2 {
-                            Text("from \(HubFmt.stat(s.spark[0]))")
+                        if let baseline {
+                            Text(baseline)
                                 .font(HubFont.data(12, .medium))
                                 .foregroundStyle(.white.opacity(0.62))
                         }
@@ -1330,12 +1426,21 @@ fileprivate struct HubStreakWatch: View {
         return homeGame ? "\(opp) @ \(team)" : "\(team) @ \(opp)"
     }
 
+    @State private var showAll = false
+
     var body: some View {
-        VStack(spacing: 0) {
-            let shown = Array(ordered.prefix(10))
+        VStack(alignment: .leading, spacing: 0) {
+            let all = ordered
+            let shown = showAll ? all : Array(all.prefix(10))
             ForEach(Array(shown.enumerated()), id: \.offset) { i, r in
                 streakRow(r)
                 if i < shown.count - 1 { HubRule(inset: 76) }
+            }
+            if all.count > 10 {
+                HubSeeAllButton(isOpen: showAll, total: all.count) {
+                    withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
+                }
+                .padding(.top, 10)
             }
         }
     }
@@ -1407,23 +1512,11 @@ fileprivate struct HubBeatSection: View {
             HubBeatList(rows: isOpen ? rows : Array(rows.prefix(topCount)),
                         open: isOpen, kickerFor: kickerFor, onRow: onRow, onProfile: onProfile)
             if rows.count > topCount {
-                Button {
+                HubSeeAllButton(isOpen: isOpen, total: rows.count) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         if isOpen { openBeats.remove(anchor) } else { openBeats.insert(anchor) }
                     }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(isOpen ? "Show less" : "See all \(rows.count)")
-                            .font(HubFont.kicker(10.5)).tracking(1.2)
-                            .foregroundStyle(GaryColors.gold)
-                        Image(systemName: isOpen ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                    .padding(.horizontal, 18)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -1463,6 +1556,9 @@ fileprivate struct HubStoryRow: View {
     let s: Signal
     let kicker: String
     var expandable: Bool = true
+    /// Rows that NAVIGATE on tap (Game Intel fullscreen, search results) show
+    /// a trailing chevron; expandable rows carry the chevron.down instead.
+    var showsChevron: Bool = false
     let onTap: () -> Void
     let onProfile: (() -> Void)?
     @State private var expanded = false
@@ -1518,6 +1614,11 @@ fileprivate struct HubStoryRow: View {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.white.opacity(0.4))
                             .rotationEffect(.degrees(expanded ? 180 : 0))
+                            .padding(.top, 4)
+                    } else if showsChevron {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.35))
                             .padding(.top, 4)
                     }
                 }
@@ -1795,6 +1896,7 @@ fileprivate struct HubFantasyCorner: View {
 fileprivate struct HubNightBoard: View {
     let rows: [NightHighlightRow]
     @State private var tab = 0
+    @State private var showAll = false
 
     private var present: [(key: String, label: String, noun: String)] {
         NightBoard.cats.filter { c in rows.contains { $0.category == c.key } }
@@ -1821,7 +1923,7 @@ fileprivate struct HubNightBoard: View {
                     HStack(spacing: 20) {
                         ForEach(Array(present.enumerated()), id: \.offset) { i, c in
                             let on = i == tab
-                            Button { withAnimation(.easeInOut(duration: 0.15)) { tab = i } } label: {
+                            Button { withAnimation(.easeInOut(duration: 0.15)) { tab = i; showAll = false } } label: {
                                 Text(c.label.capitalized)
                                     .font(HubFont.kicker(11)).tracking(1.3)
                                     .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.45))
@@ -1834,10 +1936,17 @@ fileprivate struct HubNightBoard: View {
                     .padding(.horizontal, 18)
                 }
             }
-            VStack(spacing: 0) {
-                ForEach(Array(visible.enumerated()), id: \.offset) { i, r in
+            VStack(alignment: .leading, spacing: 0) {
+                let shown = showAll ? visible : Array(visible.prefix(12))
+                ForEach(Array(shown.enumerated()), id: \.offset) { i, r in
                     boardRow(r)
-                    if i < visible.count - 1 { HubRule(inset: 18) }
+                    if i < shown.count - 1 { HubRule(inset: 18) }
+                }
+                if visible.count > 12 {
+                    HubSeeAllButton(isOpen: showAll, total: visible.count) {
+                        withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
+                    }
+                    .padding(.top, 10)
                 }
             }
         }
@@ -1879,13 +1988,20 @@ fileprivate struct HubNightBoard: View {
 fileprivate struct HubReceipts: View {
     let signals: [Signal]
     let onTap: (Signal) -> Void
+    @State private var showAll = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            let shown = Array(signals.prefix(12))
+        VStack(alignment: .leading, spacing: 0) {
+            let shown = showAll ? signals : Array(signals.prefix(12))
             ForEach(Array(shown.enumerated()), id: \.element.id) { i, s in
                 Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
                 if i < shown.count - 1 { HubRule(inset: 18) }
+            }
+            if signals.count > 12 {
+                HubSeeAllButton(isOpen: showAll, total: signals.count) {
+                    withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
+                }
+                .padding(.top, 10)
             }
         }
     }
@@ -1920,6 +2036,138 @@ fileprivate struct HubReceipts: View {
         }
         .padding(.horizontal, 18).padding(.vertical, 10)
         .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Game sheet (slate-strip tap)
+
+/// Everything the Hub knows about one slate game, in place: status/score,
+/// the lines, every edge touching the matchup, streaks on the line — with
+/// Picks as a CTA at the bottom instead of a forced tab jump.
+fileprivate struct HubGameSheet: View {
+    let row: TomorrowBoardRow
+    let edges: [Signal]
+    let streaks: [StreakRow]
+    let kickerFor: (Signal) -> String
+    let onViewGame: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var live = LiveScoreCache.shared
+    @State private var detailSignal: Signal? = nil
+    @State private var breakdownSignal: Signal? = nil
+
+    private var abbrMatchup: String {
+        "\(hubSideLabel(row.away_abbr, row.away_team)) @ \(hubSideLabel(row.home_abbr, row.home_team))"
+    }
+    private var ls: LiveScore? {
+        live.status(forMatchup: "\(row.away_team ?? "") @ \(row.home_team ?? "")")
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                header
+                if edges.isEmpty {
+                    Text("No edges posted for this game yet — they land as lineups and matchups firm up.")
+                        .font(HubFont.body(12.5)).foregroundStyle(.white.opacity(0.62))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 18)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HubHead(title: "The Edges", count: edges.count)
+                        HubBeatList(rows: edges, open: true, kickerFor: kickerFor,
+                                    onRow: { s in if s.playerId != nil { breakdownSignal = s } else { detailSignal = s } },
+                                    onProfile: { breakdownSignal = $0 })
+                    }
+                }
+                if !streaks.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "On the Line", count: streaks.count)
+                        HubStreakWatch(rows: streaks, onTapGame: { g in dismiss(); onViewGame(g) })
+                    }
+                }
+                cta
+            }
+            .padding(.top, 26).padding(.bottom, 34)
+        }
+        .background(GaryColors.darkBg.ignoresSafeArea())
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .sheet(item: $detailSignal) { EdgeDetailSheet(signal: $0, onSelectGame: { g in dismiss(); onViewGame(g) }) }
+        .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+    }
+
+    private func fmtML(_ v: Double) -> String { v > 0 ? "+\(Int(v))" : "\(Int(v))" }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if ls?.isLive == true {
+                HubKicker(text: "Live", size: 10.5, color: GaryColors.win)
+            } else if ls?.isFinal == true {
+                HubKicker(text: "Final", size: 10.5, color: .white.opacity(0.62))
+            } else {
+                HubKicker(text: "Tonight", size: 10.5, color: GaryColors.gold)
+            }
+            Text("\(row.away_team ?? hubSideLabel(row.away_abbr, nil)) @ \(row.home_team ?? hubSideLabel(row.home_abbr, nil))")
+                .font(HubFont.serif(23, .bold))
+                .foregroundStyle(GaryColors.warmWhite)
+                .fixedSize(horizontal: false, vertical: true)
+            if let ls, ls.isLive || ls.isFinal {
+                HStack(spacing: 10) {
+                    Text(ls.scoreLine ?? "")
+                        .font(HubFont.data(15))
+                        .foregroundStyle(.white.opacity(0.95))
+                    if ls.isLive, let det = ls.detail, !det.isEmpty {
+                        Text("▶ \(det.uppercased())")
+                            .font(HubFont.data(11, .medium))
+                            .foregroundStyle(GaryColors.win)
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Text(TomorrowView.etTime(row.commence_time))
+                        .font(HubFont.data(11, .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                    if let v = row.venue, !v.isEmpty {
+                        Text(v).font(HubFont.body(11.5)).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
+                    }
+                }
+                // The lines, quietly (meta, never the headline).
+                HStack(spacing: 18) {
+                    if let t = row.total { numberStat("O/U", HubFmt.stat(t)) }
+                    if let sp = row.spread {
+                        numberStat("Spread \(hubSideLabel(row.home_abbr, row.home_team))", HubFmt.stat(sp))
+                    }
+                    if let mh = row.ml_home, let ma = row.ml_away {
+                        numberStat("ML", "\(hubSideLabel(row.home_abbr, row.home_team)) \(fmtML(mh)) · \(hubSideLabel(row.away_abbr, row.away_team)) \(fmtML(ma))")
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, 18)
+    }
+
+    private func numberStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.capitalized).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
+            Text(value).font(HubFont.data(12)).foregroundStyle(.white.opacity(0.92))
+        }
+    }
+
+    private var cta: some View {
+        Button { dismiss(); onViewGame(abbrMatchup) } label: {
+            HStack(spacing: 6) {
+                Text("VIEW GAME ON PICKS")
+                Image(systemName: "arrow.right")
+            }
+            .font(HubFont.data(12))
+            .foregroundStyle(GaryColors.ink)
+            .frame(maxWidth: .infinity).padding(.vertical, 13)
+            .background(Capsule().fill(GaryColors.gold))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 18)
+        .padding(.top, 4)
     }
 }
 
@@ -1973,6 +2221,7 @@ fileprivate struct HubSearchResults: View {
                             VStack(spacing: 0) {
                                 ForEach(edgeMatches) { s in
                                     HubStoryRow(s: s, kicker: s.kind.chip, expandable: false,
+                                                showsChevron: true,
                                                 onTap: { onEdge(s) }, onProfile: nil)
                                     HubRule(inset: 18)
                                 }
