@@ -308,9 +308,45 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
   const wantHandoff = pickThreads.length === 0;
   const handoff = wantHandoff ? APP_HANDOFF[new Date().getDate() % APP_HANDOFF.length] : null;
 
-  if (dryRun) return { posted: false, dry_run: true, chosen: chosen.pick, is_top_pick: isTopPick, hook, handoff };
+  // TOP PICK = the day's ONE card tweet (Jul 5, founder): the highest-conviction play posts as the app's
+  // actual share card (/api/share-card, full-bleed) with the hook as caption — visually unmistakable from
+  // the standard text threads, and its verdict later quote-tweets the card itself. The caption drops the
+  // pick shorthand line (the card carries the pick); the full hook is the text-only fallback.
+  let cardUrl: string | null = null;
+  if (isTopPick) {
+    const nick = (s: string) => String(s ?? "").trim().split(/\s+/).pop() ?? "";
+    const pl = String(chosen.pick).toLowerCase();
+    const has = (team: string) => String(team ?? "").toLowerCase().split(/\s+/).some((w) => w.length > 2 && pl.includes(w));
+    const opp = has(chosen.homeTeam) && !has(chosen.awayTeam) ? `vs ${nick(chosen.awayTeam)}`
+      : has(chosen.awayTeam) && !has(chosen.homeTeam) ? `@ ${nick(chosen.homeTeam)}`
+      : `${nick(chosen.awayTeam)} @ ${nick(chosen.homeTeam)}`;
+    const timeLabel = chosen.commence_time ? new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true }) + " ET" : "";
+    const od = fmtOdds(chosen.odds ?? String(chosen.pick).match(/([+-]\d{3,})\s*$/)?.[1] ?? "");
+    const metaParts = [opp, timeLabel, od].filter(Boolean);
+    cardUrl = `${CARD_BASE}/api/share-card?hero=${encodeURIComponent(shareHeroLines(String(chosen.pick)).join("|"))}&league=${encodeURIComponent(league)}&meta=${encodeURIComponent(metaParts.join(" · "))}`;
+  }
 
-  const hookId = await postTweet(hook);
+  if (dryRun) return { posted: false, dry_run: true, chosen: chosen.pick, is_top_pick: isTopPick, hook, handoff, card_url: cardUrl };
+
+  let hookId: string;
+  if (cardUrl) {
+    try {
+      const ir = await fetch(cardUrl);
+      if (!ir.ok) throw new Error(`card fetch ${ir.status}`);
+      const b = new Uint8Array(await ir.arrayBuffer());
+      let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+      const caption = `${angle}\n\n${edge}`;
+      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, images_base64: [btoa(bin)] }) });
+      const j = await r.json();
+      if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 200)}`);
+      hookId = j.tweetId;
+    } catch (e) {
+      console.error("top-pick card failed, posting text only: " + String(e));
+      hookId = await postTweet(hook);
+    }
+  } else {
+    hookId = await postTweet(hook);
+  }
   const handoffId = handoff ? await postTweet(handoff, hookId) : null;
   const startEt = new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" });
   const slot = parseInt(startEt) < 14 ? "morning" : parseInt(startEt) < 17 ? "afternoon" : parseInt(startEt) < 21 ? "evening" : "late";
