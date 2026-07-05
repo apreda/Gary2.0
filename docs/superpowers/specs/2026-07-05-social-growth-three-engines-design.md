@@ -117,7 +117,17 @@ Emojis; ALL-CAPS persona cosplay; fabricated cash-wager or "watched every minute
 **Week 1:** `post-quote-tweet` endpoint + Verdict Loop behind dry-run → founder approves a slate day → live. Bits sheet drafted + approved → seeded into both fns' prompts. Engagement Sheet v1 (curated account list + generator + token page). Founder: signups + ASA account. Video pipeline scaffold (first render, no channels needed yet).
 **Week 2:** Season-arc pin drafted + pinned. First video clips through the preview gallery → founder starts manual posting cadence. ASA campaigns live. Influencer shortlist prepared (held for retention data). First Monday scoreboard.
 
-## 13. Architecture notes
+## 13. Addendum (Jul 5, post-approval) — the Cal AI / RizzGPT playbook, applied
+
+Founder pointed at the Blake Anderson (RizzGPT, Umax) / Zach Yadegari (Cal AI, ~$30M ARR 2025, acquired by MyFitnessPal) playbook; their thesis is that distribution, not the app, is the moat. Reviewed their public material Jul 5. Amendments:
+
+1. **3-second demonstrability rule (amends Engine 1).** Every clip's first 3 seconds must show the money shot, legible with sound OFF. Gary's money shot = the graded tape (green/red receipts + record) or the instant pick reveal. "If you cannot explain the value proposition in a 7-second silent video, organic reach will struggle" — this is now a hard acceptance criterion in the video preview gallery. Also adopted: native lo-fi over polish, subtle/indirect CTAs, batch hook testing (3–5 hook variants/week at our scale; keep winners, kill losers).
+2. **Influencer lane restructured to a standing funnel (amends Engine 3).** Not "2 curated tests" — a weekly funnel: I build creator target lists (sports/betting/degen niches, TikTok+IG) and draft personalized DMs; founder sends 20–30/week; expect roughly a 10% reply and ~2% post rate (their observed funnel: 500 → 50 → 10); pay $50–100/post for native-style content with creator creative control (never a forced script). Per-creator attribution via minted redirect links (`betwithgary.ai/get?ct=cr_<handle>` — the `/get` route + `link_clicks` table already support arbitrary `ct`). Up to ~$300/mo of the envelope may fund micro-posts alongside ASA once the first hooks validate.
+3. **Channel-economics rule (amends the scoreboard).** Scale only channels where 2×LTV > CAC (their RPM/CPM rule). Paywall LTV from app analytics feeds this as install data accrues; until LTV data exists, CPI + D7 retention are the proxies.
+4. **Scale honesty.** Their revenue came from thousands of outreach messages and, later, $1M/mo paid. We adopt the funnel discipline and demonstrability rules at our budget; targets in §9 are unchanged.
+5. **Future app-side K-factor lever (out of scope for this spec):** a shareable "wrapped"-style recap (Spotify-recap mechanic) building on the locked share card — noted for a future app cycle, not this build.
+
+## 14. Architecture notes
 
 - Engine 0 extends `social-auto-post` (one new small posting endpoint), same deploy path: `supabase functions deploy <fn> --project-ref xuttubsfgdcjfgmskcol --use-api`, and commit to git `main` (web routes on betwithgary.ai auto-deploy from git; CLI-only Vercel deploys get clobbered).
 - Engine 2's generator is a new edge fn + one table (sheet rows) + one token-gated web route in `web/`.
