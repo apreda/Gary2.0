@@ -14846,6 +14846,11 @@ struct CompactPickRow: View {
                 }
                 .opacity(d3Dim(0.4))
 
+                // Balanced hero (founder, Jul 5): a one-word pick like DRAW
+                // hugged the eyebrow with all the slack pooled below — equal
+                // flexible space above and below centers the hero in its band.
+                Spacer(minLength: 0)
+
                 // Skyscraper hero: one Text per line so tight (negative) leading is
                 // possible in SwiftUI and each line scales independently — the team
                 // name shrinks to fit, the call stays at full size.
@@ -21933,6 +21938,10 @@ struct CompactPropRow: View {
                     Spacer()
                 }
                 .opacity(d3Dim(0.4))
+
+                // Balanced hero (game-card parity, Jul 5): equal flexible space
+                // above and below centers the hero in its band.
+                Spacer(minLength: 0)
 
                 // Skyscraper hero (game-card parity): one Text per line with tight
                 // leading; both prop lines run long and self-scale. Premium leading
