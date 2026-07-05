@@ -811,6 +811,19 @@ Deno.serve(async (req) => {
     }
     if (force === "wc") { console.log(JSON.stringify({ mode: "wc", wc }).slice(0, 500)); return Response.json({ mode: "wc", metrics, wc }); }
 
+    // Verdict loop rides every unforced hourly run (like WC): finals detected within ~1hr, quote-tweeted.
+    let verdict: any = undefined;
+    if (!force) {
+      try { verdict = await runVerdictMode(today, dryRun); }
+      catch (e) { console.error("verdict mode failed: " + String(e)); verdict = { error: String(e) }; }
+    }
+    // Season-arc standing posts under the pin every Monday at ET noon (the retired personality slot).
+    let arc: any = undefined;
+    if (!force && hour === 12 && new Date().toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short" }) === "Mon") {
+      try { arc = await runArcUpdateMode(today, dryRun); }
+      catch (e) { console.error("arc mode failed: " + String(e)); arc = { error: String(e) }; }
+    }
+
     if (force === "verdict") {
       const verdict = await runVerdictMode(today, dryRun);
       console.log(JSON.stringify({ mode: "verdict", verdict }).slice(0, 500));
@@ -823,10 +836,10 @@ Deno.serve(async (req) => {
       return Response.json({ mode: "arc", metrics, arc });
     }
 
-    if (mode === "none") return Response.json({ posted: false, reason: `ET hour ${hour} is not a posting slot`, metrics, wc });
+    if (mode === "none") return Response.json({ posted: false, reason: `ET hour ${hour} is not a posting slot`, metrics, wc, verdict, arc });
     const result = mode === "recap" ? await runRecapMode(today, dryRun) : mode === "personality" ? await runPersonalityMode(today, dryRun) : await runPickMode(today, nowMs, hour, dryRun, preview);
-    console.log(JSON.stringify({ mode, wc, ...result }).slice(0, 500));
-    return Response.json({ mode, metrics, wc, ...result });
+    console.log(JSON.stringify({ mode, wc, verdict, arc, ...result }).slice(0, 500));
+    return Response.json({ mode, metrics, wc, verdict, arc, ...result });
   } catch (e) {
     console.error(String(e));
     return Response.json({ error: String(e) }, { status: 500 });
