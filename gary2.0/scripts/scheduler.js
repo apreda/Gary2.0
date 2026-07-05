@@ -389,16 +389,20 @@ async function executeSchedule(schedule) {
   }
 
   // Group games that start within 15 min of each other (run them as a batch)
-  // This avoids scheduling 8 NBA games individually when they all start at 7 PM
+  // This avoids scheduling 8 NBA games individually when they all start at 7 PM.
+  // The window is anchored to the batch's FIRST entry — chaining off the
+  // previous entry let a dense slate link 12:00→12:10→…→3:45 into one
+  // 52-entry mega-batch (Jul 5: the 4-5 PM games' tiers all fired at 1 PM
+  // against a closed lineup gate and burned every retry).
   const batches = [];
   let currentBatch = [schedule[0]];
 
   for (let i = 1; i < schedule.length; i++) {
-    const prevTrigger = currentBatch[currentBatch.length - 1].triggerTime.getTime();
+    const batchAnchor = currentBatch[0].triggerTime.getTime();
     const thisTrigger = schedule[i].triggerTime.getTime();
 
-    if (thisTrigger - prevTrigger <= 15 * 60 * 1000) {
-      // Within 15 min — same batch
+    if (thisTrigger - batchAnchor <= 15 * 60 * 1000) {
+      // Within 15 min of the batch open — same batch
       currentBatch.push(schedule[i]);
     } else {
       batches.push(currentBatch);
@@ -462,6 +466,12 @@ async function executeSchedule(schedule) {
       // We pass --game-id (BDL game id) so we always target the exact game,
       // never a substring match (which would collide on Red/White Sox or doubleheaders).
       for (const entry of games) {
+        // Never fire a tier before its own clock — a retry that runs early
+        // hits the closed lineup gate, stores nothing, and is spent. (Catch-up
+        // after a long prior run is the normal case: past-due entries don't wait.)
+        if (entry.triggerTime.getTime() - Date.now() > 90 * 1000) {
+          await sleepUntilWallClock(entry.triggerTime);
+        }
         const tierWord = entry.tier > 1 ? 'retry' : 'primary';
         const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
         try {
@@ -476,6 +486,10 @@ async function executeSchedule(schedule) {
       // propsScript (e.g. World Cup — game picks only) skip this entirely.
       for (const entry of games) {
         if (!sport.propsScript) break;
+        // Same early-fire guard as game picks above.
+        if (entry.triggerTime.getTime() - Date.now() > 90 * 1000) {
+          await sleepUntilWallClock(entry.triggerTime);
+        }
         const tierWord = entry.tier > 1 ? 'retry' : 'primary';
         const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
         try {

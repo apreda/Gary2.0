@@ -1683,6 +1683,7 @@ struct HomeView: View {
     /// GAME picks only — the fresh-day recap pop-up's ledger (props keep
     /// their own strip in the box scores; user call, Jun 11).
     @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
+    @State private var gamesNightRoll: [HomeOvernightStrip.RollItem] = []
     @State private var gamesNightNet: Double? = nil
     @State private var gamesNightBest: Double? = nil
     @State private var showDailyRecap = false
@@ -1981,6 +1982,11 @@ struct HomeView: View {
                     gamesNightRecord = gamesNight.record
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
+                    // The strip's rolling slot — biggest cashes first.
+                    gamesNightRoll = gamesNight.cashes
+                        .sorted { $0.units > $1.units }
+                        .prefix(6)
+                        .map { .init(line: $0.sub.uppercased(), odds: $0.odds) }
                     let todayKey = SupabaseAPI.todayEST()
                     if gamesNight.graded > 0, dailyRecapShownDate != todayKey {
                         // Mark shown for today the MOMENT it appears — so it's truly once/day even
@@ -2345,7 +2351,7 @@ struct HomeView: View {
                                net: gamesNightNet,
                                best: gamesNightBest,
                                label: recapLabel,
-                               firstCall: firstCallClock) {
+                               rollItems: gamesNightRoll) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
@@ -3893,12 +3899,23 @@ struct HomeMarqueeTracker: View {
 /// tape. No voice, no filler (founder, Jul 5) — the daily recap pop-up owns
 /// the morning moment; this is just the standing fact.
 struct HomeOvernightStrip: View {
+    /// One cashed pick for the rolling slot — "✓ PIRATES ML +120".
+    struct RollItem {
+        let line: String   // "PIRATES ML"
+        let odds: String   // "+120"
+    }
     let record: (w: Int, l: Int, p: Int)
     let net: Double?
     let best: Double?
     let label: String          // "LAST NIGHT" / "TODAY"
-    let firstCall: String?     // kept for call-site stability; unused
+    var rollItems: [RollItem] = []
     let onTape: () -> Void
+
+    // The static "BEST +126" earned its keep by rolling: the slot cycles
+    // through the night's cashes every 3s (founder, Jul 5 — "it feels kind
+    // of pointless in its current form").
+    @State private var rollIndex = 0
+    private let rollTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     private func money(_ v: Double) -> String {
         v >= 0 ? String(format: "+$%.0f", v) : String(format: "−$%.0f", -v)
@@ -3906,9 +3923,9 @@ struct HomeOvernightStrip: View {
 
     var body: some View {
         Button(action: onTape) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
                 Text("\(record.w)–\(record.l)")
                     .font(.system(size: 15, weight: .heavy, design: .monospaced))
@@ -3918,14 +3935,16 @@ struct HomeOvernightStrip: View {
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
                         .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
                 }
-                if let best, best > 0 {
+                if !rollItems.isEmpty {
+                    rollSlot
+                } else if let best, best > 0 {
                     Text("BEST +\(Int(best))")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 6)
                 Text("THE TAPE")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.5)
                     .foregroundStyle(.white.opacity(0.7))
                 Image(systemName: "chevron.right")
                     .font(.system(size: 8, weight: .bold))
@@ -3943,6 +3962,36 @@ struct HomeOvernightStrip: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16)
+    }
+
+    private var rollSlot: some View {
+        let item = rollItems[rollIndex % rollItems.count]
+        return HStack(spacing: 4) {
+            Text("✓")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(GaryColors.win)
+            Text(item.line)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1).minimumScaleFactor(0.78)
+            Text(item.odds)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(GaryColors.gold)
+        }
+        .id(rollIndex)
+        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)))
+        .frame(height: 16)
+        .clipped()
+        // The rolling cash wins the width fight — the record and THE TAPE
+        // door are short and fixed; the pick line is the story.
+        .layoutPriority(2)
+        .onReceive(rollTimer) { _ in
+            guard rollItems.count > 1 else { return }
+            withAnimation(.easeInOut(duration: 0.35)) {
+                rollIndex = (rollIndex + 1) % rollItems.count
+            }
+        }
     }
 }
 
@@ -13493,20 +13542,22 @@ struct MembersOnlyCardFace: View {
     /// (a stacked prop group runs taller than one card).
     var fillsContainer: Bool = false
 
-    private var kickerText: String {
-        if let kicker { return kicker }
+    /// The two stacked display lines — away over home in the pick states
+    /// ("TWINS" / "YANKEES"), state words when there's no matchup yet.
+    private var stack: (top: String, bottom: String) {
+        if let tease, tease.contains(" @ ") {
+            let sides = tease.components(separatedBy: " @ ")
+            return (sides[0].uppercased(), sides[1].uppercased())
+        }
         switch state {
-        case .pickIn:      return "GARY'S PICK IS IN"
-        case .coming:      return "PICK COMING"
-        case .placeholder: return "TODAY'S CARD"
+        case .pickIn:      return ("THE PICK", "IS IN")
+        case .coming:      return ("TONIGHT'S", "\(leagueTag ?? "GARY") PICK")
+        case .placeholder: return ("TODAY'S", "CARD")
         }
     }
-    /// The big display line — the matchup when we know it, the league lane
-    /// when we don't. This is what makes the seal read as a wrapped PICK.
-    private var displayLine: String? {
-        if let tease { return tease }
-        if case .coming = state, let leagueTag { return "Tonight's \(leagueTag) pick" }
-        return nil
+    private var kickerLine: String? {
+        guard case .pickIn = state else { return nil }
+        return kicker ?? "GARY'S PICK IS IN"
     }
     /// Sport-correct start-of-game word — FIRST PITCH is baseball-only.
     private var startWord: String {
@@ -13518,10 +13569,10 @@ struct MembersOnlyCardFace: View {
         default:               return "STARTS"
         }
     }
-    private var metaLine: String? {
+    private var noteLine: String? {
         switch state {
-        case .pickIn(let fp): return fp.map { "\(startWord) \($0)" }
-        case .coming(let n):  return n
+        case .pickIn:             return nil
+        case .coming(let n):      return n
         case .placeholder(let n): return n
         }
     }
@@ -13544,59 +13595,89 @@ struct MembersOnlyCardFace: View {
                         .foregroundStyle(.white.opacity(0.66))
                 }
             }
-            Spacer(minLength: 8)
-            VStack(spacing: 9) {
-                Image(GaryBrand.mark)
-                    .resizable().scaledToFit()
-                    .frame(width: 54, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .shadow(color: .black.opacity(0.7), radius: 8, y: 5)
-                VStack(spacing: 4) {
-                    Text(kickerText)
-                        .font(GaryFonts.mono(11, bold: true)).tracking(2.2)
-                        .foregroundStyle(inviting ? GaryColors.lightGold : GaryColors.gold.opacity(0.92))
-                    if let displayLine {
-                        Text(displayLine)
-                            .font(GaryFonts.display(25))
-                            .foregroundStyle(GaryColors.warmWhite)
+            Spacer(minLength: 10)
+            HStack(alignment: .center, spacing: 12) {
+                // The face-off stack: away white over home gold — the two
+                // sides of the diagonal, Gary's gold hinting he took one.
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stack.top)
+                        .font(GaryFonts.display(38))
+                        .foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.55)
+                    Text(stack.bottom)
+                        .font(GaryFonts.display(38))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.55)
+                    if let kickerLine {
+                        Text(kickerLine)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
+                            .foregroundStyle(GaryColors.lightGold)
                             .lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                    if let metaLine {
-                        Text(metaLine)
-                            .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .padding(.top, 5)
                     }
                 }
-                if inviting {
-                    // A real button, not a caption — the reason to touch it.
-                    Text("TAP TO REVEAL")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.6)
-                        .foregroundStyle(Color(hex: "#191507"))
-                        .padding(.horizontal, 20).padding(.vertical, 9)
-                        .background(
-                            Capsule().fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
-                                                          startPoint: .top, endPoint: .bottom))
-                                .shadow(color: GaryColors.gold.opacity(0.35), radius: 10, y: 3)
-                        )
-                        .padding(.top, 4)
-                }
-                if let footnote {
-                    Text(footnote)
-                        .font(GaryFonts.mono(9, bold: false)).tracking(2.4)
-                        .foregroundStyle(.white.opacity(0.6))
+                Spacer(minLength: 8)
+                if case .pickIn(let fp) = state {
+                    VStack(alignment: .trailing, spacing: 10) {
+                        if let fp {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(startWord)
+                                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                                    .foregroundStyle(.white.opacity(0.78))
+                                Text(fp)
+                                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                        }
+                        // A real button, not a caption — squared, not a pill
+                        // (founder, Jul 5: no oval boxes).
+                        Text("TAP TO REVEAL")
+                            .font(GaryFonts.mono(10, bold: true)).tracking(1.4)
+                            .foregroundStyle(Color(hex: "#191507"))
+                            .padding(.horizontal, 13).padding(.vertical, 9)
+                            .background(
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
+                                                         startPoint: .top, endPoint: .bottom))
+                                    .shadow(color: GaryColors.gold.opacity(0.35), radius: 10, y: 3)
+                            )
+                    }
                 }
             }
-            Spacer(minLength: 8)
+            if let noteLine {
+                Text(noteLine)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
+            }
+            if let footnote {
+                Text(footnote)
+                    .font(GaryFonts.mono(9, bold: false)).tracking(2.4)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+            }
+            Spacer(minLength: 10)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 18).padding(.vertical, 13)
         .frame(maxWidth: .infinity)
         .frame(height: fillsContainer ? nil : CompactPickRow.uniformHeight)
         .frame(maxHeight: fillsContainer ? .infinity : nil)
         .background(
+            // W17 — the split diagonal: two warm tones, gold seam between the
+            // sides. The card is the matchup; the seam is Gary in the middle.
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: "#282420"), Color(hex: "#141210")],
-                                     startPoint: .top, endPoint: .bottom))
+                .fill(Color(hex: "#14110D"))
+                .overlay(SealDiagonalShape().fill(Color(hex: "#2B2620")))
+                .overlay(
+                    SealSeamShape().stroke(
+                        LinearGradient(colors: [GaryColors.gold.opacity(0), GaryColors.gold, GaryColors.gold.opacity(0)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1)
@@ -13610,6 +13691,29 @@ struct MembersOnlyCardFace: View {
                 .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
                 .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
         )
+    }
+}
+
+/// The lit side of the W17 seal — covers the top-left, leaning 25° right.
+struct SealDiagonalShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: .zero)
+        p.addLine(to: CGPoint(x: rect.width * 0.62, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * 0.44, y: rect.height))
+        p.addLine(to: CGPoint(x: 0, y: rect.height))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// The gold seam along the W17 split.
+struct SealSeamShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.width * 0.62, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * 0.44, y: rect.height))
+        return p
     }
 }
 
@@ -14113,36 +14217,50 @@ struct LockedPickCard: View {
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(2)
                         .foregroundStyle(.white.opacity(0.66))
                 }
-                Spacer(minLength: 8)
-                VStack(spacing: 9) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: 54, height: 54)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .shadow(color: .black.opacity(0.7), radius: 8, y: 5)
-                    Text("GARY'S \(league.uppercased()) PICKS ARE IN")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(2.2)
-                        .foregroundStyle(GaryColors.lightGold)
-                    Text("UNLOCK TO REVEAL")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+                Spacer(minLength: 10)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(league.uppercased()) PICKS")
+                            .font(GaryFonts.display(38))
+                            .foregroundStyle(.white)
+                            .lineLimit(1).minimumScaleFactor(0.55)
+                        Text("ARE IN")
+                            .font(GaryFonts.display(38))
+                            .foregroundStyle(GaryColors.gold)
+                            .lineLimit(1).minimumScaleFactor(0.55)
+                        Text("GARY'S BOARD FOR TONIGHT")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
+                            .foregroundStyle(GaryColors.lightGold)
+                            .padding(.top, 5)
+                    }
+                    Spacer(minLength: 8)
+                    Text("UNLOCK")
+                        .font(GaryFonts.mono(10, bold: true)).tracking(1.4)
                         .foregroundStyle(Color(hex: "#191507"))
-                        .padding(.horizontal, 20).padding(.vertical, 9)
+                        .padding(.horizontal, 13).padding(.vertical, 9)
                         .background(
-                            Capsule().fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
-                                                          startPoint: .top, endPoint: .bottom))
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
+                                                     startPoint: .top, endPoint: .bottom))
                                 .shadow(color: GaryColors.gold.opacity(0.35), radius: 10, y: 3)
                         )
-                        .padding(.top, 4)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 10)
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            .padding(.horizontal, 18).padding(.vertical, 13)
             .frame(maxWidth: .infinity)
             .frame(height: CompactPickRow.uniformHeight)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "#282420"), Color(hex: "#141210")],
-                                         startPoint: .top, endPoint: .bottom))
+                    .fill(Color(hex: "#14110D"))
+                    .overlay(SealDiagonalShape().fill(Color(hex: "#2B2620")))
+                    .overlay(
+                        SealSeamShape().stroke(
+                            LinearGradient(colors: [GaryColors.gold.opacity(0), GaryColors.gold, GaryColors.gold.opacity(0)],
+                                           startPoint: .top, endPoint: .bottom),
+                            lineWidth: 1.5)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1)
@@ -16134,7 +16252,7 @@ struct SharePropCardView: View {
 /// attachments + the tall story canvas read badly in Messages.
 @MainActor
 func renderPropShareImages(prop: PropPick, gameResult: String?) -> [UIImage] {
-    let renderer = ImageRenderer(content: HeadlineSharePropCardView(prop: prop, gameResult: gameResult, square: true))
+    let renderer = ImageRenderer(content: HeadlineSharePropCardView(prop: prop, gameResult: gameResult, square: true, bare: true))
     renderer.scale = 2
     return renderer.uiImage.map { [$0] } ?? []
 }
@@ -16148,6 +16266,7 @@ struct HeadlineShareCardView: View {
     let pick: GaryPick
     var gameResult: String? = nil
     var square: Bool = false
+    var bare: Bool = false
 
     private var tier: String? { pick.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
@@ -16197,8 +16316,13 @@ struct HeadlineShareCardView: View {
 
     var body: some View {
         ZStack {
-            RadialGradient(colors: [Color(hex: "#151311"), Color(hex: "#0B0A09")],
-                           center: .top, startRadius: 60, endRadius: square ? 640 : 1000)
+            // bare (Jul 5, founder): the shared image IS the card, no canvas behind it. The card's own
+            // rounded rectangle becomes the image edge (transparent corners), so it reads as a native
+            // card in Messages and DMs instead of a card floating on a black box.
+            if !bare {
+                RadialGradient(colors: [Color(hex: "#151311"), Color(hex: "#0B0A09")],
+                               center: .top, startRadius: 60, endRadius: square ? 640 : 1000)
+            }
 
             headlineCard
 
@@ -16211,7 +16335,7 @@ struct HeadlineShareCardView: View {
                     .rotationEffect(.degrees(-12))
             }
         }
-        .frame(width: 540, height: square ? 540 : 960)
+        .frame(width: bare ? nil : 540, height: bare ? nil : (square ? 540 : 960))
     }
 
     private var headlineCard: some View {
@@ -16278,6 +16402,7 @@ struct HeadlineSharePropCardView: View {
     let prop: PropPick
     var gameResult: String? = nil
     var square: Bool = false
+    var bare: Bool = false
 
     private var tier: String? { prop.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
@@ -16312,8 +16437,13 @@ struct HeadlineSharePropCardView: View {
 
     var body: some View {
         ZStack {
-            RadialGradient(colors: [Color(hex: "#151311"), Color(hex: "#0B0A09")],
-                           center: .top, startRadius: 60, endRadius: square ? 640 : 1000)
+            // bare (Jul 5, founder): the shared image IS the card, no canvas behind it. The card's own
+            // rounded rectangle becomes the image edge (transparent corners), so it reads as a native
+            // card in Messages and DMs instead of a card floating on a black box.
+            if !bare {
+                RadialGradient(colors: [Color(hex: "#151311"), Color(hex: "#0B0A09")],
+                               center: .top, startRadius: 60, endRadius: square ? 640 : 1000)
+            }
 
             headlineCard
 
@@ -16326,7 +16456,7 @@ struct HeadlineSharePropCardView: View {
                     .rotationEffect(.degrees(-12))
             }
         }
-        .frame(width: 540, height: square ? 540 : 960)
+        .frame(width: bare ? nil : 540, height: bare ? nil : (square ? 540 : 960))
     }
 
     private var headlineCard: some View {
@@ -16529,7 +16659,7 @@ func dumpShareCardRendersIfRequested() {
 /// stays available in code for an explicit story-format option later.
 @MainActor
 func renderPickShareImages(pick: GaryPick, gameResult: String?) -> [UIImage] {
-    let renderer = ImageRenderer(content: HeadlineShareCardView(pick: pick, gameResult: gameResult, square: true))
+    let renderer = ImageRenderer(content: HeadlineShareCardView(pick: pick, gameResult: gameResult, square: true, bare: true))
     renderer.scale = 2
     return renderer.uiImage.map { [$0] } ?? []
 }

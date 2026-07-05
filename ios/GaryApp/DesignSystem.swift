@@ -164,9 +164,11 @@ enum TeamColors {
 //   display – hero titles   mono – "Quant Terminal" labels   text – body/UI (Inter)
 // Retune the brand voice by changing the single `displayFace` value.
 enum GaryFonts {
-    /// Bundled options: "SairaCondensed-Bold" (default), "BebasNeue-Regular",
-    /// "Anton-Regular", "Rajdhani-Bold", "Oswald-Bold", "ChakraPetch-Bold", "BarlowCondensed-Bold".
-    static let displayFace = "SairaCondensed-Bold"
+    /// Bundled options: "BebasNeue-Regular" (default — founder-picked Jul 5 off
+    /// the W17 seal mock), "SairaCondensed-Bold", "Anton-Regular", "Rajdhani-Bold",
+    /// "Oswald-Bold", "ChakraPetch-Bold", "BarlowCondensed-Bold".
+    /// NOTE: Bebas has no lowercase — everything through display() renders CAPS.
+    static let displayFace = "BebasNeue-Regular"
 
     static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size) }
 
