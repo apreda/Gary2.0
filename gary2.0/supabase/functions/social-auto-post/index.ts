@@ -14,8 +14,10 @@
 //   - "Give the pick, hold the depth" withhold policy: the pick hook shows the pick + odds + ONE strongest falsifiable
 //     factor; the full breakdown and the rest of the day's slate stay in the app (that is the reason to download).
 //   - No hashtags. No "Full breakdown" promise. No in-thread App Store link (the buried link converted ~0; the bio +
-//     pinned post carry the install path, and the profile out-converts an in-thread link). Pick thread = hook + handoff.
-//   - Recaps show wins AND losses openly (honest receipts build the trust that drives installs) + week-to-date record.
+//     pinned post carry the install path, and the profile out-converts an in-thread link). Pick thread = hook, plus a
+//     "link in bio" handoff reply on the DAY'S FIRST thread ONLY (Jul 5: every-thread handoffs read generic-capper).
+//   - Recap (10am) = ONE Gary-voiced morning-tape post: record in prose + one real result detail, mood-ladder register
+//     (absorbed the retired personality post, Jul 5). Falls back to plain per-sport lines if the LLM fails.
 //
 // Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|wc|verdict|arc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
 //   force_mode=wc → run ONLY the WC per-game card path (use with dry_run=1 to vet captions/cards without posting).
@@ -218,7 +220,9 @@ async function runPickMode(today: string, nowMs: number, etHour: number, dryRun:
 
   const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format").eq("post_date", today);
   if (logErr) throw logErr;
-  const pickThreads = (logRows ?? []).filter((r) => !["recap", "personality"].includes(r.thread_format ?? ""));
+  // Whitelist the ACTUAL pick-thread formats: with verdict/arc/wc rows in the same log, a blacklist would let
+  // them eat the 3/day cap (three verdicts would silently block the day's real picks) and suppress the handoff.
+  const pickThreads = (logRows ?? []).filter((r) => ["standard", "top_pick"].includes(r.thread_format ?? ""));
   if (pickThreads.length >= 3 && !preview) return { posted: false, reason: "daily cap of 3 reached" };
   const postedSet = new Set(pickThreads.map((r) => r.pick_text));
 
@@ -293,12 +297,16 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
   const angle = clean(out.angle);
   const edge = clean(out.edge);
   const hook = `${angle}\n\n${pickLine}\n\n${edge}`;
-  const handoff = APP_HANDOFF[pickThreads.length % APP_HANDOFF.length];
+  // Handoff reply on the DAY'S FIRST thread only (Jul 5 2026): a "link in bio" reply on every thread reads
+  // generic-capper (the big personality accounts never do it) and /get clicks showed it converts ~0. One
+  // deliberate handoff a day; the bio + pinned arc carry the install path the rest of the time.
+  const wantHandoff = pickThreads.length === 0;
+  const handoff = wantHandoff ? APP_HANDOFF[new Date().getDate() % APP_HANDOFF.length] : null;
 
   if (dryRun) return { posted: false, dry_run: true, chosen: chosen.pick, is_top_pick: isTopPick, hook, handoff };
 
   const hookId = await postTweet(hook);
-  const handoffId = await postTweet(handoff, hookId);
+  const handoffId = handoff ? await postTweet(handoff, hookId) : null;
   const startEt = new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" });
   const slot = parseInt(startEt) < 14 ? "morning" : parseInt(startEt) < 17 ? "afternoon" : parseInt(startEt) < 21 ? "evening" : "late";
   await sb.from("social_post_log").insert({
@@ -711,21 +719,21 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
 }
 
 async function runRecapMode(today: string, dryRun: boolean) {
-  // Clean per-sport GAME recap (text only, Jun 29 2026). Replaces both the results-card IMAGE (the local
-  // com.gary2.results-card job, now paused) and the noon personality post. game_results is games-only
-  // (player props live in prop_results), so this is automatically "game picks, not props". Pure data, no
-  // LLM — one line per sport, most games first:
-  //   Results from June 28th
-  //
-  //   MLB 4-2
-  //   WC 3-0
+  // MORNING TAPE (reworked Jul 5 2026): the 10am recap is now ONE Gary-voiced post (record in prose + one
+  // real result detail), absorbing the retired personality post's mood ladder. The old dry per-sport
+  // scoreboard ("MLB 8-7") averaged 27 impressions with zero engagement across 11 posts; per-pick receipts
+  // drama now lives in the verdict loop and the weekly ledger in the arc pin, so this slot's job is the
+  // CHARACTER take on yesterday. game_results is games-only (props live in prop_results). Falls back to the
+  // plain per-sport lines if the LLM fails, so the receipts promise never silently skips a day.
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
   const y = yesterdayOf(today);
-  const { data: results, error } = await sb.from("game_results").select("league, result").eq("game_date", y);
+  const { data: results, error } = await sb.from("game_results").select("league, result, pick_text, final_score").eq("game_date", y);
   if (error) throw error;
   const graded = (results ?? []).filter((r) => r.result === "won" || r.result === "lost");
   if (!graded.length) return { posted: false, reason: "no graded game results for yesterday yet" };
+  const wins = graded.filter((r) => r.result === "won").length;
+  const losses = graded.filter((r) => r.result === "lost").length;
 
   const byLeague = new Map<string, { w: number; l: number }>();
   for (const r of graded) {
@@ -733,19 +741,41 @@ async function runRecapMode(today: string, dryRun: boolean) {
     if (r.result === "won") rec.w++; else rec.l++;
     byLeague.set(r.league, rec);
   }
-  const lines = [...byLeague.entries()]
+  const leagueLines = [...byLeague.entries()]
     .sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l) || a[0].localeCompare(b[0]))
     .map(([lg, rec]) => `${lg} ${rec.w}-${rec.l}`);
-  const text = `Results from ${ordinalDate(y)}\n\n${lines.join("\n")}`;
+  const fallback = `Results from ${ordinalDate(y)}\n\n${leagueLines.join("\n")}`;
 
-  if (dryRun) return { posted: false, dry_run: true, text };
+  const mood = moodFor(wins, losses);
+  const dogWins = graded.filter((r) => r.result === "won" && /\+\d{3,}\)?\s*$/.test(String(r.pick_text))).slice(0, 3);
+  const lossRows = graded.filter((r) => r.result === "lost").slice(0, 3);
+  const fact = (r: any) => `${r.pick_text} (${r.result}${r.final_score ? `, final ${r.final_score}` : ""})`;
+
+  let post = "";
+  try {
+    const user = `Write Gary's ONE morning post about yesterday's card. Return ONLY JSON: {"post":"..."}.
+YESTERDAY (ground truth, use ONLY these facts and copy the numbers exactly):
+Overall record: ${wins} and ${losses}. By league: ${leagueLines.join(", ")}.
+${dogWins.length ? `Plus-money wins: ${dogWins.map(fact).join("; ")}.` : ""}
+${lossRows.length ? `Losses include: ${lossRows.map(fact).join("; ")}.` : ""}
+Gary's register this morning (from the record): ${MOODS[mood]}.
+Shape: 2 to 4 short sentences, under 260 characters total. State the real record in prose (say "went 8 and 7", never "an 8-7 record"). Reference ONE concrete result from the facts above (a specific pick that cashed or died, with its real detail). Own losses flat, no spin; on good days stay dry, never gloat. It can end with a plain pointer like "Full card's graded in the app." on some days, or just end on the take. No link, no hashtag.
+Match this VOICE (a DIFFERENT day, copy the register not the facts): "Went 9 and 4 yesterday. The White Sox at plus 124 paid like it should've, and the one Cup match I trusted went sideways in stoppage. Back on the card this afternoon."`;
+    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
+    post = clean(out.post);
+  } catch (e) {
+    console.error("recap LLM failed, using plain per-sport lines: " + String(e));
+  }
+  const text = post || fallback;
+
+  if (dryRun) return { posted: false, dry_run: true, mood, record: `${wins}-${losses}`, text };
 
   const tweetId = await postTweet(text);
   await sb.from("social_post_log").insert({
     post_date: today, slot: "recap", league: "RECAP", pick_text: `DAILY RECAP ${today}`, thread_format: "recap",
     hook_tweet_id: tweetId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${tweetId}`,
   });
-  return { posted: true, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
+  return { posted: true, mood, record: `${wins}-${losses}`, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
 
 // Daily standalone CHARACTER post (Option A). Grounded in yesterday's mood + today's slate so it's earned, not random. No link, no hashtag.
