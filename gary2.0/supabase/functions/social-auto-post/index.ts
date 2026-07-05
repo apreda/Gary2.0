@@ -2,9 +2,10 @@
 // Cron: every hour at :45 UTC. Function decides by ET hour: 10 → recap, 11/14/17/20 → MLB pick slot.
 // (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
 // World Cup is separate: EVERY hour also runs runWcCardMode, which tweets each WC game once in the window around its
-// kickoff. The whole thread is Gary's REAL rationale, his actual words, NO LLM: the FIRST sentence is the MAIN caption
-// above the app pick card(s) (/api/pick-card-app); the rest threads as the plain-text REPLY, ending with a link-in-bio
-// pointer (no image). So WC coverage is per-game, not per-slot. (The /api/take-card route is no longer used here.)
+// kickoff. The caption is a grounded stat hook (wcCaption) above the APP'S OWN SHARE CARD (/api/share-card, a
+// verbatim HeadlineShareCardView rebuild — Jul 5: the tweet card IS the in-app share output); the full rationale
+// threads as the REPLY, ending with a link-in-bio pointer. WC coverage is per-game, not per-slot.
+// (The /api/take-card and /api/pick-card-app routes are no longer used here.)
 // Metrics: every run also refreshes impressions/likes/replies/retweets for posts from the last 6 days (KPI stays live 24/7).
 //          Each row's numbers = SUM across all tweets in the thread = total thread reach.
 //
@@ -488,19 +489,12 @@ async function runArcUpdateMode(today: string, dryRun: boolean) {
 // Runs every hour, posts each game once in the window around kickoff. Independent of the MLB slot path (sport isolation).
 const WC_MAX_PER_RUN = 3;
 
-// The app card's two stacked hero lines from a pick string (mirrors CompactPickRow.heroLines for WC):
-//  "Austria +1.5 -120" -> ["AUSTRIA","+1.5"]; "Brazil ML -900" -> ["BRAZIL","MONEYLINE"]; "Under 2.5" -> ["UNDER 2.5","TOTAL GOALS"]
-function wcHeroLines(pickText: string, type?: string): [string, string] {
-  const words = String(pickText).split(/\s+/).filter((w) => w && w !== "@" && !/^[+-]?\d{3,}$/.test(w));
-  const lower = String(pickText).toLowerCase();
-  if (lower.includes("over") || lower.includes("under") || (type ?? "").toLowerCase() === "total") {
-    return [words.filter((w) => !/^total$/i.test(w)).join(" ").toUpperCase(), "TOTAL GOALS"];
-  }
-  let bet = words[words.length - 1] ?? "";
-  let team = words.slice(0, -1).join(" ");
-  if (/^ml$/i.test(bet)) bet = "MONEYLINE";
-  if (!team) { team = words.join(" "); bet = ""; }
-  return [team.toUpperCase(), bet.toUpperCase()];
+// The APP SHARE CARD's stacked hero: the pick one word per line, trailing odds stripped, "ML" spelled out
+// MONEYLINE — mirrors HeadlineShareCardView.heroLines exactly, so the tweeted card IS the in-app share output.
+//  "Brazil ML -130" -> ["BRAZIL","MONEYLINE"]; "Under 2.5" -> ["UNDER","2.5"]; "South Korea ML" -> ["SOUTH","KOREA","MONEYLINE"]
+function shareHeroLines(pickText: string): string[] {
+  const words = String(pickText).replace(/\s*\(?[+-]\d{3,}\)?\s*$/, "").trim().split(/\s+/).filter(Boolean);
+  return words.map((w) => (/^ml$/i.test(w) ? "MONEYLINE" : w.toUpperCase()));
 }
 // Meta-line opponent from the picked side ("@ Argentina" / "vs Austria"; totals show "Austria @ Argentina").
 function wcOpp(p: any, away: string, home: string): string {
@@ -707,9 +701,13 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
     const listText = `Up next, ${g.away} vs ${g.home}, ${timeLabel}:\n\n${[...gameLines, ...g.props.map(wcPropPickLine)].join("\n")}`;
     let cardUrl: string | null = null;
     if (chosen) {
-      const [h1, h2] = wcHeroLines(String(chosen.pick), chosen.type);
+      // The tweet card = the app's ACTUAL share card (founder Jul 5: "literally tweeting the pick card from
+      // the app, not a picture of it") — /api/share-card is a verbatim HeadlineShareCardView(square) rebuild.
       const opp = wcOpp(chosen, g.away, g.home);
-      cardUrl = `${CARD_BASE}/api/pick-card-app?token=${encodeURIComponent("WORLD CUP")}&hero1=${encodeURIComponent(h1)}&hero2=${encodeURIComponent(h2)}&opp=${encodeURIComponent(opp)}&odds=${encodeURIComponent(chosen.odds ?? "")}&time=${encodeURIComponent(timeLabel)}`;
+      const metaParts = [opp, timeLabel];
+      const od = fmtOdds(chosen.odds);
+      if (od && !String(chosen.pick).includes(od)) metaParts.push(od);
+      cardUrl = `${CARD_BASE}/api/share-card?hero=${encodeURIComponent(shareHeroLines(String(chosen.pick)).join("|"))}&league=${encodeURIComponent("WORLD CUP")}&meta=${encodeURIComponent(metaParts.join(" · "))}`;
     }
     actions.push({ type: "picks", game: g.key, caption, listText, cardUrl, start: g.start });
   }
