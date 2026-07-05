@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Reveal Affordance — 25 Ways In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@500;600;700&family=Instrument+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0908; --gold:#D4AF37; --lgold:#F0D68A; --ink:#191507;
+    --warm:#F5F1E8; --mono:'JetBrains Mono',monospace; --beb:'Bebas Neue',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--warm);font-family:'Instrument Sans',sans-serif;padding:40px 24px 120px}
+  .page-head{max-width:1240px;margin:0 auto 8px}
+  .page-head h1{font-family:var(--beb);font-size:46px;letter-spacing:1px}
+  .page-head h1 em{font-style:normal;color:var(--gold)}
+  .page-head p{color:rgba(245,241,232,.62);font-size:14px;max-width:780px;line-height:1.5;margin-top:6px}
+  .grid{max-width:1240px;margin:28px auto 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(370px,1fr));gap:40px 32px}
+  .slot .tag{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+  .slot .tag b{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--gold)}
+  .slot .note{margin-top:9px;font-size:12px;line-height:1.45;color:rgba(245,241,232,.55)}
+  /* The W17 card, miniaturized — same in all 25; only the affordance changes. */
+  .card{position:relative;height:205px;border-radius:18px;overflow:hidden;cursor:pointer;
+    background:#14110D;border:1px solid rgba(212,175,55,.45);
+    box-shadow:0 12px 24px rgba(0,0,0,.6),0 2px 4px rgba(0,0,0,.4);
+    display:flex;flex-direction:column}
+  .card .diag{position:absolute;inset:0;background:#2B2620;
+    clip-path:polygon(0 0,62% 0,44% 100%,0 100%)}
+  .card .seam{position:absolute;top:0;bottom:0;left:0;right:0;pointer-events:none}
+  .card .seam::before{content:"";position:absolute;top:0;bottom:0;left:53%;width:1.5px;
+    background:linear-gradient(180deg,transparent,var(--gold),transparent);transform:skewX(-9deg)}
+  .eyeb{position:relative;display:flex;justify-content:space-between;padding:12px 15px 0;
+    font-family:var(--mono);font-size:9px;letter-spacing:3px;font-weight:700}
+  .eyeb .mo{color:rgba(212,175,55,.85)} .eyeb .lg{color:rgba(245,241,232,.66);letter-spacing:2px}
+  .stage{position:relative;flex:1;display:flex;align-items:center;padding:0 18px;gap:12px}
+  .teams{flex:1}
+  .teams .a{font-family:var(--beb);font-size:37px;line-height:.92;color:var(--warm)}
+  .teams .h{font-family:var(--beb);font-size:37px;line-height:.92;color:var(--gold)}
+  .teams .k{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:1.8px;color:var(--lgold);margin-top:6px}
+  .right{display:flex;flex-direction:column;align-items:flex-end;gap:9px;text-align:right}
+  .clock{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.2px;color:rgba(245,241,232,.78);line-height:1.6}
+  .clock b{font-size:10.5px;color:rgba(245,241,232,.9)}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>THE REVEAL AFFORDANCE <em>— 25 WAYS IN</em></h1>
+  <p>Same W17 card in all twenty-five — only the "this opens" cue changes. You killed the oval, then the box; fair. A—E are container-free: words, arrows, the seam itself, the card's own edges. F is "if it must be a shape, these aren't buttons from a template." Everything ships with the tap target being the whole card, so the cue only has to SAY it, not BE the hitbox.</p>
+</div>
+
+<div class="grid">
+
+<!-- ═══════════ A · PURE WORDS ═══════════ -->
+
+<div class="slot">
+  <div class="tag"><b>R1 · THE PLAIN CALL</b><span></span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:1.6px;color:var(--lgold)">TAP TO REVEAL ›</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">No container at all — light-gold mono text + a single chevron. The words do everything.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R2 · THE CHEVRON TRAIL</b><span></span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:var(--lgold)">REVEAL <span style="color:var(--gold);letter-spacing:-1.5px">›››</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Chevrons stack into motion — in the app they'd ripple gold left-to-right every few seconds.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R3 · THE UNDERSCORE</b><span></span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:1.6px;color:var(--lgold);border-bottom:2px solid var(--gold);padding-bottom:4px">TAP TO REVEAL</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">A link, not a button — the thick gold rule under the words is the entire affordance.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R4 · BEBAS SAYS IT</b><span></span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--beb);font-size:24px;color:var(--lgold);letter-spacing:1px">TAP TO REVEAL</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">The CTA speaks the display face — same family as the teams, gold, no chrome. Loudest words-only option.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R5 · THE THIRD LINE</b><span></span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams">
+        <div class="a">TWINS</div><div class="h">YANKEES</div>
+        <div style="font-family:var(--beb);font-size:20px;color:rgba(240,214,138,.95);margin-top:4px;letter-spacing:1.5px">TAP FOR THE PICK ›</div>
+      </div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div></div>
+    </div>
+  </div>
+  <div class="note">The CTA joins the team stack as a third display line — the card reads top-to-bottom like a poster: who, who, what to do.</div>
+</div>
+
+<!-- ═══════════ B · THE SEAM ═══════════ -->
+
+<div class="slot">
+  <div class="tag"><b>R6 · BREAK THE SEAL</b><span>seam-anchored</span></div>
+  <div class="card"><div class="diag"></div>
+    <div class="seam" style="filter:drop-shadow(0 0 6px rgba(212,175,55,.6))"></div>
+    <div style="position:absolute;left:50.5%;top:50%;transform:translate(-50%,-50%) rotate(80deg);font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:2.5px;color:var(--gold);background:#14110D;padding:3px 10px;white-space:nowrap">TAP TO BREAK THE SEAL</div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div></div>
+    </div>
+  </div>
+  <div class="note">The W17 diagonal IS the seal — the CTA runs along it like print on a security strip. Tap cracks the card open at the seam.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R7 · THE PERFORATION</b><span>seam-anchored</span></div>
+  <div class="card"><div class="diag"></div>
+    <div style="position:absolute;top:0;bottom:0;left:53%;width:0;border-left:2px dashed rgba(212,175,55,.75);transform:skewX(-9deg)"></div>
+    <div style="position:absolute;left:53%;top:14%;transform:translateX(-58%) skewX(-9deg);font-size:12px">✂</div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.4px;color:var(--lgold)">TEAR OPEN</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">The seam becomes a dashed tear line with the little scissors — packaging language everyone has literally handled.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R8 · THE WAX COIN</b><span>seam-anchored</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div style="position:absolute;left:49%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;transform-origin:center;
+      background:radial-gradient(circle at 35% 30%,#E8C766,#9a7818);clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+      display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.6)">
+      <span style="font-family:var(--beb);font-size:19px;color:var(--ink)">G</span></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">TAP THE SEAL TO OPEN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div></div>
+    </div>
+  </div>
+  <div class="note">A hex wax seal pressed ON the seam (not an oval — six sides). The kicker tells you to hit it; tapping anywhere still works.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R9 · LIGHT IN THE CRACK</b><span>seam-anchored</span></div>
+  <div class="card"><div class="diag"></div>
+    <div style="position:absolute;top:0;bottom:0;left:53%;width:3px;transform:skewX(-9deg);
+      background:linear-gradient(180deg,transparent,#FFF3C9 40%,#F7E7AE 60%,transparent);filter:blur(1px);box-shadow:0 0 14px rgba(247,231,174,.5)"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">THE PICK IS GLOWING INSIDE</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.4px;color:var(--lgold)">TAP TO OPEN</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">The seam leaks light — the pick burning through the crack. In-app the glow would breathe slowly. Zero added elements.</div>
+</div>
+
+<!-- ═══════════ C · CARD HARDWARE ═══════════ -->
+
+<div class="slot">
+  <div class="tag"><b>R10 · THE FOOTER RAIL</b><span>card architecture</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage" style="padding-bottom:34px">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div></div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,#EBD188,#C29B2C);
+      padding:9px 0;text-align:center;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--ink)">TAP TO REVEAL</div>
+  </div>
+  <div class="note">Not a floating box — the card's whole bottom edge is the gold rail. Reads as part of the card's anatomy, unmissable, nothing oval about it.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R11 · THE DOG-EAR</b><span>card architecture</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div style="position:absolute;right:0;bottom:0;width:46px;height:46px;background:linear-gradient(315deg,#C29B2C 50%,transparent 50.5%)"></div>
+    <div style="position:absolute;right:5px;bottom:5px;font-size:11px;color:var(--ink);font-weight:700">↗</div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.4px;color:var(--lgold)">PEEL THE CORNER</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">A folded gold corner, like a page waiting to turn. Quietest of the hardware set — the fold implies "lift me."</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R12 · THE SIDE TAB</b><span>card architecture</span></div>
+  <div class="card" style="overflow:visible"><div class="diag" style="border-radius:18px 0 0 18px"></div><div class="seam"></div>
+    <div style="position:absolute;right:-10px;top:50%;transform:translateY(-50%);background:linear-gradient(180deg,#EBD188,#C29B2C);
+      writing-mode:vertical-rl;padding:14px 6px;border-radius:0 6px 6px 0;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;color:var(--ink);box-shadow:4px 3px 10px rgba(0,0,0,.5)">OPEN</div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right" style="padding-right:8px"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div></div>
+    </div>
+  </div>
+  <div class="note">A physical tab sticking off the card's edge — folder/binder language. Breaks the rectangle, which is exactly why you notice it.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R13 · THE TEAR STRIP</b><span>card architecture</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage" style="padding-bottom:30px">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div></div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;border-top:2px dashed rgba(212,175,55,.65);background:rgba(212,175,55,.08);
+      padding:8px 16px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:2px;color:var(--lgold)">PULL TO OPEN</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--gold);letter-spacing:-2px">››››</span>
+    </div>
+  </div>
+  <div class="note">Bottom strip behind a dashed tear line — cigarette-pack / FedEx-envelope muscle memory. The chevrons show the pull direction.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R14 · THE HANGING TAB</b><span>card architecture</span></div>
+  <div class="card" style="overflow:visible;margin-bottom:10px"><div class="diag" style="border-radius:18px 18px 0 18px"></div><div class="seam"></div>
+    <div style="position:absolute;left:50%;bottom:-11px;transform:translateX(-50%);background:linear-gradient(180deg,#EBD188,#C29B2C);
+      padding:5px 22px;border-radius:0 0 8px 8px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;color:var(--ink);box-shadow:0 5px 10px rgba(0,0,0,.5)">TAP TO REVEAL</div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div></div>
+    </div>
+  </div>
+  <div class="note">The tab hangs OFF the card bottom like a luggage tag — part of the object, not a UI control floating inside it.</div>
+</div>
+
+<!-- ═══════════ D · ICON-LED ═══════════ -->
+
+<div class="slot">
+  <div class="tag"><b>R15 · THE KEYHOLE</b><span>icon-led</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right">
+        <div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+          <div style="width:16px;height:22px;background:var(--gold);clip-path:polygon(50% 0,72% 8%,80% 28%,72% 45%,58% 52%,70% 100%,30% 100%,42% 52%,28% 45%,20% 28%,28% 8%)"></div>
+          <span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--lgold)">TAP TO UNLOCK</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">A solid-gold keyhole silhouette — members hold the key. Icon + three words, no container.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R16 · THE DIAMOND</b><span>icon-led</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right">
+        <div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.4px;color:var(--lgold)">REVEAL</span>
+          <div style="width:26px;height:26px;background:linear-gradient(135deg,#EBD188,#C29B2C);transform:rotate(45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(212,175,55,.4)">
+            <span style="transform:rotate(-45deg);color:var(--ink);font-weight:700;font-size:12px">›</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Home plate rotated — a gold diamond holding the chevron. The only "shape" here is a baseball shape.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R17 · THE LONG ARROW</b><span>icon-led</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right">
+        <div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.4px;color:var(--lgold)">SEE THE PICK<br>
+          <span style="display:inline-block;margin-top:3px;color:var(--gold);font-size:13px;letter-spacing:-1px">──────›</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Editorial arrow — the long rule with a head, drawn toward the seam. Magazine language, zero chrome.</div>
+</div>
+
+<!-- ═══════════ E · LIVING CUES ═══════════ -->
+
+<div class="slot">
+  <div class="tag"><b>R18 · THE SHIMMER</b><span>living cue</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:1.6px;
+          background:linear-gradient(90deg,#8a6f1f 20%,#FFF3C9 50%,#8a6f1f 80%);-webkit-background-clip:text;background-clip:text;color:transparent">TAP TO REVEAL</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Foil-stamp text: a light band sweeps through the letters every ~3s (frozen mid-sweep here). Motion is the affordance — nothing drawn around it.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R19 · THE LIVE DOT</b><span>living cue</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="display:flex;align-items:center;gap:7px">
+          <div style="width:8px;height:8px;background:var(--gold);box-shadow:0 0 0 4px rgba(212,175,55,.22),0 0 12px rgba(212,175,55,.6)"></div>
+          <span style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--lgold)">TAP TO REVEAL</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">A square gold beacon breathing next to the words — the same pulse language the LIVE dot already uses on Home.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R20 · THE FINGERPRINT</b><span>living cue</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="width:26px;height:26px;border:2px solid var(--gold);border-radius:6px;position:relative">
+            <div style="position:absolute;inset:5px;border:1.5px solid rgba(212,175,55,.55);border-radius:3px"></div>
+            <div style="position:absolute;inset:10px;background:rgba(212,175,55,.75);border-radius:1px"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.3px;color:var(--lgold)">PRESS HERE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Concentric squares like a touch target ripple (squared, not circular). In-app the rings would expand outward on a loop.</div>
+</div>
+
+<!-- ═══════════ F · IF IT MUST BE A SHAPE ═══════════ -->
+
+<div class="slot">
+  <div class="tag"><b>R21 · THE SHARP FRAME</b><span>shape, refined</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.6px;color:var(--lgold);border:1.5px solid var(--gold);padding:8px 14px">TAP TO REVEAL</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Hairline gold frame, dead-square corners, no fill — a plaque, not a pill. The most restrained "shape" option.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R22 · THE CHAMFER TAG</b><span>shape, refined</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.6px;color:var(--ink);
+          background:linear-gradient(180deg,#EBD188,#C29B2C);padding:9px 16px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)">REVEAL</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Filled gold but with two corners cut — angular hardware that rhymes with the diagonal seam instead of fighting it.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R23 · THE BOOKMARK</b><span>shape, refined</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="width:4px;height:26px;background:var(--gold)"></div>
+          <span style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--lgold)">TAP TO<br>REVEAL</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">A thick gold bar flanking the words — the "selected item" language editors and IDEs use. Shape count: one rectangle, 4px wide.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R24 · THE RUBBER STAMP</b><span>shape, refined</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="transform:rotate(-6deg);font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--gold);
+          border:2.5px solid var(--gold);padding:7px 12px;opacity:.92">REVEAL</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Stamped at a tilt like SEALED/PAID — document hardware with the most Gary personality. Tap "un-stamps" it.</div>
+</div>
+
+<div class="slot">
+  <div class="tag"><b>R25 · THE TICKET NOTCH</b><span>shape, refined</span></div>
+  <div class="card"><div class="diag"></div><div class="seam"></div>
+    <div class="eyeb"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="stage">
+      <div class="teams"><div class="a">TWINS</div><div class="h">YANKEES</div><div class="k">GARY'S PICK IS IN</div></div>
+      <div class="right"><div class="clock">FIRST PITCH<br><b>7:05 PM</b></div>
+        <div style="position:relative;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:1.6px;color:var(--ink);
+          background:linear-gradient(180deg,#EBD188,#C29B2C);padding:9px 18px;
+          -webkit-mask:radial-gradient(circle 5px at 0 50%,transparent 98%,#000) left,radial-gradient(circle 5px at 100% 50%,transparent 98%,#000) right;
+          -webkit-mask-size:51% 100%;-webkit-mask-repeat:no-repeat;
+          mask:radial-gradient(circle 5px at 0 50%,transparent 98%,#000) left,radial-gradient(circle 5px at 100% 50%,transparent 98%,#000) right;
+          mask-size:51% 100%;mask-repeat:no-repeat">ADMIT ONE</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">A ticket stub with punched side notches — "ADMIT ONE" is the members' room in three syllables. Sports-native object, not a UI button.</div>
+</div>
+
+</div>
+
+<div class="page-head" style="margin-top:56px">
+  <h1 style="font-size:28px">MY READ</h1>
+  <p><b style="color:var(--gold)">R10 (Footer Rail)</b> is my pick — it's unmissable without being a floating widget, because it's the card's own bottom edge doing the work; nothing else in the app looks like it, so it becomes THE "sealed pick" signature. <b style="color:var(--gold)">R9 (Light in the Crack)</b> is the most elegant — the W17 seam earning its keep — best paired with R1's plain words so the cue isn't motion-only. <b style="color:var(--gold)">R2/R5</b> are the strongest pure-typography routes if you want zero added objects. R24 has the most personality; R21 the most restraint. Tap target is the full card in every case — this choice is purely about what SAYS "open me."</p>
+</div>
+
+</body>
+</html>

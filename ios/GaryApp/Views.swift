@@ -5153,7 +5153,6 @@ struct PremiumPicksView: View {
     // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
     enum Mode { case games, props }
     @State private var mode: Mode = .games
-    @State private var jumpedLeague: String? = nil
     /// Winners date browser (user call, Jun 16): nil = today's live board; a past
     /// date (≤60 days back) loads that day's picks, all settled with CASHED/LOST
     /// stamps + flip-backs — the deep transparency surface for Gary's track record.
@@ -5321,11 +5320,13 @@ struct PremiumPicksView: View {
                             emptyState
                         } else {
                             Section {
-                                jumpBar(proxy)
+                                // League jump bar retired (Jul 5 design review):
+                                // styled like the GAMES/PROPS tabs one line up, it
+                                // read as a second filter row and re-said what the
+                                // shelf headers already say. Deep links still
+                                // scroll via jumpToSport.
                                 modeContent
-                                    // Tightened from 16 — the jumpBar above already
-                                    // sets the board off from the sticky toggle.
-                                    .padding(.top, 10)
+                                    .padding(.top, 14)
                                     .padding(.bottom, 120)
                             } header: {
                                 toggleBar
@@ -5416,52 +5417,16 @@ struct PremiumPicksView: View {
     }
 
     /// Consume a deep-linked sport (Home LIVE FORM tap) once the board's loaded:
-    /// switch to the mode that has it, highlight the chip, scroll to its shelf.
+    /// switch to the mode that has it, scroll to its shelf.
     private func jumpToFocusSport(_ proxy: ScrollViewProxy) {
         guard let sport = picksFocus.focusSport, !loading else { return }
         if gameShelves.contains(where: { $0.league == sport }) { mode = .games }
         else if propShelves.contains(where: { $0.league == sport }) { mode = .props }
         else { picksFocus.focusSport = nil; return }
-        jumpedLeague = sport
         withAnimation(.easeInOut(duration: 0.35)) {
             proxy.scrollTo((mode == .games ? "g-" : "p-") + sport, anchor: .top)
         }
         picksFocus.focusSport = nil
-    }
-
-    /// Sport chips that jump the page to a league's shelf in the active mode.
-    /// Left-aligned with fixed 24pt gaps (elastic columns made optically
-    /// unequal gaps); rhymes with GAMES/PROPS above. Scrolls if it overflows.
-    /// A chip wears its sport color only when it's the one you jumped to.
-    private func jumpBar(_ proxy: ScrollViewProxy) -> some View {
-        let leagues = mode == .games ? gameShelves.map(\.league) : propShelves.map(\.league)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 24) {
-                ForEach(leagues, id: \.self) { lg in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { jumpedLeague = lg }
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            proxy.scrollTo((mode == .games ? "g-" : "p-") + lg, anchor: .top)
-                        }
-                    } label: {
-                        Text(lg)
-                            .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
-                            .foregroundStyle(jumpChipStyle(lg))
-                            .lineLimit(1)
-                            .frame(minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
-    private func jumpChipStyle(_ lg: String) -> AnyShapeStyle {
-        guard jumpedLeague == lg else { return AnyShapeStyle(Color.white.opacity(0.38)) }
-        if lg == "MLB" { return AnyShapeStyle(GaryColors.mlbFieldText) }
-        return AnyShapeStyle(Sport.from(league: lg).accentColor)
     }
 
     // MARK: - Header / states
@@ -6028,7 +5993,8 @@ struct PremiumPicksView: View {
                                                 tease: propTease(group),
                                                 league: shelf.league.uppercased(),
                                                 sealKicker: group.count > 1 ? "GARY'S PROP PICKS ARE IN"
-                                                                            : "GARY'S PROP PICK IS IN") {
+                                                                            : "GARY'S PROP PICK IS IN",
+                                                sealedHeight: group.count > 1 ? UIScreen.main.bounds.height * 0.45 : nil) {
                                         if group.count == 1, let only = group.first {
                                             FlippablePropCard(prop: only,
                                                               gameResult: shelf.settled ? propResult(for: only) : nil,
@@ -13729,6 +13695,10 @@ struct MembersWrap<Content: View>: View {
     var league: String? = nil
     /// Kicker override ("GARY'S PROP PICKS ARE IN").
     var sealKicker: String? = nil
+    /// Sealed footprint override — a stacked prop group seals at ONE card's
+    /// height instead of the whole stack (the double-tall seal read wrong,
+    /// founder Jul 5), then grows to the real stack on reveal.
+    var sealedHeight: CGFloat? = nil
 
     /// "12:30 PM" (ET) — the seal names first pitch instead of ticking at it.
     static func pitchClock(_ d: Date) -> String {
@@ -13741,13 +13711,14 @@ struct MembersWrap<Content: View>: View {
     @State private var revealed: Bool
 
     init(revealId: String, commence: Date? = nil, tease: String? = nil,
-         league: String? = nil, sealKicker: String? = nil,
+         league: String? = nil, sealKicker: String? = nil, sealedHeight: CGFloat? = nil,
          @ViewBuilder content: @escaping () -> Content) {
         self.revealId = revealId
         self.commence = commence
         self.tease = tease
         self.league = league
         self.sealKicker = sealKicker
+        self.sealedHeight = sealedHeight
         self.content = content
         let started = commence.map { $0 <= Date() } ?? true
         _revealed = State(initialValue: RevealedPicks.isRevealed(revealId) || started)
@@ -13768,6 +13739,7 @@ struct MembersWrap<Content: View>: View {
                 .allowsHitTesting(revealed)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         }
+        .frame(height: revealed ? nil : sealedHeight)
         .rotation3DEffect(.degrees(revealed ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.7, dampingFraction: 0.8), value: revealed)
         // In-place reveal FX (founder call, Jul 3: on the page, never a popup).
@@ -15032,21 +15004,23 @@ struct CompactPickRow: View {
                 if premiumFinish {
                     GoldBar.background()
                 } else {
+                    // Lift v2 (founder, Jul 5: cards should sit FORWARD of the
+                    // page): brighter top face, harder edge light, deeper throw.
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(LinearGradient(colors: [Color(hex: "#1B1917"), Color(hex: "#0F0E0D")],
+                        .fill(LinearGradient(colors: [Color(hex: "#22201C"), Color(hex: "#100F0D")],
                                              startPoint: .top, endPoint: .bottom))
                         .overlay(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.13), lineWidth: 1)
+                                .stroke(.white.opacity(0.16), lineWidth: 1)
                         )
                         .overlay(alignment: .top) {
                             // Lit-from-above highlight — the lift cue.
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.12), lineWidth: 1)
+                                .stroke(.white.opacity(0.2), lineWidth: 1)
                                 .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
                         }
-                        .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
-                        .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
+                        .shadow(color: .black.opacity(0.62), radius: 26, y: 14)
+                        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
                 }
             }
         )
@@ -22074,21 +22048,23 @@ struct CompactPropRow: View {
                 if premiumFinish {
                     SilverBar.background()
                 } else {
+                    // Lift v2 (founder, Jul 5: cards should sit FORWARD of the
+                    // page): brighter top face, harder edge light, deeper throw.
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(LinearGradient(colors: [Color(hex: "#1B1917"), Color(hex: "#0F0E0D")],
+                        .fill(LinearGradient(colors: [Color(hex: "#22201C"), Color(hex: "#100F0D")],
                                              startPoint: .top, endPoint: .bottom))
                         .overlay(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.13), lineWidth: 1)
+                                .stroke(.white.opacity(0.16), lineWidth: 1)
                         )
                         .overlay(alignment: .top) {
                             // Lit-from-above highlight — the lift cue.
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.12), lineWidth: 1)
+                                .stroke(.white.opacity(0.2), lineWidth: 1)
                                 .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
                         }
-                        .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
-                        .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
+                        .shadow(color: .black.opacity(0.62), radius: 26, y: 14)
+                        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
                 }
             }
         )
