@@ -33,8 +33,10 @@ export async function GET(req: Request) {
   const bearSrc = `data:image/png;base64,${bear.toString('base64')}`;
 
   // Mirror the app's minimumScaleFactor: shrink to the longest line (width) and the line count (height).
+  // A single short word ("DRAW") gets poster-sized type — at the standard cap it floats tiny in an empty card.
   const longest = Math.max(1, ...heroLines.map((l) => l.length));
-  const byWidth = Math.min(150, Math.floor(1700 / longest));
+  const cap = heroLines.length === 1 && longest <= 7 ? 300 : 150;
+  const byWidth = Math.min(cap, Math.floor(1700 / longest));
   const byHeight = Math.floor(600 / (0.98 * Math.max(1, heroLines.length)));
   const heroSize = Math.max(62, Math.min(byWidth, byHeight));
 

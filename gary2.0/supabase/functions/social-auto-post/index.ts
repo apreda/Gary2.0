@@ -741,8 +741,10 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
       // the app, not a picture of it") — /api/share-card is a verbatim HeadlineShareCardView(square) rebuild.
       const opp = wcOpp(chosen, g.away, g.home);
       const metaParts = [opp, timeLabel];
-      const od = fmtOdds(chosen.odds);
-      if (od && !String(chosen.pick).includes(od)) metaParts.push(od);
+      // Odds ALWAYS ride the meta line on the card: shareHeroLines strips them from the hero, so the old
+      // "skip if the pick text already has them" guard left them appearing nowhere (England@Mexico, Jul 5).
+      const od = fmtOdds(chosen.odds ?? String(chosen.pick).match(/([+-]\d{3,})\s*$/)?.[1] ?? "");
+      if (od) metaParts.push(od);
       cardUrl = `${CARD_BASE}/api/share-card?hero=${encodeURIComponent(shareHeroLines(String(chosen.pick)).join("|"))}&league=${encodeURIComponent("WORLD CUP")}&meta=${encodeURIComponent(metaParts.join(" · "))}`;
     }
     actions.push({ type: "picks", game: g.key, caption, listText, cardUrl, start: g.start });
