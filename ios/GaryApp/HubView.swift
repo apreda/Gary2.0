@@ -92,6 +92,13 @@ fileprivate struct HubRule: View {
     }
 }
 
+/// Tracks the masthead's bottom edge in scroll space — drives the sticky
+/// jump bar (visible once the masthead scrolls off).
+fileprivate struct HubMastheadBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 /// The page-wide "See all n / Show less" expander control.
 fileprivate struct HubSeeAllButton: View {
     let isOpen: Bool
@@ -197,6 +204,9 @@ struct HubView: View {
     @State private var pendingScrollAnchor: String? = nil
     /// Beats currently expanded past their top rows ("See all n").
     @State private var openBeats: Set<String> = []
+    /// Sticky jump bar — shown once the masthead scrolls off, so every
+    /// section is one tap away and nothing gets buried (founder, Jul 4).
+    @State private var jumpBarVisible = false
     /// Pre-grouped [league: [kind: rows]] — rebuilt once per load.
     @State private var itemsIndex: [HubLeagueSel: [SignalKind: [Signal]]] = [:]
 
@@ -518,6 +528,12 @@ struct HubView: View {
                     searchFocused: $searchFocused
                 )
                 .id("top")
+                .background(
+                    GeometryReader { g in
+                        Color.clear.preference(key: HubMastheadBottomKey.self,
+                                               value: g.frame(in: .global).maxY)
+                    }
+                )
 
                 if !didLoad {
                     hubLoading
@@ -666,6 +682,25 @@ struct HubView: View {
             .frame(minHeight: geo.size.height, alignment: .top)
             .task { if !didLoad { await load() } }
         }
+        .onPreferenceChange(HubMastheadBottomKey.self) { maxY in
+            // Global-space measurement (named scroll spaces failed to resolve
+            // through this Reader/Geometry nesting): the masthead's bottom is
+            // past the status bar once maxY drops under the top inset.
+            let show = maxY < geo.safeAreaInsets.top
+            if show != jumpBarVisible {
+                withAnimation(.easeInOut(duration: 0.18)) { jumpBarVisible = show }
+            }
+        }
+        .overlay(alignment: .top) {
+            if jumpBarVisible, !searchOpen, didLoad {
+                // The app's scroll surfaces underlap the status bar — pad the
+                // pinned bar down by the real top inset so labels stay visible.
+                HubJumpBar(items: jumpItems, topInset: geo.safeAreaInsets.top) { anchor in
+                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .scrollDismissesKeyboard(.immediately)
         .refreshable { await load() }
         .onChange(of: isVisible) { vis in
@@ -736,6 +771,27 @@ struct HubView: View {
         (s.kind == .ballpark && s.league == .wc) ? "VENUE" : s.kind.chip
     }
 
+    /// Jump-bar entries — only sections that exist right now, in page order.
+    private var jumpItems: [(anchor: String, label: String)] {
+        var out: [(String, String)] = []
+        if !leagueSignals.isEmpty {
+            if lead != nil || !bestOfBoard.isEmpty { out.append(("lead", "The Best")) }
+            if !items(.regression).isEmpty { out.append(("regression", "Regression")) }
+            if sel == .wc, !items(.xgRegression).isEmpty { out.append(("xgboard", "xG")) }
+        }
+        if !selStreakRows.isEmpty { out.append(("streaks", "Streaks")) }
+        if !leagueSignals.isEmpty {
+            for beat in beats where !beatRows(beat).isEmpty {
+                out.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
+            }
+            if sel == .wc, !wcIntelSignals.isEmpty { out.append(("wcIntel", "Intel")) }
+            if !items(.fantasyPickups).isEmpty { out.append(("fantasy", "Fantasy")) }
+        }
+        if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
+        if !selYdaySignals.isEmpty { out.append(("receipts", "Receipts")) }
+        return out
+    }
+
     private var receiptsTally: String {
         let rows = selYdaySignals
         let (hit, graded) = hitRate
@@ -794,6 +850,39 @@ struct HubView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 18)
+    }
+}
+
+// MARK: - Sticky jump bar
+
+/// Thin pinned section nav — appears once the masthead scrolls off so every
+/// section stays one tap away on a long page. Plain kickers, no capsules.
+fileprivate struct HubJumpBar: View {
+    let items: [(anchor: String, label: String)]
+    var topInset: CGFloat = 0
+    let onTap: (String) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: topInset)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(items, id: \.anchor) { item in
+                        Button { onTap(item.anchor) } label: {
+                            Text(item.label.capitalized)
+                                .font(HubFont.kicker(10.5)).tracking(1.3)
+                                .foregroundStyle(.white.opacity(0.75))
+                                .frame(minHeight: 38)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+            Rectangle().fill(GaryColors.gold.opacity(0.3)).frame(height: 1)
+        }
+        .background(GaryColors.darkBg.opacity(0.96))
     }
 }
 
