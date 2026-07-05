@@ -23,7 +23,7 @@
 //   force_mode=wc → run ONLY the WC per-game card path (use with dry_run=1 to vet captions/cards without posting).
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { matchVerdicts } from "./verdicts.ts";
+import { matchVerdicts, avoidRepeat } from "./verdicts.ts";
 import { computeStanding } from "./pl.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -313,7 +313,7 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
     post_date: today, slot, league, pick_text: chosen.pick, confidence: conf || null,
     commence_time: chosen.commence_time, thread_format: isTopPick ? "top_pick" : "standard",
     hook_tweet_id: hookId, reasoning_tweet_id: handoffId, cta_tweet_id: null,
-    thread_url: `https://x.com/BetwithGary/status/${hookId}`,
+    thread_url: `https://x.com/BetwithGary/status/${hookId}`, post_text: hook,
   });
   return { posted: true, pick: chosen.pick, thread_url: `https://x.com/BetwithGary/status/${hookId}`, count_today: pickThreads.length + 1 };
 }
@@ -330,17 +330,18 @@ function fallbackVerdict(result: string, finalScore: string): string {
   return `Didn't land.${finalScore ? ` Final ${finalScore}.` : ""} On the tape like everything else.`;
 }
 
-async function verdictLine(c: { pickText: string; matchup: string; result: string; finalScore: string; league: string }): Promise<string> {
+async function verdictLine(c: { pickText: string; matchup: string; result: string; finalScore: string; league: string }, used: string[]): Promise<string> {
   try {
     const user = `Gary is quote-tweeting HIS OWN pick from earlier today, now that the game is final. Write the ONE short verdict line that goes above the quoted pick. Return ONLY JSON: {"verdict":"..."}.
 PICK: ${c.pickText} | GAME: ${c.matchup} (${c.league}) | FINAL SCORE: ${c.finalScore || "n/a"} | RESULT: ${c.result.toUpperCase()}
-Match this VOICE (different games, copy the register not the facts):
+${used.length ? `VERDICTS ALREADY POSTED TODAY (write something structurally DIFFERENT: a fresh opening, a different shape; never reuse their opening words or repeat a signature phrase from them):\n${used.slice(-6).map((u) => `- ${u}`).join("\n")}\n` : ""}Match this VOICE (different games, copy the register, NOT the openings; every verdict on the timeline must open differently):
 WIN example: "Never sweated it. Pirates by three."
 WIN example: "Cashed. That bullpen had no business holding a lead and it didn't."
+WIN example: "Quantrill went three innings, which is exactly why I was on Detroit. Tigers cash."
 LOSS example: "Scored twice all night. I'll wear that one."
 LOSS example: "Had the right read and the wrong ninth inning. It stays on the tape."
 PUSH example: "Push. Money back, nothing learned."
-Rules: under 180 characters. Past tense, first person. Reference the real final score or one real detail. On a WIN no gloating cliches (banned: easy, free, told you, never a doubt). On a LOSS own it flat, no excuses, no apology tour. Never mention money or units wagered.`;
+Rules: under 180 characters. Past tense, first person. Reference the real final score or one real detail (calling back to the reason in the quoted pick is the best version). On a WIN no gloating cliches (banned: easy, free, told you, never a doubt). On a LOSS own it flat, no excuses, no apology tour. Never mention money or units wagered.`;
     const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
     const v = clean(out.verdict);
     return v || fallbackVerdict(c.result, c.finalScore);
@@ -353,7 +354,7 @@ Rules: under 180 characters. Past tense, first person. Reference the real final 
 async function runVerdictMode(today: string, dryRun: boolean) {
   const dates = [today, yesterdayOf(today)];
   const { data: logRows, error: logErr } = await sb.from("social_post_log")
-    .select("id, post_date, league, pick_text, thread_format, hook_tweet_id")
+    .select("id, post_date, league, pick_text, thread_format, hook_tweet_id, post_text")
     .in("post_date", dates);
   if (logErr) throw logErr;
   const { data: results, error: resErr } = await sb.from("game_results")
@@ -367,17 +368,34 @@ async function runVerdictMode(today: string, dryRun: boolean) {
   );
   if (!cands.length) return { posted: false, reason: "no graded, unverdicted pick tweets" };
 
+  // Variety guard: recent verdict texts (from the log) + the ones composed in THIS run. Two verdicts stamped
+  // with the same opener in one afternoon ("Never sweated it." twice, Jul 5) reads like a template bot.
+  const used: string[] = (logRows ?? [])
+    .filter((r: any) => r.thread_format === "verdict" && r.post_text)
+    .map((r: any) => String(r.post_text));
+
   const verdicts: any[] = [];
   for (const c of cands) {
-    const text = await verdictLine(c);
+    const raw = await verdictLine(c, used);
+    const fs = c.finalScore ? ` Final ${c.finalScore}.` : "";
+    const fallbacks = c.result === "won"
+      ? [`That one paid.${fs}`, `On the tape as a win.${fs}`, `Cashed.${fs}`]
+      : c.result === "push"
+        ? ["Push. Money back.", "Dead heat, money back.", "Push. Nothing learned."]
+        : [`That one missed.${fs} I'll wear it.`, `Didn't land.${fs} On the tape like everything else.`, `Loss.${fs} It goes on the tape.`];
+    const text = avoidRepeat(raw, used, fallbacks);
+    used.push(text);
     if (dryRun) { verdicts.push({ pick: c.pickText, result: c.result, quoting: c.hookTweetId, text }); continue; }
     try {
       const id = await postQuote(text, c.hookTweetId);
-      await sb.from("social_post_log").insert({
-        post_date: c.postDate, slot: "verdict", league: c.league, pick_text: c.pickText,
+      // " [verdict]" satisfies UNIQUE(post_date, pick_text) — the pick's own row already holds the bare key.
+      // (Unchecked, this failed silently on Jul 5 and the missing dedup row duplicated both verdicts hourly.)
+      const { error: insErr } = await sb.from("social_post_log").insert({
+        post_date: c.postDate, slot: "verdict", league: c.league, pick_text: `${c.pickText} [verdict]`,
         thread_format: "verdict", hook_tweet_id: id, cta_tweet_id: c.hookTweetId,
-        thread_url: `https://x.com/BetwithGary/status/${id}`,
+        thread_url: `https://x.com/BetwithGary/status/${id}`, post_text: text,
       });
+      if (insErr) throw new Error(`posted ${id} but log insert FAILED (dedup at risk): ${insErr.message}`);
       verdicts.push({ pick: c.pickText, result: c.result, thread_url: `https://x.com/BetwithGary/status/${id}` });
     } catch (e) {
       console.error(`verdict post failed for ${c.pickText}: ` + String(e));
@@ -419,7 +437,7 @@ async function runArcUpdateMode(today: string, dryRun: boolean) {
   await sb.from("social_post_log").insert({
     post_date: today, slot: "pin", league: "ARC", pick_text: `ARC UPDATE ${today}`,
     thread_format: "arc_update", hook_tweet_id: tweetId,
-    thread_url: `https://x.com/BetwithGary/status/${tweetId}`,
+    thread_url: `https://x.com/BetwithGary/status/${tweetId}`, post_text: text,
   });
   return { posted: true, standing: s, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
@@ -773,7 +791,7 @@ Match this VOICE (a DIFFERENT day, copy the register not the facts): "Went 9 and
   const tweetId = await postTweet(text);
   await sb.from("social_post_log").insert({
     post_date: today, slot: "recap", league: "RECAP", pick_text: `DAILY RECAP ${today}`, thread_format: "recap",
-    hook_tweet_id: tweetId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${tweetId}`,
+    hook_tweet_id: tweetId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${tweetId}`, post_text: text,
   });
   return { posted: true, mood, record: `${wins}-${losses}`, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
