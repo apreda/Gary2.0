@@ -17,10 +17,11 @@
 //     pinned post carry the install path, and the profile out-converts an in-thread link). Pick thread = hook + handoff.
 //   - Recaps show wins AND losses openly (honest receipts build the trust that drives installs) + week-to-date record.
 //
-// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|wc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
+// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|wc|verdict, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
 //   force_mode=wc → run ONLY the WC per-game card path (use with dry_run=1 to vet captions/cards without posting).
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { matchVerdicts } from "./verdicts.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -135,6 +136,17 @@ async function postTweet(text: string, replyToId?: string): Promise<string> {
   });
   const j = await r.json();
   if (!j.success || !j.tweetId) throw new Error(`${fn} failed: ${JSON.stringify(j).slice(0, 300)}`);
+  return j.tweetId as string;
+}
+
+async function postQuote(text: string, quoteTweetId: string): Promise<string> {
+  const r = await fetch(`${SB_URL}/functions/v1/post-quote-tweet`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, quoteTweetId }),
+  });
+  const j = await r.json();
+  if (!j.success || !j.tweetId) throw new Error(`post-quote-tweet failed: ${JSON.stringify(j).slice(0, 300)}`);
   return j.tweetId as string;
 }
 
@@ -293,6 +305,75 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
     thread_url: `https://x.com/BetwithGary/status/${hookId}`,
   });
   return { posted: true, pick: chosen.pick, thread_url: `https://x.com/BetwithGary/status/${hookId}`, count_today: pickThreads.length + 1 };
+}
+
+// VERDICT LOOP (Engine 0, Jul 2026): when a game Gary tweeted a pick for goes FINAL, quote-tweet HIS OWN
+// pick tweet with a one-line verdict. Win = short swagger, loss = owned flat, push = shrug. The quote surfaces
+// the original timestamped call (native receipts). Covers standard/top_pick threads from today AND yesterday
+// (late finals grade after midnight ET); WC is excluded (runWcCardMode's finals recap owns it).
+const VERDICT_CAP_PER_RUN = 4;
+
+function fallbackVerdict(result: string, finalScore: string): string {
+  if (result === "won") return `Cashed.${finalScore ? ` Final ${finalScore}.` : ""}`;
+  if (result === "push") return "Push. Money back.";
+  return `Didn't land.${finalScore ? ` Final ${finalScore}.` : ""} On the tape like everything else.`;
+}
+
+async function verdictLine(c: { pickText: string; matchup: string; result: string; finalScore: string; league: string }): Promise<string> {
+  try {
+    const user = `Gary is quote-tweeting HIS OWN pick from earlier today, now that the game is final. Write the ONE short verdict line that goes above the quoted pick. Return ONLY JSON: {"verdict":"..."}.
+PICK: ${c.pickText} | GAME: ${c.matchup} (${c.league}) | FINAL SCORE: ${c.finalScore || "n/a"} | RESULT: ${c.result.toUpperCase()}
+Match this VOICE (different games, copy the register not the facts):
+WIN example: "Never sweated it. Pirates by three."
+WIN example: "Cashed. That bullpen had no business holding a lead and it didn't."
+LOSS example: "Scored twice all night. I'll wear that one."
+LOSS example: "Had the right read and the wrong ninth inning. It stays on the tape."
+PUSH example: "Push. Money back, nothing learned."
+Rules: under 180 characters. Past tense, first person. Reference the real final score or one real detail. On a WIN no gloating cliches (banned: easy, free, told you, never a doubt). On a LOSS own it flat, no excuses, no apology tour. Never mention money or units wagered.`;
+    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
+    const v = clean(out.verdict);
+    return v || fallbackVerdict(c.result, c.finalScore);
+  } catch (e) {
+    console.error("verdictLine LLM failed, using fallback: " + String(e));
+    return fallbackVerdict(c.result, c.finalScore);
+  }
+}
+
+async function runVerdictMode(today: string, dryRun: boolean) {
+  const dates = [today, yesterdayOf(today)];
+  const { data: logRows, error: logErr } = await sb.from("social_post_log")
+    .select("id, post_date, league, pick_text, thread_format, hook_tweet_id")
+    .in("post_date", dates);
+  if (logErr) throw logErr;
+  const { data: results, error: resErr } = await sb.from("game_results")
+    .select("game_date, league, pick_text, result, final_score, matchup")
+    .in("game_date", dates);
+  if (resErr) throw resErr;
+  const cands = matchVerdicts(
+    (logRows ?? []) as any,
+    (results ?? []).map((r: any) => ({ ...r, game_date: String(r.game_date) })),
+    { cap: VERDICT_CAP_PER_RUN },
+  );
+  if (!cands.length) return { posted: false, reason: "no graded, unverdicted pick tweets" };
+
+  const verdicts: any[] = [];
+  for (const c of cands) {
+    const text = await verdictLine(c);
+    if (dryRun) { verdicts.push({ pick: c.pickText, result: c.result, quoting: c.hookTweetId, text }); continue; }
+    try {
+      const id = await postQuote(text, c.hookTweetId);
+      await sb.from("social_post_log").insert({
+        post_date: c.postDate, slot: "verdict", league: c.league, pick_text: c.pickText,
+        thread_format: "verdict", hook_tweet_id: id, cta_tweet_id: c.hookTweetId,
+        thread_url: `https://x.com/BetwithGary/status/${id}`,
+      });
+      verdicts.push({ pick: c.pickText, result: c.result, thread_url: `https://x.com/BetwithGary/status/${id}` });
+    } catch (e) {
+      console.error(`verdict post failed for ${c.pickText}: ` + String(e));
+      verdicts.push({ pick: c.pickText, result: c.result, error: String(e) });
+    }
+  }
+  return { posted: verdicts.some((v) => v.thread_url), dry_run: dryRun || undefined, verdicts };
 }
 
 // WORLD CUP picks: tweet EVERY game. Gary's chosen play renders as the app's OWN pick card (CompactPickRow, rebuilt
@@ -682,6 +763,12 @@ Deno.serve(async (req) => {
       catch (e) { console.error("wc card mode failed: " + String(e)); wc = { error: String(e) }; }
     }
     if (force === "wc") { console.log(JSON.stringify({ mode: "wc", wc }).slice(0, 500)); return Response.json({ mode: "wc", metrics, wc }); }
+
+    if (force === "verdict") {
+      const verdict = await runVerdictMode(today, dryRun);
+      console.log(JSON.stringify({ mode: "verdict", verdict }).slice(0, 500));
+      return Response.json({ mode: "verdict", metrics, verdict });
+    }
 
     if (mode === "none") return Response.json({ posted: false, reason: `ET hour ${hour} is not a posting slot`, metrics, wc });
     const result = mode === "recap" ? await runRecapMode(today, dryRun) : mode === "personality" ? await runPersonalityMode(today, dryRun) : await runPickMode(today, nowMs, hour, dryRun, preview);
