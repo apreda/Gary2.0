@@ -34,41 +34,41 @@ export async function GET(req: Request) {
 
   // Mirror the app's minimumScaleFactor: shrink to the longest line (width) and the line count (height).
   const longest = Math.max(1, ...heroLines.map((l) => l.length));
-  const byWidth = Math.min(124, Math.floor(1560 / longest));
-  const byHeight = Math.floor(540 / (0.98 * Math.max(1, heroLines.length)));
+  const byWidth = Math.min(150, Math.floor(1700 / longest));
+  const byHeight = Math.floor(600 / (0.98 * Math.max(1, heroLines.length)));
   const heroSize = Math.max(62, Math.min(byWidth, byHeight));
 
   return new ImageResponse(
     (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundImage: 'radial-gradient(circle at 50% 0%, #151311 0%, #0B0A09 100%)' }}>
-        {/* the floating card (width 460@2x, radius 28@2x, #121110, hairline stroke, drop shadow) */}
-        <div style={{ width: 920, display: 'flex', flexDirection: 'column', background: CARD, borderRadius: 56, border: '2px solid rgba(255,255,255,0.10)', padding: 60, boxShadow: '0 28px 52px rgba(0,0,0,0.55)' }}>
-          {/* GARY'S PICK + bear */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ fontFamily: 'JBMono', fontSize: 28, color: GOLD, letterSpacing: 6, paddingTop: 16 }}>GARY'S PICK</div>
-            <img src={bearSrc} width={108} height={108} style={{ borderRadius: 20 }} />
-          </div>
+      // FULL-BLEED (Jul 5, founder): the image IS the card — no canvas behind it, no border radius or
+      // shadow of our own (X's media container rounds the corners). Header up top, hero in the middle,
+      // meta + footer pinned to the bottom edge.
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: CARD, padding: 80 }}>
+        {/* GARY'S PICK + bear */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ fontFamily: 'JBMono', fontSize: 30, color: GOLD, letterSpacing: 6, paddingTop: 16 }}>GARY'S PICK</div>
+          <img src={bearSrc} width={116} height={116} style={{ borderRadius: 22 }} />
+        </div>
 
-          {/* stacked hero, one line per word, BarlowCondensed */}
-          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 32 }}>
-            {heroLines.map((line, i) => (
-              <div key={i} style={{ fontFamily: 'Barlow', fontSize: heroSize, color: WHITE, lineHeight: 0.98 }}>{line}</div>
-            ))}
-          </div>
+        {/* stacked hero, one line per word, BarlowCondensed — vertically centered in the free space */}
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexGrow: 1, marginTop: 20, marginBottom: 20 }}>
+          {heroLines.map((line, i) => (
+            <div key={i} style={{ fontFamily: 'Barlow', fontSize: heroSize, color: WHITE, lineHeight: 0.98 }}>{line}</div>
+          ))}
+        </div>
 
-          {/* league token (the card's one sport-color touch) + meta line */}
-          <div style={{ display: 'flex', alignItems: 'baseline', marginTop: 28 }}>
-            <div style={{ fontFamily: 'JBMono', fontSize: 26, color: accent, letterSpacing: 3 }}>{league}</div>
-            <div style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 36, color: 'rgba(255,255,255,0.55)', marginLeft: 18 }}>{meta}</div>
-          </div>
+        {/* league token (the card's one sport-color touch) + meta line */}
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <div style={{ fontFamily: 'JBMono', fontSize: 28, color: accent, letterSpacing: 3 }}>{league}</div>
+          <div style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 38, color: 'rgba(255,255,255,0.55)', marginLeft: 20 }}>{meta}</div>
+        </div>
 
-          {/* divider */}
-          <div style={{ display: 'flex', height: 2, background: 'rgba(255,255,255,0.12)', marginTop: 36, marginBottom: 36 }} />
+        {/* divider */}
+        <div style={{ display: 'flex', height: 2, background: 'rgba(255,255,255,0.12)', marginTop: 38, marginBottom: 38 }} />
 
-          {/* footer */}
-          <div style={{ display: 'flex' }}>
-            <div style={{ fontFamily: 'JBMono', fontSize: 25, color: 'rgba(201,162,39,0.8)' }}>betwithgary.ai</div>
-          </div>
+        {/* footer */}
+        <div style={{ display: 'flex' }}>
+          <div style={{ fontFamily: 'JBMono', fontSize: 27, color: 'rgba(201,162,39,0.8)' }}>betwithgary.ai</div>
         </div>
 
         {/* result stamp, rotated over the whole canvas (the app's CASHED/LOST overlay) */}
