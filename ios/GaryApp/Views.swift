@@ -46,8 +46,8 @@ struct GaryPageHeader<Trailing: View>: View {
                 // header speaks the same terminal language as the numerics.
                 // Quiet weight + signature color beats bold + white (June 5).
                 Text(title.uppercased())
-                    .font(GaryFonts.mono(23, bold: false))
-                    .foregroundStyle(GaryColors.gold)
+                    .font(GaryFonts.display(28))
+                    .foregroundStyle(GaryColors.warmWhite)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .layoutPriority(1)
@@ -74,10 +74,10 @@ struct GaryPageHeader<Trailing: View>: View {
                 .accessibilityLabel("Settings")
             }
             .padding(.horizontal, 20)
-            StitchLine()
-                .stroke(GaryColors.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+            Rectangle()
+                .fill(GaryColors.gold.opacity(0.35))
                 .frame(height: 1)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
         }
         .padding(.top, 12)
     }
@@ -1737,6 +1737,8 @@ struct HomeView: View {
     /// The Tomorrow look-ahead payload (tomorrow_board). nil until it loads /
     /// posts — the Tomorrow body shows its own honest-empty states meanwhile.
     @State private var tomorrowBoard: TomorrowBoard? = nil
+    /// Today's board snapshot — feeds the MARQUEE tracker (big games).
+    @State private var todayBoard: TomorrowBoard? = nil
     /// What the "TODAY" pill maps to: today's locked Home, time-aware (morning
     /// before noon ET, pregame after) — exactly the computed `phase` clock, so
     /// the Today pill drives selectedPhase to .morning/.pregame untouched. Live
@@ -2124,6 +2126,7 @@ struct HomeView: View {
                     // The TOMORROW look-ahead board (keyed on tomorrow's EST slate
                     // day) — feeds the Tomorrow pill's countdown + scoreboard.
                     tomorrowBoard = await SupabaseAPI.fetchTomorrowBoard(date: Self.tomorrowSlateDateEST())
+                    todayBoard = await SupabaseAPI.fetchTodayBoard(date: SupabaseAPI.todayEST())
                     homeStreaks = await SupabaseAPI.fetchStreaks()
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
@@ -2356,6 +2359,19 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
 
+        // ── THE MARQUEE — the day's big games, tracked live (founder):
+        // countdown → live score + where Gary stands → result → the next one.
+        if !marqueeEntries.isEmpty {
+            HomeMarqueeTracker(entries: marqueeEntries,
+                               tomorrowTease: marqueeTomorrowTease,
+                               onOpenGame: { m in
+                                   PicksFocusState.shared.focusGame = m
+                                   withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
+                               })
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        }
+
         // ── THE SHEET — today's slate in three zones.
         homeSheet
             .opacity(animateIn ? 1 : 0)
@@ -2523,9 +2539,9 @@ struct HomeView: View {
             } else if callLine == nil {
                 // Upcoming, call not posted yet — say when it lands.
                 if let ct = g.commence_time, let d = parseISO8601(ct) {
-                    pendingLine = "CALL ~" + Self.etClock(d.addingTimeInterval(-5400))
+                    pendingLine = "PICK DROPS ~" + Self.etClock(d.addingTimeInterval(-5400))
                 } else {
-                    pendingLine = "CALL POSTS ~T-90"
+                    pendingLine = "PICK DROPS SOON"
                 }
             }
             out.append(HomeSheetRow(
@@ -2543,6 +2559,69 @@ struct HomeView: View {
             ))
         }
         return out.sorted { $0.commence < $1.commence }
+    }
+
+    /// The day's big games joined with Gary's picks + the live board — the
+    /// MARQUEE tracker's feed, ranked by the pipeline (todayBoard.big_games).
+    private var marqueeEntries: [HomeMarqueeTracker.Entry] {
+        let bigs = todayBoard?.big_games ?? []
+        guard !bigs.isEmpty else { return [] }
+        return bigs.compactMap { big -> HomeMarqueeTracker.Entry? in
+            guard let matchup = big.matchup, matchup.contains(" @ ") else { return nil }
+            let sides = matchup.components(separatedBy: " @ ")
+            let away = sides[0], home = sides.count > 1 ? sides[1] : ""
+            let title = "\(Self.shortTeam(away)) @ \(Self.shortTeam(home))"
+            let calls = todayPicks.filter { p in
+                (p.awayTeam ?? "").caseInsensitiveCompare(away) == .orderedSame
+                    && (p.homeTeam ?? "").caseInsensitiveCompare(home) == .orderedSame
+            }
+            let pickLine: String? = calls.isEmpty ? nil : calls
+                .map { p in
+                    let parts = Formatters.splitPickAndOdds(p.pick ?? "")
+                    return parts.1.isEmpty ? parts.0.uppercased() : "\(parts.0.uppercased()) \(parts.1)"
+                }
+                .joined(separator: "  ·  ")
+            var pendingLine: String? = nil
+            if pickLine == nil {
+                if let ct = big.commence_time, let d = parseISO8601(ct) {
+                    pendingLine = "PICK DROPS ~" + Self.etClock(d.addingTimeInterval(-5400))
+                } else {
+                    pendingLine = "PICK DROPS SOON"
+                }
+            }
+            let ls = sheetLive(matchup)
+            let verdicts = calls.map { p in ls.map { HomeLiveVerdict.evaluate(pick: p, live: $0) } ?? .neutral }
+            var result: (String, Color)? = nil
+            if let ls, ls.isFinal {
+                let cashed = verdicts.filter { $0 == .covering }.count
+                let lost = verdicts.filter { $0 == .trailing }.count
+                if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
+                else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
+                else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
+                else { result = ("FINAL", Color.white.opacity(0.7)) }
+            }
+            return HomeMarqueeTracker.Entry(
+                id: "mq-\(big.rank)-\(matchup)",
+                rank: big.rank,
+                matchupFull: matchup,
+                title: title,
+                context: (big.context?.isEmpty == false ? big.context : big.standing),
+                commence: big.commence_time,
+                pickLine: pickLine,
+                pendingLine: pendingLine,
+                live: ls,
+                verdict: verdicts.first,
+                result: result
+            )
+        }
+    }
+
+    /// Tomorrow's #1 big game — the look-ahead row once today's marquee is done.
+    private var marqueeTomorrowTease: (matchup: String, time: String)? {
+        guard let big = tomorrowBoard?.big_games.first, let m = big.matchup else { return nil }
+        let sides = m.components(separatedBy: " @ ")
+        let title = sides.count == 2 ? "\(Self.shortTeam(sides[0])) @ \(Self.shortTeam(sides[1]))" : m
+        return (title, TomorrowView.etTime(big.commence_time, withZone: false, meridiem: true).uppercased())
     }
 
     /// The sheet body — EARLIER (collapsed past), LIVE (glowing middle),
@@ -2583,17 +2662,7 @@ struct HomeView: View {
         }
         if !up.isEmpty {
             HomeActHead(title: "Tonight", count: up.count,
-                        sub: firstCallClock.map { "FIRST CALL \($0)" })
-            if let target = up.compactMap({ parseISO8601($0.commence) }).min() {
-                HStack(spacing: 8) {
-                    Text(up.count == rows.count ? "FIRST GAME IN" : "NEXT GAME IN")
-                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.62))
-                    HomeCountdownText(target: target)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-            }
+                        sub: firstCallClock.map { "FIRST PICK \($0)" })
             let leagues = Array(Set(up.map(\.league))).sorted { a, b in
                 let ea = up.filter { $0.league == a }.map(\.commence).min() ?? ""
                 let eb = up.filter { $0.league == b }.map(\.commence).min() ?? ""
@@ -2602,7 +2671,7 @@ struct HomeView: View {
             ForEach(leagues, id: \.self) { lg in
                 if leagues.count > 1 {
                     Text(lg)
-                        .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(1.4)
+                        .font(.system(size: 10.5, weight: .bold, design: .monospaced)).tracking(1.4)
                         .foregroundStyle(lg == "MLB" ? GaryColors.mlbGrass : lg == "WC" ? Color(hex: "#3FB6A8") : GaryColors.gold)
                         .padding(.horizontal, 16)
                 }
@@ -3484,7 +3553,7 @@ struct HomeMasthead: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 (Text("GARY ").foregroundColor(Color(hex: "#F6F1E7"))
                     + Text("A.I.").foregroundColor(GaryColors.gold))
-                    .font(.system(size: 24, weight: .heavy))
+                    .font(GaryFonts.display(30))
                     .tracking(0.5)
                 Text(dateLine)
                     .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
@@ -3533,15 +3602,268 @@ struct HomeActHead: View {
                 Spacer(minLength: 0)
                 if let sub, !sub.isEmpty {
                     Text(sub.uppercased())
-                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.62))
+                        .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
                 }
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 6)
+    }
+}
+
+/// THE MARQUEE — the day's big games, tracked through their whole lifecycle
+/// (founder, Jul 5): countdown to the next big one + Gary's pick → the live
+/// score + where Gary stands → the result → on to the next. Tap the hero to
+/// open the game; the footer unfolds the full ranked list, which stamps
+/// CASHED/LOST as the day settles and teases tomorrow's marquee once done.
+struct HomeMarqueeTracker: View {
+    struct Entry: Identifiable {
+        let id: String
+        let rank: Int
+        let matchupFull: String
+        let title: String
+        let context: String?
+        let commence: String?
+        let pickLine: String?
+        let pendingLine: String?
+        let live: LiveScore?
+        let verdict: HomeLiveVerdict?
+        let result: (String, Color)?   // settled stamp, nil until final
+        var isLive: Bool { live?.isLive == true }
+        var isFinal: Bool { result != nil }
+    }
+
+    let entries: [Entry]
+    var tomorrowTease: (matchup: String, time: String)? = nil
+    let onOpenGame: (String) -> Void
+    @State private var expanded = false
+
+    /// The hero: the live big game if one's on, else the next one up BY THE
+    /// CLOCK (the list keeps the pipeline's rank; the hero follows the day).
+    private var hero: Entry? {
+        entries.first { $0.isLive }
+            ?? entries.filter { !$0.isFinal }.min { ($0.commence ?? "") < ($1.commence ?? "") }
+    }
+    private var settledLine: String? {
+        let done = entries.filter { $0.isFinal }
+        guard !done.isEmpty else { return nil }
+        let cashed = done.filter { $0.result?.0.contains("CASHED") == true }.count
+        let lost = done.filter { $0.result?.0.contains("LOST") == true }.count
+        return "\(cashed)–\(lost) in the big ones"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let hero {
+                Button { onOpenGame(hero.matchupFull) } label: { heroView(hero) }
+                    .buttonStyle(.plain)
+            } else {
+                doneView
+            }
+            if entries.count > 1 || tomorrowTease != nil {
+                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { expanded.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(expanded ? "CLOSE" : "ALL BIG GAMES")
+                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced)).tracking(1.2)
+                            .foregroundStyle(GaryColors.gold)
+                        if !expanded {
+                            Text("\(entries.count)")
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                        Spacer()
+                        if !expanded, let line = settledLine {
+                            Text(line.uppercased())
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if expanded { list }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(hero?.isLive == true ? GaryColors.win.opacity(0.35) : GaryColors.gold.opacity(0.3), lineWidth: 1))
+        )
+        .padding(.horizontal, 16)
+    }
+
+    // The hero face — live sweat, or the countdown to the next big one.
+    @ViewBuilder private func heroView(_ e: Entry) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                if e.isLive {
+                    Text("● LIVE · THE BIG GAME")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                        .foregroundStyle(GaryColors.win)
+                } else {
+                    Text("NEXT BIG GAME")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                        .foregroundStyle(GaryColors.gold)
+                }
+                Spacer()
+                if let c = e.context, !c.isEmpty {
+                    Text(c.uppercased())
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            if e.isLive, let ls = e.live {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(ls.scoreLine ?? e.title)
+                        .font(.system(size: 24, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    if let det = ls.detail, !det.isEmpty {
+                        Text(det.uppercased())
+                            .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            } else {
+                Text(e.title)
+                    .font(GaryFonts.display(26))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                HStack(spacing: 10) {
+                    if let ct = e.commence, let d = parseISO8601(ct) {
+                        HomeCountdownText(target: d)
+                        Text(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                if let pick = e.pickLine {
+                    Text(pick)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                    if e.isLive, let v = e.verdict {
+                        switch v {
+                        case .covering:
+                            Text("COVERING").font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .foregroundStyle(GaryColors.win)
+                        case .trailing:
+                            Text("IN THE RED").font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .foregroundStyle(GaryColors.loss)
+                        case .neutral: EmptyView()
+                        }
+                    }
+                } else if let pending = e.pendingLine {
+                    Text(pending)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    // Every big one settled — the day's marquee line.
+    private var doneView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("TODAY'S BIG GAMES · SETTLED")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                .foregroundStyle(GaryColors.gold)
+            if let line = settledLine {
+                Text(line)
+                    .font(GaryFonts.display(22))
+                    .foregroundStyle(GaryColors.warmWhite)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // The unfolded ranked list — stamps land as games settle.
+    private var list: some View {
+        VStack(spacing: 0) {
+            ForEach(entries) { e in
+                Button { onOpenGame(e.matchupFull) } label: { listRow(e) }
+                    .buttonStyle(.plain)
+                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
+            }
+            if let tease = tomorrowTease {
+                HStack(spacing: 8) {
+                    Text("TOMORROW'S MARQUEE")
+                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.1)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Spacer()
+                    Text(tease.matchup)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text(tease.time)
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11)
+            }
+        }
+    }
+
+    @ViewBuilder private func listRow(_ e: Entry) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("\(e.rank)")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(GaryColors.gold.opacity(0.9))
+                .frame(width: 14, alignment: .leading)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(e.isLive || e.isFinal ? (e.live?.scoreLine ?? e.title) : e.title)
+                    .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.96))
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                if let pick = e.pickLine {
+                    Text(pick)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GaryColors.gold.opacity(0.95))
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                } else if let pending = e.pendingLine {
+                    Text(pending)
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+            Spacer(minLength: 8)
+            if let (text, color) = e.result {
+                Text(text)
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(color)
+            } else if e.isLive, let det = e.live?.detail {
+                Text("▶ \(det.uppercased())")
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(GaryColors.win)
+            } else {
+                Text(TomorrowView.etTime(e.commence, withZone: false, meridiem: true).uppercased())
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 }
 
@@ -3579,8 +3901,8 @@ struct HomeOvernightStrip: View {
                     Spacer()
                     HStack(spacing: 4) {
                         Text("THE TAPE")
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.62))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.7))
                         Image(systemName: "chevron.right")
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.white.opacity(0.45))
@@ -3607,8 +3929,8 @@ struct HomeOvernightStrip: View {
                     }
                 }
                 Text(line)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(.white.opacity(0.85))
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -3649,29 +3971,29 @@ struct HomeStoryRail: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(s.league.uppercased())
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.62))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.7))
                 Spacer()
                 Text(s.verdict)
                     .font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(0.8)
                     .foregroundStyle(s.cashed ? GaryColors.win : s.verdict == "PUSH" ? GaryColors.gold : GaryColors.loss)
             }
             Text(s.headline)
-                .font(.system(size: 13.5, weight: .bold))
-                .foregroundStyle(.white.opacity(0.95))
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white.opacity(0.96))
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 2)
             if !s.receiptPick.isEmpty {
                 Text("\(s.receiptLead.uppercased()) \(s.receiptPick)")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
         .padding(12)
-        .frame(width: 236, height: 108, alignment: .topLeading)
+        .frame(width: 240, height: 112, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(GaryColors.warmWhite.opacity(0.03))
@@ -3692,8 +4014,8 @@ struct HomeSheetRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     Text(row.title)
-                        .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.95))
+                        .font(.system(size: 14.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.96))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     if row.bigOne {
                         Text("THE BIG ONE")
@@ -3703,18 +4025,18 @@ struct HomeSheetRowView: View {
                 }
                 if let call = row.callLine {
                     Text(call)
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GaryColors.gold.opacity(0.95))
                         .lineLimit(1).minimumScaleFactor(0.75)
                 } else if let pending = row.pendingLine {
                     Text(pending)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.62))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.72))
                 }
             }
             Spacer(minLength: 8)
             Text(row.statusText)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(row.statusColor)
                 .lineLimit(1)
                 .padding(.top, 2)
@@ -3763,8 +4085,8 @@ struct HomeWinnersStub: View {
                             .font(.system(size: 15, weight: .heavy))
                             .foregroundStyle(GaryColors.warmWhite)
                         Text("Gary's best of the board · games + props")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.white.opacity(0.62))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.white.opacity(0.7))
                     }
                     Spacer()
                     HStack(spacing: 4) {
@@ -4792,7 +5114,8 @@ struct PremiumPicksView: View {
     /// stamps + flip-backs — the deep transparency surface for Gary's track record.
     @State private var selectedDate: String? = nil
     /// Coming-soon popup: dismissed → collapses to a compact top strip, cards stay.
-    @State private var comingSoonDismissed = false
+    /// Pre-post state: when today's first pick lands (earliest game −90m).
+    @State private var firstDropAt: Date? = nil
 
     // Per-sport entitlements, granted by the Stripe webhook and keyed to the
     // auth user (or this install when signed out). isPremium stays as the
@@ -5149,118 +5472,72 @@ struct PremiumPicksView: View {
         .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
     }
 
-    /// TODAY, before Gary's board posts: real-looking pick cards with ONLY the
-    /// pick fields (the call, the matchup, the time) blurred — the card chrome,
-    /// eyebrow, Gary mark and affordances stay SHARP so the design reads through.
-    /// The "drops soon" message floats centered in the foreground; the cards sit
-    /// behind it, and the date menu in the header still opens past graded days.
+    /// TODAY, before Gary's board posts — the members' room speaks ONE sealed
+    /// language all day (founder, Jul 5): the same wrapper face the reveal
+    /// uses, rendered as non-interactive placeholders with the drop countdown
+    /// on the seal, under a plain how-it-works card with a one-tap door to
+    /// yesterday's graded card. The old blur-skeletons + pop-up modal are gone.
     private var comingSoonState: some View {
-        VStack(spacing: 0) {
-            if comingSoonDismissed { comingSoonStrip.padding(.horizontal, 16).padding(.bottom, 4) }
-            VStack(spacing: 14) {
-                comingSoonCard
-                comingSoonCard
-                comingSoonCard
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, comingSoonDismissed ? 6 : 16)
-            .padding(.bottom, 120)
-            .opacity(comingSoonDismissed ? 1 : 0.9)
-            .allowsHitTesting(false)
+        VStack(spacing: 14) {
+            comingSoonIntro
+            MembersOnlyCardFace(countdownTo: firstDropAt,
+                                subtitle: firstDropAt == nil ? "PICKS DROP ~90 MIN BEFORE EACH GAME" : "FIRST PICKS IN",
+                                footnote: "TODAY'S CARD")
+            MembersOnlyCardFace(subtitle: "PICKS DROP ~90 MIN BEFORE EACH GAME",
+                                footnote: "GAME PICKS · PROP PICKS")
         }
-        .overlay(alignment: .center) {
-            if !comingSoonDismissed {
-                comingSoonPopup.padding(.horizontal, 30)
-                    .transition(.scale(scale: 0.92).combined(with: .opacity))
-            }
-        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 120)
     }
 
-    /// The dismissible "drops soon" pop-up — readable over the cards behind it.
-    /// Tapping the X collapses it to `comingSoonStrip` so the cards open up.
-    private var comingSoonPopup: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "clock.badge")
-                .font(.system(size: 30)).foregroundStyle(GaryColors.gold)
-            Text("Today's board drops soon")
-                .font(GaryFonts.text(18, .semibold)).foregroundStyle(.white)
-            Text("It's still early — Gary posts his picks a few hours before the games start. Pull to refresh, or use the date menu up top for past days' results.")
-                .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.7))
-                .multilineTextAlignment(.center).lineSpacing(2)
-        }
-        .padding(.vertical, 24).padding(.horizontal, 22)
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.9)))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(GaryColors.gold.opacity(0.18), lineWidth: 1))
-        .overlay(alignment: .topTrailing) {
+    /// Plain-language how-it-works + the door to yesterday's results.
+    private var comingSoonIntro: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("TODAY'S CARD ISN'T OUT YET")
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced)).tracking(1.4)
+                .foregroundStyle(GaryColors.gold)
+            Text("Gary posts his best picks about 90 minutes before each game, once lineups are in. Every pick gets graded here the next morning — wins and losses.")
+                .font(GaryFonts.text(13.5))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
             Button {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { comingSoonDismissed = true }
+                withAnimation { selectedDate = Self.yesterdayEST() }
             } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .padding(8)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
-                    .padding(10)
+                HStack(spacing: 5) {
+                    Text("SEE YESTERDAY'S CARD")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1)
+                        .foregroundStyle(GaryColors.gold)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.top, 2)
         }
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
-    }
-
-    /// The collapsed reminder — one compact strip at the top once dismissed.
-    private var comingSoonStrip: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "clock.badge").font(.system(size: 13)).foregroundStyle(GaryColors.gold)
-            Text("Today's board drops soon — Gary posts a few hours before games. Date menu up top has past results.")
-                .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 10).padding(.horizontal, 13)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.gold.opacity(0.12), lineWidth: 1))
-    }
-
-    /// A pick card with the design intact — eyebrow, Gary mark, divider and
-    /// affordances stay SHARP; only the call, matchup and time blur (the data
-    /// that isn't posted yet). Same footprint as a real Winners card.
-    private var comingSoonCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Eyebrow + Gary mark — sharp chrome
-            HStack(alignment: .top) {
-                Text("GARY'S PICK")
-                    .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 36, height: 36)
-            }
-            // The call — blurred
-            VStack(alignment: .leading, spacing: 8) {
-                RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.18)).frame(width: 188, height: 22)
-                RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.18)).frame(width: 128, height: 22)
-            }
-            .blur(radius: 4).padding(.top, 16)
-            // Matchup · odds — blurred; share affordance sharp
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.13)).frame(width: 172, height: 13).blur(radius: 3.5)
-                Spacer()
-                Image(systemName: "square.and.arrow.up").font(.system(size: 15)).foregroundStyle(.white.opacity(0.45))
-            }
-            .padding(.top, 16)
-            // Divider — sharp
-            Rectangle().fill(.white.opacity(0.08)).frame(height: 1).padding(.top, 14)
-            // Time + chevron — time blurred, chevron sharp
-            HStack {
-                RoundedRectangle(cornerRadius: 4).fill(GaryColors.gold.opacity(0.55)).frame(width: 70, height: 12).blur(radius: 3)
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white.opacity(0.45))
-            }
-            .padding(.top, 13)
-        }
-        .padding(18)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08), lineWidth: 1))
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
+        )
+    }
+
+    /// Yesterday's EST slate day — the date-browser key for the results door.
+    private static func yesterdayEST() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        guard let d = f.date(from: SupabaseAPI.todayEST()),
+              let y = cal.date(byAdding: .day, value: -1, to: d) else { return SupabaseAPI.todayEST() }
+        return f.string(from: y)
     }
 
     /// On the TODAY board, a sport that hasn't posted/graded a pick yet would
@@ -5538,7 +5815,7 @@ struct PremiumPicksView: View {
     private func sortedShelfPicks(_ shelf: GameShelf) -> [GaryPick] {
         // A pick is "done" — bump to the BACK of the rail — once its game is
         // FINAL, so fresh upcoming/live picks always lead and the user scrolls
-        // right to see settled (CASHED/NO CASH) ones. Detect FINAL from the live
+        // right to see settled (CASHED/LOST) ones. Detect FINAL from the live
         // score (covers today's finished games), plus the yesterday shelf's
         // graded results. (User call: graded picks go to the back.)
         func isDone(_ p: GaryPick) -> Bool {
@@ -5933,6 +6210,19 @@ struct PremiumPicksView: View {
     /// Today's live board, or a chosen past day.
     private func reload() async {
         if let d = selectedDate { await loadHistorical(d) } else { await load() }
+        // Pre-post seal countdown: first pick lands ~90m before the earliest
+        // game still ahead of us (nil once the slate is underway/posted).
+        if selectedDate == nil {
+            let slate = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
+            let now = Date()
+            let firstAhead = slate
+                .compactMap { $0.commence_time.flatMap(parseISO8601) }
+                .filter { $0 > now }
+                .min()
+            await MainActor.run {
+                firstDropAt = firstAhead.map { $0.addingTimeInterval(-5400) }.flatMap { $0 > now ? $0 : nil }
+            }
+        }
     }
 
     private func sportRank(_ lg: String) -> Int {
@@ -12953,7 +13243,7 @@ struct ResultStampOverlay: View {
         switch result {
         case "won": return "CASHED"
         case "push": return "PUSH"
-        default: return "NO CASH"
+        default: return "LOST"
         }
     }
 
@@ -15348,7 +15638,7 @@ struct ShareCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("NO CASH", GaryColors.gold)
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }
@@ -15550,7 +15840,7 @@ struct SharePropCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("NO CASH", GaryColors.gold)
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }
@@ -15716,7 +16006,7 @@ struct HeadlineShareCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("NO CASH", GaryColors.gold)
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }
@@ -15846,7 +16136,7 @@ struct HeadlineSharePropCardView: View {
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
-        case "lost": return ("NO CASH", GaryColors.gold)
+        case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
     }

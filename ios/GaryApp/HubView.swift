@@ -28,7 +28,9 @@ fileprivate enum HubFont {
     /// newspaper voice was retired Jul 4: founder — "reads blog, not betting
     /// app"; the mock language is heavy sans + mono.)
     static func display(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font {
-        .system(size: size, weight: weight)
+        // Saira Condensed — the app's bundled athletic display face (Jul 5).
+        _ = weight
+        return GaryFonts.display(size)
     }
     /// Mono kickers/labels — always uppercase at the call site.
     static func kicker(_ size: CGFloat = 10.5) -> Font {
@@ -931,7 +933,7 @@ fileprivate struct HubMasthead: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 (Text("THE ").foregroundColor(GaryColors.warmWhite)
                     + Text("HUB").foregroundColor(GaryColors.gold))
-                    .font(HubFont.display(25))
+                    .font(HubFont.display(30))
                     .tracking(0.5)
                 Spacer()
                 Button {
@@ -1167,9 +1169,9 @@ fileprivate struct HubLeadStory: View {
                         .lineLimit(1)
                 }
                 Text(s.headline)
-                    .font(HubFont.display(22))
+                    .font(HubFont.display(26))
                     .foregroundStyle(GaryColors.warmWhite)
-                    .lineSpacing(1)
+                    .lineSpacing(0)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 // The giant number is for compact stats only — a sentence
@@ -1189,8 +1191,8 @@ fileprivate struct HubLeadStory: View {
                     .padding(.top, 10)
                 }
                 Text(read)
-                    .font(HubFont.body(13.5))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .font(HubFont.body(14))
+                    .foregroundStyle(.white.opacity(0.78))
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
@@ -1230,7 +1232,7 @@ fileprivate struct HubBestOf: View {
         HStack(alignment: .top, spacing: 14) {
             Text(String(format: "%02d", i + 2))
                 .font(HubFont.data(13, .medium))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.white.opacity(0.45))
                 .frame(width: 24, alignment: .leading)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {
@@ -1242,8 +1244,8 @@ fileprivate struct HubBestOf: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                 Text(s.game.uppercased())
-                    .font(HubFont.data(9.5, .medium))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(HubFont.data(10, .medium))
+                    .foregroundStyle(.white.opacity(0.62))
             }
             Spacer(minLength: 8)
             if let v = s.displayValue {
@@ -1380,7 +1382,7 @@ fileprivate struct HubRegressionBoard: View {
                 HStack(spacing: 12) {
                     Text("\(i + 1)")
                         .font(HubFont.data(12, .medium))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.white.opacity(0.45))
                         .frame(width: 18, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(HubFmt.subject(s.headline))
@@ -1699,8 +1701,8 @@ fileprivate struct HubStoryRow: View {
                     HubKicker(text: kicker, size: 9.5, color: GaryColors.gold.opacity(0.9))
                     Spacer(minLength: 6)
                     Text(s.game.uppercased())
-                        .font(HubFont.data(9, .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(HubFont.data(10, .medium))
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 10) {
@@ -1732,8 +1734,8 @@ fileprivate struct HubStoryRow: View {
                 }
                 if expanded {
                     Text(dedupedDetail)
-                        .font(HubFont.body(12.5))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(HubFont.body(13))
+                        .foregroundStyle(.white.opacity(0.75))
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
@@ -1845,8 +1847,8 @@ fileprivate struct HubTugRow: View {
                     HubKicker(text: "Head-To-Head", size: 9.5, color: GaryColors.gold.opacity(0.9))
                     Spacer(minLength: 6)
                     Text(s.game.uppercased())
-                        .font(HubFont.data(9, .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(HubFont.data(10, .medium))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 HStack(spacing: 6) {
                     Text(h?.dominant_name ?? "Team")
@@ -1904,8 +1906,8 @@ fileprivate struct HubDotsRow: View {
                     HubKicker(text: kicker, size: 9.5, color: GaryColors.gold.opacity(0.9))
                     Spacer(minLength: 6)
                     Text(s.game.uppercased())
-                        .font(HubFont.data(9, .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(HubFont.data(10, .medium))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 Text(s.headline)
                     .font(HubFont.body(14, .semibold)).foregroundStyle(.white.opacity(0.95))
@@ -2216,7 +2218,7 @@ fileprivate struct HubGameSheet: View {
                 HubKicker(text: "Tonight", size: 10.5, color: GaryColors.gold)
             }
             Text("\(row.away_team ?? hubSideLabel(row.away_abbr, nil)) @ \(row.home_team ?? hubSideLabel(row.home_abbr, nil))")
-                .font(HubFont.display(21))
+                .font(HubFont.display(24))
                 .foregroundStyle(GaryColors.warmWhite)
                 .fixedSize(horizontal: false, vertical: true)
             if let ls, ls.isLive || ls.isFinal {

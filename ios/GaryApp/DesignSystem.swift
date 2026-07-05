@@ -166,7 +166,7 @@ enum TeamColors {
 enum GaryFonts {
     /// Bundled options: "SairaCondensed-Bold" (default), "BebasNeue-Regular",
     /// "Anton-Regular", "Rajdhani-Bold", "Oswald-Bold", "ChakraPetch-Bold", "BarlowCondensed-Bold".
-    static let displayFace = "BarlowCondensed-Bold"
+    static let displayFace = "SairaCondensed-Bold"
 
     static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size) }
 
