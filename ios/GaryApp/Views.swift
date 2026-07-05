@@ -2544,6 +2544,14 @@ struct HomeView: View {
                     pendingLine = "PICK DROPS SOON"
                 }
             }
+            // The game has begun but the score feed hasn't caught it yet —
+            // move it to LIVE honestly instead of listing a past start time.
+            if zone == .upcoming, let ct = g.commence_time, let d = parseISO8601(ct),
+               d.addingTimeInterval(180) < Date() {
+                zone = .live
+                statusText = "▶ STARTED"
+                statusColor = GaryColors.gold
+            }
             out.append(HomeSheetRow(
                 id: "sheet-\(i)-\(full)",
                 zone: zone,
@@ -3634,6 +3642,11 @@ struct HomeMarqueeTracker: View {
         let result: (String, Color)?   // settled stamp, nil until final
         var isLive: Bool { live?.isLive == true }
         var isFinal: Bool { result != nil }
+        /// Begun by the clock, score feed not caught up yet.
+        var started: Bool {
+            guard !isLive, !isFinal, let c = commence, let d = parseISO8601(c) else { return false }
+            return d.addingTimeInterval(180) < Date()
+        }
     }
 
     let entries: [Entry]
@@ -3645,6 +3658,7 @@ struct HomeMarqueeTracker: View {
     /// CLOCK (the list keeps the pipeline's rank; the hero follows the day).
     private var hero: Entry? {
         entries.first { $0.isLive }
+            ?? entries.first { $0.started }
             ?? entries.filter { !$0.isFinal }.min { ($0.commence ?? "") < ($1.commence ?? "") }
     }
     private var settledLine: String? {
@@ -3717,7 +3731,9 @@ struct HomeMarqueeTracker: View {
                         .foregroundStyle(GaryColors.gold)
                 }
                 Spacer()
-                if let c = e.context, !c.isEmpty {
+                // Standings context only while the game is still ahead — live,
+                // the score IS the context (founder: it crowded the card).
+                if !e.isLive, let c = e.context, !c.isEmpty {
                     Text(c.uppercased())
                         .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.62))
@@ -3725,17 +3741,25 @@ struct HomeMarqueeTracker: View {
                 }
             }
             if e.isLive, let ls = e.live {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(ls.scoreLine ?? e.title)
-                        .font(.system(size: 24, weight: .heavy, design: .monospaced))
+                        .font(GaryFonts.display(30))
                         .foregroundStyle(.white)
                         .lineLimit(1).minimumScaleFactor(0.7)
                     if let det = ls.detail, !det.isEmpty {
                         Text(det.uppercased())
-                            .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.7))
                     }
                 }
+            } else if e.started {
+                Text(e.title)
+                    .font(GaryFonts.display(26))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text("▶ JUST STARTED")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(GaryColors.win)
             } else {
                 Text(e.title)
                     .font(GaryFonts.display(26))
@@ -3833,7 +3857,7 @@ struct HomeMarqueeTracker: View {
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 Text(e.isLive || e.isFinal ? (e.live?.scoreLine ?? e.title) : e.title)
-                    .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.96))
                     .lineLimit(1).minimumScaleFactor(0.75)
                 if let pick = e.pickLine {
@@ -3867,81 +3891,55 @@ struct HomeMarqueeTracker: View {
     }
 }
 
-/// THE OVERNIGHT STRIP — the graded numbers plus ONE line of Gary. Wins get
-/// the celebration tint, losses get owned ("Rough one. Back on the board
-/// ~2:30 PM.") — Trent's law: the L, owned with a straight face, is what
-/// makes the W's land. Template-built from real numbers only.
+/// THE OVERNIGHT STRIP — one line: last night's number and the door to the
+/// tape. No voice, no filler (founder, Jul 5) — the daily recap pop-up owns
+/// the morning moment; this is just the standing fact.
 struct HomeOvernightStrip: View {
     let record: (w: Int, l: Int, p: Int)
     let net: Double?
     let best: Double?
     let label: String          // "LAST NIGHT" / "TODAY"
-    let firstCall: String?     // "~2:30 PM"
+    let firstCall: String?     // kept for call-site stability; unused
     let onTape: () -> Void
 
-    private var won: Bool { record.w > record.l }
-    private var line: String {
-        if record.w > 0 && record.l == 0 { return "Swept the board." }
-        if won { return "Cashed the night." }
-        if record.w == record.l { return "Broke even." }
-        if let firstCall { return "Rough one. Back on the board \(firstCall)." }
-        return "Rough one. Back on the board today."
-    }
     private func money(_ v: Double) -> String {
         v >= 0 ? String(format: "+$%.0f", v) : String(format: "−$%.0f", -v)
     }
 
     var body: some View {
         Button(action: onTape) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack {
-                    Text("\(label) · GAME PICKS")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.4)
-                        .foregroundStyle(won ? GaryColors.win : GaryColors.gold)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Text("THE TAPE")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.7))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.45))
-                    }
+            HStack(spacing: 10) {
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                    .foregroundStyle(GaryColors.gold)
+                Text("\(record.w)–\(record.l)")
+                    .font(.system(size: 15, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white)
+                if let net {
+                    Text(money(net))
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text("\(record.w)–\(record.l)")
-                        .font(.system(size: 26, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(.white)
-                    if let net {
-                        Text(money(net))
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
-                            .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
-                    }
-                    if record.p > 0 {
-                        Text("\(record.p) PUSH")
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.62))
-                    }
-                    if let best, best > 0 {
-                        Text("BEST +\(Int(best))")
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.62))
-                    }
+                if let best, best > 0 {
+                    Text("BEST +\(Int(best))")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
                 }
-                Text(line)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(.white.opacity(0.85))
+                Spacer(minLength: 8)
+                Text("THE TAPE")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.7))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.45))
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, 14).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(won
-                          ? AnyShapeStyle(LinearGradient(colors: [GaryColors.win.opacity(0.09), GaryColors.warmWhite.opacity(0.02)],
-                                                         startPoint: .top, endPoint: .bottom))
-                          : AnyShapeStyle(GaryColors.warmWhite.opacity(0.03)))
+                    .fill(GaryColors.warmWhite.opacity(0.03))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(won ? GaryColors.win.opacity(0.3) : GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
+                        .stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
             )
             .contentShape(Rectangle())
         }
@@ -4014,7 +4012,7 @@ struct HomeSheetRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     Text(row.title)
-                        .font(.system(size: 14.5, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 15.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.96))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     if row.bigOne {

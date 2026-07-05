@@ -142,6 +142,30 @@ fileprivate enum HubFmt {
     }
 }
 
+/// Body text with the headline echo stripped: drops a first sentence that
+/// restates the headline, and any sentence that only re-reads the value the
+/// card already shows big. Returns "" when nothing new remains.
+fileprivate func hubDedupedDetail(_ s: Signal) -> String {
+    let detail = s.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !detail.isEmpty else { return "" }
+    let norm: (String) -> String = { $0.lowercased().filter { $0.isLetter || $0.isNumber } }
+    let nHead = norm(s.headline)
+    var sentences = detail.components(separatedBy: ". ")
+    sentences = sentences.enumerated().filter { i, sent in
+        let n = norm(sent)
+        if n.isEmpty { return false }
+        // The headline restated (or containing it) adds nothing.
+        if n == nHead || (nHead.count > 20 && (n.hasPrefix(nHead) || nHead.hasPrefix(n))) { return false }
+        // A sentence whose only job is re-reading the shown value adds nothing —
+        // but only cut it up front; mid-body mentions carry context.
+        if i == 0, !s.value.isEmpty, sent.contains(s.value), sent.count < 60 { return false }
+        return true
+    }.map { $0.element }
+    let out = sentences.joined(separator: ". ").trimmingCharacters(in: .whitespaces)
+    guard !out.isEmpty else { return "" }
+    return out.hasSuffix(".") ? out : out + "."
+}
+
 fileprivate extension Signal {
     /// True when the right-side value would only echo a number the headline
     /// already carries ("Giants 7-1 in…" beside a 7-1, "…pen: 13.7 relief IP"
@@ -717,7 +741,18 @@ struct HubView: View {
             default: break
             }
         }
-        .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
+        .overlay {
+            if let s = selectedSignal {
+                HubEdgeOverlay(signal: s,
+                               onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { selectedSignal = nil } },
+                               onViewGame: { g in
+                                   selectedSignal = nil
+                                   onSelectGame(g)
+                               })
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: selectedSignal?.id)
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
         .sheet(item: $gameSheet) { sel in
             HubGameSheet(row: sel.row,
@@ -1410,16 +1445,21 @@ fileprivate struct HubRegressionBoard: View {
 
     @ViewBuilder private func detail(_ s: Signal, _ r: SwapMeta) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Only the sentences the row DOESN'T already say (the row carries
+            // the gap bar + xERA; a verdict clause re-reading them is noise).
             if let v = r.verdict, !v.isEmpty {
-                Text(v)
-                    .font(HubFont.body(12.5))
-                    .foregroundStyle(.white.opacity(0.78))
-                    .fixedSize(horizontal: false, vertical: true)
+                let fresh = v.components(separatedBy: ". ")
+                    .filter { !(s.value.isEmpty == false && $0.contains(s.value)) }
+                    .joined(separator: ". ")
+                if !fresh.isEmpty {
+                    Text(fresh.hasSuffix(".") ? fresh : fresh + ".")
+                        .font(HubFont.body(12.5))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
-                    if let era = r.era { stat("ERA", HubFmt.stat(era)) }
-                    if let x = r.xera { stat("xERA", HubFmt.stat(x), tint: s.tone.color) }
                     if let w = r.whip { stat("WHIP", HubFmt.stat(w)) }
                     if let k = r.k9 { stat("K/9", String(format: "%.1f", k)) }
                     if let hh = r.hard_hit { stat("Hard-Hit", String(format: "%.1f%%", hh)) }
@@ -1673,20 +1713,8 @@ fileprivate struct HubStoryRow: View {
     let onProfile: (() -> Void)?
     @State private var expanded = false
 
-    /// Drop a detail that opens by restating the headline word-for-word.
-    private var dedupedDetail: String {
-        let detail = s.detail
-        guard !detail.isEmpty else { return detail }
-        let norm: (String) -> String = { $0.lowercased().filter { $0.isLetter || $0.isNumber } }
-        let sentences = detail.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
-        guard sentences.count == 2 else {
-            return norm(detail) == norm(s.headline) ? "" : detail
-        }
-        let first = String(sentences[0]), rest = String(sentences[1]).trimmingCharacters(in: .whitespaces)
-        let nFirst = norm(first), nHead = norm(s.headline)
-        let echoes = nFirst == nHead || (nHead.count > 20 && nFirst.hasPrefix(nHead)) || (nFirst.count > 20 && nHead.hasPrefix(nFirst))
-        return (echoes && !rest.isEmpty) ? rest : detail
-    }
+    /// Body text with the headline/value echo stripped (shared helper).
+    private var dedupedDetail: String { hubDedupedDetail(s) }
 
     var body: some View {
         Button {
@@ -2202,7 +2230,19 @@ fileprivate struct HubGameSheet: View {
         .background(GaryColors.darkBg.ignoresSafeArea())
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .sheet(item: $detailSignal) { EdgeDetailSheet(signal: $0, onSelectGame: { g in dismiss(); onViewGame(g) }) }
+        .overlay {
+            if let s = detailSignal {
+                HubEdgeOverlay(signal: s,
+                               onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { detailSignal = nil } },
+                               onViewGame: { g in
+                                   detailSignal = nil
+                                   dismiss()
+                                   onViewGame(g)
+                               })
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: detailSignal?.id)
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
     }
 
@@ -2278,6 +2318,96 @@ fileprivate struct HubGameSheet: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 18)
         .padding(.top, 4)
+    }
+}
+
+// MARK: - Edge overlay (centered — founder: nothing pulls up from the bottom)
+
+/// A tapped edge, as a centered card over the dimmed page: kicker + game,
+/// the headline once, the value only when it isn't already in the headline,
+/// and only the sentences the row didn't say. VIEW GAME → Picks.
+fileprivate struct HubEdgeOverlay: View {
+    let signal: Signal
+    let onClose: () -> Void
+    let onViewGame: (String) -> Void
+
+    private var isMatchup: Bool {
+        let g = signal.game.lowercased()
+        return g.contains("@") || g.contains(" vs ") || g.contains(" v ")
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.62).ignoresSafeArea()
+                .onTapGesture { onClose() }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    HubKicker(text: signal.kind.chip, size: 10.5)
+                    Spacer()
+                    if let r = signal.result {
+                        Text(r == "hit" ? "CASHED" : r == "push" ? "PUSH" : "LOST")
+                            .font(HubFont.data(10.5))
+                            .foregroundStyle(r == "hit" ? GaryColors.win : r == "push" ? GaryColors.gold : GaryColors.loss)
+                    }
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(Color.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text(signal.game.uppercased())
+                    .font(HubFont.data(10, .medium))
+                    .foregroundStyle(.white.opacity(0.62))
+                Text(signal.headline)
+                    .font(HubFont.display(21))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !signal.valueEchoesHeadline, !signal.value.isEmpty {
+                    Text(signal.value)
+                        .font(HubFont.data(30))
+                        .foregroundStyle(signal.tone.color)
+                }
+                let body = hubDedupedDetail(signal)
+                if !body.isEmpty {
+                    Text(body)
+                        .font(HubFont.body(14))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let note = signal.resultNote, !note.isEmpty {
+                    Text(note)
+                        .font(HubFont.data(11, .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                if isMatchup {
+                    Button { onViewGame(signal.game) } label: {
+                        HStack(spacing: 6) {
+                            Text("VIEW GAME")
+                            Image(systemName: "arrow.right")
+                        }
+                        .font(HubFont.data(12))
+                        .foregroundStyle(GaryColors.ink)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background(Capsule().fill(GaryColors.gold))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
+            }
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(hex: "#141210"))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.6), radius: 28, y: 12)
+            )
+            .padding(.horizontal, 26)
+        }
     }
 }
 
