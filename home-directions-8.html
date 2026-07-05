@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home — 8 Directions</title>
+<style>
+  :root { --bg:#08080A; --panel:rgba(246,241,231,.03); --pborder:rgba(246,241,231,.08);
+          --gold:#C9A227; --warm:#F6F1E7; --win:#3FB950; --loss:#E5484D; --mut:rgba(255,255,255,.62); }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#131315;color:var(--warm);font-family:-apple-system,system-ui,sans-serif;padding:40px 22px 90px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:26px;font-weight:800}
+  .intro{color:var(--mut);font-size:14px;max-width:880px;line-height:1.55;margin:8px 0 14px}
+  .mono{font-family:ui-monospace,SFMono-Regular,monospace}
+  .kick{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+  .dir{display:flex;gap:34px;margin:54px 0;flex-wrap:wrap;align-items:flex-start}
+  .about{flex:1;min-width:360px;max-width:560px}
+  .about h2{font-size:21px;font-weight:800;margin:4px 0 10px}
+  .about .tag{font-family:ui-monospace,monospace;font-size:11px;color:var(--gold);letter-spacing:.12em}
+  .about p{color:rgba(255,255,255,.8);font-size:13.5px;line-height:1.6;margin:8px 0}
+  .about ul{margin:6px 0 6px 18px}
+  .about li{color:rgba(255,255,255,.78);font-size:13px;line-height:1.55;margin-bottom:6px}
+  .about .warn{color:rgba(255,255,255,.55);font-size:12.5px;line-height:1.5;border-left:2px solid rgba(229,72,77,.5);padding-left:10px;margin-top:10px}
+  .lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mut);text-transform:uppercase;margin-top:12px}
+  /* phone */
+  .phone{width:344px;background:var(--bg);border:1px solid rgba(246,241,231,.14);border-radius:34px;padding:16px 15px 24px;box-shadow:0 18px 50px rgba(0,0,0,.55);flex-shrink:0}
+  .mast{display:flex;align-items:baseline;gap:8px}
+  .mast .gary{font-size:21px;font-weight:850;letter-spacing:.02em}
+  .mast .gary b{color:var(--gold)}
+  .mast .date{font-family:ui-monospace,monospace;font-size:9px;color:var(--mut);letter-spacing:.1em}
+  .goldline{height:1px;background:rgba(201,162,39,.4);margin:10px 0 0}
+  .panel{background:var(--panel);border:1px solid var(--pborder);border-radius:12px}
+  .hr{height:1px;background:rgba(255,255,255,.07)}
+  .g{color:var(--win)} .r{color:var(--loss)} .go{color:var(--gold)}
+  .m9{font-family:ui-monospace,monospace;font-size:9px} .m10{font-family:ui-monospace,monospace;font-size:10px}
+  .m11{font-family:ui-monospace,monospace;font-size:11px} .m12{font-family:ui-monospace,monospace;font-size:12px}
+  .b13{font-size:13px;font-weight:700} .b14{font-size:14px;font-weight:750} .b16{font-size:16px;font-weight:800}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:9px 12px}
+  table.matrix{border-collapse:collapse;margin-top:16px;width:100%;max-width:980px}
+  .matrix th,.matrix td{border:1px solid rgba(255,255,255,.12);padding:8px 12px;font-size:12.5px;text-align:center}
+  .matrix th{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.08em;color:var(--gold);text-transform:uppercase}
+  .matrix td:first-child{text-align:left;font-weight:700}
+  .readout{background:var(--panel);border:1px solid var(--pborder);border-radius:14px;padding:20px 24px;margin-top:26px;max-width:980px}
+  .readout p{color:rgba(255,255,255,.82);font-size:13.5px;line-height:1.6;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>The Home Page — 8 directions</h1>
+<div class="intro">Same brand voice on all eight (GARY A.I. wordmark, mono kickers, mono digits, gold, CASHED/LOST) and same real data (Sun Jul 5: France −1.5 LOST last night, MIN ML CASHED, 17 games today, first kickoff Norway @ Brazil 4:00 PM) — so you're comparing <b>what the page fundamentally is</b>, not styling. A comparison table + my read is at the bottom.</div>
+
+<!-- ═══════════ A — GARY'S DESK ═══════════ -->
+<div class="dir" id="A">
+  <div class="about">
+    <span class="tag">A · GARY'S DESK</span>
+    <h2>Check on Gary — the ride-along</h2>
+    <p>Home is Gary, present tense. The page opens on his state right now: how last night went (and when he wins, the page <i>celebrates</i> — gold wash, swagger; when he loses he owns it in one line), what he's doing next (countdown to his next call), what he's sweating live. You open the app the way you'd check on a friend who bets.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Nobody can copy it — it needs a character with a public ledger.</li>
+    <li>"When Gary wins we all win" becomes the literal structure of the page.</li>
+    <li>Never empty: mornings are "between nights" — result up top, anticipation below.</li></ul>
+    <div class="warn">Watch out: needs disciplined first-person copy all day (generated from real events only — no canned filler).</div>
+  </div>
+  <div class="phone">
+    <div class="mast"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUN, JUL 5</span></div>
+    <div class="goldline"></div>
+    <div class="panel" style="margin-top:14px;padding:13px 14px;border-color:rgba(63,185,80,.35);background:linear-gradient(180deg,rgba(63,185,80,.07),rgba(246,241,231,.02))">
+      <span class="kick" style="color:var(--win)">Last night · Cashed the night</span>
+      <div style="display:flex;gap:16px;margin-top:8px;align-items:baseline">
+        <span class="mono" style="font-size:26px;font-weight:800">7–2</span>
+        <span class="mono g" style="font-size:16px;font-weight:700">+$412</span>
+        <span class="m10" style="color:var(--mut)">BEST CASH +126</span>
+      </div>
+      <div style="font-size:12.5px;color:rgba(255,255,255,.8);margin-top:6px">Rode the Twins bats and never looked back. France couldn't find the second goal — that one stung.</div>
+    </div>
+    <div class="panel" style="margin-top:10px;padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span class="kick">Next call</span><span class="m10" style="color:var(--mut)">17 GAMES TODAY</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:baseline;margin-top:6px">
+        <span class="mono" style="font-size:22px;font-weight:800">00:41:12</span>
+        <span class="m10" style="color:var(--mut)">NORWAY @ BRAZIL · 4:00 PM</span>
+      </div>
+    </div>
+    <div style="margin-top:16px"><span class="kick">The Desk · As It Happens</span></div>
+    <div class="panel" style="margin-top:8px">
+      <div class="row"><span class="b13">Gary graded the night <span class="m9" style="color:var(--mut)">7:02 AM</span></span><span class="m11 g">7–2 ✓</span></div>
+      <div class="hr"></div>
+      <div class="row"><span class="b13">Lineups landing <span class="m9" style="color:var(--mut)">11:30 AM</span></span><span class="m11 go">HUB ›</span></div>
+      <div class="hr"></div>
+      <div class="row"><span class="b13" style="color:rgba(255,255,255,.55)">First card posts</span><span class="m11" style="color:var(--mut)">~2:30 PM</span></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <div class="panel" style="flex:1;padding:9px;text-align:center"><div class="kick">Free Pick</div><div class="m11" style="margin-top:3px">TODAY ›</div></div>
+      <div class="panel" style="flex:1;padding:9px;text-align:center"><div class="kick">The Hub</div><div class="m11" style="margin-top:3px">EDGES ›</div></div>
+      <div class="panel" style="flex:1;padding:9px;text-align:center"><div class="kick">Winners</div><div class="m11" style="margin-top:3px">5 SEALED ›</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ B — THE RUNDOWN ═══════════ -->
+<div class="dir" id="B">
+  <div class="about">
+    <span class="tag">B · THE RUNDOWN</span>
+    <h2>The bettor's day-sheet</h2>
+    <p>Home is the day itself: one continuous spine from last night to midnight. Settled games sink to the top with Gary's stamps, live games glow in the middle, tonight's slate queues below with times and his calls as they post. Scores + picks + results merged into a single scannable column — your three morning questions are literally the first three zones.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Highest daily utility per pixel — the page IS "what did I miss / what's live / what's on."</li>
+    <li>One mental model all day; nothing re-arranges, the day just flows down the sheet.</li></ul>
+    <div class="warn">Watch out: character-light — Gary becomes marks on a schedule unless his voice rides the rows.</div>
+  </div>
+  <div class="phone">
+    <div class="mast"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUN, JUL 5</span></div>
+    <div class="goldline"></div>
+    <div style="margin-top:12px"><span class="kick">Overnight</span> <span class="m10" style="color:var(--mut)">· GARY 7–2 · +$412</span></div>
+    <div class="panel" style="margin-top:6px">
+      <div class="row"><div><div class="b13">MIN 11 · NYY 4</div><div class="m9 go">MIN ML +126</div></div><span class="m11 g">✓ CASHED</span></div>
+      <div class="hr"></div>
+      <div class="row"><div><div class="b13">FRA 1 · PAR 0</div><div class="m9 go">FRANCE −1.5</div></div><span class="m11 r">✗ LOST</span></div>
+    </div>
+    <div style="margin-top:14px"><span class="kick" style="color:var(--win)">● Live now</span></div>
+    <div class="panel" style="margin-top:6px;border-color:rgba(63,185,80,.3)">
+      <div class="row"><div><div class="b13">NED 2 · JPN 1 <span class="m9" style="color:var(--mut)">67'</span></div><div class="m9 go">NETHERLANDS ML</div></div><span class="m11 g">▶ COVERING</span></div>
+    </div>
+    <div style="margin-top:14px"><span class="kick">Tonight · 17 games</span> <span class="m10" style="color:var(--mut)">· FIRST 4:00 PM</span></div>
+    <div class="panel" style="margin-top:6px">
+      <div class="row"><div><div class="b13">Norway @ Brazil</div><div class="m9" style="color:var(--mut)">CALL POSTS ~2:30</div></div><span class="m11" style="color:var(--mut)">4:00 PM</span></div>
+      <div class="hr"></div>
+      <div class="row"><div><div class="b13">England @ Mexico</div><div class="m9" style="color:var(--mut)">BIG GAME · R16</div></div><span class="m11" style="color:var(--mut)">8:00 PM</span></div>
+      <div class="hr"></div>
+      <div class="row"><div><div class="b13">Cardinals @ Cubs</div><div class="m9" style="color:var(--mut)">CALL POSTS ~6:40</div></div><span class="m11" style="color:var(--mut)">8:08 PM</span></div>
+    </div>
+    <div class="m10" style="color:var(--mut);margin-top:10px;text-align:center">EVERY GAME GETS A CALL · WINNERS GETS THE BEST ›</div>
+  </div>
+</div>
+
+<!-- ═══════════ C — MISSION CONTROL ═══════════ -->
+<div class="dir" id="C">
+  <div class="about">
+    <span class="tag">C · MISSION CONTROL</span>
+    <h2>Tiles and doors</h2>
+    <p>Home as the fastest possible orientation: a compact grid of live tiles (record, next event, live count, free pick) and big doors to the tabs that own depth. Ten-second read, zero scroll.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Clearest for day-0 users; nothing to learn.</li><li>Cheapest to keep truthful — tiles are just live numbers.</li></ul>
+    <div class="warn">Watch out: it's the most generic direction — any app could ship this. Hard to love, impossible to screenshot.</div>
+  </div>
+  <div class="phone">
+    <div class="mast"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUN, JUL 5</span></div>
+    <div class="goldline"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+      <div class="panel" style="padding:12px"><div class="kick">Last Night</div><div class="mono g" style="font-size:20px;font-weight:800;margin-top:4px">7–2</div><div class="m9" style="color:var(--mut)">+$412 NET</div></div>
+      <div class="panel" style="padding:12px"><div class="kick">Next Call</div><div class="mono" style="font-size:20px;font-weight:800;margin-top:4px">00:41</div><div class="m9" style="color:var(--mut)">NOR @ BRA 4:00</div></div>
+      <div class="panel" style="padding:12px"><div class="kick">Live Now</div><div class="mono" style="font-size:20px;font-weight:800;margin-top:4px">1</div><div class="m9 g">▶ COVERING</div></div>
+      <div class="panel" style="padding:12px"><div class="kick">Last 7 Days</div><div class="mono" style="font-size:20px;font-weight:800;margin-top:4px">55%</div><div class="m9" style="color:var(--mut)">347–285</div></div>
+    </div>
+    <div class="panel" style="margin-top:10px;padding:13px 14px;border-color:rgba(201,162,39,.4)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div class="kick">Today's Free Pick</div><div class="b14" style="margin-top:3px">Unlocked at 2:30 PM</div></div>
+        <span class="m11 go">›</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+      <div class="panel row"><span class="b14">Picks — every game, every day</span><span class="m11 go">17 ›</span></div>
+      <div class="panel row"><span class="b14">The Hub — tonight's edges</span><span class="m11 go">›</span></div>
+      <div class="panel row"><span class="b14">Winners — Gary's best card</span><span class="m11 go">5 SEALED ›</span></div>
+      <div class="panel row"><span class="b14">Billfold — the ledger</span><span class="m11 go">›</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ D — THE TICKET ═══════════ -->
+<div class="dir" id="D">
+  <div class="about">
+    <span class="tag">D · THE TICKET</span>
+    <h2>You're holding Gary's betslip</h2>
+    <p>The most betting-native metaphor there is: Home IS Gary's ticket for today. His card renders as a physical slip — perforated edge, stake and odds per leg, stamps landing as games settle, a running day total at the bottom. Yesterday's settled ticket sits folded above it. "Riding with Gary" becomes literal: his ticket is in your hand.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Instantly legible to any bettor — everyone knows how to read a slip.</li>
+    <li>The object is shareable/screenshot-able by design (it already looks like the share card).</li>
+    <li>The day has a natural arc: ticket fills → stamps land → total settles.</li></ul>
+    <div class="warn">Watch out: overlaps the Picks/Winners mental model — needs a crisp rule for what's on the Home ticket (e.g. the day's marquee card) vs what lives in Winners.</div>
+  </div>
+  <div class="phone">
+    <div class="mast"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUN, JUL 5</span></div>
+    <div class="goldline"></div>
+    <div class="panel" style="margin-top:12px;padding:9px 14px;opacity:.75">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="m10" style="color:var(--mut)">SAT JUL 4 · SETTLED</span>
+        <span class="m11"><span class="g">7 CASHED</span> · <span class="r">2 LOST</span> · <span class="g">+$412</span></span>
+      </div>
+    </div>
+    <div style="margin-top:12px;background:#100F0D;border:1px solid rgba(201,162,39,.45);border-radius:14px;overflow:hidden">
+      <div style="padding:12px 14px;display:flex;justify-content:space-between;align-items:baseline;background:rgba(201,162,39,.08)">
+        <span class="kick" style="font-size:11px">Gary's Ticket · Sunday</span>
+        <span class="m9" style="color:var(--mut)">FILLS AS CALLS POST</span>
+      </div>
+      <div style="border-top:1.5px dashed rgba(201,162,39,.35)"></div>
+      <div class="row"><div><div class="b13">Netherlands ML <span class="m9" style="color:var(--mut)">−145</span></div><div class="m9" style="color:var(--mut)">NED @ JPN · 67'</div></div><span class="m11 g">▶ COVERING</span></div>
+      <div class="hr"></div>
+      <div class="row"><div><div class="b13">Norway +0.5 <span class="m9" style="color:var(--mut)">+115</span></div><div class="m9" style="color:var(--mut)">NOR @ BRA · 4:00 PM</div></div><span class="m11 go">POSTED</span></div>
+      <div class="hr"></div>
+      <div class="row"><div><div class="b13" style="color:rgba(255,255,255,.5)">14 more legs</div><div class="m9" style="color:var(--mut)">POST ~90 MIN BEFORE EACH</div></div><span class="m11" style="color:var(--mut)">…</span></div>
+      <div style="border-top:1.5px dashed rgba(201,162,39,.35)"></div>
+      <div class="row" style="background:rgba(201,162,39,.06)">
+        <span class="m10" style="color:var(--mut)">DAY SO FAR</span>
+        <span class="m12" style="font-weight:700">2 LIVE · 0 SETTLED · <span class="go">17 CALLS COMING</span></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <div class="panel" style="flex:1;padding:9px;text-align:center"><div class="kick">Winners</div><div class="m11" style="margin-top:3px">THE BEST 5 ›</div></div>
+      <div class="panel" style="flex:1;padding:9px;text-align:center"><div class="kick">The Hub</div><div class="m11" style="margin-top:3px">WHY THESE ›</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ E — THE BROADCAST ═══════════ -->
+<div class="dir" id="E">
+  <div class="about">
+    <span class="tag">E · THE BROADCAST</span>
+    <h2>Always on air</h2>
+    <p>Home as a live show with Gary as anchor: a scores ticker crawls up top, an <b>ON NOW</b> panel carries whatever this second is about (the sweat during games, the countdown show pre-game, the morning-after desk at 9 AM), and an <b>UP NEXT</b> rundown queues the day like a control-room board. The page always feels ON AIR.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Maximum energy — the "fast-paced, dynamic" feel you asked for, structurally.</li>
+    <li>ON NOW gives every hour of the day a hero without re-architecting the page.</li></ul>
+    <div class="warn">Watch out: tickers and pulsing LIVE chrome can tip into noise — needs restraint to stay premium, and motion costs battery/attention.</div>
+  </div>
+  <div class="phone">
+    <div class="m9" style="white-space:nowrap;overflow:hidden;color:var(--mut);border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:7px">MIN 11 · NYY 4 <span class="g">✓</span>&nbsp;&nbsp;|&nbsp;&nbsp;FRA 1 · PAR 0 <span class="r">✗</span>&nbsp;&nbsp;|&nbsp;&nbsp;<span class="g">NED 2 · JPN 1 ▶</span>&nbsp;&nbsp;|&nbsp;&nbsp;NOR @ BRA 4:00…</div>
+    <div class="mast" style="margin-top:10px"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUN, JUL 5</span></div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:3px;background:var(--loss)"></span><span class="kick" style="color:var(--loss)">On Now</span></div>
+    <div class="panel" style="margin-top:6px;padding:13px 14px;border-color:rgba(63,185,80,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span class="mono" style="font-size:19px;font-weight:800">NED 2 · JPN 1</span><span class="m10" style="color:var(--mut)">67'</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:5px;align-items:center">
+        <span class="m11 go" style="font-weight:700">NETHERLANDS ML −145</span><span class="m10 g">▶ COVERING</span>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:6px">Depay's second has Gary's side in front — 23 minutes from a cash.</div>
+    </div>
+    <div style="margin-top:14px"><span class="kick">Up Next · The Rundown</span></div>
+    <div class="panel" style="margin-top:6px">
+      <div class="row"><span class="m10" style="color:var(--mut)">2:30</span><span class="b13" style="flex:1;margin-left:10px">First calls post</span><span class="m10 go">CARD ›</span></div>
+      <div class="hr"></div>
+      <div class="row"><span class="m10" style="color:var(--mut)">4:00</span><span class="b13" style="flex:1;margin-left:10px">Norway @ Brazil</span><span class="m10" style="color:var(--mut)">KICKOFF</span></div>
+      <div class="hr"></div>
+      <div class="row"><span class="m10" style="color:var(--mut)">8:00</span><span class="b13" style="flex:1;margin-left:10px">England @ Mexico</span><span class="m10 go">BIG ONE</span></div>
+    </div>
+    <div style="margin-top:14px"><span class="kick">Earlier · While You Slept</span></div>
+    <div class="panel row" style="margin-top:6px"><span class="b13">Gary went 7–2 overnight</span><span class="m11 g">+$412 ›</span></div>
+  </div>
+</div>
+
+<!-- ═══════════ F — THE FEED ═══════════ -->
+<div class="dir" id="F">
+  <div class="about">
+    <span class="tag">F · THE FEED</span>
+    <h2>Following Gary, inside the app</h2>
+    <p>Home is Gary's own feed — timestamped first-person posts generated from real events all day: the 7 AM grading post, the lineup note, each call as it posts (with the pick card embedded), sweat updates as games swing, the sign-off. Like following him on X, except richer and in-app. Infinite scroll back through his whole life.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>The most character-alive direction — Gary literally talks to you all day.</li>
+    <li>Every event already exists in the backend; the feed is a presentation of real data, and it mirrors the @BetwithGary voice users may already follow.</li>
+    <li>Habit-forming shape users already understand (a timeline).</li></ul>
+    <div class="warn">Watch out: voice volume — needs hard grounding rules (posts only from real events, no filler) and it buries "what's on tonight" unless a slate module rides above the stream.</div>
+  </div>
+  <div class="phone">
+    <div class="mast"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUN, JUL 5</span></div>
+    <div class="goldline"></div>
+    <div style="margin-top:12px;display:flex;gap:10px">
+      <div style="width:34px;height:34px;border-radius:17px;background:linear-gradient(135deg,#C9A227,#8B6914);flex-shrink:0"></div>
+      <div style="flex:1">
+        <div><span class="b13">Gary</span> <span class="m9" style="color:var(--mut)">7:02 AM</span></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.85);margin-top:3px">Graded the night: 7–2, +$412. The Twins bats carried, France won ugly and cost us the cover. On to Sunday.</div>
+        <div class="panel" style="margin-top:7px;padding:8px 11px;display:flex;justify-content:space-between"><span class="m10">LAST NIGHT</span><span class="m11"><span class="g">7 ✓</span> · <span class="r">2 ✗</span> · <span class="g">+$412</span></span></div>
+      </div>
+    </div>
+    <div class="hr" style="margin:12px 0"></div>
+    <div style="display:flex;gap:10px">
+      <div style="width:34px;height:34px;border-radius:17px;background:linear-gradient(135deg,#C9A227,#8B6914);flex-shrink:0"></div>
+      <div style="flex:1">
+        <div><span class="b13">Gary</span> <span class="m9" style="color:var(--mut)">11:31 AM</span></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.85);margin-top:3px">Lineups are in. Brazil resting two starters against Norway — that changes things. Full read in the Hub.</div>
+      </div>
+    </div>
+    <div class="hr" style="margin:12px 0"></div>
+    <div style="display:flex;gap:10px">
+      <div style="width:34px;height:34px;border-radius:17px;background:linear-gradient(135deg,#C9A227,#8B6914);flex-shrink:0"></div>
+      <div style="flex:1">
+        <div><span class="b13">Gary</span> <span class="m9" style="color:var(--mut)">2:30 PM</span></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.85);margin-top:3px">First call of the day is live.</div>
+        <div class="panel" style="margin-top:7px;padding:10px 12px;border-color:rgba(201,162,39,.4)">
+          <div class="kick">Gary's Pick</div>
+          <div class="b14" style="margin-top:3px">Norway +0.5 <span class="m10" style="color:var(--mut)">+115</span></div>
+          <div class="m9" style="color:var(--mut);margin-top:2px">NOR @ BRA · 4:00 PM</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ G — THE BOARD ═══════════ -->
+<div class="dir" id="G">
+  <div class="about">
+    <span class="tag">G · THE BOARD</span>
+    <h2>The whole day on one wall</h2>
+    <p>Home as the big board — every game today as a compact tile on a grid wall, auto-sorted by state: live tiles glow first, upcoming queue by time, settled tiles dim with their stamps. Gary's side is lit gold on every tile. One glance = the entire day and exactly where Gary stands on it. Sportsbook lounge wall meets Bloomberg terminal, in our black and gold.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>The strongest visual identity of the eight — a screenshot IS the brand.</li>
+    <li>Perfect for "I wonder who Gary has in this one" — find the tile, see the gold.</li>
+    <li>Density = the fast-paced feel without any motion tricks.</li></ul>
+    <div class="warn">Watch out: tiles are tight — long team names, doubleheaders, and accessibility sizes need real design work; storytelling (recaps, celebration) needs a home above the wall.</div>
+  </div>
+  <div class="phone">
+    <div class="mast"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUN, JUL 5</span></div>
+    <div class="goldline"></div>
+    <div style="display:flex;justify-content:space-between;margin-top:10px;align-items:baseline">
+      <span class="kick">The Board · 17 games</span>
+      <span class="m10"><span class="g">7✓</span> <span class="r">2✗</span> <span style="color:var(--mut)">LAST NIGHT · </span><span class="g">+$412</span></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px">
+      <div class="panel" style="padding:9px 10px;border-color:rgba(63,185,80,.4)">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">NED 2·JPN 1</span><span class="m9 g">67'</span></div>
+        <div class="m9 go" style="margin-top:3px">NED ML</div><div class="m9 g">▶ COVERING</div>
+      </div>
+      <div class="panel" style="padding:9px 10px">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">NOR @ BRA</span><span class="m9" style="color:var(--mut)">4:00</span></div>
+        <div class="m9 go" style="margin-top:3px">NOR +0.5</div><div class="m9" style="color:var(--mut)">POSTED</div>
+      </div>
+      <div class="panel" style="padding:9px 10px">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">ENG @ MEX</span><span class="m9" style="color:var(--mut)">8:00</span></div>
+        <div class="m9" style="margin-top:3px;color:var(--mut)">CALL ~6:30</div><div class="m9 go">BIG ONE</div>
+      </div>
+      <div class="panel" style="padding:9px 10px">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">STL @ CHC</span><span class="m9" style="color:var(--mut)">8:08</span></div>
+        <div class="m9" style="margin-top:3px;color:var(--mut)">CALL ~6:40</div><div class="m9" style="color:var(--mut)">O/U 7.5</div>
+      </div>
+      <div class="panel" style="padding:9px 10px;opacity:.62">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">MIN 11·NYY 4</span><span class="m9" style="color:var(--mut)">F</span></div>
+        <div class="m9 go" style="margin-top:3px">MIN ML +126</div><div class="m9 g">✓ CASHED</div>
+      </div>
+      <div class="panel" style="padding:9px 10px;opacity:.62">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">FRA 1·PAR 0</span><span class="m9" style="color:var(--mut)">F</span></div>
+        <div class="m9 go" style="margin-top:3px">FRA −1.5</div><div class="m9 r">✗ LOST</div>
+      </div>
+    </div>
+    <div class="m10" style="color:var(--mut);text-align:center;margin-top:10px">LIVE FIRST · THEN TONIGHT · SETTLED SINK ↓</div>
+  </div>
+</div>
+
+<!-- ═══════════ H — TODAY'S EDITION ═══════════ -->
+<div class="dir" id="H">
+  <div class="about">
+    <span class="tag">H · TODAY'S EDITION</span>
+    <h2>One cover, three times a day</h2>
+    <p>The anti-dashboard: Home is a single bold cover that changes with the day — the morning-after cover (the night's story + the record), the afternoon cover (the marquee game + Gary's angle), the night cover (the sweat, huge). Massive type, one story, a contents row to everything else. Premium brand statement over utility.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>The most striking single screen — pure brand, feels like a flagship app.</li>
+    <li>Celebration is built in: a winning morning IS the cover.</li></ul>
+    <div class="warn">Watch out: utility lives one tap down — power users may find it slow by week two. Highest risk of "beautiful but why."</div>
+  </div>
+  <div class="phone">
+    <div class="mast"><span class="gary">GARY <b>A.I.</b></span><span class="date">SUNDAY EDITION · JUL 5</span></div>
+    <div class="goldline"></div>
+    <div style="margin-top:26px"><span class="kick" style="color:var(--win)">Cashed the night · 7–2</span></div>
+    <div style="font-size:34px;font-weight:850;line-height:1.12;margin-top:8px">The Twins bats bailed out a French heartbreak.</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.72);margin-top:10px;line-height:1.5">Eleven runs in the Bronx, +$412 on the night — and one goal short in Paris of a perfect card.</div>
+    <div style="display:flex;gap:16px;margin-top:18px;align-items:baseline">
+      <span class="mono g" style="font-size:24px;font-weight:800">+$412</span>
+      <span class="m10" style="color:var(--mut)">NET · $100/PICK</span>
+    </div>
+    <div style="margin-top:26px;border-top:1px solid rgba(201,162,39,.35);padding-top:12px;display:flex;justify-content:space-between">
+      <span class="m10"><span class="go">TODAY</span> 17 GAMES</span>
+      <span class="m10"><span class="go">FIRST CALL</span> 2:30</span>
+      <span class="m10"><span class="go">WINNERS</span> 5 ›</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MATRIX ═══════════ -->
+<h1 style="margin-top:60px;font-size:20px">Side by side</h1>
+<table class="matrix">
+  <tr><th>Direction</th><th>Only-Gary-can</th><th>Daily utility</th><th>Day-0 clarity</th><th>Character energy</th><th>Celebration fit</th><th>Build lift</th></tr>
+  <tr><td>A · Gary's Desk</td><td>●●●</td><td>●●</td><td>●●</td><td>●●●</td><td>●●●</td><td>●●</td></tr>
+  <tr><td>B · The Rundown</td><td>●●</td><td>●●●</td><td>●●●</td><td>●</td><td>●</td><td>●●</td></tr>
+  <tr><td>C · Mission Control</td><td>●</td><td>●●</td><td>●●●</td><td>●</td><td>●</td><td>●</td></tr>
+  <tr><td>D · The Ticket</td><td>●●●</td><td>●●</td><td>●●●</td><td>●●</td><td>●●●</td><td>●●</td></tr>
+  <tr><td>E · The Broadcast</td><td>●●</td><td>●●</td><td>●●</td><td>●●</td><td>●●</td><td>●●●</td></tr>
+  <tr><td>F · The Feed</td><td>●●●</td><td>●</td><td>●●●</td><td>●●●</td><td>●●●</td><td>●●●</td></tr>
+  <tr><td>G · The Board</td><td>●●</td><td>●●●</td><td>●●</td><td>●</td><td>●</td><td>●●</td></tr>
+  <tr><td>H · The Edition</td><td>●●</td><td>●</td><td>●●</td><td>●●</td><td>●●●</td><td>●</td></tr>
+</table>
+
+<div class="readout">
+  <p><b>My read.</b> These compose more than they compete. The strongest identities are the ones only Gary can wear: <b>A (Desk)</b>, <b>D (Ticket)</b>, and <b>F (Feed)</b> — all three are the character; B and G are the best <i>utility spines</i>; H is the best <i>moment</i>; C and E are grammars, not identities.</p>
+  <p><b>If I had to ship one:</b> A's identity, D's hero object, G's middle. Concretely: the page opens as Gary's Desk (the celebration/ownership header + next-call countdown), the hero object is his Ticket for today (the slip filling with calls and stamps — the "ride with Gary" made physical), and below it the Board wall gives the whole day at a glance for the "who's Gary got in this one?" fan. H's cover treatment becomes the morning celebration state of the header rather than a whole page. F is the boldest future — Gary talking all day is the deepest moat — but it deserves its own bet (maybe as the center tab someday) rather than being Home's v1.</p>
+  <p>Tell me which of these feel like Gary — or which pieces from different ones — and that's what I'll build for real.</p>
+</div>
+
+</div>
+</body>
+</html>

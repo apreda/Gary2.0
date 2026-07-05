@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sealed Wrapper — 20 Explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&family=Anton&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Barlow+Condensed:wght@600;700;800&family=Big+Shoulders+Display:wght@700;800&family=Khand:wght@600;700&family=Teko:wght@600;700&family=Staatliches&family=Rajdhani:wght@600;700&family=Chakra+Petch:wght@600;700&family=Space+Grotesk:wght@500;600;700&family=Unbounded:wght@600;700&family=Sora:wght@600;700;800&family=Six+Caps&family=Fjalla+One&family=Archivo+Black&family=Archivo:wght@600;700;800;900&family=Inter+Tight:wght@600;700;800;900&family=Instrument+Sans:wght@600;700&family=JetBrains+Mono:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Space+Mono:wght@400;700&family=Martian+Mono:wght@500;600&family=Hanken+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0908; --gold:#D4AF37; --lgold:#F0D68A; --ink:#191507;
+    --warm:#F5F1E8; --win:#4CD07D; --card1:#282420; --card2:#141210;
+    --mono:'JetBrains Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--warm);font-family:'Instrument Sans',sans-serif;padding:40px 24px 120px}
+  .page-head{max-width:1200px;margin:0 auto 8px}
+  .page-head h1{font-family:'Saira Condensed',sans-serif;font-size:44px;letter-spacing:.5px;text-transform:uppercase}
+  .page-head h1 em{font-style:normal;color:var(--gold)}
+  .page-head p{color:rgba(245,241,232,.62);font-size:14px;max-width:760px;line-height:1.5;margin-top:6px}
+  .grid{max-width:1200px;margin:28px auto 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:44px 36px}
+  .slot .tag{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .slot .tag b{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--gold)}
+  .slot .tag span{font-family:var(--mono);font-size:10px;color:rgba(245,241,232,.5)}
+  .slot .note{margin-top:10px;font-size:12px;line-height:1.45;color:rgba(245,241,232,.55)}
+  .card{position:relative;height:235px;border-radius:20px;overflow:hidden;cursor:pointer;
+    background:linear-gradient(180deg,var(--card1),var(--card2));
+    border:1px solid rgba(212,175,55,.45);
+    box-shadow:0 10px 20px rgba(0,0,0,.55),0 2px 3px rgba(0,0,0,.35);
+    display:flex;flex-direction:column}
+  .card::before{content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.10),transparent 40%)}
+  .eyebrow{display:flex;justify-content:space-between;padding:13px 16px 0;font-family:var(--mono);
+    font-size:9.5px;letter-spacing:3px;font-weight:700}
+  .eyebrow .mo{color:rgba(212,175,55,.85)} .eyebrow .lg{color:rgba(245,241,232,.66);letter-spacing:2px}
+  .mark{width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#3a3020,#191507);
+    display:flex;align-items:center;justify-content:center;box-shadow:0 5px 8px rgba(0,0,0,.7)}
+  .mark span{font-family:'Saira Condensed',sans-serif;font-weight:800;font-size:22px;color:var(--gold)}
+  .cap{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1.6px;
+    color:var(--ink);padding:9px 22px;border-radius:99px;
+    background:linear-gradient(180deg,var(--lgold),var(--gold));
+    box-shadow:0 3px 10px rgba(212,175,55,.35)}
+  .meta{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.2px;color:rgba(245,241,232,.78)}
+  .kick{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2.2px;color:var(--lgold)}
+  .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:0 16px 14px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>The Sealed Wrapper <em>— 20 from scratch</em></h1>
+  <p>Every one carries the three fixes: the GAME is named (the gift tag), the face is bright enough to read at arm's length, and the tap affordance is an unmistakable button — not a caption. Same data in all twenty: Twins @ Yankees, MLB, first pitch 7:05 PM. Typeface named on each tag.</p>
+</div>
+
+<div class="grid">
+
+<!-- W1 -->
+<div class="slot">
+  <div class="tag"><b>W1 · THE BASELINE V3</b><span>Saira Condensed — what's in the app build right now</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="center">
+      <div class="mark"><span>G</span></div>
+      <div class="kick">GARY'S PICK IS IN</div>
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:27px;letter-spacing:.4px">Twins @ Yankees</div>
+      <div class="meta">FIRST PITCH 7:05 PM</div>
+      <div class="cap">TAP TO REVEAL</div>
+    </div>
+  </div>
+  <div class="note">The control — house display face, centered lockup, gold capsule. Everything below argues with this.</div>
+</div>
+
+<!-- W2 -->
+<div class="slot">
+  <div class="tag"><b>W2 · THE REDACTED SLIP</b><span>Barlow Condensed + JetBrains Mono</span></div>
+  <div class="card" style="align-items:stretch">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB · 7:05 PM</span></div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 22px;gap:7px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:34px;text-transform:uppercase;letter-spacing:.5px">Twins @ Yankees</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:8px">
+        THE PICK:&nbsp;<span style="display:inline-block;width:150px;height:15px;border-radius:3px;background:repeating-linear-gradient(45deg,rgba(212,175,55,.55) 0 6px,rgba(212,175,55,.3) 6px 12px)"></span>
+      </div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:8px">
+        THE ODDS:&nbsp;<span style="display:inline-block;width:64px;height:15px;border-radius:3px;background:repeating-linear-gradient(45deg,rgba(212,175,55,.55) 0 6px,rgba(212,175,55,.3) 6px 12px)"></span>
+      </div>
+    </div>
+    <div style="padding:0 22px 18px"><span class="cap" style="width:100%;display:block;text-align:center">TAP TO REVEAL THE PICK</span></div>
+  </div>
+  <div class="note">The strongest "there IS a pick behind this" cue possible: show the pick's own rows, redacted. Nothing leaks, everything is promised.</div>
+</div>
+
+<!-- W3 -->
+<div class="slot">
+  <div class="tag"><b>W3 · BIG TYPE WALL</b><span>Anton</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="center" style="gap:5px">
+      <div style="font-family:'Anton',sans-serif;font-size:47px;line-height:.95;text-transform:uppercase;letter-spacing:1px">TWINS<span style="color:var(--gold)">@</span>YANKEES</div>
+      <div class="meta" style="margin-top:2px">GARY'S PICK IS IN · FIRST PITCH 7:05 PM</div>
+      <div class="cap" style="margin-top:6px">TAP TO REVEAL</div>
+    </div>
+  </div>
+  <div class="note">The matchup IS the design. Poster energy; the logo sits out this one so the game owns the card.</div>
+</div>
+
+<!-- W4 -->
+<div class="slot">
+  <div class="tag"><b>W4 · THE LIGHT LEAK</b><span>Space Grotesk</span></div>
+  <div class="card" style="background:linear-gradient(180deg,#1c1916,#0e0d0b)">
+    <div style="position:absolute;left:8%;right:8%;top:52%;height:2px;background:linear-gradient(90deg,transparent,#F7E7AE 30%,#fff 50%,#F7E7AE 70%,transparent);filter:blur(1px)"></div>
+    <div style="position:absolute;left:15%;right:15%;top:52%;height:36px;transform:translateY(-50%);background:radial-gradient(ellipse at center,rgba(247,231,174,.4),transparent 70%);filter:blur(8px)"></div>
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding-bottom:12px">
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.5px;margin-bottom:16px">Twins @ Yankees</div>
+      <div class="meta" style="margin-top:16px">THE PICK IS SEALED INSIDE · 7:05 PM</div>
+      <div class="cap">CRACK IT OPEN</div>
+    </div>
+  </div>
+  <div class="note">Gold light escaping from the card's seam — the present metaphor made literal. The matchup sits above the crack, the button below it.</div>
+</div>
+
+<!-- W5 -->
+<div class="slot">
+  <div class="tag"><b>W5 · THE TICKET</b><span>Oswald + IBM Plex Mono</span></div>
+  <div class="card" style="flex-direction:row;overflow:visible;border-radius:14px">
+    <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:2.5px"><span style="color:rgba(212,175,55,.85)">MEMBERS ONLY</span><span style="color:rgba(245,241,232,.6)">Nº 0007</span></div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(245,241,232,.6);margin-bottom:4px">TONIGHT · MLB · 7:05 PM ET</div>
+        <div style="font-family:'Oswald',sans-serif;font-weight:600;font-size:30px;text-transform:uppercase;letter-spacing:.5px;line-height:1.05">Twins @<br>Yankees</div>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:1.5px;color:var(--lgold)">GARY'S PICK IS PRINTED INSIDE</div>
+    </div>
+    <div style="width:1px;background:repeating-linear-gradient(180deg,rgba(212,175,55,.5) 0 6px,transparent 6px 12px)"></div>
+    <div style="width:108px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(212,175,55,.05)">
+      <div class="mark" style="width:40px;height:40px"><span style="font-size:17px">G</span></div>
+      <div class="cap" style="padding:8px 12px;font-size:9.5px;text-align:center">OPEN<br>TICKET</div>
+    </div>
+  </div>
+  <div class="note">A stub with a perforated line — the tear-off end is the button. Sports-native object; nobody wonders if it opens.</div>
+</div>
+
+<!-- W6 -->
+<div class="slot">
+  <div class="tag"><b>W6 · WAX SEAL</b><span>Staatliches</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="center" style="gap:7px">
+      <div style="width:66px;height:66px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E8C766,#9a7818);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(0,0,0,.6),inset 0 -3px 6px rgba(0,0,0,.35)">
+        <span style="font-family:'Staatliches',sans-serif;font-size:26px;color:var(--ink)">G</span>
+      </div>
+      <div style="font-family:'Staatliches',sans-serif;font-size:29px;letter-spacing:1.5px">TWINS @ YANKEES</div>
+      <div class="meta">SEALED UNTIL YOU OPEN IT · 7:05 PM</div>
+      <div style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1.6px;color:var(--lgold);border:1.5px solid rgba(212,175,55,.7);border-radius:99px;padding:8px 20px">BREAK THE SEAL</div>
+    </div>
+  </div>
+  <div class="note">The mark pressed into a gold wax medallion. Outlined button variant — quieter than the filled capsule, still unmistakably a button.</div>
+</div>
+
+<!-- W7 -->
+<div class="slot">
+  <div class="tag"><b>W7 · SCOREBOARD BLANKS</b><span>Space Mono</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB · 7:05</span></div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:0 22px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-family:'Space Mono',monospace;font-weight:700;font-size:19px">
+        <span>MIN TWINS</span><span style="color:rgba(212,175,55,.9);letter-spacing:3px">–</span>
+      </div>
+      <div style="height:1px;background:rgba(245,241,232,.12)"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-family:'Space Mono',monospace;font-weight:700;font-size:19px">
+        <span>NY YANKEES</span><span style="color:rgba(212,175,55,.9);letter-spacing:3px">–</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <span style="font-family:'Space Mono',monospace;font-size:10.5px;color:var(--lgold);letter-spacing:1px">GARY'S CALL SHEET: 1 PICK</span>
+        <span class="cap" style="padding:8px 16px;font-size:10px">REVEAL</span>
+      </div>
+    </div>
+  </div>
+  <div class="note">The matchup rendered as a scoreboard with blank score cells — a board waiting to be filled is inherently "pre-game, pick pending."</div>
+</div>
+
+<!-- W8 -->
+<div class="slot">
+  <div class="tag"><b>W8 · SKYSCRAPER</b><span>Six Caps</span></div>
+  <div class="card" style="flex-direction:row">
+    <div style="width:104px;display:flex;align-items:center;justify-content:center;background:rgba(212,175,55,.06);border-right:1px solid rgba(212,175,55,.3)">
+      <div style="font-family:'Six Caps',sans-serif;font-size:66px;line-height:.86;text-align:center;color:var(--gold)">MIN<br>NYY</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px;padding:0 20px">
+      <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:3px;color:rgba(212,175,55,.85)">MEMBERS ONLY · MLB</div>
+      <div style="font-family:'Six Caps',sans-serif;font-size:34px;line-height:1">GARY'S PICK IS IN</div>
+      <div class="meta">TWINS @ YANKEES · 7:05 PM</div>
+      <div><span class="cap">TAP TO REVEAL</span></div>
+    </div>
+  </div>
+  <div class="note">Ultra-condensed team codes stacked as a gold spine; the body reads left-to-right like a lineup card.</div>
+</div>
+
+<!-- W9 -->
+<div class="slot">
+  <div class="tag"><b>W9 · THE VAULT</b><span>Unbounded</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="center" style="gap:8px">
+      <div style="width:58px;height:58px;border-radius:50%;border:2px solid rgba(212,175,55,.8);display:flex;align-items:center;justify-content:center;position:relative">
+        <div style="position:absolute;inset:6px;border-radius:50%;border:1px dashed rgba(212,175,55,.5)"></div>
+        <span style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:18px;color:var(--gold)">G</span>
+      </div>
+      <div style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:19px;letter-spacing:-.3px">Twins @ Yankees</div>
+      <div class="meta">PICK LOCKED IN · OPENS ON TAP · 7:05 PM</div>
+      <div class="cap">UNLOCK</div>
+    </div>
+  </div>
+  <div class="note">Vault-dial mark, wide techy face. "LOCKED IN" flips the negative (locked out) into the confident read (Gary locked it in).</div>
+</div>
+
+<!-- W10 -->
+<div class="slot">
+  <div class="tag"><b>W10 · LOWER THIRD</b><span>Archivo Black + Archivo</span></div>
+  <div class="card" style="justify-content:flex-end">
+    <div class="eyebrow" style="position:absolute;left:0;right:0;top:0"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div style="position:absolute;right:-24px;top:-30px;font-family:'Archivo Black',sans-serif;font-size:150px;color:rgba(212,175,55,.07);letter-spacing:-6px;pointer-events:none">NYY</div>
+    <div style="padding:0 20px 16px">
+      <div style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--lgold);margin-bottom:5px">GARY'S PICK IS IN</div>
+      <div style="font-family:'Archivo Black',sans-serif;font-size:29px;letter-spacing:-.5px;line-height:1.02;margin-bottom:10px">TWINS @ YANKEES</div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="meta">FIRST PITCH 7:05 PM</span>
+        <span class="cap" style="padding:8px 18px;font-size:10px">REVEAL</span>
+      </div>
+    </div>
+  </div>
+  <div class="note">Broadcast lower-third composition with a ghost "NYY" watermark filling the dead air up top. Left-anchored, thumb-reachable button.</div>
+</div>
+
+<!-- W11 -->
+<div class="slot">
+  <div class="tag"><b>W11 · THE MARQUEE BULBS</b><span>Big Shoulders Display</span></div>
+  <div class="card" style="border-color:rgba(212,175,55,.6)">
+    <div style="position:absolute;inset:8px;border-radius:14px;border:1px solid rgba(212,175,55,.25);pointer-events:none;
+      background-image:radial-gradient(circle 2px at 12px 12px,rgba(240,214,138,.9) 0 2px,transparent 3px);"></div>
+    <div style="position:absolute;inset:8px;border-radius:14px;pointer-events:none;
+      background-image:radial-gradient(circle,rgba(240,214,138,.85) 0 1.6px,transparent 2.4px);background-size:22px 22px;background-position:11px 3px;
+      -webkit-mask:linear-gradient(#000,#000) content-box exclude,linear-gradient(#000,#000);mask:linear-gradient(#000 0 0) exclude content-box,linear-gradient(#000 0 0);padding:7px"></div>
+    <div class="center" style="gap:7px;z-index:1">
+      <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:3px;color:rgba(212,175,55,.85)">MEMBERS ONLY · MLB</div>
+      <div style="font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:38px;text-transform:uppercase;letter-spacing:1px">Twins @ Yankees</div>
+      <div class="meta">TONIGHT 7:05 PM · ONE PICK INSIDE</div>
+      <div class="cap">TAP TO REVEAL</div>
+    </div>
+  </div>
+  <div class="note">Theater-marquee bulb border — tonight's show, name on the board. The bulbs are the "something's playing here" signal.</div>
+</div>
+
+<!-- W12 -->
+<div class="slot">
+  <div class="tag"><b>W12 · TALE OF THE TAPE</b><span>Teko</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB · 7:05 PM</span></div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:18px;padding:0 18px">
+      <div style="font-family:'Teko',sans-serif;font-weight:700;font-size:44px;line-height:.9;text-align:right;flex:1">TWINS</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="font-family:var(--mono);font-size:9px;font-weight:700;color:rgba(245,241,232,.55);letter-spacing:1px">AT</div>
+        <div style="width:1.5px;height:44px;background:linear-gradient(180deg,transparent,var(--gold),transparent)"></div>
+      </div>
+      <div style="font-family:'Teko',sans-serif;font-weight:700;font-size:44px;line-height:.9;flex:1">YANKEES</div>
+    </div>
+    <div style="padding:0 18px 16px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:var(--lgold)">GARY TOOK A SIDE</span>
+      <span class="cap" style="padding:8px 18px;font-size:10px">SEE WHICH</span>
+    </div>
+  </div>
+  <div class="note">Fight-poster face-off with the gold divider. "GARY TOOK A SIDE / SEE WHICH" is the tease as copy — the button finishes the sentence.</div>
+</div>
+
+<!-- W13 -->
+<div class="slot">
+  <div class="tag"><b>W13 · DOSSIER STAMP</b><span>Rajdhani + JetBrains Mono</span></div>
+  <div class="card">
+    <div style="position:absolute;right:18px;top:16px;transform:rotate(8deg);font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--gold);border:2px solid rgba(212,175,55,.8);border-radius:4px;padding:4px 10px;opacity:.9">SEALED</div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:0 22px">
+      <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:3px;color:rgba(212,175,55,.85)">MEMBERS ONLY · MLB</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:31px;text-transform:uppercase;letter-spacing:.5px">Twins @ Yankees</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:rgba(245,241,232,.78);letter-spacing:.5px;line-height:1.7">
+        GAME&nbsp;&nbsp;··· TONIGHT 7:05 PM<br>
+        PICK&nbsp;&nbsp;··· <span style="color:var(--gold)">ON FILE</span><br>
+        ODDS&nbsp;&nbsp;··· <span style="color:var(--gold)">ON FILE</span>
+      </div>
+    </div>
+    <div style="padding:0 22px 16px"><span class="cap" style="display:block;text-align:center">OPEN THE FILE</span></div>
+  </div>
+  <div class="note">Case-file framing: the rubber stamp says sealed, the ledger rows say exactly what's inside. Kin to W2 but drier, more analyst.</div>
+</div>
+
+<!-- W14 -->
+<div class="slot">
+  <div class="tag"><b>W14 · QUIET LUXURY</b><span>Inter Tight</span></div>
+  <div class="card" style="background:linear-gradient(180deg,#221f1b,#100f0d);border-color:rgba(212,175,55,.35)">
+    <div class="center" style="gap:10px">
+      <div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:4px;color:rgba(212,175,55,.8)">MEMBERS ONLY</div>
+      <div style="font-family:'Inter Tight',sans-serif;font-weight:800;font-size:30px;letter-spacing:-.8px">Twins <span style="color:rgba(245,241,232,.45);font-weight:600">@</span> Yankees</div>
+      <div style="width:34px;height:2px;background:var(--gold);border-radius:2px"></div>
+      <div class="meta" style="letter-spacing:2px">MLB · 7:05 PM · ONE PICK INSIDE</div>
+      <div class="cap" style="margin-top:2px">REVEAL THE PICK</div>
+    </div>
+  </div>
+  <div class="note">The minimalist read: no mark, no chrome, one gold tick. Bets everything on type quality and the button.</div>
+</div>
+
+<!-- W15 -->
+<div class="slot">
+  <div class="tag"><b>W15 · TERMINAL DECRYPT</b><span>Martian Mono</span></div>
+  <div class="card" style="background:linear-gradient(180deg,#191713,#0d0c0a)">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px;padding:0 22px;font-family:'Martian Mono',monospace">
+      <div style="font-size:9px;font-weight:600;letter-spacing:2px;color:rgba(212,175,55,.85)">GARY A.I. // MEMBERS CHANNEL</div>
+      <div style="font-size:17px;font-weight:600;color:var(--warm)">TWINS @ YANKEES<span style="color:var(--gold)">_</span></div>
+      <div style="font-size:10px;color:rgba(245,241,232,.78);line-height:1.8">
+        MLB · 19:05 ET<br>
+        PICK STATUS: <span style="color:var(--win)">READY</span><br>
+        PAYLOAD: <span style="color:var(--gold)">█▓▒░ ENCRYPTED ░▒▓█</span>
+      </div>
+    </div>
+    <div style="padding:0 22px 16px">
+      <span style="display:block;text-align:center;font-family:'Martian Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:1.5px;color:var(--ink);padding:10px;border-radius:8px;background:linear-gradient(180deg,var(--lgold),var(--gold));box-shadow:0 3px 10px rgba(212,175,55,.35)">[ DECRYPT PICK ]</span>
+    </div>
+  </div>
+  <div class="note">The "legit A.I." end of the brand spectrum. PICK STATUS: READY does the reassurance in system language.</div>
+</div>
+
+<!-- W16 -->
+<div class="slot">
+  <div class="tag"><b>W16 · GOLD FOIL BAND</b><span>Fjalla One</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:0">
+      <div style="text-align:center;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;color:rgba(245,241,232,.78);margin-bottom:10px">GARY'S PICK IS IN · 7:05 PM</div>
+      <div style="background:linear-gradient(180deg,#EBD188,#C29B2C);padding:12px 0;text-align:center;box-shadow:0 4px 14px rgba(212,175,55,.3);transform:rotate(-1.2deg);margin:0 -6px">
+        <span style="font-family:'Fjalla One',sans-serif;font-size:29px;color:var(--ink);letter-spacing:.5px">TWINS @ YANKEES</span>
+      </div>
+      <div style="text-align:center;margin-top:14px"><span class="cap" style="background:none;border:1.5px solid rgba(212,175,55,.7);color:var(--lgold);box-shadow:none">TEAR THE BAND</span></div>
+    </div>
+  </div>
+  <div class="note">The matchup printed ON the gold — a foil belly-band around the card, tilted like it was wrapped by hand. "TEAR THE BAND" continues the object.</div>
+</div>
+
+<!-- W17 -->
+<div class="slot">
+  <div class="tag"><b>W17 · SPLIT DIAGONAL</b><span>Bebas Neue</span></div>
+  <div class="card" style="background:linear-gradient(115deg,#2b2620 0 56%,#14110d 56.3%)">
+    <div style="position:absolute;left:53.4%;top:-10%;bottom:-10%;width:2px;background:linear-gradient(180deg,transparent,var(--gold),transparent);transform:rotate(25deg)"></div>
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div style="flex:1;display:flex;align-items:center;padding:0 22px;gap:14px">
+      <div style="flex:1">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:46px;line-height:.92">TWINS</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:46px;line-height:.92;color:var(--gold)">YANKEES</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div class="meta" style="text-align:right">TONIGHT<br>7:05 PM</div>
+        <div class="cap" style="padding:9px 16px;font-size:10px">REVEAL</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Versus energy without a literal VS — the diagonal splits the card into the two sides, Gary's gold hints at the one he took.</div>
+</div>
+
+<!-- W18 -->
+<div class="slot">
+  <div class="tag"><b>W18 · THE PULL TAB</b><span>Khand</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB · 7:05 PM</span></div>
+    <div class="center" style="gap:7px;padding-bottom:0">
+      <div style="font-family:'Khand',sans-serif;font-weight:700;font-size:33px;letter-spacing:.5px">TWINS @ YANKEES</div>
+      <div class="meta">GARY'S PICK IS SEALED BELOW</div>
+    </div>
+    <div style="margin:12px 0 0;position:relative;background:rgba(212,175,55,.1);border-top:1.5px dashed rgba(212,175,55,.6);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1.6px;color:var(--lgold)">PULL TO OPEN</span>
+      <span style="font-family:var(--mono);font-size:15px;color:var(--gold);letter-spacing:-2px">››››</span>
+      <div style="position:absolute;left:50%;top:-9px;transform:translateX(-50%);background:var(--gold);color:var(--ink);font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:1px;border-radius:3px;padding:2px 8px">LIFT HERE</div>
+    </div>
+  </div>
+  <div class="note">The bottom strip is a physical tab — dashed tear line, LIFT HERE tag, chevrons pointing the way. Affordance by object, not instruction.</div>
+</div>
+
+<!-- W19 -->
+<div class="slot">
+  <div class="tag"><b>W19 · STACKED WORDMARK</b><span>Sora + Hanken Grotesk</span></div>
+  <div class="card">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 22px;gap:3px">
+      <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:24px;letter-spacing:-.5px;line-height:1.15">The pick for</div>
+      <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:24px;letter-spacing:-.5px;line-height:1.15;color:var(--gold)">Twins @ Yankees</div>
+      <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:24px;letter-spacing:-.5px;line-height:1.15">is in.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+        <span class="meta">FIRST PITCH 7:05 PM</span>
+        <span class="cap" style="padding:8px 18px;font-size:10px">REVEAL</span>
+      </div>
+    </div>
+  </div>
+  <div class="note">A sentence, not a layout: "The pick for Twins @ Yankees is in." Reads like Gary texting you. Warmest of the twenty.</div>
+</div>
+
+<!-- W20 -->
+<div class="slot">
+  <div class="tag"><b>W20 · TECH BADGE</b><span>Chakra Petch</span></div>
+  <div class="card" style="border-radius:14px;clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)">
+    <div class="eyebrow"><span class="mo">MEMBERS ONLY</span><span class="lg">MLB</span></div>
+    <div class="center" style="gap:8px">
+      <div style="font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:11px;letter-spacing:3px;color:var(--lgold);border:1px solid rgba(212,175,55,.5);padding:4px 12px">PICK Nº 1 — READY</div>
+      <div style="font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:29px;letter-spacing:.5px">TWINS @ YANKEES</div>
+      <div class="meta">7:05 PM ET · SEALED FOR MEMBERS</div>
+      <div class="cap" style="border-radius:6px">TAP TO REVEAL</div>
+    </div>
+  </div>
+  <div class="note">Clipped corners + angular face — the most "hardware" of the set. Squared button matches the geometry.</div>
+</div>
+
+</div>
+
+<div class="page-head" style="margin-top:56px">
+  <h1 style="font-size:26px">My read</h1>
+  <p><b style="color:var(--gold)">W2 (Redacted Slip)</b> is the one I'd ship: it proves a pick exists better than any styling can, because you're looking at the pick's own rows with the answer blacked out. <b style="color:var(--gold)">W12 (Tale of the Tape)</b> is the best pure-sports alternative — "GARY TOOK A SIDE / SEE WHICH" is the tightest tease copy in the set. <b style="color:var(--gold)">W19</b> if you want warmth, <b style="color:var(--gold)">W3</b> if you want a poster. W1 (already in the build) is the safe centered version of all of them.</p>
+</div>
+
+</body>
+</html>

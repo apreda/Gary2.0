@@ -3687,7 +3687,10 @@ struct HomeMarqueeTracker: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
+        // M1 — hero owns the full width; the rest of the day's big ones run
+        // as one slim ticker ribbon along the card's bottom (founder-picked
+        // over the side rail: shorter card, nothing competing with the hero).
+        VStack(spacing: 0) {
             Group {
                 if let hero {
                     Button { onOpenGame(hero.matchupFull) } label: { heroView(hero) }
@@ -3698,9 +3701,9 @@ struct HomeMarqueeTracker: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if !rail.isEmpty || tomorrowTease != nil {
-                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
-                    .padding(.vertical, 10)
-                railView
+                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+                    .padding(.horizontal, 12)
+                ribbonView
             }
         }
         .background(
@@ -3719,38 +3722,44 @@ struct HomeMarqueeTracker: View {
         return "\(teamAbbrevFromName(sides[0], league: e.league)) @ \(teamAbbrevFromName(sides[1], league: e.league))"
     }
 
-    private var railView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(rail) { e in
-                Button { onOpenGame(e.matchupFull) } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(railTitle(e))
-                            .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                        railStatus(e)
+    /// The bottom ticker — every non-hero big game as a "PIT @ WSH ▶ 5–3"
+    /// chip, hairlines between, tomorrow's marquee dimmed at the end.
+    private var ribbonView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(rail) { e in
+                    Button { onOpenGame(e.matchupFull) } label: {
+                        HStack(spacing: 6) {
+                            Text(railTitle(e))
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1)
+                            railStatus(e)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    if e.id != rail.last?.id || tomorrowTease != nil {
+                        Rectangle().fill(Color.white.opacity(0.1))
+                            .frame(width: 1, height: 14)
+                    }
                 }
-                .buttonStyle(.plain)
-            }
-            if let tease = tomorrowTease {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tease.matchup)
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Text("TMRW \(tease.time)")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.55))
+                if let tease = tomorrowTease {
+                    HStack(spacing: 6) {
+                        Text(tease.matchup)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(1)
+                        Text("TMRW \(tease.time)")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 10)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 7)
             }
+            .padding(.horizontal, 2)
         }
-        .padding(.vertical, 6)
-        .frame(width: 128, alignment: .leading)
     }
 
     @ViewBuilder private func railStatus(_ e: Entry) -> some View {
@@ -5532,8 +5541,8 @@ struct PremiumPicksView: View {
     private func teasedTodayCard(for league: String) -> some View {
         // Winners is the members' room — the pre-drop state speaks the same
         // sealed-card language as the wrapper (no blur, no pick data to leak).
-        MembersOnlyCardFace(state: .coming(note: "DROPS ~90 MIN BEFORE FIRST PITCH"),
-                            footnote: "TONIGHT'S \(league.uppercased()) PICK")
+        MembersOnlyCardFace(state: .coming(note: "DROPS ~90 MIN BEFORE GAME TIME"),
+                            leagueTag: league.uppercased())
             .frame(width: UIScreen.main.bounds.width - 44)
     }
 
@@ -5843,7 +5852,9 @@ struct PremiumPicksView: View {
                                     // in the members wrapper — tap flips it into the 21B-S
                                     // poured-gold bar. Revealed/live/settled cards show gold.
                                     MembersWrap(revealId: pick.id,
-                                                commence: parseISO8601(pick.commence_time ?? "")) {
+                                                commence: parseISO8601(pick.commence_time ?? ""),
+                                                tease: gameTease(pick),
+                                                league: shelf.league.uppercased()) {
                                         FlippablePickCard(pick: pick,
                                                           alwaysShowStartTime: true,
                                                           gameResult: shelf.settled ? gamePickResult(pick) : nil,
@@ -5916,6 +5927,27 @@ struct PremiumPicksView: View {
         }.map { $0.element }
     }
 
+    /// Nickname for club teams ("Yankees"), untouched for countries — WC
+    /// sides are multi-word nations ("United States") that last-word
+    /// shortening would mangle into "States".
+    private func sealSide(_ name: String, league: String?) -> String {
+        (league ?? "").uppercased() == "WC" ? name : HomeView.shortTeam(name)
+    }
+
+    /// The seal's gift tag for a game pick — "Twins @ Yankees".
+    private func gameTease(_ pick: GaryPick) -> String? {
+        guard let away = pick.awayTeam, let home = pick.homeTeam else { return nil }
+        return "\(sealSide(away, league: pick.league)) @ \(sealSide(home, league: pick.league))"
+    }
+
+    /// The seal's gift tag for a prop group — shortened from the full-name matchup.
+    private func propTease(_ group: [PropPick]) -> String? {
+        guard let first = group.first, let m = first.matchup, m.contains(" @ ") else { return nil }
+        let sides = m.components(separatedBy: " @ ")
+        let lg = first.effectiveLeague
+        return "\(sealSide(sides[0], league: lg)) @ \(sealSide(sides[1], league: lg))"
+    }
+
     private func propShelfView(_ shelf: PropShelf) -> some View {
         // Same TODAY-board rule as the game shelf: a settled prop lane is a stale
         // prior-day fallback — tease it with the blurred lock card, not yesterday's
@@ -5943,7 +5975,11 @@ struct PremiumPicksView: View {
                                     // Props seal in the same members wrapper as game picks —
                                     // one reveal per game-group (the group shares a slot).
                                     MembersWrap(revealId: group.first?.id ?? "prop-group",
-                                                commence: parseISO8601(group.first?.commence_time ?? "")) {
+                                                commence: parseISO8601(group.first?.commence_time ?? ""),
+                                                tease: propTease(group),
+                                                league: shelf.league.uppercased(),
+                                                sealKicker: group.count > 1 ? "GARY'S PROP PICKS ARE IN"
+                                                                            : "GARY'S PROP PICK IS IN") {
                                         if group.count == 1, let only = group.first {
                                             FlippablePropCard(prop: only,
                                                               gameResult: shelf.settled ? propResult(for: only) : nil,
@@ -13445,21 +13481,46 @@ struct MembersOnlyCardFace: View {
         case placeholder(note: String)
     }
     var state: SealState = .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME")
+    /// The gift tag (founder, Jul 5: "this is a wrapping around a present —
+    /// say what game the pick is for"). Short matchup: "Twins @ Yankees".
+    var tease: String? = nil
+    /// League chip in the eyebrow row ("MLB").
+    var leagueTag: String? = nil
+    /// Kicker override — the prop shelf says PROP PICK instead of PICK.
+    var kicker: String? = nil
     var footnote: String? = nil
     /// True inside MembersWrap — the face stretches to cover whatever it seals
     /// (a stacked prop group runs taller than one card).
     var fillsContainer: Bool = false
 
-    private var headline: String {
+    private var kickerText: String {
+        if let kicker { return kicker }
         switch state {
-        case .pickIn:      return "THE PICK IS IN"
+        case .pickIn:      return "GARY'S PICK IS IN"
         case .coming:      return "PICK COMING"
         case .placeholder: return "TODAY'S CARD"
         }
     }
-    private var sub: String {
+    /// The big display line — the matchup when we know it, the league lane
+    /// when we don't. This is what makes the seal read as a wrapped PICK.
+    private var displayLine: String? {
+        if let tease { return tease }
+        if case .coming = state, let leagueTag { return "Tonight's \(leagueTag) pick" }
+        return nil
+    }
+    /// Sport-correct start-of-game word — FIRST PITCH is baseball-only.
+    private var startWord: String {
+        switch leagueTag ?? "" {
+        case "MLB":            return "FIRST PITCH"
+        case "WC", "NFL", "NCAAF": return "KICKOFF"
+        case "NBA", "NCAAB":   return "TIP-OFF"
+        case "NHL":            return "PUCK DROP"
+        default:               return "STARTS"
+        }
+    }
+    private var metaLine: String? {
         switch state {
-        case .pickIn(let fp): return fp.map { "TAP TO REVEAL · FIRST PITCH \($0)" } ?? "TAP TO REVEAL"
+        case .pickIn(let fp): return fp.map { "\(startWord) \($0)" }
         case .coming(let n):  return n
         case .placeholder(let n): return n
         }
@@ -13470,46 +13531,80 @@ struct MembersOnlyCardFace: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            Image(GaryBrand.mark)
-                .resizable().scaledToFit()
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: .black.opacity(0.7), radius: 8, y: 5)
-            Text("MEMBERS ONLY")
-                .font(GaryFonts.mono(11, bold: true)).tracking(6)
-                .foregroundStyle(.white.opacity(0.72))
-                .padding(.leading, 6)   // recenters the tracked type optically
-            Text(headline)
-                .font(GaryFonts.mono(14, bold: true)).tracking(2.2)
-                .foregroundStyle(inviting ? GaryColors.lightGold : GaryColors.gold.opacity(0.9))
-                .padding(.leading, 2)
-            Text(sub)
-                .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
-                .foregroundStyle(.white.opacity(0.72))
-                .lineLimit(1).minimumScaleFactor(0.8)
-            if let footnote {
-                Text(footnote)
-                    .font(GaryFonts.mono(9, bold: false)).tracking(2.4)
-                    .foregroundStyle(.white.opacity(0.55))
+        VStack(spacing: 0) {
+            // Eyebrow — membership left, league right.
+            HStack {
+                Text("MEMBERS ONLY")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(3)
+                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+                Spacer()
+                if let leagueTag {
+                    Text(leagueTag)
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(2)
+                        .foregroundStyle(.white.opacity(0.66))
+                }
             }
+            Spacer(minLength: 8)
+            VStack(spacing: 9) {
+                Image(GaryBrand.mark)
+                    .resizable().scaledToFit()
+                    .frame(width: 54, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .shadow(color: .black.opacity(0.7), radius: 8, y: 5)
+                VStack(spacing: 4) {
+                    Text(kickerText)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(2.2)
+                        .foregroundStyle(inviting ? GaryColors.lightGold : GaryColors.gold.opacity(0.92))
+                    if let displayLine {
+                        Text(displayLine)
+                            .font(GaryFonts.display(25))
+                            .foregroundStyle(GaryColors.warmWhite)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    if let metaLine {
+                        Text(metaLine)
+                            .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                }
+                if inviting {
+                    // A real button, not a caption — the reason to touch it.
+                    Text("TAP TO REVEAL")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+                        .foregroundStyle(Color(hex: "#191507"))
+                        .padding(.horizontal, 20).padding(.vertical, 9)
+                        .background(
+                            Capsule().fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
+                                                          startPoint: .top, endPoint: .bottom))
+                                .shadow(color: GaryColors.gold.opacity(0.35), radius: 10, y: 3)
+                        )
+                        .padding(.top, 4)
+                }
+                if let footnote {
+                    Text(footnote)
+                        .font(GaryFonts.mono(9, bold: false)).tracking(2.4)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            Spacer(minLength: 8)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(maxWidth: .infinity)
         .frame(height: fillsContainer ? nil : CompactPickRow.uniformHeight)
         .frame(maxHeight: fillsContainer ? .infinity : nil)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: "#201E1B"), Color(hex: "#0E0D0C")],
+                .fill(LinearGradient(colors: [Color(hex: "#282420"), Color(hex: "#141210")],
                                      startPoint: .top, endPoint: .bottom))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1)
+                        .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1)
                 )
                 .overlay(alignment: .top) {
                     // Lit-from-above highlight — the lift cue.
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(.white.opacity(0.14), lineWidth: 1)
+                        .stroke(.white.opacity(0.16), lineWidth: 1)
                         .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
                 }
                 .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
@@ -13524,6 +13619,12 @@ struct MembersOnlyCardFace: View {
 struct MembersWrap<Content: View>: View {
     let revealId: String
     var commence: Date? = nil
+    /// Short matchup for the seal's gift tag ("Twins @ Yankees").
+    var tease: String? = nil
+    /// League chip for the seal's eyebrow ("MLB").
+    var league: String? = nil
+    /// Kicker override ("GARY'S PROP PICKS ARE IN").
+    var sealKicker: String? = nil
 
     /// "12:30 PM" (ET) — the seal names first pitch instead of ticking at it.
     static func pitchClock(_ d: Date) -> String {
@@ -13535,9 +13636,14 @@ struct MembersWrap<Content: View>: View {
     @ViewBuilder var content: () -> Content
     @State private var revealed: Bool
 
-    init(revealId: String, commence: Date? = nil, @ViewBuilder content: @escaping () -> Content) {
+    init(revealId: String, commence: Date? = nil, tease: String? = nil,
+         league: String? = nil, sealKicker: String? = nil,
+         @ViewBuilder content: @escaping () -> Content) {
         self.revealId = revealId
         self.commence = commence
+        self.tease = tease
+        self.league = league
+        self.sealKicker = sealKicker
         self.content = content
         let started = commence.map { $0 <= Date() } ?? true
         _revealed = State(initialValue: RevealedPicks.isRevealed(revealId) || started)
@@ -13550,6 +13656,7 @@ struct MembersWrap<Content: View>: View {
     var body: some View {
         ZStack {
             MembersOnlyCardFace(state: .pickIn(firstPitch: commence.map { Self.pitchClock($0) }),
+                                tease: tease, leagueTag: league, kicker: sealKicker,
                                 fillsContainer: true)
                 .opacity(revealed ? 0 : 1)
             content()
@@ -13996,34 +14103,57 @@ struct LockedPickCard: View {
 
     var body: some View {
         Button(action: onUnlock) {
-            VStack(spacing: 9) {
-                Image(GaryBrand.mark)
-                    .resizable().scaledToFit()
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    .shadow(color: .black.opacity(0.7), radius: 6, y: 4)
-                Text("MEMBERS ONLY")
-                    .font(GaryFonts.mono(12, bold: true)).tracking(6)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .padding(.leading, 6)
-                Text("GARY'S \(league.uppercased()) PICKS ARE IN")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1.5)
-                    .foregroundStyle(.white.opacity(0.6))
-                Text("UNLOCK TO REVEAL ›")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
-                    .foregroundStyle(GaryColors.lightGold)
+            VStack(spacing: 0) {
+                HStack {
+                    Text("MEMBERS ONLY")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(3)
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                    Spacer()
+                    Text(league.uppercased())
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(2)
+                        .foregroundStyle(.white.opacity(0.66))
+                }
+                Spacer(minLength: 8)
+                VStack(spacing: 9) {
+                    Image(GaryBrand.mark)
+                        .resizable().scaledToFit()
+                        .frame(width: 54, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: .black.opacity(0.7), radius: 8, y: 5)
+                    Text("GARY'S \(league.uppercased()) PICKS ARE IN")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(2.2)
+                        .foregroundStyle(GaryColors.lightGold)
+                    Text("UNLOCK TO REVEAL")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+                        .foregroundStyle(Color(hex: "#191507"))
+                        .padding(.horizontal, 20).padding(.vertical, 9)
+                        .background(
+                            Capsule().fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
+                                                          startPoint: .top, endPoint: .bottom))
+                                .shadow(color: GaryColors.gold.opacity(0.35), radius: 10, y: 3)
+                        )
+                        .padding(.top, 4)
+                }
+                Spacer(minLength: 8)
             }
+            .padding(.horizontal, 16).padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .frame(height: CompactPickRow.uniformHeight)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "#1A1A1C"), Color(hex: "#0D0D0F")],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(LinearGradient(colors: [Color(hex: "#282420"), Color(hex: "#141210")],
+                                         startPoint: .top, endPoint: .bottom))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(.white.opacity(0.08), lineWidth: 1)
+                            .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+                    .overlay(alignment: .top) {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(.white.opacity(0.16), lineWidth: 1)
+                            .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
+                    }
+                    .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
+                    .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
             )
             .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }

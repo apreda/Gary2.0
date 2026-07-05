@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Marquee — 5 treatments</title>
+<style>
+  :root{--bg:#08080A;--gold:#C9A227;--warm:#F6F1E7;--win:#3FB950;--loss:#E5484D;--mut:rgba(255,255,255,.62)}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#141416;color:var(--warm);font-family:-apple-system,system-ui,sans-serif;padding:40px 24px 90px}
+  .wrap{max-width:1100px;margin:0 auto}
+  h1{font-size:24px;font-weight:800}
+  .intro{color:var(--mut);font-size:13.5px;margin:8px 0 30px;max-width:760px;line-height:1.5}
+  .row{display:flex;gap:30px;margin:44px 0;align-items:flex-start;flex-wrap:wrap}
+  .about{flex:1;min-width:300px;max-width:480px}
+  .about .tag{font-family:ui-monospace,monospace;font-size:11px;color:var(--gold);letter-spacing:.12em}
+  .about h2{font-size:18px;font-weight:800;margin:4px 0 8px}
+  .about p{color:rgba(255,255,255,.78);font-size:13px;line-height:1.55;margin:6px 0}
+  .about .con{color:rgba(255,255,255,.5);font-size:12.5px;border-left:2px solid rgba(229,72,77,.5);padding-left:10px;margin-top:8px}
+  .stage{width:392px;background:var(--bg);border:1px solid rgba(246,241,231,.14);border-radius:22px;padding:16px 14px;flex-shrink:0}
+  .mono{font-family:ui-monospace,monospace}
+  .m9{font-family:ui-monospace,monospace;font-size:9px}.m10{font-family:ui-monospace,monospace;font-size:10px}
+  .m11{font-family:ui-monospace,monospace;font-size:11px}
+  .disp{font-family:'Arial Narrow',system-ui;font-weight:800;letter-spacing:.01em}
+  .g{color:var(--win)}.r{color:var(--loss)}.go{color:var(--gold)}.mut{color:var(--mut)}
+  .card{border:1px solid rgba(63,185,80,.35);border-radius:14px;background:rgba(246,241,231,.03)}
+  .hr{height:1px;background:rgba(255,255,255,.08)}
+  .ctx{font-family:ui-monospace,monospace;font-size:9px;color:rgba(255,255,255,.35);letter-spacing:.1em;margin:8px 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>The Marquee — 5 treatments</h1>
+<div class="intro">Same data in all five: CHW–CLE live (Gary on WHITE SOX ML +126), NYM–ATL also live, three big games queued (4:00 / 7:20 / 8:00), tomorrow's marquee teased. The strips above/below each mock are just context.</div>
+
+<!-- M1 -->
+<div class="row">
+  <div class="about">
+    <span class="tag">M1 · HERO + TICKER RIBBON</span>
+    <h2>Big hero, schedule underneath</h2>
+    <p>The hero owns the full width — score huge, pick line clean. The other big games live in ONE slim horizontal ribbon pinned to the card's bottom edge, reading like a broadcast schedule bar. Swipes sideways if the day is long.</p>
+    <p><b>Why:</b> one thing leads (the sweat), the day stays one glance, the card gets SHORTER not taller. My recommendation.</p>
+    <div class="con">Ribbon chips are small — statuses must stay micro (▶2 · 4:00 · ✓).</div>
+  </div>
+  <div class="stage">
+    <div class="ctx">LAST NIGHT · 8–11 · −$5 ————— THE TAPE ›</div>
+    <div class="card">
+      <div style="padding:13px 14px 10px">
+        <span class="m10 g" style="letter-spacing:.12em">● LIVE · THE BIG GAME</span>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px">
+          <span class="disp" style="font-size:30px">CHW 0 · CLE 0</span>
+          <span class="m11 mut">INN 1</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px">
+          <span class="m11 go" style="font-weight:700">WHITE SOX ML +126</span>
+          <span class="mut">›</span>
+        </div>
+      </div>
+      <div class="hr"></div>
+      <div style="display:flex;gap:0;padding:8px 6px;overflow:hidden">
+        <div style="padding:0 9px;border-right:1px solid rgba(255,255,255,.08)"><div class="m10" style="font-weight:700">NYM@ATL</div><div class="m9 g">▶ 1</div></div>
+        <div style="padding:0 9px;border-right:1px solid rgba(255,255,255,.08)"><div class="m10" style="font-weight:700">NOR@BRA</div><div class="m9 mut">4:00</div></div>
+        <div style="padding:0 9px;border-right:1px solid rgba(255,255,255,.08)"><div class="m10" style="font-weight:700">SD@LAD</div><div class="m9 mut">7:20</div></div>
+        <div style="padding:0 9px;border-right:1px solid rgba(255,255,255,.08)"><div class="m10" style="font-weight:700">ENG@MEX</div><div class="m9 mut">8:00</div></div>
+        <div style="padding:0 9px"><div class="m10" style="font-weight:700;opacity:.6">BEL@USA</div><div class="m9" style="color:rgba(255,255,255,.4)">TMRW</div></div>
+      </div>
+    </div>
+    <div class="ctx">LIVE NOW 5 ——————————————</div>
+  </div>
+</div>
+
+<!-- M2 -->
+<div class="row">
+  <div class="about">
+    <span class="tag">M2 · THE FILMSTRIP</span>
+    <h2>Swipe through the big games</h2>
+    <p>Every big game is its own full hero card on a horizontal pager — the current one front, the next peeking from the right edge. Swiping is the browse; each game gets the cinematic treatment when it's on screen.</p>
+    <p><b>Why:</b> maximum drama per game, natural "what's next" gesture, and the peek invites the swipe.</p>
+    <div class="con">The day is never visible at once — you swipe to know. Browse cost is real.</div>
+  </div>
+  <div class="stage">
+    <div class="ctx">LAST NIGHT · 8–11 ····························</div>
+    <div style="display:flex;gap:8px;overflow:hidden">
+      <div class="card" style="min-width:300px;padding:13px 14px">
+        <span class="m10 g" style="letter-spacing:.12em">● LIVE · BIG GAME 1 OF 5</span>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px">
+          <span class="disp" style="font-size:28px">CHW 0 · CLE 0</span>
+          <span class="m11 mut">INN 1</span>
+        </div>
+        <div class="m11 go" style="font-weight:700;margin-top:6px">WHITE SOX ML +126</div>
+        <div style="display:flex;gap:4px;margin-top:10px">
+          <div style="width:14px;height:3px;border-radius:2px;background:var(--gold)"></div>
+          <div style="width:6px;height:3px;border-radius:2px;background:rgba(255,255,255,.2)"></div>
+          <div style="width:6px;height:3px;border-radius:2px;background:rgba(255,255,255,.2)"></div>
+          <div style="width:6px;height:3px;border-radius:2px;background:rgba(255,255,255,.2)"></div>
+          <div style="width:6px;height:3px;border-radius:2px;background:rgba(255,255,255,.2)"></div>
+        </div>
+      </div>
+      <div class="card" style="min-width:120px;padding:13px 12px;border-color:rgba(201,162,39,.3);opacity:.75">
+        <span class="m10 g">● LIVE</span>
+        <div class="disp" style="font-size:19px;margin-top:6px">NYM 1 · ATL 0</div>
+        <div class="m10 r" style="font-weight:700;margin-top:4px">IN THE RED</div>
+      </div>
+    </div>
+    <div class="ctx">LIVE NOW 5 ——————————————</div>
+  </div>
+</div>
+
+<!-- M3 -->
+<div class="row">
+  <div class="about">
+    <span class="tag">M3 · THE RUNDOWN</span>
+    <h2>One column, the "now" row swells</h2>
+    <p>No hero/list split at all: the big games are one vertical rundown in time order, and whichever game is live/next EXPANDS inline — score and pick big — while the rest sit as one-line rows. The swollen row moves down the list as the day plays.</p>
+    <p><b>Why:</b> reads like a broadcast rundown board; the whole day and the hierarchy in one shape; no dead space ever.</p>
+    <div class="con">The hero moment is smaller than M1/M2 — less cinematic, more editorial.</div>
+  </div>
+  <div class="stage">
+    <div class="ctx">LAST NIGHT · 8–11 ····························</div>
+    <div class="card">
+      <div style="padding:10px 14px 4px"><span class="m10 go" style="letter-spacing:.14em">THE BIG GAMES</span></div>
+      <div style="padding:6px 14px;display:flex;justify-content:space-between"><span class="m11" style="font-weight:600;color:rgba(255,255,255,.85)">NYM @ ATL</span><span class="m10 r">▶ IN THE RED · 1</span></div>
+      <div class="hr" style="margin:0 14px"></div>
+      <div style="padding:10px 14px;background:rgba(63,185,80,.05)">
+        <span class="m9 g" style="letter-spacing:.12em">● LIVE NOW</span>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:3px">
+          <span class="disp" style="font-size:25px">CHW 0 · CLE 0</span><span class="m10 mut">INN 1</span>
+        </div>
+        <div class="m11 go" style="font-weight:700;margin-top:3px">WHITE SOX ML +126</div>
+      </div>
+      <div class="hr" style="margin:0 14px"></div>
+      <div style="padding:6px 14px;display:flex;justify-content:space-between"><span class="m11" style="font-weight:600;color:rgba(255,255,255,.85)">NOR @ BRA</span><span class="m10 mut">4:00 PM</span></div>
+      <div class="hr" style="margin:0 14px"></div>
+      <div style="padding:6px 14px;display:flex;justify-content:space-between"><span class="m11" style="font-weight:600;color:rgba(255,255,255,.85)">SD @ LAD</span><span class="m10 mut">7:20 PM</span></div>
+      <div class="hr" style="margin:0 14px"></div>
+      <div style="padding:6px 14px 10px;display:flex;justify-content:space-between"><span class="m11" style="font-weight:600;color:rgba(255,255,255,.85)">ENG @ MEX</span><span class="m10 mut">8:00 PM</span></div>
+    </div>
+    <div class="ctx">LIVE NOW 5 ——————————————</div>
+  </div>
+</div>
+
+<!-- M4 -->
+<div class="row">
+  <div class="about">
+    <span class="tag">M4 · THE TILE WALL</span>
+    <h2>Every big game equal, at a glance</h2>
+    <p>A 2-wide grid of scoreboard tiles — no hero at all. Live tiles glow green with the verdict, upcoming carry time + pick-drop, settled dim with the stamp. Tomorrow takes the last tile.</p>
+    <p><b>Why:</b> the whole marquee day in one rectangle; screenshot-friendly; zero hierarchy decisions to maintain.</p>
+    <div class="con">Nothing leads — the sweat you opened the app for is the same size as an 8 PM game.</div>
+  </div>
+  <div class="stage">
+    <div class="ctx">LAST NIGHT · 8–11 ····························</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="card" style="padding:10px 11px">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">CHW 0·CLE 0</span><span class="m9 g">▶1</span></div>
+        <div class="m9 go" style="margin-top:3px;font-weight:700">WHITE SOX +126</div>
+      </div>
+      <div class="card" style="padding:10px 11px">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">NYM 1·ATL 0</span><span class="m9 g">▶1</span></div>
+        <div class="m9 r" style="margin-top:3px;font-weight:700">IN THE RED</div>
+      </div>
+      <div class="card" style="padding:10px 11px;border-color:rgba(246,241,231,.1)">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">NOR @ BRA</span><span class="m9 mut">4:00</span></div>
+        <div class="m9 go" style="margin-top:3px;font-weight:700">BRAZIL ML −130</div>
+      </div>
+      <div class="card" style="padding:10px 11px;border-color:rgba(246,241,231,.1)">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">SD @ LAD</span><span class="m9 mut">7:20</span></div>
+        <div class="m9" style="margin-top:3px;color:rgba(255,255,255,.55)">PICK ~5:50</div>
+      </div>
+      <div class="card" style="padding:10px 11px;border-color:rgba(246,241,231,.1)">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">ENG @ MEX</span><span class="m9 mut">8:00</span></div>
+        <div class="m9" style="margin-top:3px;color:rgba(255,255,255,.55)">PICK ~6:30</div>
+      </div>
+      <div class="card" style="padding:10px 11px;border-color:rgba(246,241,231,.08);opacity:.6">
+        <div style="display:flex;justify-content:space-between"><span class="m11" style="font-weight:700">BEL @ USA</span><span class="m9 mut">TMRW</span></div>
+        <div class="m9" style="margin-top:3px;color:rgba(255,255,255,.5)">8:00 PM</div>
+      </div>
+    </div>
+    <div class="ctx">LIVE NOW 5 ——————————————</div>
+  </div>
+</div>
+
+<!-- M5 -->
+<div class="row">
+  <div class="about">
+    <span class="tag">M5 · SIDE RAIL, QUIETED (current, fixed)</span>
+    <h2>Keep the two panes, fix the volume</h2>
+    <p>The current idea done properly: rail shrinks to whisper-level (smaller, dimmer, tighter, narrower), the hero gets bigger type and a real pick chip, and a hairline gold rank ties the rail to the day's order. The hero unmistakably leads.</p>
+    <p><b>Why:</b> preserves the one-glance layout you asked for, with the hierarchy the first cut lacked.</p>
+    <div class="con">Still the tallest option after M3; rail text is at the floor of readability.</div>
+  </div>
+  <div class="stage">
+    <div class="ctx">LAST NIGHT · 8–11 ····························</div>
+    <div class="card" style="display:flex">
+      <div style="flex:1;padding:14px;display:flex;flex-direction:column;justify-content:center">
+        <span class="m10 g" style="letter-spacing:.12em">● LIVE · THE BIG GAME</span>
+        <div style="display:flex;align-items:baseline;gap:9px;margin-top:7px">
+          <span class="disp" style="font-size:31px">CHW 0 · CLE 0</span>
+        </div>
+        <span class="m10 mut" style="margin-top:2px">INN 1 · GUARANTEED RATE FIELD</span>
+        <div style="margin-top:9px"><span class="m11 go" style="font-weight:700;border:1px solid rgba(201,162,39,.35);border-radius:8px;padding:4px 9px">WHITE SOX ML +126</span></div>
+      </div>
+      <div style="width:1px;background:rgba(255,255,255,.07);margin:12px 0"></div>
+      <div style="width:104px;padding:10px 10px;display:flex;flex-direction:column;gap:7px;justify-content:center">
+        <div><div class="m9" style="font-weight:700;color:rgba(255,255,255,.65)">NYM@ATL</div><div class="m9 g" style="font-size:8px">▶ 1</div></div>
+        <div><div class="m9" style="font-weight:700;color:rgba(255,255,255,.65)">NOR@BRA</div><div class="m9" style="font-size:8px;color:rgba(255,255,255,.42)">4:00</div></div>
+        <div><div class="m9" style="font-weight:700;color:rgba(255,255,255,.65)">SD@LAD</div><div class="m9" style="font-size:8px;color:rgba(255,255,255,.42)">7:20</div></div>
+        <div><div class="m9" style="font-weight:700;color:rgba(255,255,255,.65)">ENG@MEX</div><div class="m9" style="font-size:8px;color:rgba(255,255,255,.42)">8:00</div></div>
+        <div style="opacity:.55"><div class="m9" style="font-weight:700;color:rgba(255,255,255,.65)">BEL@USA</div><div class="m9" style="font-size:8px;color:rgba(255,255,255,.42)">TMRW</div></div>
+      </div>
+    </div>
+    <div class="ctx">LIVE NOW 5 ——————————————</div>
+  </div>
+</div>
+
+<div style="background:rgba(246,241,231,.03);border:1px solid rgba(246,241,231,.08);border-radius:14px;padding:18px 22px;max-width:900px">
+  <p style="font-size:13.5px;color:rgba(255,255,255,.82);line-height:1.6"><b>My read:</b> M1 is the one — the hero stays cinematic, the whole day rides in a ribbon that costs 30 points of height, and the card gets shorter than what's in the sim now. M3 is the strongest alternative if you want the marquee to feel like a rundown board rather than a moment. M2 is the most fun but hides the day. M4 abandons the "big game" idea entirely. M5 is the rescue of what's currently shipped.</p>
+</div>
+
+</div>
+</body>
+</html>
