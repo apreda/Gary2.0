@@ -1823,9 +1823,11 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
 
-                    // ── ① Masthead — wordmark only (the Scorecard below carries
-                    // the numbers; June 5: no badge). Mood images stay retired.
-                    GaryPageHeader(title: "Gary", accent: GaryPageHeader<EmptyView>.dateLabel())
+                    // ── ① Masthead — the serif front-door wordmark (the emerging
+                    // app language the Hub established Jul 4). No record up top:
+                    // most users are free users who came for tonight, not Gary's
+                    // ledger (founder) — The Record signs the page off instead.
+                    HomeMasthead()
                         .opacity(animateIn ? 1 : 0)
                         .animation(.easeOut(duration: 0.6), value: animateIn)
 
@@ -2383,26 +2385,26 @@ struct HomeView: View {
         return out
     }
 
-    /// TODAY — the single full merged Home page. Every section that used to live
-    /// across the old Morning + Pre-game + Live states renders here, nothing
-    /// dropped: it just RE-ORDERS as the day evolves. While games are live the
-    /// tape leads; otherwise the results-first morning stack leads. The forward-
-    /// looking blocks the founder flagged (TONIGHT'S BOARD / free pick card, the
-    /// WORLD CUP module, the SLATE, the big one) are always present here.
+    /// TODAY — the bettor's day, in the order the founder described it (Jul 4):
+    /// morning = "what did I miss, what hit" → the day = "what's on tonight,
+    /// the big games, the countdown, the horizon angles" → live = the sweat.
+    /// One merged page, three acts that re-order on the clock + live state;
+    /// GARY'S DAY (every posted pick with its rolling status) is the new
+    /// accountability spine, and THE RECORD signs the page off — present for
+    /// whoever wants proof, never the lead (most users are free users).
     @ViewBuilder private var todaySections: some View {
-        // ── ① The headlines marquee LEADS the page — rotating front-page cards,
-        // moved to the top (where Tonight's Top Plays used to sit; that carousel
-        // now lives in the Winners tab).
-        // Compute once — these are referenced for both the isEmpty check and the
-        // use; a bare computed-property access would re-run the whole derivation
-        // each time, on every live-score tick (the Home double-compute hitch).
+        // Compute once — a bare computed-property access would re-run the whole
+        // derivation on every live-score tick (the Home double-compute hitch).
         let stories = headlineStories
-        // LIVE-WINDOW WEIGHTING (Jul 2 founder call): while a game Gary picked is
-        // in progress, the live module leads the page — the sweat is why users
-        // open the app mid-game. Once nothing is live, the headlines return to
-        // the top and Morning reads exactly as locked.
+        // LIVE-WINDOW WEIGHTING (Jul 2 founder call): while a game Gary picked
+        // is in progress, the live module leads — the sweat is why users open
+        // the app mid-game.
         let sweatIsOn = liveScoresNow.contains { $0.isLive && pickFor($0) != nil }
+        // Results lead only on the actual morning; from noon the slate leads
+        // and last night's stories follow it.
+        let morningLeads = todayClockPhase == .morning && !sweatIsOn
 
+        // ── THE SWEAT — live takeover leads whenever Gary has a game on.
         if sweatIsOn, let tb = todayBoard {
             TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false,
                               includeBigGames: false, dayLabel: "TODAY",
@@ -2413,8 +2415,9 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
 
-        // ── ① The headlines marquee — leads the page except during a live sweat.
-        if !stories.isEmpty {
+        // ── WHILE YOU SLEPT — mornings open on last night's stories.
+        if morningLeads, !stories.isEmpty {
+            HomeActHead(title: "While You Slept", sub: recapLabel == "TODAY" ? "" : "last night, graded")
             HomeHeadlinesCarousel(stories: stories) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
@@ -2422,8 +2425,13 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
 
-        // ── ② Countdown to the next game up today — under the headlines when no
-        // live sweat (its usual slot); already rendered above when one is on.
+        // ── TONIGHT — the countdown, the big games, the full board with the
+        // horizon tabs (streaks to continue / home dogs / road dogs), and the
+        // marquee game with stakes.
+        let board = liveBoardRows   // O(games×picks) — compute once
+        if todayBoard != nil || !board.isEmpty {
+            HomeActHead(title: sweatIsOn ? "The Rest of Tonight" : "Tonight")
+        }
         if !sweatIsOn, let tb = todayBoard {
             TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false,
                               includeBigGames: false, dayLabel: "TODAY",
@@ -2433,27 +2441,14 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
         }
-
-        // (LIVE FORM moved into the tab row — see phaseSwitcher/liveFormInline.
-        // No standalone section; the per-sport records ride beside TODAY/TOMORROW.)
-
-        // ── ②c Big Games To Watch — below the form (countdown is now its own block
-        // above). includeCountdown:false so this Body renders only Big Games.
         if let tb = todayBoard {
             TomorrowView.Body(board: tb, includeBoard: false, includeLookAhead: false,
                               includeCountdown: false, dayLabel: "TODAY")
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
         }
-
-        // ── ③ Tonight's Board — under the form + headlines (founder call). The
-        // unified board: BOARD shows EVERY game on the slate with the live-score
-        // overlay (settled · live · upcoming) — the old standalone Slate's value
-        // tabs (STREAKS / HOME DOGS / ROAD DOGS) are folded in here. The bottom
-        // Slate section was removed; this is the one board now.
-        let board = liveBoardRows   // O(games×picks) — compute once, not twice per body eval
         if !board.isEmpty {
-            HomeSlateSection(header: "Today's board", sub: "", tabs: [
+            HomeSlateSection(header: "The board", sub: "", tabs: [
                 .init(label: "BOARD", rows: board,
                       empty: "The board fills in as picks post."),
                 .init(label: "STREAKS", rows: streaksToContinueRows,
@@ -2468,34 +2463,42 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
         }
-
-        // ── (REMOVED) The dedicated "The World Cup" Home module (its own headline
-        // + WC match list) was pulled per the founder ("we don't need this section
-        // anymore"). WC still flows through the board tabs, the headlines, and the
-        // Wire — only the standalone Home module is gone. `worldCupModule` is left
-        // defined but unrendered (parked) for an easy restore.
-
-        // ── ④ The big one — the marquee game with stakes attached.
         if let big = bigOneModel {
             bigOneSection(big)
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.11), value: animateIn)
         }
 
-        // ── ⑤ The results-first morning stack — prop box, scorecard, the Wire
-        // (the 7-Day Form moved up under the headlines). Carried over from the
-        // locked Morning page (Hits & heartbreakers was removed per founder).
-        morningSections
+        // ── GARY'S DAY — every pick posted today with its status rolling
+        // pending → live verdict → final. Accountability as content; rows tap
+        // through to the pick, the footer note says when the rest post.
+        if !todayPicks.isEmpty {
+            HomeActHead(title: "Gary's Day", count: todayPicks.count)
+            HomeGarysDaySection(
+                picks: todayPicks,
+                freePickId: freePick?.id,
+                slateCount: max(slateGames.count, todayPicks.count),
+                onTapPick: { p in
+                    PicksFocusState.shared.focusGame = "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
+                }
+            )
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
+        }
 
-        // ── (REMOVED) The standalone Slate section that used to sit at the
-        // very bottom is gone — its BOARD became the unified Tonight's Board
-        // above (every game + live scores), and its HOME DOGS / ROAD DOGS /
-        // STREAKS tabs were folded into that same board.
-    }
+        // ── LAST NIGHT — from noon on, the stories follow the slate.
+        if !morningLeads, !stories.isEmpty {
+            HomeActHead(title: "Last Night", sub: recapLabel == "TODAY" ? "today, graded" : "")
+            HomeHeadlinesCarousel(stories: stories) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.09), value: animateIn)
+        }
 
-    @ViewBuilder private var morningSections: some View {
-        // (The headlines marquee AND the 7-Day Form now lead `todaySections`
-        // up top — both moved out of this results stack per the redesign.)
+        // ── THE NIGHT'S NUMBERS — prop box (the fan candy), then the honest
+        // sign-off: the scorecard. Present for whoever wants proof, never the lead.
         if !propBoxTabs.isEmpty {
             HomePropBoxSection(tabs: propBoxTabs) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
@@ -2504,27 +2507,15 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         }
         if lastNightGraded > 0 {
+            HomeActHead(title: "The Record", sub: "every pick graded")
             scorecard
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
         }
-        // (The standalone "The Wire" section was folded into the 70/30 row up top:
-        // its live intel rides beside the headlines, its results ARE the headlines.
-        // Removed from here so the Wire isn't shown twice — founder's side-by-side.)
-        // The Hits & heartbreakers (biggest-cashes) section was REMOVED from the
-        // Today page per the founder. cashRows/worstBeat are still computed for
-        // the best-cash odds line in the scorecard; the rail itself is gone.
-        // The Receipts section was dropped from the merged Today page for space
-        // (founder, rolling-Home final pass). receiptLanes is still computed for
-        // the Hub; it just isn't rendered here.
-        // The forward-looking sections (board / World Cup / slate / the big one)
-        // are no longer split off — `todaySections` renders them ABOVE this
-        // results stack so the merged Today page carries everything in one page.
+        // (Parked, unrendered: worldCupModule, the Wire, Hits & Heartbreakers,
+        // The Receipts — all removed from Today by earlier founder calls;
+        // receiptLanes/cashRows are still computed for other surfaces.)
     }
-
-    // NOTE: the old `pregameSections` builder was folded into `todaySections`
-    // (the merged Today page) — board + World Cup + slate + the big one all live
-    // there now, so nothing pre-game was dropped.
 
     // MARK: Tonight extras — the bettor's read on the DAY
 
@@ -4014,6 +4005,194 @@ struct HomeView: View {
 }
 
 // MARK: - Front Page Blocks (Home)
+
+/// The Home masthead — the mock wordmark (Jul 4, founder-picked): heavy
+/// "GARY" + gold "A.I.", the date in mono on the same baseline, bear mark,
+/// settings dots, one gold hairline. Dynamic sports-tech, never serif.
+struct HomeMasthead: View {
+    private var dateLine: String {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: Date()).uppercased()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(GaryBrand.mark)
+                    .resizable().scaledToFit()
+                    .frame(width: 28, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                (Text("GARY ").foregroundColor(Color(hex: "#F6F1E7"))
+                    + Text("A.I.").foregroundColor(GaryColors.gold))
+                    .font(.system(size: 24, weight: .heavy))
+                    .tracking(0.5)
+                Text(dateLine)
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .padding(.leading, 2)
+                Spacer()
+                Button {
+                    NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .frame(width: 28, height: 30)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
+            }
+            Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(height: 1)
+                .padding(.top, 12)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+    }
+}
+
+/// Act head — mock language: gold hairline, mono uppercase label, mono count,
+/// quiet sub right-aligned. Twin of the Hub's section head.
+struct HomeActHead: View {
+    let title: String
+    var count: Int? = nil
+    var sub: String? = nil
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Rectangle().fill(GaryColors.gold.opacity(0.25)).frame(height: 1)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundStyle(GaryColors.gold)
+                if let count, count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                Spacer(minLength: 0)
+                if let sub, !sub.isEmpty {
+                    Text(sub.uppercased())
+                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+    }
+}
+
+/// GARY'S DAY — the accountability feed: every pick posted today, one row per
+/// game, its status rolling scheduled time → live verdict → final call. The
+/// day's free pick wears the gold FREE tag; rows tap through to the pick.
+struct HomeGarysDaySection: View {
+    let picks: [GaryPick]
+    var freePickId: String? = nil
+    var slateCount: Int = 0
+    let onTapPick: (GaryPick) -> Void
+    @ObservedObject private var live = LiveScoreCache.shared
+
+    private var ordered: [GaryPick] {
+        picks.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+    }
+
+    private func liveRow(_ p: GaryPick) -> LiveScore? {
+        if let ls = live.status(forGameId: p.game_id) { return ls }
+        return live.status(forMatchup: "\(p.awayTeam ?? "") @ \(p.homeTeam ?? "")")
+    }
+
+    /// The row's right-side status: time → ▶ verdict → final call.
+    private func status(_ p: GaryPick) -> (text: String, color: Color) {
+        guard let ls = liveRow(p), ls.isLive || ls.isFinal else {
+            let t = Formatters.formatCommenceTime(p.commence_time)
+            return (t.isEmpty ? "TONIGHT" : t.uppercased(), Color.white.opacity(0.62))
+        }
+        let verdict = HomeLiveVerdict.evaluate(pick: p, live: ls)
+        if ls.isLive {
+            switch verdict {
+            case .covering: return ("▶ COVERING", GaryColors.win)
+            case .trailing: return ("▶ IN THE RED", GaryColors.loss)
+            case .neutral:  return ("▶ \((ls.detail ?? "LIVE").uppercased())", GaryColors.gold)
+            }
+        }
+        switch verdict {
+        case .covering: return ("✓ CASHED", GaryColors.win)
+        case .trailing: return ("✗ NO CASH", GaryColors.loss)
+        case .neutral:  return ("FINAL", Color.white.opacity(0.62))
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(ordered.enumerated()), id: \.element.id) { i, p in
+                    Button { onTapPick(p) } label: { row(p) }.buttonStyle(.plain)
+                    if i < ordered.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
+                    }
+                }
+            }
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(GaryColors.warmWhite.opacity(0.03))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
+            )
+            .padding(.horizontal, 16)
+            if slateCount > picks.count {
+                Text("\(slateCount - picks.count) more post ~90 minutes before first pitch.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .padding(.horizontal, 16).padding(.top, 10)
+            }
+        }
+    }
+
+    @ViewBuilder private func row(_ p: GaryPick) -> some View {
+        let s = status(p)
+        // The call itself rides under the matchup (the slate is free content —
+        // the board above already shows it); it also disambiguates the WC
+        // two-pick games, whose side + total rows share one matchup line.
+        let call = Formatters.splitPickAndOdds(p.pick ?? "").0
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text("\(Formatters.shortTeamName(p.awayTeam, league: p.league)) @ \(Formatters.shortTeamName(p.homeTeam, league: p.league))")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    if p.id == freePickId {
+                        Text("FREE")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+                if !call.isEmpty {
+                    Text(call.uppercased())
+                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(s.text)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(s.color)
+                .lineLimit(1)
+                .padding(.top, 2)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.3))
+                .padding(.top, 3)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 9)
+        .contentShape(Rectangle())
+    }
+}
 
 /// ③ The Marquee — last night's story as a static hero (no footage, no
 /// logos: facts are free). League chip up top, the game headline, and the

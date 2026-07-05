@@ -9,10 +9,11 @@ import SwiftUI
 // boards (Regression, Streak Watch), the beats (the long tail in four human
 // sections), and the receipts closing the page all day.
 //
-// Visual language is deliberately its own: New York serif for the masthead /
-// headlines / section heads, SF for reads, monospaced digits for data, gold
-// small-caps kickers, newspaper hairline rules instead of boxed panels.
-// Palette stays Gary: warm black, gold signature, HubPalette green/red tones.
+// Visual language (Jul 4, founder-tuned): heavy SF display for the wordmark
+// and headlines, mono uppercase kickers for lanes/sections, monospaced digits
+// for data, gold hairline rules — "legit A.I. tech meets sports betting",
+// never newspaper-serif, never crypto-dashboard. Palette stays Gary: warm
+// black, gold signature, HubPalette green/red tones.
 //
 // Data machinery (staleness gates, 3am EST rollover, graded-date walk-back,
 // kept-alive-tab visibility flips) is carried over from the original Hub page
@@ -23,13 +24,15 @@ import SwiftUI
 // MARK: - Type + chrome system
 
 fileprivate enum HubFont {
-    /// New York — the editorial voice (masthead, headlines, section heads).
-    static func serif(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .serif)
+    /// Display voice — heavy SF, the dynamic sports-tech face. (The serif
+    /// newspaper voice was retired Jul 4: founder — "reads blog, not betting
+    /// app"; the mock language is heavy sans + mono.)
+    static func display(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font {
+        .system(size: size, weight: weight)
     }
-    /// Small-caps kickers (feed Title Case text so the caps read as small caps).
+    /// Mono kickers/labels — always uppercase at the call site.
     static func kicker(_ size: CGFloat = 10.5) -> Font {
-        Font.system(size: size, weight: .semibold).smallCaps()
+        .system(size: size, weight: .semibold, design: .monospaced)
     }
     /// Monospaced data numerals.
     static func data(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
@@ -40,41 +43,42 @@ fileprivate enum HubFont {
     }
 }
 
-/// Gold small-caps kicker — the lane/section label idiom (no chips, no boxes).
+/// Gold mono kicker — the lane/section label idiom (no chips, no boxes).
 fileprivate struct HubKicker: View {
     let text: String
     var size: CGFloat = 10.5
     var color: Color = GaryColors.gold
     var body: some View {
-        Text(text.capitalized)
+        Text(text.uppercased())
             .font(HubFont.kicker(size))
-            .tracking(1.4)
+            .tracking(1.2)
             .foregroundStyle(color)
             .lineLimit(1)
     }
 }
 
-/// Section head: newspaper rule above a serif title, count in mono gold.
+/// Section head — mock language: gold hairline, mono uppercase label, mono
+/// count, quiet sub on the right. The rows below carry the big type.
 fileprivate struct HubHead: View {
     let title: String
     var count: Int? = nil
     var sub: String? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(height: 1)
+        VStack(alignment: .leading, spacing: 8) {
+            Rectangle().fill(GaryColors.gold.opacity(0.25)).frame(height: 1)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title)
-                    .font(HubFont.serif(20, .semibold))
-                    .foregroundStyle(GaryColors.warmWhite)
+                Text(title.uppercased())
+                    .font(HubFont.kicker(12)).tracking(1.6)
+                    .foregroundStyle(GaryColors.gold)
                 if let count, count > 0 {
                     Text("\(count)")
-                        .font(HubFont.data(12))
-                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                        .font(HubFont.data(11.5))
+                        .foregroundStyle(.white.opacity(0.7))
                 }
                 Spacer(minLength: 0)
                 if let sub, !sub.isEmpty {
-                    Text(sub)
-                        .font(HubFont.data(10, .medium))
+                    Text(sub.uppercased())
+                        .font(HubFont.kicker(9.5)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                 }
@@ -92,13 +96,6 @@ fileprivate struct HubRule: View {
     }
 }
 
-/// Tracks the masthead's bottom edge in scroll space — drives the sticky
-/// jump bar (visible once the masthead scrolls off).
-fileprivate struct HubMastheadBottomKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
 /// The page-wide "See all n / Show less" expander control.
 fileprivate struct HubSeeAllButton: View {
     let isOpen: Bool
@@ -107,7 +104,7 @@ fileprivate struct HubSeeAllButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Text(isOpen ? "Show less" : "See all \(total)")
+                Text(isOpen ? "SHOW LESS" : "SEE ALL \(total)")
                     .font(HubFont.kicker(10.5)).tracking(1.2)
                     .foregroundStyle(GaryColors.gold)
                 Image(systemName: isOpen ? "chevron.up" : "chevron.down")
@@ -204,9 +201,9 @@ struct HubView: View {
     @State private var pendingScrollAnchor: String? = nil
     /// Beats currently expanded past their top rows ("See all n").
     @State private var openBeats: Set<String> = []
-    /// Sticky jump bar — shown once the masthead scrolls off, so every
-    /// section is one tap away and nothing gets buried (founder, Jul 4).
-    @State private var jumpBarVisible = false
+    /// Floating section nav — the trailing index button pops the section
+    /// list so everything is one tap away (founder, Jul 4).
+    @State private var sectionNavOpen = false
     /// Pre-grouped [league: [kind: rows]] — rebuilt once per load.
     @State private var itemsIndex: [HubLeagueSel: [SignalKind: [Signal]]] = [:]
 
@@ -528,12 +525,6 @@ struct HubView: View {
                     searchFocused: $searchFocused
                 )
                 .id("top")
-                .background(
-                    GeometryReader { g in
-                        Color.clear.preference(key: HubMastheadBottomKey.self,
-                                               value: g.frame(in: .global).maxY)
-                    }
-                )
 
                 if !didLoad {
                     hubLoading
@@ -682,23 +673,14 @@ struct HubView: View {
             .frame(minHeight: geo.size.height, alignment: .top)
             .task { if !didLoad { await load() } }
         }
-        .onPreferenceChange(HubMastheadBottomKey.self) { maxY in
-            // Global-space measurement (named scroll spaces failed to resolve
-            // through this Reader/Geometry nesting): the masthead's bottom is
-            // past the status bar once maxY drops under the top inset.
-            let show = maxY < geo.safeAreaInsets.top
-            if show != jumpBarVisible {
-                withAnimation(.easeInOut(duration: 0.18)) { jumpBarVisible = show }
-            }
-        }
-        .overlay(alignment: .top) {
-            if jumpBarVisible, !searchOpen, didLoad {
-                // The app's scroll surfaces underlap the status bar — pad the
-                // pinned bar down by the real top inset so labels stay visible.
-                HubJumpBar(items: jumpItems, topInset: geo.safeAreaInsets.top) { anchor in
+        .overlay(alignment: .bottomTrailing) {
+            if !searchOpen, didLoad, !jumpItems.isEmpty {
+                HubSectionNav(items: jumpItems, open: $sectionNavOpen) { anchor in
                     withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.trailing, 14)
+                .padding(.bottom, 108)   // clears the floating tab bar
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .scrollDismissesKeyboard(.immediately)
@@ -715,6 +697,10 @@ struct HubView: View {
         .onGaryTour { verb, arg in
             // "hubgame 1" — open the game sheet for slate index 1 (sim QA:
             // the tour harness can't tap, so the sheet gets its own verb).
+            if verb == "hubnav" {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { sectionNavOpen.toggle() }
+                return
+            }
             if verb == "hubgame" {
                 if let i = Int(arg), slateRows.indices.contains(i) {
                     gameSheet = HubGameSel(row: slateRows[i])
@@ -808,8 +794,8 @@ struct HubView: View {
     private var hubLoading: some View {
         VStack(spacing: 14) {
             ProgressView().tint(GaryColors.gold)
-            Text("Pulling tonight's board")
-                .font(HubFont.serif(15, .medium))
+            Text("PULLING TONIGHT'S BOARD")
+                .font(HubFont.kicker(11)).tracking(1.4)
                 .foregroundStyle(.white.opacity(0.62))
         }
         .frame(maxWidth: .infinity).padding(.top, 120)
@@ -821,7 +807,7 @@ struct HubView: View {
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(GaryColors.gold.opacity(0.6))
             Text("Couldn't load the Hub")
-                .font(HubFont.serif(18, .semibold))
+                .font(HubFont.display(17, .bold))
                 .foregroundStyle(GaryColors.warmWhite)
             Text("Check your connection, then pull down to retry.")
                 .font(HubFont.body(12.5)).foregroundStyle(.white.opacity(0.62))
@@ -845,7 +831,7 @@ struct HubView: View {
         VStack(alignment: .leading, spacing: 6) {
             HubKicker(text: "Tonight's Board")
             Text("No \(sel.label) edges posted yet — tonight's board fills in as lineups and matchups firm up.")
-                .font(HubFont.serif(16, .medium))
+                .font(HubFont.body(14.5, .semibold))
                 .foregroundStyle(.white.opacity(0.8))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -853,36 +839,68 @@ struct HubView: View {
     }
 }
 
-// MARK: - Sticky jump bar
+// MARK: - Pop-out section nav
 
-/// Thin pinned section nav — appears once the masthead scrolls off so every
-/// section stays one tap away on a long page. Plain kickers, no capsules.
-fileprivate struct HubJumpBar: View {
+/// Floating section nav (founder: "a pop out nav from the side") — a small
+/// gold index button rides the trailing edge once the masthead scrolls off;
+/// tapping it pops a vertical list of the page's sections, tap one to jump.
+fileprivate struct HubSectionNav: View {
     let items: [(anchor: String, label: String)]
-    var topInset: CGFloat = 0
+    @Binding var open: Bool
     let onTap: (String) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(height: topInset)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 20) {
+        VStack(alignment: .trailing, spacing: 10) {
+            if open {
+                VStack(alignment: .trailing, spacing: 0) {
                     ForEach(items, id: \.anchor) { item in
-                        Button { onTap(item.anchor) } label: {
-                            Text(item.label.capitalized)
-                                .font(HubFont.kicker(10.5)).tracking(1.3)
-                                .foregroundStyle(.white.opacity(0.75))
-                                .frame(minHeight: 38)
+                        Button {
+                            onTap(item.anchor)
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { open = false }
+                        } label: {
+                            Text(item.label.uppercased())
+                                .font(HubFont.kicker(11)).tracking(1.3)
+                                .foregroundStyle(.white.opacity(0.85))
+                                .padding(.vertical, 9)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        if item.anchor != items.last?.anchor {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        }
                     }
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .frame(width: 168)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(hex: "#141210").opacity(0.97))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.35), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.5), radius: 18, y: 6)
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
-            Rectangle().fill(GaryColors.gold.opacity(0.3)).frame(height: 1)
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { open.toggle() }
+            } label: {
+                Image(systemName: open ? "xmark" : "list.bullet")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(open ? GaryColors.ink : GaryColors.gold)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        Circle()
+                            .fill(open ? AnyShapeStyle(GaryColors.gold) : AnyShapeStyle(Color(hex: "#141210").opacity(0.95)))
+                            .overlay(Circle().stroke(GaryColors.gold.opacity(0.5), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
+                    )
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(open ? "Close section list" : "Jump to a section")
         }
-        .background(GaryColors.darkBg.opacity(0.96))
     }
 }
 
@@ -911,9 +929,10 @@ fileprivate struct HubMasthead: View {
                     .resizable().scaledToFit()
                     .frame(width: 30, height: 30)
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                Text("The Hub")
-                    .font(HubFont.serif(32))
-                    .foregroundStyle(GaryColors.warmWhite)
+                (Text("THE ").foregroundColor(GaryColors.warmWhite)
+                    + Text("HUB").foregroundColor(GaryColors.gold))
+                    .font(HubFont.display(25))
+                    .tracking(0.5)
                 Spacer()
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -1148,9 +1167,9 @@ fileprivate struct HubLeadStory: View {
                         .lineLimit(1)
                 }
                 Text(s.headline)
-                    .font(HubFont.serif(24, .bold))
+                    .font(HubFont.display(22))
                     .foregroundStyle(GaryColors.warmWhite)
-                    .lineSpacing(2)
+                    .lineSpacing(1)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 // The giant number is for compact stats only — a sentence
@@ -1176,7 +1195,7 @@ fileprivate struct HubLeadStory: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 HStack(spacing: 5) {
-                    Text(s.playerId != nil ? "Full breakdown" : "The full read")
+                    Text(s.playerId != nil ? "FULL BREAKDOWN" : "THE FULL READ")
                         .font(HubFont.kicker(10.5)).tracking(1.2)
                         .foregroundStyle(GaryColors.gold)
                     Image(systemName: "arrow.right")
@@ -1330,7 +1349,7 @@ fileprivate struct HubRegressionBoard: View {
                 let on = t == activeTab
                 Button { withAnimation(.easeInOut(duration: 0.15)) { tab = t; expandedID = nil } } label: {
                     HStack(spacing: 5) {
-                        Text(label(t)).font(HubFont.kicker(11)).tracking(1.3)
+                        Text(label(t).uppercased()).font(HubFont.kicker(11)).tracking(1.3)
                         Text("\(rowsFor(t).count)").font(HubFont.data(10, .medium))
                     }
                     .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.45))
@@ -1408,7 +1427,7 @@ fileprivate struct HubRegressionBoard: View {
             }
             if s.playerId != nil {
                 HStack(spacing: 5) {
-                    Text("Tap again for the full profile")
+                    Text("TAP AGAIN FOR THE FULL PROFILE")
                         .font(HubFont.kicker(9.5)).tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                     Image(systemName: "arrow.right")
@@ -1423,7 +1442,7 @@ fileprivate struct HubRegressionBoard: View {
 
     private func stat(_ label: String, _ value: String, tint: Color = Color.white.opacity(0.92)) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label.capitalized).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
+            Text(label.uppercased()).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
             Text(value).font(HubFont.data(12)).foregroundStyle(tint)
         }
     }
@@ -1721,7 +1740,7 @@ fileprivate struct HubStoryRow: View {
                     if let onProfile {
                         Button(action: onProfile) {
                             HStack(spacing: 5) {
-                                Text("Full profile")
+                                Text("FULL PROFILE")
                                     .font(HubFont.kicker(10)).tracking(1.1)
                                     .foregroundStyle(GaryColors.gold)
                                 Image(systemName: "arrow.right")
@@ -2013,7 +2032,7 @@ fileprivate struct HubNightBoard: View {
                         ForEach(Array(present.enumerated()), id: \.offset) { i, c in
                             let on = i == tab
                             Button { withAnimation(.easeInOut(duration: 0.15)) { tab = i; showAll = false } } label: {
-                                Text(c.label.capitalized)
+                                Text(c.label.uppercased())
                                     .font(HubFont.kicker(11)).tracking(1.3)
                                     .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.45))
                                     .frame(minHeight: 28)
@@ -2197,7 +2216,7 @@ fileprivate struct HubGameSheet: View {
                 HubKicker(text: "Tonight", size: 10.5, color: GaryColors.gold)
             }
             Text("\(row.away_team ?? hubSideLabel(row.away_abbr, nil)) @ \(row.home_team ?? hubSideLabel(row.home_abbr, nil))")
-                .font(HubFont.serif(23, .bold))
+                .font(HubFont.display(21))
                 .foregroundStyle(GaryColors.warmWhite)
                 .fixedSize(horizontal: false, vertical: true)
             if let ls, ls.isLive || ls.isFinal {
@@ -2238,7 +2257,7 @@ fileprivate struct HubGameSheet: View {
 
     private func numberStat(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label.capitalized).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
+            Text(label.uppercased()).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
             Text(value).font(HubFont.data(12)).foregroundStyle(.white.opacity(0.92))
         }
     }
@@ -2296,7 +2315,7 @@ fileprivate struct HubSearchResults: View {
             if total == 0 {
                 VStack(spacing: 8) {
                     Text("No matches")
-                        .font(HubFont.serif(16, .semibold))
+                        .font(HubFont.display(15, .bold))
                         .foregroundStyle(.white.opacity(0.7))
                     Text("Try a player, a team, or a lane like \"platoon\".")
                         .font(HubFont.body(12)).foregroundStyle(.white.opacity(0.62))
