@@ -2611,6 +2611,7 @@ struct HomeView: View {
             return HomeMarqueeTracker.Entry(
                 id: "mq-\(big.rank)-\(matchup)",
                 rank: big.rank,
+                league: big.league,
                 matchupFull: matchup,
                 title: title,
                 context: (big.context?.isEmpty == false ? big.context : big.standing),
@@ -2628,7 +2629,9 @@ struct HomeView: View {
     private var marqueeTomorrowTease: (matchup: String, time: String)? {
         guard let big = tomorrowBoard?.big_games.first, let m = big.matchup else { return nil }
         let sides = m.components(separatedBy: " @ ")
-        let title = sides.count == 2 ? "\(Self.shortTeam(sides[0])) @ \(Self.shortTeam(sides[1]))" : m
+        let title = sides.count == 2
+            ? "\(teamAbbrevFromName(sides[0], league: big.league)) @ \(teamAbbrevFromName(sides[1], league: big.league))"
+            : m
         return (title, TomorrowView.etTime(big.commence_time, withZone: false, meridiem: true).uppercased())
     }
 
@@ -3631,6 +3634,7 @@ struct HomeMarqueeTracker: View {
     struct Entry: Identifiable {
         let id: String
         let rank: Int
+        let league: String?
         let matchupFull: String
         let title: String
         let context: String?
@@ -3652,14 +3656,27 @@ struct HomeMarqueeTracker: View {
     let entries: [Entry]
     var tomorrowTease: (matchup: String, time: String)? = nil
     let onOpenGame: (String) -> Void
-    @State private var expanded = false
 
-    /// The hero: the live big game if one's on, else the next one up BY THE
-    /// CLOCK (the list keeps the pipeline's rank; the hero follows the day).
+    /// The hero: live beats just-started beats next-up by the clock.
     private var hero: Entry? {
         entries.first { $0.isLive }
             ?? entries.first { $0.started }
             ?? entries.filter { !$0.isFinal }.min { ($0.commence ?? "") < ($1.commence ?? "") }
+    }
+    /// The rail: every other big game, docked beside the hero (founder:
+    /// no drop-down — the space was already there).
+    private var rail: [Entry] {
+        entries.filter { $0.id != hero?.id }.sorted { a, b in
+            func weight(_ e: Entry) -> Int {
+                if e.isLive { return 0 }
+                if e.started { return 1 }
+                if !e.isFinal { return 2 }
+                return 3
+            }
+            let (wa, wb) = (weight(a), weight(b))
+            if wa != wb { return wa < wb }
+            return (a.commence ?? "") < (b.commence ?? "")
+        }
     }
     private var settledLine: String? {
         let done = entries.filter { $0.isFinal }
@@ -3670,42 +3687,20 @@ struct HomeMarqueeTracker: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let hero {
-                Button { onOpenGame(hero.matchupFull) } label: { heroView(hero) }
-                    .buttonStyle(.plain)
-            } else {
-                doneView
-            }
-            if entries.count > 1 || tomorrowTease != nil {
-                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { expanded.toggle() }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(expanded ? "CLOSE" : "ALL BIG GAMES")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced)).tracking(1.2)
-                            .foregroundStyle(GaryColors.gold)
-                        if !expanded {
-                            Text("\(entries.count)")
-                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(GaryColors.gold)
-                        Spacer()
-                        if !expanded, let line = settledLine {
-                            Text(line.uppercased())
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .contentShape(Rectangle())
+        HStack(alignment: .center, spacing: 0) {
+            Group {
+                if let hero {
+                    Button { onOpenGame(hero.matchupFull) } label: { heroView(hero) }
+                        .buttonStyle(.plain)
+                } else {
+                    doneView
                 }
-                .buttonStyle(.plain)
-                if expanded { list }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if !rail.isEmpty || tomorrowTease != nil {
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                    .padding(.vertical, 10)
+                railView
             }
         }
         .background(
@@ -3715,6 +3710,67 @@ struct HomeMarqueeTracker: View {
                     .stroke(hero?.isLive == true ? GaryColors.win.opacity(0.35) : GaryColors.gold.opacity(0.3), lineWidth: 1))
         )
         .padding(.horizontal, 16)
+    }
+
+    /// Compact "PIT @ WSH" from the full matchup, via the league abbr maps.
+    private func railTitle(_ e: Entry) -> String {
+        let sides = e.matchupFull.components(separatedBy: " @ ")
+        guard sides.count == 2 else { return e.matchupFull }
+        return "\(teamAbbrevFromName(sides[0], league: e.league)) @ \(teamAbbrevFromName(sides[1], league: e.league))"
+    }
+
+    private var railView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(rail) { e in
+                Button { onOpenGame(e.matchupFull) } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(railTitle(e))
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                        railStatus(e)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            if let tease = tomorrowTease {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tease.matchup)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Text("TMRW \(tease.time)")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .padding(.horizontal, 12).padding(.vertical, 7)
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(width: 128, alignment: .leading)
+    }
+
+    @ViewBuilder private func railStatus(_ e: Entry) -> some View {
+        if let (text, color) = e.result {
+            Text(text)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(color)
+        } else if e.isLive, let det = e.live?.detail {
+            Text("▶ \(det.uppercased())")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(GaryColors.win)
+        } else if e.started {
+            Text("▶ STARTED")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(GaryColors.win)
+        } else {
+            Text(TomorrowView.etTime(e.commence, withZone: false, meridiem: true).uppercased())
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.62))
+        }
     }
 
     // The hero face — live sweat, or the countdown to the next big one.
@@ -3822,73 +3878,6 @@ struct HomeMarqueeTracker: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // The unfolded ranked list — stamps land as games settle.
-    private var list: some View {
-        VStack(spacing: 0) {
-            ForEach(entries) { e in
-                Button { onOpenGame(e.matchupFull) } label: { listRow(e) }
-                    .buttonStyle(.plain)
-                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
-            }
-            if let tease = tomorrowTease {
-                HStack(spacing: 8) {
-                    Text("TOMORROW'S MARQUEE")
-                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.1)
-                        .foregroundStyle(.white.opacity(0.7))
-                    Spacer()
-                    Text(tease.matchup)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Text(tease.time)
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                .padding(.horizontal, 14).padding(.vertical, 11)
-            }
-        }
-    }
-
-    @ViewBuilder private func listRow(_ e: Entry) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text("\(e.rank)")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundStyle(GaryColors.gold.opacity(0.9))
-                .frame(width: 14, alignment: .leading)
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(e.isLive || e.isFinal ? (e.live?.scoreLine ?? e.title) : e.title)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.96))
-                    .lineLimit(1).minimumScaleFactor(0.75)
-                if let pick = e.pickLine {
-                    Text(pick)
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(GaryColors.gold.opacity(0.95))
-                        .lineLimit(1).minimumScaleFactor(0.75)
-                } else if let pending = e.pendingLine {
-                    Text(pending)
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.72))
-                }
-            }
-            Spacer(minLength: 8)
-            if let (text, color) = e.result {
-                Text(text)
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(color)
-            } else if e.isLive, let det = e.live?.detail {
-                Text("▶ \(det.uppercased())")
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(GaryColors.win)
-            } else {
-                Text(TomorrowView.etTime(e.commence, withZone: false, meridiem: true).uppercased())
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .contentShape(Rectangle())
-    }
 }
 
 /// THE OVERNIGHT STRIP — one line: last night's number and the door to the
