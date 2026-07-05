@@ -544,7 +544,7 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
   const { data: gradedGames } = await sb.from("game_results").select("matchup, pick_text, result").eq("league", "WC").eq("game_date", today);
   const { data: gradedProps } = await sb.from("prop_results").select("matchup, player_name, prop_type, line_value, bet, result").eq("game_date", today);
 
-  const { data: logRows } = await sb.from("social_post_log").select("pick_text, thread_format").eq("post_date", today).eq("league", "WC");
+  const { data: logRows } = await sb.from("social_post_log").select("pick_text, thread_format, hook_tweet_id").eq("post_date", today).eq("league", "WC");
   const log = logRows ?? [];
   const recapLogged = (key: string) => log.some((r) => r.thread_format === "wc_recap" && sameGame(String(r.pick_text), key));
   const picksLogged = (key: string) => log.some((r) => r.thread_format === "wc_picks" && sameGame(String(r.pick_text), key));
@@ -578,7 +578,9 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
     if (!lines.length) continue; // graded row exists but nothing readable yet
     const allWon = !lines.some((l) => l.endsWith("✗"));
     const header = allWon ? "We just cashed the following:" : "Final results:";
-    actions.push({ type: "recap", game: g.key, text: `WC Picks all day long.\n\n${header}\n\n${lines.join("\n")}` });
+    // Quote the game's own wc_picks tweet when it exists — the recap then carries the original timestamped call (receipts).
+    const picksRow = log.find((r) => r.thread_format === "wc_picks" && sameGame(String(r.pick_text), g.key));
+    actions.push({ type: "recap", game: g.key, quoteId: picksRow?.hook_tweet_id ?? null, text: `WC Picks all day long.\n\n${header}\n\n${lines.join("\n")}` });
   }
 
   // 2) NEXT PICKS — first game near kickoff, or any game once the previous one is final.
@@ -643,7 +645,12 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
           catch (e) { console.error("WC picks-list reply failed: " + String(e)); }
         }
       } else {
-        tweetId = await postTweet(a.text);
+        if (a.quoteId) {
+          try { tweetId = await postQuote(a.text, a.quoteId); }
+          catch (e) { console.error("wc recap quote failed, posting plain: " + String(e)); tweetId = await postTweet(a.text); }
+        } else {
+          tweetId = await postTweet(a.text);
+        }
       }
       const startEt = a.start ? parseInt(new Date(a.start).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" })) : 12;
       const slot = startEt < 14 ? "morning" : startEt < 17 ? "afternoon" : startEt < 21 ? "evening" : "late";
