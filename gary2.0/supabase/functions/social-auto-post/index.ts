@@ -17,11 +17,12 @@
 //     pinned post carry the install path, and the profile out-converts an in-thread link). Pick thread = hook + handoff.
 //   - Recaps show wins AND losses openly (honest receipts build the trust that drives installs) + week-to-date record.
 //
-// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|wc|verdict, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
+// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|wc|verdict|arc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
 //   force_mode=wc → run ONLY the WC per-game card path (use with dry_run=1 to vet captions/cards without posting).
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts } from "./verdicts.ts";
+import { computeStanding } from "./pl.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -374,6 +375,43 @@ async function runVerdictMode(today: string, dryRun: boolean) {
     }
   }
   return { posted: verdicts.some((v) => v.thread_url), dry_run: dryRun || undefined, verdicts };
+}
+
+// SEASON ARC (Engine 0, Jul 2026): the pinned post promises "every pick, $100 flat, all season"; this mode
+// posts the weekly standing as a REPLY under the pin (Monday noon ET). The pin itself is posted+pinned once,
+// manually (GaryMarketing/ARC_PIN.md runbook), and anchored by a thread_format='arc_pin' log row.
+const ARC_START = "2026-07-06";
+
+async function runArcUpdateMode(today: string, dryRun: boolean) {
+  const { data: pinRows } = await sb.from("social_post_log")
+    .select("hook_tweet_id").eq("thread_format", "arc_pin")
+    .order("posted_at", { ascending: false }).limit(1);
+  const pinId = pinRows?.[0]?.hook_tweet_id;
+  if (!pinId) return { posted: false, reason: "no arc_pin row yet (see GaryMarketing/ARC_PIN.md runbook)" };
+
+  const weekAgo = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
+  const { data: recent } = await sb.from("social_post_log")
+    .select("id").eq("thread_format", "arc_update").gte("post_date", weekAgo).limit(1);
+  if (recent?.length && !dryRun) return { posted: false, reason: "arc update already posted this week" };
+
+  const { data: rows, error } = await sb.from("game_results")
+    .select("pick_text, result").gte("game_date", ARC_START);
+  if (error) throw error;
+  const s = computeStanding(rows ?? []);
+  if (!s.w && !s.l && !s.p) return { posted: false, reason: "no graded picks since ARC_START yet" };
+
+  const pushes = s.p ? ` with ${s.p} push${s.p === 1 ? "" : "es"}` : "";
+  const text = `The tape since July 6th, every pick at $100 flat:\n\n${s.record}${pushes}\nNet: ${s.netLabel}\n\nEvery result stays up. Wins and losses.`;
+
+  if (dryRun) return { posted: false, dry_run: true, standing: s, text };
+
+  const tweetId = await postTweet(text, pinId);
+  await sb.from("social_post_log").insert({
+    post_date: today, slot: "pin", league: "ARC", pick_text: `ARC UPDATE ${today}`,
+    thread_format: "arc_update", hook_tweet_id: tweetId,
+    thread_url: `https://x.com/BetwithGary/status/${tweetId}`,
+  });
+  return { posted: true, standing: s, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
 
 // WORLD CUP picks: tweet EVERY game. Gary's chosen play renders as the app's OWN pick card (CompactPickRow, rebuilt
@@ -775,6 +813,12 @@ Deno.serve(async (req) => {
       const verdict = await runVerdictMode(today, dryRun);
       console.log(JSON.stringify({ mode: "verdict", verdict }).slice(0, 500));
       return Response.json({ mode: "verdict", metrics, verdict });
+    }
+
+    if (force === "arc") {
+      const arc = await runArcUpdateMode(today, dryRun);
+      console.log(JSON.stringify({ mode: "arc", arc }).slice(0, 500));
+      return Response.json({ mode: "arc", metrics, arc });
     }
 
     if (mode === "none") return Response.json({ posted: false, reason: `ET hour ${hour} is not a posting slot`, metrics, wc });
