@@ -484,6 +484,10 @@ function getStatValue(sport, data, name, type) {
       // NOTE: total_bases and stolen_bases are NOT in BDL — compute or skip
 
       // Batter props
+      // Combo prop FIRST — "hits_runs_rbis" contains "rbi" as a substring, so it must be
+      // checked before the individual rbi/hit tests below or it gets intercepted by them
+      // and graded on RBI count alone instead of the hits+runs+rbi sum.
+      if (t.includes('hits_runs_rbi') || t.includes('h+r+rbi')) return (p.hits || 0) + (p.runs || 0) + (p.rbi || 0);
       if (t.includes('hit') && !t.includes('run') && !t.includes('allow')) return p.hits ?? 0;
       if (t.includes('home_run') || t.includes('homer')) return p.hr ?? p.home_runs ?? 0;
       if (t.includes('total_base')) {
@@ -502,7 +506,6 @@ function getStatValue(sport, data, name, type) {
       }
       if (t.includes('single')) return null; // Need doubles/triples which BDL may not have
       if (t.includes('double') && !t.includes('play')) return p.doubles ?? null;
-      if (t.includes('hits_runs_rbi') || t.includes('h+r+rbi')) return (p.hits || 0) + (p.runs || 0) + (p.rbi || 0);
       // Strikeouts — check pitcher stats first (p_k), then batter (k)
       if (t.includes('strikeout')) {
         if (p.p_k != null && p.p_k > 0) return p.p_k; // pitcher strikeouts

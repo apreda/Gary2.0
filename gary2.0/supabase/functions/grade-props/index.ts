@@ -89,11 +89,14 @@ function gradeProp(actual: number | null, line: number, bet: string): string | n
 // market isn't supported.
 function mlbStat(token: string, p: any): number | null {
   const t = token.toLowerCase();
+  // Combo prop FIRST — "hits_runs_rbis" contains "rbi" as a substring, so it must be
+  // checked before the individual rbi/hit tests below or it gets intercepted by them
+  // and graded on RBI count alone instead of the hits+runs+rbi sum.
+  if (t.includes("hits_runs_rbi") || t.includes("h+r+rbi")) return num(p.hits) + num(p.runs) + num(p.rbi);
   if (t.includes("hit") && !t.includes("run") && !t.includes("allow")) return num(p.hits);
   if (t.includes("home_run") || t.includes("homer")) return num(p.hr ?? p.home_runs);
   if (t.includes("total_base")) return p.total_bases != null ? num(p.total_bases) : null;
   if (t.includes("rbi") || t.includes("runs_batted")) return num(p.rbi);
-  if (t.includes("hits_runs_rbi") || t.includes("h+r+rbi")) return num(p.hits) + num(p.runs) + num(p.rbi);
   if (t.includes("runs_scored") || t === "runs") return num(p.runs);
   if (t.includes("walk") || t.includes("bases_on_ball")) return num(p.bb);
   if (t.includes("stolen_base") || t.includes("steal")) {
