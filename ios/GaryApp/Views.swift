@@ -2352,7 +2352,11 @@ struct HomeView: View {
                                best: gamesNightBest,
                                label: recapLabel,
                                rollItems: gamesNightRoll) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+                // The strip is the Winners funnel (founder, Jul 5): last
+                // night's card record + rolling cashes ARE the ad — the tap
+                // lands on the Winners room (members: their card; free:
+                // the locked board + plans).
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
             }
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
@@ -3663,9 +3667,17 @@ struct HomeMarqueeTracker: View {
     var tomorrowTease: (matchup: String, time: String)? = nil
     let onOpenGame: (String) -> Void
 
-    /// The hero: live beats just-started beats next-up by the clock.
+    /// A ribbon tap pins its game as the hero (founder, Jul 5) — cleared
+    /// implicitly once that game settles.
+    @State private var promotedId: String? = nil
+
+    /// The hero: the pinned game, else live beats just-started beats next-up.
     private var hero: Entry? {
-        entries.first { $0.isLive }
+        if let promotedId,
+           let pinned = entries.first(where: { $0.id == promotedId && !$0.isFinal }) {
+            return pinned
+        }
+        return entries.first { $0.isLive }
             ?? entries.first { $0.started }
             ?? entries.filter { !$0.isFinal }.min { ($0.commence ?? "") < ($1.commence ?? "") }
     }
@@ -3734,7 +3746,18 @@ struct HomeMarqueeTracker: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
                 ForEach(rail) { e in
-                    Button { onOpenGame(e.matchupFull) } label: {
+                    Button {
+                        // Live/upcoming chips swap INTO the hero slot; a
+                        // settled chip has nothing to sweat — it opens its
+                        // game sheet directly.
+                        if e.isFinal {
+                            onOpenGame(e.matchupFull)
+                        } else {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                promotedId = e.id
+                            }
+                        }
+                    } label: {
                         HStack(spacing: 6) {
                             Text(railTitle(e))
                                 .font(.system(size: 11, weight: .semibold))
@@ -3793,11 +3816,11 @@ struct HomeMarqueeTracker: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
                 if e.isLive {
-                    Text("● LIVE · THE BIG GAME")
+                    Text("● LIVE")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
                         .foregroundStyle(GaryColors.win)
                 } else {
-                    Text("NEXT BIG GAME")
+                    Text("UP NEXT")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
                         .foregroundStyle(GaryColors.gold)
                 }
@@ -3943,9 +3966,9 @@ struct HomeOvernightStrip: View {
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 Spacer(minLength: 6)
-                Text("THE TAPE")
+                Text("THE CARD")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.5)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(GaryColors.gold.opacity(0.9))
                 Image(systemName: "chevron.right")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.white.opacity(0.45))
@@ -3983,7 +4006,7 @@ struct HomeOvernightStrip: View {
                                 removal: .move(edge: .top).combined(with: .opacity)))
         .frame(height: 16)
         .clipped()
-        // The rolling cash wins the width fight — the record and THE TAPE
+        // The rolling cash wins the width fight — the record and THE CARD
         // door are short and fixed; the pick line is the story.
         .layoutPriority(2)
         .onReceive(rollTimer) { _ in
