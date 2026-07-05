@@ -5114,8 +5114,6 @@ struct PremiumPicksView: View {
     /// stamps + flip-backs — the deep transparency surface for Gary's track record.
     @State private var selectedDate: String? = nil
     /// Coming-soon popup: dismissed → collapses to a compact top strip, cards stay.
-    /// Pre-post state: when today's first pick lands (earliest game −90m).
-    @State private var firstDropAt: Date? = nil
 
     // Per-sport entitlements, granted by the Stripe webhook and keyed to the
     // auth user (or this install when signed out). isPremium stays as the
@@ -5480,10 +5478,8 @@ struct PremiumPicksView: View {
     private var comingSoonState: some View {
         VStack(spacing: 14) {
             comingSoonIntro
-            MembersOnlyCardFace(countdownTo: firstDropAt,
-                                subtitle: firstDropAt == nil ? "PICKS DROP ~90 MIN BEFORE EACH GAME" : "FIRST PICKS IN",
-                                footnote: "TODAY'S CARD")
-            MembersOnlyCardFace(subtitle: "PICKS DROP ~90 MIN BEFORE EACH GAME",
+            MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"))
+            MembersOnlyCardFace(state: .placeholder(note: "EVERY PICK GRADED BY MORNING"),
                                 footnote: "GAME PICKS · PROP PICKS")
         }
         .padding(.horizontal, 16)
@@ -5549,7 +5545,7 @@ struct PremiumPicksView: View {
     private func teasedTodayCard(for league: String) -> some View {
         // Winners is the members' room — the pre-drop state speaks the same
         // sealed-card language as the wrapper (no blur, no pick data to leak).
-        MembersOnlyCardFace(subtitle: "NEXT DROP ~90 MIN BEFORE FIRST PITCH",
+        MembersOnlyCardFace(state: .coming(note: "DROPS ~90 MIN BEFORE FIRST PITCH"),
                             footnote: "TONIGHT'S \(league.uppercased()) PICK")
             .frame(width: UIScreen.main.bounds.width - 44)
     }
@@ -6210,19 +6206,6 @@ struct PremiumPicksView: View {
     /// Today's live board, or a chosen past day.
     private func reload() async {
         if let d = selectedDate { await loadHistorical(d) } else { await load() }
-        // Pre-post seal countdown: first pick lands ~90m before the earliest
-        // game still ahead of us (nil once the slate is underway/posted).
-        if selectedDate == nil {
-            let slate = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
-            let now = Date()
-            let firstAhead = slate
-                .compactMap { $0.commence_time.flatMap(parseISO8601) }
-                .filter { $0 > now }
-                .min()
-            await MainActor.run {
-                firstDropAt = firstAhead.map { $0.addingTimeInterval(-5400) }.flatMap { $0 > now ? $0 : nil }
-            }
-        }
     }
 
     private func sportRank(_ lg: String) -> Int {
@@ -13461,60 +13444,89 @@ enum CelebratedWins {
     }
 }
 
-/// The sealed face: black grain, chrome bear crest, MEMBERS ONLY, and a live
-/// countdown to first pitch (falls back to `subtitle` once the clock passes).
+/// The sealed Winners face — ONE object, three honest states (founder,
+/// Jul 5 redo): the pick is IN (tap to reveal), the pick is COMING (when it
+/// drops), or the pre-post PLACEHOLDER for the day's card. The normal gold
+/// Gary mark, lifted card chrome, and words instead of ticking countdowns.
 struct MembersOnlyCardFace: View {
-    var countdownTo: Date? = nil
-    var subtitle: String = "TAP TO REVEAL"
+    enum SealState {
+        /// A real pick sits behind the seal — invite the tap.
+        case pickIn(firstPitch: String?)
+        /// The league's pick hasn't dropped yet — say when it lands.
+        case coming(note: String)
+        /// Pre-post morning placeholder — nothing behind it yet.
+        case placeholder(note: String)
+    }
+    var state: SealState = .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME")
     var footnote: String? = nil
     /// True inside MembersWrap — the face stretches to cover whatever it seals
     /// (a stacked prop group runs taller than one card).
     var fillsContainer: Bool = false
 
-    private func clock(_ now: Date, until target: Date) -> String {
-        let s = max(0, Int(target.timeIntervalSince(now)))
-        return String(format: "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+    private var headline: String {
+        switch state {
+        case .pickIn:      return "THE PICK IS IN"
+        case .coming:      return "PICK COMING"
+        case .placeholder: return "TODAY'S CARD"
+        }
+    }
+    private var sub: String {
+        switch state {
+        case .pickIn(let fp): return fp.map { "TAP TO REVEAL · FIRST PITCH \($0)" } ?? "TAP TO REVEAL"
+        case .coming(let n):  return n
+        case .placeholder(let n): return n
+        }
+    }
+    private var inviting: Bool {
+        if case .pickIn = state { return true }
+        return false
     }
 
     var body: some View {
         VStack(spacing: 10) {
-            Image("GaryChrome")
+            Image(GaryBrand.mark)
                 .resizable().scaledToFit()
-                .frame(width: 74, height: 74)
-                .shadow(color: .black.opacity(0.8), radius: 7, y: 5)
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.7), radius: 8, y: 5)
             Text("MEMBERS ONLY")
-                .font(GaryFonts.mono(12, bold: true)).tracking(6)
-                .foregroundStyle(Color(hex: "#C8C8CC"))
+                .font(GaryFonts.mono(11, bold: true)).tracking(6)
+                .foregroundStyle(.white.opacity(0.72))
                 .padding(.leading, 6)   // recenters the tracked type optically
-            if let target = countdownTo, target > Date() {
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    Text("FIRST PITCH IN \(clock(ctx.date, until: target))")
-                        .font(GaryFonts.mono(11.5, bold: true)).tracking(1.5)
-                        .foregroundStyle(GaryColors.lightGold)
-                }
-            } else {
-                Text(subtitle)
-                    .font(GaryFonts.mono(11.5, bold: true)).tracking(1.5)
-                    .foregroundStyle(GaryColors.lightGold)
-            }
+            Text(headline)
+                .font(GaryFonts.mono(14, bold: true)).tracking(2.2)
+                .foregroundStyle(inviting ? GaryColors.lightGold : GaryColors.gold.opacity(0.9))
+                .padding(.leading, 2)
+            Text(sub)
+                .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
+                .foregroundStyle(.white.opacity(0.72))
+                .lineLimit(1).minimumScaleFactor(0.8)
             if let footnote {
                 Text(footnote)
                     .font(GaryFonts.mono(9, bold: false)).tracking(2.4)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.55))
             }
         }
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
         .frame(height: fillsContainer ? nil : CompactPickRow.uniformHeight)
         .frame(maxHeight: fillsContainer ? .infinity : nil)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: "#1A1A1C"), Color(hex: "#0D0D0F")],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [Color(hex: "#201E1B"), Color(hex: "#0E0D0C")],
+                                     startPoint: .top, endPoint: .bottom))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(.white.opacity(0.08), lineWidth: 1)
+                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+                .overlay(alignment: .top) {
+                    // Lit-from-above highlight — the lift cue.
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(.white.opacity(0.14), lineWidth: 1)
+                        .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
+                }
+                .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
+                .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
         )
     }
 }
@@ -13525,6 +13537,14 @@ struct MembersOnlyCardFace: View {
 struct MembersWrap<Content: View>: View {
     let revealId: String
     var commence: Date? = nil
+
+    /// "12:30 PM" (ET) — the seal names first pitch instead of ticking at it.
+    static func pitchClock(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "h:mm a"
+        return f.string(from: d)
+    }
     @ViewBuilder var content: () -> Content
     @State private var revealed: Bool
 
@@ -13542,7 +13562,8 @@ struct MembersWrap<Content: View>: View {
 
     var body: some View {
         ZStack {
-            MembersOnlyCardFace(countdownTo: commence, footnote: "TAP TO OPEN", fillsContainer: true)
+            MembersOnlyCardFace(state: .pickIn(firstPitch: commence.map { Self.pitchClock($0) }),
+                                fillsContainer: true)
                 .opacity(revealed ? 0 : 1)
             content()
                 .opacity(revealed ? 1 : 0)
@@ -13989,13 +14010,14 @@ struct LockedPickCard: View {
     var body: some View {
         Button(action: onUnlock) {
             VStack(spacing: 9) {
-                Image("GaryChrome")
+                Image(GaryBrand.mark)
                     .resizable().scaledToFit()
                     .frame(width: 60, height: 60)
-                    .shadow(color: .black.opacity(0.8), radius: 6, y: 4)
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .shadow(color: .black.opacity(0.7), radius: 6, y: 4)
                 Text("MEMBERS ONLY")
                     .font(GaryFonts.mono(12, bold: true)).tracking(6)
-                    .foregroundStyle(Color(hex: "#C8C8CC"))
+                    .foregroundStyle(.white.opacity(0.72))
                     .padding(.leading, 6)
                 Text("GARY'S \(league.uppercased()) PICKS ARE IN")
                     .font(GaryFonts.mono(10, bold: true)).tracking(1.5)
@@ -14776,12 +14798,20 @@ struct CompactPickRow: View {
                     GoldBar.background()
                 } else {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(hex: "#121110"))
+                        .fill(LinearGradient(colors: [Color(hex: "#1B1917"), Color(hex: "#0F0E0D")],
+                                             startPoint: .top, endPoint: .bottom))
                         .overlay(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.10), lineWidth: 1)
+                                .stroke(.white.opacity(0.13), lineWidth: 1)
                         )
-                        .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+                        .overlay(alignment: .top) {
+                            // Lit-from-above highlight — the lift cue.
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(.white.opacity(0.12), lineWidth: 1)
+                                .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
+                        }
+                        .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
+                        .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
                 }
             }
         )
@@ -21798,12 +21828,20 @@ struct CompactPropRow: View {
                     SilverBar.background()
                 } else {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(hex: "#121110"))
+                        .fill(LinearGradient(colors: [Color(hex: "#1B1917"), Color(hex: "#0F0E0D")],
+                                             startPoint: .top, endPoint: .bottom))
                         .overlay(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.10), lineWidth: 1)
+                                .stroke(.white.opacity(0.13), lineWidth: 1)
                         )
-                        .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+                        .overlay(alignment: .top) {
+                            // Lit-from-above highlight — the lift cue.
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(.white.opacity(0.12), lineWidth: 1)
+                                .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
+                        }
+                        .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
+                        .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
                 }
             }
         )
