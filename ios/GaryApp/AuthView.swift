@@ -106,11 +106,6 @@ struct AuthView: View {
                             iconName: "g.circle.fill",
                             action: { handleOAuth(provider: .google) }
                         )
-                        SocialSignInButton(
-                            title: "Continue with Facebook",
-                            iconName: "f.circle.fill",
-                            action: { handleOAuth(provider: .facebook) }
-                        )
                     }
                     .padding(.horizontal, 24)
                     .opacity(animateIn ? 1 : 0)

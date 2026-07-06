@@ -207,7 +207,7 @@ final class AuthManager: ObservableObject {
         }
     }
 
-    // MARK: - OAuth (Google, Facebook) — Opens web flow
+    // MARK: - OAuth (Google) — Opens web flow
 
     /// Returns the OAuth URL to open in a web view / ASWebAuthenticationSession
     func oauthURL(provider: OAuthProvider) -> URL? {
@@ -453,6 +453,5 @@ enum AuthError: LocalizedError {
 
 enum OAuthProvider: String {
     case google
-    case facebook
     case apple
 }
