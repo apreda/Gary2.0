@@ -5521,7 +5521,10 @@ struct PremiumPicksView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(0..<count, id: \.self) { _ in
-                        MembersOnlyCardFace(state: .coming(note: "DROPS ~90 MIN BEFORE GAME TIME"),
+                        // The ORIGINAL "TODAY'S CARD / COMING SOON" face (founder,
+                        // Jul 6: he asked to add per-sport headers to this, not to
+                        // replace the wording) — leagueTag is the only new thing.
+                        MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"),
                                             leagueTag: league.uppercased())
                             .frame(width: UIScreen.main.bounds.width - 44)
                     }
