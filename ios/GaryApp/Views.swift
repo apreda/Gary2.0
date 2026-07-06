@@ -5207,7 +5207,10 @@ struct PremiumPicksView: View {
     /// 2.18 PAYWALL ON (Jul 2 2026, founder call): Winners boards gate behind
     /// Stripe checkout. The free slate (Picks tab) stays free — Winners is the
     /// paid conviction layer, per the Jun 8 pricing overhaul.
-    static let freeLaunch = false
+    // Jul 5 2026 (founder): shipping the update FREE — payments wait. Every
+    // user gets the full members room (sealed cards, tap to reveal) "for a
+    // good while." All checkout/entitlement logic stays intact behind this.
+    static let freeLaunch = true
 
     /// Dev/QA all-access — honored in DEBUG builds ONLY. A Release binary
     /// ignores the flag entirely, so defaults tampering (jailbreak, backup
@@ -5375,6 +5378,9 @@ struct PremiumPicksView: View {
                 case "games": withAnimation { mode = .games }
                 case "today": withAnimation { selectedDate = nil }
                 case "date": if parts.count > 1 { withAnimation { selectedDate = parts[1] } }
+                // QA the free/member views without hunting the footer button.
+                case "member": withAnimation { isPremium = true }
+                case "free": withAnimation { isPremium = false }
                 default: break
                 }
             case "plans": showPlansSheet = true
@@ -5694,17 +5700,18 @@ struct PremiumPicksView: View {
         }
     }
 
-    /// Free-launch announcement — paid plans land June 18, in the exact slot
-    /// the storefront will occupy. Informational only: no prices and no
-    /// purchase path in-app (the App Store 3.1.1 fence stays up).
+    /// Free-launch announcement, in the exact slot the storefront will occupy.
+    /// NO date promised (founder, Jul 5: free "for a good while"). Informational
+    /// only: no prices and no purchase path in-app (the App Store 3.1.1 fence
+    /// stays up).
     private var plansComingCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Paid Plans", sub: "Coming June 18")
+            HubSectionHeader(eyebrow: "The Launch", sub: "")
             VStack(alignment: .leading, spacing: 6) {
-                Text("Every board is free until June 18.")
+                Text("Every board is free right now.")
                     .font(GaryFonts.text(15, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
-                Text("Single-sport plans, bundles, and All-Access — plans and pricing land right here on June 18.")
+                Text("Gary's full card — game picks and props — is open to everyone while we launch. Paid plans come later, and you'll see them here first.")
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineSpacing(2)
