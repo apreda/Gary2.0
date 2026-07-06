@@ -12,6 +12,8 @@ import {
   getMatchesForDate,
   getTeamMatchStats,
   formatMatchForPipeline,
+  isKnockoutStage,
+  deriveAdvanceOdds,
 } from '../../src/services/fifaWorldCupService.js';
 
 function mockFetchOnce(jsonBody) {
@@ -177,8 +179,8 @@ describe('filterMatchesByDate', () => {
     { id: 2, datetime: '2026-06-12T02:00:00.000Z' },
     { id: 3, datetime: '2026-06-12T19:00:00.000Z' },
   ];
-  it('keeps only matches whose UTC date matches', () => {
-    expect(filterMatchesByDate(matches, '2026-06-12').map(m => m.id)).toEqual([2, 3]);
+  it('keeps only matches whose ET date matches (2026-06-12T02:00Z is still June 11 ET)', () => {
+    expect(filterMatchesByDate(matches, '2026-06-12').map(m => m.id)).toEqual([3]);
   });
   it('returns [] for no matches or bad input', () => {
     expect(filterMatchesByDate(matches, '2026-07-01')).toEqual([]);
@@ -212,9 +214,9 @@ describe('selectConsensusOdds', () => {
     expect(c.total).toEqual({ line: '2.5', over: -120, under: 100 });
   });
 
-  it('falls back to the first row when no preferred vendor present', () => {
+  it('returns null when no preferred vendor is present (no fallback to thin books)', () => {
     const rows = [{ vendor: 'pinnacle', moneyline_home_odds: 100, moneyline_draw_odds: 200, moneyline_away_odds: 300, spread_home_value: null, total_value: null }];
-    expect(selectConsensusOdds(rows).vendor).toBe('pinnacle');
+    expect(selectConsensusOdds(rows)).toBeNull();
   });
 
   it('returns null for empty input', () => {
@@ -238,7 +240,7 @@ describe('getOdds (paginated)', () => {
 });
 
 describe('getMatchesForDate', () => {
-  it('fetches matches then filters to the given UTC date', async () => {
+  it('fetches matches then filters to the given ET date (2026-06-12T02:00Z = June 11 ET)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
       ok: true, status: 200,
       json: async () => ({ data: [
@@ -247,7 +249,7 @@ describe('getMatchesForDate', () => {
       ], meta: { next_cursor: null } }),
     }));
     const games = await getMatchesForDate('2026-06-11', [2026]);
-    expect(games.map(g => g.id)).toEqual([1]);
+    expect(games.map(g => g.id)).toEqual([1, 2]);
   });
 });
 
@@ -296,5 +298,75 @@ describe('formatMatchForPipeline', () => {
     expect(g.home_team_data).toBeNull();
     expect(g.soccer_three_way_ml).toBeNull();
     expect(g.soccer_round).toBe('Round of 32');
+  });
+});
+
+// ─── Task 8: isKnockoutStage ──────────────────────────────────────────
+describe('isKnockoutStage', () => {
+  it('returns true for Round of 32 via soccer_stage', () => {
+    expect(isKnockoutStage({ soccer_stage: 'Round of 32', soccer_round: null })).toBe(true);
+  });
+  it('returns true for Quarter Final via soccer_round', () => {
+    expect(isKnockoutStage({ soccer_stage: null, soccer_round: 'Quarter Final' })).toBe(true);
+  });
+  it('returns true for Semi Final', () => {
+    expect(isKnockoutStage({ soccer_stage: 'Semi Final', soccer_round: null })).toBe(true);
+  });
+  it('returns true for Final', () => {
+    expect(isKnockoutStage({ soccer_stage: 'Final', soccer_round: null })).toBe(true);
+  });
+  it('returns false for Group Stage', () => {
+    expect(isKnockoutStage({ soccer_stage: 'Group Stage', soccer_round: null, soccer_group: 'Group A' })).toBe(false);
+  });
+  it('returns false when stage/round are both empty', () => {
+    expect(isKnockoutStage({ soccer_stage: null, soccer_round: null })).toBe(false);
+  });
+  it('returns false for null game', () => {
+    expect(isKnockoutStage(null)).toBe(false);
+  });
+});
+
+// ─── Task 9: deriveAdvanceOdds ────────────────────────────────────────
+describe('deriveAdvanceOdds', () => {
+  it('returns null for null input', () => {
+    expect(deriveAdvanceOdds(null)).toBeNull();
+  });
+
+  it('returns null when odds are missing', () => {
+    expect(deriveAdvanceOdds({ home: null, draw: 230, away: 310 })).toBeNull();
+  });
+
+  it('produces valid American odds for a near-even match', () => {
+    // home -115, draw +240, away +290 — close match
+    const result = deriveAdvanceOdds({ home: -115, draw: 240, away: 290 });
+    expect(result).not.toBeNull();
+    expect(typeof result.home).toBe('number');
+    expect(typeof result.away).toBe('number');
+    // home should be the advance favorite (negative odds)
+    expect(result.home).toBeLessThan(0);
+    // away should be the advance underdog (positive odds)
+    expect(result.away).toBeGreaterThan(0);
+  });
+
+  it('home advance odds are more negative than regulation ML (absorbing draw prob makes them more favored)', () => {
+    // Home -200 regulation, Draw +260, Away +350 — draw probability splits proportionally
+    // The favorite absorbs most of the draw prob → their advance chance is higher → shorter (more negative) odds
+    const result = deriveAdvanceOdds({ home: -200, draw: 260, away: 350 });
+    expect(result).not.toBeNull();
+    expect(result.home).toBeLessThan(-200);
+    // Away advance odds should be shorter (less positive) than regulation +350 too
+    expect(result.away).toBeGreaterThan(0);
+    expect(result.away).toBeLessThan(350);
+  });
+
+  it('advance probabilities sum to ~1 (round-trip via implied prob)', () => {
+    const result = deriveAdvanceOdds({ home: -130, draw: 220, away: 330 });
+    expect(result).not.toBeNull();
+    // Convert back to implied probs and verify they sum close to 1
+    const toImplied = (a) => a < 0 ? (-a) / (-a + 100) : 100 / (a + 100);
+    const sum = toImplied(result.home) + toImplied(result.away);
+    // With vig removed from 3-way and fair odds output, sum should be ~1.0 (slight vig from rounding)
+    expect(sum).toBeGreaterThan(0.95);
+    expect(sum).toBeLessThan(1.1);
   });
 });

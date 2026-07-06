@@ -537,7 +537,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
               ? propContext.propsConstitution.pass25 || '' : '';
             const pass25Content = (isPropsMode
               ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-              : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+              : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '', { isKnockout: options.isKnockout, advanceOdds: options.advanceOdds }));
             messages.push({ role: 'user', content: pass25Content });
             nextMessageToSend = pass25Content;
             _pass25Injected = true;
@@ -1779,7 +1779,7 @@ INVESTIGATION COMPLETE`;
           ? propContext.propsConstitution.pass25 || '' : '';
         const pass25Content = (isPropsMode
           ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '', { isKnockout: options.isKnockout, advanceOdds: options.advanceOdds }));
         messages.push({ role: 'user', content: pass25Content });
         nextMessageToSend = pass25Content;
         _pass25Injected = true;
@@ -1798,7 +1798,7 @@ INVESTIGATION COMPLETE`;
           ? propContext.propsConstitution.pass25 || '' : '';
         const pass25Content = (isPropsMode
           ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '', { isKnockout: options.isKnockout, advanceOdds: options.advanceOdds }));
         messages.push({ role: 'user', content: pass25Content });
         nextMessageToSend = pass25Content;
         _pass25Injected = true;

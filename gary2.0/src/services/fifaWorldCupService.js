@@ -538,6 +538,49 @@ export function formatMatchForPipeline(match, consensus = null) {
   };
 }
 
+/**
+ * Returns true when game is a knockout-round match (Round of 32/16, QF, SF, Final).
+ * Uses soccer_stage / soccer_round set by formatMatchForPipeline.
+ */
+export function isKnockoutStage(game) {
+  const stage = (game?.soccer_stage || '').toLowerCase();
+  const round = (game?.soccer_round || '').toLowerCase();
+  const text = `${stage} ${round}`.trim();
+  if (!text) return false;
+  if (/\bgroup\b/.test(text)) return false;
+  return /round|knockout|quarter|semi|final/i.test(text);
+}
+
+function toAmericanOdds(prob) {
+  if (!Number.isFinite(prob) || prob <= 0 || prob >= 1) return null;
+  return prob >= 0.5
+    ? Math.round(-100 * prob / (1 - prob))
+    : Math.round(100 * (1 - prob) / prob);
+}
+
+/**
+ * Derive a 2-way "to advance" price from the 3-way regulation moneyline.
+ * Splits draw probability proportionally to each side's de-vigged win share.
+ * Formula: P_advance(A) = P_reg(A) + P_draw × P_reg(A) / (P_reg(A) + P_reg(B))
+ * Returns { home, away } in American odds, or null when odds are missing.
+ */
+export function deriveAdvanceOdds(threeWayMl) {
+  if (!threeWayMl) return null;
+  if (threeWayMl.home == null || threeWayMl.draw == null || threeWayMl.away == null) return null;
+  const pH = impliedProb(threeWayMl.home);
+  const pD = impliedProb(threeWayMl.draw);
+  const pA = impliedProb(threeWayMl.away);
+  if (!Number.isFinite(pH) || !Number.isFinite(pD) || !Number.isFinite(pA)) return null;
+  const total = pH + pD + pA;
+  if (total === 0 || pH + pA === 0) return null;
+  const tH = pH / total;
+  const tA = pA / total;
+  const tD = pD / total;
+  const pAdvH = tH + tD * tH / (tH + tA);
+  const pAdvA = tA + tD * tA / (tH + tA);
+  return { home: toAmericanOdds(pAdvH), away: toAmericanOdds(pAdvA) };
+}
+
 export default {
   DEFAULT_SEASON,
   PREFERRED_VENDORS,
@@ -565,4 +608,6 @@ export default {
   filterMatchesByDate,
   selectConsensusOdds,
   formatMatchForPipeline,
+  isKnockoutStage,
+  deriveAdvanceOdds,
 };

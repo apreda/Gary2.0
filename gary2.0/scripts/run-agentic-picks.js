@@ -1673,8 +1673,8 @@ async function main() {
           let extraIdx = 0;
           for (const extra of (result.additionalPicks || [])) {
             if (!extra || !extra.pick) continue;
-            const cat = extraIdx === 0 ? 'total' : `total${extraIdx + 1}`;
-            extraIdx++;
+            const cat = extra.type === 'to_advance' ? 'advance' : (extraIdx === 0 ? 'total' : `total${extraIdx + 1}`);
+            if (extra.type !== 'to_advance') extraIdx++;
             picksForGame.push({
               ...cleanPick,
               pick: extra.pick,

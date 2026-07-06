@@ -59,6 +59,7 @@ import { buildFlashResearchBriefing } from './flashAdvisor.js';
 import { buildPass1Message, buildPass1PropsMessage } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
+import { isKnockoutStage, deriveAdvanceOdds } from '../../fifaWorldCupService.js';
 
 /**
  * Main entry point - analyze a game and generate a pick
@@ -72,6 +73,16 @@ export async function analyzeGame(game, sport, options = {}) {
   const startTime = Date.now();
   let homeTeam = game.home_team;
   let awayTeam = game.away_team;
+
+  // Knockout advance-pick setup — derive odds once, embed on game object for
+  // odds resolution in responseParser (resolveSoccerMarketOdds reads soccer_advance_odds).
+  const isWC = sport === 'soccer_world_cup' || sport === 'WC';
+  const isKnockout = isWC ? isKnockoutStage(game) : false;
+  const advanceOdds = isKnockout ? deriveAdvanceOdds(game.soccer_three_way_ml) : null;
+  if (isKnockout && advanceOdds) {
+    game.soccer_advance_odds = advanceOdds;
+    console.log(`[Orchestrator] ⚽ Knockout match — advance odds: home ${advanceOdds.home > 0 ? '+' : ''}${advanceOdds.home} / away ${advanceOdds.away > 0 ? '+' : ''}${advanceOdds.away}`);
+  }
 
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`🐻 GARY AGENTIC ANALYSIS: ${awayTeam} @ ${homeTeam}`);
@@ -188,7 +199,7 @@ export async function analyzeGame(game, sport, options = {}) {
     if (isPropsMode) {
       userMessage = buildPass1PropsMessage(garyText, homeTeam, awayTeam, today, sport);
     } else {
-      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0, { homeSeed: game.homeSeed, awaySeed: game.awaySeed });
+      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0, { homeSeed: game.homeSeed, awaySeed: game.awaySeed, isKnockout, advanceOdds });
     }
     // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
     if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
@@ -246,7 +257,10 @@ context for player-level evaluation. Investigate the game thoroughly first.
       scoutReport: flashText,
       // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
       pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
-      bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null)
+      bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null),
+      // Knockout advance-pick context (threaded to buildPass25Message via agentLoop)
+      isKnockout,
+      advanceOdds,
     };
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
