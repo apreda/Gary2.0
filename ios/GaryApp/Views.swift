@@ -1843,6 +1843,9 @@ struct HomeView: View {
                 dailyRecapShownDate = SupabaseAPI.todayEST()
                 withAnimation(.easeOut(duration: 0.2)) { showDailyRecap = false }
             }
+            // Day switcher for the screenshot tooling.
+            if verb == "tomorrow" { selectedPhase = .tomorrow }
+            if verb == "today" { selectedPhase = todayClockPhase }
         }
         .task(id: homeNonce) {
             #if DEBUG
@@ -9160,43 +9163,10 @@ struct TomorrowView {
     /// Home's ScrollView, so it returns a VStack (no ScrollView/background here).
     struct Body: View {
         let board: TomorrowBoard?
-        /// When set (e.g. "MLB" or "WC"), the countdown hero and Big Games show
-        /// only that sport. Used by the Hub so MLB tab → MLB countdown + MLB big
-        /// games, WC tab → WC countdown + WC big games. Home/Tomorrow pass nil.
-        var leagueFilter: String? = nil
-        /// When true, render ONLY the "The Day Ahead" look-ahead table (Starters /
-        /// Form / Run Profile / Weather + MLB/WC) — used on the Home page's TODAY
-        /// section. The countdown hero, big games, and full board are hidden.
-        /// Render ONLY the Day Ahead table (no countdown/big-games/board). Currently
-        /// unused — Today + Hub now show the full today treatment (see includeBoard).
-        var lookAheadOnly: Bool = false
-        /// Whether to render the full board section under the look-ahead table. The
-        /// Today page + Hub have their OWN board, so they pass false (countdown +
-        /// big games + Day Ahead, no duplicate board).
-        var includeBoard: Bool = true
-        /// Whether to render the "Day Ahead" look-ahead TABLE. The Today page passes
-        /// false (it wants only the countdown + big games — the full table lives on
-        /// the Hub); the Hub + Tomorrow page keep it.
-        var includeLookAhead: Bool = true
-        /// Render the countdown hero / Big Games independently — the Today page
-        /// shows them as SEPARATE blocks (countdown above the 7-Day Form, Big Games
-        /// below it), so it renders one Body with only the countdown and another
-        /// with only Big Games.
-        var includeCountdown: Bool = true
-        var includeBigGames: Bool = true
-        /// Header word for the countdown / empty hero — "TODAY" for the today use.
-        var dayLabel: String = "TOMORROW"
-        /// Home-only: resolve Gary's pick text + live verdict for a featured live game,
-        /// so the live widget shows "GARY COVERING / IN THE RED". Passed from the Home
-        /// (which owns pickFor + HomeLiveVerdict.evaluate); nil elsewhere (no status).
-        var liveStatus: ((LiveScore) -> (pick: String, verdict: HomeLiveVerdict)?)? = nil
-        /// (The WC analytical lanes — Streaks / xG Regression / Advancement / Rest —
-        /// that used to fold in here were fed only by the old Hub; the redesigned
-        /// Hub (HubView.swift) surfaces them itself, so the params left with it.)
-        /// 1Hz tick for the live countdown. Re-render every second.
-        @State private var now = Date()
-        /// Live scores drive the hero's countdown → live-score → next-game flip.
-        @ObservedObject private var liveCache = LiveScoreCache.shared
+        // (Jul 5 redesign: the Hub/Today flag machinery — leagueFilter,
+        // include*, dayLabel, liveStatus, the 1Hz ticker — left with its last
+        // consumers. Home's TOMORROW tab is the only caller; the page is now
+        // static per data refresh, no per-second re-render.)
         /// The active look-ahead tab (Starters · Key Returns · Form · Run
         /// Profile · Weather). The giant inline list overflowed the screen — this
         /// is now a contained tabbed table that scrolls internally.
@@ -9207,196 +9177,48 @@ struct TomorrowView {
         /// MLB / WC top-level switch for "The Day Ahead". MLB = the existing
         /// tabbed table; WC = the per-match World Cup look-ahead cards.
         @State private var lookAheadSport: LookAheadSport = .mlb
-        private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
         /// Teal WC accent, matching the board's sport-dot legend.
         private let wcAccent = Color(hex: "#3FB6A8")
 
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
-                if !lookAheadOnly {
-                    if includeCountdown { countdownHero }
-                    if includeBigGames { bigGames }
-                }
-                if includeLookAhead { lookAheadTabs }
-                if !lookAheadOnly, includeBoard, let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
-            }
-            // The 1Hz tick drives ONLY the countdown hero. In lookAheadOnly mode
-            // (Home TODAY + the Hub Day Ahead) that hero is hidden, so updating
-            // `now` there just re-renders the whole table every second for nothing.
-            .onReceive(ticker) { if !lookAheadOnly, includeCountdown { now = $0 } }
-            // When the Hub switches league tabs, reset the look-ahead sport
-            // so WC tab opens on World Cup starters, MLB tab on MLB starters.
-            .task(id: leagueFilter) {
-                lookAheadSport = leagueFilter == "WC" ? .wc : .mlb
+                slateHero
+                bigGames
+                lookAheadTabs
+                if let b = board, !b.board.isEmpty { tomorrowBoardSection(b) }
             }
         }
 
-        // ── ① Countdown hero ───────────────────────────────────────────────
+        // ── ① The slate masthead ───────────────────────────────────────────
+        // Jul 5 redesign: the giant ticking HH:MM:SS clock is gone (18 hours
+        // of second-precision was noise) — the hero is now the DAY: date in
+        // the display face, one meta line with the count, first start, and
+        // the game that opens the slate.
 
-        /// LIVE state of the hero — the in-progress game's score in the same card
-        /// style as the countdown: green LIVE label + equalizer, the score big, the
-        /// clock/inning beneath.
-        @ViewBuilder private func liveScoreHero(_ s: LiveScore) -> some View {
-            let status = liveStatus?(s) ?? nil
-            HStack(spacing: 7) {
-                Text("\((s.league ?? "").uppercased()) · LIVE")
+        private var slateHero: some View {
+            let iso = board?.countdown_iso
+            let anyLines = board?.any_lines ?? false
+            let count = board?.game_count ?? 0
+            return VStack(alignment: .leading, spacing: 0) {
+                Text("THE SLATE")
                     .font(GaryFonts.mono(10, bold: true)).tracking(2)
                     .foregroundStyle(GaryColors.gold)
-                LiveBars(color: Color(hex: "#3FB950"))
-            }
-            Text(s.scoreLine ?? s.abbrGame)
-                .font(GaryFonts.mono(30, bold: true))
-                .foregroundStyle(.white)
-                .lineLimit(1).minimumScaleFactor(0.6)
-                .padding(.top, 6)
-            HStack(spacing: 8) {
-                Text((s.detail ?? "").isEmpty ? "In progress" : (s.detail ?? ""))
-                    .font(GaryFonts.text(13))
-                    .foregroundStyle(.white.opacity(0.55))
-                // Gary's live verdict on THIS game — short, the app's standard terms.
-                if let st = status, st.verdict != .neutral, !st.pick.isEmpty {
-                    Text("·").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.25))
-                    Text(st.verdict == .covering ? "COVERING" : "TRAILING")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
-                        .foregroundStyle(st.verdict == .covering ? Color(hex: "#3FB950") : Color(hex: "#E5614D"))
-                }
-            }
-            .padding(.top, 7)
-            // The pick line itself, so it's clear WHAT Gary's on. Gold = Gary's
-            // voice (no "Gary:" prefix needed), odds ride grey — the app-wide chip.
-            if let st = status, !st.pick.isEmpty {
-                let parts = Formatters.splitPickAndOdds(st.pick)
-                HStack(spacing: 5) {
-                    Text(parts.0)
-                        .foregroundStyle(GaryColors.gold)
-                    if !parts.1.isEmpty {
-                        Text(parts.1).foregroundStyle(.white.opacity(0.5))
-                    }
-                }
-                .font(GaryFonts.mono(12, bold: true))
-                .lineLimit(1)
-                .padding(.top, 3)
-            }
-        }
-
-        private var countdownHero: some View {
-            // When leagueFilter is set (Hub), derive sport-specific countdown
-            // from board.board — covers ALL games of the sport, not just the
-            // cross-sport top-3. Filter to FUTURE games only so already-started
-            // matches (e.g. Japan @ Brazil at 1pm after kickoff) fall off.
-            let (filteredIso, filteredMatchup, filteredCount): (String?, String?, Int?) = {
-                guard let lg = leagueFilter else { return (nil, nil, nil) }
-                let sportRows = (board?.board ?? [])
-                    .filter { ($0.league ?? "").uppercased() == lg.uppercased() }
-                let count = sportRows.count
-                let futureRows = sportRows
-                    .filter { (parseISO8601($0.commence_time ?? "") ?? .distantPast) > now }
-                    .sorted {
-                        (parseISO8601($0.commence_time ?? "") ?? .distantFuture)
-                        < (parseISO8601($1.commence_time ?? "") ?? .distantFuture)
-                    }
-                guard let first = futureRows.first else { return (nil, nil, count) }
-                let away = first.away_team ?? first.away_abbr ?? "?"
-                let home = first.home_team ?? first.home_abbr ?? "?"
-                return (first.commence_time, "\(away) @ \(home)", count)
-            }()
-            // TODAY (no league filter): advance to the NEXT upcoming game so the
-            // countdown keeps ticking all day instead of freezing on the first game
-            // (founder). WC leads — the biggest draw until the tournament's over —
-            // then the next game overall once today's WC games are done.
-            let nextToday: (iso: String?, matchup: String?, sport: String?) = {
-                guard leagueFilter == nil, dayLabel == "TODAY" else { return (nil, nil, nil) }
-                func nextFuture(_ pred: (TomorrowBoardRow) -> Bool) -> (String, String, String)? {
-                    (board?.board ?? []).filter(pred).compactMap { r -> (Date, String, String, String)? in
-                        guard let iso = r.commence_time, let d = parseISO8601(iso), d > now else { return nil }
-                        let away = r.away_team ?? r.away_abbr ?? "?"
-                        let home = r.home_team ?? r.home_abbr ?? "?"
-                        return (d, iso, "\(away) @ \(home)", r.league ?? "")
-                    }
-                    .min(by: { $0.0 < $1.0 }).map { ($0.1, $0.2, $0.3) }
-                }
-                let g = nextFuture { ($0.league ?? "").uppercased() == "WC" } ?? nextFuture { _ in true }
-                return (g?.0, g?.1, g?.2)
-            }()
-            let iso = leagueFilter != nil ? filteredIso : (nextToday.iso ?? board?.countdown_iso)
-            let cdMatchup = leagueFilter != nil ? filteredMatchup : (nextToday.matchup ?? board?.countdown_matchup)
-            let cdSport   = leagueFilter ?? nextToday.sport ?? board?.countdown_sport
-            let anyLines = board?.any_lines ?? false
-            let target = iso.flatMap { parseISO8601($0) }
-            let isFuture = target.map { $0 > now } ?? false
-            let hasClock = (target != nil) && anyLines && isFuture
-            // TODAY only: the first game already started, so a ticking 00:00:00
-            // would be wrong — show an "underway" state instead.
-            let started = (target != nil) && anyLines && !isFuture
-            // The hero follows the biggest game — WC-preferred (founder). A WC game
-            // in progress takes over the hero with a live score; a live non-WC game
-            // only features when there's no upcoming WC left to count down to. When
-            // it ends, liveFeature clears and the countdown resumes for the next one.
-            let liveFeature: LiveScore? = {
-                guard leagueFilter == nil, dayLabel == "TODAY" else { return nil }
-                let live = liveCache.scores.filter { $0.isLive }
-                if let wc = live.first(where: { ($0.league ?? "").uppercased() == "WC" }) { return wc }
-                let hasUpcomingWC = (board?.board ?? []).contains {
-                    ($0.league ?? "").uppercased() == "WC" && (parseISO8601($0.commence_time ?? "") ?? .distantPast) > now
-                }
-                return hasUpcomingWC ? nil : live.first
-            }()
-            return VStack(alignment: .leading, spacing: 0) {
-                if let live = liveFeature {
-                    liveScoreHero(live)
-                } else if hasClock, let target {
-                    Text(TomorrowView.countdownTerm(cdSport))
-                        .font(GaryFonts.mono(10, bold: true)).tracking(2)
-                        .foregroundStyle(GaryColors.gold)
-                    // Name the opening game(s) (founder) — what kicks the day off.
-                    if let m = cdMatchup, !m.isEmpty {
-                        Text(m)
-                            .font(GaryFonts.mono(15, bold: true)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.92))
-                            .padding(.top, 4)
-                    }
-                    Text(Self.hms(from: now, to: target))
-                        .font(GaryFonts.mono(39)).monospacedDigit()
-                        .foregroundStyle(.white)
+                if let iso {
+                    Text(TomorrowView.weekdayLabel(iso))
+                        .font(GaryFonts.display(34))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.top, 6)
-                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: dayLabel == "TODAY"))
-                        .font(GaryFonts.text(13))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .padding(.top, 8)
-                } else if started {
-                    // For TODAY this only fires once EVERY game has already started
-                    // (no upcoming game left), so cdMatchup is the day's FIRST game —
-                    // naming it froze the hero on "Japan @ Brazil · 1:00 PM" hours
-                    // later (founder bug). Show a clean slate-underway line instead of
-                    // a stale matchup + stale start time.
-                    Text(dayLabel)
-                        .font(GaryFonts.mono(10, bold: true)).tracking(2)
-                        .foregroundStyle(GaryColors.gold)
-                    Text("Today's games are underway")
-                        .font(GaryFonts.text(20, .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .padding(.top, 6)
-                    Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: false))
-                        .font(GaryFonts.text(13))
-                        .foregroundStyle(.white.opacity(0.45))
+                    Text(heroMeta(iso: iso, anyLines: anyLines, count: count))
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.66))
+                        .lineLimit(1).minimumScaleFactor(0.8)
                         .padding(.top, 8)
                 } else {
-                    // Honest-empty: no slate posted (iso nil) OR lines not open.
-                    Text(dayLabel)
-                        .font(GaryFonts.mono(10, bold: true)).tracking(2)
-                        .foregroundStyle(GaryColors.gold)
-                    Text(iso == nil ? "\(dayLabel == "TODAY" ? "Today's" : "Tomorrow's") board posts soon"
-                                    : "Lines open soon")
+                    Text("Tomorrow's board posts soon")
                         .font(GaryFonts.text(20, .semibold))
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.top, 8)
-                    if iso != nil {
-                        Text(Self.heroSub(board: board, iso: iso, gameCount: filteredCount, showTime: dayLabel == "TODAY"))
-                            .font(GaryFonts.text(13))
-                            .foregroundStyle(.white.opacity(0.45))
-                            .padding(.top, 6)
-                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -9413,57 +9235,29 @@ struct TomorrowView {
             .padding(.horizontal, 16)
         }
 
-        private static func hms(from: Date, to: Date) -> String {
-            let secs = max(0, Int(to.timeIntervalSince(from)))
-            let h = secs / 3600, m = (secs % 3600) / 60, s = secs % 60
-            return String(format: "%02d:%02d:%02d", h, m, s)
-        }
-
-        private static func heroSub(board: TomorrowBoard?, iso: String?, gameCount: Int? = nil, showTime: Bool = false) -> String {
-            let count = gameCount ?? board?.game_count ?? 0
-            if board?.any_lines == false || iso == nil {
-                return "lines open soon"
-            }
-            let plural = count == 1 ? "game" : "games"
-            // TODAY's countdown (Hub/Today): the date is redundant (it's today), so
-            // show the actual first-pitch CLOCK time, e.g. "13 games · 1:05 PM ET"
-            // (founder). TOMORROW keeps the short date — there the day still matters.
-            let trailing = showTime
-                ? Formatters.formatCommenceTime(iso)
-                : TomorrowView.shortDateLabel(iso)
-            return trailing.isEmpty ? "\(count) \(plural)" : "\(count) \(plural) · \(trailing)"
+        /// "10 GAMES · FIRST PITCH 1:05 PM ET · PHI @ KC OPENS" — or the honest
+        /// pre-lines state. The start word keys on the opening game's sport.
+        private func heroMeta(iso: String, anyLines: Bool, count: Int) -> String {
+            let plural = count == 1 ? "GAME" : "GAMES"
+            guard anyLines else { return "\(count) \(plural) · LINES OPEN SOON" }
+            let startWord = TomorrowView.countdownTerm(board?.countdown_sport)
+                .replacingOccurrences(of: " IN", with: "")
+            var bits = ["\(count) \(plural)", "\(startWord) \(TomorrowView.etTime(iso))"]
+            if let m = board?.countdown_matchup, !m.isEmpty { bits.append("\(m.uppercased()) OPENS") }
+            return bits.joined(separator: " · ")
         }
 
         // ── ② Big games to watch ───────────────────────────────────────────
 
         @ViewBuilder private var bigGames: some View {
-            let all = board?.big_games ?? []
-            let filtered = leagueFilter.map { lg in
-                all.filter { ($0.league ?? "").uppercased() == lg.uppercased() }
-            } ?? all
-
-            // When filtering by sport, board.board may have more games than
-            // big_games (cross-sport top-5, WC-led + at least one MLB mixed in).
-            // Use board rows only for small slates (≤6 games, e.g. WC) where
-            // big_games doesn't capture everything. MLB has 15+ games — keep
-            // the curated big_games view there.
-            let boardRows: [TomorrowBoardRow] = {
-                guard let lg = leagueFilter else { return [] }
-                let rows = (board?.board ?? []).filter {
-                    ($0.league ?? "").uppercased() == lg.uppercased()
-                }
-                guard rows.count > filtered.count, rows.count <= 6 else { return [] }
-                return rows
-            }()
-
-            if !boardRows.isEmpty {
-                let title = leagueFilter == "WC" ? "Today's Matches" : "Today's Games"
+            let games = (board?.big_games ?? []).sorted { $0.rank < $1.rank }.prefix(5)
+            if !games.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    HubSectionHeader(eyebrow: title, sub: "")
+                    HubSectionHeader(eyebrow: "The Marquee", sub: "")
                     VStack(spacing: 0) {
-                        ForEach(Array(boardRows.enumerated()), id: \.offset) { idx, row in
-                            boardRow(row, alt: idx % 2 == 1)
-                            if idx < boardRows.count - 1 {
+                        ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
+                            bigGameRow(g, displayRank: idx + 1)
+                            if idx < games.count - 1 {
                                 Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
                             }
                         }
@@ -9471,24 +9265,6 @@ struct TomorrowView {
                     .padding(.vertical, 4)
                     .quantPanel()
                     .padding(.horizontal, 16)
-                }
-            } else {
-                let games = filtered.sorted { $0.rank < $1.rank }.prefix(5)
-                if !games.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HubSectionHeader(eyebrow: "Big Games To Watch", sub: "")
-                        VStack(spacing: 0) {
-                            ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
-                                bigGameRow(g, displayRank: idx + 1)
-                                if idx < games.count - 1 {
-                                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .quantPanel()
-                        .padding(.horizontal, 16)
-                    }
                 }
             }
         }
@@ -9505,18 +9281,17 @@ struct TomorrowView {
             }()
             return HStack(alignment: .top, spacing: 12) {
                 Text("\(displayRank)")
-                    .font(GaryFonts.mono(15, bold: true))
+                    .font(GaryFonts.display(22))
                     .foregroundStyle(GaryColors.gold)
-                    .frame(width: 16, alignment: .leading)
-                    .padding(.top, 2)
+                    .frame(width: 18, alignment: .leading)
                 VStack(alignment: .leading, spacing: 7) {
-                    // Top line: bold matchup (left) · time (right).
+                    // Top line: the matchup in the display face (left) · time (right).
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(g.matchup ?? "")
-                            .font(GaryFonts.text(15.5, .semibold))
+                        Text((g.matchup ?? "").uppercased())
+                            .font(GaryFonts.display(22))
                             .foregroundStyle(.white.opacity(0.95))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.85)
+                            .minimumScaleFactor(0.7)
                         Spacer(minLength: 6)
                         Text(TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true))
                             .font(GaryFonts.mono(12))
@@ -9930,19 +9705,15 @@ struct TomorrowView {
         /// otherwise the single available sport renders alone (no orphan toggle).
         @ViewBuilder private var lookAheadTabs: some View {
             if hasMlbLookahead || hasWcLookahead {
-                // Resolve the effective sport. When leagueFilter locks the sport
-                // (e.g. Hub WC tab), skip the switcher and always use that sport.
-                let lockedSport: LookAheadSport? = leagueFilter == "WC" ? .wc : leagueFilter == "MLB" ? .mlb : nil
                 let sport: LookAheadSport = {
-                    if let locked = lockedSport { return locked }
                     if lookAheadSport == .wc, hasWcLookahead { return .wc }
                     if lookAheadSport == .mlb, hasMlbLookahead { return .mlb }
                     return hasMlbLookahead ? .mlb : .wc
                 }()
                 VStack(alignment: .leading, spacing: 6) {
                     HubSectionHeader(eyebrow: "The Day Ahead", sub: "")
-                    // MLB / WC switch — only when both have data AND sport isn't locked.
-                    if hasMlbLookahead && hasWcLookahead && lockedSport == nil {
+                    // MLB / WC switch — only when both have data.
+                    if hasMlbLookahead && hasWcLookahead {
                         HStack(spacing: 18) {
                             ForEach([LookAheadSport.mlb, .wc], id: \.self) { s in
                                 Button {
