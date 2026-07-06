@@ -5138,6 +5138,11 @@ struct PremiumPicksView: View {
     // Per-sport shelves: each sport shows TODAY's pick if it has one, else its last graded result.
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
+    // Real per-league game count from today's slate — lets the pre-post
+    // "coming soon" state show the actual shelf shape (N sealed placeholders
+    // per league) instead of a generic fixed count (founder, Jul 6: match
+    // the populated board's layout, just with coming-soon wrapper words).
+    @State private var todaySlateCounts: [String: Int] = [:]
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
     @State private var gameScoresMap: [String: String] = [:]    // same key -> "away-home" final score
     @State private var matchupScoresMap: [String: String] = [:] // matchup-only key -> final (props share the game's score)
@@ -5484,28 +5489,44 @@ struct PremiumPicksView: View {
     /// uses, rendered as non-interactive placeholders with the drop countdown
     /// on the seal, under a plain how-it-works card with a one-tap door to
     /// yesterday's graded card. The old blur-skeletons + pop-up modal are gone.
+    /// Founder, Jul 6: this state should look like the REAL board — same
+    /// per-league shelf headers, same card rail — just with coming-soon
+    /// wrapper words in place of a live tap-to-reveal seal. Iterates
+    /// `gameShelves` (already carries every in-season league, empty picks
+    /// and all) and renders one sealed placeholder per expected slot,
+    /// sized from today's real slate count so it's never overstating or
+    /// understating the day.
     private var comingSoonState: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 22) {
             comingSoonIntro
                 .padding(.horizontal, 16)
-            // THREE placeholders on a swipeable rail (founder, Jul 6): Gary
-            // posts 3+ picks most days, so the empty room previews the real
-            // shape of the board instead of one lonely card.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"))
-                        .frame(width: UIScreen.main.bounds.width - 60)
-                    MembersOnlyCardFace(state: .placeholder(note: "EVERY PICK GRADED BY MORNING"),
-                                        footnote: "GAME PICKS · PROP PICKS")
-                        .frame(width: UIScreen.main.bounds.width - 60)
-                    MembersOnlyCardFace(state: .placeholder(note: "USUALLY 3+ PICKS A DAY"))
-                        .frame(width: UIScreen.main.bounds.width - 60)
-                }
-                .padding(.horizontal, 16)
+            ForEach(gameShelves) { shelf in
+                comingSoonShelf(shelf.league)
             }
         }
         .padding(.top, 14)
         .padding(.bottom, 120)
+    }
+
+    /// One league's coming-soon shelf: real header, real card footprint,
+    /// placeholder count matched to tonight's actual slate (WC ships 2
+    /// picks/match; everything else shows its usual top-3 shelf).
+    private func comingSoonShelf(_ league: String) -> some View {
+        let games = todaySlateCounts[league.uppercased()] ?? 1
+        let count = league.uppercased() == "WC" ? min(games * 2, 12) : min(max(games, 1), 3)
+        return VStack(alignment: .leading, spacing: 10) {
+            shelfHeader(league, status: "·  \(games) game\(games == 1 ? "" : "s") tonight")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(0..<count, id: \.self) { _ in
+                        MembersOnlyCardFace(state: .coming(note: "DROPS ~90 MIN BEFORE GAME TIME"),
+                                            leagueTag: league.uppercased())
+                            .frame(width: UIScreen.main.bounds.width - 44)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
     }
 
     /// Plain-language how-it-works + the door to yesterday's results.
@@ -6393,7 +6414,10 @@ struct PremiumPicksView: View {
         // (NBA/NHL once their season ends) have no game today, so we skip their
         // empty placeholder lane instead of showing a misleading "next slate
         // posts ~90 min before tip" message for a sport that isn't playing.
-        let slateLeagues = Set((await slateF).compactMap { $0.league?.uppercased() })
+        let slateRows = await slateF
+        let slateLeagues = Set(slateRows.compactMap { $0.league?.uppercased() })
+        let slateCounts = Dictionary(grouping: slateRows) { ($0.league ?? "").uppercased() }
+            .mapValues(\.count)
 
         // Yesterday's result map for settled (last-result) shelves.
         var rMap: [String: String] = [:]
@@ -6512,6 +6536,7 @@ struct PremiumPicksView: View {
             propResultsMap = pMap
             gameShelves = gShelves
             propShelves = pShelves
+            todaySlateCounts = slateCounts
             sportRecords = sRec
             entitledSports = entitlements
             loading = false
