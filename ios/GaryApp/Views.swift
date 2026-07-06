@@ -13350,6 +13350,7 @@ struct MembersOnlyCardFace: View {
 
     var body: some View {
         VStack(spacing: 0) {
+        VStack(spacing: 0) {
             // Eyebrow — membership left, league right.
             HStack {
                 Text("MEMBERS ONLY")
@@ -13384,30 +13385,14 @@ struct MembersOnlyCardFace: View {
                     }
                 }
                 Spacer(minLength: 8)
-                if case .pickIn(let fp) = state {
-                    VStack(alignment: .trailing, spacing: 10) {
-                        if let fp {
-                            VStack(alignment: .trailing, spacing: 1) {
-                                Text(startWord)
-                                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                                    .foregroundStyle(.white.opacity(0.78))
-                                Text(fp)
-                                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                                    .foregroundStyle(.white.opacity(0.9))
-                            }
-                        }
-                        // A real button, not a caption — squared, not a pill
-                        // (founder, Jul 5: no oval boxes).
-                        Text("TAP TO REVEAL")
-                            .font(GaryFonts.mono(10, bold: true)).tracking(1.4)
-                            .foregroundStyle(Color(hex: "#191507"))
-                            .padding(.horizontal, 13).padding(.vertical, 9)
-                            .background(
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
-                                                         startPoint: .top, endPoint: .bottom))
-                                    .shadow(color: GaryColors.gold.opacity(0.35), radius: 10, y: 3)
-                            )
+                if case .pickIn(let fp) = state, let fp {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(startWord)
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.78))
+                        Text(fp)
+                            .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.9))
                     }
                 }
             }
@@ -13430,8 +13415,15 @@ struct MembersOnlyCardFace: View {
         }
         .padding(.horizontal, 18).padding(.vertical, 13)
         .frame(maxWidth: .infinity)
+        .frame(maxHeight: .infinity)
+        // R10 (founder-picked from reveal-affordance-25): the reveal is the
+        // card's own bottom edge — a gold rail, not a floating control (the
+        // oval died Jul 5 AM, the box Jul 5 PM).
+        if inviting { revealRail }
+        }
         .frame(height: fillsContainer ? nil : CompactPickRow.uniformHeight)
         .frame(maxHeight: fillsContainer ? .infinity : nil)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .background(
             // W17 — the split diagonal: two warm tones, gold seam between the
             // sides. The card is the matchup; the seam is Gary in the middle.
@@ -13458,6 +13450,20 @@ struct MembersOnlyCardFace: View {
                 .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
                 .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
         )
+    }
+}
+
+extension MembersOnlyCardFace {
+    /// R10 — the footer rail. Full-bleed gold bar along the card's bottom;
+    /// the whole card is the tap target, this edge is what says so.
+    var revealRail: some View {
+        Text("TAP TO REVEAL")
+            .font(GaryFonts.mono(10.5, bold: true)).tracking(2.5)
+            .foregroundStyle(Color(hex: "#191507"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(LinearGradient(colors: [Color(hex: "#EBD188"), Color(hex: "#C29B2C")],
+                                       startPoint: .top, endPoint: .bottom))
     }
 }
 
@@ -13981,6 +13987,7 @@ struct LockedPickCard: View {
     var body: some View {
         Button(action: onUnlock) {
             VStack(spacing: 0) {
+            VStack(spacing: 0) {
                 HStack {
                     Text("MEMBERS ONLY")
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(3)
@@ -14007,22 +14014,23 @@ struct LockedPickCard: View {
                             .padding(.top, 5)
                     }
                     Spacer(minLength: 8)
-                    Text("UNLOCK")
-                        .font(GaryFonts.mono(10, bold: true)).tracking(1.4)
-                        .foregroundStyle(Color(hex: "#191507"))
-                        .padding(.horizontal, 13).padding(.vertical, 9)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(LinearGradient(colors: [Color(hex: "#F0D68A"), GaryColors.gold],
-                                                     startPoint: .top, endPoint: .bottom))
-                                .shadow(color: GaryColors.gold.opacity(0.35), radius: 10, y: 3)
-                        )
                 }
                 Spacer(minLength: 10)
             }
             .padding(.horizontal, 18).padding(.vertical, 13)
             .frame(maxWidth: .infinity)
+            .frame(maxHeight: .infinity)
+            // R10 rail — same edge grammar as the members seal.
+            Text("UNLOCK")
+                .font(GaryFonts.mono(10.5, bold: true)).tracking(2.5)
+                .foregroundStyle(Color(hex: "#191507"))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(LinearGradient(colors: [Color(hex: "#EBD188"), Color(hex: "#C29B2C")],
+                                           startPoint: .top, endPoint: .bottom))
+            }
             .frame(height: CompactPickRow.uniformHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color(hex: "#14110D"))

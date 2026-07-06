@@ -569,6 +569,10 @@ struct HubView: View {
                     hubError
                 } else {
                     if !slateRows.isEmpty {
+                        // THE SLATE panel (founder, Jul 5: the Tomorrow-page
+                        // masthead earns a daily spot here too) — the day's
+                        // shape in one card; the strip below carries the games.
+                        HubSlatePanel(rows: slateRows)
                         HubSlateStrip(rows: slateRows) { r in
                             gameSheet = HubGameSel(row: r)
                         }
@@ -999,9 +1003,8 @@ fileprivate struct HubMasthead: View {
             }
 
             HStack(spacing: 8) {
-                Text(dateLine + (gameCount > 0 ? " · \(gameCount) games" : ""))
-                    .font(HubFont.body(12, .medium))
-                    .foregroundStyle(.white.opacity(0.62))
+                // Date + count moved into HubSlatePanel (Jul 5) — saying them
+                // twice two blocks apart failed the duplication rule.
                 Spacer()
                 if let r = record7 {
                     let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
@@ -1094,6 +1097,78 @@ fileprivate func hubSideLabel(_ abbr: String?, _ team: String?) -> String {
     if let a = abbr, !a.isEmpty { return a }
     guard let t = team, !t.isEmpty else { return "—" }
     return String(t.uppercased().filter { $0.isLetter }.prefix(3))
+}
+
+/// THE SLATE — the Tomorrow-page masthead, day-aware for today: Bebas date,
+/// then one mono line with the count, what's live, and what's next.
+fileprivate struct HubSlatePanel: View {
+    let rows: [TomorrowBoardRow]
+    @ObservedObject private var live = LiveScoreCache.shared
+
+    private var dateLine: String {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEEE, MMMM d"
+        return f.string(from: Date())
+    }
+
+    private func matchup(_ r: TomorrowBoardRow) -> String {
+        "\(r.away_team ?? r.away_abbr ?? "?") @ \(r.home_team ?? r.home_abbr ?? "?")"
+    }
+
+    private var meta: String {
+        let now = Date()
+        var bits = ["\(rows.count) \(rows.count == 1 ? "GAME" : "GAMES")"]
+        let liveCount = rows.filter { live.status(forMatchup: matchup($0))?.isLive == true }.count
+        if liveCount > 0 { bits.append("\(liveCount) LIVE NOW") }
+        let next = rows
+            .compactMap { r -> (Date, TomorrowBoardRow)? in
+                guard let d = parseISO8601(r.commence_time ?? ""), d > now else { return nil }
+                return (d, r)
+            }
+            .min { $0.0 < $1.0 }
+        if let next {
+            let title = "\(next.1.away_abbr ?? "?") @ \(next.1.home_abbr ?? "?")"
+            bits.append("NEXT \(title) \(TomorrowView.etTime(next.1.commence_time, withZone: false, meridiem: true).uppercased())")
+        } else if liveCount == 0 {
+            bits.append("ALL DONE")
+        }
+        return bits.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("THE SLATE")
+                .font(GaryFonts.mono(10, bold: true)).tracking(2)
+                .foregroundStyle(GaryColors.gold)
+            Text(dateLine)
+                .font(GaryFonts.display(30))
+                .foregroundStyle(GaryColors.warmWhite)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .padding(.top, 5)
+            Text(meta)
+                .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
+                .foregroundStyle(.white.opacity(0.66))
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.top, 7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
+        )
+        .overlay(alignment: .topTrailing) {
+            RadialGradient(colors: [GaryColors.gold.opacity(0.18), .clear],
+                           center: .topTrailing, startRadius: 0, endRadius: 150)
+                .frame(width: 200, height: 200)
+                .allowsHitTesting(false)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .padding(.horizontal, 16)
+    }
 }
 
 fileprivate struct HubSlateStrip: View {
