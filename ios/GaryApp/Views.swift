@@ -5874,6 +5874,25 @@ struct PremiumPicksView: View {
         }
     }
 
+    /// How many "coming soon" filler cards a still-filling shelf should carry
+    /// after its real picks (founder, Jul 6: "MLB has only 1 [of 3] — we need
+    /// two of the coming soon cards" so the rail always previews its full
+    /// intended size, not just what's dropped so far). Never pads a settled
+    /// shelf (yesterday's LAST RESULT fallback, or a graded past day) — only
+    /// TODAY's still-live board keeps filling in.
+    private func shelfPadCount(_ shelf: GameShelf) -> Int {
+        guard !shelf.settled else { return 0 }
+        let target: Int
+        if shelf.league.uppercased() == "WC" {
+            // WC ships 2 plays/match — the target scales with tonight's real
+            // match count (same math as the fully-pre-post comingSoonShelf).
+            target = min((todaySlateCounts["WC"] ?? 0) * 2, 12)
+        } else {
+            target = 3   // Gary's fixed "top 3 plays" shelf size, every sport.
+        }
+        return max(0, target - shelf.picks.count)
+    }
+
     private func gameShelfView(_ shelf: GameShelf) -> some View {
         // On the TODAY board a settled shelf is a STALE prior-day fallback (today's
         // pick hasn't posted/graded yet). Tease it with the blurred lock card
@@ -5925,6 +5944,14 @@ struct PremiumPicksView: View {
                                 }
                             }
                             .frame(width: UIScreen.main.bounds.width - 44)
+                        }
+                        // The shelf's still-open slots — "1 of 3" reads as a
+                        // sparse, half-finished board without these; they say
+                        // more of tonight's plays are still coming.
+                        ForEach(0..<shelfPadCount(shelf), id: \.self) { _ in
+                            MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"),
+                                                leagueTag: shelf.league.uppercased())
+                                .frame(width: UIScreen.main.bounds.width - 44)
                         }
                     }
                     .padding(.horizontal, 16)

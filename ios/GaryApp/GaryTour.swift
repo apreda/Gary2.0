@@ -27,6 +27,8 @@ import UIKit
 //   hub mlb|nba|wc               Hub league tab
 //   billfold LINE|CANDLES|SPORTS Billfold chart mode
 //   scroll 800 / scroll -400     scroll the frontmost scroll view by px
+//   hscroll 300                  scroll EVERY horizontal rail on screen by px
+//                                (shelf card rails — QA screenshots can't swipe)
 //   dismiss                      dismiss the presented sheet
 //
 // The observer is only registered in DEBUG (`start()` is a no-op in Release),
@@ -58,6 +60,8 @@ enum GaryTour {
         switch verb {
         case "scroll":
             scrollFrontmost(by: CGFloat(Double(arg) ?? 0))
+        case "hscroll":
+            scrollAllHorizontalRails(by: CGFloat(Double(arg) ?? 0))
         case "dismiss":
             topController()?.dismiss(animated: true)
         case "settings":
@@ -111,6 +115,25 @@ enum GaryTour {
         let maxY = max(minY, sv.contentSize.height + sv.adjustedContentInset.bottom - sv.bounds.height)
         let target = min(max(sv.contentOffset.y + dy, minY), maxY)
         sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: target), animated: false)
+    }
+
+    /// Every horizontal-scrolling rail on the frontmost surface, shifted by
+    /// the same dx — a screenshot tool can't swipe, and a page can carry
+    /// several rails (one per league shelf) at once.
+    private static func scrollAllHorizontalRails(by dx: CGFloat) {
+        guard let window = frontWindow() else { return }
+        let root: UIView = topController()?.view ?? window
+        func walk(_ v: UIView) {
+            guard !v.isHidden, v.alpha > 0.01 else { return }
+            if let sv = v as? UIScrollView, sv.contentSize.width > sv.bounds.width + 1 {
+                let minX = -sv.adjustedContentInset.left
+                let maxX = max(minX, sv.contentSize.width + sv.adjustedContentInset.right - sv.bounds.width)
+                let target = min(max(sv.contentOffset.x + dx, minX), maxX)
+                sv.setContentOffset(CGPoint(x: target, y: sv.contentOffset.y), animated: false)
+            }
+            v.subviews.forEach(walk)
+        }
+        walk(root)
     }
 
     private static func frontWindow() -> UIWindow? {
