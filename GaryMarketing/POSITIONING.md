@@ -26,12 +26,13 @@
 > Each of Gary's picks comes with a full breakdown.
 > *(alt for prose: "Gary explains the rationale behind every pick.")*
 
-**Support line — Gary is checkable:**
-> His full record is public. Wins and losses, every day.
+**Support line — Gary is checkable (founder's phrasing, verbatim):**
+> Transparent win rate. A full log of all of Gary's picks.
+> *(alt for prose: "Gary's record and every pick is always visible.")*
 
 **Full (App Store / press / anywhere):**
 > Gary A.I. picks every game, every night — games and player props, free in the app. Each pick comes
-> with a full breakdown, and every result stays public, wins and losses.
+> with a full breakdown, and Gary's record and every pick is always visible.
 
 **Phrasing test (added v5):** would a person SAY the sentence out loud? "Shows what it's built on"
 fails (writerly). "Comes with a full breakdown" passes. When the founder supplies a line, it goes in
