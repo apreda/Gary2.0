@@ -54,7 +54,7 @@ async function main() {
 {"s1":["LINE1","LINE2","NUMBER","LINE4"], "s2":["LINE1","LINE2","NUMBER"], "caption":"...", "vo":"..."}
 s1 = hook against/setup: up to 3 short ALL-CAPS words per text line, the NUMBER alone on its own line (e.g. ["NORWAY","CONCEDES","2.0","GOALS A MATCH"]). s2 = the counter stat, same shape, NUMBER third (e.g. ["BRAZIL","GIVES UP","0.5"]). Numbers must be REAL numbers from the rationale, never invented.
 caption = one casual first-person line stating the play ("I'm on the Brazil moneyline tonight.").
-vo = 3 to 4 short spoken sentences, casual bettor talking to a friend, ending with EXACTLY this sentence: "Win or lose, it's on my record." Use only facts from the rationale. No emojis, no dashes, no hashtags, no hype words, and never the words "graded", "model", or "data".
+vo = 3 to 4 short spoken sentences, casual bettor talking to a friend, ending with EXACTLY these sentences: "Every pick's free in the app, with the full reasoning. Win or lose, it's on my record." Use only facts from the rationale. No emojis, no dashes, no hashtags, no hype words, and never the words "graded", "model", or "data".
 PICK: ${chosen.pick} (${chosen.odds ?? ''}) | ${chosen.awayTeam} @ ${chosen.homeTeam} | ${String(chosen.league ?? '').toUpperCase()}
 RATIONALE (ground truth): ${String(chosen.rationale ?? '').slice(0, 4000)}`);
 

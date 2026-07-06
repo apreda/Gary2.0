@@ -57,7 +57,7 @@ after. Win or lose."*
 **SHOT 5 — THE TAPE (0:36-0:45)**
 Hard cut to product truth: the real app — the graded tape scrolling (green and red), the season P/L, the
 share card. Type stamps in: **EVERY PICK. EVERY RESULT. GRADED.** Then the wordmark + App Store badge.
-VO: *"Gary A.I. The tape doesn't lie."*
+VO: *"Gary A.I. A pick for every game, free, with the reasoning. Every result public."*
 > Production: this shot is NOT generated — it's a screen capture of the real app + our Remotion-style type
 > system (video-pipeline). Real product, real record. That honesty is the whole brand.
 
