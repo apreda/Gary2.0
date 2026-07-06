@@ -22,15 +22,20 @@
 **Standard (offer + coverage):**
 > Gary picks every game, every night. Games and props, free in the app.
 
-**Support line — the pick is checkable (never sell "reasoning" as a feature):**
-> Every pick shows what it's built on, so you can check it before you bet it.
+**Support line — the pick is checkable (founder's phrasing, verbatim; plain speech only):**
+> Each of Gary's picks comes with a full breakdown.
+> *(alt for prose: "Gary explains the rationale behind every pick.")*
 
 **Support line — Gary is checkable:**
 > His full record is public. Wins and losses, every day.
 
 **Full (App Store / press / anywhere):**
-> Gary A.I. picks every game, every night — games and player props, free in the app. Every pick shows
-> what it's built on, and every result stays public, wins and losses.
+> Gary A.I. picks every game, every night — games and player props, free in the app. Each pick comes
+> with a full breakdown, and every result stays public, wins and losses.
+
+**Phrasing test (added v5):** would a person SAY the sentence out loud? "Shows what it's built on"
+fails (writerly). "Comes with a full breakdown" passes. When the founder supplies a line, it goes in
+verbatim — never re-styled.
 
 **X bio (current is already in this register; optional one-word swap of "grade" → "show"):**
 > AI that calls every game. MLB, NBA, NFL, NHL, college. I post my plays before they start and show
