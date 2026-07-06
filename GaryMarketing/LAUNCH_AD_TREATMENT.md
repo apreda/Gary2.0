@@ -44,8 +44,8 @@ VO: *"Then it went legit, and everyone got a book in their pocket."*
 The dim mahogany bar from our proof render. GARY — the golden bear, tailored suit, gold-rim sunglasses,
 cigar — sits where the bookie sat in Shot 1. Same framing, same tungsten bulb. He slides the GLOWING GOLD
 PICK CARD across the wood toward camera and looks up over the sunglasses. Beat.
-VO: *"Now the other side of the bet got smarter. He posts his picks before the game. He grades every one.
-Win or lose."*
+VO: *"Now the other side of the bet got smarter. He posts every pick before the game. And every result
+after. Win or lose."*
 > VEO PROMPT: (the proven one) cinematic anthropomorphic golden bear mascot in a tailored charcoal suit,
 > gold-rimmed sunglasses, cigar, matching the reference image exactly, seated alone in a dim moody sports
 > bar at night, neon signage soft-focus behind him, wall of old CRT televisions showing baseball, he slowly
