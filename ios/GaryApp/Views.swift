@@ -3933,12 +3933,12 @@ struct HomeOvernightStrip: View {
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 Spacer(minLength: 6)
-                Text("THE CARD")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.5)
-                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+                // "THE CARD" label retired (founder, Jul 6): the words were
+                // stealing the roller's width — the chevron alone marks the
+                // door, and the whole strip is the tap target anyway.
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(GaryColors.gold.opacity(0.8))
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
