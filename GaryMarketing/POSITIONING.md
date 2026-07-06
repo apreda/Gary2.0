@@ -10,15 +10,27 @@
 
 # PART A — THE COPY (publishable, use verbatim)
 
-**Short:**
+> **The derivation (v4, founder-driven):** the user's question at 5pm is "who do I bet tonight?" —
+> so THE PRODUCT IS THE ANSWER: a pick, with a price, on every game. Reasoning is NOT what we sell
+> (it's a given for any AI app); its value is functional — it lets you CHECK THE PICK before you bet
+> it. The record's value is the same one level up — it lets you CHECK GARY over time. Copy sells the
+> answer and states the checks as plain facts. Every line below passed "so what?".
+
+**Short (the offer):**
 > Free daily picks with Gary A.I.
 
-**Standard:**
-> Gary makes a pick for every game, free in the app, with the reasoning for every one.
+**Standard (offer + coverage):**
+> Gary picks every game, every night. Games and props, free in the app.
+
+**Support line — the pick is checkable (never sell "reasoning" as a feature):**
+> Every pick shows what it's built on, so you can check it before you bet it.
+
+**Support line — Gary is checkable:**
+> His full record is public. Wins and losses, every day.
 
 **Full (App Store / press / anywhere):**
-> Gary A.I. makes a pick for every game, every day — games and player props — each with the reasoning
-> behind it. Every pick is free in the app, and every result is public, wins and losses.
+> Gary A.I. picks every game, every night — games and player props, free in the app. Every pick shows
+> what it's built on, and every result stays public, wins and losses.
 
 **X bio (current is already in this register; optional one-word swap of "grade" → "show"):**
 > AI that calls every game. MLB, NBA, NFL, NHL, college. I post my plays before they start and show
@@ -30,7 +42,7 @@
 > @betwithgary
 
 **Video VO closer (Gary, first person):**
-> "Every pick's free in the app, with the full reasoning. Win or lose, it's on my record."
+> "The full read's free in the app. Win or lose, it's on my record."
 
 **Launch film closing VO:**
 > "Gary A.I. A pick for every game, free, with the reasoning. Every result public."
