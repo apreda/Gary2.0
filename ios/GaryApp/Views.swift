@@ -3932,18 +3932,20 @@ struct HomeOvernightStrip: View {
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                Spacer(minLength: 6)
+                Spacer(minLength: 10)
                 // "THE CARD" label retired (founder, Jul 6): the words were
                 // stealing the roller's width — the chevron alone marks the
-                // door, and the whole strip is the tap target anyway.
-                // Sized up + pushed further right (founder, Jul 6) so the
-                // door reads clearly instead of hugging the roller.
+                // door, and the whole strip is the tap target anyway. A gold
+                // hairline now fills the gap before it (founder, Jul 6: bare
+                // Spacer space read as an accident, not a design) and the
+                // door itself is bigger + pushed to the true trailing edge.
+                Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(width: 1, height: 22)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(GaryColors.gold)
-                    .padding(.leading, 2)
+                    .padding(.leading, 10)
             }
-            .padding(.leading, 14).padding(.trailing, 18).padding(.vertical, 11)
+            .padding(.leading, 14).padding(.trailing, 16).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -13324,8 +13326,13 @@ struct MembersOnlyCardFace: View {
         }
     }
     private var kickerLine: String? {
-        guard case .pickIn = state else { return nil }
-        return kicker ?? "GARY'S PICK IS IN"
+        switch state {
+        case .pickIn:  return kicker ?? "GARY'S PICK IS IN"
+        // Founder, Jul 6: the pre-post seal needs to say it plainly, not
+        // just imply it via the note line.
+        case .coming:  return "COMING SOON"
+        case .placeholder: return nil
+        }
     }
     /// Sport-correct start-of-game word — FIRST PITCH is baseball-only.
     private var startWord: String {
