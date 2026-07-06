@@ -2408,9 +2408,11 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.09), value: animateIn)
         }
 
-        // ── THE RECORD — the honest sign-off + the doors.
-        if lastNightGraded > 0 {
-            HomeActHead(title: "The Record", sub: "every pick graded")
+        // ── THE RECORD — the honest sign-off + the doors. GAME picks only
+        // (founder, Jul 6: the combined number dragged in longshot props —
+        // 21–39 read like a disaster when the game card went 8–11).
+        if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
+            HomeActHead(title: "The Record", sub: "every game pick graded")
             scorecard
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
@@ -2888,52 +2890,14 @@ struct HomeView: View {
             switcherTab("TODAY", pill: .today)
             switcherTab("TOMORROW", pill: .tomorrow)
             Spacer(minLength: 8)
-            // LIVE FORM rides in the tab row's dead space (founder): each sport's
-            // record for the live day — today as it grades, else last night held —
-            // shown only on TODAY. No section, no container.
-            if activePill == .today, !dailyForm.isEmpty {
-                liveFormInline
-            }
+            // (The per-sport live record cells left this row Jul 6 — founder:
+            // data crowding the nav. The strip + THE RECORD carry the day.)
         }
         .padding(.horizontal, 16)
     }
 
-    /// The per-sport live record, inline in the tab row: a hairline, then
-    /// "MLB 9-6  WC 2-0 ●" — league in its accent, record white, green pip when live.
-    private var liveFormInline: some View {
-        HStack(spacing: 11) {
-            Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 19)
-            ForEach(dailyForm) { c in
-                Button {
-                    // Tap a sport → its picks (Winners board jumps to that shelf).
-                    PicksFocusState.shared.focusSport = c.league
-                    if reduceMotion { selectedTab = 1 }
-                    else { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 } }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(c.league == "WC" ? "WC" : c.league)
-                            .font(GaryFonts.mono(12.5, bold: true))
-                            .foregroundStyle(c.league == "MLB"
-                                ? AnyShapeStyle(Color(hex: "#63D17E"))
-                                : AnyShapeStyle(Sport.from(league: c.league).accentColor))
-                        Text(c.record)
-                            .font(GaryFonts.mono(16, bold: true))
-                            .foregroundStyle(.white)
-                        if c.state == .live {
-                            LiveBars(color: Color(hex: "#3FB950"), animate: !reduceMotion)
-                        }
-                    }
-                    .fixedSize()
-                }
-                .buttonStyle(.plain)
-            }
-            // The affordance: these records tap through to the picks.
-            Image(systemName: "chevron.right")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(.white.opacity(0.45))
-        }
-        .lineLimit(1)
-    }
+    // (liveFormInline removed Jul 6 — founder: records crowded the nav row.
+    // dailyForm plumbing kept: the per-sport live record wants a new home.)
 
     private func switcherTab(_ label: String, pill: SwitcherPill) -> some View {
         let on = activePill == pill
@@ -3078,14 +3042,14 @@ struct HomeView: View {
                 // Window named once, leftmost — every cell in this row is
                 // last night's slate (feedback: unlabeled windows next to the
                 // form lane's L10 numbers read contradictory).
-                scoreCell(Self.recordLine(lastNightRecord.w, lastNightRecord.l, lastNightRecord.p),
+                scoreCell(Self.recordLine(gamesNightRecord.w, gamesNightRecord.l, gamesNightRecord.p),
                           recapLabel, .white.opacity(0.92))
-                if let net = lastNightNet {
+                if let net = gamesNightNet {
                     Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
                     scoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
                               net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
                 }
-                if let best = bestCashOdds, best > 0 {
+                if let best = gamesNightBest, best > 0 {
                     Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
                     scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
                 }
@@ -5520,11 +5484,23 @@ struct PremiumPicksView: View {
     private var comingSoonState: some View {
         VStack(spacing: 14) {
             comingSoonIntro
-            MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"))
-            MembersOnlyCardFace(state: .placeholder(note: "EVERY PICK GRADED BY MORNING"),
-                                footnote: "GAME PICKS · PROP PICKS")
+                .padding(.horizontal, 16)
+            // THREE placeholders on a swipeable rail (founder, Jul 6): Gary
+            // posts 3+ picks most days, so the empty room previews the real
+            // shape of the board instead of one lonely card.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"))
+                        .frame(width: UIScreen.main.bounds.width - 60)
+                    MembersOnlyCardFace(state: .placeholder(note: "EVERY PICK GRADED BY MORNING"),
+                                        footnote: "GAME PICKS · PROP PICKS")
+                        .frame(width: UIScreen.main.bounds.width - 60)
+                    MembersOnlyCardFace(state: .placeholder(note: "USUALLY 3+ PICKS A DAY"))
+                        .frame(width: UIScreen.main.bounds.width - 60)
+                }
+                .padding(.horizontal, 16)
+            }
         }
-        .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 120)
     }
@@ -13316,7 +13292,7 @@ struct MembersOnlyCardFace: View {
         switch state {
         case .pickIn:      return ("THE PICK", "IS IN")
         case .coming:      return ("TONIGHT'S", "\(leagueTag ?? "GARY") PICK")
-        case .placeholder: return ("TODAY'S", "CARD")
+        case .placeholder: return ("TODAY'S CARD", "COMING SOON")
         }
     }
     private var kickerLine: String? {
@@ -14815,23 +14791,25 @@ struct CompactPickRow: View {
                 if premiumFinish {
                     GoldBar.background()
                 } else {
-                    // Lift v2 (founder, Jul 5: cards should sit FORWARD of the
-                    // page): brighter top face, harder edge light, deeper throw.
+                    // Lift v3 (founder, Jul 6: "+20% more off the page"):
+                    // brighter top face, harder edge light, longer throw —
+                    // dark cards only; the Winners gold/silver bars keep
+                    // their own finish.
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(LinearGradient(colors: [Color(hex: "#22201C"), Color(hex: "#100F0D")],
+                        .fill(LinearGradient(colors: [Color(hex: "#272522"), Color(hex: "#100F0D")],
                                              startPoint: .top, endPoint: .bottom))
                         .overlay(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.16), lineWidth: 1)
+                                .stroke(.white.opacity(0.19), lineWidth: 1)
                         )
                         .overlay(alignment: .top) {
                             // Lit-from-above highlight — the lift cue.
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.2), lineWidth: 1)
+                                .stroke(.white.opacity(0.24), lineWidth: 1)
                                 .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
                         }
-                        .shadow(color: .black.opacity(0.62), radius: 26, y: 14)
-                        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+                        .shadow(color: .black.opacity(0.68), radius: 32, y: 17)
+                        .shadow(color: .black.opacity(0.45), radius: 5, y: 3)
                 }
             }
         )
@@ -21863,23 +21841,25 @@ struct CompactPropRow: View {
                 if premiumFinish {
                     SilverBar.background()
                 } else {
-                    // Lift v2 (founder, Jul 5: cards should sit FORWARD of the
-                    // page): brighter top face, harder edge light, deeper throw.
+                    // Lift v3 (founder, Jul 6: "+20% more off the page"):
+                    // brighter top face, harder edge light, longer throw —
+                    // dark cards only; the Winners gold/silver bars keep
+                    // their own finish.
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(LinearGradient(colors: [Color(hex: "#22201C"), Color(hex: "#100F0D")],
+                        .fill(LinearGradient(colors: [Color(hex: "#272522"), Color(hex: "#100F0D")],
                                              startPoint: .top, endPoint: .bottom))
                         .overlay(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.16), lineWidth: 1)
+                                .stroke(.white.opacity(0.19), lineWidth: 1)
                         )
                         .overlay(alignment: .top) {
                             // Lit-from-above highlight — the lift cue.
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.white.opacity(0.2), lineWidth: 1)
+                                .stroke(.white.opacity(0.24), lineWidth: 1)
                                 .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
                         }
-                        .shadow(color: .black.opacity(0.62), radius: 26, y: 14)
-                        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+                        .shadow(color: .black.opacity(0.68), radius: 32, y: 17)
+                        .shadow(color: .black.opacity(0.45), radius: 5, y: 3)
                 }
             }
         )

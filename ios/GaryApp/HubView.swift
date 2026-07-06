@@ -495,6 +495,30 @@ struct HubView: View {
         (todayBoard?.board ?? []).filter { ($0.league ?? "").uppercased() == sel.label }
     }
 
+    /// The slate panel's countdown target (founder, Jul 6). WC: the day's
+    /// BIGGEST match (pipeline rank-1 big game, e.g. USA @ Belgium) — the
+    /// tournament runs on marquee moments. MLB: the FIRST game of the day —
+    /// a 15-game slate rarely has one game that owns the night.
+    private var slateCountdown: (title: String, date: Date)? {
+        let now = Date()
+        if sel == .wc,
+           let bg = (todayBoard?.big_games ?? [])
+               .filter({ ($0.league ?? "").uppercased() == "WC" })
+               .sorted(by: { $0.rank < $1.rank })
+               .first(where: { (parseISO8601($0.commence_time ?? "") ?? .distantPast) > now }),
+           let d = parseISO8601(bg.commence_time ?? "") {
+            return ((bg.matchup ?? "").uppercased(), d)
+        }
+        let next = slateRows
+            .compactMap { r -> (Date, TomorrowBoardRow)? in
+                guard let d = parseISO8601(r.commence_time ?? ""), d > now else { return nil }
+                return (d, r)
+            }
+            .min { $0.0 < $1.0 }
+        guard let next else { return nil }
+        return ("\(next.1.away_abbr ?? "?") @ \(next.1.home_abbr ?? "?")", next.0)
+    }
+
     // ---- the beats (the long tail, in human sections) ----
 
     private struct Beat: Identifiable {
@@ -572,7 +596,7 @@ struct HubView: View {
                         // THE SLATE panel (founder, Jul 5: the Tomorrow-page
                         // masthead earns a daily spot here too) — the day's
                         // shape in one card; the strip below carries the games.
-                        HubSlatePanel(rows: slateRows)
+                        HubSlatePanel(rows: slateRows, countdown: slateCountdown)
                         HubSlateStrip(rows: slateRows) { r in
                             gameSheet = HubGameSel(row: r)
                         }
@@ -760,13 +784,40 @@ struct HubView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: selectedSignal?.id)
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
-        .sheet(item: $gameSheet) { sel in
-            HubGameSheet(row: sel.row,
-                         edges: edgesFor(sel.row),
-                         streaks: streaksFor(sel.row),
-                         kickerFor: kickerText,
-                         onViewGame: { onSelectGame($0) })
+        // Centered pop-up, not a pull-up (founder, Jul 6: no bottom sheets
+        // on the game widget) — dim + scale, tap outside to close.
+        .overlay {
+            if let sel = gameSheet {
+                ZStack {
+                    Color.black.opacity(0.55).ignoresSafeArea()
+                        .onTapGesture { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil } }
+                    HubGameSheet(row: sel.row,
+                                 edges: edgesFor(sel.row),
+                                 streaks: streaksFor(sel.row),
+                                 kickerFor: kickerText,
+                                 onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil } },
+                                 onViewGame: { onSelectGame($0) })
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1))
+                        .overlay(alignment: .topTrailing) {
+                            Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil } } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(width: 38, height: 38)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .shadow(color: .black.opacity(0.6), radius: 30, y: 14)
+                        .padding(.horizontal, 14)
+                        .frame(maxHeight: UIScreen.main.bounds.height * 0.66)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: gameSheet?.id)
         .fullScreenCover(item: $wcIntel) { s in
             ZStack(alignment: .top) {
                 GaryColors.darkBg.ignoresSafeArea()
@@ -1105,7 +1156,15 @@ fileprivate func hubSideLabel(_ abbr: String?, _ team: String?) -> String {
 /// then one mono line with the count, what's live, and what's next.
 fileprivate struct HubSlatePanel: View {
     let rows: [TomorrowBoardRow]
+    var countdown: (title: String, date: Date)? = nil
     @ObservedObject private var live = LiveScoreCache.shared
+
+    /// "IN 5H 42M" / "IN 42M" — minutes are plenty; a ticking second hand
+    /// on a slate panel is noise (same call as the Tomorrow clock removal).
+    private static func inClock(to d: Date, from now: Date) -> String {
+        let mins = max(0, Int(d.timeIntervalSince(now) / 60))
+        return mins >= 60 ? "IN \(mins / 60)H \(mins % 60)M" : "IN \(mins)M"
+    }
 
     private var dateLine: String {
         let f = DateFormatter()
@@ -1129,10 +1188,9 @@ fileprivate struct HubSlatePanel: View {
                 return (d, r)
             }
             .min { $0.0 < $1.0 }
-        if let next {
-            let title = "\(next.1.away_abbr ?? "?") @ \(next.1.home_abbr ?? "?")"
-            bits.append("NEXT \(title) \(TomorrowView.etTime(next.1.commence_time, withZone: false, meridiem: true).uppercased())")
-        } else if liveCount == 0 {
+        // (The upcoming game itself lives on the gold countdown line now —
+        // naming it here too failed the duplication rule.)
+        if next == nil, liveCount == 0 {
             bits.append("ALL DONE")
         }
         return bits.joined(separator: " · ")
@@ -1153,6 +1211,15 @@ fileprivate struct HubSlatePanel: View {
                 .foregroundStyle(.white.opacity(0.66))
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .padding(.top, 7)
+            if let countdown {
+                TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                    Text("\(countdown.title) \(Self.inClock(to: countdown.date, from: ctx.date))")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+                .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -2266,8 +2333,8 @@ fileprivate struct HubGameSheet: View {
     let edges: [Signal]
     let streaks: [StreakRow]
     let kickerFor: (Signal) -> String
+    var onClose: () -> Void = {}
     let onViewGame: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var live = LiveScoreCache.shared
     @State private var detailSignal: Signal? = nil
     @State private var breakdownSignal: Signal? = nil
@@ -2299,23 +2366,21 @@ fileprivate struct HubGameSheet: View {
                 if !streaks.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         HubHead(title: "On the Line", count: streaks.count)
-                        HubStreakWatch(rows: streaks, onTapGame: { g in dismiss(); onViewGame(g) })
+                        HubStreakWatch(rows: streaks, onTapGame: { g in onClose(); onViewGame(g) })
                     }
                 }
                 cta
             }
             .padding(.top, 26).padding(.bottom, 34)
         }
-        .background(GaryColors.darkBg.ignoresSafeArea())
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .background(GaryColors.darkBg)
         .overlay {
             if let s = detailSignal {
                 HubEdgeOverlay(signal: s,
                                onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { detailSignal = nil } },
                                onViewGame: { g in
                                    detailSignal = nil
-                                   dismiss()
+                                   onClose()
                                    onViewGame(g)
                                })
                     .transition(.opacity.combined(with: .scale(scale: 0.94)))
@@ -2384,7 +2449,7 @@ fileprivate struct HubGameSheet: View {
     }
 
     private var cta: some View {
-        Button { dismiss(); onViewGame(abbrMatchup) } label: {
+        Button { onClose(); onViewGame(abbrMatchup) } label: {
             HStack(spacing: 6) {
                 Text("VIEW GAME ON PICKS")
                 Image(systemName: "arrow.right")
