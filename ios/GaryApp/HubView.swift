@@ -90,6 +90,17 @@ fileprivate struct HubHead: View {
     }
 }
 
+/// Value tint with market-direction correction: O/U streak values are
+/// ANGLES (neither good nor bad) so they wear gold — the backend tone stays
+/// hot/cold because the morning grader branches on it (functional, not
+/// cosmetic). Everything else keeps its tone color.
+func hubValueTint(_ s: Signal) -> Color {
+    if s.kind == .streak, let first = s.value.first, first == "O" || first == "U" {
+        return GaryColors.gold
+    }
+    return s.tone.color
+}
+
 /// Hairline row divider.
 fileprivate struct HubRule: View {
     var inset: CGFloat = 0
@@ -685,7 +696,9 @@ struct HubView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 HubHead(title: "Fantasy Corner", count: fantasy.count)
                                 HubFantasyCorner(signals: fantasy) { s in
-                                    if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    // The row's payoff is Gary's waiver read —
+                                    // open the insight, not the stat profile.
+                                    selectedSignal = s
                                 }
                             }
                             .id("fantasy")
@@ -812,7 +825,7 @@ struct HubView: View {
                         }
                         .shadow(color: .black.opacity(0.6), radius: 30, y: 14)
                         .padding(.horizontal, 14)
-                        .frame(maxHeight: UIScreen.main.bounds.height * 0.66)
+                        .frame(maxHeight: UIScreen.main.bounds.height * 0.58)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.94)))
             }
@@ -1359,7 +1372,7 @@ fileprivate struct HubLeadStory: View {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(s.value)
                             .font(HubFont.data(40))
-                            .foregroundStyle(s.tone.color)
+                            .foregroundStyle(hubValueTint(s))
                             .lineLimit(1).minimumScaleFactor(0.6)
                         if let baseline {
                             Text(baseline)
@@ -1430,7 +1443,7 @@ fileprivate struct HubBestOf: View {
             if let v = s.displayValue {
                 Text(v)
                     .font(HubFont.data(16))
-                    .foregroundStyle(s.tone.color)
+                    .foregroundStyle(hubValueTint(s))
                     .lineLimit(1)
                     .padding(.top, 14)
             }
@@ -1576,7 +1589,7 @@ fileprivate struct HubRegressionBoard: View {
                     if s.spark.count >= 2 { gapBar(s.spark[0], s.spark[1]) }
                     Text(s.value)
                         .font(HubFont.data(15))
-                        .foregroundStyle(s.tone.color)
+                        .foregroundStyle(hubValueTint(s))
                         .frame(width: 48, alignment: .trailing)
                 }
                 .padding(.horizontal, 18).padding(.vertical, 10)
@@ -1691,8 +1704,10 @@ fileprivate struct HubStreakWatch: View {
         case "hit":     return ("\(n) GM", GaryColors.gold)
         case "hr":      return ("HR ×\(n)", GaryColors.gold)
         case "hitless": return ("0-\(n)", GaryColors.loss)
-        case "over":    return ("O ×\(n)", GaryColors.win)
-        case "under":   return ("U ×\(n)", GaryColors.loss)
+        // Over/under runs are ANGLES, not good/bad — gold both directions
+        // (founder, Jul 6: red on a scoring streak read as a warning).
+        case "over":    return ("O ×\(n)", GaryColors.gold)
+        case "under":   return ("U ×\(n)", GaryColors.gold)
         default:        return ("\(n)", .white.opacity(0.6))
         }
     }
@@ -1888,7 +1903,7 @@ fileprivate struct HubStoryRow: View {
                     if let v = s.displayValue {
                         Text(v)
                             .font(HubFont.data(15))
-                            .foregroundStyle(s.tone.color)
+                            .foregroundStyle(hubValueTint(s))
                             .lineLimit(1)
                     }
                     if expandable, !dedupedDetail.isEmpty {
@@ -2157,6 +2172,13 @@ fileprivate struct HubFantasyCorner: View {
                     if let pos = s.fantasy?.position, !pos.isEmpty, pos != "SP" {
                         Text(pos)
                             .font(HubFont.data(8.5, .semibold)).foregroundStyle(.white.opacity(0.55))
+                    }
+                    if let tier = s.fantasy?.tier {
+                        Text(tier == "MUST_ADD" ? "MUST ADD" : tier)
+                            .font(HubFont.data(8.5, .semibold)).tracking(0.8)
+                            .foregroundStyle(tier == "MUST_ADD" ? GaryColors.gold
+                                             : tier == "STREAM" ? HubPalette.green
+                                             : .white.opacity(0.45))
                     }
                 }
                 Text(s.fantasy?.reason ?? s.detail)
@@ -2512,7 +2534,7 @@ fileprivate struct HubEdgeOverlay: View {
                 if !signal.valueEchoesHeadline, !signal.value.isEmpty {
                     Text(signal.value)
                         .font(HubFont.data(30))
-                        .foregroundStyle(signal.tone.color)
+                        .foregroundStyle(hubValueTint(signal))
                 }
                 let body = hubDedupedDetail(signal)
                 if !body.isEmpty {

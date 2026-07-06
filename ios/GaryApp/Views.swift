@@ -21057,7 +21057,7 @@ struct EdgeDetailSheet: View {
                 if !signal.value.isEmpty || !signal.spark.isEmpty {
                     HStack(alignment: .bottom, spacing: 16) {
                         if !signal.value.isEmpty {
-                            Text(signal.value).font(GaryFonts.mono(34, bold: true)).foregroundStyle(signal.tone.color)
+                            Text(signal.value).font(GaryFonts.mono(34, bold: true)).foregroundStyle(hubValueTint(signal))
                         }
                         if !signal.spark.isEmpty { MiniBarChart(values: signal.spark, line: signal.lineVal, tint: signal.kind.tint, height: 40) }
                     }
@@ -21301,9 +21301,9 @@ struct SignalRow: View {
                     Spacer(minLength: 6)
                     if !s.value.isEmpty {
                         if s.value.contains(where: { $0.isNumber }) {
-                            Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(s.tone.color)
+                            Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(hubValueTint(s))
                         } else {
-                            Text(s.value).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(s.tone.color)
+                            Text(s.value).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(hubValueTint(s))
                                 .padding(.horizontal, 7).padding(.vertical, 3)
                                 .overlay(Capsule().stroke(s.tone.color.opacity(0.28), lineWidth: 1))
                         }

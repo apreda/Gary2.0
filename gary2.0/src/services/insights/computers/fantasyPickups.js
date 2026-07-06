@@ -22,6 +22,7 @@
 
 import { makeRow, TONES, clampScore, round, pct3, nameKey } from '../shared.js';
 import { getPitcherXStats } from '../../baseballSavantService.js';
+import { geminiService } from '../../geminiService.js';
 
 const MIN_XERA_PA = 80;           // batters faced — xERA unstable below this
 // Availability gates — exclude owned aces so we surface PICKUPS, not stars.
@@ -78,7 +79,65 @@ export async function computeFantasyPickups(ctx) {
     .sort((a, b) => b.relevance_score - a.relevance_score).slice(0, MAX_HITTERS);
 
   console.log(`[fantasyPickups] pitchers=${topP.length}/${pitchers.length}, hitters=${topH.length}/${hitters.length}`);
-  return [...topP, ...topH];
+  const out = [...topP, ...topH];
+  // The analyst pass (founder, Jul 6: "a real insight, a mini pick process —
+  // not simple xERA vs ERA"): ONE flash call writes an ESPN-waiver-column
+  // read per finalist from the GROUNDED facts computed above. The model is
+  // fenced to the provided numbers; any failure keeps the computed detail.
+  await writeAnalystReads(out);
+  return out;
+}
+
+/** Per-player grounded fact sheet → 2-3 sentence read + a verdict line. */
+async function writeAnalystReads(rows) {
+  if (!rows.length) return;
+  const facts = rows.map((r, i) => {
+    const m = r.meta || {};
+    if (m.role === 'SP') {
+      const bits = [`xERA ${m.xera}`];
+      if (m.era != null) bits.push(`season ERA ${m.era}`);
+      if (m.k9 != null) bits.push(`${m.k9} K/9`);
+      if (m.whip != null) bits.push(`${m.whip} WHIP`);
+      return `${i}. PITCHER ${r.headline} — ${bits.join(', ')}. Matchup: ${m.reason || `vs ${m.opp}`}. Availability tier: ${m.tier}. Game: ${r.game}.`;
+    }
+    const bits = [`OPS ${m.ops}`];
+    if (m.avg != null) bits.push(`AVG ${m.avg}`);
+    if (m.batting_order != null) bits.push(`bats ${m.batting_order}`);
+    return `${i}. HITTER ${r.headline} (${m.position || 'BAT'}) — ${bits.join(', ')}. Faces ${m.opp_sp} tonight (${m.opp_sp_era} xERA, struggling). Availability tier: ${m.tier}. Game: ${r.game}.`;
+  }).join('\n');
+
+  const prompt = `You are Gary, a sharp fantasy baseball analyst writing today's waiver-wire column. For each player below, write the case for picking him up TODAY.
+
+HARD RULES:
+- Use ONLY the facts and numbers listed for that player. Never introduce any statistic, injury, trend, or player not provided.
+- 2-3 sentences per player, plain confident analyst voice — explain WHY the matchup makes him worth a roster spot tonight (what the numbers mean together, not a recital of them).
+- Then one short verdict sentence: who should grab him ("Must-add in all formats." / "Stream him tonight in 12-teamers." / "Deep-league dart only.") matched to his tier: MUST_ADD / STREAM / DEEP.
+- No hedging boilerplate, no exclamation marks, never mention being an AI or a model.
+
+Return STRICT JSON only: {"reads":[{"i":0,"read":"...","verdict":"..."}]}
+
+PLAYERS:
+${facts}`;
+
+  try {
+    const resp = await geminiService.generateResponse(
+      [{ role: 'user', content: prompt }],
+      { model: 'gemini-3-flash-preview', maxTokens: 4000 }
+    );
+    const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
+    const jsonStr = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));
+    for (const item of parsed?.reads || []) {
+      const r = rows[item?.i];
+      if (!r || !item?.read) continue;
+      const verdict = (item.verdict || '').trim();
+      r.detail = `${item.read.trim()}${verdict ? ` ${verdict}` : ''}`;
+      r.meta = { ...(r.meta || {}), read: item.read.trim(), ...(verdict ? { verdict } : {}) };
+    }
+    console.log(`[fantasyPickups] analyst reads attached: ${(parsed?.reads || []).length}/${rows.length}`);
+  } catch (err) {
+    console.error('[fantasyPickups] analyst pass failed (computed details kept):', err?.message || err);
+  }
 }
 
 async function pickupsForGame(game, opts) {
