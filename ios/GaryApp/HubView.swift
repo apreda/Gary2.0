@@ -742,7 +742,9 @@ struct HubView: View {
             case "mlb": withAnimation { sel = .mlb }
             case "nba": withAnimation { sel = .nba }
             case "wc": withAnimation { sel = .wc }
-            default: break
+            // Any other arg = a section anchor ("hub fantasy", "hub lastNight")
+            // — the tour harness can't drive the pop-out nav.
+            default: withAnimation { proxy.scrollTo(arg, anchor: .top) }
             }
         }
         .overlay {
@@ -2055,50 +2057,52 @@ fileprivate struct HubFantasyCorner: View {
     private var hitters: [Signal] { signals.filter { ($0.fantasy?.role ?? "") == "HITTER" } }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 22) {
-            column("Pitchers", pitchers, stat: GaryColors.gold)
-            column("Hitters", hitters, stat: HubPalette.green)
+        // ONE column, two groups (Jul 5 founder fix: side-by-side columns
+        // with 4 pitchers vs 10 hitters stretched a half-screen void under
+        // the short column). Stat rides the right edge; rows tightened.
+        VStack(alignment: .leading, spacing: 14) {
+            group("Pitchers", pitchers, stat: GaryColors.gold)
+            group("Hitters", hitters, stat: HubPalette.green)
         }
         .padding(.horizontal, 18)
     }
 
-    @ViewBuilder private func column(_ title: String, _ items: [Signal], stat: Color) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HubKicker(text: title, size: 10, color: .white.opacity(0.62))
-                .padding(.bottom, 8)
-            if items.isEmpty {
-                Text("None today")
-                    .font(HubFont.body(11.5)).foregroundStyle(.white.opacity(0.55))
-            } else {
+    @ViewBuilder private func group(_ title: String, _ items: [Signal], stat: Color) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HubKicker(text: title, size: 10, color: .white.opacity(0.62))
+                    .padding(.bottom, 4)
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
                     Button { onTap(s) } label: { row(s, stat: stat) }.buttonStyle(.plain)
                     if i < items.count - 1 { HubRule() }
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder private func row(_ s: Signal, stat: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                Text(s.headline)
-                    .font(HubFont.body(13.5, .semibold)).foregroundStyle(.white.opacity(0.95))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                if let pos = s.fantasy?.position, !pos.isEmpty, pos != "SP" {
-                    Text(pos)
-                        .font(HubFont.data(8.5, .semibold)).foregroundStyle(.white.opacity(0.55))
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(s.headline)
+                        .font(HubFont.body(13.5, .semibold)).foregroundStyle(.white.opacity(0.95))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    if let pos = s.fantasy?.position, !pos.isEmpty, pos != "SP" {
+                        Text(pos)
+                            .font(HubFont.data(8.5, .semibold)).foregroundStyle(.white.opacity(0.55))
+                    }
                 }
+                Text(s.fantasy?.reason ?? s.detail)
+                    .font(HubFont.body(11)).foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1)
+                    .multilineTextAlignment(.leading)
             }
+            Spacer(minLength: 8)
             Text(s.value)
                 .font(HubFont.data(14)).foregroundStyle(stat)
                 .lineLimit(1).minimumScaleFactor(0.7)
-            Text(s.fantasy?.reason ?? s.detail)
-                .font(HubFont.body(11)).foregroundStyle(.white.opacity(0.62))
-                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                .multilineTextAlignment(.leading)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }

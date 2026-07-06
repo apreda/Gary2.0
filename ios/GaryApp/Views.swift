@@ -10868,10 +10868,11 @@ struct BillfoldView: View {
     private var headerBar: some View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                // Matches GaryPageHeader: gold mono wordmark, ALL CAPS, white date.
+                // GaryPageHeader grammar (Jul 5 sweep — the mono-display
+                // wordmark was the app's last old-style page header).
                 Text("BILLFOLD")
-                    .font(GaryFonts.mono(23, bold: false))
-                    .foregroundStyle(GaryColors.gold)
+                    .font(GaryFonts.display(28))
+                    .foregroundStyle(GaryColors.warmWhite)
                 Text(statementDateLabel)
                     .font(GaryFonts.mono(10))
                     .foregroundStyle(.white.opacity(0.55))
@@ -11014,11 +11015,8 @@ struct BillfoldView: View {
 
             HStack(spacing: 8) {
                 Text(String(format: "ROI %+.1f%%", journal.roiPct))
-                    .font(.system(size: 11, weight: .bold, design: .default))
-                    .foregroundStyle(paper.opacity(0.95))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(journal.roiPct >= 0 ? emerald : crimson))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
 
                 Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
                     .font(.system(size: 13, weight: .semibold, design: .default))
@@ -11933,15 +11931,14 @@ struct BillfoldView: View {
 
     private var recentCarousel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("Gary's Recent Picks")
-                    .font(.system(size: 15, weight: .semibold))
-                    .tracking(0.2)
-                    .foregroundStyle(brass.opacity(0.95))
-                Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("GARY'S RECENT PICKS")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+                    .foregroundStyle(GaryColors.gold)
                 Text("\(selectedTab == 0 ? recentGameCards.count : recentPropCards.count)")
-                    .font(.system(size: 12, weight: .semibold, design: .default))
+                    .font(GaryFonts.mono(11))
                     .foregroundStyle(paper.opacity(0.55))
+                Spacer()
             }
             .padding(.horizontal, 20)
 
