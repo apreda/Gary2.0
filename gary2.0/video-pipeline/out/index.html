@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary — Clip Gallery</title><style>
+  body{background:#0B0A09;color:#ECE9E4;font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:30px 18px 80px}
+  .wrap{max-width:1100px;margin:0 auto}
+  .kick{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.2em;color:#C9A227}
+  h1{font-size:30px;margin:6px 0 4px}
+  .sub{color:#9A948A;font-size:14px;margin-bottom:26px}
+  .grid{display:flex;flex-wrap:wrap;gap:22px}
+  .cell{width:300px}
+  video{width:300px;border-radius:16px;border:1px solid rgba(236,233,228,.14);display:block;background:#000}
+  .name{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#C9A227;margin-top:8px}
+</style></head><body><div class="wrap">
+  <div class="kick">GARY A.I. · ENGINE 1</div>
+  <h1>Clip Gallery</h1>
+  <p class="sub">Every render lands here. Approve it, then post it from your phone. (Open this file: gary2.0/video-pipeline/out/index.html)</p>
+  <div class="grid" id="g"></div>
+<script>
+  // lists known clips; add new renders here or just open the mp4s directly
+  const clips = ["pick-brazil.mp4", "pick-2026-07-05.mp4", "veo-gary-bar.mp4"];
+  const g = document.getElementById("g");
+  for (const c of clips) {
+    const d = document.createElement("div"); d.className = "cell";
+    d.innerHTML = `<video src="${c}" controls playsinline></video><div class="name">${c}</div>`;
+    g.appendChild(d);
+  }
+</script>
+</div></body></html>

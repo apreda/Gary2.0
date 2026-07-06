@@ -1,0 +1,6 @@
+{
+  "name": "gary-video-pipeline",
+  "private": true,
+  "description": "Engine 1 Tier 1: renders Gary's daily vertical clips (TikTok/Reels/Shorts) from live pick data. Headless Chrome frames -> ffmpeg. Local-first, like results-card.",
+  "dependencies": { "puppeteer-core": "^24.0.0" }
+}
