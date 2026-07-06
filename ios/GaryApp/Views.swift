@@ -3936,11 +3936,14 @@ struct HomeOvernightStrip: View {
                 // "THE CARD" label retired (founder, Jul 6): the words were
                 // stealing the roller's width — the chevron alone marks the
                 // door, and the whole strip is the tap target anyway.
+                // Sized up + pushed further right (founder, Jul 6) so the
+                // door reads clearly instead of hugging the roller.
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.8))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.leading, 2)
             }
-            .padding(.horizontal, 14).padding(.vertical, 11)
+            .padding(.leading, 14).padding(.trailing, 18).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
