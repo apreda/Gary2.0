@@ -5883,7 +5883,7 @@ struct PremiumPicksView: View {
             shelfHeader(shelf.league,
                         status: shelf.picks.isEmpty
                             ? "·  —"
-                            : isStaleToday ? "·  PICK COMING"
+                            : isStaleToday ? "·  COMING SOON"
                             : (shelf.settled ? "·  LAST RESULT" : "·  \(shelf.picks.count) play\(shelf.picks.count == 1 ? "" : "s")"))
             if isStaleToday {
                 teasedTodayCard(for: shelf.league).padding(.horizontal, 16)
@@ -6007,7 +6007,7 @@ struct PremiumPicksView: View {
         let isStaleToday = selectedDate == nil && shelf.settled && !shelf.props.isEmpty
         return VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league, status: shelf.props.isEmpty ? "·  —"
-                            : isStaleToday ? "·  PICK COMING"
+                            : isStaleToday ? "·  COMING SOON"
                             : shelf.settled ? "·  LAST RESULT"
                             : "·  \(shelf.props.count) prop\(shelf.props.count == 1 ? "" : "s")")
             if isStaleToday {
