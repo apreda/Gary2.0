@@ -13354,13 +13354,7 @@ struct MembersOnlyCardFace: View {
         case .placeholder(let n): return n
         }
     }
-    private var inviting: Bool {
-        if case .pickIn = state { return true }
-        return false
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
         VStack(spacing: 0) {
             // Eyebrow — membership left, league right.
             HStack {
@@ -13396,14 +13390,26 @@ struct MembersOnlyCardFace: View {
                     }
                 }
                 Spacer(minLength: 8)
-                if case .pickIn(let fp) = state, let fp {
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(startWord)
-                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.78))
-                        Text(fp)
-                            .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.9))
+                // R1 "The Plain Call" (founder-picked off reveal-affordance-25,
+                // Jul 6 — R10's footer rail was MY unrequested pick, not his):
+                // no container at all, just light-gold mono words + a chevron,
+                // sitting under the clock the way the mock draws it.
+                if case .pickIn(let fp) = state {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if let fp {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(startWord)
+                                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                                    .foregroundStyle(.white.opacity(0.78))
+                                Text(fp)
+                                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                        }
+                        Text("TAP TO REVEAL ›")
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
+                            .foregroundStyle(GaryColors.lightGold)
+                            .lineLimit(1)
                     }
                 }
             }
@@ -13426,15 +13432,8 @@ struct MembersOnlyCardFace: View {
         }
         .padding(.horizontal, 18).padding(.vertical, 13)
         .frame(maxWidth: .infinity)
-        .frame(maxHeight: .infinity)
-        // R10 (founder-picked from reveal-affordance-25): the reveal is the
-        // card's own bottom edge — a gold rail, not a floating control (the
-        // oval died Jul 5 AM, the box Jul 5 PM).
-        if inviting { revealRail }
-        }
         .frame(height: fillsContainer ? nil : CompactPickRow.uniformHeight)
         .frame(maxHeight: fillsContainer ? .infinity : nil)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .background(
             // W17 — the split diagonal: two warm tones, gold seam between the
             // sides. The card is the matchup; the seam is Gary in the middle.
@@ -13461,20 +13460,6 @@ struct MembersOnlyCardFace: View {
                 .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
                 .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
         )
-    }
-}
-
-extension MembersOnlyCardFace {
-    /// R10 — the footer rail. Full-bleed gold bar along the card's bottom;
-    /// the whole card is the tap target, this edge is what says so.
-    var revealRail: some View {
-        Text("TAP TO REVEAL")
-            .font(GaryFonts.mono(10.5, bold: true)).tracking(2.5)
-            .foregroundStyle(Color(hex: "#191507"))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(LinearGradient(colors: [Color(hex: "#EBD188"), Color(hex: "#C29B2C")],
-                                       startPoint: .top, endPoint: .bottom))
     }
 }
 
@@ -13998,7 +13983,6 @@ struct LockedPickCard: View {
     var body: some View {
         Button(action: onUnlock) {
             VStack(spacing: 0) {
-            VStack(spacing: 0) {
                 HStack {
                     Text("MEMBERS ONLY")
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(3)
@@ -14025,23 +14009,18 @@ struct LockedPickCard: View {
                             .padding(.top, 5)
                     }
                     Spacer(minLength: 8)
+                    // R1 "The Plain Call" — same words-only reveal cue as the
+                    // members seal, no container.
+                    Text("UNLOCK ›")
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
+                        .foregroundStyle(GaryColors.lightGold)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: 10)
             }
             .padding(.horizontal, 18).padding(.vertical, 13)
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: .infinity)
-            // R10 rail — same edge grammar as the members seal.
-            Text("UNLOCK")
-                .font(GaryFonts.mono(10.5, bold: true)).tracking(2.5)
-                .foregroundStyle(Color(hex: "#191507"))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(LinearGradient(colors: [Color(hex: "#EBD188"), Color(hex: "#C29B2C")],
-                                           startPoint: .top, endPoint: .bottom))
-            }
             .frame(height: CompactPickRow.uniformHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color(hex: "#14110D"))
