@@ -20032,18 +20032,46 @@ struct GameScoutSection: View {
         guard !parts.isEmpty else { return nil }
         return parts.dropFirst().reduce(parts[0]) { $0 + stat(" · ", .white.opacity(0.35)) + $1 }
     }
-    /// "5 IP · 1 ER · 10 K" tinted by run rate; the opponent tag stays neutral.
+    /// BDL thirds notation ("16.2" = 16⅔ innings) → true innings.
+    private static func inningsOf(_ ip: String) -> Double {
+        let parts = ip.split(separator: ".")
+        let whole = Double(parts.first.map(String.init) ?? "") ?? 0
+        let outs = parts.count > 1 ? (Double(String(parts[1])) ?? 0) : 0
+        return whole + outs / 3
+    }
+    /// "16.2 IP · 5 ER · 21 K" tinted by the window's run rate.
+    private static func ipLine(ip: String, er: Int, k: Int?) -> Text {
+        let ipShow = ip.hasSuffix(".0") ? String(ip.dropLast(2)) : ip
+        var bits = "\(ipShow) IP · \(er) ER"
+        if let k, k > 0 { bits += " · \(k) K" }
+        let innings = inningsOf(ip)
+        let ra9 = innings > 0 ? Double(er) * 9 / innings : 99
+        let c: Color = ra9 <= 3 ? GaryColors.win : ra9 >= 6 ? GaryColors.loss : .white.opacity(0.9)
+        return stat(bits, c)
+    }
+    /// "5 IP · 1 ER · 10 K vs CIN" — the opponent tag stays neutral.
     private static func outingText(_ o: TomorrowOuting?) -> Text? {
         guard let o, let ip = o.ip else { return nil }
-        let ipShow = ip.hasSuffix(".0") ? String(ip.dropLast(2)) : ip
-        var bits = "\(ipShow) IP · \(o.er ?? 0) ER"
-        if let k = o.k, k > 0 { bits += " · \(k) K" }
-        let innings = Double(ip) ?? 0
-        let ra9 = innings > 0 ? Double(o.er ?? 0) * 9 / innings : 99
-        let c: Color = ra9 <= 3 ? GaryColors.win : ra9 >= 6 ? GaryColors.loss : .white.opacity(0.9)
-        var t = stat(bits, c)
+        var t = ipLine(ip: ip, er: o.er ?? 0, k: o.k)
         if let opp = o.opp {
             t = t + Text(" \(o.at ?? "vs") \(opp)").font(GaryFonts.mono(12)).foregroundColor(.white.opacity(0.62))
+        }
+        return t
+    }
+    private static func l3Text(_ l: TomorrowL3?) -> Text? {
+        guard let l, let ip = l.ip, let er = l.er else { return nil }
+        return ipLine(ip: ip, er: er, k: l.k)
+    }
+    /// "4 days" — short rest flags red, long layoffs get a dim note.
+    private static func restText(_ r: TomorrowRest?) -> Text? {
+        guard let d = r?.days else { return nil }
+        if d <= 3 {
+            return stat("\(d) day\(d == 1 ? "" : "s")", GaryColors.loss)
+                + Text(" · short").font(GaryFonts.mono(12)).foregroundColor(GaryColors.loss.opacity(0.85))
+        }
+        var t = stat("\(d) days")
+        if d >= 10 {
+            t = t + Text(" · layoff").font(GaryFonts.mono(12)).foregroundColor(.white.opacity(0.55))
         }
         return t
     }
@@ -20168,8 +20196,10 @@ struct GameScoutSection: View {
     private func armRows(_ st: TomorrowPerson, oppAbbr: String) -> [ArmRow] {
         var out: [ArmRow] = []
         if let t = Self.outingText(st.last_outing) { out.append(ArmRow(id: 0, label: "LAST OUTING", value: t)) }
-        if let t = vsOppText(st.vs_opp) { out.append(ArmRow(id: 1, label: "VS \(oppAbbr)", value: t)) }
-        if let t = seasonText(st) { out.append(ArmRow(id: 2, label: "SEASON", value: t)) }
+        if let t = Self.l3Text(st.l3) { out.append(ArmRow(id: 1, label: "LAST \(st.l3?.gs ?? 3)", value: t)) }
+        if let t = vsOppText(st.vs_opp) { out.append(ArmRow(id: 2, label: "VS \(oppAbbr)", value: t)) }
+        if let t = Self.restText(st.rest) { out.append(ArmRow(id: 3, label: "REST", value: t)) }
+        if let t = seasonText(st) { out.append(ArmRow(id: 4, label: "SEASON", value: t)) }
         return out
     }
 

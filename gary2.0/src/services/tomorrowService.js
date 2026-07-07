@@ -446,6 +446,15 @@ function scoutIpOuts(v) {
   return Number(m[1]) * 3 + Number(m[2] || 0);
 }
 function scoutOutsToIp(outs) { return `${Math.trunc(outs / 3)}.${outs % 3}`; }
+/** Whole days from one ISO date to another (date parts only). */
+function scoutDayDiff(fromIso, toIso) {
+  const m1 = /^(\d{4}-\d{2}-\d{2})/.exec(String(fromIso || ''));
+  const m2 = /^(\d{4}-\d{2}-\d{2})/.exec(String(toIso || ''));
+  if (!m1 || !m2) return null;
+  const a = new Date(`${m1[1]}T00:00:00Z`).getTime();
+  const b = new Date(`${m2[1]}T00:00:00Z`).getTime();
+  return Math.round((b - a) / 86400000);
+}
 
 // Short ballpark names for the meetings rows ("at Busch"). Curated,
 // unambiguous parks only — anything absent falls back to the home team's
@@ -513,7 +522,7 @@ async function resolvePitcherBdlId(fullName, teamId) {
  * last_outing = his most recent regular-season START (never relief);
  * vs_opp = this season's starts against tonight's opponent, aggregated.
  */
-async function enrichStartersWithOutings(starters) {
+async function enrichStartersWithOutings(starters, etDateStr) {
   const { idByAbbr, abbrById } = await bdlTeamMaps();
   const mlb = starters.filter((st) => st.league === 'MLB' && (st.full_name || st.name));
   const CHUNK = 4;
@@ -543,6 +552,22 @@ async function enrichStartersWithOutings(starters) {
           at: atHome == null ? null : (atHome ? 'vs' : 'at'),
           date: scoutShortDate(last._game?.date),
         };
+        // REST — days between his last start and THIS game day, minus one
+        // (pitched Jul 2, starts Jul 7 => "4 days' rest", the standard usage).
+        const restDiff = scoutDayDiff(last._game?.date, etDateStr);
+        if (restDiff != null && restDiff >= 1) st.rest = { days: restDiff - 1 };
+        // LAST 3 (or 2) starts, aggregated — omitted with fewer than 2 starts
+        // (a single start would just echo LAST OUTING).
+        const l3rows = startRows.slice(-3);
+        if (l3rows.length >= 2) {
+          let l3o = 0; let l3er = 0; let l3k = 0;
+          for (const r of l3rows) {
+            l3o += scoutIpOuts(r.ip);
+            l3er += Number(r.er) || 0;
+            l3k += Number(r.p_k) || 0;
+          }
+          st.l3 = { gs: l3rows.length, ip: scoutOutsToIp(l3o), er: l3er, k: l3k };
+        }
         // Quality-start form over his last (up to) 5 starts — the name-row
         // tag ("3 STRAIGHT QS" / "1 QS IN LAST 4"). Standard QS: 6+ IP, <=3 ER.
         const qsWin = startRows.slice(-5)
@@ -1386,7 +1411,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   // 2c. SCOUT EXTRAS — each probable's last outing + this-season record vs
   // tonight's opponent (BDL box scores; grounded, omit-when-short).
   try {
-    await enrichStartersWithOutings(starters);
+    await enrichStartersWithOutings(starters, etDateStr);
   } catch (e) {
     console.warn(`[TomorrowBoard] starter outings failed (honest-empty): ${e.message}`);
   }

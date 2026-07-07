@@ -1685,6 +1685,10 @@ struct TomorrowPerson: Decodable {   // starters AND returns share this
     let vs_opp: TomorrowVsOpp?
     /// Quality-start form (name-row tag: "3 STRAIGHT QS" / "1 QS IN LAST 4").
     let qs_form: TomorrowQsForm?
+    /// Days of rest before this start. nil when no prior start this season.
+    let rest: TomorrowRest?
+    /// Last 2-3 starts aggregated. nil with fewer than 2 starts.
+    let l3: TomorrowL3?
 }
 
 struct TomorrowOuting: Decodable {
@@ -1706,6 +1710,17 @@ struct TomorrowQsForm: Decodable {
     let streak: Int?
     let qs: Int?
     let window: Int?
+}
+/// Days of rest before THIS start (pitched Jul 2, starts Jul 7 = 4 days).
+struct TomorrowRest: Decodable {
+    let days: Int?
+}
+/// His last 2-3 starts aggregated (thirds-notation IP).
+struct TomorrowL3: Decodable {
+    let gs: Int?
+    let ip: String?
+    let er: Int?
+    let k: Int?
 }
 
 // FORM — per-team last-10 + current streak (grounded from standings).
