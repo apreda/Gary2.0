@@ -3649,7 +3649,11 @@ struct HomeMarqueeTracker: View {
            let pinned = entries.first(where: { $0.id == promotedId && upNext($0) }) {
             return pinned
         }
-        return entries.filter(upNext).min { ($0.commence ?? "") < ($1.commence ?? "") }
+        // BIGGEST first, not soonest (founder, Jul 7): a WC round-of-16 at 4
+        // outranks a 2:15 MLB game — the pipeline's rank decides, clock breaks ties.
+        return entries.filter(upNext).min {
+            $0.rank != $1.rank ? $0.rank < $1.rank : ($0.commence ?? "") < ($1.commence ?? "")
+        }
     }
     private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
     /// The rail: every other big game, docked beside the hero (founder:
