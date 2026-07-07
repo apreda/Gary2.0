@@ -818,12 +818,10 @@ const RECAP_EXAMPLES = [
 ];
 
 async function runRecapMode(today: string, dryRun: boolean) {
-  // MORNING TAPE (reworked Jul 5 2026): the 10am recap is now ONE Gary-voiced post (record in prose + one
-  // real result detail), absorbing the retired personality post's mood ladder. The old dry per-sport
-  // scoreboard ("MLB 8-7") averaged 27 impressions with zero engagement across 11 posts; per-pick receipts
-  // drama now lives in the verdict loop and the weekly ledger in the arc pin, so this slot's job is the
-  // CHARACTER take on yesterday. game_results is games-only (props live in prop_results). Falls back to the
-  // plain per-sport lines if the LLM fails, so the receipts promise never silently skips a day.
+  // RETIRED Jul 7 2026 (founder: "dont do 1"): NO daily recap post of any kind — the verdict loop carries
+  // per-pick results. Early-return keeps the 10am slot quiet; dry-run still previews for testing. To revive,
+  // delete this line. (History: scoreboard recap → Jul 5 Gary-voiced "morning tape" → killed Jul 7.)
+  if (!dryRun) return { posted: false, reason: "daily recap retired Jul 7 (founder)" };
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
   const y = yesterdayOf(today);
@@ -946,12 +944,9 @@ Deno.serve(async (req) => {
       try { verdict = await runVerdictMode(today, dryRun); }
       catch (e) { console.error("verdict mode failed: " + String(e)); verdict = { error: String(e) }; }
     }
-    // Season-arc standing posts under the pin every Monday at ET noon (the retired personality slot).
-    let arc: any = undefined;
-    if (!force && hour === 12 && new Date().toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short" }) === "Mon") {
-      try { arc = await runArcUpdateMode(today, dryRun); }
-      catch (e) { console.error("arc mode failed: " + String(e)); arc = { error: String(e) }; }
-    }
+    // Weekly arc standing RETIRED from the hourly path Jul 7 (founder: "dont do 8") — the pin stays up,
+    // but no automated standing replies. force_mode=arc remains for a manual/dry-run standing if wanted.
+    const arc: any = undefined;
 
     if (force === "verdict") {
       const verdict = await runVerdictMode(today, dryRun);
