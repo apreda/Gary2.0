@@ -19914,31 +19914,28 @@ enum TodayBoardCache {
     }
 }
 
-/// SCOUTING REPORT — the standing tale of the tape: two team columns over the
-/// grounded day-board facts. Stats live in short mono cells; names, venues and
-/// stages ride the TEXT face (mono is micro-data only — founder rule, Jul 7).
-/// On the page from the morning, stays as the live intel fills in beneath it.
-/// Renders nothing when the board has no row for the game.
+/// SCOUTING REPORT — the standing pre-game read, designed for THIS page (no
+/// template, founder Jul 7): FLAT on the surface — no card chrome, so the pick
+/// card above stays the one lifted, forward object. Boxing-tape rows: away
+/// left, dim center label, home right. The probables lead, and COLOR carries
+/// the story — streak/form letters and run diffs in win/loss tints, starter
+/// ERA/xERA against the board's league average. Grounded day-board facts only;
+/// renders nothing without a board row; stays up as live intel fills in below.
 struct GameScoutSection: View {
     let matchup: String
     var row: TomorrowBoardRow? = nil
     var board: TomorrowBoard? = nil
     var wc: TomorrowWcMatch? = nil
 
-    private struct Cell {
-        var text: String = "—"
-        var sub: String? = nil
-        var mono: Bool = true
-        var dim: Bool = false
-    }
     private struct TapeRow: Identifiable {
         let id: Int
         let label: String
-        let away: Cell
-        let home: Cell
+        let away: Text
+        let home: Text
+        var awaySub: Text? = nil
+        var homeSub: Text? = nil
+        var mono: Bool = true
     }
-
-    private let labelW: CGFloat = 74
 
     private var sides: (away: String, home: String) {
         let p = matchup.components(separatedBy: " @ ")
@@ -19970,31 +19967,58 @@ struct GameScoutSection: View {
          Formatters.shortTeamName(sides.home, league: league))
     }
 
-    private var tapeRows: [TapeRow] {
+    // MARK: styled values — the color IS the read
+
+    /// "6-4 · W1" — the streak letter carries the win/loss tint.
+    private static func formStreakText(_ l10: String?, _ streak: String?) -> Text? {
+        var parts: [Text] = []
+        if let l10, !l10.isEmpty { parts.append(Text(l10)) }
+        if let streak, !streak.isEmpty {
+            let c: Color = streak.hasPrefix("W") ? GaryColors.win
+                         : streak.hasPrefix("L") ? GaryColors.loss : .white
+            parts.append(Text(streak).foregroundColor(c))
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.dropFirst().reduce(parts[0]) { $0 + Text(" · ").foregroundColor(.white.opacity(0.35)) + $1 }
+    }
+
+    /// "WWDLW" letter by letter — a green run of Ws reads instantly.
+    private static func formRunText(_ run: String?) -> Text? {
+        guard let run, !run.isEmpty else { return nil }
+        return run.reduce(Text("")) { acc, ch in
+            let c: Color = ch == "W" ? GaryColors.win
+                         : ch == "L" ? GaryColors.loss : .white.opacity(0.55)
+            return acc + Text(String(ch)).foregroundColor(c)
+        }
+    }
+
+    /// Signed per-game differential, tinted by sign.
+    private static func diffText(_ v: Double?) -> Text? {
+        guard let v else { return nil }
+        let str = (v > 0 ? "+" : "") + (Self.num(v) ?? "0")
+        let c: Color = v > 0 ? GaryColors.win : v < 0 ? GaryColors.loss : .white
+        return Text(str).foregroundColor(c)
+    }
+
+    private var tape: [TapeRow] {
         var out: [TapeRow] = []
-        func add(_ label: String, _ away: Cell?, _ home: Cell?) {
-            guard away != nil || home != nil else { return }
+        func add(_ label: String, _ a: Text?, _ h: Text?,
+                 _ aSub: Text? = nil, _ hSub: Text? = nil, mono: Bool = true) {
+            guard a != nil || h != nil else { return }
+            let dash = Text("—").foregroundColor(.white.opacity(0.3))
             out.append(TapeRow(id: out.count, label: label,
-                               away: away ?? Cell(dim: true), home: home ?? Cell(dim: true)))
+                               away: a ?? dash, home: h ?? dash,
+                               awaySub: aSub, homeSub: hSub, mono: mono))
         }
         if let wc {
-            if let l = wc.lines {
-                add("ML", Self.odds(l.ml_away).map { Cell(text: $0) },
-                          Self.odds(l.ml_home).map { Cell(text: $0) })
+            add("FORM · L5", Self.formRunText(wc.away?.form?.form), Self.formRunText(wc.home?.form?.form))
+            func gd(_ s: TomorrowWcSide?) -> Double? {
+                guard let f = s?.form, let gf = f.gf_per_game, let ga = f.ga_per_game else { return nil }
+                return gf - ga
             }
-            func formCell(_ s: TomorrowWcSide?) -> Cell? {
-                s?.form?.form.map { Cell(text: $0) }
-            }
-            add("FORM · L5", formCell(wc.away), formCell(wc.home))
-            func goalsCell(_ s: TomorrowWcSide?) -> Cell? {
-                guard let f = s?.form, f.gf_per_game != nil || f.ga_per_game != nil else { return nil }
-                return Cell(text: "\(Self.num(f.gf_per_game) ?? "—") / \(Self.num(f.ga_per_game) ?? "—")")
-            }
-            add("GF / GA", goalsCell(wc.away), goalsCell(wc.home))
-            func shapeCell(_ s: TomorrowWcSide?) -> Cell? {
-                s?.xi?.formation.map { Cell(text: $0) }
-            }
-            add("SHAPE", shapeCell(wc.away), shapeCell(wc.home))
+            add("GOAL DIFF/GM", Self.diffText(gd(wc.away)), Self.diffText(gd(wc.home)))
+            func shape(_ s: TomorrowWcSide?) -> Text? { s?.xi?.formation.map { Text($0) } }
+            add("SHAPE", shape(wc.away), shape(wc.home))
             func manLine(_ p: TomorrowWcKeyPlayer) -> String? {
                 guard let n = p.name else { return nil }
                 var stat: [String] = []
@@ -20002,45 +20026,63 @@ struct GameScoutSection: View {
                 if let a = p.assists, a > 0 { stat.append("\(a)A") }
                 return stat.isEmpty ? n : "\(n) \(stat.joined(separator: " "))"
             }
-            func dangerCell(_ s: TomorrowWcSide?) -> Cell? {
-                let men = (s?.key_players ?? []).compactMap(manLine)
-                guard let first = men.first else { return nil }
-                return Cell(text: first, sub: men.count > 1 ? men[1] : nil, mono: false)
+            func men(_ s: TomorrowWcSide?) -> (Text, Text?)? {
+                let lines = (s?.key_players ?? []).compactMap(manLine)
+                guard let first = lines.first else { return nil }
+                return (Text(first), lines.count > 1 ? Text(lines[1]) : nil)
             }
-            add("DANGER MEN", dangerCell(wc.away), dangerCell(wc.home))
+            let ma = men(wc.away), mh = men(wc.home)
+            add("DANGER MEN", ma?.0, mh?.0, ma?.1, mh?.1, mono: false)
+            if let l = wc.lines {
+                add("ML", Self.odds(l.ml_away).map { Text($0) }, Self.odds(l.ml_home).map { Text($0) })
+            }
         } else if let row {
             let aAb = abbr(sides.away, fallback: row.away_abbr)
             let hAb = abbr(sides.home, fallback: row.home_abbr)
-            add("ML", Self.odds(row.ml_away).map { Cell(text: $0) },
-                      Self.odds(row.ml_home).map { Cell(text: $0) })
-            func last10(_ side: String, _ ab: String) -> Cell? {
-                guard let f = board?.form?.first(where: { $0.abbr == ab || Self.sideMatches($0.team, side) })
-                else { return nil }
-                let bits = [f.l10, f.streak].compactMap { $0 }.filter { !$0.isEmpty }
-                guard !bits.isEmpty else { return nil }
-                return Cell(text: bits.joined(separator: " · "))
-            }
-            add("LAST 10", last10(sides.away, aAb), last10(sides.home, hAb))
-            func runs(_ side: String, _ ab: String) -> Cell? {
-                guard let rp = board?.run_profile?.first(where: { $0.abbr == ab || Self.sideMatches($0.team, side) }),
-                      rp.rs_per_game != nil || rp.ra_per_game != nil else { return nil }
-                return Cell(text: "\(Self.num(rp.rs_per_game) ?? "—") / \(Self.num(rp.ra_per_game) ?? "—")")
-            }
-            add("RS / RA", runs(sides.away, aAb), runs(sides.home, hAb))
-            func probable(_ ab: String) -> Cell? {
+            // The probables lead — the single most bettable MLB fact.
+            func starter(_ ab: String) -> (Text, Text?)? {
                 guard let st = board?.starters.first(where: { $0.abbr == ab }),
                       let n = st.name else { return nil }
-                var bits: [String] = []
-                if let e = st.era { bits.append(String(format: "%.2f ERA", e)) }
-                if let x = st.xera { bits.append(String(format: "%.2f xERA", x)) }
-                return Cell(text: n, sub: bits.isEmpty ? nil : bits.joined(separator: " · "), mono: false)
+                var bits: [Text] = []
+                if let e = st.era {
+                    var t = Text(String(format: "%.2f ERA", e))
+                    if let avg = board?.league_avg_era {
+                        t = t.foregroundColor(e <= avg ? GaryColors.win : GaryColors.loss)
+                    }
+                    bits.append(t)
+                }
+                if let x = st.xera {
+                    var t = Text(String(format: "%.2f xERA", x))
+                    if let avg = board?.league_avg_xera {
+                        t = t.foregroundColor(x <= avg ? GaryColors.win : GaryColors.loss)
+                    }
+                    bits.append(t)
+                }
+                let sub = bits.isEmpty ? nil
+                    : bits.dropFirst().reduce(bits[0]) { $0 + Text(" · ").foregroundColor(.white.opacity(0.35)) + $1 }
+                return (Text(n), sub)
             }
-            add("PROBABLE", probable(aAb), probable(hAb))
+            let sa = starter(aAb), sh = starter(hAb)
+            add("PROBABLE", sa?.0, sh?.0, sa?.1, sh?.1, mono: false)
+            func form(_ side: String, _ ab: String) -> TomorrowForm? {
+                board?.form?.first { $0.abbr == ab || Self.sideMatches($0.team, side) }
+            }
+            let fa = form(sides.away, aAb), fh = form(sides.home, hAb)
+            add("LAST 10", Self.formStreakText(fa?.l10, fa?.streak), Self.formStreakText(fh?.l10, fh?.streak))
+            func rd(_ side: String, _ ab: String) -> Double? {
+                guard let rp = board?.run_profile?.first(where: { $0.abbr == ab || Self.sideMatches($0.team, side) }),
+                      let rs = rp.rs_per_game, let ra = rp.ra_per_game else { return nil }
+                return rs - ra
+            }
+            add("RUN DIFF/GM", Self.diffText(rd(sides.away, aAb)), Self.diffText(rd(sides.home, hAb)))
+            if row.ml_away != nil || row.ml_home != nil {
+                add("ML", Self.odds(row.ml_away).map { Text($0) }, Self.odds(row.ml_home).map { Text($0) })
+            }
         }
         return out
     }
 
-    /// Full-width closing line(s): the total + where/when it's played.
+    /// Full-width closing line: the total + where it's played (+ weather).
     private var footers: [String] {
         var bits: [String] = []
         if let wc {
@@ -20067,77 +20109,72 @@ struct GameScoutSection: View {
     }
 
     var body: some View {
-        let tape = tapeRows
+        let rows = tape
         let foot = footers
-        if !tape.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("SCOUTING REPORT")
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.45))
-                    .padding(.horizontal, 16)
-                VStack(alignment: .leading, spacing: 0) {
-                    // Column heads — away white over home gold, the seal's grammar.
-                    HStack(spacing: 10) {
-                        Color.clear.frame(width: labelW, height: 1)
-                        Text(headerNames.away)
-                            .font(GaryFonts.display(18))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .lineLimit(1).minimumScaleFactor(0.6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Text(headerNames.home)
-                            .font(GaryFonts.display(18))
-                            .foregroundStyle(GaryColors.gold)
-                            .lineLimit(1).minimumScaleFactor(0.6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.vertical, 8)
-                    ForEach(tape) { r in
-                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(r.label)
-                                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                                .foregroundStyle(GaryColors.gold.opacity(0.8))
-                                .frame(width: labelW, alignment: .leading)
-                            cell(r.away)
-                            cell(r.home)
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    ForEach(Array(foot.enumerated()), id: \.offset) { _, f in
-                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                        Text(f)
-                            .font(GaryFonts.text(13, .medium))
-                            .foregroundStyle(.white.opacity(0.78))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.vertical, 8)
-                    }
+                    .padding(.bottom, 10)
+                // The face-off heads — away white over home gold, the seal's grammar.
+                HStack(alignment: .firstTextBaseline) {
+                    Text(headerNames.away)
+                        .font(GaryFonts.display(21))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1).minimumScaleFactor(0.55)
+                    Spacer(minLength: 10)
+                    Text(headerNames.home)
+                        .font(GaryFonts.display(21))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.55)
                 }
-                .padding(.horizontal, 14).padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(GaryColors.warmWhite.opacity(0.03))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
-                )
-                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
+                ForEach(rows) { r in
+                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            r.away
+                                .font(r.mono ? GaryFonts.mono(13, bold: true) : GaryFonts.text(13.5, .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                            if let sub = r.awaySub {
+                                sub.font(r.mono ? GaryFonts.mono(11) : GaryFonts.text(12, .medium))
+                                    .foregroundStyle(.white.opacity(0.62))
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(r.label)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.4))
+                            .fixedSize()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            r.home
+                                .font(r.mono ? GaryFonts.mono(13, bold: true) : GaryFonts.text(13.5, .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                            if let sub = r.homeSub {
+                                sub.font(r.mono ? GaryFonts.mono(11) : GaryFonts.text(12, .medium))
+                                    .foregroundStyle(.white.opacity(0.62))
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .padding(.vertical, 9)
+                }
+                ForEach(Array(foot.enumerated()), id: \.offset) { _, f in
+                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    Text(f)
+                        .font(GaryFonts.text(13, .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 9)
+                }
             }
+            .padding(.horizontal, 16)
         }
-    }
-
-    @ViewBuilder private func cell(_ c: Cell) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(c.text)
-                .font(c.mono ? GaryFonts.mono(13, bold: true) : GaryFonts.text(13.5, .semibold))
-                .foregroundStyle(.white.opacity(c.dim ? 0.35 : 0.9))
-                .lineLimit(1).minimumScaleFactor(0.7)
-            if let sub = c.sub {
-                Text(sub)
-                    .font(c.mono ? GaryFonts.mono(11) : GaryFonts.text(12, .medium))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
