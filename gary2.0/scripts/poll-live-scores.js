@@ -291,6 +291,70 @@ function triggerGrading(date) {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
+/* ── LIVE BET-EVENTS (founder, Jul 7) — the prop markets already CASHED in a
+ * live game: WC goals (anytime scorer) / assists / cards via BDL FIFA
+ * match_events; MLB homers / steals / multi-hit days / K milestones via the
+ * live box. Written as a surgical PATCH per game so the cloud score poller
+ * (which doesn't carry this column) can never clobber it. Honest-empty:
+ * a failed fetch writes nothing. */
+
+const evLastName = (n) => String(n || '').trim().split(/\s+/).pop() || '';
+
+async function wcLiveEvents(matchId) {
+  try {
+    const rows = (await fifaWorldCup.getMatchEvents([Number(matchId)])) || [];
+    const out = [];
+    for (const e of rows) {
+      if (e.rescinded) continue;                       // VAR took it back
+      if (e.shootout_sequence != null) continue;       // shootout pens cash nothing
+      const type = String(e.incident_type || '').toLowerCase();
+      const cls = String(e.incident_class || '').toLowerCase();
+      const player = e.player?.name || e.player?.short_name || null;
+      if (!player) continue;
+      const d = e.time_minute != null ? `${e.time_minute}'` : null;
+      const scoredGoal =
+        (type === 'goal' && !cls.includes('own'))
+        || (type === 'ingamepenalty' && cls.includes('scored'));
+      if (scoredGoal) {
+        out.push({ k: 'goal', p: evLastName(player).toUpperCase(), d });
+        const assist = e.assist_player?.name || e.assist_player?.short_name || null;
+        if (assist) out.push({ k: 'assist', p: evLastName(assist).toUpperCase(), d });
+      } else if (type.includes('card') || cls === 'yellow' || cls === 'red') {
+        out.push({ k: 'card', p: evLastName(player).toUpperCase(), d });
+      }
+    }
+    return out.slice(0, 8);
+  } catch (e) {
+    console.warn(`[events] WC ${matchId}: ${e.message}`);
+    return null;
+  }
+}
+
+async function mlbLiveEvents(gameId) {
+  try {
+    const rows = (await bdl.getMlbGameStats({ gameIds: [Number(gameId)] }, 1)) || [];
+    const out = [];
+    for (const r of rows) {
+      const nm = (r.player?.last_name || evLastName(r.player_name || '')).toUpperCase();
+      if (!nm) continue;
+      const hr = Number(r.hr) || 0;
+      if (hr >= 1) out.push({ k: 'hr', p: nm, d: hr > 1 ? `x${hr}` : null });
+      const sb = Number(r.sb ?? r.stolen_bases) || 0;
+      if (sb >= 1) out.push({ k: 'sb', p: nm, d: null });
+      const hits = Number(r.hits) || 0;
+      if (hits >= 2) out.push({ k: 'hits', p: nm, d: `${hits} HITS` });
+      const ks = Number(r.p_k) || 0;
+      if (ks >= 7) out.push({ k: 'ks', p: nm, d: `${ks} KS` });
+    }
+    const rank = { hr: 0, sb: 1, hits: 2, ks: 3 };
+    out.sort((a, b) => (rank[a.k] ?? 9) - (rank[b.k] ?? 9));
+    return out.slice(0, 8);
+  } catch (e) {
+    console.warn(`[events] MLB ${gameId}: ${e.message}`);
+    return null;
+  }
+}
+
 async function run() {
   // Which games were ALREADY final before this poll wrote — so we grade only the
   // ones that flip to final on THIS poll (each game triggers grading exactly once).
@@ -335,6 +399,31 @@ async function run() {
     },
   });
   console.log(`✅ live_scores: ${stamped.length} game(s) for ${targetDate} (${live} live, ${final} final).`);
+
+  // ── the cashed-props pass, live games only ──
+  const liveRows = stamped.filter((r) => r.status === 'live');
+  for (const r of liveRows) {
+    const events = r.league === 'WC' ? await wcLiveEvents(r.game_id)
+      : r.league === 'MLB' ? await mlbLiveEvents(r.game_id)
+      : null;
+    if (!events) continue;
+    try {
+      await axios({
+        method: 'PATCH',
+        url: `${REST_URL}?date=eq.${r.date}&league=eq.${encodeURIComponent(r.league)}&game_id=eq.${encodeURIComponent(r.game_id)}`,
+        data: { events },
+        headers: {
+          apikey: adminKey,
+          Authorization: `Bearer ${adminKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+      });
+      if (events.length) console.log(`🎯 ${r.league} ${r.game_id}: ${events.length} cashed-prop event(s).`);
+    } catch (e) {
+      console.warn(`[events] write ${r.league} ${r.game_id}: ${e.message}`);
+    }
+  }
 
   // Phantom-row cleanup: a prior poll (or a bad source frame) can leave a DUPLICATE
   // game_id for the same matchup — live: a bogus "BAL 5 · SEA 3" lingered beside the

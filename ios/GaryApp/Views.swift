@@ -2533,8 +2533,12 @@ struct HomeView: View {
                 let verdicts = calls.map { HomeLiveVerdict.evaluate(pick: $0, live: ls) }
                 if ls.isLive {
                     zone = .live
+                    // The cashed-props feed (scorers/assists/cards, homers/
+                    // steals/multi-hit days) + any of Gary's overs the score
+                    // has already passed (founder, Jul 7).
+                    hitLines = Self.liveHitStrings(ls)
                     let combined = Double((ls.away_score ?? 0) + (ls.home_score ?? 0))
-                    hitLines = calls.compactMap { p in
+                    hitLines += calls.compactMap { p in
                         let t = (p.pick ?? "").lowercased()
                         guard t.contains("over"), !t.contains("under"),
                               let line = HomeLiveVerdict.unsignedNumber(in: t),
@@ -2592,6 +2596,24 @@ struct HomeView: View {
             ))
         }
         return out.sorted { $0.commence < $1.commence }
+    }
+
+    /// Cashed-prop events -> render lines: "IBRAHIM GOAL 15'", "ATTIA ASSIST",
+    /// "PEDRI CARDED", "JUDGE HR x2", "WITT STEAL", "SKENES 8 KS".
+    static func liveHitStrings(_ ls: LiveScore) -> [String] {
+        (ls.events ?? []).compactMap { ev in
+            guard let p = ev.p, !p.isEmpty else { return nil }
+            switch ev.k {
+            case "goal":   return ["\(p) GOAL", ev.d].compactMap { $0 }.joined(separator: " ")
+            case "assist": return "\(p) ASSIST"
+            case "card":   return "\(p) CARDED"
+            case "hr":     return ["\(p) HR", ev.d].compactMap { $0 }.joined(separator: " ")
+            case "sb":     return "\(p) STEAL"
+            case "hits":   return "\(p) \(ev.d ?? "2+ HITS")"
+            case "ks":     return "\(p) \(ev.d ?? "")"
+            default:       return nil
+            }
+        }
     }
 
     /// "Over 2.5 -105" -> "OVER 2.5", "Argentina -1.5 -105" -> "ARGENTINA -1.5"

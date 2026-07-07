@@ -177,6 +177,15 @@ struct XIMan: Decodable {
 
 // MARK: - Live Scores (2-minute poller snapshots)
 
+/// A prop-market event that already CASHED in a live game — WC goals (anytime
+/// scorer) / assists / cards; MLB homers / steals / multi-hit days / K days.
+/// Written by the live poller's events pass.
+struct LiveEvent: Decodable, Equatable {
+    let k: String?         // goal | assist | card | hr | sb | hits | ks
+    let p: String?         // player (LAST NAME, uppercased server-side)
+    let d: String?         // detail — "38'" / "x2" / "3 HITS" / "8 KS"
+}
+
 struct LiveScore: Decodable, Equatable {
     let league: String?
     let game_id: String?
@@ -188,6 +197,7 @@ struct LiveScore: Decodable, Equatable {
     let detail: String?    // "INN 7" / "Q3 4:12" / "FINAL"
     let outs: Int?         // MLB live: 0-2 during play; nil otherwise
     let bases: String?     // MLB live: 3-char [first,second,third] occupancy, e.g. "101"
+    let events: [LiveEvent]?   // cashed-prop events (nil until the events pass runs)
 
     var isLive: Bool { status == "live" }
     var isFinal: Bool { status == "final" }

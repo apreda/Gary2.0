@@ -425,7 +425,7 @@ enum SupabaseAPI {
     /// the 2-minute poller. Returns [] on any failure.
     static func fetchLiveScores(date: String) async -> [LiveScore] {
         let url = buildURL(table: "live_scores", query: [
-            URLQueryItem(name: "select", value: "league,game_id,away_abbr,home_abbr,away_score,home_score,status,detail,outs,bases"),
+            URLQueryItem(name: "select", value: "league,game_id,away_abbr,home_abbr,away_score,home_score,status,detail,outs,bases,events"),
             URLQueryItem(name: "date", value: "eq.\(date)")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
