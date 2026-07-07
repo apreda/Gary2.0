@@ -2516,10 +2516,7 @@ struct HomeView: View {
                     && (p.homeTeam ?? "").caseInsensitiveCompare(home) == .orderedSame
             }
             let callLine: String? = calls.isEmpty ? nil : calls
-                .map { p in
-                    let parts = Formatters.splitPickAndOdds(p.pick ?? "")
-                    return parts.1.isEmpty ? parts.0.uppercased() : "\(parts.0.uppercased()) \(parts.1)"
-                }
+                .map { Self.homePickLabel($0.pick) }
                 .joined(separator: "  ·  ")
             let ls = sheetLive(full)
             var zone: HomeSheetRow.Zone = .upcoming
@@ -2584,6 +2581,15 @@ struct HomeView: View {
         return out.sorted { $0.commence < $1.commence }
     }
 
+    /// "Over 2.5 -105" -> "OVER 2.5" — totals ride ~-110 so the price is
+    /// noise on the Home lines (founder, Jul 7); everything else keeps its odds.
+    private static func homePickLabel(_ pick: String?) -> String {
+        let parts = Formatters.splitPickAndOdds(pick ?? "")
+        let name = parts.0.uppercased()
+        let isTotal = name.hasPrefix("OVER") || name.hasPrefix("UNDER")
+        return (parts.1.isEmpty || isTotal) ? name : "\(name) \(parts.1)"
+    }
+
     /// The day's big games joined with Gary's picks + the live board — the
     /// MARQUEE tracker's feed, ranked by the pipeline (todayBoard.big_games).
     private var marqueeEntries: [HomeMarqueeTracker.Entry] {
@@ -2599,10 +2605,7 @@ struct HomeView: View {
                     && (p.homeTeam ?? "").caseInsensitiveCompare(home) == .orderedSame
             }
             let pickLine: String? = calls.isEmpty ? nil : calls
-                .map { p in
-                    let parts = Formatters.splitPickAndOdds(p.pick ?? "")
-                    return parts.1.isEmpty ? parts.0.uppercased() : "\(parts.0.uppercased()) \(parts.1)"
-                }
+                .map { Self.homePickLabel($0.pick) }
                 .joined(separator: "  ·  ")
             var pendingLine: String? = nil
             if pickLine == nil {
@@ -3638,16 +3641,17 @@ struct HomeMarqueeTracker: View {
     /// implicitly once that game settles.
     @State private var promotedId: String? = nil
 
-    /// The hero: the pinned game, else live beats just-started beats next-up.
+    /// The hero is ALWAYS the UP NEXT card (founder, Jul 7 — "i loved the up
+    /// next card... always there with the next game even while one is live"):
+    /// live games hand off to the sheet's LIVE zone + the ribbon, never here.
     private var hero: Entry? {
         if let promotedId,
-           let pinned = entries.first(where: { $0.id == promotedId && !$0.isFinal }) {
+           let pinned = entries.first(where: { $0.id == promotedId && upNext($0) }) {
             return pinned
         }
-        return entries.first { $0.isLive }
-            ?? entries.first { $0.started }
-            ?? entries.filter { !$0.isFinal }.min { ($0.commence ?? "") < ($1.commence ?? "") }
+        return entries.filter(upNext).min { ($0.commence ?? "") < ($1.commence ?? "") }
     }
+    private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
     /// The rail: every other big game, docked beside the hero (founder:
     /// no drop-down — the space was already there).
     private var rail: [Entry] {
@@ -3680,6 +3684,8 @@ struct HomeMarqueeTracker: View {
                 if let hero {
                     Button { onOpenGame(hero.matchupFull) } label: { heroView(hero) }
                         .buttonStyle(.plain)
+                } else if let tease = tomorrowTease {
+                    tomorrowHeroView(tease)
                 } else {
                     doneView
                 }
@@ -3728,7 +3734,7 @@ struct HomeMarqueeTracker: View {
                         // Live/upcoming chips swap INTO the hero slot; a
                         // settled chip has nothing to sweat — it opens its
                         // game sheet directly.
-                        if e.isFinal {
+                        if e.isFinal || e.isLive || e.started {
                             onOpenGame(e.matchupFull)
                         } else {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -3789,82 +3795,45 @@ struct HomeMarqueeTracker: View {
         }
     }
 
-    // The hero face — live sweat, or the countdown to the next big one.
+    // The hero face — ALWAYS the countdown to the next big one (founder,
+    // Jul 7): the live sweat lives on the sheet's LIVE zone and the ribbon.
     @ViewBuilder private func heroView(_ e: Entry) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                if e.isLive {
-                    Text("● LIVE")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
-                        .foregroundStyle(GaryColors.win)
-                } else {
-                    Text("UP NEXT")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
-                        .foregroundStyle(GaryColors.gold)
-                }
+                Text("UP NEXT")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
+                    .foregroundStyle(GaryColors.gold)
                 Spacer()
-                // Standings context only while the game is still ahead — live,
-                // the score IS the context (founder: it crowded the card).
-                if !e.isLive, let c = e.context, !c.isEmpty {
+                if let c = e.context, !c.isEmpty {
                     Text(c.uppercased())
                         .font(GaryFonts.mono(10.5))
                         .foregroundStyle(.white.opacity(0.65))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
-            if e.isLive, let ls = e.live {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(ls.scoreLine ?? e.title)
-                        .font(GaryFonts.display(30))
-                        .foregroundStyle(.white)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    if let det = ls.detail, !det.isEmpty {
-                        Text(det.uppercased())
-                            .font(GaryFonts.mono(12.5, bold: true))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                }
-            } else if e.started {
-                Text(e.title)
-                    .font(GaryFonts.display(30))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text("▶ JUST STARTED")
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(GaryColors.win)
-            } else {
-                Text(e.title)
-                    .font(GaryFonts.display(30))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                // The countdown owns the left edge and the hard start time
-                // answers from the right — the row spans the card instead of
-                // huddling in the corner (founder, Jul 7).
-                if let ct = e.commence, let d = parseISO8601(ct) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        HomeCountdownText(target: d)
-                        Spacer(minLength: 8)
-                        Text("\(startWord(e.league)) \(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())")
-                            .font(GaryFonts.mono(11.5, bold: true))
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
+            Text(e.title)
+                .font(GaryFonts.display(30))
+                .foregroundStyle(GaryColors.warmWhite)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            if let ct = e.commence, let d = parseISO8601(ct) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    HomeCountdownText(target: d)
+                    Spacer(minLength: 8)
+                    Text("\(startWord(e.league)) \(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())")
+                        .font(GaryFonts.mono(11.5, bold: true))
+                        .foregroundStyle(.white.opacity(0.72))
                 }
             }
-            HStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
                 if let pick = e.pickLine {
-                    Text(pick)
-                        .font(GaryFonts.mono(13.5, bold: true))
-                        .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1).minimumScaleFactor(0.75)
-                    if e.isLive, let v = e.verdict {
-                        switch v {
-                        case .covering:
-                            Text("COVERING").font(GaryFonts.mono(11.5, bold: true))
-                                .foregroundStyle(GaryColors.win)
-                        case .trailing:
-                            Text("IN THE RED").font(GaryFonts.mono(11.5, bold: true))
-                                .foregroundStyle(GaryColors.loss)
-                        case .neutral: EmptyView()
+                    // ONE pick per line — the words always fit; the design
+                    // never falls back to an ellipsis (founder, Jul 7).
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(pick.components(separatedBy: "  ·  "), id: \.self) { line in
+                            Text(line)
+                                .font(GaryFonts.mono(13.5, bold: true))
+                                .foregroundStyle(GaryColors.gold)
+                                .lineLimit(1).minimumScaleFactor(0.75)
                         }
                     }
                 } else if let pending = e.pendingLine {
@@ -3880,6 +3849,25 @@ struct HomeMarqueeTracker: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 13)
         .contentShape(Rectangle())
+    }
+
+    /// The all-live / all-done state still keeps an UP NEXT on the wall —
+    /// tomorrow's marquee steps in as the hero.
+    private func tomorrowHeroView(_ tease: (matchup: String, time: String)) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("UP NEXT · TOMORROW")
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
+                .foregroundStyle(GaryColors.gold)
+            Text(tease.matchup)
+                .font(GaryFonts.display(30))
+                .foregroundStyle(GaryColors.warmWhite)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(tease.time.uppercased())
+                .font(GaryFonts.mono(11.5, bold: true))
+                .foregroundStyle(.white.opacity(0.72))
+        }
+        .padding(.horizontal, 14).padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // Every big one settled — the day's marquee line.
@@ -4095,10 +4083,14 @@ struct HomeSheetRowView: View {
                     }
                 }
                 if let call = row.callLine {
-                    Text(call)
-                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(GaryColors.gold.opacity(0.95))
-                        .lineLimit(1).minimumScaleFactor(0.75)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(call.components(separatedBy: "  ·  "), id: \.self) { line in
+                            Text(line)
+                                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(GaryColors.gold.opacity(0.95))
+                                .lineLimit(1).minimumScaleFactor(0.75)
+                        }
+                    }
                 } else if let pending = row.pendingLine {
                     Text(pending)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
