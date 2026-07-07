@@ -32,13 +32,13 @@ export async function GET(req: Request) {
   ]);
   const bearSrc = `data:image/png;base64,${bear.toString('base64')}`;
 
-  // Mirror the app's minimumScaleFactor: shrink to the longest line (width) and the line count (height).
-  // A single short word ("DRAW") gets poster-sized type — at the standard cap it floats tiny in an empty card.
+  // The hero FILLS the card: size to whichever runs out first — line width or the vertical space the
+  // line count needs. (v1 capped multi-line heroes at 150px, which left COLOMBIA/MONEYLINE floating in
+  // a void — founder, Jul 7. Long names and 3-4 line stacks still shrink to fit via the same two bounds.)
   const longest = Math.max(1, ...heroLines.map((l) => l.length));
-  const cap = heroLines.length === 1 && longest <= 7 ? 300 : 150;
-  const byWidth = Math.min(cap, Math.floor(1700 / longest));
-  const byHeight = Math.floor(600 / (0.98 * Math.max(1, heroLines.length)));
-  const heroSize = Math.max(62, Math.min(byWidth, byHeight));
+  const byWidth = Math.floor(1800 / longest);
+  const byHeight = Math.floor(612 / (0.98 * Math.max(1, heroLines.length)));
+  const heroSize = Math.max(62, Math.min(300, byWidth, byHeight));
 
   return new ImageResponse(
     (
