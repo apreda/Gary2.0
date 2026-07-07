@@ -38,7 +38,10 @@ const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI
 const CARD_BASE = Deno.env.get("CARD_BASE_URL") ?? "https://www.betwithgary.ai";
 const sb = createClient(SB_URL, SERVICE_KEY);
 
-const SLOT_HOURS = [11, 14, 17, 20];
+// Jul 7 (founder): 5 pick threads/day in the standard text format. Pick mode runs EVERY hour 11a-10p ET —
+// the per-game timing windows below pace the 5 posts to the slate (each run posts at most one pick).
+const SLOT_HOURS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+const PICKS_PER_DAY = 5;
 const RECAP_HOUR = 10;
 const PERSONALITY_HOUR = 12;
 // In-thread handoff (replaces the old buried App Store link CTA). No URL on purpose: the install path lives in the bio +
@@ -228,7 +231,7 @@ async function runPickMode(today: string, nowMs: number, etHour: number, dryRun:
   // Whitelist the ACTUAL pick-thread formats: with verdict/arc/wc rows in the same log, a blacklist would let
   // them eat the 3/day cap (three verdicts would silently block the day's real picks) and suppress the handoff.
   const pickThreads = (logRows ?? []).filter((r) => ["standard", "top_pick"].includes(r.thread_format ?? ""));
-  if (pickThreads.length >= 3 && !preview) return { posted: false, reason: "daily cap of 3 reached" };
+  if (pickThreads.length >= PICKS_PER_DAY && !preview) return { posted: false, reason: `daily cap of ${PICKS_PER_DAY} reached` };
   const postedSet = new Set(pickThreads.map((r) => r.pick_text));
 
   const MIN = 60_000;
@@ -308,45 +311,11 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
   const wantHandoff = pickThreads.length === 0;
   const handoff = wantHandoff ? APP_HANDOFF[new Date().getDate() % APP_HANDOFF.length] : null;
 
-  // TOP PICK = the day's ONE card tweet (Jul 5, founder): the highest-conviction play posts as the app's
-  // actual share card (/api/share-card, full-bleed) with the hook as caption — visually unmistakable from
-  // the standard text threads, and its verdict later quote-tweets the card itself. The caption drops the
-  // pick shorthand line (the card carries the pick); the full hook is the text-only fallback.
-  let cardUrl: string | null = null;
-  if (isTopPick) {
-    const nick = (s: string) => String(s ?? "").trim().split(/\s+/).pop() ?? "";
-    const pl = String(chosen.pick).toLowerCase();
-    const has = (team: string) => String(team ?? "").toLowerCase().split(/\s+/).some((w) => w.length > 2 && pl.includes(w));
-    const opp = has(chosen.homeTeam) && !has(chosen.awayTeam) ? `vs ${nick(chosen.awayTeam)}`
-      : has(chosen.awayTeam) && !has(chosen.homeTeam) ? `@ ${nick(chosen.homeTeam)}`
-      : `${nick(chosen.awayTeam)} @ ${nick(chosen.homeTeam)}`;
-    const timeLabel = chosen.commence_time ? new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true }) + " ET" : "";
-    const od = fmtOdds(chosen.odds ?? String(chosen.pick).match(/([+-]\d{3,})\s*$/)?.[1] ?? "");
-    const metaParts = [opp, timeLabel, od].filter(Boolean);
-    cardUrl = `${CARD_BASE}/api/share-card?hero=${encodeURIComponent(shareHeroLines(String(chosen.pick)).join("|"))}&league=${encodeURIComponent(league)}&meta=${encodeURIComponent(metaParts.join(" · "))}`;
-  }
+  // Jul 7 (founder): the top-pick CARD tweet is retired — all 5 daily picks post as the standard text
+  // thread. isTopPick still shapes the language (conviction carries in the words, never a badge).
+  if (dryRun) return { posted: false, dry_run: true, chosen: chosen.pick, is_top_pick: isTopPick, hook, handoff };
 
-  if (dryRun) return { posted: false, dry_run: true, chosen: chosen.pick, is_top_pick: isTopPick, hook, handoff, card_url: cardUrl };
-
-  let hookId: string;
-  if (cardUrl) {
-    try {
-      const ir = await fetch(cardUrl);
-      if (!ir.ok) throw new Error(`card fetch ${ir.status}`);
-      const b = new Uint8Array(await ir.arrayBuffer());
-      let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
-      const caption = `${angle}\n\n${edge}`;
-      const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: caption, images_base64: [btoa(bin)] }) });
-      const j = await r.json();
-      if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 200)}`);
-      hookId = j.tweetId;
-    } catch (e) {
-      console.error("top-pick card failed, posting text only: " + String(e));
-      hookId = await postTweet(hook);
-    }
-  } else {
-    hookId = await postTweet(hook);
-  }
+  const hookId = await postTweet(hook);
   const handoffId = handoff ? await postTweet(handoff, hookId) : null;
   const startEt = new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" });
   const slot = parseInt(startEt) < 14 ? "morning" : parseInt(startEt) < 17 ? "afternoon" : parseInt(startEt) < 21 ? "evening" : "late";
