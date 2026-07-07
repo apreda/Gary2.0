@@ -2594,13 +2594,17 @@ struct HomeView: View {
         return out.sorted { $0.commence < $1.commence }
     }
 
-    /// "Over 2.5 -105" -> "OVER 2.5" — totals ride ~-110 so the price is
-    /// noise on the Home lines (founder, Jul 7); everything else keeps its odds.
+    /// "Over 2.5 -105" -> "OVER 2.5", "Argentina -1.5 -105" -> "ARGENTINA -1.5"
+    /// — on the Home lines only a MONEYLINE keeps its price, because there the
+    /// price IS the pick (founder, Jul 7). Totals and goal/run lines drop it.
     private static func homePickLabel(_ pick: String?) -> String {
         let parts = Formatters.splitPickAndOdds(pick ?? "")
         let name = parts.0.uppercased()
         let isTotal = name.hasPrefix("OVER") || name.hasPrefix("UNDER")
-        return (parts.1.isEmpty || isTotal) ? name : "\(name) \(parts.1)"
+        let hasLine = name.split(separator: " ").contains { w in
+            (w.hasPrefix("+") || w.hasPrefix("-")) && (Double(w).map { abs($0) <= 30 } ?? false)
+        }
+        return (parts.1.isEmpty || isTotal || hasLine) ? name : "\(name) \(parts.1)"
     }
 
     /// The day's big games joined with Gary's picks + the live board — the
@@ -3541,6 +3545,31 @@ struct HomeView: View {
 /// The Home masthead — the mock wordmark (Jul 4, founder-picked): heavy
 /// "GARY" + gold "A.I.", the date in mono on the same baseline, bear mark,
 /// settings dots, one gold hairline. Dynamic sports-tech, never serif.
+/// The green "already cashed" slot under a LIVE row's status — one hit shows
+/// static, two-plus roll on the strip's 3s cadence (founder, Jul 7).
+struct LiveHitsRoller: View {
+    let items: [String]
+    @State private var idx = 0
+    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    var body: some View {
+        if !items.isEmpty {
+            Text("✓ \(items[idx % items.count])")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(GaryColors.win)
+                .lineLimit(1)
+                .id(idx)
+                .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
+                                        removal: .move(edge: .top).combined(with: .opacity)))
+                .frame(height: 14)
+                .clipped()
+                .onReceive(timer) { _ in
+                    guard items.count > 1 else { return }
+                    withAnimation(.easeInOut(duration: 0.35)) { idx += 1 }
+                }
+        }
+    }
+}
+
 struct HomeMasthead: View {
     private var dateLine: String {
         let f = DateFormatter()
@@ -3553,8 +3582,8 @@ struct HomeMasthead: View {
             HStack(alignment: .center, spacing: 10) {
                 Image(GaryBrand.mark)
                     .resizable().scaledToFit()
-                    .frame(width: 28, height: 28)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 (Text("GARY ").foregroundColor(Color(hex: "#F6F1E7"))
                     + Text("A.I.").foregroundColor(GaryColors.gold))
                     .font(GaryFonts.display(30))
@@ -4123,12 +4152,7 @@ struct HomeSheetRowView: View {
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(row.statusColor)
                     .lineLimit(1)
-                ForEach(row.hitLines, id: \.self) { h in
-                    Text("✓ \(h)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(GaryColors.win)
-                        .lineLimit(1)
-                }
+                LiveHitsRoller(items: row.hitLines)
             }
             .padding(.top, 2)
             Image(systemName: "chevron.right")
