@@ -2557,6 +2557,9 @@ struct HomeView: View {
                     }
                 } else {
                     zone = .settled
+                    // What cashed in the game stays on the settled row — the
+                    // feed is history, not a live-only flourish (founder, Jul 7).
+                    hitLines = Self.liveHitStrings(ls)
                     let cashed = verdicts.filter { $0 == .covering }.count
                     let lost = verdicts.filter { $0 == .trailing }.count
                     if cashed > 0 && lost == 0 { statusText = "✓ CASHED"; statusColor = GaryColors.win }
@@ -3576,13 +3579,13 @@ struct LiveHitsRoller: View {
     var body: some View {
         if !items.isEmpty {
             Text("✓ \(items[idx % items.count])")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(.system(size: 12.5, weight: .bold, design: .monospaced))
                 .foregroundStyle(GaryColors.win)
                 .lineLimit(1)
                 .id(idx)
                 .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                         removal: .move(edge: .top).combined(with: .opacity)))
-                .frame(height: 14)
+                .frame(height: 17)
                 .clipped()
                 .onReceive(timer) { _ in
                     guard items.count > 1 else { return }
@@ -4169,7 +4172,7 @@ struct HomeSheetRowView: View {
                 }
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 3) {
+            VStack(alignment: .trailing, spacing: 7) {
                 Text(row.statusText)
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(row.statusColor)
