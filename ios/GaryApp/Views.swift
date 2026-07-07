@@ -20286,12 +20286,28 @@ struct GameScoutSection: View {
             out.append(WcRow(id: out.count, label: label, away: a ?? dash, home: h ?? dash, awaySub: aSub, homeSub: hSub))
         }
         add("FORM · L5", (wc.away?.form?.form).map(Self.formRun), (wc.home?.form?.form).map(Self.formRun))
-        func gd(_ s: TomorrowWcSide?) -> Double? {
+        // GOALS/GM — scored and allowed per match, net tinted at the end
+        // (totals bettors want both halves, not just the diff).
+        func goals(_ s: TomorrowWcSide?) -> Text? {
             guard let f = s?.form, let gf = f.gf_per_game, let ga = f.ga_per_game else { return nil }
-            return gf - ga
+            let d = gf - ga
+            let dim: (String) -> Text = { Text($0).font(GaryFonts.mono(12)).foregroundColor(.white.opacity(0.62)) }
+            var t = Self.stat(Self.num(gf) ?? "—") + dim(" for · ")
+                + Self.stat(Self.num(ga) ?? "—") + dim(" vs")
+            if let dTxt = Self.diffText(d) { t = t + dim("  ") + dTxt }
+            return t
         }
-        add("GOAL DIFF/GM", Self.diffText(gd(wc.away)), Self.diffText(gd(wc.home)))
-        add("SHAPE", (wc.away?.xi?.formation).map { Self.stat($0) }, (wc.home?.xi?.formation).map { Self.stat($0) })
+        add("GOALS / GM", goals(wc.away), goals(wc.home))
+        // AT THIS CUP — tournament-only record (excludes friendlies/qualifiers).
+        func cup(_ s: TomorrowWcSide?) -> Text? {
+            guard let c = s?.form?.wc, let rec = c.record else { return nil }
+            let w = c.w ?? 0
+            let l = c.l ?? 0
+            let tint: Color = w > l ? GaryColors.win : l > w ? GaryColors.loss : .white.opacity(0.9)
+            return Self.stat(rec, tint)
+                + Text(" W-D-L").font(GaryFonts.mono(11)).foregroundColor(.white.opacity(0.45))
+        }
+        add("AT THIS CUP", cup(wc.away), cup(wc.home))
         func manLine(_ p: TomorrowWcKeyPlayer) -> String? {
             guard let n = p.name else { return nil }
             var stat: [String] = []
