@@ -1622,6 +1622,25 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     let ml_away: Double?
     let total: Double?
     let is_marquee: Bool?            // gold star + tinted row
+    /// Season series between the clubs (scout lane, Jul 7) — record from
+    /// tonight's AWAY side's perspective, the leader's venue split, and the
+    /// last three meetings. nil until the clubs have met this season.
+    let series: TomorrowSeries?
+}
+
+// SEASON SERIES — this season's finished meetings between tonight's clubs.
+struct TomorrowSeries: Decodable {
+    let away_w: Int?
+    let home_w: Int?
+    let leader: String?              // "away" | "home"
+    let split_line: String?          // "2-1 AT BUSCH · 3-0 AT AMFAM" (leader's record)
+    let meetings: [TomorrowMeeting]?
+}
+struct TomorrowMeeting: Decodable {
+    let d: String?                   // "JUL 6"
+    let line: String?                // "MIL 4 · STL 3"
+    let venue: String?               // "at Busch"
+    let won: String?                 // "away" | "home" — tonight's away side's result
 }
 
 struct TomorrowBigGame: Decodable {
@@ -1659,6 +1678,26 @@ struct TomorrowPerson: Decodable {   // starters AND returns share this
     let game: String?               // the game this starter is in, e.g. "HOU @ DET"
     let opponent: String?           // opposing team abbr | nil
     let home: Bool?                 // pitching at home?
+    let full_name: String?          // un-abbreviated (backend id resolution)
+    /// His most recent regular-season START (scout lane) — "5 IP · 1 ER vs CIN".
+    let last_outing: TomorrowOuting?
+    /// This season's starts vs TONIGHT's opponent. nil = hasn't faced them.
+    let vs_opp: TomorrowVsOpp?
+}
+
+struct TomorrowOuting: Decodable {
+    let ip: String?                 // "5.0" (thirds notation)
+    let er: Int?
+    let k: Int?
+    let opp: String?                // opposing abbr that day
+    let at: String?                 // "vs" (home) | "at" (road)
+    let date: String?               // "JUL 2"
+}
+struct TomorrowVsOpp: Decodable {
+    let gs: Int?
+    let ip: String?
+    let er: Int?
+    let era: Double?
 }
 
 // FORM — per-team last-10 + current streak (grounded from standings).

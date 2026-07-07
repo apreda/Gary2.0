@@ -19921,11 +19921,13 @@ enum ScoutWireCache {
     private static var stored: (day: String, items: [SupabaseAPI.WireItem])? = nil
     static func get() async -> [SupabaseAPI.WireItem] {
         let day = SupabaseAPI.todayEST()
-        if let stored, stored.day == day { return stored.items }
+        if let stored, stored.day == day, !stored.items.isEmpty { return stored.items }
         async let today = SupabaseAPI.fetchWireItems(date: day, limit: 24)
         async let prior = SupabaseAPI.fetchWireItems(date: shiftDay(day, -1), limit: 24)
         let items = await today + prior
-        stored = (day, items)
+        // NEVER cache an empty read — a page swipe cancels in-flight .tasks and
+        // the cancelled fetch returns [], which would poison every later page.
+        if !items.isEmpty { stored = (day, items) }
         return items
     }
     private static func shiftDay(_ iso: String, _ delta: Int) -> String {
@@ -19938,11 +19940,14 @@ enum ScoutWireCache {
     }
 }
 
-/// SCOUTING REPORT — a team capsule per side, written like a scout would say
-/// it, not a stat grid: how each team is trending (grounded phrase from the
-/// day board), their scoring shape, the probable / danger men, and a wire
-/// note (injury first) when one names the team. Flat on the page — the pick
-/// card above stays the one lifted object. Renders nothing without board data.
+/// SCOUTING REPORT — the founder-picked composite (Jul 7): S3's tape frame,
+/// S5's Bebas team+price heads, S9's last-three-meetings list. Season-series
+/// tug bar with the leader's venue split, then boxing-tape rows — probables,
+/// last outing, this season vs tonight's opponent, last 10. WC games speak
+/// the same frame (form / goal diff / shape / danger men). Flat on the page —
+/// the pick card above stays the one lifted object. Every fact is server-
+/// grounded (BDL box scores + season game index); rows omit themselves when
+/// their data is short.
 struct GameScoutSection: View {
     let matchup: String
     var row: TomorrowBoardRow? = nil
@@ -19950,13 +19955,13 @@ struct GameScoutSection: View {
     var wc: TomorrowWcMatch? = nil
     var wire: [SupabaseAPI.WireItem] = []
 
-    private struct TeamCapsule: Identifiable {
+    private struct TapeRow: Identifiable {
         let id: Int
-        let name: String
-        let tint: Color
-        let odds: String?
-        let lines: [Text]
-        let news: String?
+        let label: String
+        let away: Text
+        let home: Text
+        var awaySub: Text? = nil
+        var homeSub: Text? = nil
     }
 
     private var sides: (away: String, home: String) {
@@ -19984,17 +19989,24 @@ struct GameScoutSection: View {
     }
 
     private var league: String { wc != nil ? "WC" : (row?.league ?? "").uppercased() }
-
-    // MARK: sentence pieces (all grounded — templates over board numbers)
-
-    private static func body(_ s: String, _ o: Double = 0.85) -> Text {
-        Text(s).font(GaryFonts.text(15)).foregroundColor(.white.opacity(o))
+    private var headerNames: (away: String, home: String) {
+        (Formatters.shortTeamName(sides.away, league: league),
+         Formatters.shortTeamName(sides.home, league: league))
     }
-    private static func strong(_ s: String, _ o: Double = 0.92) -> Text {
-        Text(s).font(GaryFonts.text(15, .semibold)).foregroundColor(.white.opacity(o))
+    private var headOdds: (a: String?, h: String?) {
+        if let wc { return (Self.odds(wc.lines?.ml_away), Self.odds(wc.lines?.ml_home)) }
+        return (Self.odds(row?.ml_away), Self.odds(row?.ml_home))
     }
 
-    /// "WWDLW" letter by letter in win/loss/draw color.
+    // MARK: styled fragments — the color IS the read
+
+    private static func stat(_ s: String, _ c: Color = .white.opacity(0.9)) -> Text {
+        Text(s).font(GaryFonts.mono(13, bold: true)).foregroundColor(c)
+    }
+    private static func nameText(_ s: String, dim: Bool = false) -> Text {
+        Text(s).font(GaryFonts.text(13.5, .semibold)).foregroundColor(.white.opacity(dim ? 0.45 : 0.92))
+    }
+    /// "WWDLW" letter by letter — a green run of Ws reads instantly.
     private static func formRun(_ run: String) -> Text {
         run.reduce(Text("")) { acc, ch in
             let c: Color = ch == "W" ? GaryColors.win
@@ -20002,28 +20014,43 @@ struct GameScoutSection: View {
             return acc + Text(String(ch)).font(GaryFonts.mono(14, bold: true)).foregroundColor(c)
         }
     }
-
-    /// " — 3 straight wins" / " — coming off a loss", tinted by direction.
-    private static func streakClause(_ streak: String?) -> Text? {
-        guard let s = streak, s.count >= 2, let n = Int(s.dropFirst()),
-              s.hasPrefix("W") || s.hasPrefix("L") else { return nil }
-        let win = s.hasPrefix("W")
-        let phrase = n == 1 ? (win ? "coming off a win" : "coming off a loss")
-                            : (win ? "\(n) straight wins" : "\(n) straight losses")
-        return Text(" — " + phrase).font(GaryFonts.text(15))
-            .foregroundColor((win ? GaryColors.win : GaryColors.loss).opacity(0.95))
+    private static func diffText(_ v: Double?) -> Text? {
+        guard let v else { return nil }
+        let str = (v > 0 ? "+" : "") + (Self.num(v) ?? "0")
+        return stat(str, v > 0 ? GaryColors.win : v < 0 ? GaryColors.loss : .white)
     }
-
-    /// Plain-words trend from the L5 W/D/L counts.
-    private static func wcPhrase(_ f: TomorrowWcForm) -> String? {
-        guard let w = f.w, let d = f.d, let l = f.l else { return f.record }
-        let n = f.matches ?? (w + d + l)
-        if l == 0 && d == 0 && w > 0 { return "\(w) straight wins" }
-        if l == 0 && n > 0 { return "unbeaten in their last \(n)" }
-        if w >= 3 { return "won \(w) of their last \(n)" }
-        if l >= 3 { return "lost \(l) of their last \(n)" }
-        if d >= 3 { return "drew \(d) of their last \(n)" }
-        return "\(w)-\(d)-\(l) in their last \(n)"
+    /// "6-4 · W1" — the streak letter carries the tint.
+    private static func last10Text(_ f: TomorrowForm?) -> Text? {
+        guard let f else { return nil }
+        var parts: [Text] = []
+        if let l10 = f.l10, !l10.isEmpty { parts.append(stat(l10)) }
+        if let st = f.streak, !st.isEmpty {
+            let c: Color = st.hasPrefix("W") ? GaryColors.win
+                         : st.hasPrefix("L") ? GaryColors.loss : .white
+            parts.append(stat(st, c))
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.dropFirst().reduce(parts[0]) { $0 + stat(" · ", .white.opacity(0.35)) + $1 }
+    }
+    /// "5 IP · 1 ER vs CIN" — tinted by the outing's run rate (gem green, blowup red).
+    private static func outingText(_ o: TomorrowOuting?) -> Text? {
+        guard let o, let ip = o.ip else { return nil }
+        let ipShow = ip.hasSuffix(".0") ? String(ip.dropLast(2)) : ip
+        var bits = "\(ipShow) IP · \(o.er ?? 0) ER"
+        if let opp = o.opp { bits += " \(o.at ?? "vs") \(opp)" }
+        let innings = Double(ip) ?? 0
+        let ra9 = innings > 0 ? Double(o.er ?? 0) * 9 / innings : 99
+        let c: Color = ra9 <= 3 ? GaryColors.win : ra9 >= 6 ? GaryColors.loss : .white.opacity(0.9)
+        return stat(bits, c)
+    }
+    /// "1.29 ERA · 1 start" — ERA tinted against the league average.
+    private func vsOppText(_ v: TomorrowVsOpp?) -> Text? {
+        guard let v, let era = v.era, let gs = v.gs else { return nil }
+        let c: Color
+        if let avg = board?.league_avg_era { c = era <= avg ? GaryColors.win : GaryColors.loss }
+        else { c = .white.opacity(0.9) }
+        return Self.stat(String(format: "%.2f ERA", era), c)
+            + Self.stat(" · \(gs) start\(gs == 1 ? "" : "s")", .white.opacity(0.62))
     }
 
     /// The team's wire note — injuries from today or yesterday; market/pace
@@ -20040,91 +20067,58 @@ struct GameScoutSection: View {
         return mine.first(where: { ($0.kind == "line_move" || $0.kind == "pace") && $0.date == today })?.headline
     }
 
-    private var capsules: [TeamCapsule] {
+    private var tape: [TapeRow] {
+        var out: [TapeRow] = []
+        func add(_ label: String, _ a: Text?, _ h: Text?, _ aSub: Text? = nil, _ hSub: Text? = nil) {
+            guard a != nil || h != nil else { return }
+            let dash = Self.stat("—", .white.opacity(0.3))
+            out.append(TapeRow(id: out.count, label: label,
+                               away: a ?? dash, home: h ?? dash,
+                               awaySub: aSub, homeSub: hSub))
+        }
         if let wc {
-            return [wcCapsule(0, wc.away, wc.away_team ?? sides.away, .white.opacity(0.92), wc.lines?.ml_away),
-                    wcCapsule(1, wc.home, wc.home_team ?? sides.home, GaryColors.gold, wc.lines?.ml_home)]
-                .compactMap { $0 }
-        }
-        if let row {
-            return [mlbCapsule(0, sides.away, row.away_abbr, .white.opacity(0.92), row.ml_away),
-                    mlbCapsule(1, sides.home, row.home_abbr, GaryColors.gold, row.ml_home)]
-                .compactMap { $0 }
-        }
-        return []
-    }
-
-    private func wcCapsule(_ id: Int, _ side: TomorrowWcSide?, _ name: String, _ tint: Color, _ ml: Double?) -> TeamCapsule? {
-        var lines: [Text] = []
-        if let f = side?.form {
-            if let run = f.form, let phrase = Self.wcPhrase(f) {
-                lines.append(Self.formRun(run) + Self.body("  —  \(phrase)"))
+            add("FORM · L5", (wc.away?.form?.form).map(Self.formRun), (wc.home?.form?.form).map(Self.formRun))
+            func gd(_ s: TomorrowWcSide?) -> Double? {
+                guard let f = s?.form, let gf = f.gf_per_game, let ga = f.ga_per_game else { return nil }
+                return gf - ga
             }
-            var bits: [String] = []
-            if let cup = f.wc?.record { bits.append("\(cup) at this Cup") }
-            if let gf = Self.num(f.gf_per_game), let ga = Self.num(f.ga_per_game) {
-                bits.append("\(gf) scored / \(ga) allowed per match")
+            add("GOAL DIFF/GM", Self.diffText(gd(wc.away)), Self.diffText(gd(wc.home)))
+            add("SHAPE", (wc.away?.xi?.formation).map { Self.stat($0) }, (wc.home?.xi?.formation).map { Self.stat($0) })
+            func manLine(_ p: TomorrowWcKeyPlayer) -> String? {
+                guard let n = p.name else { return nil }
+                var stat: [String] = []
+                if let g = p.goals, g > 0 { stat.append("\(g)G") }
+                if let a = p.assists, a > 0 { stat.append("\(a)A") }
+                return stat.isEmpty ? n : "\(n) \(stat.joined(separator: " "))"
             }
-            if !bits.isEmpty { lines.append(Self.body(bits.joined(separator: " · "))) }
-        }
-        let men = (side?.key_players ?? []).prefix(2).compactMap { p -> String? in
-            guard let n = p.name else { return nil }
-            var stat: [String] = []
-            if let g = p.goals, g > 0 { stat.append("\(g)G") }
-            if let a = p.assists, a > 0 { stat.append("\(a)A") }
-            return stat.isEmpty ? n : "\(n) (\(stat.joined(separator: " ")))"
-        }
-        if !men.isEmpty {
-            let label = men.count > 1 ? "Danger men:  " : "Danger man:  "
-            lines.append(Self.body(label, 0.5) + Self.strong(men.joined(separator: " · ")))
-        }
-        guard !lines.isEmpty else { return nil }
-        return TeamCapsule(id: id, name: name, tint: tint, odds: Self.odds(ml),
-                           lines: lines, news: news(name))
-    }
-
-    private func mlbCapsule(_ id: Int, _ side: String, _ abbrHint: String?, _ tint: Color, _ ml: Double?) -> TeamCapsule? {
-        let ab = abbr(side, fallback: abbrHint)
-        let mascot = Formatters.shortTeamName(side, league: "MLB")
-        var lines: [Text] = []
-        if let f = board?.form?.first(where: { $0.abbr == ab || Self.sideMatches($0.team, side) }) {
-            var line = f.l10.map { Self.body("\($0) over the last 10") }
-            if let clause = Self.streakClause(f.streak) { line = (line ?? Self.body("")) + clause }
-            if let line { lines.append(line) }
-        }
-        if let rp = board?.run_profile?.first(where: { $0.abbr == ab || Self.sideMatches($0.team, side) }),
-           let rs = Self.num(rp.rs_per_game), let ra = Self.num(rp.ra_per_game) {
-            var line = Self.body("\(rs) scored / \(ra) allowed per game")
-            if let rsv = rp.rs_per_game, let rav = rp.ra_per_game {
-                let d = rsv - rav
-                let str = (d > 0 ? "+" : "") + (Self.num(d) ?? "0")
-                line = line + Text("  (\(str))").font(GaryFonts.text(15, .semibold))
-                    .foregroundColor(d >= 0 ? GaryColors.win : GaryColors.loss)
+            func men(_ s: TomorrowWcSide?) -> (Text, Text?)? {
+                let lines = (s?.key_players ?? []).compactMap(manLine)
+                guard let first = lines.first else { return nil }
+                let sub = lines.count > 1
+                    ? Text(lines[1]).font(GaryFonts.text(12, .medium)).foregroundColor(.white.opacity(0.6))
+                    : nil
+                return (Self.nameText(first), sub)
             }
-            lines.append(line)
+            let ma = men(wc.away), mh = men(wc.home)
+            add("DANGER MEN", ma?.0, mh?.0, ma?.1, mh?.1)
+        } else if let row {
+            let aAb = abbr(sides.away, fallback: row.away_abbr)
+            let hAb = abbr(sides.home, fallback: row.home_abbr)
+            let sa = board?.starters.first { $0.abbr == aAb }
+            let sh = board?.starters.first { $0.abbr == hAb }
+            if sa?.name != nil || sh?.name != nil {
+                add("PROBABLE",
+                    sa?.name.map { Self.nameText($0) } ?? Self.nameText("TBA", dim: true),
+                    sh?.name.map { Self.nameText($0) } ?? Self.nameText("TBA", dim: true))
+            }
+            add("LAST OUTING", Self.outingText(sa?.last_outing), Self.outingText(sh?.last_outing))
+            add("VS OPPONENT", vsOppText(sa?.vs_opp), vsOppText(sh?.vs_opp))
+            func form(_ side: String, _ ab: String) -> TomorrowForm? {
+                board?.form?.first { $0.abbr == ab || Self.sideMatches($0.team, side) }
+            }
+            add("LAST 10", Self.last10Text(form(sides.away, aAb)), Self.last10Text(form(sides.home, hAb)))
         }
-        if let st = board?.starters.first(where: { $0.abbr == ab }), let n = st.name {
-            var line = Self.body("Probable:  ", 0.5) + Self.strong(n)
-            var stats: [Text] = []
-            if let e = st.era {
-                var t = Text(String(format: "%.2f ERA", e)).font(GaryFonts.text(15))
-                t = t.foregroundColor(board?.league_avg_era.map { e <= $0 ? GaryColors.win : GaryColors.loss } ?? .white.opacity(0.8))
-                stats.append(t)
-            }
-            if let x = st.xera {
-                var t = Text(String(format: "%.2f xERA", x)).font(GaryFonts.text(15))
-                t = t.foregroundColor(board?.league_avg_xera.map { x <= $0 ? GaryColors.win : GaryColors.loss } ?? .white.opacity(0.8))
-                stats.append(t)
-            }
-            if !stats.isEmpty {
-                line = line + Self.body("  —  ", 0.4)
-                    + stats.dropFirst().reduce(stats[0]) { $0 + Self.body(" · ", 0.4) + $1 }
-            }
-            lines.append(line)
-        }
-        guard !lines.isEmpty || ml != nil else { return nil }
-        return TeamCapsule(id: id, name: mascot, tint: tint, odds: Self.odds(ml),
-                           lines: lines, news: news(mascot))
+        return out
     }
 
     /// The closing line: total + stage/venue (+ weather for MLB).
@@ -20154,54 +20148,141 @@ struct GameScoutSection: View {
     }
 
     var body: some View {
-        let caps = capsules
-        if !caps.isEmpty {
+        let rows = tape
+        let series = wc == nil ? row?.series : nil
+        if !rows.isEmpty || series != nil {
             VStack(alignment: .leading, spacing: 0) {
                 Text("SCOUTING REPORT")
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.45))
                     .padding(.bottom, 12)
-                ForEach(caps) { c in
-                    if c.id > 0 {
-                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                            .padding(.vertical, 12)
-                    }
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(c.name)
-                                .font(GaryFonts.display(24))
-                                .foregroundStyle(c.tint)
-                                .lineLimit(1).minimumScaleFactor(0.6)
-                            Spacer(minLength: 10)
-                            if let o = c.odds {
-                                Text(o)
-                                    .font(GaryFonts.mono(15, bold: true))
-                                    .foregroundStyle(.white.opacity(0.85))
-                            }
-                        }
-                        ForEach(Array(c.lines.enumerated()), id: \.offset) { _, line in
-                            line.lineSpacing(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if let news = c.news {
-                            (Text("WIRE  ").font(GaryFonts.mono(10.5, bold: true)).foregroundColor(GaryColors.gold.opacity(0.8))
-                                + Text(news).font(GaryFonts.text(14)).foregroundColor(.white.opacity(0.72)))
-                                .lineSpacing(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.top, 1)
-                        }
-                    }
+                // S5 header — team + price in one Bebas run; away white, home gold.
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(headerNames.away + (headOdds.a.map { " \($0)" } ?? ""))
+                        .font(GaryFonts.display(24))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1).minimumScaleFactor(0.5)
+                    Spacer(minLength: 8)
+                    Text(headerNames.home + (headOdds.h.map { " \($0)" } ?? ""))
+                        .font(GaryFonts.display(24))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.5)
                 }
+                .padding(.bottom, 8)
+                if let series { seriesBlock(series) }
+                ForEach(rows) { r in
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            r.away.lineLimit(1).minimumScaleFactor(0.7)
+                            if let sub = r.awaySub { sub.lineLimit(1).minimumScaleFactor(0.7) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(r.label)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.4))
+                            .fixedSize()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            r.home.lineLimit(1).minimumScaleFactor(0.7)
+                            if let sub = r.homeSub { sub.lineLimit(1).minimumScaleFactor(0.7) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .padding(.vertical, 9)
+                }
+                wireLines
                 if let footer {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                        .padding(.top, 14).padding(.bottom, 10)
                     Text(footer)
                         .font(GaryFonts.text(13.5, .medium))
                         .foregroundStyle(.white.opacity(0.7))
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 9)
                 }
             }
             .padding(.horizontal, 16)
+        }
+    }
+
+    /// S3's tug — the leader's side carries the win tint — with the venue
+    /// split under it and S9's last-three-meetings list.
+    @ViewBuilder private func seriesBlock(_ s: TomorrowSeries) -> some View {
+        let aAb = abbr(sides.away, fallback: row?.away_abbr)
+        let hAb = abbr(sides.home, fallback: row?.home_abbr)
+        let aw = s.away_w ?? 0
+        let hw = s.home_w ?? 0
+        let leaderAway = (s.leader ?? "away") == "away"
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geo in
+                let total = max(aw + hw, 1)
+                let awW = min(max(geo.size.width * CGFloat(aw) / CGFloat(total), 52), geo.size.width - 52)
+                HStack(spacing: 0) {
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(leaderAway ? GaryColors.win.opacity(0.8) : Color.white.opacity(0.1))
+                        Text("\(aAb) \(aw)")
+                            .font(GaryFonts.mono(10, bold: true))
+                            .foregroundStyle(leaderAway ? Color(hex: "#08130D") : .white.opacity(0.8))
+                            .padding(.leading, 8)
+                    }
+                    .frame(width: awW)
+                    ZStack(alignment: .trailing) {
+                        Rectangle().fill(leaderAway ? Color.white.opacity(0.1) : GaryColors.win.opacity(0.8))
+                        Text("\(hw) \(hAb)")
+                            .font(GaryFonts.mono(10, bold: true))
+                            .foregroundStyle(leaderAway ? .white.opacity(0.8) : Color(hex: "#08130D"))
+                            .padding(.trailing, 8)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
+            .frame(height: 16)
+            if let split = s.split_line {
+                Text("SERIES · \(split)")
+                    .font(GaryFonts.mono(10, bold: true))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            if let meets = s.meetings, !meets.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(meets.enumerated()), id: \.offset) { _, m in
+                        HStack(spacing: 8) {
+                            Text(m.d ?? "")
+                                .font(GaryFonts.mono(12, bold: true))
+                                .foregroundStyle(m.won == "away" ? GaryColors.win : GaryColors.loss)
+                                .frame(width: 58, alignment: .leading)
+                            Text(m.line ?? "")
+                                .font(GaryFonts.mono(12))
+                                .foregroundStyle(.white.opacity(0.78))
+                            Spacer(minLength: 8)
+                            Text(m.venue ?? "")
+                                .font(GaryFonts.mono(12))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                    }
+                }
+                .padding(.top, 6)
+            }
+        }
+        .padding(.bottom, 11)
+    }
+
+    /// Team-matched wire notes (injury first), de-duped across the two sides.
+    @ViewBuilder private var wireLines: some View {
+        let aKey = wc != nil ? sides.away : Formatters.shortTeamName(sides.away, league: "MLB")
+        let hKey = wc != nil ? sides.home : Formatters.shortTeamName(sides.home, league: "MLB")
+        let items = [news(aKey), news(hKey)].compactMap { $0 }
+        let uniq = items.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        if !uniq.isEmpty {
+            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(uniq, id: \.self) { h in
+                    (Text("WIRE  ").font(GaryFonts.mono(10.5, bold: true)).foregroundColor(GaryColors.gold.opacity(0.8))
+                        + Text(h).font(GaryFonts.text(14)).foregroundColor(.white.opacity(0.72)))
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.vertical, 8)
         }
     }
 }
