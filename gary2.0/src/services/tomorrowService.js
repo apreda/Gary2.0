@@ -543,6 +543,19 @@ async function enrichStartersWithOutings(starters) {
           at: atHome == null ? null : (atHome ? 'vs' : 'at'),
           date: scoutShortDate(last._game?.date),
         };
+        // Quality-start form over his last (up to) 5 starts — the name-row
+        // tag ("3 STRAIGHT QS" / "1 QS IN LAST 4"). Standard QS: 6+ IP, <=3 ER.
+        const qsWin = startRows.slice(-5)
+          .map((r) => scoutIpOuts(r.ip) >= 18 && (Number(r.er) || 0) <= 3);
+        let qsStreak = 0;
+        for (let qi = qsWin.length - 1; qi >= 0; qi--) {
+          if (qsWin[qi]) qsStreak += 1; else break;
+        }
+        st.qs_form = {
+          streak: qsStreak,
+          qs: qsWin.filter(Boolean).length,
+          window: qsWin.length,
+        };
         const oppTonightId = idByAbbr.get(String(st.opponent || '').toUpperCase());
         if (oppTonightId != null) {
           const vs = startRows.filter((r) => r._game

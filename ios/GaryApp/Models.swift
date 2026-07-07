@@ -1683,6 +1683,8 @@ struct TomorrowPerson: Decodable {   // starters AND returns share this
     let last_outing: TomorrowOuting?
     /// This season's starts vs TONIGHT's opponent. nil = hasn't faced them.
     let vs_opp: TomorrowVsOpp?
+    /// Quality-start form (name-row tag: "3 STRAIGHT QS" / "1 QS IN LAST 4").
+    let qs_form: TomorrowQsForm?
 }
 
 struct TomorrowOuting: Decodable {
@@ -1698,6 +1700,12 @@ struct TomorrowVsOpp: Decodable {
     let ip: String?
     let er: Int?
     let era: Double?
+}
+/// Quality-start form over his last (up to) 5 starts — 6+ IP, ≤3 ER.
+struct TomorrowQsForm: Decodable {
+    let streak: Int?
+    let qs: Int?
+    let window: Int?
 }
 
 // FORM — per-team last-10 + current streak (grounded from standings).
