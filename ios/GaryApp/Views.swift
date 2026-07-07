@@ -3707,6 +3707,17 @@ struct HomeMarqueeTracker: View {
         return "\(teamAbbrevFromName(sides[0], league: e.league)) @ \(teamAbbrevFromName(sides[1], league: e.league))"
     }
 
+    /// Sport-correct start word for the countdown row — "FIRST PITCH 7:10 PM".
+    private func startWord(_ league: String?) -> String {
+        switch (league ?? "").uppercased() {
+        case "MLB":                return "FIRST PITCH"
+        case "WC", "NFL", "NCAAF": return "KICKOFF"
+        case "NBA", "NCAAB":       return "TIP-OFF"
+        case "NHL":                return "PUCK DROP"
+        default:                   return "STARTS"
+        }
+    }
+
     /// The bottom ticker — every non-hero big game as a "PIT @ WSH ▶ 5–3"
     /// chip, hairlines between, tomorrow's marquee dimmed at the end.
     private var ribbonView: some View {
@@ -3780,15 +3791,15 @@ struct HomeMarqueeTracker: View {
 
     // The hero face — live sweat, or the countdown to the next big one.
     @ViewBuilder private func heroView(_ e: Entry) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 if e.isLive {
                     Text("● LIVE")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
                         .foregroundStyle(GaryColors.win)
                 } else {
                     Text("UP NEXT")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
                         .foregroundStyle(GaryColors.gold)
                 }
                 Spacer()
@@ -3796,8 +3807,8 @@ struct HomeMarqueeTracker: View {
                 // the score IS the context (founder: it crowded the card).
                 if !e.isLive, let c = e.context, !c.isEmpty {
                     Text(c.uppercased())
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.62))
+                        .font(GaryFonts.mono(10.5))
+                        .foregroundStyle(.white.opacity(0.65))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
@@ -3809,61 +3820,65 @@ struct HomeMarqueeTracker: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                     if let det = ls.detail, !det.isEmpty {
                         Text(det.uppercased())
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(12.5, bold: true))
                             .foregroundStyle(.white.opacity(0.7))
                     }
                 }
             } else if e.started {
                 Text(e.title)
-                    .font(GaryFonts.display(26))
+                    .font(GaryFonts.display(30))
                     .foregroundStyle(GaryColors.warmWhite)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Text("▶ JUST STARTED")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(GaryFonts.mono(12, bold: true))
                     .foregroundStyle(GaryColors.win)
             } else {
                 Text(e.title)
-                    .font(GaryFonts.display(26))
+                    .font(GaryFonts.display(30))
                     .foregroundStyle(GaryColors.warmWhite)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                HStack(spacing: 10) {
-                    if let ct = e.commence, let d = parseISO8601(ct) {
+                // The countdown owns the left edge and the hard start time
+                // answers from the right — the row spans the card instead of
+                // huddling in the corner (founder, Jul 7).
+                if let ct = e.commence, let d = parseISO8601(ct) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
                         HomeCountdownText(target: d)
-                        Text(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.7))
+                        Spacer(minLength: 8)
+                        Text("\(startWord(e.league)) \(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())")
+                            .font(GaryFonts.mono(11.5, bold: true))
+                            .foregroundStyle(.white.opacity(0.72))
                     }
                 }
             }
             HStack(spacing: 8) {
                 if let pick = e.pickLine {
                     Text(pick)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(GaryFonts.mono(13.5, bold: true))
                         .foregroundStyle(GaryColors.gold)
                         .lineLimit(1).minimumScaleFactor(0.75)
                     if e.isLive, let v = e.verdict {
                         switch v {
                         case .covering:
-                            Text("COVERING").font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                            Text("COVERING").font(GaryFonts.mono(11.5, bold: true))
                                 .foregroundStyle(GaryColors.win)
                         case .trailing:
-                            Text("IN THE RED").font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                            Text("IN THE RED").font(GaryFonts.mono(11.5, bold: true))
                                 .foregroundStyle(GaryColors.loss)
                         case .neutral: EmptyView()
                         }
                     }
                 } else if let pending = e.pendingLine {
                     Text(pending)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.72))
+                        .font(GaryFonts.mono(12.5))
+                        .foregroundStyle(.white.opacity(0.78))
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.5))
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 12)
+        .padding(.horizontal, 14).padding(.vertical, 13)
         .contentShape(Rectangle())
     }
 
@@ -3871,7 +3886,7 @@ struct HomeMarqueeTracker: View {
     private var doneView: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("TODAY'S BIG GAMES · SETTLED")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.3)
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
                 .foregroundStyle(GaryColors.gold)
             if let line = settledLine {
                 Text(line)
@@ -3913,23 +3928,23 @@ struct HomeOvernightStrip: View {
 
     var body: some View {
         Button(action: onTape) {
-            HStack(spacing: 8) {
+            HStack(spacing: 9) {
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.8)
+                    .font(GaryFonts.mono(11.5, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Text("\(record.w)–\(record.l)")
-                    .font(.system(size: 15, weight: .heavy, design: .monospaced))
+                    .font(GaryFonts.mono(19, bold: true))
                     .foregroundStyle(.white)
                 if let net {
                     Text(money(net))
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(15.5, bold: true))
                         .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
                 }
                 if !rollItems.isEmpty {
                     rollSlot
                 } else if let best, best > 0 {
                     Text("BEST +\(Int(best))")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(GaryFonts.mono(12, bold: true))
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 Spacer(minLength: 10)
@@ -3939,13 +3954,13 @@ struct HomeOvernightStrip: View {
                 // hairline now fills the gap before it (founder, Jul 6: bare
                 // Spacer space read as an accident, not a design) and the
                 // door itself is bigger + pushed to the true trailing edge.
-                Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(width: 1, height: 22)
+                Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(width: 1, height: 26)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(GaryColors.gold)
                     .padding(.leading, 10)
             }
-            .padding(.leading, 14).padding(.trailing, 16).padding(.vertical, 11)
+            .padding(.leading, 14).padding(.trailing, 16).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -3961,22 +3976,22 @@ struct HomeOvernightStrip: View {
 
     private var rollSlot: some View {
         let item = rollItems[rollIndex % rollItems.count]
-        return HStack(spacing: 4) {
+        return HStack(spacing: 5) {
             Text("✓")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(12.5, bold: true))
                 .foregroundStyle(GaryColors.win)
             Text(item.line)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(1).minimumScaleFactor(0.78)
+                .font(GaryFonts.mono(13, bold: true))
+                .foregroundStyle(.white.opacity(0.88))
+                .lineLimit(1).minimumScaleFactor(0.75)
             Text(item.odds)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(13, bold: true))
                 .foregroundStyle(GaryColors.gold)
         }
         .id(rollIndex)
         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                 removal: .move(edge: .top).combined(with: .opacity)))
-        .frame(height: 16)
+        .frame(height: 20)
         .clipped()
         // The rolling cash wins the width fight — the record and THE CARD
         // door are short and fixed; the pick line is the story.
@@ -4171,7 +4186,7 @@ struct HomeCountdownText: View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let s = max(0, Int(target.timeIntervalSince(ctx.date)))
             Text(s == 0 ? "ANY MINUTE" : String(format: "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60))
-                .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                .font(GaryFonts.mono(21, bold: true))
                 .foregroundStyle(GaryColors.warmWhite)
         }
     }
