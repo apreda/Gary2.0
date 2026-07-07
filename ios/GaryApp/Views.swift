@@ -3841,9 +3841,11 @@ struct HomeMarqueeTracker: View {
                         }
                     }
                 } else if let pending = e.pendingLine {
+                    // Gold in the pick's slot even before it posts — the card
+                    // always carries Gary's color in the same place (founder, Jul 7).
                     Text(pending)
-                        .font(GaryFonts.mono(12.5))
-                        .foregroundStyle(.white.opacity(0.78))
+                        .font(GaryFonts.mono(12.5, bold: true))
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
