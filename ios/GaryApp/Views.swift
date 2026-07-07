@@ -3809,9 +3809,12 @@ struct HomeMarqueeTracker: View {
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if let c = e.context, !c.isEmpty {
+                    // Same size/weight/tracking as UP NEXT — the two ends of the
+                    // row differ by COLOR only, so they sit on one plane
+                    // (founder, Jul 7: three stacked cues read as depth).
                     Text(c.uppercased())
-                        .font(GaryFonts.mono(10.5))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
+                        .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
