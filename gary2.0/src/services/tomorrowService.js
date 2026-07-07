@@ -84,6 +84,7 @@ import {
 } from './dailySlateService.js';
 import { getMlbSchedule, getMlbStandings, getMlbTeams } from './mlbStatsApiService.js';
 import { getPitcherXStats } from './baseballSavantService.js';
+import { ballDontLieService as bdl } from './ballDontLieService.js';
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -374,6 +375,7 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
         starters.push({
           league: 'MLB',
           name: abbrevName(name),
+          full_name: name,              // un-abbreviated (scout-extras id resolution)
           team: abbr,
           abbr,                         // explicit alias (iOS gold team-name source)
           era,                          // number | null
@@ -418,6 +420,209 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
   // WC is no longer mixed into starters — it has its own dedicated lane
   // (buildWcLookahead). starters[] is MLB pitchers only.
   return { starters, acesByGame, pitchersByGame };
+}
+
+/* ────────────────── 2c. SCOUT EXTRAS (last outing · vs opp · series) ─────────────────
+ * The Picks-page scouting report's bettor lanes (founder, Jul 7): what did each
+ * probable do LAST time out, how has he fared against TONIGHT's opponent this
+ * season, and the season series between the clubs with the venue split + the
+ * last three meetings. All grounded from BDL box scores + the season game
+ * index; every field is omitted (never guessed) when its source is short.
+ */
+
+const MONTHS_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function scoutShortDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return null;
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return null;
+  return `${MONTHS_ABBR[mo - 1]} ${Number(m[3])}`;
+}
+/** BDL ip notation ("5.2" = 5 innings 2 outs) -> total outs. */
+function scoutIpOuts(v) {
+  const s = String(v ?? '');
+  const m = /^(\d+)(?:\.(\d))?$/.exec(s);
+  if (!m) return 0;
+  return Number(m[1]) * 3 + Number(m[2] || 0);
+}
+function scoutOutsToIp(outs) { return `${Math.trunc(outs / 3)}.${outs % 3}`; }
+
+// Short ballpark names for the meetings rows ("at Busch"). Curated,
+// unambiguous parks only — anything absent falls back to the home team's
+// abbreviation ("at TB"), never a guessed name.
+const PARK_SHORT = {
+  MIL: 'AmFam', STL: 'Busch', NYY: 'Yankee', NYM: 'Citi', BOS: 'Fenway',
+  CHC: 'Wrigley', LAD: 'Dodger', SF: 'Oracle', SD: 'Petco', ATL: 'Truist',
+  PIT: 'PNC', BAL: 'Camden', DET: 'Comerica', KC: 'Kauffman', SEA: 'T-Mobile',
+  MIN: 'Target', COL: 'Coors', CIN: 'GABP', TEX: 'Globe Life', TOR: 'Rogers',
+  CLE: 'Progressive', MIA: 'loanDepot', LAA: 'Angel', AZ: 'Chase', ARI: 'Chase',
+  HOU: 'Daikin', CWS: 'Rate', CHW: 'Rate',
+};
+function parkShort(homeAbbr) {
+  return PARK_SHORT[String(homeAbbr || '').toUpperCase()] || homeAbbr || '?';
+}
+
+/**
+ * BDL team maps — the season game index and per-player game rows carry BDL
+ * team ids (a DIFFERENT id space from teamIndex's MLB-Stats-API ids), so the
+ * scout lanes join through BDL's own teams read.
+ */
+async function bdlTeamMaps() {
+  const teams = await bdl.getTeams('baseball_mlb');
+  const list = Array.isArray(teams) ? teams : (teams?.data || []);
+  const idByAbbr = new Map();
+  const abbrById = new Map();
+  for (const t of list) {
+    const ab = t?.abbreviation || t?.abbr;
+    if (t?.id == null || !ab) continue;
+    idByAbbr.set(String(ab).toUpperCase(), t.id);
+    abbrById.set(t.id, String(ab).toUpperCase());
+  }
+  return { idByAbbr, abbrById };
+}
+
+/** Resolve a probable's BDL player id by full name (+ team when it can). */
+async function resolvePitcherBdlId(fullName, teamId) {
+  const last = String(fullName || '').trim().split(/\s+/).pop();
+  if (!last) return null;
+  const res = await bdl.getPlayersGeneric('baseball_mlb', { search: last, per_page: 100 });
+  const players = Array.isArray(res) ? res : (res?.data || []);
+  if (!players.length) return null;
+  const want = nameKey(fullName);
+  const byName = players.filter((p) => {
+    const full = p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ');
+    return nameKey(full) === want;
+  });
+  if (byName.length === 1) return byName[0].id;
+  if (byName.length > 1 && teamId != null) {
+    const onTeam = byName.find((p) => (p.team?.id ?? p.team_id) === teamId);
+    if (onTeam) return onTeam.id;
+  }
+  if (byName.length > 1) return byName[0].id;
+  // No exact full-name hit — same last name + the right team is still safe.
+  if (teamId != null) {
+    const teamHits = players.filter((p) =>
+      nameKey(p.last_name || '') === nameKey(last) && (p.team?.id ?? p.team_id) === teamId);
+    if (teamHits.length === 1) return teamHits[0].id;
+  }
+  return null;
+}
+
+/**
+ * Attach { last_outing, vs_opp } to each MLB starter row IN PLACE.
+ * last_outing = his most recent regular-season START (never relief);
+ * vs_opp = this season's starts against tonight's opponent, aggregated.
+ */
+async function enrichStartersWithOutings(starters) {
+  const { idByAbbr, abbrById } = await bdlTeamMaps();
+  const mlb = starters.filter((st) => st.league === 'MLB' && (st.full_name || st.name));
+  const CHUNK = 4;
+  for (let i = 0; i < mlb.length; i += CHUNK) {
+    await Promise.all(mlb.slice(i, i + CHUNK).map(async (st) => {
+      try {
+        const teamId = idByAbbr.get(String(st.team || '').toUpperCase()) ?? null;
+        const pid = await resolvePitcherBdlId(st.full_name || st.name, teamId);
+        if (!pid) return;
+        const rows = await bdl.getMlbPlayerGameRowsChrono(pid, SEASON);
+        const startRows = (rows || []).filter((r) => Number(r.games_started) === 1);
+        if (!startRows.length) return;
+        const last = startRows[startRows.length - 1];
+        const outs = scoutIpOuts(last.ip);
+        let oppAbbr = null;
+        let atHome = null;
+        if (teamId != null && last._game) {
+          atHome = last._game.homeId === teamId;
+          const oppId = atHome ? last._game.awayId : last._game.homeId;
+          oppAbbr = abbrById.get(oppId) ?? null;
+        }
+        st.last_outing = {
+          ip: scoutOutsToIp(outs),
+          er: Number(last.er) || 0,
+          k: Number(last.p_k) || 0,
+          opp: oppAbbr,
+          at: atHome == null ? null : (atHome ? 'vs' : 'at'),
+          date: scoutShortDate(last._game?.date),
+        };
+        const oppTonightId = idByAbbr.get(String(st.opponent || '').toUpperCase());
+        if (oppTonightId != null) {
+          const vs = startRows.filter((r) => r._game
+            && (r._game.homeId === oppTonightId || r._game.awayId === oppTonightId));
+          if (vs.length) {
+            let vOuts = 0; let vEr = 0;
+            for (const r of vs) { vOuts += scoutIpOuts(r.ip); vEr += Number(r.er) || 0; }
+            st.vs_opp = {
+              gs: vs.length,
+              ip: scoutOutsToIp(vOuts),
+              er: vEr,
+              era: vOuts > 0 ? Number(((vEr * 27) / vOuts).toFixed(2)) : null,
+            };
+          }
+        }
+      } catch (e) {
+        console.warn(`[TomorrowBoard] outing enrich failed for ${st.name}: ${e.message}`);
+      }
+    }));
+  }
+}
+
+/**
+ * Attach `series` to each MLB board row IN PLACE: this season's finished
+ * meetings between the two clubs — record (from tonight's AWAY side's
+ * perspective), the leader's venue split, and the last three meetings.
+ */
+async function attachSeriesToBoard(board) {
+  const mlbRows = board.filter((r) => r.league === 'MLB' && r.away_abbr && r.home_abbr);
+  if (!mlbRows.length) return;
+  const { idByAbbr, abbrById } = await bdlTeamMaps();
+  const index = await bdl.getMlbSeasonGameIndex(SEASON);
+  for (const r of mlbRows) {
+    const aId = idByAbbr.get(String(r.away_abbr).toUpperCase());
+    const hId = idByAbbr.get(String(r.home_abbr).toUpperCase());
+    if (aId == null || hId == null) continue;
+    const games = [];
+    for (const g of index.values()) {
+      if (g.status !== 'STATUS_FINAL' || g.seasonType === 'spring_training' || g.postseason) continue;
+      const pair = (g.homeId === aId && g.awayId === hId) || (g.homeId === hId && g.awayId === aId);
+      if (!pair) continue;
+      if (g.homeRuns == null || g.awayRuns == null || g.homeRuns === g.awayRuns) continue;
+      games.push(g);
+    }
+    if (!games.length) continue;
+    games.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    let awayW = 0; let homeW = 0;
+    const perGame = games.map((g) => {
+      const awayRuns = g.homeId === aId ? g.homeRuns : g.awayRuns; // tonight's away side
+      const homeRuns = g.homeId === aId ? g.awayRuns : g.homeRuns;
+      const awayWon = awayRuns > homeRuns;
+      if (awayWon) awayW += 1; else homeW += 1;
+      return { g, awayRuns, homeRuns, awayWon };
+    });
+    const leaderIsAway = awayW >= homeW;
+    const parks = new Map(); // park (home team's abbr) -> leader's {w, l} there
+    for (const pg of perGame) {
+      const parkAbbr = abbrById.get(pg.g.homeId) || '?';
+      const leaderWon = leaderIsAway ? pg.awayWon : !pg.awayWon;
+      const cur = parks.get(parkAbbr) || { w: 0, l: 0 };
+      if (leaderWon) cur.w += 1; else cur.l += 1;
+      parks.set(parkAbbr, cur);
+    }
+    const split_line = [...parks.entries()]
+      .map(([abbr, rec]) => `${rec.w}-${rec.l} AT ${parkShort(abbr).toUpperCase()}`)
+      .join(' · ');
+    const meetings = perGame.slice(-3).reverse().map((pg) => ({
+      d: scoutShortDate(pg.g.date),
+      line: `${r.away_abbr} ${pg.awayRuns} · ${r.home_abbr} ${pg.homeRuns}`,
+      venue: `at ${parkShort(abbrById.get(pg.g.homeId))}`,
+      won: pg.awayWon ? 'away' : 'home',
+    }));
+    r.series = {
+      away_w: awayW,
+      home_w: homeW,
+      leader: leaderIsAway ? 'away' : 'home',
+      split_line,
+      meetings,
+    };
+  }
 }
 
 /* ─────────────────────── 2b. WC LOOK-AHEAD (own tab) ─────────────────────── */
@@ -1165,6 +1370,14 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     console.warn(`[TomorrowBoard] weather lane failed (honest-empty): ${e.message}`);
   }
 
+  // 2c. SCOUT EXTRAS — each probable's last outing + this-season record vs
+  // tonight's opponent (BDL box scores; grounded, omit-when-short).
+  try {
+    await enrichStartersWithOutings(starters);
+  } catch (e) {
+    console.warn(`[TomorrowBoard] starter outings failed (honest-empty): ${e.message}`);
+  }
+
   // 2b. WC LOOK-AHEAD — its own iOS tab (projected XI + formation, L5 form, the
   // posted lines, and key players per side). GROUNDED; honest-empty when no WC
   // tomorrow or its sources are short. Joins the slate's WC line rows in place.
@@ -1201,6 +1414,13 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
 
   // board[] presentation rows.
   const board = slateRows.map((r) => toBoardRow(r, marqueeKeys, teamIndex));
+  // SCOUT EXTRAS — per-MLB-game season series (record + venue split + last
+  // three meetings) off the season game index. Grounded; omit-when-short.
+  try {
+    await attachSeriesToBoard(board);
+  } catch (e) {
+    console.warn(`[TomorrowBoard] season series failed (honest-empty): ${e.message}`);
+  }
   const any_lines = board.some(
     (r) => r.spread != null || r.ml_home != null || r.ml_away != null || r.total != null,
   );
