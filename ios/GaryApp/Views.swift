@@ -2475,6 +2475,9 @@ struct HomeView: View {
         let statusColor: Color
         let bigOne: Bool
         let commence: String
+        /// Picks already mathematically HIT mid-game (an OVER whose line the
+        /// score has passed) — stacked under the live status (founder, Jul 7).
+        var hitLines: [String] = []
     }
 
     /// Freshest live/final row for a slate game (the cache once it has polled,
@@ -2524,11 +2527,20 @@ struct HomeView: View {
             var statusText = TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true).uppercased()
             var statusColor = Color.white.opacity(0.62)
             var pendingLine: String? = nil
+            var hitLines: [String] = []
             if let ls, ls.isFinal || ls.isLive {
                 title = ls.scoreLine ?? title
                 let verdicts = calls.map { HomeLiveVerdict.evaluate(pick: $0, live: ls) }
                 if ls.isLive {
                     zone = .live
+                    let combined = Double((ls.away_score ?? 0) + (ls.home_score ?? 0))
+                    hitLines = calls.compactMap { p in
+                        let t = (p.pick ?? "").lowercased()
+                        guard t.contains("over"), !t.contains("under"),
+                              let line = HomeLiveVerdict.unsignedNumber(in: t),
+                              combined > line else { return nil }
+                        return Self.homePickLabel(p.pick)
+                    }
                     let det = (ls.detail ?? "LIVE").uppercased()
                     if verdicts.contains(.covering), !verdicts.contains(.trailing) {
                         statusText = "▶ COVERING · \(det)"; statusColor = GaryColors.win
@@ -2575,7 +2587,8 @@ struct HomeView: View {
                 statusText: statusText,
                 statusColor: statusColor,
                 bigOne: bigKey == "\(away)@\(home)",
-                commence: g.commence_time ?? ""
+                commence: g.commence_time ?? "",
+                hitLines: hitLines
             ))
         }
         return out.sorted { $0.commence < $1.commence }
@@ -4105,11 +4118,19 @@ struct HomeSheetRowView: View {
                 }
             }
             Spacer(minLength: 8)
-            Text(row.statusText)
-                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(row.statusColor)
-                .lineLimit(1)
-                .padding(.top, 2)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(row.statusText)
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(row.statusColor)
+                    .lineLimit(1)
+                ForEach(row.hitLines, id: \.self) { h in
+                    Text("✓ \(h)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(GaryColors.win)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.top, 2)
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.3))
@@ -4738,7 +4759,7 @@ enum HomeLiveVerdict {
     }
 
     /// First bare number that reads like a total line.
-    private static func unsignedNumber(in text: String) -> Double? {
+    static func unsignedNumber(in text: String) -> Double? {
         for raw in text.split(separator: " ") {
             let s = raw.trimmingCharacters(in: CharacterSet(charactersIn: "()[],"))
             guard !s.hasPrefix("+"), !s.hasPrefix("-"), let d = Double(s), d > 3, d < 400 else { continue }
