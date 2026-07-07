@@ -3940,6 +3940,7 @@ struct HomeOvernightStrip: View {
                 Text(label)
                     .font(GaryFonts.mono(15, bold: true)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
+                stripDivider
                 Text("\(record.w)–\(record.l)")
                     .font(GaryFonts.mono(15, bold: true))
                     .foregroundStyle(.white)
@@ -3948,6 +3949,7 @@ struct HomeOvernightStrip: View {
                         .font(GaryFonts.mono(15, bold: true))
                         .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
                 }
+                stripDivider
                 if !rollItems.isEmpty {
                     rollSlot
                 } else if let best, best > 0 {
@@ -3980,6 +3982,12 @@ struct HomeOvernightStrip: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16)
+    }
+
+    /// The gold hairline walls between the strip's zones (founder, Jul 7):
+    /// date | record · net | rolling cashes | door.
+    private var stripDivider: some View {
+        Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(width: 1, height: 22)
     }
 
     private var rollSlot: some View {
