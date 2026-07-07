@@ -1946,7 +1946,7 @@ struct HomeView: View {
                     let recapDays = recentGameResults.filter { ["won","lost","push"].contains($0.result ?? "") }.compactMap { $0.game_date }
                                   + recentPropResults.filter { ["won","lost","push"].contains($0.result ?? "") }.compactMap { $0.game_date }
                     let recapDay = Set(recapDays).max()
-                    recapLabel = (recapDay == SupabaseAPI.todayEST()) ? "TODAY" : "LAST NIGHT"
+                    recapLabel = recapDay.map(slateDayShort) ?? recapLabel
 
                     // ③ The marquee + biggest cashes + masthead units — one
                     // pass over the latest settled night. Template-built, no AI.
@@ -3738,7 +3738,7 @@ struct HomeMarqueeTracker: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(railTitle(e))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(GaryFonts.mono(12, bold: true))
                                 .foregroundStyle(.white.opacity(0.9))
                                 .lineLimit(1)
                             railStatus(e)
@@ -3755,11 +3755,11 @@ struct HomeMarqueeTracker: View {
                 if let tease = tomorrowTease {
                     HStack(spacing: 6) {
                         Text(tease.matchup)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(GaryFonts.mono(12, bold: true))
                             .foregroundStyle(.white.opacity(0.6))
                             .lineLimit(1)
                         Text("TMRW \(tease.time)")
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(10, bold: true))
                             .foregroundStyle(.white.opacity(0.5))
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
@@ -3772,20 +3772,20 @@ struct HomeMarqueeTracker: View {
     @ViewBuilder private func railStatus(_ e: Entry) -> some View {
         if let (text, color) = e.result {
             Text(text)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(10.5, bold: true))
                 .foregroundStyle(color)
         } else if e.isLive, let det = e.live?.detail {
             Text("▶ \(det.uppercased())")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(10.5, bold: true))
                 .foregroundStyle(GaryColors.win)
         } else if e.started {
             Text("▶ STARTED")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(10.5, bold: true))
                 .foregroundStyle(GaryColors.win)
         } else {
             Text(TomorrowView.etTime(e.commence, withZone: false, meridiem: true).uppercased())
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.62))
+                .font(GaryFonts.mono(10.5))
+                .foregroundStyle(.white.opacity(0.66))
         }
     }
 
@@ -3900,6 +3900,14 @@ struct HomeMarqueeTracker: View {
 
 }
 
+/// "2026-07-06" → "7/6" — the overnight strip's date tag (founder, Jul 7: the
+/// words LAST NIGHT were spending the roller's room; the date says it shorter).
+func slateDayShort(_ iso: String) -> String {
+    let p = iso.split(separator: "-")
+    guard p.count == 3, let m = Int(p[1]), let d = Int(p[2]) else { return iso }
+    return "\(m)/\(d)"
+}
+
 /// THE OVERNIGHT STRIP — one line: last night's number and the door to the
 /// tape. No voice, no filler (founder, Jul 5) — the daily recap pop-up owns
 /// the morning moment; this is just the standing fact.
@@ -3930,21 +3938,21 @@ struct HomeOvernightStrip: View {
         Button(action: onTape) {
             HStack(spacing: 9) {
                 Text(label)
-                    .font(GaryFonts.mono(11.5, bold: true)).tracking(1)
+                    .font(GaryFonts.mono(15, bold: true)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
                 Text("\(record.w)–\(record.l)")
-                    .font(GaryFonts.mono(19, bold: true))
+                    .font(GaryFonts.mono(15, bold: true))
                     .foregroundStyle(.white)
                 if let net {
                     Text(money(net))
-                        .font(GaryFonts.mono(15.5, bold: true))
+                        .font(GaryFonts.mono(15, bold: true))
                         .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
                 }
                 if !rollItems.isEmpty {
                     rollSlot
                 } else if let best, best > 0 {
                     Text("BEST +\(Int(best))")
-                        .font(GaryFonts.mono(12, bold: true))
+                        .font(GaryFonts.mono(15, bold: true))
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 Spacer(minLength: 10)
@@ -3978,20 +3986,20 @@ struct HomeOvernightStrip: View {
         let item = rollItems[rollIndex % rollItems.count]
         return HStack(spacing: 5) {
             Text("✓")
-                .font(GaryFonts.mono(12.5, bold: true))
+                .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(GaryColors.win)
             Text(item.line)
-                .font(GaryFonts.mono(13, bold: true))
+                .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(.white.opacity(0.88))
                 .lineLimit(1).minimumScaleFactor(0.75)
             Text(item.odds)
-                .font(GaryFonts.mono(13, bold: true))
+                .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(GaryColors.gold)
         }
         .id(rollIndex)
         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                 removal: .move(edge: .top).combined(with: .opacity)))
-        .frame(height: 20)
+        .frame(height: 21)
         .clipped()
         // The rolling cash wins the width fight — the record and THE CARD
         // door are short and fixed; the pick line is the story.
@@ -13401,13 +13409,13 @@ struct MembersOnlyCardFace: View {
             // Eyebrow — membership left, league right.
             HStack {
                 Text("MEMBERS ONLY")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(3)
+                    .font(GaryFonts.mono(11.5, bold: true)).tracking(2.4)
                     .foregroundStyle(GaryColors.gold.opacity(0.85))
                 Spacer()
                 if let leagueTag {
                     Text(leagueTag)
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(2)
-                        .foregroundStyle(.white.opacity(0.66))
+                        .font(GaryFonts.mono(11.5, bold: true)).tracking(1.6)
+                        .foregroundStyle(.white.opacity(0.72))
                 }
             }
             Spacer(minLength: 10)
@@ -13455,22 +13463,23 @@ struct MembersOnlyCardFace: View {
                     }
                 }
             }
+            Spacer(minLength: 10)
+            // The when-line rides the card's bottom edge (founder, Jul 7 —
+            // lowering it bought the eyebrow + note their bigger type).
             if let noteLine {
                 Text(noteLine)
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(1).minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 10)
             }
             if let footnote {
                 Text(footnote)
-                    .font(GaryFonts.mono(9, bold: false)).tracking(2.4)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(GaryFonts.mono(10, bold: false)).tracking(2)
+                    .foregroundStyle(.white.opacity(0.62))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 4)
             }
-            Spacer(minLength: 10)
         }
         .padding(.horizontal, 18).padding(.vertical, 13)
         .frame(maxWidth: .infinity)
@@ -19891,6 +19900,200 @@ struct TeasedPickCard: View {
     }
 }
 
+/// Day-keyed cache of the today board (today_board → tomorrow_board fallback,
+/// written the evening before) — ONE fetch feeds every game page's scout.
+@MainActor
+enum TodayBoardCache {
+    private static var stored: (day: String, board: TomorrowBoard)? = nil
+    static func get() async -> TomorrowBoard? {
+        let day = SupabaseAPI.todayEST()
+        if let stored, stored.day == day { return stored.board }
+        guard let board = await SupabaseAPI.fetchTodayBoard(date: day) else { return nil }
+        stored = (day, board)
+        return board
+    }
+}
+
+/// SCOUTING REPORT — the standing two-team read: the line, form, probables /
+/// danger men, conditions. All server-precomputed grounded facts off the day
+/// board — none of it waits on a pick run or the intel pipeline, so the game
+/// page is never blank in the morning; it stays up top as the live sections
+/// populate beneath it (founder, Jul 7). Renders nothing without a board row.
+struct GameScoutSection: View {
+    let matchup: String
+    var row: TomorrowBoardRow? = nil
+    var board: TomorrowBoard? = nil
+    var wc: TomorrowWcMatch? = nil
+
+    private struct ScoutLine: Identifiable {
+        let id: Int
+        let label: String        // "" continues the group above (second team)
+        let text: String
+    }
+
+    private var sides: (away: String, home: String) {
+        let p = matchup.components(separatedBy: " @ ")
+        return (p.first ?? "", p.count > 1 ? p[1] : "")
+    }
+    private static func sideMatches(_ boardName: String?, _ side: String) -> Bool {
+        guard let b = boardName?.lowercased(), !b.isEmpty else { return false }
+        let s = side.lowercased()
+        return s == b || s.hasSuffix(b) || b.hasSuffix(s)
+    }
+    private func abbr(_ side: String, fallback: String?) -> String {
+        if let fallback, !fallback.isEmpty { return fallback }
+        let a = teamAbbrevFromName(side, league: row?.league)
+        return a.isEmpty ? side.uppercased() : a
+    }
+    private static func odds(_ v: Double?) -> String? {
+        guard let v else { return nil }
+        let i = Int(v)
+        return i > 0 ? "+\(i)" : "\(i)"
+    }
+    private static func num(_ v: Double?) -> String? {
+        guard let v else { return nil }
+        return v == v.rounded() ? String(format: "%.0f", v) : String(format: "%.1f", v)
+    }
+
+    private var lines: [ScoutLine] {
+        var out: [ScoutLine] = []
+        func add(_ label: String, _ text: String?) {
+            guard let text, !text.isEmpty else { return }
+            out.append(ScoutLine(id: out.count, label: label, text: text))
+        }
+        if let wc { buildWc(wc, add) } else if let row { buildTeams(row, add) }
+        return out
+    }
+
+    // World Cup: the look-ahead lane carries a full pre-match report per side.
+    private func buildWc(_ m: TomorrowWcMatch, _ add: (String, String?) -> Void) {
+        let away = (m.away_team ?? sides.away).uppercased()
+        let home = (m.home_team ?? sides.home).uppercased()
+        if let l = m.lines {
+            let ml = [Self.odds(l.ml_away).map { "\(away) \($0)" },
+                      Self.odds(l.ml_home).map { "\(home) \($0)" }]
+                .compactMap { $0 }.joined(separator: " · ")
+            let ou = Self.num(l.total).map { "O/U \($0)" }
+            add("THE LINE", [ml.isEmpty ? nil : ml, ou].compactMap { $0 }.joined(separator: " · "))
+        }
+        add("THE STAGE", [m.stage, m.venue].compactMap { $0 }.joined(separator: " · "))
+        func formText(_ side: TomorrowWcSide?) -> String? {
+            guard let side, let f = side.form else { return nil }
+            var bits: [String] = []
+            if let run = f.form { bits.append(run) }
+            if let gf = Self.num(f.gf_per_game) { bits.append("\(gf) GF/G") }
+            if let ga = Self.num(f.ga_per_game) { bits.append("\(ga) GA/G") }
+            guard !bits.isEmpty else { return nil }
+            return "\((side.team ?? "").uppercased())  \(bits.joined(separator: " · "))"
+        }
+        add("FORM · L5", formText(m.away))
+        add("", formText(m.home))
+        func menText(_ side: TomorrowWcSide?) -> String? {
+            guard let side, let men = side.key_players, !men.isEmpty else { return nil }
+            let parts = men.prefix(2).compactMap { p -> String? in
+                guard let n = p.name else { return nil }
+                var stat: [String] = []
+                if let g = p.goals, g > 0 { stat.append("\(g)G") }
+                if let a = p.assists, a > 0 { stat.append("\(a)A") }
+                return stat.isEmpty ? n : "\(n) \(stat.joined(separator: " "))"
+            }
+            guard !parts.isEmpty else { return nil }
+            return "\((side.team ?? "").uppercased())  \(parts.joined(separator: " · "))"
+        }
+        add("DANGER MEN", menText(m.away))
+        add("", menText(m.home))
+        if let af = m.away?.xi?.formation, let hf = m.home?.xi?.formation {
+            add("SHAPE", "\(away) \(af) · \(home) \(hf) · PROJECTED")
+        }
+    }
+
+    // MLB (and any board sport): line + per-team form/run shape + probables + weather.
+    private func buildTeams(_ r: TomorrowBoardRow, _ add: (String, String?) -> Void) {
+        let aAb = abbr(sides.away, fallback: r.away_abbr)
+        let hAb = abbr(sides.home, fallback: r.home_abbr)
+        let ml = [Self.odds(r.ml_away).map { "\(aAb) \($0)" },
+                  Self.odds(r.ml_home).map { "\(hAb) \($0)" }]
+            .compactMap { $0 }.joined(separator: " · ")
+        let ou = Self.num(r.total).map { "O/U \($0)" }
+        add("THE LINE", [ml.isEmpty ? nil : ml, ou].compactMap { $0 }.joined(separator: " · "))
+        func teamForm(_ side: String, _ ab: String) -> String? {
+            let f = board?.form?.first { $0.abbr == ab || Self.sideMatches($0.team, side) }
+            let rp = board?.run_profile?.first { $0.abbr == ab || Self.sideMatches($0.team, side) }
+            var bits: [String] = []
+            if let l10 = f?.l10 { bits.append("\(l10) L10") }
+            if let st = f?.streak, !st.isEmpty { bits.append(st) }
+            if let rs = Self.num(rp?.rs_per_game) { bits.append("\(rs) RS/G") }
+            if let ra = Self.num(rp?.ra_per_game) { bits.append("\(ra) RA/G") }
+            guard !bits.isEmpty else { return nil }
+            return "\(ab)  \(bits.joined(separator: " · "))"
+        }
+        add("FORM", teamForm(sides.away, aAb))
+        add("", teamForm(sides.home, hAb))
+        func starter(_ ab: String) -> String? {
+            guard let st = board?.starters.first(where: { $0.abbr == ab }),
+                  let n = st.name else { return nil }
+            var bits: [String] = []
+            if let era = st.era { bits.append(String(format: "%.2f ERA", era)) }
+            if let x = st.xera { bits.append(String(format: "%.2f xERA", x)) }
+            return "\(n) (\(ab))\(bits.isEmpty ? "" : "  " + bits.joined(separator: " · "))"
+        }
+        add("PROBABLES", starter(aAb))
+        add("", starter(hAb))
+        if let w = board?.weather?.first(where: {
+            ($0.away_abbr == aAb && $0.home_abbr == hAb) || Self.sideMatches($0.matchup, matchup)
+        }) {
+            var bits: [String] = []
+            if let v = w.venue { bits.append(v) }
+            if let t = w.temp_f { bits.append("\(t)°") }
+            if let wind = w.wind_mph { bits.append("WIND \(wind)") }
+            if let pr = w.precip_pct { bits.append("RAIN \(pr)%") }
+            if let note = w.note { bits.append(note.uppercased()) }
+            add("CONDITIONS", bits.isEmpty ? nil : bits.joined(separator: " · "))
+        }
+    }
+
+    var body: some View {
+        let rows = lines
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("SCOUTING REPORT")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.45))
+                    .padding(.horizontal, 16)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { l in
+                        // Hairline between GROUPS — a continued (second-team)
+                        // row stays tight against its label row.
+                        if !l.label.isEmpty && l.id != rows.first?.id {
+                            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                        }
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(l.label)
+                                .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                                .foregroundStyle(GaryColors.gold.opacity(0.8))
+                                .frame(width: 88, alignment: .leading)
+                            Text(l.text)
+                                .font(GaryFonts.mono(12.5, bold: true))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineLimit(2).minimumScaleFactor(0.8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.vertical, 7)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(GaryColors.warmWhite.opacity(0.03))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
+                )
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+}
+
 struct PicksGamePage: View {
     let group: (matchup: String, time: String, props: [PropPick])
     let entries: [(pick: GaryPick, isYesterday: Bool)]
@@ -19902,6 +20105,33 @@ struct PicksGamePage: View {
     /// locked look-ahead card so a user with no pick yet can go see last night.
     var onSeeYesterday: (() -> Void)? = nil
 
+    /// The shared day board — feeds THE SCOUT and lets the league branches
+    /// below engage from the MORNING, before any pick or intel row exists
+    /// (founder, Jul 7: the game page sat blank until the first intel run).
+    @State private var scoutBoard: TomorrowBoard? = nil
+
+    private var matchSides: (away: String, home: String) {
+        let p = group.matchup.components(separatedBy: " @ ")
+        return (p.first ?? "", p.count > 1 ? p[1] : "")
+    }
+    private static func scoutSideMatches(_ boardName: String?, _ side: String) -> Bool {
+        guard let b = boardName?.lowercased(), !b.isEmpty else { return false }
+        let s = side.lowercased()
+        return s == b || s.hasSuffix(b) || b.hasSuffix(s)
+    }
+    private var scoutRow: TomorrowBoardRow? {
+        scoutBoard?.board.first {
+            Self.scoutSideMatches($0.away_team, matchSides.away) &&
+            Self.scoutSideMatches($0.home_team, matchSides.home)
+        }
+    }
+    private var scoutWc: TomorrowWcMatch? {
+        scoutBoard?.wc_lookahead?.first {
+            Self.scoutSideMatches($0.away_team, matchSides.away) &&
+            Self.scoutSideMatches($0.home_team, matchSides.home)
+        }
+    }
+
     private var topProps: [PropPick] {
         // The slip scales — show up to 5, strongest first.
         Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
@@ -19911,6 +20141,7 @@ struct PicksGamePage: View {
     private var isWorldCup: Bool {
         if (group.props.first?.effectiveLeague ?? "").uppercased() == "WC" { return true }
         if (entries.first?.pick.league ?? "").uppercased() == "WC" { return true }
+        if scoutWc != nil || scoutRow?.league?.uppercased() == "WC" { return true }
         return edges.contains { $0.league == .wc }
     }
     /// The confirmed-XI edge for this WC match (carries the formation + lineup).
@@ -19919,6 +20150,7 @@ struct PicksGamePage: View {
     private var isMLB: Bool {
         if (group.props.first?.effectiveLeague ?? "").uppercased() == "MLB" { return true }
         if (entries.first?.pick.league ?? "").uppercased() == "MLB" { return true }
+        if scoutRow?.league?.uppercased() == "MLB" { return true }
         return edges.contains { $0.league == .mlb }
     }
 
@@ -19986,25 +20218,35 @@ struct PicksGamePage: View {
                     .padding(.horizontal, 16)
             }
 
+            // THE SCOUT — on the page from the morning, stays as the live
+            // sections underneath fill in (founder, Jul 7).
+            GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wc: scoutWc)
             PlayerIntelSection(matchup: group.matchup)
             if isWorldCup {
                 // World Cup: the plain GAME INTEL edges become the WC game-intel
                 // dashboard (Starting XI pitch · The Read), with the existing intel
-                // rows folded in beneath it.
-                WCGameIntelView(matchup: group.matchup,
-                                confirmedXI: wcXIEdge?.confirmedXI,
-                                read: wcXIEdge ?? edges.first,
-                                edges: edges,
-                                showHeader: false)
+                // rows folded in beneath it. Mounted only once it has SOMETHING —
+                // on a pre-intel morning the scout above carries the page.
+                if wcXIEdge != nil || !edges.isEmpty {
+                    WCGameIntelView(matchup: group.matchup,
+                                    confirmedXI: wcXIEdge?.confirmedXI,
+                                    read: wcXIEdge ?? edges.first,
+                                    edges: edges,
+                                    showHeader: false)
+                }
             } else if isMLB {
                 // MLB: the flat GAME INTEL list becomes the modular dashboard —
                 // a baseball-field anchor + Pitching / Bats / Park & Weather.
+                // The field + real (projected → confirmed) lineup self-load off
+                // mlb_field_lineups, so this mounts from the MORNING now — it no
+                // longer waits for the first intel pass (founder, Jul 7).
                 MLBGameIntelView(matchup: group.matchup, edges: edges, showHeader: false)
             } else {
                 EdgesSection(title: "GAME INTEL", edges: edges)
             }
         }
         .padding(.top, 14)
+        .task { scoutBoard = await TodayBoardCache.get() }
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
     }
 }
