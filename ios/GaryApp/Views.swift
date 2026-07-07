@@ -3820,14 +3820,10 @@ struct HomeMarqueeTracker: View {
                 .foregroundStyle(GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.7)
             if let ct = e.commence, let d = parseISO8601(ct) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    HomeCountdownText(target: d)
-                    Spacer(minLength: 8)
-                    Text("\(startWord(e.league)) \(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())")
-                        .font(GaryFonts.mono(11.5, bold: true))
-                        .foregroundStyle(.white.opacity(0.72))
-                }
+                HomeCountdownText(target: d)
             }
+            // Bottom row: Gary's line left, the hard start time right — the
+            // chevron retired; the whole card is the tap (founder, Jul 7).
             HStack(alignment: .bottom, spacing: 8) {
                 if let pick = e.pickLine {
                     // ONE pick per line — the words always fit; the design
@@ -3847,10 +3843,12 @@ struct HomeMarqueeTracker: View {
                         .font(GaryFonts.mono(12.5, bold: true))
                         .foregroundStyle(GaryColors.gold.opacity(0.85))
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.5))
+                Spacer(minLength: 8)
+                if let ct = e.commence {
+                    Text("\(startWord(e.league)) \(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())")
+                        .font(GaryFonts.mono(11.5, bold: true))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 13)
