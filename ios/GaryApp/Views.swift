@@ -3579,13 +3579,13 @@ struct LiveHitsRoller: View {
     var body: some View {
         if !items.isEmpty {
             Text("✓ \(items[idx % items.count])")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundStyle(GaryColors.win)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .id(idx)
                 .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                         removal: .move(edge: .top).combined(with: .opacity)))
-                .frame(height: 17)
+                .frame(height: 19)
                 .clipped()
                 .onReceive(timer) { _ in
                     guard items.count > 1 else { return }
@@ -4143,84 +4143,49 @@ struct HomeSheetRowView: View {
     let row: HomeView.HomeSheetRow
 
     var body: some View {
-        Group {
-            if row.zone != .upcoming, let call = row.callLine {
-                // A STARTED game speaks in three zones (founder, Jul 7):
-                // Gary's picks LARGE on the left, the score + status in the
-                // middle, the rolling cashed-props feed LARGE on the right.
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 7) {
+                    Text(row.title)
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.96))
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                    if row.bigOne {
+                        Text("THE BIG ONE")
+                            .font(.system(size: 8.5, weight: .bold, design: .monospaced)).tracking(0.8)
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+                if let call = row.callLine {
+                    VStack(alignment: .leading, spacing: 2) {
                         ForEach(call.components(separatedBy: "  ·  "), id: \.self) { line in
                             Text(line)
-                                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                .foregroundStyle(GaryColors.gold)
-                                .lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    VStack(spacing: 3) {
-                        Text(row.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.96))
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        Text(row.statusText)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(row.statusColor)
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    HStack(spacing: 8) {
-                        LiveHitsRoller(items: row.hitLines)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.3))
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            } else {
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 7) {
-                            Text(row.title)
-                                .font(.system(size: 15.5, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.96))
+                                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(GaryColors.gold.opacity(0.95))
                                 .lineLimit(1).minimumScaleFactor(0.75)
-                            if row.bigOne {
-                                Text("THE BIG ONE")
-                                    .font(.system(size: 8.5, weight: .bold, design: .monospaced)).tracking(0.8)
-                                    .foregroundStyle(GaryColors.gold)
-                            }
-                        }
-                        if let call = row.callLine {
-                            VStack(alignment: .leading, spacing: 2) {
-                                ForEach(call.components(separatedBy: "  ·  "), id: \.self) { line in
-                                    Text(line)
-                                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                                        .foregroundStyle(GaryColors.gold.opacity(0.95))
-                                        .lineLimit(1).minimumScaleFactor(0.75)
-                                }
-                            }
-                        } else if let pending = row.pendingLine {
-                            Text(pending)
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.72))
                         }
                     }
-                    Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 7) {
-                        Text(row.statusText)
-                            .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(row.statusColor)
-                            .lineLimit(1)
-                        LiveHitsRoller(items: row.hitLines)
-                    }
-                    .padding(.top, 2)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.3))
-                        .padding(.top, 3)
+                } else if let pending = row.pendingLine {
+                    Text(pending)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.72))
                 }
             }
+            Spacer(minLength: 8)
+            // Status up top, the cashed-props feed BIG with real air under it
+            // (founder, Jul 7: larger, and further from the red part).
+            VStack(alignment: .trailing, spacing: 12) {
+                Text(row.statusText)
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(row.statusColor)
+                    .lineLimit(1)
+                LiveHitsRoller(items: row.hitLines)
+            }
+            .padding(.top, 2)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.3))
+                .padding(.top, 3)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .contentShape(Rectangle())
