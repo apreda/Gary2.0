@@ -20071,7 +20071,7 @@ struct GameScoutSection: View {
         var out: [TapeRow] = []
         func add(_ label: String, _ a: Text?, _ h: Text?, _ aSub: Text? = nil, _ hSub: Text? = nil) {
             guard a != nil || h != nil else { return }
-            let dash = Self.stat("—", .white.opacity(0.3))
+            let dash = Self.stat("—", .white.opacity(0.45))
             out.append(TapeRow(id: out.count, label: label,
                                away: a ?? dash, home: h ?? dash,
                                awaySub: aSub, homeSub: hSub))
@@ -20153,8 +20153,8 @@ struct GameScoutSection: View {
         if !rows.isEmpty || series != nil {
             VStack(alignment: .leading, spacing: 0) {
                 Text("SCOUTING REPORT")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.45))
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
+                    .foregroundStyle(.white.opacity(0.6))
                     .padding(.bottom, 12)
                 // S5 header — team + price in one Bebas run; away white, home gold.
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -20179,8 +20179,8 @@ struct GameScoutSection: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Text(r.label)
-                            .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.4))
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.62))
                             .fixedSize()
                         VStack(alignment: .trailing, spacing: 2) {
                             r.home.lineLimit(1).minimumScaleFactor(0.7)
@@ -20194,8 +20194,8 @@ struct GameScoutSection: View {
                 if let footer {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                     Text(footer)
-                        .font(GaryFonts.text(13.5, .medium))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(GaryFonts.text(14, .medium))
+                        .foregroundStyle(.white.opacity(0.78))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 9)
                 }
@@ -20239,24 +20239,24 @@ struct GameScoutSection: View {
             .frame(height: 16)
             if let split = s.split_line {
                 Text("SERIES · \(split)")
-                    .font(GaryFonts.mono(10, bold: true))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .font(GaryFonts.mono(11.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.68))
             }
             if let meets = s.meetings, !meets.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(Array(meets.enumerated()), id: \.offset) { _, m in
                         HStack(spacing: 8) {
                             Text(m.d ?? "")
-                                .font(GaryFonts.mono(12, bold: true))
+                                .font(GaryFonts.mono(13, bold: true))
                                 .foregroundStyle(m.won == "away" ? GaryColors.win : GaryColors.loss)
                                 .frame(width: 58, alignment: .leading)
                             Text(m.line ?? "")
-                                .font(GaryFonts.mono(12))
-                                .foregroundStyle(.white.opacity(0.78))
+                                .font(GaryFonts.mono(13, bold: true))
+                                .foregroundStyle(.white.opacity(0.88))
                             Spacer(minLength: 8)
                             Text(m.venue ?? "")
-                                .font(GaryFonts.mono(12))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .font(GaryFonts.mono(13))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                     }
                 }
@@ -20277,7 +20277,7 @@ struct GameScoutSection: View {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(uniq, id: \.self) { h in
                     (Text("WIRE  ").font(GaryFonts.mono(10.5, bold: true)).foregroundColor(GaryColors.gold.opacity(0.8))
-                        + Text(h).font(GaryFonts.text(14)).foregroundColor(.white.opacity(0.72)))
+                        + Text(h).font(GaryFonts.text(14.5)).foregroundColor(.white.opacity(0.8)))
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
