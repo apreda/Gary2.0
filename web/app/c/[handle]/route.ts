@@ -6,9 +6,10 @@ import { restInsert } from '@/lib/gary/supabase';
 // our click log AND App Store Connect Campaigns attribute installs to that creator. Same pattern as /get.
 const PPID = '3c207d81-dc0d-4cc3-a50d-b5f47e29b18f';
 
-export function GET(request: Request, { params }: { params: { handle: string } }) {
+export async function GET(request: Request, context: { params: Promise<{ handle: string }> }) {
+  const { handle: rawHandle } = await context.params;
   // Apple ct tokens: keep it short, lowercase alphanumeric + underscore, max ~40 chars.
-  const handle = String(params.handle ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 32) || 'unknown';
+  const handle = String(rawHandle ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 32) || 'unknown';
   const ct = `cr_${handle}`;
   const dest = `https://apps.apple.com/us/app/gary-ai/id6751238914?ppid=${PPID}&ct=${ct}`;
   const user_agent = request.headers.get('user-agent');
