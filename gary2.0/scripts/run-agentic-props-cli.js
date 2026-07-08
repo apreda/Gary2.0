@@ -10,7 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 // Dynamic imports after env is loaded (so geminiService gets correct proxy URL)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
-const { getPropsConstitution, applyPropsPerGameConstraint } = await import('../src/services/agentic/propsSharedUtils.js');
+const { getPropsConstitution, applyPropsPerGameConstraint, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
 
 const defaultArgv = process.argv.slice(2);
@@ -406,22 +406,20 @@ export async function runAgenticPropsCli({
             };
           });
 
-          // (C) ODDS RECONCILIATION VISIBILITY: matched picks now carry the real BDL price
-          // (set in the map above). Picks with NO matching BDL line keep the model's odds but
-          // are FLAGGED _oddsUnverified — surfaced here, NOT dropped, to avoid over-rejecting
-          // on a prop_type/line formatting mismatch. (Flip to a hard drop once live runs
-          // confirm the unverified rate is low.) Only the truly price-less (odds == null,
-          // model + BDL both missing — the rare ~1/768 case) is dropped.
+          // (C) ODDS HARD GATE (F-5, Jul 5 2026 audit): a price users can bet must exist at
+          // a book. The Jul 5 audit measured 25-40% of stored props/day carrying model-quoted
+          // odds that matched no BDL line — those shipped fictional prices. Per this block's
+          // original design note ("flip to a hard drop once live runs confirm"), unverified
+          // odds are now DROPPED, not flagged.
           {
             const beforeOdds = result.picks.length;
             result.picks = result.picks.filter(p => {
               if (p.odds == null) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} — no price at all (model + BDL both missing)`); return false; }
+              if (p._oddsUnverified) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} @ ${p.odds} — no BDL line matched the pick (model-quoted price)`); return false; }
               return true;
             });
             const droppedOdds = beforeOdds - result.picks.length;
-            if (droppedOdds > 0) console.log(`[Props CLI] Odds gate dropped ${droppedOdds} price-less pick(s)`);
-            const unverifiedOdds = result.picks.filter(p => p._oddsUnverified).length;
-            if (unverifiedOdds > 0) console.warn(`[Props CLI] ⚠️ ${unverifiedOdds} pick(s) kept MODEL odds — no BDL line matched (flagged _oddsUnverified for review)`);
+            if (droppedOdds > 0) console.log(`[Props CLI] Odds gate dropped ${droppedOdds} pick(s) without a verifiable book price`);
           }
 
           // Apply 2-per-game cap + Gary Specials correlation for every sport.
@@ -558,7 +556,9 @@ export async function runAgenticPropsCli({
         });
       }
 
-      const mergedPicks = [...existingPicks, ...validPicks];
+      // F-5: strip pipeline-internal flags (_oddsUnverified, _statAuditWarnings, …) at the
+      // storage boundary — existing rows too, so the day's row self-cleans on each write.
+      const mergedPicks = [...existingPicks, ...validPicks].map(stripInternalFields);
       
       // Use upsert instead of delete-then-insert (atomic, race-safe)
       const { error: upsertError } = await supabase

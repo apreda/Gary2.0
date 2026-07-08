@@ -70,17 +70,17 @@ fileprivate struct HubHead: View {
             Rectangle().fill(GaryColors.gold.opacity(0.25)).frame(height: 1)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title.uppercased())
-                    .font(HubFont.kicker(12)).tracking(1.6)
+                    .font(HubFont.kicker(13.5)).tracking(1.6)
                     .foregroundStyle(GaryColors.gold)
                 if let count, count > 0 {
                     Text("\(count)")
-                        .font(HubFont.data(11.5))
+                        .font(HubFont.data(13))
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 Spacer(minLength: 0)
                 if let sub, !sub.isEmpty {
                     Text(sub.uppercased())
-                        .font(HubFont.kicker(9.5)).tracking(0.8)
+                        .font(HubFont.kicker(11)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                 }
@@ -506,30 +506,6 @@ struct HubView: View {
         (todayBoard?.board ?? []).filter { ($0.league ?? "").uppercased() == sel.label }
     }
 
-    /// The slate panel's countdown target (founder, Jul 6). WC: the day's
-    /// BIGGEST match (pipeline rank-1 big game, e.g. USA @ Belgium) — the
-    /// tournament runs on marquee moments. MLB: the FIRST game of the day —
-    /// a 15-game slate rarely has one game that owns the night.
-    private var slateCountdown: (title: String, date: Date)? {
-        let now = Date()
-        if sel == .wc,
-           let bg = (todayBoard?.big_games ?? [])
-               .filter({ ($0.league ?? "").uppercased() == "WC" })
-               .sorted(by: { $0.rank < $1.rank })
-               .first(where: { (parseISO8601($0.commence_time ?? "") ?? .distantPast) > now }),
-           let d = parseISO8601(bg.commence_time ?? "") {
-            return ((bg.matchup ?? "").uppercased(), d)
-        }
-        let next = slateRows
-            .compactMap { r -> (Date, TomorrowBoardRow)? in
-                guard let d = parseISO8601(r.commence_time ?? ""), d > now else { return nil }
-                return (d, r)
-            }
-            .min { $0.0 < $1.0 }
-        guard let next else { return nil }
-        return ("\(next.1.away_abbr ?? "?") @ \(next.1.home_abbr ?? "?")", next.0)
-    }
-
     // ---- the beats (the long tail, in human sections) ----
 
     private struct Beat: Identifiable {
@@ -604,10 +580,6 @@ struct HubView: View {
                     hubError
                 } else {
                     if !slateRows.isEmpty {
-                        // THE SLATE panel (founder, Jul 5: the Tomorrow-page
-                        // masthead earns a daily spot here too) — the day's
-                        // shape in one card; the strip below carries the games.
-                        HubSlatePanel(rows: slateRows, countdown: slateCountdown)
                         HubSlateStrip(rows: slateRows) { r in
                             gameSheet = HubGameSel(row: r)
                         }
@@ -1069,8 +1041,6 @@ fileprivate struct HubMasthead: View {
             }
 
             HStack(spacing: 8) {
-                // Date + count moved into HubSlatePanel (Jul 5) — saying them
-                // twice two blocks apart failed the duplication rule.
                 Spacer()
                 if let r = record7 {
                     let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
@@ -1163,94 +1133,6 @@ fileprivate func hubSideLabel(_ abbr: String?, _ team: String?) -> String {
     if let a = abbr, !a.isEmpty { return a }
     guard let t = team, !t.isEmpty else { return "—" }
     return String(t.uppercased().filter { $0.isLetter }.prefix(3))
-}
-
-/// THE SLATE — the Tomorrow-page masthead, day-aware for today: Bebas date,
-/// then one mono line with the count, what's live, and what's next.
-fileprivate struct HubSlatePanel: View {
-    let rows: [TomorrowBoardRow]
-    var countdown: (title: String, date: Date)? = nil
-    @ObservedObject private var live = LiveScoreCache.shared
-
-    /// "IN 5H 42M" / "IN 42M" — minutes are plenty; a ticking second hand
-    /// on a slate panel is noise (same call as the Tomorrow clock removal).
-    private static func inClock(to d: Date, from now: Date) -> String {
-        let mins = max(0, Int(d.timeIntervalSince(now) / 60))
-        return mins >= 60 ? "IN \(mins / 60)H \(mins % 60)M" : "IN \(mins)M"
-    }
-
-    private var dateLine: String {
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEEE, MMMM d"
-        return f.string(from: Date())
-    }
-
-    private func matchup(_ r: TomorrowBoardRow) -> String {
-        "\(r.away_team ?? r.away_abbr ?? "?") @ \(r.home_team ?? r.home_abbr ?? "?")"
-    }
-
-    private var meta: String {
-        let now = Date()
-        var bits = ["\(rows.count) \(rows.count == 1 ? "GAME" : "GAMES")"]
-        let liveCount = rows.filter { live.status(forMatchup: matchup($0))?.isLive == true }.count
-        if liveCount > 0 { bits.append("\(liveCount) LIVE NOW") }
-        let next = rows
-            .compactMap { r -> (Date, TomorrowBoardRow)? in
-                guard let d = parseISO8601(r.commence_time ?? ""), d > now else { return nil }
-                return (d, r)
-            }
-            .min { $0.0 < $1.0 }
-        // (The upcoming game itself lives on the gold countdown line now —
-        // naming it here too failed the duplication rule.)
-        if next == nil, liveCount == 0 {
-            bits.append("ALL DONE")
-        }
-        return bits.joined(separator: " · ")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("THE SLATE")
-                .font(GaryFonts.mono(10, bold: true)).tracking(2)
-                .foregroundStyle(GaryColors.gold)
-            Text(dateLine)
-                .font(GaryFonts.display(30))
-                .foregroundStyle(GaryColors.warmWhite)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .padding(.top, 5)
-            Text(meta)
-                .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
-                .foregroundStyle(.white.opacity(0.66))
-                .lineLimit(1).minimumScaleFactor(0.8)
-                .padding(.top, 7)
-            if let countdown {
-                TimelineView(.periodic(from: .now, by: 60)) { ctx in
-                    Text("\(countdown.title) \(Self.inClock(to: countdown.date, from: ctx.date))")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
-                        .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                }
-                .padding(.top, 4)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(GaryColors.warmWhite.opacity(0.03))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
-        )
-        .overlay(alignment: .topTrailing) {
-            RadialGradient(colors: [GaryColors.gold.opacity(0.18), .clear],
-                           center: .topTrailing, startRadius: 0, endRadius: 150)
-                .frame(width: 200, height: 200)
-                .allowsHitTesting(false)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .padding(.horizontal, 16)
-    }
 }
 
 fileprivate struct HubSlateStrip: View {
@@ -1743,7 +1625,7 @@ fileprivate struct HubStreakWatch: View {
             let shown = showAll ? all : Array(all.prefix(10))
             ForEach(Array(shown.enumerated()), id: \.offset) { i, r in
                 streakRow(r)
-                if i < shown.count - 1 { HubRule(inset: 76) }
+                if i < shown.count - 1 { HubRule(inset: 84) }
             }
             if all.count > 10 {
                 HubSeeAllButton(isOpen: showAll, total: all.count) {
@@ -1757,38 +1639,42 @@ fileprivate struct HubStreakWatch: View {
     @ViewBuilder private func streakRow(_ r: StreakRow) -> some View {
         let b = badge(r)
         let game = matchup(r)
-        let row = HStack(spacing: 12) {
+        // The next-game tag gets its own line now (founder, Jul 8: cramming
+        // "AT ORIOLES · 6:35 PM ET" into the trailing slot beside the name
+        // truncated both it and the detail line to an unreadable stub).
+        let row = HStack(alignment: .center, spacing: 12) {
             Text(b.text)
-                .font(HubFont.data(13))
+                .font(HubFont.data(16))
                 .foregroundStyle(b.color)
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(width: 46, alignment: .leading)
-            VStack(alignment: .leading, spacing: 3) {
+                .frame(width: 54, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(r.subject ?? "")
-                    .font(HubFont.body(14, .semibold))
+                    .font(HubFont.body(17, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
                 if let d = cleanDetail(r, badgeText: b.text) {
                     Text(d)
-                        .font(HubFont.body(11.5))
+                        .font(HubFont.body(13.5))
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
-            }
-            Spacer(minLength: 8)
-            if let next = r.next_game, !next.isEmpty {
-                Text(next.uppercased())
-                    .font(HubFont.data(9.5, .semibold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    .lineLimit(1).minimumScaleFactor(0.75)
-                if game != nil {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.4))
+                if let next = r.next_game, !next.isEmpty {
+                    Text(next.uppercased())
+                        .font(HubFont.data(12.5, .semibold))
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        .lineLimit(1).minimumScaleFactor(0.85)
+                        .padding(.top, 1)
                 }
             }
+            Spacer(minLength: 8)
+            if game != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
         }
-        .padding(.horizontal, 18).padding(.vertical, 10)
+        .padding(.horizontal, 18).padding(.vertical, 13)
         if let game {
             Button { onTapGame(game) } label: { row.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
@@ -2077,7 +1963,8 @@ fileprivate struct HubTugRow: View {
     }
 }
 
-/// First-inning (NRFI/YRFI): recent first innings as scoreless-vs-run dots.
+/// First-inning (NRFI/YRFI): recent first innings as scoreless-vs-run dots
+/// (green = they scored, red = scoreless).
 fileprivate struct HubDotsRow: View {
     let s: Signal
     let kicker: String
@@ -2120,7 +2007,7 @@ fileprivate struct HubDotsRow: View {
                 .font(HubFont.data(9.5, .semibold)).foregroundStyle(.white.opacity(0.62))
                 .frame(width: 34, alignment: .leading)
             ForEach(Array(seq.enumerated()), id: \.offset) { _, v in
-                Circle().fill(v == 0 ? green.opacity(0.85) : red.opacity(0.5)).frame(width: 7, height: 7)
+                Circle().fill(v == 0 ? red.opacity(0.5) : green.opacity(0.85)).frame(width: 7, height: 7)
             }
             Spacer(minLength: 6)
             Text("\(seq.filter { $0 == 0 }.count)/\(seq.count) clean")
@@ -2370,11 +2257,11 @@ fileprivate struct HubGameSheet: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 26) {
                 header
                 if edges.isEmpty {
                     Text("No edges posted for this game yet — they land as lineups and matchups firm up.")
-                        .font(HubFont.body(12.5)).foregroundStyle(.white.opacity(0.62))
+                        .font(HubFont.body(15)).foregroundStyle(.white.opacity(0.62))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 18)
                 } else {
@@ -2415,40 +2302,40 @@ fileprivate struct HubGameSheet: View {
     private func fmtML(_ v: Double) -> String { v > 0 ? "+\(Int(v))" : "\(Int(v))" }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             if ls?.isLive == true {
-                HubKicker(text: "Live", size: 10.5, color: GaryColors.win)
+                HubKicker(text: "Live", size: 12.5, color: GaryColors.win)
             } else if ls?.isFinal == true {
-                HubKicker(text: "Final", size: 10.5, color: .white.opacity(0.62))
+                HubKicker(text: "Final", size: 12.5, color: .white.opacity(0.62))
             } else {
-                HubKicker(text: "Tonight", size: 10.5, color: GaryColors.gold)
+                HubKicker(text: "Tonight", size: 12.5, color: GaryColors.gold)
             }
             Text("\(row.away_team ?? hubSideLabel(row.away_abbr, nil)) @ \(row.home_team ?? hubSideLabel(row.home_abbr, nil))")
-                .font(HubFont.display(24))
+                .font(HubFont.display(30))
                 .foregroundStyle(GaryColors.warmWhite)
                 .fixedSize(horizontal: false, vertical: true)
             if let ls, ls.isLive || ls.isFinal {
                 HStack(spacing: 10) {
                     Text(ls.scoreLine ?? "")
-                        .font(HubFont.data(15))
+                        .font(HubFont.data(17))
                         .foregroundStyle(.white.opacity(0.95))
                     if ls.isLive, let det = ls.detail, !det.isEmpty {
                         Text("▶ \(det.uppercased())")
-                            .font(HubFont.data(11, .medium))
+                            .font(HubFont.data(13, .medium))
                             .foregroundStyle(GaryColors.win)
                     }
                 }
             } else {
                 HStack(spacing: 8) {
                     Text(TomorrowView.etTime(row.commence_time))
-                        .font(HubFont.data(11, .medium))
+                        .font(HubFont.data(13.5, .medium))
                         .foregroundStyle(.white.opacity(0.7))
                     if let v = row.venue, !v.isEmpty {
-                        Text(v).font(HubFont.body(11.5)).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
+                        Text(v).font(HubFont.body(13.5)).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
                     }
                 }
                 // The lines, quietly (meta, never the headline).
-                HStack(spacing: 18) {
+                HStack(spacing: 22) {
                     if let t = row.total { numberStat("O/U", HubFmt.stat(t)) }
                     if let sp = row.spread {
                         numberStat("Spread \(hubSideLabel(row.home_abbr, row.home_team))", HubFmt.stat(sp))
@@ -2457,29 +2344,30 @@ fileprivate struct HubGameSheet: View {
                         numberStat("ML", "\(hubSideLabel(row.home_abbr, row.home_team)) \(fmtML(mh)) · \(hubSideLabel(row.away_abbr, row.away_team)) \(fmtML(ma))")
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 6)
             }
         }
         .padding(.horizontal, 18)
     }
 
     private func numberStat(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label.uppercased()).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
-            Text(value).font(HubFont.data(12)).foregroundStyle(.white.opacity(0.92))
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased()).font(HubFont.kicker(10.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
+            Text(value).font(HubFont.data(15)).foregroundStyle(.white.opacity(0.92))
         }
     }
 
     private var cta: some View {
         Button { onClose(); onViewGame(abbrMatchup) } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Text("VIEW GAME ON PICKS")
                 Image(systemName: "arrow.right")
             }
-            .font(HubFont.data(12))
-            .foregroundStyle(GaryColors.ink)
-            .frame(maxWidth: .infinity).padding(.vertical, 13)
-            .background(Capsule().fill(GaryColors.gold))
+            .font(HubFont.data(15))
+            .foregroundStyle(GaryColors.gold)
+            .frame(maxWidth: .infinity).padding(.vertical, 16)
+            .background(Capsule().fill(Color.black))
+            .overlay(Capsule().stroke(GaryColors.gold, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 18)

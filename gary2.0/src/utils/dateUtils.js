@@ -131,6 +131,45 @@ export function mlbSeason() {
   return year;
 }
 
+/**
+ * Truthful one-line description of the US sports calendar for a given date.
+ *
+ * Feeds the grounding Freshness Protocol's "Season Context" line. Before
+ * Jul 8 2026 that line hardcoded "(NBA/NHL mid-season, NFL playoffs)" — built
+ * once from the NBA calendar and false from roughly February onward, so every
+ * summer grounding call carried January misdirection. Month-derived and
+ * deliberately coarse: its job is to orient the search model toward the right
+ * leagues, not to be a schedule.
+ *
+ * @param {Date} date - The date to describe (defaults to now)
+ * @returns {string} e.g. "MLB regular season; NBA and NHL off-season; ..."
+ */
+export function describeSportsCalendar(date = new Date()) {
+  const month = date.getMonth(); // 0-indexed
+  const byMonth = [
+    'NFL playoffs; NBA, NHL, and NCAAB mid-season; MLB off-season',                          // Jan
+    'NBA and NHL mid-season; NCAAB late season; Super Bowl early in the month; MLB spring training begins', // Feb
+    'NCAAB March Madness; NBA and NHL late regular season; MLB spring training',             // Mar
+    'MLB regular season opens; NBA and NHL playoffs begin; NFL draft',                       // Apr
+    'MLB regular season; NBA and NHL playoffs',                                              // May
+    'MLB regular season; NBA Finals and NHL Stanley Cup Final conclude',                     // Jun
+    'MLB regular season (All-Star break mid-month); NBA and NHL off-season',                 // Jul
+    'MLB regular season; NFL training camp and preseason',                                   // Aug
+    'NFL and college football underway; MLB pennant races',                                  // Sep
+    'MLB postseason; NFL and NCAAF mid-season; NBA and NHL seasons open',                    // Oct
+    'NFL and NCAAF; NBA and NHL early season; NCAAB opens',                                  // Nov
+    'NFL late season; NBA and NHL; NCAAB non-conference; college bowl season',               // Dec
+  ];
+  let context = byMonth[month];
+  // 2026 FIFA World Cup — real window only (Jun 11 – Jul 19, 2026, North America)
+  const wcStart = new Date('2026-06-11T00:00:00');
+  const wcEnd = new Date('2026-07-19T23:59:59');
+  if (date >= wcStart && date <= wcEnd) {
+    context += '; 2026 FIFA World Cup in North America (Jun 11 – Jul 19, 2026)';
+  }
+  return context;
+}
+
 // formatGameTime removed — dead export (3 other files define their own local versions)
 
 /**

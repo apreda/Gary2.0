@@ -1,4 +1,5 @@
 import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from './flashAdvisor.js';
@@ -134,15 +135,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // 3.5 Flash outperforms 3.1 Pro on agentic+coding benchmarks while costing
   // 25% less, so the previous sport-specific "use Pro for MLB / playoffs"
   // branching is no longer needed — every sport gets the same upgraded brain.
-  const primaryModel = modelOverride
-    ? modelOverride
-    : isPropsMode
-      ? GEMINI_FLASH_MODEL
-      : GEMINI_PRO_MODEL;
+  // F-9 (Jul 5 2026) upgraded props to the 3.5 brain estimating ~$0.04/game;
+  // measured reality (Jul 8 cost audit): ~$0.35-0.45/game ≈ half the monthly
+  // LLM bill — and the lane showed NO quality gain on the big brain (36.6%
+  // over 82 picks Jul 5-7 vs 43.1% over 355 on Tier 2 with the debiased
+  // prompts, Jun 25-Jul 4). Founder reverted props to the documented Tier 2
+  // on Jul 8; props win-rate stays on the nightly watch — one-line re-upgrade
+  // if the lane sags.
+  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? GEMINI_FLASH_MODEL : GEMINI_PRO_MODEL);
   const modelLabel = modelOverride
     ? `OVERRIDE: ${modelOverride}`
     : isPropsMode
-      ? 'Flash 3 (props)'
+      ? 'Flash 3 (props — Tier 2)'
       : 'Flash 3.5 (main)';
   console.log(`[Orchestrator] Starting ${sport} — ${modelLabel} + Flash 3 (research)`);
 
@@ -283,7 +287,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
 
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — use them as your foundation. If something stands out or needs deeper context, you can investigate further with your own tools.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nYou MUST still investigate this matchup yourself using fetch_stats. The briefing gives you a head start — now verify key claims, check stats the briefing flagged, and use additional calls only where you need critical evidence to complete your synthesis.${caseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
+      // Jul 8 2026 cost audit: this contract used to ORDER Gary to keep
+      // investigating on his own even though every Flash-covered token is
+      // already seeded into the dedup set — those re-requests return nothing
+      // new, so the order guaranteed wasted big-brain round-trips every game.
+      // The briefing IS the investigation (the December design); Gary fetches
+      // only what is genuinely missing.
+      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — this briefing IS your investigation. Everything it covers is already fetched; re-requesting those stats returns nothing new.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nUse your own fetch_stats calls ONLY where a specific fact you need is genuinely missing from the briefing and the scout report. If nothing is missing, go straight to your Pass 1 synthesis.${caseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
       nextMessageToSend = userMessage;
@@ -723,6 +733,24 @@ INVESTIGATION COMPLETE`;
           const rawPicks = args.picks || [];
           console.log(`[Orchestrator] 🎯 finalize_props called with ${rawPicks.length} picks`);
 
+          // F-3 (Jul 5 2026 audit): an explicit pass (no_play + empty picks) is a
+          // legitimate decision, not a malformed call — do NOT retry it into forced volume.
+          if (isExplicitPropsPass(args)) {
+            console.log(`[Orchestrator] 🚫 PROPS PASS — Gary passed on this board${args.pass_reason ? `: "${args.pass_reason}"` : ''}`);
+            return {
+              picks: [],
+              passed: true,
+              passReason: args.pass_reason || null,
+              toolCallHistory,
+              iterations: iteration,
+              homeTeam,
+              awayTeam,
+              sport,
+              rawAnalysis: message.content || '',
+              isProps: true
+            };
+          }
+
           // Validate picks have required fields
           const validPicks = rawPicks.filter(p => {
             if (!p.player || !p.bet || !p.rationale) {
@@ -736,7 +764,7 @@ INVESTIGATION COMPLETE`;
             console.warn(`[Orchestrator] ⚠️ finalize_props had 0 valid picks — requesting retry`);
             pendingFunctionResponses.push({
               name: functionName,
-              content: JSON.stringify({ error: 'Your picks are missing required fields (player, bet, rationale). Call finalize_props again with complete pick data.' })
+              content: JSON.stringify({ error: 'Your picks are missing required fields (player, bet, rationale). Call finalize_props again — either with complete pick data, or with an empty picks array plus no_play: true and a pass_reason if you are passing on this board.' })
             });
             continue;
           }

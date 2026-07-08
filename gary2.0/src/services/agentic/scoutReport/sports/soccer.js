@@ -2,11 +2,14 @@
  * Soccer (2026 FIFA World Cup) scout report builder. Mirrors sports/mlb.js shape:
  * returns { text, verifiedTaleOfTape, injuries, tokenMenu }.
  *
- * World Cup injuries / suspensions / confirmed lineups / weather come from Flash
- * grounding (no structured injury feed), so injuries is empty here by design.
+ * Suspensions/card status and day-of team news come from the SAME-DAY WIRE
+ * grounding call below (no structured feed exists for those); injuries and
+ * confirmed lineups are structured (see AVAILABILITY TIMING), so injuries is
+ * empty here by design — the structured timing data lives in that section.
  */
 import * as wc from '../../../fifaWorldCupService.js';
 import * as apiFootball from '../../../apiFootballService.js';
+import { geminiGroundingSearch } from '../shared/grounding.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 
@@ -129,7 +132,7 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const awayId = game.away_team_data?.id ?? game.away_team?.id ?? null;
   console.log(`[Scout Report] Building WC report: ${homeTeam} vs ${awayTeam}`);
 
-  const [standings, homeAgg, awayAgg, futures, homeForm, awayForm, homeTeamStats, awayTeamStats, h2h, homeSquad, awaySquad] = await Promise.all([
+  const [standings, homeAgg, awayAgg, futures, homeForm, awayForm, homeTeamStats, awayTeamStats, h2h, homeSquad, awaySquad, homeAvail, awayAvail, sameDayWire] = await Promise.all([
     wc.getGroupStandings().catch(() => []),
     aggregateRateStats(homeId),
     aggregateRateStats(awayId),
@@ -149,6 +152,29 @@ export async function buildSoccerScoutReport(game, options = {}) {
     // the injury list. Game picks were team-only before this (user call, Jun 18).
     apiFootball.getSquadStats(homeTeam).catch(() => ({})),
     apiFootball.getSquadStats(awayTeam).catch(() => ({})),
+    // NBA-semantics availability timing (Jul 7): FRESH vs PRICED IN computed
+    // from real starting lineups, so a long-known absence can never read as
+    // "tonight's edge" again.
+    apiFootball.getAvailabilityTiming(homeTeam, 3).catch(() => []),
+    apiFootball.getAvailabilityTiming(awayTeam, 3).catch(() => []),
+    // SAME-DAY WIRE (Jul 8 2026, fan-parity doctrine — see
+    // feedback-grounding-fan-parity.md): grounding's job is everything a fan
+    // following this match would know that no stat token captures —
+    // storylines, squad/roster news, fan & media sentiment, team/player
+    // reputation, travel-as-story, suspensions/card status (no structured feed
+    // exists for those). Tight to dated, concrete facts — mirrors MLB's Jun 29
+    // "breaking news only" design so stale pre-tournament narrative can't
+    // bleed into every report. "Trade rumors" has no literal analogue for a
+    // national team; translated honestly to squad/call-up/roster news.
+    geminiGroundingSearch(
+      `${awayTeam} vs ${homeTeam} FIFA World Cup 2026 TODAY — the storylines and fan-known context around ` +
+      `this match: squad and roster news (call-ups, late withdrawals, fitness doubts), suspensions and ` +
+      `yellow-card watches, what fans and pundits are saying about each team's tournament so far, team and ` +
+      `player reputations heading into this match, the travel and schedule context between host cities, and ` +
+      `venue conditions (weather, altitude, kickoff time). Report only concrete, dated facts. ` +
+      `do NOT include expert picks, betting predictions, or projections. If there is no fresh news, say so briefly.`,
+      { thinkingLevel: 'low', maxTokens: 1500 }
+    ).then(r => r?.data || '').catch(() => ''),
   ]);
 
   const homeStand = standingsFor(standings, homeId);
@@ -206,6 +232,8 @@ export async function buildSoccerScoutReport(game, options = {}) {
     return `${team} — last ${f.played} internationals: ${f.w}W-${f.d}D-${f.l}L, ${f.gfPerMatch} GF/match, ${f.gaPerMatch} GA/match. Recent: ${recent}`;
   };
   // Per-match performance (xG, possession, shots) aggregated over recent fixtures.
+  // The sample's fixtures render inline — an average carries the opposition it
+  // was earned against, so the tape never shows a naked aggregate.
   const statsLine = (team, ts) => {
     if (!ts) return null;
     const bits = [];
@@ -214,7 +242,11 @@ export async function buildSoccerScoutReport(game, options = {}) {
     if (ts.shots != null) bits.push(`${ts.shots} shots/match (${ts.shots_on_target ?? '?'} on target)`);
     if (ts.corners != null) bits.push(`${ts.corners} corners/match`);
     if (ts.pass_accuracy != null) bits.push(`${ts.pass_accuracy}% pass accuracy`);
-    return bits.length ? `${team} (last ${ts.sampleMatches}): ${bits.join(', ')}` : null;
+    if (!bits.length) return null;
+    const sample = ts.sampleOpponents?.length
+      ? `last ${ts.sampleMatches} — ${ts.sampleOpponents.join(', ')}`
+      : `last ${ts.sampleMatches}`;
+    return `${team} (${sample}): ${bits.join(', ')}`;
   };
   const homeStatsLine = statsLine(homeTeam, homeTeamStats);
   const awayStatsLine = statsLine(awayTeam, awayTeamStats);
@@ -284,6 +316,23 @@ export async function buildSoccerScoutReport(game, options = {}) {
     (homeKeyPlayers || awayKeyPlayers)
       ? `\n### KEY PLAYERS (national-team season totals — goals/assists/shots in caps; NOT this-match form, and availability must be confirmed against injuries + lineups before leaning on any single name)\n${[homeKeyPlayers, awayKeyPlayers].filter(Boolean).join('\n')}`
       : '',
+    (() => {
+      // NBA-semantics timing tags: an absence's AGE decides whether it can inform
+      // the pick. FRESH = started the team's most recent match, flagged since;
+      // PRICED IN = already out of the XI last match — the line has eaten it.
+      const availLine = (team, rows) => {
+        if (!rows?.length) return null;
+        return `${team}: ${rows.map(r =>
+          `${r.player} (${r.reason || r.type || 'flagged'}) — ${r.tag}${r.tag === 'PRICED IN' ? ` (already missed last ${r.missedOfLastN})` : ' (started their last match)'}`).join('; ')}`;
+      };
+      const lines = [availLine(homeTeam, homeAvail), availLine(awayTeam, awayAvail)].filter(Boolean);
+      if (!lines.length) return '';
+      return `\n### AVAILABILITY TIMING (computed from real starting lineups — read the TAGS)
+FRESH = started this team's most recent match and is flagged now — the market may still be settling the news, and the public can over- or under-move a price on a big name.
+PRICED IN = already missing from the XI in their last match(es) — every book set tonight's line knowing it; the team you are evaluating IS the team without them.
+${lines.join('\n')}
+Grounded availability news adds day-of confirmations on top of these tags. Suspensions — including yellow-card bans — are announced in advance and priced the moment they're known.`;
+    })(),
     h2h?.meetings?.length
       ? `\n### HEAD TO HEAD (recent meetings)\n${h2h.meetings.map(m => `${m.date}: ${m.home} ${m.score} ${m.away} (${m.league})`).join('\n')}`
       : '',
@@ -306,7 +355,7 @@ export async function buildSoccerScoutReport(game, options = {}) {
     game.soccer_total && Number(game.soccer_total.line) >= 1.0 && Number(game.soccer_total.line) <= 5.0
       ? `Total goals (main line): ${game.soccer_total.line} — Over ${game.soccer_total.over} / Under ${game.soccer_total.under}`
       : 'Total goals: NOT AVAILABLE — do not pick or cite a total',
-    `\n(Injuries, suspensions, confirmed lineups, and weather/altitude come from Flash grounding for this match.)`,
+    `\n### SAME-DAY WIRE (grounded — storylines, squad/suspension news, fan & media context)\n${sameDayWire || 'No same-day wire news available for this match.'}`,
   ].filter(Boolean).join('\n');
 
   const injuries = { home: [], away: [] };

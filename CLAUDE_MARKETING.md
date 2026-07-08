@@ -32,9 +32,18 @@
 
 ## Accounts & Handles
 - X: @BetwithGary (VERIFIED ✓ blue check)
-- Instagram: @betwithgary.ai (on hold)
+- Instagram: @betwithgary.ai (bio + profile refreshed Jul 5 2026; link editing is mobile-only — add betwithgary.ai link from the phone app)
+- Threads: @betwithgary.ai (LIVE Jul 5 2026 — public profile, bio + betwithgary.ai link set, bear avatar inherited from IG)
+- YouTube: "Gary A.I." @betwithgary (LIVE Jul 5 2026 — brand channel on APreda31@gmail.com, channel id UC_jbOagwn4yEWeam16VGMsw; avatar/banner still to upload)
+- TikTok: NOT created yet — Adam must sign up (fastest: Continue with Google), then profile setup can be finished for him
 - Website: betwithgary.ai
 - App Store: https://apps.apple.com/us/app/gary-ai/id6751238914
+
+## Ops notes (Jul 5 2026)
+- Bio on IG/Threads = MIRROR OF THE LIVE X BIO (Adam's call Jul 5 after two bad rewrites; keep all three identical, change X first): "AI that calls every game. MLB, NBA, NFL, NHL, college. I post my plays before start and grade every one, win or loss. Free in the app below."
+- X API spend cap set to $100/billing cycle in console.x.com (was Unlimited).
+- x-api-probe + other dead edge functions confirmed gone from Supabase project xuttubsfgdcjfgmskcol.
+- Daily engagement sheet: scheduled Cowork task "gary-engagement-sheet-daily" regenerates the sheet ~10:17am ET and pings Adam. NEVER auto-post sheet drafts via API — X bans automated unsolicited replies (see engagement-sheet function header).
 
 ## POTD Record
 **System of record: the Supabase `social_post_log` table** (see `SESSION_HANDOFF.md`). Don't keep a static log here — it goes stale (this one had stopped at March). Pull the record live from Supabase instead.

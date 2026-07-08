@@ -353,9 +353,41 @@ function extractMainSpread(markets, ml = null) {
     const consistent = realistic.filter(l => homeFav ? l.homeValue <= 0 : l.homeValue >= 0);
     if (consistent.length) realistic = consistent; // keep band if ML/lines disagree (degenerate)
   }
-  // American-style half-goal lines only (-0.5, -1.5, -2.5 ...) — never a pushable whole
-  // line or an alt (-1.3, -0.8). If the book lists no clean half line, omit the spread
-  // (Gary leans on the 3-way ML for the side) rather than ship an odd number.
+  // UN-TRAP THE STRIPPED FAVORITE (Jul 7): when the favorite's 3-way ML is heavier
+  // than -200 the menu strips it, so the elected handicap is the ONLY way to back
+  // them — and knockout favorites most often win by exactly one goal, the one
+  // outcome -1.5 can't cash (Colombia/France/Argentina -1.5 all died on one-goal
+  // wins in the R32/R16). Elect the LOWEST rung whose favorite side is still
+  // playable (not heavier than -200 — the same threshold as the strip), WHOLE
+  // lines included: AH -1.0 pushes on a one-goal win, and soccerGrading already
+  // settles pushes. Mega-favorites where nothing qualifies fall through to the
+  // classic election below.
+  if (ml && ml.home != null && ml.away != null) {
+    const homeFav = Number(ml.home) < Number(ml.away);
+    const favMl = Number(homeFav ? ml.home : ml.away);
+    if (favMl < -200) {
+      const expected = expectedAhFromMl(favMl);
+      const playable = realistic.filter(l => {
+        const mag = Math.abs(l.homeValue);
+        const cleanRung = Number.isInteger(mag * 2) && mag > 0; // halves and wholes, no -1.3/-0.75 alts
+        const favOdds = homeFav ? l.homeOdds : l.awayOdds;
+        return cleanRung && favOdds != null && favOdds >= -200
+          && (expected == null || mag <= expected + 1);
+      });
+      if (playable.length) {
+        playable.sort((a, b) => {
+          const ma = Math.abs(a.homeValue), mb = Math.abs(b.homeValue);
+          return ma !== mb ? ma - mb : juiceGap(a.homeOdds, a.awayOdds) - juiceGap(b.homeOdds, b.awayOdds);
+        });
+        return playable[0];
+      }
+    }
+  }
+  // American-style half-goal lines only (-0.5, -1.5, -2.5 ...) for the classic
+  // election — a pushable whole line is elected ONLY via the stripped-favorite
+  // path above, never an alt (-1.3, -0.8). If the book lists no clean half line,
+  // omit the spread (Gary leans on the 3-way ML for the side) rather than ship
+  // an odd number.
   const half = realistic.filter(l => isHalfGoalLine(l.homeValue));
   if (half.length === 0) return null;
   // ML-MAGNITUDE ANCHOR: the main handicap must track the moneyline's implied

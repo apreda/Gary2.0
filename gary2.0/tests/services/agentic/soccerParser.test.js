@@ -119,17 +119,19 @@ describe('soccer pick string is rebuilt clean from market data', () => {
     expect(out.pick).not.toMatch(/105\s*\+?105/); // odds not doubled
   });
 
-  it('asian handicap: unsigned prose handicap becomes a clean signed line from the market ("Cabo Verde +3.3 -160")', () => {
+  it('asian handicap: unsigned prose handicap becomes a clean signed line from the market ("Cabo Verde +3.25 -160")', () => {
+    // 3.3 → 3.25: the off-grid guard (0.25 grid) now rejects non-Asian lines like
+    // 3.3 by design — the fixture predates that guard. Quarter-lines are on-grid.
     const out = normalizePickFormat(
-      { pick: 'Cabo Verde 3.3 @ -160', rationale: RATIONALE },
+      { pick: 'Cabo Verde 3.25 @ -160', rationale: RATIONALE },
       'Spain', 'Cabo Verde', 'soccer_world_cup',
-      { soccer_spread: { homeValue: -3.3, homeOdds: 120, awayValue: 3.3, awayOdds: -160 } }
+      { soccer_spread: { homeValue: -3.25, homeOdds: 120, awayValue: 3.25, awayOdds: -160 } }
     );
     expect(out).not.toBeNull();
     expect(out.type).toBe('asian_handicap');
-    expect(out.handicap).toBe(3.3);
+    expect(out.handicap).toBe(3.25);
     expect(out.odds).toBe(-160);
-    expect(out.pick).toBe('Cabo Verde +3.3 -160');
+    expect(out.pick).toBe('Cabo Verde +3.25 -160');
     expect(out.pick).not.toContain('@');
   });
 

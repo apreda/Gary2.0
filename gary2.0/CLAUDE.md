@@ -19,37 +19,17 @@ Examples:
 
 Gary WILL follow explicit if/then rules — he takes instructions literally. If we write "Fast pace helps underdogs stay close," Gary will pick underdogs in fast-paced games without investigating whether it's true for THIS matchup. Never tell Gary what a factor means for the pick. Never assign point values to factors. Never label something as "edge." Gary investigates and concludes on his own.
 
-## LOCKED: Approved UI Designs (June 4, 2026)
+## Design Authority (rewritten July 7, 2026 — founder's call)
 
-User-approved and locked — do NOT restyle these surfaces without explicit direction,
-including while doing adjacent work. Tune-ups by request only.
-- **The Picks page** (TODAY + per-game pages): hero w/ score strip (FINAL SD 4 · PHI 6),
-  time-in-slot cards, full-size Prop Slip rows, GAME INTEL edges. "That design is perfect."
-- **Game Pick Card** (gold, CompactPickRow): eyebrow + matchup + "Gary's Take ›" +
-  gold pick chip with grey odds. Gold marks only the pick text and Gary's voice.
-- **Prop Pick Card + Prop Slip** (silver, CompactPropRow/PropSlipCard): silver twin of the
-  game card; OVER calls gold, UNDER calls silver; rows flip. THE RULE (final, June 5,
-  user-confirmed working): group props BY GAME — 2+ props from the SAME game share ONE
-  slip (scales to any count); a prop alone is its own card. Groups ride a HORIZONTAL
-  rail per league shelf (slip 344pt / card 308pt); automatic from the data. Winners
-  selection (selectPremiumProps) = straight confidence cut, top 5 per sport, NO per-game
-  cap (any per-game cap makes same-game pairs impossible by construction — the bug that
-  caused four rounds of churn). Slip eyebrow names the LEAGUE ("MLB · 2"), never "PROPS".
-  W/L letter capsules: leading (beside name) on Picks, trailing corner on Winners
-  (resultLetterTrailing). Team labels are mascot-short (Formatters.shortTeamName).
-  One shared back app-wide (PropSlipBack: GARY'S TAKE · The Numbers · The Read). The
-  Picks TODAY page's combined top-props slip is a user-approved exception (locked page).
-- **The Home front page** (HomeView, June 8 2026): opens on **Morning** (results-first — the
-  view users land on), with a three-pill state switcher **Morning · Pre-game · Live** (matte
-  capsule, gold active pill — NO "Auto"). Each state re-orders the same blocks. Morning:
-  scorecard (record / net flat stakes / best cash) → **Gary's form** (last-10 W/L pips +
-  streak chip + net·L10 + win rate) → last-night marquee → The Wire (market-pulse strip +
-  betting-angle rows + 𝕏-voice quotes) → Prop Box → Biggest cashes → The Receipts. Pre-game:
-  last-night strip → board + free pick → the slate → the Wire. Live: live tape → takeover
-  (score + base diamond + outs) → live board → in-game Wire → tonight strip. Pre-game/Live
-  ride `#if DEBUG` sample data until real picks/live games exist (never ships in release).
-  World Cup module is parked (it used to lead the page) — restore on request. User-approved:
-  "the Morning page is perfect, that is what I want users to see first."
+**No stored design rules, no templates — ever.** The founder has fully delegated
+design: the bar is "production-level, award-winning," and every part is designed from
+scratch to fit the app and its page. Do not keep, consult, or create design-spec
+files/rules (all prior ones were deleted on his order, July 7 2026); his reactions in
+the live conversation are the only design input.
+
+Behavior vs. visuals: prop-slip grouping and Winners selection logic
+(selectPremiumProps: straight confidence cut, no per-game cap) encode hard-won
+BEHAVIORAL rules — keep the behavior even when restyling the visuals.
 
 ## LOCKED: Injury Handling
 

@@ -113,7 +113,7 @@ export async function buildWcPropsAgenticContext(game, playerProps, options = {}
 
   const playerStats = [
     `WORLD CUP PLAYER PROPS — ${homeTeam} vs ${awayTeam}`,
-    `The % after each price is the market's IMPLIED probability — the strongest single player-level signal. Ground every pick in the player's role, minutes, and recent form, not the price alone. Favor attackers' shots/SoT and likely scorers' anytime-goal where form + role + price align.`,
+    `The % after each price is the market's IMPLIED probability — the strongest single player-level signal. Ground every pick in the player's role, minutes, and recent form, not the price alone. Every offered market is equally available — pick whichever prop your read of the match and the player actually supports.`,
     '',
     ...lines,
   ].join('\n');

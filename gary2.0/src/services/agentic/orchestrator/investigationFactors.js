@@ -105,21 +105,21 @@ export const INVESTIGATION_FACTORS = {
     SCHEDULE_QUALITY: ['NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH', 'NCAAF_VS_POWER_OPPONENTS']
   },
 
-  // MLB: 12 factor categories (consolidated from 17 — removed redundant tokens to cut Flash research cost)
-  // Merged: STANDINGS 4→1, RECENT_FORM 5→2, BASERUNNING into CATCHER, RISP into HITTING, REST into GAME_CONTEXT
+  // MLB: 8 factor categories (12 → 8, Jul 8 2026 cost audit; originally 17).
+  // Each factor is one fresh research chat, so fewer factors = fewer seeds —
+  // the merges below combine factors that investigate the same subject and
+  // keep the token UNION identical, so Flash loses zero data access.
+  // Merged Jul 8: starters (season + recent form), hitting (lineup + platoon),
+  // defense (catcher + team), environment (park/weather + odds/rest/preview).
   baseball_mlb: {
-    STARTING_PITCHING: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS', 'MLB_PITCH_TYPES_SP'],  // Per-pitch xwOBA/whiff%/chase% replaces blind grounding for pitcher quality
-    PITCHER_RECENT_FORM: ['MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING'],
+    PITCHING_MATCHUP: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS', 'MLB_PITCH_TYPES_SP', 'MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING'],  // Both starters: season line, per-pitch xwOBA/whiff%/chase%, last-5 form, platoon/venue scouting
     BULLPEN: ['MLB_BULLPEN', 'MLB_BULLPEN_WORKLOAD', 'MLB_CLOSER_RELIEVER_STATS'],
-    HITTING_LINEUP: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST'],  // Absorbed RISP + splits + Statcast contact quality
-    PLATOON_MATCHUPS: ['MLB_BATTER_VS_PITCHER', 'MLB_PITCH_TYPES_HITTERS'],  // BvP career history + per-pitch performance for top hitters
-    CATCHER_DEFENSE: ['MLB_CATCHER_DEFENSE', 'MLB_KEY_HITTERS'],  // Absorbed BASERUNNING (same tokens — SB stats + catcher arm)
-    TEAM_DEFENSE: ['MLB_TEAM_DEFENSE'],
-    STANDINGS_FORM: ['MLB_STANDINGS_STRUCTURED', 'MLB_RECENT_FORM_STRUCTURED', 'MLB_RECENT_RESULTS'],  // Consolidated: 1 standings + 2 form (was 4+5)
+    HITTING_MATCHUPS: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST', 'MLB_BATTER_VS_PITCHER', 'MLB_PITCH_TYPES_HITTERS'],  // Lineups + L/R splits + Statcast contact quality + BvP history + hitters-vs-pitch-types
+    DEFENSE: ['MLB_CATCHER_DEFENSE', 'MLB_TEAM_DEFENSE', 'MLB_KEY_HITTERS'],  // Catcher framing/arm + team DRS/OAA + SB threat (season SB stats ride MLB_KEY_HITTERS)
+    STANDINGS_FORM: ['MLB_STANDINGS_STRUCTURED', 'MLB_RECENT_FORM_STRUCTURED', 'MLB_RECENT_RESULTS'],
     H2H: ['H2H_HISTORY', 'MLB_H2H'],
-    PARK_WEATHER: ['MLB_PARK_FACTORS', 'MLB_WEATHER'],
     INJURIES: ['INJURIES', 'MLB_INJURIES'],
-    GAME_CONTEXT: ['MLB_ODDS', 'MLB_GAME_PREVIEW', 'MLB_TOP_PLAYERS', 'REST_SITUATION'],  // Absorbed ODDS + REST
+    GAME_ENVIRONMENT: ['MLB_PARK_FACTORS', 'MLB_WEATHER', 'MLB_ODDS', 'MLB_GAME_PREVIEW', 'MLB_TOP_PLAYERS', 'REST_SITUATION'],  // Park + conditions + betting context + rest
   },
   // WC AVAILABILITY (injuries/suspensions/lineups) has NO structured API
   // source — it is investigated via fetch_narrative_context grounding (see the
@@ -131,7 +131,11 @@ export const INVESTIGATION_FACTORS = {
     DEFENSE: ['TEAM_MATCH_STATS', 'GOALS_CONCEDED'],
     GROUP_CONTEXT: ['GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT'],
     H2H: ['H2H_HISTORY'],
-    AVAILABILITY: ['LINEUPS'], // confirmed starting XI (structured); injuries/suspensions via grounding
+    AVAILABILITY: ['LINEUPS'], // confirmed starting XI (structured) + injury timing (scout report AVAILABILITY TIMING); suspensions/cards via grounding only
+    // Jul 8 2026 (fan-parity doctrine): storylines, squad/roster news, fan &
+    // media sentiment, team/player reputation — the fan-knowledge layer no
+    // stat token carries. Own factor slot, same role as MLB's GAME_PREVIEW.
+    STORYLINES: ['GAME_PREVIEW'],
   },
 };
 

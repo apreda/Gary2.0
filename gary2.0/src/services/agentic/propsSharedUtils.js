@@ -262,3 +262,24 @@ export function applyPropsPerGameConstraint(picks, gameId) {
 
   return { constrainedPicks, droppedPicks, garySpecials };
 }
+
+/**
+ * F-3 (Jul 5 2026 audit): an explicit props pass — finalize_props called with
+ * no_play: true and NO picks. Distinct from a malformed empty call (no no_play),
+ * which still gets the retry treatment in agentLoop.
+ */
+export function isExplicitPropsPass(args) {
+  if (!args || args.no_play !== true) return false;
+  const picks = Array.isArray(args.picks) ? args.picks : [];
+  return picks.length === 0;
+}
+
+/**
+ * F-5 (Jul 5 2026 audit): pipeline-internal flags (underscore-prefixed keys such
+ * as _oddsUnverified / _statAuditWarnings) must never ship inside the user-facing
+ * pick JSON. Strip them at the storage boundary.
+ */
+export function stripInternalFields(pick) {
+  if (!pick || typeof pick !== 'object') return pick;
+  return Object.fromEntries(Object.entries(pick).filter(([k]) => !k.startsWith('_')));
+}

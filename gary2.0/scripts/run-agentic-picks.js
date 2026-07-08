@@ -127,6 +127,35 @@ const tokenToIosKey = {
  */
 async function fetchSportsbookOdds(sportKey, gameId, homeTeam, awayTeam) {
   if (!gameId) return null;
+  // WC (F-8a, Jul 5 2026 audit): soccer has no BDL odds endpoint — the generic call
+  // below hit the NBA v2 route and 401'd on every match, which is why every WC pick
+  // stored sportsbook_odds: null. Map the FIFA per-vendor odds rows instead.
+  if (sportKey === 'soccer_world_cup') {
+    try {
+      const rows = await fifaWorldCupService.getOdds({ matchIds: [gameId] });
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      const plausible = (o) => Number.isFinite(Number(o)) && Math.abs(Number(o)) <= 10000 ? Number(o) : null;
+      return rows
+        .map(r => ({
+          spread_home: r.spread_home_value ?? null,
+          spread_home_odds: plausible(r.spread_home_odds),
+          spread_away: r.spread_away_value ?? null,
+          spread_away_odds: plausible(r.spread_away_odds),
+          ml_home: plausible(r.moneyline_home_odds),
+          ml_away: plausible(r.moneyline_away_odds),
+          ml_draw: plausible(r.moneyline_draw_odds),
+          total: r.total_value ?? null,
+          total_over_odds: plausible(r.total_over_odds),
+          total_under_odds: plausible(r.total_under_odds),
+          displayName: r.vendor || 'Unknown',
+          vendor: r.vendor || 'Unknown'
+        }))
+        .filter(r => r.ml_home != null && r.ml_away != null);
+    } catch (err) {
+      console.warn(`[Sportsbook Odds] FIFA odds fetch failed for match ${gameId}: ${err.message}`);
+      return null;
+    }
+  }
   try {
     const rows = await ballDontLieService.getOddsV2({ game_ids: [gameId] }, sportKey);
     if (!Array.isArray(rows) || rows.length === 0) return null;
@@ -180,16 +209,19 @@ function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
     // BDL returns spread as string ("8.5") — convert to number for consistent storage
     const rawSpread = isHomePick ? row.spread_home : row.spread_away;
     const spreadNum = rawSpread != null ? parseFloat(rawSpread) : NaN;
+    // WC Draw picks: the pick-side "ml" is the draw price, not either team's.
+    const isDrawPick = pickLower.startsWith('draw');
     return {
     book: row.displayName || row.vendor || 'Unknown',
     spread: Number.isFinite(spreadNum) ? spreadNum : null,
     spread_odds: isHomePick ? row.spread_home_odds : row.spread_away_odds,
-    ml: isHomePick ? row.ml_home : row.ml_away,
+    ml: isDrawPick ? (row.ml_draw ?? null) : (isHomePick ? row.ml_home : row.ml_away),
     // Keep full data for Supabase storage
     spread_home: row.spread_home,
     spread_away: row.spread_away,
     ml_home: row.ml_home,
     ml_away: row.ml_away,
+    ...(row.ml_draw != null ? { ml_draw: row.ml_draw } : {}),
     total: row.total,
     total_over_odds: row.total_over_odds,
     total_under_odds: row.total_under_odds
@@ -1910,6 +1942,11 @@ async function storePicks(picks) {
   if (useTestTable) {
     console.log(`🧪 TEST MODE - Storing ${picks.length} picks to test_daily_picks table`);
     try {
+      // The row is keyed by date and shared across same-day runs, so stamp each
+      // pick with its arm — test queries separate arms by test_arm, not by the
+      // row's (last-writer-wins) test_name.
+      const armLabel = testName || process.env.GARY_MODEL_OVERRIDE || 'default';
+      for (const p of picks) p.test_arm = armLabel;
       const result = await picksService.storeTestPicks(picks, testName, `Test run at ${new Date().toISOString()}`);
       if (result.success) {
         console.log(`✅ TEST: Stored ${result.count} picks in test_daily_picks (mode: ${result.mode})`);

@@ -1146,7 +1146,7 @@ export async function buildMlbPropsAgenticContext(game, playerProps, options = {
     .map(inj => inj.player.toLowerCase())
     .filter(name => name.length > 2);
 
-  const availableCandidates = validatedCandidates.filter(c => {
+  let availableCandidates = validatedCandidates.filter(c => {
     const playerNameLower = c.player.toLowerCase();
     const isRisky = injuredPlayerNames.some(injName =>
       playerNameLower.includes(injName) || injName.includes(playerNameLower)
@@ -1177,6 +1177,23 @@ export async function buildMlbPropsAgenticContext(game, playerProps, options = {
   const playersWithSplits = Object.keys(playerSplits).length;
   const totalCandidates = availableCandidates.length;
   console.log(`[MLB Props Context] Player stats coverage: ${playersWithStats}/${totalCandidates} stats, ${playersWithLogs}/${totalCandidates} logs, ${playersWithSplits}/${totalCandidates} splits`);
+
+  // No-stats gate (Jul 6 2026 audit — closes the stat-integrity audit's open props
+  // item): a candidate with betting lines but zero season stats AND zero game logs
+  // gives Gary nothing but a price to reason from — the constitution's "no stats =
+  // no basis" case. Drop them from the board (their lines drop with them, since the
+  // CLI filters available lines to candidate names); if the board empties, Gary
+  // passes — a legitimate decision since F-3 — instead of manufacturing an
+  // odds-only pick around "(stats unavailable)".
+  {
+    const before = availableCandidates.length;
+    availableCandidates = availableCandidates.filter(c => {
+      const pid = playerIdMap[c.player.toLowerCase()]?.id;
+      return pid != null && (playerSeasonStats[pid] || playerGameLogs[pid]);
+    });
+    const dropped = before - availableCandidates.length;
+    if (dropped > 0) console.log(`[MLB Props Context] 🛑 No-stats gate: dropped ${dropped}/${before} candidate(s) with lines but no stats/logs`);
+  }
 
   // Fetch Statcast process indicators for top 4 prop candidates (batters only)
   let statcastContext = '';

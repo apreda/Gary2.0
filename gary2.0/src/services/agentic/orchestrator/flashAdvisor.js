@@ -251,10 +251,17 @@ CRITICAL RULES:
 OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON object:
 {"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams", "context": "Opponent quality / who played / sample window context"}
 
-Do NOT make a pick or recommendation.`,
+Do NOT make a pick or recommendation.
+
+## SCOUT REPORT (this game's data — the baseline for every factor)
+${scoutReportContent}`,
       tools: researchTools,
       thinkingLevel: flashThinkingLevel,
-      enableCache: true,  // Cache research-assistant system prompt + tools (~5K tokens, reused across 25+ stat calls)
+      // Jul 8 cost audit: the scout report (~8K tokens) now lives INSIDE the
+      // cached prefix (system prompt + tools) instead of riding every
+      // per-factor seed at full price — it was re-billed on all ~30 calls per
+      // game. Identical content, one full-price pass + 90%-off reuse.
+      enableCache: true,
       ...(flashMaxOutput ? { maxOutputTokens: flashMaxOutput } : {})
     });
 
@@ -264,14 +271,9 @@ Do NOT make a pick or recommendation.`,
 **Game:** ${homeTeam} vs ${awayTeam} (${sportLabel})
 ${hasSpread ? `**Spread:** ${options.spread}` : ''}
 
-**Scout Report Data:**
-${scoutReportContent}
+The full scout report for this game is in your system context — it is your baseline for every factor. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? `
 
----
-
-Read the scout report above. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? `
-
-(MLB: The scout report above ALREADY contains the following — DO NOT re-fetch these tokens:
+(MLB: The scout report in your system context ALREADY contains the following — DO NOT re-fetch these tokens:
 - DIVISION STANDINGS → covers MLB_STANDINGS, MLB_STANDINGS_STRUCTURED, MLB_TEAM_RECORD
 - RECENT PERFORMANCE (L1/L3/L5/L10) + RECENT RESULTS → covers MLB_RECENT_FORM, MLB_RECENT_FORM_STRUCTURED, MLB_SEASON_FORM, MLB_RECENT_RESULTS
 - INJURIES (BDL structured) → covers INJURIES, MLB_INJURIES
@@ -393,10 +395,13 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 calledTokens.push({ token, quality: 'unavailable' });
               }
             } else if (functionName === 'fetch_narrative_context') {
-              // Cap grounding calls to control cost
-              // MLB: 8 (needs injury/weather/lineup investigation), NHL: 10 (RotoWire), others: 8
-              const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-              const MAX_GROUNDING_CALLS = isNHLSport ? 10 : 8;
+              // Grounding budget per game (Jul 8 2026 cost audit):
+              //   WC 8  — availability, suspensions, and pre-tournament form have
+              //           NO structured source; grounding IS the feed.
+              //   NHL 10 — RotoWire-era cap; revisit when the season starts in October.
+              //   MLB + others 4 — structured tokens cover stats/lineups/injuries;
+              //           grounding is for breaking news no token can answer.
+              const MAX_GROUNDING_CALLS = isNHLSport ? 10 : (isWCSport ? 8 : 4);
               if (groundingCalls >= MAX_GROUNDING_CALLS) {
                 console.log(`  → [Research Grounding] SKIPPED (cap reached: ${groundingCalls}/${MAX_GROUNDING_CALLS}): "${(args.query || '').slice(0, 80)}"`);
                 functionResponses.push({ name: functionName, content: `Grounding call limit reached (${MAX_GROUNDING_CALLS}). Use available stat tokens and scout report data instead.` });

@@ -6,7 +6,6 @@ import {
   normalizePlayerName,
   fuzzyMatchPlayerName,
   fixBdlInjuryStatus,
-  applyBuyTheHook,
   formatStatValue,
   safeStatValue,
   isGameCompleted,
@@ -179,34 +178,9 @@ describe('fixBdlInjuryStatus', () => {
   });
 });
 
-// ─── applyBuyTheHook ──────────────────────────────────────────────────
-describe('applyBuyTheHook', () => {
-  it('buys hook on negative half-point spread', () => {
-    const result = applyBuyTheHook(-7.5, -110);
-    expect(result.spread).toBe(-7);
-    expect(result.odds).toBe(-120);
-    expect(result.hooked).toBe(true);
-  });
-
-  it('buys hook on positive half-point spread', () => {
-    const result = applyBuyTheHook(3.5, -110);
-    expect(result.spread).toBe(3);
-    expect(result.odds).toBe(-120);
-    expect(result.hooked).toBe(true);
-  });
-
-  it('does not hook whole-number spreads', () => {
-    const result = applyBuyTheHook(-7, -110);
-    expect(result.hooked).toBe(false);
-    expect(result.spread).toBe(-7);
-    expect(result.odds).toBe(-110);
-  });
-
-  it('handles non-number inputs', () => {
-    const result = applyBuyTheHook(null, -110);
-    expect(result.hooked).toBe(false);
-  });
-});
+// applyBuyTheHook tests removed Jul 6 2026: the function was deleted from
+// sharedUtils in an earlier cleanup and these tests had been failing against
+// a function that no longer exists.
 
 // ─── formatStatValue / safeStatValue ──────────────────────────────────
 describe('formatStatValue', () => {

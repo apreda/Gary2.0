@@ -2668,13 +2668,22 @@ struct HomeView: View {
                 else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
                 else { result = ("FINAL", Color.white.opacity(0.7)) }
             }
+            // MLB shows BOTH probable starters, away @ home — WC (and any
+            // league without structured pitcher fields) keeps the existing
+            // context/standing line untouched.
+            let mlbPitchers: String? = {
+                guard (big.league ?? "").uppercased() == "MLB",
+                      let a = big.awayPitcher, !a.isEmpty,
+                      let h = big.homePitcher, !h.isEmpty else { return nil }
+                return "\(a.uppercased()) @ \(h.uppercased())"
+            }()
             return HomeMarqueeTracker.Entry(
                 id: "mq-\(big.rank)-\(matchup)",
                 rank: big.rank,
                 league: big.league,
                 matchupFull: matchup,
                 title: title,
-                context: (big.context?.isEmpty == false ? big.context : big.standing),
+                context: mlbPitchers ?? (big.context?.isEmpty == false ? big.context : big.standing),
                 commence: big.commence_time,
                 pickLine: pickLine,
                 pendingLine: pendingLine,
@@ -3915,7 +3924,11 @@ struct HomeMarqueeTracker: View {
                 }
                 Spacer(minLength: 8)
                 if let ct = e.commence {
-                    Text("\(startWord(e.league)) \(TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased())")
+                    let time = TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased()
+                    // MLB drops the "FIRST PITCH" label — the clock alone
+                    // already reads clearly; other sports keep their word.
+                    let isMLB = (e.league ?? "").uppercased() == "MLB"
+                    Text(isMLB ? time : "\(startWord(e.league)) \(time)")
                         .font(GaryFonts.mono(11.5, bold: true))
                         .foregroundStyle(.white.opacity(0.72))
                 }
@@ -3992,13 +4005,9 @@ struct HomeOvernightStrip: View {
     @State private var rollIndex = 0
     private let rollTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
-    private func money(_ v: Double) -> String {
-        v >= 0 ? String(format: "+$%.0f", v) : String(format: "−$%.0f", -v)
-    }
-
     var body: some View {
         Button(action: onTape) {
-            HStack(spacing: 9) {
+            HStack(spacing: 7) {
                 Text(label)
                     .font(GaryFonts.mono(15, bold: true)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
@@ -4006,10 +4015,17 @@ struct HomeOvernightStrip: View {
                 Text("\(record.w)–\(record.l)")
                     .font(GaryFonts.mono(15, bold: true))
                     .foregroundStyle(.white)
+                    .fixedSize()
                 if let net {
-                    Text(money(net))
+                    // Fixed size so the roller (which already shrinks itself)
+                    // never squeezes the real dollar figure down to a stub.
+                    // `net` is in UNITS (1u = $100 stake) — flatStakeDollars
+                    // converts it; the old inline formatter treated it as
+                    // already-dollars and rounded -1.14u down to "-$1".
+                    Text(Formatters.flatStakeDollars(net))
                         .font(GaryFonts.mono(15, bold: true))
                         .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
+                        .fixedSize()
                 }
                 stripDivider
                 if !rollItems.isEmpty {
@@ -4019,20 +4035,22 @@ struct HomeOvernightStrip: View {
                         .font(GaryFonts.mono(15, bold: true))
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                Spacer(minLength: 10)
+                Spacer(minLength: 6)
                 // "THE CARD" label retired (founder, Jul 6): the words were
                 // stealing the roller's width — the chevron alone marks the
                 // door, and the whole strip is the tap target anyway. A gold
                 // hairline now fills the gap before it (founder, Jul 6: bare
                 // Spacer space read as an accident, not a design) and the
                 // door itself is bigger + pushed to the true trailing edge.
+                // (Jul 8: the HStack's own spacing already opens a gap on
+                // both sides of that hairline — the old +10 leading padding
+                // on the chevron doubled up and starved the roller's width.)
                 Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(width: 1, height: 26)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(GaryColors.gold)
-                    .padding(.leading, 10)
             }
-            .padding(.leading, 14).padding(.trailing, 16).padding(.vertical, 12)
+            .padding(.leading, 14).padding(.trailing, 14).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -4061,10 +4079,11 @@ struct HomeOvernightStrip: View {
             Text(item.line)
                 .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(.white.opacity(0.88))
-                .lineLimit(1).minimumScaleFactor(0.75)
+                .lineLimit(1).minimumScaleFactor(0.6)
             Text(item.odds)
                 .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(GaryColors.gold)
+                .fixedSize()
         }
         .id(rollIndex)
         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -4120,13 +4139,13 @@ struct HomeStoryRail: View {
             Spacer(minLength: 2)
             if !s.receiptPick.isEmpty {
                 Text("\(s.receiptLead.uppercased()) \(s.receiptPick)")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(1).minimumScaleFactor(0.75)
             }
         }
         .padding(12)
-        .frame(width: 240, height: 112, alignment: .topLeading)
+        .frame(width: 240, height: 122, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(GaryColors.warmWhite.opacity(0.03))
@@ -20073,10 +20092,10 @@ struct GameScoutSection: View {
     // MARK: styled fragments
 
     private static func stat(_ s: String, _ c: Color = .white.opacity(0.9)) -> Text {
-        Text(s).font(GaryFonts.mono(13, bold: true)).foregroundColor(c)
+        Text(s).font(GaryFonts.mono(15, bold: true)).foregroundColor(c)
     }
     private static func kicker(_ s: String) -> some View {
-        Text(s).font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
+        Text(s).font(GaryFonts.mono(12, bold: true)).tracking(1.4)
             .foregroundStyle(GaryColors.gold.opacity(0.8))
     }
     private static func formRun(_ run: String) -> Text {
@@ -20103,29 +20122,19 @@ struct GameScoutSection: View {
         guard !parts.isEmpty else { return nil }
         return parts.dropFirst().reduce(parts[0]) { $0 + stat(" · ", .white.opacity(0.35)) + $1 }
     }
-    /// BDL thirds notation ("16.2" = 16⅔ innings) → true innings.
-    private static func inningsOf(_ ip: String) -> Double {
-        let parts = ip.split(separator: ".")
-        let whole = Double(parts.first.map(String.init) ?? "") ?? 0
-        let outs = parts.count > 1 ? (Double(String(parts[1])) ?? 0) : 0
-        return whole + outs / 3
-    }
-    /// "16.2 IP · 5 ER · 21 K" tinted by the window's run rate.
+    /// "16.2 IP · 5 ER · 21 K" — plain; the numbers speak for themselves.
     private static func ipLine(ip: String, er: Int, k: Int?) -> Text {
         let ipShow = ip.hasSuffix(".0") ? String(ip.dropLast(2)) : ip
         var bits = "\(ipShow) IP · \(er) ER"
         if let k, k > 0 { bits += " · \(k) K" }
-        let innings = inningsOf(ip)
-        let ra9 = innings > 0 ? Double(er) * 9 / innings : 99
-        let c: Color = ra9 <= 3 ? GaryColors.win : ra9 >= 6 ? GaryColors.loss : .white.opacity(0.9)
-        return stat(bits, c)
+        return stat(bits)
     }
     /// "5 IP · 1 ER · 10 K vs CIN" — the opponent tag stays neutral.
     private static func outingText(_ o: TomorrowOuting?) -> Text? {
         guard let o, let ip = o.ip else { return nil }
         var t = ipLine(ip: ip, er: o.er ?? 0, k: o.k)
         if let opp = o.opp {
-            t = t + Text(" \(o.at ?? "vs") \(opp)").font(GaryFonts.mono(12)).foregroundColor(.white.opacity(0.62))
+            t = t + Text(" \(o.at ?? "vs") \(opp)").font(GaryFonts.mono(13.5)).foregroundColor(.white.opacity(0.62))
         }
         return t
     }
@@ -20133,48 +20142,37 @@ struct GameScoutSection: View {
         guard let l, let ip = l.ip, let er = l.er else { return nil }
         return ipLine(ip: ip, er: er, k: l.k)
     }
-    /// "4 days" — short rest flags red, long layoffs get a dim note.
+    /// "4 days" — the note ("short" / "layoff") carries the flag in words.
     private static func restText(_ r: TomorrowRest?) -> Text? {
         guard let d = r?.days else { return nil }
+        var t = stat("\(d) day\(d == 1 ? "" : "s")")
         if d <= 3 {
-            return stat("\(d) day\(d == 1 ? "" : "s")", GaryColors.loss)
-                + Text(" · short").font(GaryFonts.mono(12)).foregroundColor(GaryColors.loss.opacity(0.85))
-        }
-        var t = stat("\(d) days")
-        if d >= 10 {
-            t = t + Text(" · layoff").font(GaryFonts.mono(12)).foregroundColor(.white.opacity(0.55))
+            t = t + Text(" · short").font(GaryFonts.mono(13.5)).foregroundColor(.white.opacity(0.62))
+        } else if d >= 10 {
+            t = t + Text(" · layoff").font(GaryFonts.mono(13.5)).foregroundColor(.white.opacity(0.55))
         }
         return t
     }
     private func vsOppText(_ v: TomorrowVsOpp?) -> Text? {
         guard let v, let era = v.era, let gs = v.gs else { return nil }
-        let c: Color
-        if let avg = board?.league_avg_era { c = era <= avg ? GaryColors.win : GaryColors.loss }
-        else { c = .white.opacity(0.9) }
-        return Self.stat(String(format: "%.2f ERA", era), c)
-            + Text(" · \(gs) start\(gs == 1 ? "" : "s")").font(GaryFonts.mono(12)).foregroundColor(.white.opacity(0.62))
+        return Self.stat(String(format: "%.2f ERA", era))
+            + Text(" · \(gs) start\(gs == 1 ? "" : "s")").font(GaryFonts.mono(13.5)).foregroundColor(.white.opacity(0.62))
     }
     private func seasonText(_ st: TomorrowPerson) -> Text? {
         var bits: [Text] = []
-        if let e = st.era {
-            let c = board?.league_avg_era.map { e <= $0 ? GaryColors.win : GaryColors.loss } ?? .white.opacity(0.9)
-            bits.append(Self.stat(String(format: "%.2f ERA", e), c))
-        }
-        if let x = st.xera {
-            let c = board?.league_avg_xera.map { x <= $0 ? GaryColors.win : GaryColors.loss } ?? .white.opacity(0.9)
-            bits.append(Self.stat(String(format: "%.2f xERA", x), c))
-        }
+        if let e = st.era { bits.append(Self.stat(String(format: "%.2f ERA", e))) }
+        if let x = st.xera { bits.append(Self.stat(String(format: "%.2f xERA", x))) }
         guard !bits.isEmpty else { return nil }
         return bits.dropFirst().reduce(bits[0]) { $0 + Self.stat(" · ", .white.opacity(0.35)) + $1 }
     }
-    /// The name-row tag: "3 STRAIGHT QS" (green) / "1 QS IN LAST 4" (red at 0).
+    /// The name-row tag: "3 STRAIGHT QS" / "1 QS IN LAST 4" — plain, no judgment color.
     private static func qsTag(_ st: TomorrowPerson?) -> Text? {
         guard let q = st?.qs_form, let w = q.window, w >= 2, let n = q.qs else { return nil }
-        let font = GaryFonts.mono(11, bold: true)
+        let font = GaryFonts.mono(12.5, bold: true)
+        let c: Color = .white.opacity(0.72)
         if let s = q.streak, s >= 2 {
-            return Text("\(s) STRAIGHT QS").font(font).foregroundColor(GaryColors.win)
+            return Text("\(s) STRAIGHT QS").font(font).foregroundColor(c)
         }
-        let c: Color = n == 0 ? GaryColors.loss : (n == w ? GaryColors.win : .white.opacity(0.72))
         return Text("\(n) QS IN LAST \(w)").font(font).foregroundColor(c)
     }
 
@@ -20291,18 +20289,18 @@ struct GameScoutSection: View {
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(rows) { r in
                                 Text(r.label)
-                                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                                    .font(GaryFonts.mono(11.5, bold: true)).tracking(1)
                                     .foregroundStyle(.white.opacity(0.62))
-                                    .frame(height: 27, alignment: .leading)
+                                    .frame(height: 30, alignment: .leading)
                             }
                         }
-                        .frame(width: 104, alignment: .leading)
+                        .frame(width: 116, alignment: .leading)
                         Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1)
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(rows) { r in
                                 r.value
                                     .lineLimit(1).minimumScaleFactor(0.7)
-                                    .frame(height: 27, alignment: .leading)
+                                    .frame(height: 30, alignment: .leading)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -20424,38 +20422,10 @@ struct GameScoutSection: View {
 
     /// S3's tug + venue split + S9's meetings.
     @ViewBuilder private func seriesBlock(_ s: TomorrowSeries) -> some View {
-        let ab = teamAbbrs
-        let aw = s.away_w ?? 0
-        let hw = s.home_w ?? 0
-        let leaderAway = (s.leader ?? "away") == "away"
         VStack(alignment: .leading, spacing: 4) {
-            GeometryReader { geo in
-                let total = max(aw + hw, 1)
-                let awW = min(max(geo.size.width * CGFloat(aw) / CGFloat(total), 52), geo.size.width - 52)
-                HStack(spacing: 0) {
-                    ZStack(alignment: .leading) {
-                        Rectangle().fill(leaderAway ? GaryColors.win.opacity(0.8) : Color.white.opacity(0.1))
-                        Text("\(ab.a) \(aw)")
-                            .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(leaderAway ? Color(hex: "#08130D") : .white.opacity(0.8))
-                            .padding(.leading, 8)
-                    }
-                    .frame(width: awW)
-                    ZStack(alignment: .trailing) {
-                        Rectangle().fill(leaderAway ? Color.white.opacity(0.1) : GaryColors.win.opacity(0.8))
-                        Text("\(hw) \(ab.h)")
-                            .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(leaderAway ? .white.opacity(0.8) : Color(hex: "#08130D"))
-                            .padding(.trailing, 8)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 3))
-            }
-            .frame(height: 16)
             if let split = s.split_line {
                 Text("SERIES · \(split)")
-                    .font(GaryFonts.mono(11.5, bold: true))
+                    .font(GaryFonts.mono(13, bold: true))
                     .foregroundStyle(.white.opacity(0.68))
             }
             if let meets = s.meetings, !meets.isEmpty {
@@ -20463,15 +20433,15 @@ struct GameScoutSection: View {
                     ForEach(Array(meets.enumerated()), id: \.offset) { _, m in
                         HStack(spacing: 8) {
                             Text(m.d ?? "")
-                                .font(GaryFonts.mono(13, bold: true))
-                                .foregroundStyle(m.won == "away" ? GaryColors.win : GaryColors.loss)
-                                .frame(width: 58, alignment: .leading)
+                                .font(GaryFonts.mono(14.5, bold: true))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .frame(width: 62, alignment: .leading)
                             Text(m.line ?? "")
-                                .font(GaryFonts.mono(13, bold: true))
+                                .font(GaryFonts.mono(14.5, bold: true))
                                 .foregroundStyle(.white.opacity(0.88))
                             Spacer(minLength: 8)
                             Text(m.venue ?? "")
-                                .font(GaryFonts.mono(13))
+                                .font(GaryFonts.mono(14.5))
                                 .foregroundStyle(.white.opacity(0.62))
                         }
                     }
@@ -21875,8 +21845,8 @@ struct PlayerInsightSheet: View {
 /// top (red), tonight's replacement below (green) with his slot + season line.
 /// Tapping anywhere opens the replacement's full Player Insights.
 /// First-Inning (NRFI/YRFI) row — recent first innings as scoreless-vs-run dots
-/// (green = scoreless). Handles the matchup row (both sides) and the single-team
-/// row (one side). Reads the nrfi meta; the headline carries the words.
+/// (green = they scored, red = scoreless). Handles the matchup row (both sides)
+/// and the single-team row (one side). Reads the nrfi meta; the headline carries the words.
 struct FirstInningRow: View {
     let s: Signal
     var onTap: (Signal) -> Void
@@ -21910,7 +21880,7 @@ struct FirstInningRow: View {
             Text(abbr).font(GaryFonts.mono(9.5, bold: true)).foregroundStyle(.white.opacity(0.55))
                 .frame(width: 34, alignment: .leading)
             ForEach(Array(seq.enumerated()), id: \.offset) { _, v in
-                Circle().fill(v == 0 ? green.opacity(0.85) : red.opacity(0.5)).frame(width: 8, height: 8)
+                Circle().fill(v == 0 ? red.opacity(0.5) : green.opacity(0.85)).frame(width: 8, height: 8)
             }
             Spacer(minLength: 6)
             Text("\(seq.filter { $0 == 0 }.count)/\(seq.count) clean")

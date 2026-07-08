@@ -172,7 +172,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   console.log(`[Scout Report] MLB player season stats: ${homeTeam}=${homePlayerSeasonStats.length}, ${awayTeam}=${awayPlayerSeasonStats.length}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // BASEBALL SAVANT xSTATS (expected vs actual — regression indicators)
+  // BASEBALL SAVANT xSTATS (expected vs actual — presented as raw gaps; Gary interprets)
   // Always use current season — stale prior-year data is misleading.
   // ═══════════════════════════════════════════════════════════════════
   const xStatsSeason = season;
@@ -237,6 +237,41 @@ export async function buildMlbScoutReport(game, options = {}) {
     lastAwayGamePk ? getGameBoxScore(lastAwayGamePk).catch(() => null) : null,
   ]);
   console.log(`[Scout Report] Box stats: ${recentBoxStats.length} player records for ${allBoxGameIds.length} games. MLB API box: ${homeTeam}=${lastHomeBoxScore ? 'Y' : 'N'}, ${awayTeam}=${lastAwayBoxScore ? 'Y' : 'N'}`);
+
+  // BULLPEN USAGE, LAST 3 GAMES (Jul 7 — founder: "not sure Gary is fully aware
+  // of bullpen usage"). The 3-day picture lived only behind a fetch token the
+  // research may or may not call; the report itself showed yesterday alone.
+  // Compute it here from the same MLB Stats API boxscores so who-threw-when
+  // (with pitch counts — the real workload signal) is ALWAYS on the desk.
+  const bullpenUsageFor = async (teamName, mlbTeamId, recentGames) => {
+    try {
+      const last3 = (recentGames || []).slice(-3).reverse(); // most recent first
+      const dayLines = [];
+      for (const g of last3) {
+        if (!g?.gamePk) continue;
+        const box = await getGameBoxScore(g.gamePk).catch(() => null);
+        if (!box?.teams) continue;
+        const sideKey = box.teams.home?.team?.id === mlbTeamId ? 'home' : 'away';
+        const side = box.teams[sideKey];
+        const players = side?.players || {};
+        const apps = [];
+        for (const pid of (Array.isArray(side?.pitchers) ? side.pitchers : [])) {
+          const p = players[`ID${pid}`];
+          const ip = parseFloat(p?.stats?.pitching?.inningsPitched);
+          if (!Number.isFinite(ip) || ip <= 0 || ip >= 5) continue; // relievers only
+          const pitches = p?.stats?.pitching?.numberOfPitches;
+          apps.push(`${p?.person?.fullName || '?'} ${ip.toFixed(1)} IP${pitches != null ? ` (${pitches} pitches)` : ''}`);
+        }
+        const date = (g.gameDate || '').split('T')[0];
+        dayLines.push(`${date}: ${apps.length ? apps.join(', ') : 'no reliever appearances'}`);
+      }
+      return dayLines.length ? `${teamName}:\n  ${dayLines.join('\n  ')}` : null;
+    } catch { return null; }
+  };
+  const [homeBullpenUsage, awayBullpenUsage] = await Promise.all([
+    bullpenUsageFor(homeTeam, homeTeamId, homeRecentGames),
+    bullpenUsageFor(awayTeam, awayTeamId, awayRecentGames),
+  ]);
 
   // ═══════════════════════════════════════════════════════════════════
   // PROBABLE PITCHERS — current-season (BDL) only, no career fallback
@@ -953,7 +988,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // xSTATS — EXPECTED VS ACTUAL (Baseball Savant, regression indicators)
+  // xSTATS — EXPECTED VS ACTUAL (Baseball Savant, raw gaps; Gary interprets)
   // ═══════════════════════════════════════════════════════════════════
   let xStatsSection = '';
   {
@@ -977,8 +1012,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     const homeSPx = findXStats(pitcherXStats,homeSPName);
     if (awaySPx || homeSPx) {
       lines.push('Starting Pitchers (expected vs actual):');
-      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} vs xERA ${awaySPx.xera} (${awaySPx.era_minus_xera_diff > 0 ? 'underperforming' : 'overperforming'} by ${Math.abs(awaySPx.era_minus_xera_diff).toFixed(2)}) | opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`);
-      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} vs xERA ${homeSPx.xera} (${homeSPx.era_minus_xera_diff > 0 ? 'underperforming' : 'overperforming'} by ${Math.abs(homeSPx.era_minus_xera_diff).toFixed(2)}) | opp wOBA ${homeSPx.woba} vs xwOBA ${homeSPx.est_woba}`);
+      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} vs xERA ${awaySPx.xera} (ERA minus xERA: ${awaySPx.era_minus_xera_diff >= 0 ? '+' : ''}${awaySPx.era_minus_xera_diff.toFixed(2)}) | opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`);
+      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} vs xERA ${homeSPx.xera} (ERA minus xERA: ${homeSPx.era_minus_xera_diff >= 0 ? '+' : ''}${homeSPx.era_minus_xera_diff.toFixed(2)}) | opp wOBA ${homeSPx.woba} vs xwOBA ${homeSPx.est_woba}`);
     }
 
     // Key batter xStats (top 3 per team from roster if available)
@@ -988,9 +1023,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       for (const h of hitters) {
         const x = findXStats(batterXStats,h.name);
         if (x) {
-          const diff = (x.est_woba - x.woba).toFixed(3);
-          const direction = diff > 0 ? 'unlucky' : 'lucky';
-          xLines.push(`  ${h.name}: BA ${x.ba} vs xBA ${x.est_ba} | SLG ${x.slg} vs xSLG ${x.est_slg} (${direction} by ${Math.abs(diff)} wOBA)`);
+          const diff = x.est_woba - x.woba;
+          xLines.push(`  ${h.name}: BA ${x.ba} vs xBA ${x.est_ba} | SLG ${x.slg} vs xSLG ${x.est_slg} (xwOBA minus wOBA: ${diff >= 0 ? '+' : ''}${diff.toFixed(3)})`);
         }
       }
       if (xLines.length > 0) {
@@ -1081,6 +1115,9 @@ ${injuriesSection || 'No structured injury data available.'}
 ═══ RECENT FORM ═══
 Rolling splits (L1/L3/L5/L10):
 ${recentPerformanceSection || 'No recent performance data.'}
+
+BULLPEN USAGE — LAST 3 GAMES (real box scores: who has thrown, when, and how many pitches — availability tonight follows from this, and it changes daily):
+${[homeBullpenUsage, awayBullpenUsage].filter(Boolean).join('\n') || 'No bullpen usage data available.'}
 
 Recent results:
 ${recentResults}

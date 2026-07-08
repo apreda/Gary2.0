@@ -13,10 +13,13 @@
 
 ## What Adam needs to do (one-time, ~30 min)
 
-1. **Threads:** Log into Instagram (@betwithgary.ai) → enable Threads profile. Handle inherits automatically.
-2. **TikTok:** Create account — handle `@betwithgary` (fallback: `@betwithgary.ai` / `@garyai.picks`). Needs phone/email verification. Mark as business account, category Sports.
-3. **YouTube:** Create channel "Gary A.I." with handle `@betwithgary`. 
-4. Share logins (or session access via Chrome) so I can post/schedule.
+**Status Jul 5 2026:**
+1. ~~**Threads:** Log into Instagram (@betwithgary.ai) → enable Threads profile.~~ ✅ DONE Jul 5 — @betwithgary.ai live on Threads, public, bio + link set.
+2. **TikTok:** STILL OPEN — Adam must create the account (fastest: tiktok.com → Continue with Google). Handle `@betwithgary` (fallback: `@betwithgary.ai` / `@garyai.picks`). Once logged in, profile setup (business account, category Sports, bio, avatar) can be done for him via Chrome.
+3. ~~**YouTube:** Create channel "Gary A.I." with handle `@betwithgary`.~~ ✅ DONE Jul 5 — brand channel live (UC_jbOagwn4yEWeam16VGMsw). Avatar/banner still to upload.
+4. Chrome session access is working (IG/Threads/YouTube all reachable) — no shared passwords needed.
+
+Note: the profile-kit bio below is superseded. Canonical bio everywhere = the live X bio, mirrored verbatim on IG + Threads (Jul 5): "AI that calls every game. MLB, NBA, NFL, NHL, college. I post my plays before start and grade every one, win or loss. Free in the app below."
 
 ## Profile kit (consistent everywhere)
 

@@ -17,6 +17,7 @@
  */
 import * as wc from '../../../fifaWorldCupService.js';
 import * as apiFootball from '../../../apiFootballService.js';
+import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
 
 const SOURCE = 'FIFA World Cup API (BDL)';
 const PRE_TOURNAMENT = (teamName) =>
@@ -320,6 +321,31 @@ async function keyPlayersSummary(ctx = {}) {
   return { homeValue: out[0], awayValue: out[1], comparison: 'Leading squad contributors — national-team season totals (API-Football); confirm starters via grounding/injuries', source: 'API-Football' };
 }
 
+// WC_GAME_PREVIEW — on-demand fan-context pull (fan-parity doctrine, Jul 8
+// 2026: see feedback-grounding-fan-parity.md). The scout report's SAME-DAY
+// WIRE call is tight and always-on; this token is the broader, invoke-when-
+// a-factor-calls-for-it pull for reputation/sentiment/storyline depth —
+// mirrors MLB_GAME_PREVIEW's role. "Trade rumors" has no literal analogue for
+// a national team — translated honestly to squad/call-up/roster news.
+async function gamePreviewSummary(ctx = {}) {
+  const homeTeam = ctx.homeTeam || 'Home';
+  const awayTeam = ctx.awayTeam || 'Away';
+  const result = await geminiGroundingSearch(
+    `${awayTeam} vs ${homeTeam} FIFA World Cup 2026 — the fan and media context around this match: ` +
+    `how each team's tournament has been received by fans and pundits so far, team and player reputations ` +
+    `heading into this match (how they're talked about, any historical patterns fans and media reference), ` +
+    `squad and roster storylines (call-ups, breakout players, veteran leadership, any federation or camp ` +
+    `drama), and how the travel and schedule between host cities is being discussed. ` +
+    `Factual reporting and narrative context only — do NOT include expert picks, betting predictions, or projections.`
+  );
+  return {
+    homeValue: result?.data || 'N/A',
+    awayValue: result?.data || 'N/A',
+    comparison: `Fan and media context for ${awayTeam} @ ${homeTeam}`,
+    source: 'Gemini Grounding',
+  };
+}
+
 export const soccerFetchers = {
   WC_TEAM_FORM: teamFormSummary,
   WC_RECENT_FORM: teamFormSummary,
@@ -336,4 +362,5 @@ export const soccerFetchers = {
   WC_INJURIES: injuriesSummary,
   WC_RECENT_INTL_FORM: recentIntlFormSummary,
   WC_KEY_PLAYERS: keyPlayersSummary,
+  WC_GAME_PREVIEW: gamePreviewSummary,
 };

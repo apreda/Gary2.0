@@ -24,7 +24,9 @@ describe('normalizeSportToLeague', () => {
   });
 
   it('returns unknown sports as-is (fallback)', () => {
-    expect(normalizeSportToLeague('baseball_mlb')).toBe('baseball_mlb');
+    // baseball_mlb/soccer_world_cup joined the mapping after this test was written —
+    // probe with a genuinely unmapped key.
+    expect(normalizeSportToLeague('cricket_t20')).toBe('cricket_t20');
     expect(normalizeSportToLeague('unknown')).toBe('unknown');
   });
 });
@@ -52,10 +54,8 @@ describe('INVESTIGATION_FACTORS', () => {
 
 // ─── getInvestigatedFactors ───────────────────────────────────────────
 describe('getInvestigatedFactors', () => {
-  it('returns 100% coverage for unknown sport', () => {
-    const result = getInvestigatedFactors([], 'baseball_mlb');
-    expect(result.coverage).toBe(1.0);
-    expect(result.useFallback).toBe(true);
+  it('hard-fails on an unknown sport (no silent fallback)', () => {
+    expect(() => getInvestigatedFactors([], 'cricket_t20')).toThrow(/HARD FAIL/);
   });
 
   it('returns 0% coverage with empty history', () => {

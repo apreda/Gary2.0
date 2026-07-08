@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCOUT — 20 finished options</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12100D; --page:#0C0B09; --ink:rgba(255,255,255,.9); --ink2:rgba(255,255,255,.72);
+    --dim:rgba(255,255,255,.5); --faint:rgba(255,255,255,.38);
+    --gold:#D9B45B; --goldim:rgba(217,180,91,.8); --win:#4CC38A; --loss:#E5534B;
+    --hair:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;padding:34px 26px 90px}
+  .intro{max-width:900px;margin:0 auto 30px}
+  .intro h1{font-family:"Bebas Neue";font-size:44px;letter-spacing:.5px;color:var(--ink)}
+  .intro p{color:var(--ink2);font-size:15px;line-height:1.55;margin-top:8px}
+  .intro .pick{color:var(--gold);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:34px;max-width:1700px;margin:0 auto}
+  .slot h2{font-family:"JetBrains Mono";font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--gold);margin-bottom:4px}
+  .slot h2 .badge{background:var(--gold);color:#141109;padding:2px 7px;border-radius:3px;margin-left:8px;font-size:10px}
+  .slot .note{font-size:12.5px;color:var(--dim);margin-bottom:10px;min-height:32px;line-height:1.4}
+  .phone{width:393px;background:var(--bg);border:1px solid rgba(255,255,255,.09);border-radius:22px;padding:20px 16px 24px;margin:0 auto}
+  /* ---- shared vocabulary ---- */
+  .kick{font-family:"JetBrains Mono";font-size:9.5px;font-weight:700;letter-spacing:1px;color:var(--faint);margin-bottom:12px}
+  .beb{font-family:"Bebas Neue";letter-spacing:.4px;line-height:1}
+  .mono{font-family:"JetBrains Mono"}
+  .away{color:rgba(255,255,255,.92)} .home{color:var(--gold)}
+  .w{color:var(--win)} .l{color:var(--loss)} .d{color:rgba(255,255,255,.5)}
+  .dm{color:var(--dim)} .dm2{color:var(--ink2)}
+  .hair{height:1px;background:var(--hair);border:0}
+  .sf15{font-size:15px;color:var(--ink2);line-height:1.5}
+  .sf14{font-size:14px;color:var(--ink2);line-height:1.5}
+  .foot{font-size:13.5px;color:var(--dim);font-weight:500}
+  .odds{font-family:"JetBrains Mono";font-weight:700;font-size:15px;color:rgba(255,255,255,.85)}
+  .wirep{font-family:"JetBrains Mono";font-size:10.5px;font-weight:700;color:var(--goldim);letter-spacing:.5px}
+  .caphead{display:flex;justify-content:space-between;align-items:baseline}
+  .tug{display:flex;height:16px;border-radius:3px;overflow:hidden;font-family:"JetBrains Mono";font-size:10px;font-weight:700;line-height:16px}
+  .tug .a{background:linear-gradient(90deg,#2E7D57,#3FA372);color:#08130D;padding:0 8px}
+  .tug .b{background:rgba(255,255,255,.1);color:var(--ink2);padding:0 8px;text-align:right;flex:1}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-family:"JetBrains Mono";font-size:11.5px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);padding:3px 8px;border-radius:4px}
+  .chip.g{color:var(--win)} .chip.r{color:var(--loss)} .chip.gold{color:var(--gold)}
+  .sq{display:inline-block;width:16px;height:16px;border-radius:3px;font-family:"JetBrains Mono";font-size:9px;font-weight:700;text-align:center;line-height:16px;margin-right:4px}
+  .sq.w{background:rgba(76,195,138,.22);color:var(--win)} .sq.l{background:rgba(229,83,75,.2);color:var(--loss)}
+  table{border-collapse:collapse;width:100%}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>SCOUTING REPORT — 20 FINISHED OPTIONS</h1>
+  <p>Every option carries the full bettor set you asked for: <b>last outing per probable</b>, <b>that pitcher vs this opponent (this season)</b>, <b>season series with home/away venues</b>, plus trend, runs, wire injury note, and the market line. All of it grounds from data we already pull (BDL box scores + season game logs) — nothing invented.
+  <br><span class="pick">MY PICK: S4 — keeps the capsule voice you liked this morning, makes the last outing scannable as a line-score, series as the tug bar.</span></p>
+</div>
+
+<div class="grid">
+
+<!-- ══════════ S1 ══════════ -->
+<div class="slot">
+  <h2>S1 · THE BRIEF</h2>
+  <div class="note">This morning's capsules, the three new facts written in as plain sentences. Least change.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="sf14" style="margin-bottom:12px"><span class="dm">Season series:</span> <b style="color:var(--ink)">Brewers lead 5-1</b> · 3-0 at AmFam · 2-1 at Busch</div>
+    <hr class="hair" style="margin-bottom:12px">
+    <div class="caphead"><span class="beb away" style="font-size:24px">BREWERS</span><span class="odds">+124</span></div>
+    <div class="sf15" style="margin-top:6px">6-4 over the last 10 <span class="w">— coming off a win</span></div>
+    <div class="sf15">Probable: <b style="color:var(--ink)">J. Misiorowski</b> — last outing <span class="w">7 IP, 1 ER, 10 K</span> vs MIA</div>
+    <div class="sf15">vs Cardinals this year: 2 starts, 12 IP, 3 ER <span class="w">(2.25)</span></div>
+    <div class="sf14" style="margin-top:4px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Brewers place Brandon Woodruff on 15-day IL (shoulder)</span></div>
+    <hr class="hair" style="margin:14px 0 12px">
+    <div class="caphead"><span class="beb home" style="font-size:24px">CARDINALS</span><span class="odds">-138</span></div>
+    <div class="sf15" style="margin-top:6px">5-5 over the last 10 <span class="l">— coming off a loss</span></div>
+    <div class="sf15">Probable: <b style="color:var(--ink)">S. Gray</b> — last outing <span class="l">4.2 IP, 5 ER</span> at CHC</div>
+    <div class="sf15">vs Brewers this year: 3 starts, 16 IP, 9 ER <span class="l">(5.06)</span></div>
+    <hr class="hair" style="margin:14px 0 10px">
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6 mph · Rain 3%</div>
+  </div>
+</div>
+
+<!-- ══════════ S2 ══════════ -->
+<div class="slot">
+  <h2>S2 · THE ARMS FIRST</h2>
+  <div class="note">The pitcher duel leads — everything a bettor prices first, face to face. Teams demoted to one line each.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div style="display:flex;gap:14px">
+      <div style="flex:1">
+        <div class="beb away" style="font-size:20px">MISIOROWSKI</div>
+        <div class="mono dm" style="font-size:10px;letter-spacing:1px;margin:2px 0 8px">MIL · RHP</div>
+        <div class="sf14">Last outing <span class="w"><b>7 IP · 1 ER · 10 K</b></span> vs MIA</div>
+        <div class="sf14">vs STL: 2 starts · <span class="w">2.25 ERA</span></div>
+        <div class="sf14"><span class="dm">Season</span> 1.47 ERA · 2.09 xERA</div>
+      </div>
+      <div style="width:1px;background:var(--hair)"></div>
+      <div style="flex:1;text-align:right">
+        <div class="beb home" style="font-size:20px">GRAY</div>
+        <div class="mono dm" style="font-size:10px;letter-spacing:1px;margin:2px 0 8px">STL · RHP</div>
+        <div class="sf14">Last outing <span class="l"><b>4.2 IP · 5 ER</b></span> at CHC</div>
+        <div class="sf14">vs MIL: 3 starts · <span class="l">5.06 ERA</span></div>
+        <div class="sf14"><span class="dm">Season</span> 3.41 ERA · 3.87 xERA</div>
+      </div>
+    </div>
+    <hr class="hair" style="margin:14px 0">
+    <div class="sf15"><span class="beb away" style="font-size:17px">BREWERS&nbsp;</span> 6-4 L10 <span class="w">· W1</span> · 5.1/3.7 RPG <span class="mono" style="font-size:13px;color:rgba(255,255,255,.85)">&nbsp;+124</span></div>
+    <div class="sf15" style="margin-top:5px"><span class="beb home" style="font-size:17px">CARDINALS&nbsp;</span> 5-5 L10 <span class="l">· L1</span> · 4.6/4.5 RPG <span class="mono" style="font-size:13px;color:rgba(255,255,255,.85)">&nbsp;-138</span></div>
+    <hr class="hair" style="margin:14px 0 10px">
+    <div class="sf14" style="margin-bottom:8px"><span class="dm">Series:</span> <b style="color:var(--ink)">MIL 5-1</b> · 3-0 AmFam · 2-1 Busch</div>
+    <div class="sf14" style="margin-bottom:10px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6</div>
+  </div>
+</div>
+
+<!-- ══════════ S3 ══════════ -->
+<div class="slot">
+  <h2>S3 · TAPE + TUG</h2>
+  <div class="note">Center-label tape with the season series as a dominance tug bar — the H2H bar you loved, venue split under it.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead"><span class="beb away" style="font-size:22px">BREWERS</span><span class="mono dm" style="font-size:10px;letter-spacing:1.2px">SEASON SERIES</span><span class="beb home" style="font-size:22px">CARDINALS</span></div>
+    <div class="tug" style="margin:8px 0 4px"><div class="a" style="flex:5">MIL 5</div><div class="b">1 STL</div></div>
+    <div class="mono dm" style="font-size:10px;margin-bottom:12px">3-0 AT AMFAM · 2-1 AT BUSCH</div>
+    <table>
+      <tr><td class="sf14" style="padding:8px 0"><span class="w"><b>7 IP · 1 ER</b></span> vs MIA</td><td class="mono dm" style="font-size:9.5px;text-align:center;letter-spacing:1px">LAST OUTING</td><td class="sf14" style="text-align:right"><span class="l"><b>4.2 IP · 5 ER</b></span> at CHC</td></tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr><td class="sf14" style="padding:8px 0"><span class="w">2.25 ERA</span> · 2 starts</td><td class="mono dm" style="font-size:9.5px;text-align:center;letter-spacing:1px">VS OPPONENT</td><td class="sf14" style="text-align:right"><span class="l">5.06 ERA</span> · 3 starts</td></tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr><td class="sf14" style="padding:8px 0">6-4 · <span class="w">W1</span></td><td class="mono dm" style="font-size:9.5px;text-align:center;letter-spacing:1px">LAST 10</td><td class="sf14" style="text-align:right">5-5 · <span class="l">L1</span></td></tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr><td class="mono" style="font-size:13px;font-weight:700;padding:8px 0">+124</td><td class="mono dm" style="font-size:9.5px;text-align:center;letter-spacing:1px">ML</td><td class="mono" style="font-size:13px;font-weight:700;text-align:right">-138</td></tr>
+    </table>
+    <hr class="hair" style="margin:6px 0 10px">
+    <div class="sf14" style="margin-bottom:8px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6 · Rain 3%</div>
+  </div>
+</div>
+
+<!-- ══════════ S4 ══════════ -->
+<div class="slot">
+  <h2>S4 · LINE-SCORE CHIPS <span class="badge">MY PICK</span></h2>
+  <div class="note">The capsules you approved + last outing as a scannable line-score chip row; series tug closes it.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead"><span class="beb away" style="font-size:24px">BREWERS</span><span class="odds">+124</span></div>
+    <div class="sf15" style="margin:6px 0 7px">6-4 over the last 10 <span class="w">— coming off a win</span> · 5.1/3.7 RPG</div>
+    <div class="sf14" style="margin-bottom:5px"><span class="dm">J. Misiorowski, last outing vs MIA</span></div>
+    <div class="chips" style="margin-bottom:7px"><span class="chip g">W</span><span class="chip">7.0 IP</span><span class="chip">1 ER</span><span class="chip">10 K</span><span class="chip gold">vs STL: 2.25 ERA · 2 GS</span></div>
+    <div class="sf14"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <hr class="hair" style="margin:13px 0 11px">
+    <div class="caphead"><span class="beb home" style="font-size:24px">CARDINALS</span><span class="odds">-138</span></div>
+    <div class="sf15" style="margin:6px 0 7px">5-5 over the last 10 <span class="l">— coming off a loss</span> · 4.6/4.5 RPG</div>
+    <div class="sf14" style="margin-bottom:5px"><span class="dm">S. Gray, last outing at CHC</span></div>
+    <div class="chips"><span class="chip r">L</span><span class="chip">4.2 IP</span><span class="chip">5 ER</span><span class="chip">3 K</span><span class="chip gold">vs MIL: 5.06 ERA · 3 GS</span></div>
+    <hr class="hair" style="margin:13px 0 11px">
+    <div class="caphead" style="margin-bottom:6px"><span class="mono dm" style="font-size:10px;letter-spacing:1.2px">SEASON SERIES</span><span class="mono dm" style="font-size:10px">3-0 AMFAM · 2-1 BUSCH</span></div>
+    <div class="tug"><div class="a" style="flex:5">MIL 5</div><div class="b">1 STL</div></div>
+    <hr class="hair" style="margin:12px 0 10px">
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6 mph · Rain 3%</div>
+  </div>
+</div>
+
+<!-- ══════════ S5 ══════════ -->
+<div class="slot">
+  <h2>S5 · DOSSIER</h2>
+  <div class="note">Gold label column, one fact category per row, both teams inside each row. Reads top-to-bottom like a file.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead" style="margin-bottom:10px"><span class="beb away" style="font-size:22px">BREWERS +124</span><span class="beb home" style="font-size:22px">CARDINALS -138</span></div>
+    <hr class="hair">
+    <div style="display:flex;gap:12px;padding:10px 0"><span class="mono" style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--goldim);width:74px;flex:none">SERIES</span><span class="sf14"><b style="color:var(--ink)">MIL lead 5-1</b> — swept 3 at AmFam, 2-1 at Busch</span></div>
+    <hr class="hair">
+    <div style="display:flex;gap:12px;padding:10px 0"><span class="mono" style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--goldim);width:74px;flex:none">ARMS</span><span class="sf14">Misiorowski <span class="w">7 IP/1 ER last out</span>, 2.25 vs STL &nbsp;·&nbsp; Gray <span class="l">4.2 IP/5 ER last out</span>, 5.06 vs MIL</span></div>
+    <hr class="hair">
+    <div style="display:flex;gap:12px;padding:10px 0"><span class="mono" style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--goldim);width:74px;flex:none">TREND</span><span class="sf14">MIL 6-4 <span class="w">W1</span> · 5.1/3.7 RPG &nbsp;·&nbsp; STL 5-5 <span class="l">L1</span> · 4.6/4.5 RPG</span></div>
+    <hr class="hair">
+    <div style="display:flex;gap:12px;padding:10px 0"><span class="mono" style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--goldim);width:74px;flex:none">WIRE</span><span class="sf14">Brewers place Woodruff on 15-day IL (shoulder)</span></div>
+    <hr class="hair">
+    <div class="foot" style="padding-top:10px">O/U 8.5 · Busch Stadium · 86° · Wind 6 mph · Rain 3%</div>
+  </div>
+</div>
+
+<!-- ══════════ S6 ══════════ -->
+<div class="slot">
+  <h2>S6 · MEETING DOTS</h2>
+  <div class="note">The six meetings drawn as squares (result color, venue letter inside) — the series becomes a glance.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead"><span class="beb away" style="font-size:24px">BREWERS</span><span class="odds">+124</span></div>
+    <div style="margin:7px 0 3px"><span class="sq w">A</span><span class="sq w">A</span><span class="sq w">A</span><span class="sq w">B</span><span class="sq l">B</span><span class="sq w">B</span><span class="mono dm" style="font-size:10.5px;margin-left:6px">SERIES 5-1 (A=AmFam B=Busch)</span></div>
+    <div class="sf15" style="margin-top:7px">6-4 last 10 <span class="w">— coming off a win</span> · 5.1/3.7 RPG</div>
+    <div class="sf15">Misiorowski: <span class="w">7 IP, 1 ER, 10 K</span> last out · 2.25 vs STL</div>
+    <div class="sf14" style="margin-top:4px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL</span></div>
+    <hr class="hair" style="margin:13px 0 11px">
+    <div class="caphead"><span class="beb home" style="font-size:24px">CARDINALS</span><span class="odds">-138</span></div>
+    <div class="sf15" style="margin-top:7px">5-5 last 10 <span class="l">— coming off a loss</span> · 4.6/4.5 RPG</div>
+    <div class="sf15">Gray: <span class="l">4.2 IP, 5 ER</span> last out · 5.06 vs MIL</div>
+    <hr class="hair" style="margin:13px 0 10px">
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6 mph</div>
+  </div>
+</div>
+
+<!-- ══════════ S7 ══════════ -->
+<div class="slot">
+  <h2>S7 · VERDICT WORDS</h2>
+  <div class="note">Last outing graded in one word a fan says out loud — DEALING / KNOCKED AROUND — numbers ride under it.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead"><span class="beb away" style="font-size:24px">BREWERS</span><span class="odds">+124</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">
+      <span class="sf15"><b style="color:var(--ink)">Misiorowski</b> was <span class="beb" style="font-size:19px;color:var(--win)">DEALING</span></span>
+      <span class="mono dm2" style="font-size:12px">7 IP · 1 ER · 10 K</span>
+    </div>
+    <div class="sf14 dm2">2 starts vs STL this year — 2.25 ERA</div>
+    <div class="sf15" style="margin-top:6px">6-4 last 10 <span class="w">— W1</span> · 5.1/3.7 RPG</div>
+    <div class="sf14" style="margin-top:4px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <hr class="hair" style="margin:13px 0 11px">
+    <div class="caphead"><span class="beb home" style="font-size:24px">CARDINALS</span><span class="odds">-138</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">
+      <span class="sf15"><b style="color:var(--ink)">Gray</b> got <span class="beb" style="font-size:19px;color:var(--loss)">KNOCKED AROUND</span></span>
+      <span class="mono dm2" style="font-size:12px">4.2 IP · 5 ER</span>
+    </div>
+    <div class="sf14 dm2">3 starts vs MIL this year — 5.06 ERA</div>
+    <div class="sf15" style="margin-top:6px">5-5 last 10 <span class="l">— L1</span> · 4.6/4.5 RPG</div>
+    <hr class="hair" style="margin:13px 0 11px">
+    <div class="sf14" style="margin-bottom:8px"><span class="dm">Series:</span> <b style="color:var(--ink)">MIL 5-1</b> · 3-0 AmFam · 2-1 Busch</div>
+    <div class="foot">O/U 8.5 · Busch Stadium · 86°</div>
+  </div>
+</div>
+
+<!-- ══════════ S8 ══════════ -->
+<div class="slot">
+  <h2>S8 · BIG NUMBER</h2>
+  <div class="note">The series owns the section — Bebas 44 "5–1" as the lead fact, everything else supports.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div style="text-align:center;padding:2px 0 4px">
+      <div class="mono dm" style="font-size:10px;letter-spacing:1.5px">SEASON SERIES</div>
+      <div class="beb" style="font-size:46px"><span class="away">MIL</span> <span style="color:var(--win)">5–1</span> <span class="home">STL</span></div>
+      <div class="mono dm" style="font-size:10.5px">3-0 AT AMFAM · 2-1 AT BUSCH</div>
+    </div>
+    <hr class="hair" style="margin:12px 0">
+    <div class="sf15"><span class="beb away" style="font-size:18px">BREWERS&nbsp;&nbsp;</span>Misiorowski — <span class="w">7 IP, 1 ER, 10 K last out</span> · 2.25 vs STL</div>
+    <div class="sf15" style="margin:2px 0 10px;padding-left:2px">6-4 L10 <span class="w">· W1</span> · 5.1/3.7 RPG · <span class="mono" style="font-size:13px">+124</span></div>
+    <div class="sf15"><span class="beb home" style="font-size:18px">CARDINALS&nbsp;&nbsp;</span>Gray — <span class="l">4.2 IP, 5 ER last out</span> · 5.06 vs MIL</div>
+    <div class="sf15" style="margin:2px 0;padding-left:2px">5-5 L10 <span class="l">· L1</span> · 4.6/4.5 RPG · <span class="mono" style="font-size:13px">-138</span></div>
+    <hr class="hair" style="margin:12px 0 10px">
+    <div class="sf14" style="margin-bottom:8px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6</div>
+  </div>
+</div>
+
+<!-- ══════════ S9 ══════════ -->
+<div class="slot">
+  <h2>S9 · LAST THREE MEETINGS</h2>
+  <div class="note">The series told as the three most recent games — score, venue, who started. History you can feel.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="sf14" style="margin-bottom:8px"><span class="dm">Series:</span> <b style="color:var(--ink)">Brewers lead 5-1</b> · 3-0 AmFam · 2-1 Busch</div>
+    <div class="mono" style="font-size:12px;color:var(--ink2);line-height:1.9">
+      <span class="w">JUN 28</span>&nbsp; MIL 6 · STL 2 &nbsp;<span class="dm">at AmFam</span><br>
+      <span class="w">JUN 27</span>&nbsp; MIL 4 · STL 3 &nbsp;<span class="dm">at AmFam</span><br>
+      <span class="l">MAY 14</span>&nbsp; STL 5 · MIL 2 &nbsp;<span class="dm">at Busch</span>
+    </div>
+    <hr class="hair" style="margin:12px 0">
+    <div class="caphead"><span class="beb away" style="font-size:22px">BREWERS</span><span class="odds">+124</span></div>
+    <div class="sf15" style="margin-top:4px">Misiorowski <span class="w">7 IP/1 ER last out</span> · 2.25 vs STL · 6-4 L10 <span class="w">W1</span></div>
+    <div class="sf14" style="margin-top:3px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL</span></div>
+    <hr class="hair" style="margin:12px 0 10px">
+    <div class="caphead"><span class="beb home" style="font-size:22px">CARDINALS</span><span class="odds">-138</span></div>
+    <div class="sf15" style="margin-top:4px">Gray <span class="l">4.2 IP/5 ER last out</span> · 5.06 vs MIL · 5-5 L10 <span class="l">L1</span></div>
+    <hr class="hair" style="margin:12px 0 10px">
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6 mph</div>
+  </div>
+</div>
+
+<!-- ══════════ S10 ══════════ -->
+<div class="slot">
+  <h2>S10 · FACE-OFF SPINE</h2>
+  <div class="note">Everything mirrored around a center spine, biggest matchup feel — the whole section is one VS.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between"><span class="beb away" style="font-size:26px">BREWERS</span><span class="mono dm" style="font-size:11px">VS</span><span class="beb home" style="font-size:26px">CARDINALS</span></div>
+    <div style="display:flex;justify-content:space-between" class="mono"><span style="font-size:13px;font-weight:700">+124</span><span class="dm" style="font-size:9.5px;letter-spacing:1px;padding-top:3px">ML</span><span style="font-size:13px;font-weight:700">-138</span></div>
+    <hr class="hair" style="margin:10px 0">
+    <div style="display:flex;justify-content:space-between" class="sf14"><span><span class="w"><b>7 IP · 1 ER</b></span> vs MIA</span><span class="mono dm" style="font-size:9px;letter-spacing:1px;padding-top:4px">LAST OUT</span><span style="text-align:right"><span class="l"><b>4.2 IP · 5 ER</b></span> at CHC</span></div>
+    <hr class="hair" style="margin:10px 0">
+    <div style="display:flex;justify-content:space-between" class="sf14"><span><span class="w">2.25</span> · 2 GS</span><span class="mono dm" style="font-size:9px;letter-spacing:1px;padding-top:4px">VS OPP ERA</span><span><span class="l">5.06</span> · 3 GS</span></div>
+    <hr class="hair" style="margin:10px 0">
+    <div style="display:flex;justify-content:space-between" class="sf14"><span>6-4 <span class="w">W1</span> · 5.1/3.7</span><span class="mono dm" style="font-size:9px;letter-spacing:1px;padding-top:4px">L10 · RPG</span><span>5-5 <span class="l">L1</span> · 4.6/4.5</span></div>
+    <hr class="hair" style="margin:10px 0 8px">
+    <div class="tug" style="margin-bottom:4px"><div class="a" style="flex:5">MIL 5</div><div class="b">1 STL</div></div>
+    <div class="mono dm" style="font-size:10px;margin-bottom:10px">SERIES · 3-0 AMFAM · 2-1 BUSCH</div>
+    <div class="sf14" style="margin-bottom:8px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL</span></div>
+    <div class="foot">O/U 8.5 · Busch Stadium · 86°</div>
+  </div>
+</div>
+
+<!-- ══════════ S11 ══════════ -->
+<div class="slot">
+  <h2>S11 · AGATE COLUMN</h2>
+  <div class="note">Dense one-column agate — maximum facts per inch, small caps leads, zero decoration. The sharp's read.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="sf14" style="line-height:1.85">
+      <b style="color:var(--ink)">SERIES</b> — Brewers lead 5-1; swept three at AmFam, 2-1 at Busch.<br>
+      <b style="color:var(--ink)">ARMS</b> — Misiorowski (MIL): <span class="w">7 IP, 1 ER, 10 K</span> last out; 2.25 in 2 starts vs STL. Gray (STL): <span class="l">4.2 IP, 5 ER</span> last out; 5.06 in 3 starts vs MIL.<br>
+      <b style="color:var(--ink)">TREND</b> — MIL 6-4 last 10, <span class="w">won last</span>, 5.1 scored/3.7 allowed. STL 5-5, <span class="l">lost last</span>, 4.6/4.5.<br>
+      <b style="color:var(--ink)">MARKET</b> — MIL +124 / STL -138 · O/U 8.5.<br>
+      <b style="color:var(--ink)">WIRE</b> — Woodruff (MIL) to 15-day IL, shoulder.<br>
+      <b style="color:var(--ink)">PARK</b> — Busch · 86° · wind 6 · rain 3%.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ S12 ══════════ -->
+<div class="slot">
+  <h2>S12 · PITCHER CARDS IN TEXT</h2>
+  <div class="note">Each capsule's middle is a two-line pitcher block — name big, then a mono line-score sentence.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead"><span class="beb away" style="font-size:24px">BREWERS</span><span class="odds">+124</span></div>
+    <div class="sf15" style="margin-top:5px">6-4 last 10 <span class="w">— coming off a win</span> · 5.1/3.7 RPG</div>
+    <div style="margin:8px 0 3px"><span class="beb" style="font-size:18px;color:var(--ink)">J. MISIOROWSKI</span>&nbsp; <span class="mono w" style="font-size:12.5px;font-weight:700">7.0 IP 1 ER 10 K</span> <span class="mono dm" style="font-size:11px">vs MIA</span></div>
+    <div class="sf14 dm2">2.25 ERA in 2 starts against the Cardinals</div>
+    <div class="sf14" style="margin-top:5px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <hr class="hair" style="margin:13px 0 11px">
+    <div class="caphead"><span class="beb home" style="font-size:24px">CARDINALS</span><span class="odds">-138</span></div>
+    <div class="sf15" style="margin-top:5px">5-5 last 10 <span class="l">— coming off a loss</span> · 4.6/4.5 RPG</div>
+    <div style="margin:8px 0 3px"><span class="beb" style="font-size:18px;color:var(--ink)">S. GRAY</span>&nbsp; <span class="mono l" style="font-size:12.5px;font-weight:700">4.2 IP 5 ER 3 K</span> <span class="mono dm" style="font-size:11px">at CHC</span></div>
+    <div class="sf14 dm2">5.06 ERA in 3 starts against the Brewers</div>
+    <hr class="hair" style="margin:13px 0 10px">
+    <div class="sf14" style="margin-bottom:8px"><span class="dm">Series:</span> <b style="color:var(--ink)">MIL 5-1</b> · 3-0 AmFam · 2-1 Busch</div>
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6</div>
+  </div>
+</div>
+
+<!-- ══════════ S13 ══════════ -->
+<div class="slot">
+  <h2>S13 · MARGIN NOTES</h2>
+  <div class="note">Facts left, gold margin column right with the one-word takeaways — reads like a marked-up program.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1">
+        <div class="beb away" style="font-size:22px">BREWERS <span class="mono" style="font-size:13px;color:rgba(255,255,255,.85)">+124</span></div>
+        <div class="sf14" style="margin-top:4px">Misiorowski <span class="w">7 IP/1 ER/10 K</span> last out · 2.25 vs STL</div>
+        <div class="sf14">6-4 L10 <span class="w">W1</span> · 5.1/3.7 RPG</div>
+        <div class="beb home" style="font-size:22px;margin-top:12px">CARDINALS <span class="mono" style="font-size:13px;color:rgba(255,255,255,.85)">-138</span></div>
+        <div class="sf14" style="margin-top:4px">Gray <span class="l">4.2 IP/5 ER</span> last out · 5.06 vs MIL</div>
+        <div class="sf14">5-5 L10 <span class="l">L1</span> · 4.6/4.5 RPG</div>
+      </div>
+      <div style="width:96px;flex:none;border-left:1px solid var(--hair);padding-left:10px" class="mono">
+        <div style="font-size:10px;color:var(--goldim);letter-spacing:.5px;line-height:1.7">SERIES<br><b style="color:var(--ink);font-size:13px">MIL 5-1</b><br>3-0 AMFAM<br>2-1 BUSCH<br><br>ARM EDGE<br><b class="w" style="font-size:12px">MIL</b><br><br>WIRE<br><span style="color:var(--ink2)">WOODRUFF IL</span></div>
+      </div>
+    </div>
+    <hr class="hair" style="margin:12px 0 10px">
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6 mph · Rain 3%</div>
+  </div>
+</div>
+
+<!-- ══════════ S14 ══════════ -->
+<div class="slot">
+  <h2>S14 · SHEET ROWS</h2>
+  <div class="note">The Home sheet's row language — every fact a right-anchored row. Familiar rhythm from the front page.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead" style="padding:6px 0"><span class="sf15" style="color:var(--ink)"><span class="beb away" style="font-size:18px">BREWERS</span> · Misiorowski</span><span class="mono w" style="font-size:12.5px;font-weight:700">7 IP · 1 ER · 10 K</span></div>
+    <div class="caphead" style="padding:0 0 8px"><span class="sf14 dm">vs STL 2 starts</span><span class="mono" style="font-size:12px;color:var(--ink2)">2.25 ERA</span></div>
+    <hr class="hair">
+    <div class="caphead" style="padding:8px 0"><span class="sf15" style="color:var(--ink)"><span class="beb home" style="font-size:18px">CARDINALS</span> · Gray</span><span class="mono l" style="font-size:12.5px;font-weight:700">4.2 IP · 5 ER</span></div>
+    <div class="caphead" style="padding:0 0 8px"><span class="sf14 dm">vs MIL 3 starts</span><span class="mono" style="font-size:12px;color:var(--ink2)">5.06 ERA</span></div>
+    <hr class="hair">
+    <div class="caphead" style="padding:8px 0"><span class="sf14 dm">Last 10 · runs per game</span><span class="sf14">MIL 6-4 <span class="w">W1</span> 5.1/3.7 · STL 5-5 <span class="l">L1</span> 4.6/4.5</span></div>
+    <hr class="hair">
+    <div class="caphead" style="padding:8px 0"><span class="sf14 dm">Season series</span><span class="sf14"><b style="color:var(--ink)">MIL 5-1</b> · 3-0 AmFam · 2-1 Busch</span></div>
+    <hr class="hair">
+    <div class="caphead" style="padding:8px 0"><span class="sf14 dm">The line</span><span class="mono" style="font-size:12.5px;font-weight:700">MIL +124 · STL -138 · O/U 8.5</span></div>
+    <hr class="hair">
+    <div class="sf14" style="padding:8px 0"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <div class="foot">Busch Stadium · 86° · Wind 6 mph · Rain 3%</div>
+  </div>
+</div>
+
+<!-- ══════════ S15 ══════════ -->
+<div class="slot">
+  <h2>S15 · FOUR LINES FLAT</h2>
+  <div class="note">Hyper-compact: exactly four lines per team, one series band. The least scroll cost of the twenty.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="sf15"><span class="beb away" style="font-size:19px">BREWERS +124&nbsp;</span> 6-4 <span class="w">W1</span> · 5.1/3.7</div>
+    <div class="sf14" style="margin:2px 0 1px">Misiorowski — <span class="w">7 IP/1 ER/10 K</span> last out · 2.25 vs STL</div>
+    <div class="sf14"><span class="wirep">WIRE</span> <span class="dm2">Woodruff to 15-day IL</span></div>
+    <div style="margin:10px 0"><div class="tug"><div class="a" style="flex:5">MIL 5</div><div class="b">1 STL</div></div>
+    <div class="mono dm" style="font-size:9.5px;margin-top:3px">SERIES · 3-0 AMFAM · 2-1 BUSCH</div></div>
+    <div class="sf15"><span class="beb home" style="font-size:19px">CARDINALS -138&nbsp;</span> 5-5 <span class="l">L1</span> · 4.6/4.5</div>
+    <div class="sf14" style="margin-top:2px">Gray — <span class="l">4.2 IP/5 ER</span> last out · 5.06 vs MIL</div>
+    <hr class="hair" style="margin:12px 0 9px">
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6</div>
+  </div>
+</div>
+
+<!-- ══════════ S16 ══════════ -->
+<div class="slot">
+  <h2>S16 · THE OPEN (BROADSHEET)</h2>
+  <div class="note">A one-sentence editorial lead built from the facts, then the numbers. The most "written" of the set.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div style="font-size:17px;line-height:1.5;color:var(--ink);font-weight:600;margin-bottom:10px">Brewers have taken 5 of 6 from the Cardinals and hand the ball to Misiorowski off a 10-strikeout gem.</div>
+    <div class="sf14 dm2" style="margin-bottom:12px">STL counters with Gray, tagged for 5 in 4.2 last out — and he's 5.06 against this lineup.</div>
+    <hr class="hair">
+    <div class="caphead" style="padding:9px 0 3px"><span class="beb away" style="font-size:19px">BREWERS +124</span><span class="sf14">6-4 <span class="w">W1</span> · 5.1/3.7 RPG</span></div>
+    <div class="caphead" style="padding:3px 0 9px"><span class="beb home" style="font-size:19px">CARDINALS -138</span><span class="sf14">5-5 <span class="l">L1</span> · 4.6/4.5 RPG</span></div>
+    <hr class="hair">
+    <div class="sf14" style="padding:9px 0 3px"><span class="dm">Series:</span> <b style="color:var(--ink)">MIL 5-1</b> · 3-0 AmFam · 2-1 Busch</div>
+    <div class="sf14" style="padding-bottom:9px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL (shoulder)</span></div>
+    <hr class="hair">
+    <div class="foot" style="padding-top:9px">O/U 8.5 · Busch Stadium · 86° · Wind 6 mph</div>
+  </div>
+</div>
+
+<!-- ══════════ S17 ══════════ -->
+<div class="slot">
+  <h2>S17 · SPLIT SHEET</h2>
+  <div class="note">True two-column mirror under one header — each team's whole story in its own column, series band across.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div style="display:flex;gap:14px">
+      <div style="flex:1">
+        <div class="beb away" style="font-size:23px">BREWERS</div>
+        <div class="mono" style="font-size:13px;font-weight:700;margin:2px 0 8px">+124</div>
+        <div class="sf14">6-4 L10 <span class="w">· W1</span></div>
+        <div class="sf14">5.1 / 3.7 RPG</div>
+        <div class="sf14" style="margin-top:7px"><b style="color:var(--ink)">Misiorowski</b></div>
+        <div class="sf14"><span class="w">7 IP · 1 ER · 10 K</span> last</div>
+        <div class="sf14">2.25 vs STL (2 GS)</div>
+      </div>
+      <div style="width:1px;background:var(--hair)"></div>
+      <div style="flex:1">
+        <div class="beb home" style="font-size:23px">CARDINALS</div>
+        <div class="mono" style="font-size:13px;font-weight:700;margin:2px 0 8px">-138</div>
+        <div class="sf14">5-5 L10 <span class="l">· L1</span></div>
+        <div class="sf14">4.6 / 4.5 RPG</div>
+        <div class="sf14" style="margin-top:7px"><b style="color:var(--ink)">Gray</b></div>
+        <div class="sf14"><span class="l">4.2 IP · 5 ER</span> last</div>
+        <div class="sf14">5.06 vs MIL (3 GS)</div>
+      </div>
+    </div>
+    <hr class="hair" style="margin:12px 0 8px">
+    <div class="tug" style="margin-bottom:4px"><div class="a" style="flex:5">MIL 5</div><div class="b">1 STL</div></div>
+    <div class="mono dm" style="font-size:10px;margin-bottom:10px">SERIES · 3-0 AMFAM · 2-1 BUSCH</div>
+    <div class="sf14" style="margin-bottom:8px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span style="color:var(--ink2)">Woodruff to 15-day IL</span></div>
+    <div class="foot">O/U 8.5 · Busch · 86° · Wind 6</div>
+  </div>
+</div>
+
+<!-- ══════════ S18 ══════════ -->
+<div class="slot">
+  <h2>S18 · GOLD LEDGER</h2>
+  <div class="note">Market frame first (the ledger line), then the facts that justify it. Bookmaker's notebook order.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+      <span class="beb" style="font-size:23px"><span class="away">MIL +124</span> <span class="dm" style="font-size:16px">@</span> <span class="home">STL -138</span></span>
+      <span class="mono" style="font-size:12.5px;color:var(--ink2)">O/U 8.5</span>
+    </div>
+    <div class="mono dm" style="font-size:10.5px;margin-bottom:12px">BUSCH STADIUM · 86° · WIND 6 · RAIN 3%</div>
+    <hr class="hair">
+    <div class="sf15" style="padding:9px 0 2px"><span class="mono" style="font-size:10px;color:var(--goldim);letter-spacing:1px">SERIES&nbsp;&nbsp;</span><b style="color:var(--ink)">Brewers 5-1</b> — 3-0 AmFam · 2-1 Busch</div>
+    <div class="sf15" style="padding:5px 0 2px"><span class="mono" style="font-size:10px;color:var(--goldim);letter-spacing:1px">ARMS&nbsp;&nbsp;</span>Misiorowski <span class="w">7 IP/1 ER/10 K</span> last · 2.25 vs STL</div>
+    <div class="sf15" style="padding:0 0 2px;text-indent:52px">Gray <span class="l">4.2 IP/5 ER</span> last · 5.06 vs MIL</div>
+    <div class="sf15" style="padding:5px 0 2px"><span class="mono" style="font-size:10px;color:var(--goldim);letter-spacing:1px">TREND&nbsp;&nbsp;</span>MIL 6-4 <span class="w">W1</span> 5.1/3.7 · STL 5-5 <span class="l">L1</span> 4.6/4.5</div>
+    <div class="sf15" style="padding:5px 0 9px"><span class="mono" style="font-size:10px;color:var(--goldim);letter-spacing:1px">WIRE&nbsp;&nbsp;</span><span class="dm2">Woodruff to 15-day IL (shoulder)</span></div>
+  </div>
+</div>
+
+<!-- ══════════ S19 ══════════ -->
+<div class="slot">
+  <h2>S19 · DIVERGING BARS</h2>
+  <div class="note">Your dominance-bar language on every fact — series tug, last-outing quality bars, trend bars. Most visual.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="caphead" style="margin-bottom:4px"><span class="beb away" style="font-size:22px">BREWERS +124</span><span class="beb home" style="font-size:22px">CARDINALS -138</span></div>
+    <div class="mono dm" style="font-size:9.5px;letter-spacing:1px;margin:6px 0 3px">SEASON SERIES · 3-0 AMFAM · 2-1 BUSCH</div>
+    <div class="tug"><div class="a" style="flex:5">MIL 5</div><div class="b">1 STL</div></div>
+    <div class="mono dm" style="font-size:9.5px;letter-spacing:1px;margin:10px 0 3px">LAST OUTING (ER PER IP)</div>
+    <div style="display:flex;gap:6px;align-items:center" class="mono">
+      <span style="font-size:10.5px;color:var(--ink2)">MIS</span>
+      <div style="flex:1;height:10px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden"><div style="width:12%;height:100%;background:var(--win)"></div></div>
+      <span class="w" style="font-size:10.5px">1 ER / 7</span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:3px" class="mono">
+      <span style="font-size:10.5px;color:var(--ink2)">GRY</span>
+      <div style="flex:1;height:10px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden"><div style="width:78%;height:100%;background:var(--loss)"></div></div>
+      <span class="l" style="font-size:10.5px">5 ER / 4.2</span>
+    </div>
+    <div class="sf14" style="margin-top:10px">Misiorowski 2.25 vs STL (2 GS) · Gray 5.06 vs MIL (3 GS)</div>
+    <div class="sf14">MIL 6-4 <span class="w">W1</span> · 5.1/3.7 &nbsp;—&nbsp; STL 5-5 <span class="l">L1</span> · 4.6/4.5</div>
+    <div class="sf14" style="margin-top:5px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span class="dm2">Woodruff to 15-day IL</span></div>
+    <hr class="hair" style="margin:12px 0 9px">
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6</div>
+  </div>
+</div>
+
+<!-- ══════════ S20 ══════════ -->
+<div class="slot">
+  <h2>S20 · THE FULL PROGRAM</h2>
+  <div class="note">Everything, sectioned: arms duel → team capsules → series dots → wire → conditions. The longest, most complete.</div>
+  <div class="phone">
+    <div class="kick">SCOUTING REPORT</div>
+    <div class="mono dm" style="font-size:9.5px;letter-spacing:1.2px;margin-bottom:6px">THE ARMS</div>
+    <div class="caphead"><span class="sf15"><b style="color:var(--ink)">Misiorowski</b> <span class="mono dm" style="font-size:10.5px">MIL</span></span><span class="mono w" style="font-size:12px;font-weight:700">7 IP · 1 ER · 10 K</span></div>
+    <div class="sf14 dm2" style="margin-bottom:5px">2.25 in 2 starts vs STL · 1.47 ERA season</div>
+    <div class="caphead"><span class="sf15"><b style="color:var(--ink)">Gray</b> <span class="mono dm" style="font-size:10.5px">STL</span></span><span class="mono l" style="font-size:12px;font-weight:700">4.2 IP · 5 ER</span></div>
+    <div class="sf14 dm2">5.06 in 3 starts vs MIL · 3.41 ERA season</div>
+    <hr class="hair" style="margin:11px 0 9px">
+    <div class="mono dm" style="font-size:9.5px;letter-spacing:1.2px;margin-bottom:6px">THE TEAMS</div>
+    <div class="sf15"><span class="beb away" style="font-size:18px">BREWERS +124&nbsp;</span> 6-4 L10 <span class="w">W1</span> · 5.1/3.7 RPG</div>
+    <div class="sf15" style="margin-top:3px"><span class="beb home" style="font-size:18px">CARDINALS -138&nbsp;</span> 5-5 L10 <span class="l">L1</span> · 4.6/4.5 RPG</div>
+    <hr class="hair" style="margin:11px 0 9px">
+    <div class="mono dm" style="font-size:9.5px;letter-spacing:1.2px;margin-bottom:5px">THE SERIES</div>
+    <div><span class="sq w">A</span><span class="sq w">A</span><span class="sq w">A</span><span class="sq w">B</span><span class="sq l">B</span><span class="sq w">B</span><span class="sf14" style="margin-left:6px"><b style="color:var(--ink)">MIL 5-1</b></span></div>
+    <hr class="hair" style="margin:11px 0 9px">
+    <div class="sf14" style="margin-bottom:8px"><span class="wirep">WIRE&nbsp;&nbsp;</span><span class="dm2">Woodruff to 15-day IL (shoulder)</span></div>
+    <div class="foot">O/U 8.5 · Busch Stadium · 86° · Wind 6 · Rain 3%</div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

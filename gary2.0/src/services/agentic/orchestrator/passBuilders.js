@@ -186,16 +186,7 @@ ${scoutReport}
 </investigation_rules>
 
 <moneyline_pricing>
-## THE MONEYLINE IS A PRICE
-
-The moneyline is not a prediction of who wins — it is a price. A team at -190 is not "the team that wins"; it is a price that pays you less because the market is confident. A team at +160 is a price that pays you more because the market doubts them. Both prices are shaped by recent results, goaltender reputation, team brand, and public perception as much as by tonight's actual matchup.
-
-**DESCRIPTIVE vs CAUSAL:**
-- Descriptive factors (records, standings, streaks, reputation, a hot save percentage) explain WHY the price is set where it is. They are already IN the price.
-- Causal factors (tonight's goaltending, 5-on-5 play, special teams, matchup dynamics) explain how this specific game is likely to play.
-- When you cite a record, ranking, or season stat — ask yourself: "Is this describing what already happened, or explaining what matters tonight — and has the price already paid for it?"
-
-The moneyline and puck line are two ways to price the same read. A short price and a long price are two sides of one question: does the price match how you read this game?
+The prices you see were set AFTER the goalie situations, schedule, and injuries were known. The question is not whether these factors exist — everyone can see them — but whether the price has accounted for them correctly for THIS game. Records and streaks describe what has happened — they are not reasons for or against a price.
 </moneyline_pricing>
 
 <instructions>
@@ -239,16 +230,7 @@ ${scoutReport}
 </investigation_rules>
 
 <spread_evaluation>
-## THE SPREAD IS A PRICE
-
-The spread is not a prediction — it is a price. Lines are shaped by recent performance, roster status, standings context, and public perception. Transient factors — rest, travel, weather, and injury timing — can shift a line away from where the underlying matchup data points.
-
-**DESCRIPTIVE vs CAUSAL:**
-- **Descriptive factors** (records, rankings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
-- **Causal factors** (unit matchups, efficiency profile, situational context) explain how this specific game is likely to play.
-- **The SPOT** (venue, schedule, weather, travel, stakes) is reflected in pricing — investigate whether the adjustment is proportionate to what the data shows.
-
-When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what matters tonight?"
+The spread you see was set AFTER the schedule, injuries, weather, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
 
 ## SPREAD EVALUATION FACTORS
 
@@ -296,16 +278,7 @@ ${scoutReport}
 </investigation_rules>
 
 <spread_evaluation>
-## THE SPREAD IS A PRICE
-
-The spread is not a prediction — it is a price. Lines are shaped by recent performance, rankings, roster status, and public perception. Transient factors — travel, weather, venue environment, and motivation context — can shift a line away from underlying opponent-adjusted evidence.
-
-**DESCRIPTIVE vs CAUSAL:**
-- **Descriptive factors** (records, rankings, streaks, program reputation) explain WHY the line is set where it is. They are already IN the price.
-- **Causal factors** (efficiency profile, trenches, explosiveness, matchup mechanics, situational context) explain how this specific game is likely to play.
-- **The SPOT** (venue, travel, weather, schedule, stakes) is reflected in pricing — investigate whether the adjustment is proportionate to what the data shows.
-
-When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what matters tonight?"
+The spread you see was set AFTER the schedule, rankings, injuries, and travel situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
 
 ## SPREAD EVALUATION FACTORS
 
@@ -344,7 +317,7 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
-  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline' : (isSoccer ? 'side (3-way ML or Asian handicap) AND a total' : 'spread'));
+  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : (isSoccer ? 'side (3-way ML or Asian handicap) AND a total' : 'spread'));
   const betTypeNote = isNHL
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
     : isSoccer
@@ -353,7 +326,13 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 2. A TOTAL play — Over or Under the match-goals line.
 Use only markets the odds actually show, and report the EXACT odds for each play.
 
-FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heavier than -200) is NOT offered to you — when a favorite is that short you will see no moneyline price for them in the RAW ODDS VALUES, so backing their bare moneyline is not an available pick. This is a structural constraint on the available prices, NOT a directional hint. The standard Asian handicap is still shown, so you can back that favorite at the goal line (e.g. -1.5), take the underdog's moneyline, or take the Draw — choose whichever side your own analysis of this match supports.`
+FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heavier than -200) is NOT offered to you — when a favorite is that short you will see no moneyline price for them in the RAW ODDS VALUES, so backing their bare moneyline is not an available pick. This is a structural constraint on the available prices, NOT a directional hint. The standard Asian handicap is still shown, so you can back that favorite at the goal line (e.g. -1.5), take the underdog's moneyline, or take the Draw — choose whichever side your own analysis of this match supports.
+
+ONE MATCH, ONE READ: both plays come from the same read of the match. They may differ in confidence, but the two rationales must describe the SAME game. If the side case and the total case need contradictory match scripts, one of them is wrong: re-examine before finalizing.`
+    : isMLB
+    ? `**BET TYPE:** Two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). The mechanics: -1.5 pays only on a win by 2+ runs — a one-run win pays the moneyline and LOSES -1.5; +1.5 cashes on a win or a one-run loss. They are different bets on different outcomes, not two prices for the same opinion — take the bet that pays if your read is right, not the one that makes a price you dislike look better.
+
+Check each offered line in both directions — does your read beat the price on either side of the moneyline, and on either side of the run line? A line can be wrong toward the favorite or toward the dog; the ticket is wherever your read and the number disagree — and if they nowhere disagree, your strongest conviction is still a real bet.`
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
@@ -361,7 +340,7 @@ FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heav
   if (isNHL) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (isMLB) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away) moneyline.`;
+    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
   } else if (isSoccer) {
     lineContext = `Line context: ${homeTeam} (home) vs Draw vs ${awayTeam} (away). Pick the market your investigation supports (3-way ML, Totals, or Asian handicap).`;
   } else {
@@ -369,7 +348,7 @@ FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heav
   }
 
   const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
-  const useOpenDecision = isMLB || isNCAAB;
+  const useOpenDecision = isNCAAB;
 
   // Soccer ships TWO plays per match (a side + a total), so the "Final Decision"
   // line and the structured-output JSON differ from the single-pick sports.
@@ -384,15 +363,15 @@ Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
 \`\`\`json
 {
   "side_pick": "[Team] [ML / Draw / -1.5 / +0.5 ...] [odds]",
-  "side_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this SIDE — write it the same way you do for every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs that lead with what carries the pick, name the strongest argument against it and why you took it anyway; drawn from your read above]",
+  "side_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this SIDE — write it the same way you do for every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs giving the real reasons for this pick; drawn from your read above]",
   "side_confidence": 0.XX,
   "total_pick": "[Over/Under] [goals] [odds]",
-  "total_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this TOTAL — same depth as every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs that lead with what carries the pick, name the strongest argument against it and why you took it anyway; drawn from your read above]",
+  "total_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this TOTAL — same depth as every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs giving the real reasons for this pick; drawn from your read above]",
   "total_confidence": 0.XX
 }
 \`\`\`
 
-**confidence (0.50-1.00):** Set EACH organically from the strength of the evidence for that specific play — do NOT default. The two plays are independent and may differ in confidence.
+**confidence (0.50-1.00):** Set EACH organically from the strength of the evidence for that specific play — do NOT default. The two confidences may differ, but both plays must come from the same read of the match. Confidence measures your read against the price — not the shortness of the price.
 
 Your JSON must include all six fields. A missing field will cause a system error.`
     : `Format:
@@ -405,7 +384,7 @@ Your JSON must include all six fields. A missing field will cause a system error
 }
 \`\`\`
 
-**confidence_score (0.50-1.00):** How confident are you in this pick? Set it organically based on the strength of the evidence — do NOT default.
+**confidence_score (0.50-1.00):** How confident are you in this pick? Set it organically based on the strength of the evidence — do NOT default. Confidence measures your read against the price — not the shortness of the price.
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
@@ -420,15 +399,11 @@ Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tool
 </decision_checkpoint>
 
 <synthesis>
-You investigated this game, your research assistant handed you a full briefing, and you built the case for each side in Pass 1. Now make the call — for yourself, honestly, before you write anything anyone else reads.
-
-You are reading how THIS specific game goes, the way a sharp gambler does. A single game runs on huge variance: favorites get beaten all the time, any team can take any other on a given night, and the outcome turns on far more than the box-score edges. Find the read you would put your own money on — a matchup you genuinely trust, a spot you think the market has wrong, a situation that tips the game your way. Lead with the one or two things that actually carry your pick and let the rest sit as supporting context. Hold the best argument against your side in view, and take your side because your read outweighs it. Trust that read even when the surface numbers lean the other way — that judgment is the whole job, and it is what makes this gambling rather than arithmetic.
-
-One specific habit when you cite "expected" or luck-adjusted metrics (an xERA or xwOBA gap in baseball; any over/under-performance signal): that gap is a read on the PRICE — whether the market is paying for something fragile or solid — so frame it exactly that way: "the market is overpaying for a fragile number." It is context for value, not a verdict on tonight. Over a single game a player or team "due to regress" performs anyway all the time, so let the gap shape how you value the price, and decide the game itself on the full matchup — never make "regression is coming" the load-bearing reason for a pick.
+You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now the actual job: the betting options in front of you are what you are picking from — you are not being asked who is better or who wins on paper; the prices already say what the world thinks. You are picking the BEST BET on this board: hold your read of tonight against the options and take the ticket you would put your own money on. Sometimes that is the favorite at a fair price. Sometimes it is the underdog, because the price pays far more than your read of a close game requires. And sometimes your read simply says a side gets it done regardless of the numbers — that conviction, owned plainly, is a real sports betting decision. Commit now and draft the exact rationale that should appear on the pick card.
 </synthesis>
 ${useOpenDecision ? `
 <decision_freedom>
-Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. The goal is to win, and sometimes that takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours. It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don't.
+Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. You keep what the ticket pays, and sometimes earning it takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours. It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don't.
 </decision_freedom>
 ` : ''}
 ${decisionGuards ? `<sport_decision_guards>\n${decisionGuards}\n</sport_decision_guards>\n` : ''}
@@ -446,7 +421,7 @@ Gary's Take
 
 [3 paragraphs, plain text, ~250-400 words]
 
-This "Gary's Take" draft is the rationale that appears on the pick card. Write the real version of why you landed here. Lead with the one or two things that carry your pick and bring the rest in as support. Name the strongest argument against your side and explain why you took your side anyway — that honesty is what real handicapping looks like.
+This "Gary's Take" draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it.
 Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
@@ -465,7 +440,7 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 2. RECORDS: Records describe what happened, not what will happen.
 3. Do NOT predict your own margin or final score.
 4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers are from 2024 and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
-5. NO EMOJIS. Data analyst reasoning only — no tactical/scheme/film claims.
+5. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.
 </negative_constraints>
 
 ## STRUCTURED OUTPUT (REQUIRED AFTER THE PROSE)
@@ -547,7 +522,7 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 2. RECORDS: Records describe what happened, not what will happen.
 3. Do NOT predict your own margin or final score.
 4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers are from 2024 and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
-5. NO EMOJIS. Data analyst reasoning only — no tactical/scheme/film claims.
+5. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.
 </negative_constraints>
 </instructions>`.trim();
 }
@@ -691,7 +666,15 @@ export function getFinalizePropsToolForSport(sport) {
           picks: {
             type: 'array',
             items: getPropsPickSchema(sport),
-            description: 'Your best 2 prop picks from different players'
+            description: 'Up to 2 prop picks from different players. May be EMPTY (with no_play: true) when no prop clears its break-even bar.'
+          },
+          no_play: {
+            type: 'boolean',
+            description: 'Set true ONLY when passing on this game entirely (picks must be empty). Passing when nothing clears the break-even bar is a legitimate decision.'
+          },
+          pass_reason: {
+            type: 'string',
+            description: 'One line on why this board offered no playable edge (required when no_play is true).'
           }
         },
         required: ['picks']
@@ -785,13 +768,13 @@ You just analyzed ${awayTeam} @ ${homeTeam} in depth. Now evaluate PLAYER PROPS 
 
 Connect your game analysis to individual player production. The line reflects established roles, long-term absences, and recent production patterns.
 
-**THE UNDER IS A FIRST-CLASS PICK.** For EVERY prop you seriously consider, evaluate BOTH sides before choosing. The under wins whenever the player falls short — pitching matchups, reduced volume, cold contact quality, and blowout substitutions all pay the under. A prop slate that is all overs means you evaluated only half the market. Historically, graded over-picks in this product have hit far below their break-even while unders have cleared theirs — treat that asymmetry as a standing reason to take the under seriously.
+**THE UNDER IS A FIRST-CLASS PICK.** For EVERY prop you seriously consider, evaluate BOTH sides before choosing. The under wins whenever the player falls short — pitching matchups, reduced volume, cold contact quality, and blowout substitutions all pay the under. A prop slate that is all overs means you evaluated only half the market. Neither side is the default: the over must beat the under on evidence, and the under must beat the over the same way — a slump is not automatically an under any more than a hot streak is automatically an over; both are already in the line.
 
 **PRICE ANCHOR (HARD RULE):** Each line above shows the break-even win probability its odds require ("needs >X%"). Only pick a side if your honest estimate of its probability EXCEEDS its break-even number. A +270 over needs to hit just 27% of the time — but if your real estimate is 15%, it is a losing bet at any narrative quality. State the side's break-even % in your key_stats.
 
 **DIVERSITY CHECK:** If all picks are the same direction or on the most obvious players, re-examine independently.
 
-Select your 2 best props from DIFFERENT players. Call finalize_props with your picks. Rationale should read like a game pick rationale — specific stats and matchup reasoning.
+Select 2 props from DIFFERENT players — the two strongest cases on this board, each on the side your evidence actually supports at its price (state the side's break-even % in key_stats). Two per game is the standard, and with both sides of every line genuinely evaluated it should rarely be hard to find two you can defend — take them with conviction. Reserve no_play (empty picks array, no_play: true, one-line pass_reason) for a board that gives you nothing to work with: missing lines, missing stats, a slate wipeout — a structural fallback, not a nightly option. Rationale should read like a game pick rationale — specific stats and matchup reasoning.
 
 If you need specific player stats before finalizing, you can still call fetch_stats tools.
 
@@ -813,16 +796,6 @@ Do NOT default to the over — an over pick must beat the under on evidence, not
 function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   const factors = getMlbSpreadFactors();
   const mlbAwareness = getMlbSeasonAwareness();
-  const absSpread = Math.abs(spread || 0);
-
-  let runLineSizeBlock = '';
-  if (absSpread >= 4.5) {
-    runLineSizeBlock = `\n\n**TONIGHT'S RUN LINE SIZE: LARGE (${absSpread} runs)**\nAt this run line size, the handicap is large — the market sees significant separation between these teams today. Large run lines are influenced by recent results, public perception, pitcher matchup, roster reputation, and more — as much as by the underlying matchup data. Season stats and team reputation are already baked into the run line.`;
-  } else if (absSpread <= 1.5 && absSpread > 0) {
-    runLineSizeBlock = `\n\n**TONIGHT'S RUN LINE SIZE: CLOSE (${absSpread} runs)**\nAt this run line size, the handicap is small — the market sees these teams as closely matched or within a narrow margin for this game. The run line still accounts for all the same factors — narratives, pitcher matchup, bullpen availability, public perception, and more. The market doesn't see much separation between these two teams today.`;
-  } else if (absSpread > 1.5) {
-    runLineSizeBlock = `\n\n**TONIGHT'S RUN LINE SIZE: MEDIUM (${absSpread} runs)**\nAt this run line size, the handicap reflects clear separation between the teams — the market sees one side as meaningfully better for this game. The run line accounts for narratives, pitcher matchup, bullpen availability, public perception, and more. Season stats, reputation, and situational context are already baked into the run line.`;
-  }
 
   return `
 <scout_report>
@@ -844,38 +817,16 @@ ${mlbAwareness}
 
 </investigation_rules>
 
-<spread_evaluation>
-## THE MONEYLINE IS A PRICE
-
-The moneyline is not a prediction of who wins — it is a price. A team at -190 is not "the team that wins"; it is a price that pays you less because the market is confident. A team at +160 is a price that pays you more because the market doubts them. Both prices are shaped by recent results, pitcher reputation, team brand, and public perception as much as by tonight's actual matchup.
-
-**DESCRIPTIVE vs CAUSAL:**
-- Descriptive factors (records, standings, streaks, reputation, a shiny season ERA) explain WHY the price is set where it is. They are already IN the price.
-- Causal factors (tonight's pitching matchup, bullpen state, lineup handedness, park and weather) explain how this specific game is likely to play.
-- When you cite a record, ranking, or season stat — ask yourself: "Is this describing what already happened, or explaining what matters tonight — and has the price already paid for it?"
-
-A short price and a long price are two sides of the same question: does the price match how you read this game?
-
-## MLB BET TYPES
-
-- **Moneyline (ML):** Back a team to win outright. The price reflects the market's view of each team's win probability.
-- **Run Line (RL):** Standard -1.5 / +1.5. Favorite must win by 2+ runs. Underdog covers if they win or lose by exactly 1.
-
-Investigate the matchup, read how the game plays out, and choose the side, the price, and the bet type (ML or RL) you would put your own money on.${runLineSizeBlock}
-
-## RUN LINE EVALUATION FACTORS
-
-Use these factors as investigation lenses. Keep findings factual and symmetric across both teams.
+<reading_the_game>
+## READING THIS GAME
 
 ${factors}
-</spread_evaluation>
+</reading_the_game>
 
 <instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
 
-Your job is to find the best bet on this game tonight — the side, and the price, that you would put your own money on. Sometimes that bet is the favorite, sometimes the underdog; the price is part of the bet, not just the question of who is the better team. Investigate the full matchup — starting pitchers, lineups, bullpen availability, park factors, weather, series context, injuries — and build your understanding of which team has the edge, and whether the price reflects it.
-
-The moneyline tonight was set after the probable pitchers, schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the price reflects the actual matchup for THIS game. Records and standings describe what has happened — they are not reasons for or against a moneyline.
+Your job in this pass is the READ: investigate the game — the pitchers taking the mound tonight, the lineups, the bullpens, the park, the schedule, the recent context — and build your honest read of how this game actually goes. The betting options come after your read is formed; do not shop prices now.
 
 Beyond the stats, consider the feel of the game: which team is rolling right now? Which pitcher is struggling? What's the series context? Is there momentum or pressure from recent results? Your research assistant also surfaced situational details — spring training form, velocity changes, weather, travel, and other context that may not show up in stat lines.
 
@@ -884,7 +835,7 @@ Use the scout report + research briefing as your starting point, then investigat
 Before completing Pass 1, include BOTH sections:
 Case for backing ${homeTeam} tonight
 Case for backing ${awayTeam} tonight
-(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — the matchup reasons it wins and why its price is one you'd take. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture. Note the price on each side.)
+(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — how they win this game and what carries it. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture.)
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -898,21 +849,25 @@ function buildSoccerPass1(scoutReport, today, homeTeam, awayTeam, spread) {
 ${scoutReport}
 </scout_report>
 
-<bet_type_menu>
-This is a 3-way soccer match. Pick from whichever markets the scout report shows odds for:
-**Moneyline (3-way):** ${homeTeam} to win, Draw, or ${awayTeam} to win — three separately priced outcomes (settles on 90 minutes).
-**Totals (O/U goals):** Over/Under total match goals, when a line is shown.
-**Asian Handicap:** the single standard goal line the scout report shows (a team -1.5 / the other +1.5, etc.) — pick a side on that line, never an alt line.
-Use only markets present in the scout report odds, and transcribe the exact odds.
-</bet_type_menu>
+<investigation_rules>
+## INJURY & AVAILABILITY TIMING
+
+- Use the AVAILABILITY TIMING tags from the scout report exactly as shown, and date every availability claim from the research.
+- **FRESH (started their last match, flagged since):** the market may still be settling it — investigate the replacement and the news recency, not the name alone.
+- **PRICED IN (already missing from their last match or longer):** the line was set knowing it; the team you are evaluating IS the team without them. Citing it as tonight's edge is using news the price already ate.
+- Suspensions — including yellow-card accumulation bans — are announced in advance and priced the moment they're known.
+- An absence is never the factor by itself: the question is whether the line has moved too far, or not far enough, on a fact everyone can see.
+</investigation_rules>
 
 <instructions>
-Investigate BOTH teams across the soccer factors (form, attack/xG, defense, set pieces, availability/injuries/suspensions, group/tournament context, fatigue/rest/travel, weather/altitude). Report findings with specific numbers — do not state what any factor means for the pick.
+Your job in this pass is the READ: how does this match actually go? The betting options come after your read is formed; do not shop prices now.
 
-Before finishing, include three cases (2-3 full PARAGRAPHS each — actually EXPLAIN each one and tell the story of the matchup, the way you would for any other sport; not a couple of sentences), grounded only in what you investigated:
-Case for ${homeTeam} winning tonight
-Case for a Draw
-Case for ${awayTeam} winning tonight
+Investigate BOTH teams with the tape and research you actually have. There is no fixed factor list to walk: some matches turn on availability, some on a stylistic clash, some on heat or altitude, some on what a team needs from the game. Lead with whatever YOUR investigation says decides THIS match. Report findings with specific numbers (say "unavailable" where the tape shows none) — do not state what any factor means for the pick.
+
+Before finishing, include three cases (2-3 full PARAGRAPHS each — actually EXPLAIN each one and tell the story of the matchup, the way you would for any other sport; not a couple of sentences), grounded only in what you investigated. Each case argues for BACKING that outcome tonight — the concrete path on the pitch, what would have to happen:
+Case for backing ${homeTeam}
+Case for backing the Draw
+Case for backing ${awayTeam}
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE

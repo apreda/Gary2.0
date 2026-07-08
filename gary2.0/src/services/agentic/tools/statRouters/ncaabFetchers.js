@@ -440,7 +440,9 @@ Only report numbers from ncaa.com. If not found, write "not found".`;
       ]);
 
       const extractNetData = (response) => {
-        let content = (response?.content || response?.choices?.[0]?.message?.content || '').toLowerCase();
+        // Jul 8 2026 fix: geminiGroundingSearch returns {success, data, raw} —
+        // the old .content / OpenAI-choices reads always produced ''.
+        let content = (response?.data || '').toLowerCase();
         // grounding.js now PRESERVES the model's staleness self-corrections
         // ("Wait, that NET 45 is from last season" / "(2024 season figure — STALE)")
         // so downstream prose readers can discount them. This regex extractor

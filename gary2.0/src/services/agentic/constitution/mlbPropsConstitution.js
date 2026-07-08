@@ -25,7 +25,6 @@ const MLB_SPORT_AWARENESS = `
 
 ### THE PROP LINE
 - Prop lines are set from a player's season averages, recent form, and the opposing pitcher matchup
-- Platoon splits can lag in prop line adjustments — a switch hitter facing a LHP vs RHP may not be fully reflected
 - Lineup confirmation moves hitter props — a player batting 2nd has different AB expectations than batting 7th
 - Pitcher strikeout props are set from the pitcher's K rate and the opposing lineup's K rate — both sides matter
 - Prop markets have less betting volume than game spreads and totals — lines can be less precise

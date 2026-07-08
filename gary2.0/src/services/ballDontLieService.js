@@ -280,8 +280,12 @@ const ballDontLieService = {
    */
   async getOddsV2(params = {}, sport = 'nba', ttlMinutes = 1) {
     try {
-      // Normalize sport key (e.g. 'basketball_nba' -> 'nba')
-      let sportKey = 'nba';
+      // Normalize sport key (e.g. 'basketball_nba' -> 'nba').
+      // Jul 6 2026 audit: an unmapped sport used to silently default to 'nba' —
+      // soccer odds requests hit the NBA endpoint (401 → WC picks stored
+      // sportsbook_odds: null; a success would have attached NBA prices to a
+      // soccer match). Unmapped sports now bail loudly with no network call.
+      let sportKey = null;
       const s = String(sport).toLowerCase();
       if (s.includes('nfl')) sportKey = 'nfl';
       else if (s.includes('mlb')) sportKey = 'mlb';
@@ -289,6 +293,10 @@ const ballDontLieService = {
       else if (s.includes('ncaaf')) sportKey = 'ncaaf';
       else if (s.includes('ncaab')) sportKey = 'ncaab';
       else if (s.includes('nba')) sportKey = 'nba';
+      if (!sportKey) {
+        console.warn(`[Ball Don't Lie] getOddsV2: no odds endpoint mapped for sport "${sport}" — returning [] (never defaulting to another sport's route)`);
+        return [];
+      }
 
       const norm = {};
       // Use plain keys 'dates' / 'game_ids'. 

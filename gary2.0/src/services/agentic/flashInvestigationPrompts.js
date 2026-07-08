@@ -828,26 +828,9 @@ The scout report already includes detailed context from both grounding searches 
 
 - If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific date]"). If you cannot determine when an injury occurred, do not include it in your findings.
 
-### 11. MOTIVATION & STAKES
-**Tokens:** STANDINGS, MLB_TEAM_RECORD
-- Is either team in a playoff race where every game matters? Or is a team eliminated/comfortable?
-- Is this a rivalry game (division, interleague tradition, geographic)?
-- Series position: rubber match games carry more intensity than game 1 of a series.
-- Are there any individual milestones in play (milestone win for a pitcher, hitting streak) that could affect lineup decisions?
-- Is either team likely to rest starters or manage workloads given their standings position? Eliminated teams in September often prioritize development over winning.
-- Are either team's starters on an innings limit or pitch count that might cause an early hook regardless of game state?
-
-### 12. ODDS & PUBLIC PERCEPTION
-**Tokens:** MLB_ODDS
-- What are the current moneyline and run line odds? What is the total (over/under)?
-- Is the line moving? In which direction and why? Line movement in MLB often signals sharp action on one side.
-- Is a star pitcher drawing heavy public money on the ML? Public action concentrates on aces and big-market teams.
-- For heavy favorites (-200+): evaluate whether the run line offers better structure than the expensive ML.
-- What is the implied probability from the moneyline for each team? How does that compare to what the stats and matchup data suggest?
-- Has the total moved since open? Total movement often reflects late weather updates, lineup announcements, or sharp betting action on one side.
-
-### 13. RUN LINE & TOTAL CONTEXT
+### 11. RUN LINE & TOTAL CONTEXT
 **Tokens:** MLB_RECENT_FORM, MLB_ODDS
+- Are either team's starters on an innings limit or pitch count that might cause an early hook regardless of game state?
 - How often does each team win by 2+ runs vs 1-run games? This affects whether the winning team is likely to cover -1.5.
 - What is each team's scoring output over the last 10 games — trending up or down?
 - What does the runs-per-game average look like for both teams at this venue specifically?
@@ -1002,6 +985,8 @@ const SOCCER_WC_FACTORS = `## INVESTIGATION CHECKLIST — SOCCER (2026 FIFA Worl
 
 Work through each factor for BOTH teams and report findings factually. Do not state what a factor means for the pick — report the facts; Gary decides.
 
+OPPOSITION CONTEXT (applies to every stats factor below): whenever you report a per-match average or aggregate (goals, xG, xGA, shots, clean sheets, form records), name the opponents the sample was compiled against — a line built against group-stage minnows and one built against knockout-calibre sides are different facts. Report the opposition; Gary judges what transfers.
+
 ### DATA REALITY CHECK (read first)
 Our structured data covers WORLD CUP FINALS MATCHES ONLY (2018/2022/2026 editions). It contains NO qualifiers, NO friendlies, NO club football, NO pre-tournament form of any kind.
 - **Matchday 1 (each team's first match): there are ZERO completed 2026 matches.** In-tournament form, xG, possession, goals-per-match DO NOT EXIST yet — the tools will say so explicitly. Do NOT substitute numbers from the 2022 World Cup, qualifiers, or memory; your training data predates the 2026 squads entirely.
@@ -1019,14 +1004,15 @@ Our structured data covers WORLD CUP FINALS MATCHES ONLY (2018/2022/2026 edition
 ### 3. DEFENSIVE RECORD
 - In-tournament goals conceded per match and xGA (GOALS_CONCEDED, TEAM_MATCH_STATS). Same rule: tool figures only.
 
-### 4. LINEUPS, INJURIES & SUSPENSIONS (grounding only — no structured source)
-- Use fetch_narrative_context for confirmed XI/formation, injuries, and suspensions (including yellow-card accumulation). Distinguish confirmed-out vs doubtful; note the DATE of the latest update. If you cannot date it, do not report it.
+### 4. AVAILABILITY: LINEUPS, INJURIES & SUSPENSIONS
+- Confirmed starting XI (LINEUPS) and injury timing are structured — the scout report's AVAILABILITY TIMING section already tags each absence FRESH or PRICED IN from real lineup data. Read it there first; re-fetch LINEUPS only if you need the freshest confirmed-XI snapshot.
+- Suspensions and yellow-card accumulation have no structured feed anywhere — use fetch_narrative_context, or the scout report's SAME-DAY WIRE section. Distinguish confirmed-out vs doubtful; note the DATE of the latest update. If you cannot date it, do not report it.
 
 ### 5. GROUP / TOURNAMENT CONTEXT
 - Group position, points, goal difference (GROUP_STANDINGS — note: before any matches, positions are seeding only). What result does each side need? Any "already qualified" rotation risk (later matchdays)?
 
-### 6. FATIGUE, REST & TRAVEL
-- Days of rest vs the opponent and travel between host cities — derivable from the match schedule; cite dates.
+### 6. SCHEDULE (report the rest days with dates and stop)
+- Days of rest for each side and travel between host cities — cite the dates and leave it there. Do NOT build a fatigue narrative around the gap: the schedule is fully public and fully priced, and recovery at this level is professionalized. Only elevate it if you ground CONCRETE evidence (visible rotation plans, a manager quoting tired legs, an injury attributed to the schedule) — dated, as always.
 
 ### 7. CONDITIONS
 - Venue, altitude (e.g. Mexico City), heat/weather, kickoff time — ground for weather; the venue is in the scout report.
@@ -1034,8 +1020,11 @@ Our structured data covers WORLD CUP FINALS MATCHES ONLY (2018/2022/2026 edition
 ### 8. HEAD-TO-HEAD
 - World Cup meetings from WC_H2H_HISTORY (2018/2022/2026 editions only). Broader all-time H2H requires grounding with dates — never from memory.
 
+### 9. STORYLINES & FAN CONTEXT
+- Squad and roster news, team and player reputations, fan and media sentiment, and how the travel/schedule between host cities is being talked about (GAME_PREVIEW, or the scout report's SAME-DAY WIRE section). This is the fan-knowledge layer no stat token carries — the storylines and context a fan following the tournament would already know. Report it factually, dated where possible; it is awareness, not a reason to pick a side.
+
 ### YOUR SCOUT REPORT IS YOUR BASELINE
-The scout report (group standings, odds, any in-tournament stats) is your starting point. Re-fetch any stat and use grounding for lineups/injuries/suspensions/weather. Every number in your findings must come from a tool response, the scout report, or a DATED grounding result.`;
+The scout report (group standings, odds, any in-tournament stats, AVAILABILITY TIMING, SAME-DAY WIRE) is your starting point. Re-fetch any stat; ground for suspensions/card status, and anything the scout report doesn't already answer. Every number in your findings must come from a tool response, the scout report, or a DATED grounding result.`;
 
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,

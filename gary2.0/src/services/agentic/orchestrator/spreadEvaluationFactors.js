@@ -33,18 +33,18 @@ Hockey streaks can be driven by goaltending, special teams, shooting variance, o
 Back-to-backs, travel, and compressed schedules affect NHL pricing. The line adjusts for these — investigate whether the adjustment matches the actual impact on each team's roster and goaltending deployment.
 
 ### 6. INJURY IMPACT ON PRICE
-Established absences are already in the team's stats and the line. FRESH/SHORT-TERM absences may not be fully reflected in the price yet. Depth matters more in hockey than casual observers assume.
+Established absences are already in the team's stats and the line. FRESH/SHORT-TERM absences may not be fully reflected in the price yet.
 
 ### 7. VARIANCE & CLOSE-GAME RECORDS
-Hockey has more single-game variance than any major sport. Teams can sustain shooting percentages, save percentages, and close-game records that the underlying process doesn't support. PDO (shooting% + save%) shows where results and process diverge.`;
+Hockey runs on heavy single-game variance. Teams can sustain shooting percentages, save percentages, and close-game records that the underlying process doesn't support. PDO (shooting% + save%) shows where results and process diverge.`;
 }
 
 export function getNflSpreadFactors() {
   return `### 1. QB STATUS & INJURY TIMING
-Quarterback status moves NFL lines faster than any other single variable. Fresh uncertainty can change the number quickly, while long-running absences are usually reflected in the team's baseline performance.
+Quarterback status moves NFL lines. Fresh uncertainty can change the number quickly, while long-running absences are usually reflected in the team's baseline performance.
 
 ### 2. TRENCHES & PRESSURE PROFILE
-Offensive line vs pass rush and run-block vs front-seven matchups often define game shape before skill-position production shows up. Public attention is usually on headlines and star players, so line pricing can lag trench dynamics.
+Offensive line vs pass rush and run-block vs front-seven matchups often define game shape before skill-position production shows up.
 
 ### 3. SCHEDULE LOAD & TRAVEL
 Short weeks, cross-country travel, rest asymmetry, and time-zone context all influence NFL prices. Separate broad schedule narratives from each team's actual performance in similar spots.
@@ -86,44 +86,33 @@ Outdoor conditions and venue environment can change play-calling and efficiency 
 }
 
 export function getMlbSpreadFactors() {
-  return `### 1. STARTING PITCHER MATCHUP
-The starting pitcher matchup is one of the inputs the opening line is built around — the biggest single one — but it is one piece of the game, not the whole. The bullpen, the lineups across all nine innings, the park, and variance decide the rest. Investigate the starters thoroughly, then weight them against everything else.
+  return `A baseball game is not decided by a checklist, and the same two or three arguments do not decide every game. The starting pitchers are one piece: nine innings of lineups, the bullpens behind both starters, the park and its conditions, the schedule and series situation, the stakes, and plain variance decide the rest. Which of those matters TONIGHT is the actual question.
 
-### 2. BULLPEN AVAILABILITY & WORKLOAD
-Bullpen usage over the previous 2-3 games directly affects available arms tonight. Teams playing their 6th or 7th game in a row may have a depleted bullpen.
-
-### 3. LINEUP CONSTRUCTION & PLATOON ADVANTAGES
-Lineup order and handedness matchups against the opposing starter affect how each lineup profiles against the pitching. Rest days, platoon splits, and injuries to key bats change the lineup's expected output.
-
-### 4. DIVISION & STANDINGS CONTEXT
-Division games, rivalry matchups, and playoff race implications affect team motivation, lineup decisions, and bullpen usage. Late-season games with playoff implications carry different weight than early-season games.
-
-### 5. VENUE & CONDITIONS
-Park factors, weather (wind, temperature, humidity), and indoor/outdoor environment all affect scoring. Coors Field plays very differently from Oracle Park or Tropicana Field.
-
-### 6. PUBLIC ACTION & LINE MOVEMENT
-Star pitchers, team brands, and winning streaks drive public action and move lines. The line reflects market sentiment as much as matchup data.
-
-### 7. REST, TRAVEL & SCHEDULE
-Travel days, day games after night games, and series positioning (game 1 vs game 4) all affect team freshness and preparation.`;
+Some nights one thing decides it; some nights it's the whole picture. Lead with what YOUR investigation of this game surfaces — not with what usually matters in baseball — and keep findings factual and symmetric across both teams. If you find yourself building tonight's case out of the same parts as yesterday's, that is a sign you are reciting, not reading.`;
 }
 
 /**
- * MLB Season Awareness — injected at Pass 1 and in Flash research briefing.
+ * MLB Awareness — injected at Pass 1 and in Flash research briefing.
+ * Jul 7 restoration: era-B text (May 28-Jun 28, the +18.3u month) verbatim,
+ * with exactly three emendations — the F-6 quotable ("shiny ERA is fragile")
+ * stays dead, the founder's streak license rides the momentum bullet, and the
+ * anti-fixation self-check (the Dodgers guard) is appended.
  */
 export function getMlbSeasonAwareness() {
   return `## MLB SEASON AWARENESS
 
 MLB is a 162-game marathon. Unlike short-sample tournaments, you have months of data — but that data needs context. A team's April performance may not reflect who they are in August. Recent form (last 10-15 games) is often more predictive than season-long averages.
 
-**What matters most in MLB game analysis:**
-- **The starting pitcher is the biggest single lever — but it is one lever, not the whole game.** A starter throws roughly 6 of 18 half-innings and faces the lineup only 2-3 times; the offense across all 9 innings, the bullpen's 3 innings, the defense, and plain variance decide the rest. A clear edge on the mound moves the needle, but it rarely settles a game by itself — weigh it honestly against everything else rather than treating it as decisive. Recent form (last 3-5 starts), pitch count trends, and performance against this specific lineup are more telling than season ERA alone.
+**MLB game analysis — what to look at:**
+- **The starting pitcher is one lever, not the whole game.** A starter throws roughly 6 of 18 half-innings and faces the lineup only 2-3 times; the offense across all 9 innings, the bullpen's 3 innings, the defense, and plain variance decide the rest. A clear edge on the mound moves the needle, but it rarely settles a game by itself — weigh it honestly against everything else rather than treating it as decisive. Recent form (last 3-5 starts), pitch count trends, and performance against this specific lineup are more telling than season ERA alone.
+- **The probable pitchers are announced before the line is set — every price already knows who is pitching.** Whether tonight's price over-weighs a starter, under-weighs him, or has him exactly right is yours to judge and factor in or not factor in to your final pick decision.
 - **Bullpen state changes daily.** A team's closer pitching 3 of the last 4 days, a setup man on a back-to-back, or a bullpen game after extra innings yesterday — these affect how the game plays out from the 6th inning onward. Investigate availability for both teams.
 - **Park factors are real.** Coors Field inflates run totals by 20-30%. Pitcher-friendly parks suppress scoring. Indoor stadiums remove weather variables entirely.
-- **Schedule and rest matter.** Day games after night games, long road trips, cross-country travel, and series positioning (rubber games) all affect performance.
+- **Schedule and rest matter.** Day games after night games, long road trips, cross-country travel, and series positioning (rubber games) all affect performance. All of it is public and already in the price — the question is whether the number moved too much, or not enough, on it.
 - **Division familiarity cuts both ways.** Teams in the same division play 19 times per season. Hitters see the same pitchers repeatedly — familiarity can help the offense or the pitcher depending on adjustments.
-- **Baseball has more game-to-game variance than any other major sport.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
-- **Expected stats read sustainability and price — not tonight's result.** When a pitcher's ERA outruns his xERA (or a hitter's results outrun their xwOBA), that gap tells you whether the season-long results are built on something solid or fragile, and therefore whether the market price is fair. Treat it as a price question — "is this favorite overpriced because his shiny ERA is fragile?" — not a forecast. Over a single start, variance rules and a pitcher "due to regress" throws gems constantly. Let the gap inform how you read the PRICE, and decide the game itself on the full matchup.
+- **Baseball runs on heavy game-to-game variance.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
+- **Expected stats read sustainability and price — not tonight's result.** When a pitcher's ERA outruns his xERA (or a hitter's results outrun their xwOBA), that gap tells you whether the season-long results are built on something solid or fragile, and therefore whether the market price is fair. Treat it as a price question, not a forecast. Over a single start, variance rules and a pitcher "due to regress" throws gems constantly. Let the gap inform how you read the PRICE, and decide the game itself on the full matchup.
 - **One-run games are volatile over small samples.** Teams with extreme records in 1-run games may be overperforming or underperforming their underlying quality. Investigate whether a team's recent results are driven by process or luck.
-- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. These dynamics are real and worth investigating alongside the statistical matchup.`;
+- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. Streaks are real currency in this sport — riding a hot team against a cold one is legitimate baseball judgment; weigh it against tonight's matchup. These dynamics are real and worth investigating alongside the statistical matchup.
+- **If you find yourself picking the same team several days running, ask yourself:** am I evaluating tonight's specific matchup — this starter, this lineup, this bullpen state — or leaning on season-level stats and a reputation that haven't moved? Yesterday's result doesn't change tonight's analysis. Investigate what's different.`;
 }

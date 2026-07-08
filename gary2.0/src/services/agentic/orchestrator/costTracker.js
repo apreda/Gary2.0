@@ -15,6 +15,13 @@ const MODEL_RATES = {
   'gemini-3.5-flash':         { input: 1.50, output: 9.00 },
   'gemini-3.1-pro-preview':   { input: 2.00, output: 12.00 },
   'gemini-3-flash-preview':   { input: 0.50, output: 3.00 },
+  // Bake-off brains (verified Jul 6 2026 via web + the account's model list).
+  // gpt-5.5 (Apr 2026) is OpenAI's current flagship: $5/$30, cached input $0.50.
+  // GPT-5.6 Sol/Terra/Luna is limited-preview only (not on our key yet).
+  // Sonnet 5 at intro pricing (through 2026-08-31; list is $3/$15).
+  'gpt-5.5':                  { input: 5.00, output: 30.00 },
+  'gpt-5':                    { input: 1.25, output: 10.00 },
+  'claude-sonnet-5':          { input: 2.00, output: 10.00 },
 };
 
 export function createCostTracker(pipelineLabel) {

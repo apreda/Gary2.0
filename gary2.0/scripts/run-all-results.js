@@ -553,6 +553,12 @@ function getStatValueSoccer(stats, nameToId, shotsByPlayer, name, type) {
   if (!row) return null;
   const t = type.toLowerCase();
   const num = (v) => (v == null ? 0 : Number(v)); // BDL stores 0 as null
+  // Combined goal-OR-assist props settle on goals + assists together — must be
+  // checked before the plain "goal" branch below, since "goal_or_assist" also
+  // contains the substring "goal" and would otherwise short-circuit to goals
+  // only, silently dropping the assist half of the market (Jul 4 2026: Hakimi
+  // vs Canada graded LOST on 0 goals despite a real assist — should have won).
+  if (t.includes('goal_or_assist') || (t.includes('goal') && t.includes('assist'))) return num(row.goals) + num(row.assists);
   if (/anytime|goalscorer|to score/.test(t) || (t.includes('goal') && !t.includes('against'))) return num(row.goals);
   if (t.includes('assist')) return num(row.assists);
   if (t.includes('save')) return num(row.saves);

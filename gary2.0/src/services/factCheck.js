@@ -161,9 +161,13 @@ function buildPrompt({ pick, result, evidence }) {
     `address the claim, the verdict is "unclear" even if you believe you know the answer.\n` +
     `3. For each claim write a short paraphrase (max ${MAX_CLAIM_CHARS} characters) and a one-line note ` +
     `explaining the verdict. The note may ONLY cite facts from the evidence above — no outside ` +
-    `knowledge, no invented numbers. For "unclear", the note says what the evidence is missing.\n\n` +
+    `knowledge, no invented numbers. For "unclear", the note says what the evidence is missing.\n` +
+    `4. Classify each claim's TYPE:\n` +
+    `   - "data": the claim rests on cited statistics or verifiable facts (splits, xERA/xG, records, rest days, injuries, lineups)\n` +
+    `   - "judgment": the claim rests on the analyst's own read — a spot, momentum, team character, a star's influence, ` +
+    `a game-script call, or a view that the market/public over- or under-reacted\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
-    `{"claims":[{"claim":"...","verdict":"right","note":"..."}]}`
+    `{"claims":[{"claim":"...","verdict":"right","note":"...","claim_type":"data"}]}`
   );
 }
 
@@ -205,7 +209,11 @@ function toClaim(item) {
   const claim = item.claim != null ? String(item.claim).trim().slice(0, MAX_CLAIM_CHARS) : '';
   if (!claim) return null;
   const note = item.note != null && String(item.note).trim() ? String(item.note).trim() : null;
-  return { claim, verdict, note };
+  // J-6 (judgment scoreboard): every claim carries its type so judgment-call
+  // accuracy can be tracked separately from data-claim accuracy.
+  const rawType = String(item.claim_type || '').trim().toLowerCase();
+  const claim_type = rawType === 'judgment' ? 'judgment' : 'data';
+  return { claim, verdict, note, claim_type };
 }
 
 /**

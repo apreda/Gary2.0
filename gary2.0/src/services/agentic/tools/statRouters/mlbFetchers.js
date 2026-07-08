@@ -305,13 +305,17 @@ export const mlbFetchers = {
       lines.push(`${teamName}: See MLB_CLOSER_RELIEVER_STATS and MLB_BULLPEN_WORKLOAD for detailed bullpen data`);
     }
 
-    // Minimal Grounding call for day-of bullpen news only
+    // Minimal Grounding call for day-of bullpen news only.
+    // Jul 8 2026 fix: geminiGroundingSearch returns {success, data, raw} — the
+    // old check read .length on that object, so the note NEVER attached (the
+    // search was paid for, then discarded).
     let newsNote = '';
     try {
       const news = await geminiGroundingSearch(
         `${awayTeam} vs ${homeTeam} MLB bullpen news closer availability update today`
       );
-      if (news && news.length > 20) newsNote = `\n\nDay-of Bullpen News: ${news}`;
+      const newsText = news?.data || '';
+      if (newsText.length > 20) newsNote = `\n\nDay-of Bullpen News: ${newsText}`;
     } catch (_) { /* Grounding is optional */ }
 
     return {
@@ -1070,18 +1074,24 @@ export const mlbFetchers = {
   // MLB PREVIEW & NARRATIVE (Grounding for context APIs can't provide)
   // ═══════════════════════════════════════════════════════════════════
 
+  // Jul 8 2026 rewrite (founder's fan-knowledge doctrine): grounding fills the
+  // gap no API covers — storylines, clubhouse news, what the media is saying.
+  // The old query actively solicited other people's picks and projections
+  // (contradicting the ignore-picks rule the research assistant runs under)
+  // and returned the raw result object instead of its text.
   MLB_GAME_PREVIEW: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const result = await geminiGroundingSearch(
-      `${awayTeam} vs ${homeTeam} MLB 2026 game preview prediction analysis today. ` +
-      `Include: starting pitcher scouting reports, key matchup advantages, projected lineup, ` +
-      `betting projections, expert picks, and any blog or media analysis.`
+      `${awayTeam} vs ${homeTeam} MLB today — the storylines and team news a fan following both teams would know: ` +
+      `recent momentum and series context, player storylines and milestone watches, clubhouse and manager news, ` +
+      `and what national and local media are saying about each team right now. ` +
+      `Factual reporting and narrative context only — do NOT include expert picks, betting predictions, or projections.`
     );
     return {
-      homeValue: result || 'N/A',
-      awayValue: result || 'N/A',
-      comparison: `Game preview and analysis for ${awayTeam} @ ${homeTeam}`,
+      homeValue: result?.data || 'N/A',
+      awayValue: result?.data || 'N/A',
+      comparison: `Storylines and team news for ${awayTeam} @ ${homeTeam}`,
       source: 'Gemini Grounding',
     };
   },
@@ -2435,12 +2445,6 @@ export const mlbFetchers = {
   },
 
   // Default handler
-  DEFAULT: async (sport, home, away, season, options) => {
-    return {
-      homeValue: 'Token not available for MLB',
-      awayValue: '',
-      comparison: 'This stat token is not implemented for baseball',
-      source: 'N/A',
-    };
-  },
+  // DEFAULT removed Jul 6 2026 — the neutral unknown-token handler lives in
+  // statRouters/index.js (per-sport DEFAULTs collided in the merged map).
 };

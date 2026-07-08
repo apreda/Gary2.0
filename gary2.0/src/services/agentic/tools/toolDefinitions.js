@@ -268,10 +268,16 @@ const MLB_TOKENS = [
 // SET_PIECES, SUSPENSIONS, LINEUP_FORMATION (SHOTS_ON_TARGET already rides
 // TEAM_MATCH_STATS). Advertising an unbacked token is the MLB fabrication bug class
 // — prompt asks, no tool answers.
+// Jul 8 2026: LINEUPS + AVAILABILITY were the REVERSE bug — soccerFetchers.js
+// has always exported working WC_LINEUPS/WC_AVAILABILITY fetchers, and
+// investigationFactors.js's AVAILABILITY factor references LINEUPS, but
+// neither name was in this allowlist, so every one of Flash's own calls for
+// them bounced off with "Not available for WC." Added here, plus
+// GAME_PREVIEW (fan-parity doctrine — see feedback-grounding-fan-parity.md).
 const SOCCER_WC_TOKENS = [
   'TEAM_FORM', 'RECENT_FORM', 'RECENT_INTL_FORM', 'KEY_PLAYERS', 'GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT',
   'TEAM_MATCH_STATS', 'POSSESSION_STATS', 'EXPECTED_GOALS',
-  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'H2H_HISTORY', 'INJURIES',
+  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'H2H_HISTORY', 'INJURIES', 'LINEUPS', 'AVAILABILITY', 'GAME_PREVIEW',
 ];
 
 // Combine all tokens by sport

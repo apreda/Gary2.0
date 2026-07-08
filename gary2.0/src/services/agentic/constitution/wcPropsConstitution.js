@@ -26,7 +26,7 @@ const WC_SPORT_AWARENESS = `
 
 ### THE PROP LINE
 - Prop lines are set primarily from a player's recent club + international form, role, and the matchup.
-- International prop markets are thinner than club markets — lines can be less precise, which is where edges live, but also where stale/laggy lines hide.
+- International prop markets are thinner than club markets — lines can be less precise, and stale or laggy.
 - The implied probability from the price is the market's player-level read — treat it as the baseline to BEAT with evidence, not as the pick itself.
 - Multiple props on one player are correlated — shots, shots-on-target, and anytime-goal are NOT independent outcomes; do not stack correlated overs as if they were.
 

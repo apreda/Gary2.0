@@ -9,16 +9,43 @@ import { ncaafFetchers } from './ncaafFetchers.js';
 import { mlbFetchers } from './mlbFetchers.js';
 import { soccerFetchers } from './soccerFetchers.js';
 
-// Merge all fetchers into one object
-const FETCHERS = {
-  ...nbaFetchers,
-  ...ncaabFetchers,
-  ...ncaafFetchers,
-  ...nflFetchers,
-  ...nhlFetchers,
-  ...mlbFetchers,
-  ...soccerFetchers,
+// Merge all fetchers into one object — WITH OWNERSHIP (Jul 6 2026 audit).
+// Sports share structure, never each other's data paths: every token records
+// which sport defined it, collisions warn loudly instead of silently letting
+// merge order pick a winner, and dispatch refuses to execute a token across
+// sport families (see SHARED_TOKENS for the deliberate exceptions).
+const SPORT_SOURCES = {
+  nba: nbaFetchers,
+  ncaab: ncaabFetchers,
+  ncaaf: ncaafFetchers,
+  nfl: nflFetchers,
+  nhl: nhlFetchers,
+  mlb: mlbFetchers,
+  soccer: soccerFetchers,
 };
+const SPORT_FAMILY = { nba: 'basketball', ncaab: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', nhl: 'icehockey', mlb: 'baseball', soccer: 'soccer' };
+// Tokens that take bdlSport and route internally — genuinely sport-agnostic,
+// reachable from any sport (NHL reaches STANDINGS/REST_SITUATION via aliases).
+const SHARED_TOKENS = new Set(['DEFAULT', 'REST_SITUATION', 'STANDINGS', 'H2H_HISTORY']);
+const FETCHERS = {};
+const TOKEN_OWNER = {};
+for (const [ownerSport, map] of Object.entries(SPORT_SOURCES)) {
+  for (const [token, fn] of Object.entries(map)) {
+    if (FETCHERS[token] && !SHARED_TOKENS.has(token)) {
+      console.warn(`[Stat Router] ⚠️ TOKEN COLLISION: "${token}" defined by both ${TOKEN_OWNER[token]} and ${ownerSport} — ${ownerSport} wins the merge. Namespace it.`);
+    }
+    FETCHERS[token] = fn;
+    TOKEN_OWNER[token] = ownerSport;
+  }
+}
+// Neutral unknown-token handler (both nba and mlb used to define their own
+// DEFAULT and merge order picked mlb's, so NBA runs got a baseball message).
+FETCHERS.DEFAULT = async (bdlSport, _home, _away) => ({
+  homeValue: 'N/A',
+  awayValue: 'N/A',
+  comparison: `Stat token not implemented for ${bdlSport}`,
+  source: 'N/A',
+});
 
 // Aliases — maps alternate token names to real fetcher names.
 // Only kept where investigation prompts or investigation factors reference the alias name.
@@ -51,10 +78,11 @@ const ALIASES = {
   MLB_H2H_HISTORY: 'MLB_H2H'
 };
 
-// Register aliases
+// Register aliases (alias inherits the target's ownership)
 for (const [alias, target] of Object.entries(ALIASES)) {
   if (!FETCHERS[alias] && FETCHERS[target]) {
     FETCHERS[alias] = FETCHERS[target];
+    TOKEN_OWNER[alias] = TOKEN_OWNER[target];
   }
 }
 
@@ -85,7 +113,8 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   } else if (normalizedSportForSeason.includes('soccer') || normalizedSportForSeason === 'wc') {
     defaultSeason = 2026; // FIFA World Cup edition year
   } else {
-    defaultSeason = nbaSeason();
+    // Never borrow another sport's season/endpoints for an unmapped sport.
+    throw new Error(`[HARD FAIL] Unknown sport "${sport}" in fetchStats — no season/endpoint mapping. Add the sport explicitly; never default to another sport's routes.`);
   }
   const season = options.season || defaultSeason;
   const normalizedSport = normalizeSportName(sport);
@@ -135,8 +164,10 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     }
 
     let fetcher = null;
+    let resolvedKey = token;
     if (FETCHERS[sportSpecificToken]) {
       fetcher = FETCHERS[sportSpecificToken];
+      resolvedKey = sportSpecificToken;
       console.log(`[Stat Router] Using sport-specific fetcher: ${sportSpecificToken}`);
     } else {
       fetcher = FETCHERS[token];
@@ -144,6 +175,16 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
 
     if (!fetcher) {
       return { error: `Unknown stat token: ${token}`, token };
+    }
+
+    // CROSS-SPORT GUARD (Jul 6 2026 audit): never execute another sport family's
+    // fetcher. A hallucinated or mis-routed token gets a loud, self-explanatory
+    // error back to Gary instead of silently fetching the wrong sport's data.
+    const tokenOwner = TOKEN_OWNER[resolvedKey];
+    const currentFamily = (bdlSport || '').split('_')[0];
+    if (tokenOwner && !SHARED_TOKENS.has(resolvedKey) && SPORT_FAMILY[tokenOwner] !== currentFamily) {
+      console.warn(`[Stat Router] 🛑 Cross-sport block: ${resolvedKey} belongs to ${tokenOwner.toUpperCase()}, requested during a ${sport} run`);
+      return { error: `Stat token ${token} belongs to ${tokenOwner.toUpperCase()} — not available for ${sport}. Use this sport's own tokens.`, token };
     }
 
     // MLB: Skip BDL team lookup — MLB fetchers use MLB Stats API + grounding for team data.

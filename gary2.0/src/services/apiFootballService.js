@@ -226,6 +226,55 @@ export async function getInjuries(teamIdOrName, season = DEFAULT_SEASON_AF) {
 }
 
 /**
+ * Availability timing (Jul 7 2026 — NBA-semantics port, founder-approved).
+ * Cross-references the injury feed with REAL starting lineups from the team's
+ * recent fixtures: FRESH = started the most recent match and is flagged now
+ * (the market may still be settling the news); PRICED IN = already missing
+ * from the XI in the last match(es) — every book set tonight's line knowing.
+ * Returns [{ player, reason, type, tag, missedOfLastN, playedLast }].
+ */
+export async function getAvailabilityTiming(teamIdOrName, lastN = 3) {
+  const teamId = typeof teamIdOrName === 'number' ? teamIdOrName : await resolveNationalTeamId(teamIdOrName);
+  if (!teamId) return [];
+  const key = `avail_${teamId}_${lastN}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  let out = [];
+  try {
+    const [injuries, fixtures] = await Promise.all([
+      getInjuries(teamId),
+      afFetch('/fixtures', { team: teamId, last: lastN + 2 }),
+    ]);
+    if (!injuries.length) { setCache(key, [], TTL_INJURY); return []; }
+    const done = fixtures.filter(f => FINISHED.has(f.fixture?.status?.short)).slice(0, lastN);
+    const starterSets = [];
+    for (const f of done) {
+      let rows = [];
+      try { rows = await afFetch('/fixtures/lineups', { fixture: f.fixture?.id }); } catch { continue; }
+      const mine = rows.find(r => r.team?.id === teamId);
+      starterSets.push(new Set((mine?.startXI || []).map(x => norm(x.player?.name)).filter(Boolean)));
+    }
+    if (!starterSets.length) { setCache(key, [], TTL_INJURY); return []; }
+    out = injuries.map((inj) => {
+      const n = norm(inj.player);
+      const playedLast = starterSets[0].has(n);
+      const missedOfLastN = starterSets.filter(s => !s.has(n)).length;
+      return {
+        ...inj,
+        playedLast,
+        missedOfLastN: playedLast ? 0 : missedOfLastN,
+        tag: playedLast ? 'FRESH' : 'PRICED IN',
+      };
+    });
+  } catch (e) {
+    console.warn(`[API-Football] getAvailabilityTiming(${teamId}) failed: ${e.message}`);
+  }
+  setCache(key, out, TTL_INJURY);
+  return out;
+}
+
+/**
  * Aggregate per-match team performance stats (xG, possession, shots, SoT, corners,
  * pass accuracy) over a team's recent fixtures via /fixtures/statistics. Fills the
  * tape/report rows BDL can't provide until the 2026 tournament is underway. {} when
@@ -239,7 +288,8 @@ export async function getRecentTeamStats(teamIdOrName, lastN = 6) {
   if (cached) return cached;
   let fixtures = [];
   try { fixtures = await afFetch('/fixtures', { team: teamId, last: lastN + 3 }); } catch { return {}; }
-  const ids = fixtures.filter(f => FINISHED.has(f.fixture?.status?.short)).map(f => f.fixture?.id).filter(Boolean).slice(0, lastN);
+  const sampled = fixtures.filter(f => FINISHED.has(f.fixture?.status?.short)).slice(0, lastN);
+  const ids = sampled.map(f => f.fixture?.id).filter(Boolean);
   if (!ids.length) return {};
   const num = (s) => { const v = parseFloat(String(s ?? '').replace('%', '')); return Number.isFinite(v) ? v : null; };
   const acc = { xg: [], xga: [], poss: [], shots: [], sot: [], corners: [], passAcc: [] };
@@ -260,10 +310,24 @@ export async function getRecentTeamStats(teamIdOrName, lastN = 6) {
     push(acc.passAcc, pick(mine, 'Passes %'));
   }
   const avg = (arr) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : undefined;
+  // An average carries the opposition it was earned against — return the sampled
+  // fixtures (result + opponent) so the tape never renders a naked aggregate.
+  const sampleOpponents = sampled.map((f) => {
+    const isHome = f.teams?.home?.id === teamId;
+    const opp = isHome ? f.teams?.away?.name : f.teams?.home?.name;
+    if (!opp) return null;
+    const gf = isHome ? f.goals?.home : f.goals?.away;
+    const ga = isHome ? f.goals?.away : f.goals?.home;
+    if (gf == null || ga == null) return `v ${opp}`;
+    const letter = gf > ga ? 'W' : gf < ga ? 'L' : 'D';
+    const et = f.fixture?.status?.short !== 'FT' ? ' aet' : '';
+    return `${letter} ${gf}-${ga}${et} v ${opp}`;
+  }).filter(Boolean);
   const out = {
     xg: avg(acc.xg), xga: avg(acc.xga), possession_pct: avg(acc.poss), shots: avg(acc.shots),
     shots_on_target: avg(acc.sot), corners: avg(acc.corners), pass_accuracy: avg(acc.passAcc),
     sampleMatches: ids.length,
+    sampleOpponents,
   };
   setCache(key, out, TTL_FORM);
   return out;
@@ -362,4 +426,4 @@ export async function getSquadStats(teamIdOrName, season = DEFAULT_SEASON_AF) {
   return out;
 }
 
-export default { hasApiFootballKey, resolveNationalTeamId, getRecentForm, getRecentTeamStats, getH2H, getInjuries, getSquadStats, clearApiFootballCache };
+export default { hasApiFootballKey, resolveNationalTeamId, getRecentForm, getRecentTeamStats, getH2H, getInjuries, getSquadStats, getAvailabilityTiming, clearApiFootballCache };

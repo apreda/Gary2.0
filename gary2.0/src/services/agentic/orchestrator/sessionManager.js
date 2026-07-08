@@ -1,6 +1,7 @@
 import { CONFIG, GEMINI_SAFETY_SETTINGS, validateGeminiModel } from './orchestratorConfig.js';
 import { getGeminiClient } from '../modelConfig.js';
 import { GoogleAICacheManager } from '@google/generative-ai/server';
+import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISessionChat } from './providerAdapters/openaiSession.js';
 
 // Minimum cacheable content size (Gemini 3 Flash min is 1024 tokens; ~4K chars is safe).
 // Below this we skip caching — break-even doesn't work and the API rejects small caches.
@@ -32,6 +33,12 @@ const CACHE_TTL_SECONDS = 900;
  * @returns {Object} - { chat, model, modelName } - Chat session and model reference
  */
 export async function createGeminiSession(options = {}) {
+  // Provider seam (Jul 6 2026 bake-off): non-Gemini brains route to their
+  // adapter BEFORE any Gemini validation/coercion. GARY_MODEL_OVERRIDE=gpt-5
+  // is the only switch — agentLoop and the callers stay provider-blind.
+  if (isOpenAiModel(options.modelName)) {
+    return createOpenAISession(options);
+  }
   const {
     modelName = 'gemini-3-flash-preview',
     systemPrompt = '',
@@ -178,6 +185,9 @@ export async function createGeminiSession(options = {}) {
  * @returns {Object} the same session (chat swapped)
  */
 export function resetSessionChat(session, seedHistory = []) {
+  if (session?.provider === 'openai') {
+    return resetOpenAISessionChat(session, seedHistory);
+  }
   const systemInstruction = session._usingCache
     ? undefined
     : (session._systemPrompt ? { parts: [{ text: session._systemPrompt }] } : undefined);
@@ -197,6 +207,9 @@ export function resetSessionChat(session, seedHistory = []) {
  * @returns {Object} - Parsed response with content, toolCalls, usage
  */
 export async function sendToSession(session, message, options = {}) {
+  if (session?.provider === 'openai') {
+    return sendToOpenAISession(session, message, options);
+  }
   const { isFunctionResponse = false } = options;
   const startTime = Date.now();
   

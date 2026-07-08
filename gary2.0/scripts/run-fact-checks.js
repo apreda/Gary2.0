@@ -121,7 +121,11 @@ async function main() {
     console.error(`❌ game_results fetch failed: ${resErr.message}`);
     process.exit(1);
   }
-  const resultByPickText = new Map((results || []).map((r) => [r.pick_text, r]));
+  // Key by pick_text AND matchup: pick texts repeat across games/days inside the
+  // 2-day window ("Over 2.5 -150" twice in one WC slate, same ML price two nights
+  // running), and a pick_text-only key wired the WRONG game's result + final score
+  // into the fact-check evidence (source of the Jul 5 "Giants defeated 6-4" row).
+  const resultByPickText = new Map((results || []).map((r) => [`${r.pick_text}|${r.matchup}`, r]));
 
   let done = 0, skipped = 0, failed = 0;
 
@@ -131,7 +135,7 @@ async function main() {
     if (!pick.rationale || !String(pick.rationale).trim()) { skipped++; continue; }
 
     const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
-    const graded = resultByPickText.get(pick.pick);
+    const graded = resultByPickText.get(`${pick.pick}|${matchup}`);
     if (!graded) {
       console.log(`  ⏭️  ${league} ${matchup}: no graded result row — skipping`);
       skipped++;
@@ -139,10 +143,15 @@ async function main() {
     }
     const gameDate = graded.game_date;
 
-    // Idempotency (mirrors the nightly path)
+    // Idempotency (mirrors the nightly path). Also re-sync: game_results re-grades
+    // every run, so a fact-check written before a grade flip goes stale — when the
+    // stored result no longer matches the graded result, regenerate the row.
+    // pick_text is part of the identity: WC ships TWO picks per match (side +
+    // total) — without it the two picks overwrite each other's fact-check row
+    // and ping-pong "result drift" forever.
     const { data: exist, error: dedupErr } = await supabase
-      .from('pick_fact_checks').select('id')
-      .eq('game_date', gameDate).eq('league', graded.league).eq('matchup', matchup)
+      .from('pick_fact_checks').select('id, result')
+      .eq('game_date', gameDate).eq('league', graded.league).eq('matchup', matchup).eq('pick_text', pick.pick)
       .maybeSingle();
     if (dedupErr) {
       console.error(`  ❌ ${league} ${matchup}: dedup check failed: ${dedupErr.message}`);
@@ -150,10 +159,14 @@ async function main() {
       continue;
     }
     if (exist) {
-      if (!force) {
+      const resultDrift = exist.result !== graded.result;
+      if (!force && !resultDrift) {
         console.log(`  ⏩ ${league} ${matchup}: fact-check exists — skipping (use --force to redo)`);
         skipped++;
         continue;
+      }
+      if (resultDrift) {
+        console.log(`  🔁 ${league} ${matchup}: result drift (fact-check "${exist.result}" vs graded "${graded.result}") — regenerating`);
       }
       if (!dryRun) {
         await supabase.from('pick_fact_checks').delete().eq('id', exist.id);

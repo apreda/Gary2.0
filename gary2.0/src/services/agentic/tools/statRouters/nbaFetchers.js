@@ -1746,7 +1746,9 @@ export const nbaFetchers = {
         source: 'Gemini Grounding (Live Search)',
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.content || 'Data unavailable',
+        // Jul 8 2026 fix: geminiGroundingSearch returns {success, data, raw} —
+        // the old .content read always fell through to 'Data unavailable'.
+        grounding_data: groundingResult?.data || 'Data unavailable',
         comparison: 'Bench scoring and depth data for both teams.',
         note: 'Starter vs bench unit stats provided for comparison.'
       };
@@ -3842,12 +3844,7 @@ export const nbaFetchers = {
 
 
   // ===== CATCH-ALL for unimplemented tokens =====
-  DEFAULT: async (bdlSport, home, away) => {
-    return {
-      error: 'Stat not yet implemented',
-      home: { team: home.full_name || home.name },
-      away: { team: away.full_name || away.name }
-    };
-  },
+  // DEFAULT removed Jul 6 2026 — the neutral unknown-token handler lives in
+  // statRouters/index.js (per-sport DEFAULTs collided in the merged map).
 
 };

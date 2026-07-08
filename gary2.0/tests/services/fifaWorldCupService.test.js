@@ -177,8 +177,10 @@ describe('filterMatchesByDate', () => {
     { id: 2, datetime: '2026-06-12T02:00:00.000Z' },
     { id: 3, datetime: '2026-06-12T19:00:00.000Z' },
   ];
-  it('keeps only matches whose UTC date matches', () => {
-    expect(filterMatchesByDate(matches, '2026-06-12').map(m => m.id)).toEqual([2, 3]);
+  it('keeps only matches on the ET calendar date (late ET evenings stay on their ET day)', () => {
+    // id 2 is 02:00 UTC Jun 12 = 10 PM ET Jun 11 — it belongs to the Jun 11 ET slate.
+    expect(filterMatchesByDate(matches, '2026-06-12').map(m => m.id)).toEqual([3]);
+    expect(filterMatchesByDate(matches, '2026-06-11').map(m => m.id)).toEqual([1, 2]);
   });
   it('returns [] for no matches or bad input', () => {
     expect(filterMatchesByDate(matches, '2026-07-01')).toEqual([]);
@@ -212,9 +214,10 @@ describe('selectConsensusOdds', () => {
     expect(c.total).toEqual({ line: '2.5', over: -120, under: 100 });
   });
 
-  it('falls back to the first row when no preferred vendor present', () => {
+  it('omits the line entirely when no preferred vendor quoted the match', () => {
+    // Trusted-books-only: a thin book's ladder is never used as the consensus quote.
     const rows = [{ vendor: 'pinnacle', moneyline_home_odds: 100, moneyline_draw_odds: 200, moneyline_away_odds: 300, spread_home_value: null, total_value: null }];
-    expect(selectConsensusOdds(rows).vendor).toBe('pinnacle');
+    expect(selectConsensusOdds(rows)).toBeNull();
   });
 
   it('returns null for empty input', () => {
@@ -238,16 +241,16 @@ describe('getOdds (paginated)', () => {
 });
 
 describe('getMatchesForDate', () => {
-  it('fetches matches then filters to the given UTC date', async () => {
+  it('fetches matches then filters to the given ET calendar date', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
       ok: true, status: 200,
       json: async () => ({ data: [
         { id: 1, datetime: '2026-06-11T19:00:00.000Z' },
-        { id: 2, datetime: '2026-06-12T02:00:00.000Z' },
+        { id: 2, datetime: '2026-06-12T02:00:00.000Z' }, // 10 PM ET Jun 11
       ], meta: { next_cursor: null } }),
     }));
     const games = await getMatchesForDate('2026-06-11', [2026]);
-    expect(games.map(g => g.id)).toEqual([1]);
+    expect(games.map(g => g.id)).toEqual([1, 2]);
   });
 });
 

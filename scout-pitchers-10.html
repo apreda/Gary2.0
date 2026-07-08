@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PITCHER TABLE — 10 ways</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12100D; --page:#0C0B09; --ink:rgba(255,255,255,.9); --ink2:rgba(255,255,255,.78);
+    --dim:rgba(255,255,255,.62); --faint:rgba(255,255,255,.45);
+    --gold:#D9B45B; --goldim:rgba(217,180,91,.85); --win:#4CC38A; --loss:#E5534B;
+    --hair:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;padding:34px 26px 90px}
+  .intro{max-width:900px;margin:0 auto 30px}
+  .intro h1{font-family:"Bebas Neue";font-size:42px}
+  .intro p{color:var(--ink2);font-size:15px;line-height:1.55;margin-top:8px}
+  .intro .pick{color:var(--gold);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:34px;max-width:1500px;margin:0 auto}
+  .slot h2{font-family:"JetBrains Mono";font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--gold);margin-bottom:4px}
+  .slot h2 .badge{background:var(--gold);color:#141109;padding:2px 7px;border-radius:3px;margin-left:8px;font-size:10px}
+  .slot .note{font-size:12.5px;color:var(--faint);margin-bottom:10px;min-height:30px;line-height:1.4}
+  .phone{width:393px;background:var(--bg);border:1px solid rgba(255,255,255,.09);border-radius:22px;padding:18px 16px 20px;margin:0 auto}
+  .beb{font-family:"Bebas Neue";letter-spacing:.4px;line-height:1}
+  .mono{font-family:"JetBrains Mono"}
+  .away{color:rgba(255,255,255,.92)} .home{color:var(--gold)}
+  .w{color:var(--win)} .l{color:var(--loss)}
+  .hair{height:1px;background:var(--hair);border:0}
+  .ctx{font-family:"JetBrains Mono";font-size:9.5px;letter-spacing:1px;color:rgba(255,255,255,.28);text-align:center;padding:5px 0}
+  .heads{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .heads .beb{font-size:21px}
+  .lbl{font-family:"JetBrains Mono";font-size:10.5px;font-weight:700;letter-spacing:1.4px;color:var(--goldim)}
+  .lbl2{font-family:"JetBrains Mono";font-size:10px;font-weight:700;letter-spacing:1px;color:var(--dim)}
+  .val{font-family:"JetBrains Mono";font-size:13.5px;font-weight:700;color:var(--ink)}
+  .nm{font-size:15px;font-weight:600;color:rgba(255,255,255,.92)}
+  .chip{font-family:"JetBrains Mono";font-size:11.5px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);padding:3px 8px;border-radius:4px;display:inline-block;margin-right:5px}
+  .chip.g{color:var(--win)} .chip.gold{color:var(--gold)}
+  .bar{height:9px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+  .bar i{display:block;height:100%}
+  table{border-collapse:collapse;width:100%}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>THE PITCHER TABLE — 10 WAYS</h1>
+  <p>Just the arms block, shown where it lives (between the meetings and LAST 10). Misiorowski's numbers are today's real board; Gray's side is a filled example so you can judge the two-pitcher shape — it renders as a dim TBA until St. Louis posts.
+  <br><span class="pick">MY PICK: P3 — names lead their columns, labels form the same left spine as F1, and a TBA side degrades cleanly.</span></p>
+</div>
+
+<div class="grid">
+
+<!-- P1 -->
+<div class="slot">
+  <h2>P1 · TWO COLUMNS, MICRO-ROWS</h2>
+  <div class="note">Each arm owns a column; label:value micro-rows under the name.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:10px">
+    <div class="lbl" style="margin-bottom:7px">THE ARMS</div>
+    <div style="display:flex;gap:14px">
+      <div style="flex:1">
+        <div class="nm">J. Misiorowski</div>
+        <div style="margin-top:6px"><span class="lbl2">LAST OUT&nbsp;&nbsp;</span><span class="val w" style="font-size:12.5px">5 IP · 1 ER · 10 K</span></div>
+        <div style="margin-top:3px"><span class="lbl2">VS STL&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="val w" style="font-size:12.5px">1.29 · 1 GS</span></div>
+        <div style="margin-top:3px"><span class="lbl2">SEASON&nbsp;&nbsp;&nbsp;</span><span class="val" style="font-size:12.5px"><span class="w">1.47</span> · <span class="w">2.09 x</span></span></div>
+      </div>
+      <div style="width:1px;background:var(--hair)"></div>
+      <div style="flex:1">
+        <div class="nm">S. Gray</div>
+        <div style="margin-top:6px"><span class="lbl2">LAST OUT&nbsp;&nbsp;</span><span class="val l" style="font-size:12.5px">4.2 IP · 5 ER</span></div>
+        <div style="margin-top:3px"><span class="lbl2">VS MIL&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="val l" style="font-size:12.5px">5.06 · 3 GS</span></div>
+        <div style="margin-top:3px"><span class="lbl2">SEASON&nbsp;&nbsp;&nbsp;</span><span class="val" style="font-size:12.5px"><span class="w">3.41</span> · <span class="l">4.51 x</span></span></div>
+      </div>
+    </div>
+    <hr class="hair" style="margin:10px 0">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P2 -->
+<div class="slot">
+  <h2>P2 · CENTER-SPINE MINI TABLE</h2>
+  <div class="note">Names as fixed column headers, labels pinned to the center — the tape, but with a header row so labels never touch data.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:4px">
+    <table>
+      <tr>
+        <td style="width:38%;padding:7px 0" class="nm">Misiorowski</td>
+        <td style="width:24%;text-align:center" class="lbl">ARMS</td>
+        <td style="width:38%;text-align:right" class="nm">Gray</td>
+      </tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr>
+        <td style="padding:8px 0" class="val"><span class="w" style="font-size:12.5px">5 IP · 1 ER · 10 K</span></td>
+        <td style="text-align:center" class="lbl2">LAST OUT</td>
+        <td style="text-align:right" class="val"><span class="l" style="font-size:12.5px">4.2 IP · 5 ER</span></td>
+      </tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr>
+        <td style="padding:8px 0" class="val"><span class="w">1.29</span> · 1 GS</td>
+        <td style="text-align:center" class="lbl2">VS OPP</td>
+        <td style="text-align:right" class="val"><span class="l">5.06</span> · 3 GS</td>
+      </tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr>
+        <td style="padding:8px 0" class="val"><span class="w">1.47</span> · <span class="w">2.09 x</span></td>
+        <td style="text-align:center" class="lbl2">SEASON</td>
+        <td style="text-align:right" class="val"><span class="w">3.41</span> · <span class="l">4.51 x</span></td>
+      </tr>
+    </table>
+    <hr class="hair" style="margin:0 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P3 -->
+<div class="slot">
+  <h2>P3 · LEFT SPINE, NAME HEADERS <span class="badge">MY PICK</span></h2>
+  <div class="note">Labels ride the same left spine as F1's kickers; the two arms are columns with their names on top. TBA just dims a column.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:4px">
+    <table>
+      <tr>
+        <td style="width:88px"></td>
+        <td style="padding:7px 0" class="nm">Misiorowski</td>
+        <td style="text-align:right;padding:7px 0" class="nm">Gray</td>
+      </tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr>
+        <td class="lbl2" style="padding:8px 0">LAST OUT</td>
+        <td class="val"><span class="w" style="font-size:12.5px">5 IP · 1 ER · 10 K</span></td>
+        <td class="val" style="text-align:right"><span class="l" style="font-size:12.5px">4.2 IP · 5 ER</span></td>
+      </tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr>
+        <td class="lbl2" style="padding:8px 0">VS OPP</td>
+        <td class="val"><span class="w">1.29 ERA</span> · 1 GS</td>
+        <td class="val" style="text-align:right"><span class="l">5.06 ERA</span> · 3 GS</td>
+      </tr>
+      <tr><td colspan="3"><hr class="hair"></td></tr>
+      <tr>
+        <td class="lbl2" style="padding:8px 0">SEASON</td>
+        <td class="val"><span class="w">1.47</span> · <span class="w">2.09 xERA</span></td>
+        <td class="val" style="text-align:right"><span class="w">3.41</span> · <span class="l">4.51 xERA</span></td>
+      </tr>
+    </table>
+    <hr class="hair" style="margin:0 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P4 -->
+<div class="slot">
+  <h2>P4 · LINE-SCORE CHIPS</h2>
+  <div class="note">Name, then the outing as a chip row you read in half a second; the matchup history rides a gold chip.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:10px">
+    <div class="nm" style="margin-bottom:6px">J. Misiorowski <span class="mono" style="font-size:11px;color:var(--dim)">· last out vs CIN</span></div>
+    <div><span class="chip g">W</span><span class="chip">5 IP</span><span class="chip">1 ER</span><span class="chip">10 K</span><span class="chip gold">1.29 vs STL</span></div>
+    <div class="nm" style="margin:12px 0 6px">S. Gray <span class="mono" style="font-size:11px;color:var(--dim)">· last out at CHC</span></div>
+    <div><span class="chip" style="color:var(--loss)">L</span><span class="chip">4.2 IP</span><span class="chip">5 ER</span><span class="chip">3 K</span><span class="chip gold">5.06 vs MIL</span></div>
+    <hr class="hair" style="margin:12px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P5 -->
+<div class="slot">
+  <h2>P5 · THE DUEL STRIP</h2>
+  <div class="note">One shared header names the duel, then pure mirrored stat rows — no repeated labels at all, the shape carries it.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <span class="nm">Misiorowski</span>
+      <span class="lbl">THE ARMS</span>
+      <span class="nm">Gray</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px">
+      <span class="val"><span class="w" style="font-size:12.5px">5 IP · 1 ER · 10 K</span></span>
+      <span class="val" style="text-align:right"><span class="l" style="font-size:12.5px">4.2 IP · 5 ER · 3 K</span></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:5px">
+      <span class="val"><span class="w">1.29</span> vs STL</span>
+      <span class="val"><span class="l">5.06</span> vs MIL</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:5px">
+      <span class="val"><span class="w">1.47 ERA</span> season</span>
+      <span class="val"><span class="w">3.41 ERA</span> season</span>
+    </div>
+    <hr class="hair" style="margin:11px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P6 -->
+<div class="slot">
+  <h2>P6 · ONE SENTENCE EACH</h2>
+  <div class="note">The arms written, not tabled — a composed line per pitcher from the same grounded fields.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:10px">
+    <div class="lbl" style="margin-bottom:7px">THE ARMS</div>
+    <div style="font-size:15px;line-height:1.55;color:var(--ink2)"><b style="color:var(--ink)">Misiorowski</b> — <span class="w">ten strikeouts, one run over five</span> against the Reds last out; held St. Louis to <span class="w">a 1.29</span> in their one meeting.</div>
+    <div style="font-size:15px;line-height:1.55;color:var(--ink2);margin-top:8px"><b style="color:var(--ink)">Gray</b> — <span class="l">tagged for five in 4.2</span> at Wrigley last out; <span class="l">5.06</span> across three starts against this Milwaukee lineup.</div>
+    <hr class="hair" style="margin:11px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P7 -->
+<div class="slot">
+  <h2>P7 · STAT TILES</h2>
+  <div class="note">Each arm gets three flat tiles — the big number leads, the label whispers under it.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:10px">
+    <div class="nm" style="margin-bottom:6px">J. Misiorowski</div>
+    <div style="display:flex;gap:8px;text-align:center">
+      <div style="flex:1"><div class="mono w" style="font-size:17px;font-weight:700">1 ER</div><div class="lbl2" style="margin-top:2px">5 IP LAST OUT</div></div>
+      <div style="width:1px;background:var(--hair)"></div>
+      <div style="flex:1"><div class="mono" style="font-size:17px;font-weight:700">10 K</div><div class="lbl2" style="margin-top:2px">VS CIN JUL 2</div></div>
+      <div style="width:1px;background:var(--hair)"></div>
+      <div style="flex:1"><div class="mono w" style="font-size:17px;font-weight:700">1.29</div><div class="lbl2" style="margin-top:2px">ERA VS STL</div></div>
+    </div>
+    <div class="nm" style="margin:12px 0 6px">S. Gray</div>
+    <div style="display:flex;gap:8px;text-align:center">
+      <div style="flex:1"><div class="mono l" style="font-size:17px;font-weight:700">5 ER</div><div class="lbl2" style="margin-top:2px">4.2 IP LAST OUT</div></div>
+      <div style="width:1px;background:var(--hair)"></div>
+      <div style="flex:1"><div class="mono" style="font-size:17px;font-weight:700">3 K</div><div class="lbl2" style="margin-top:2px">AT CHC JUL 1</div></div>
+      <div style="width:1px;background:var(--hair)"></div>
+      <div style="flex:1"><div class="mono l" style="font-size:17px;font-weight:700">5.06</div><div class="lbl2" style="margin-top:2px">ERA VS MIL</div></div>
+    </div>
+    <hr class="hair" style="margin:12px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P8 -->
+<div class="slot">
+  <h2>P8 · FORM LADDER</h2>
+  <div class="note">Each arm as a right-anchored ladder — label left, value right, the app's player-card rhythm.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:8px">
+    <div class="nm">J. Misiorowski <span class="mono" style="font-size:11px;color:var(--dim)">MIL</span></div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px"><span class="lbl2">LAST OUTING</span><span class="val w" style="font-size:12.5px">5 IP · 1 ER · 10 K vs CIN</span></div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="lbl2">VS CARDINALS</span><span class="val" style="font-size:12.5px"><span class="w">1.29 ERA</span> · 1 start</span></div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="lbl2">SEASON</span><span class="val" style="font-size:12.5px"><span class="w">1.47 ERA</span> · <span class="w">2.09 xERA</span></span></div>
+    <hr class="hair" style="margin:10px 0 8px">
+    <div class="nm">S. Gray <span class="mono" style="font-size:11px;color:var(--dim)">STL</span></div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px"><span class="lbl2">LAST OUTING</span><span class="val l" style="font-size:12.5px">4.2 IP · 5 ER at CHC</span></div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="lbl2">VS BREWERS</span><span class="val" style="font-size:12.5px"><span class="l">5.06 ERA</span> · 3 starts</span></div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="lbl2">SEASON</span><span class="val" style="font-size:12.5px"><span class="w">3.41 ERA</span> · <span class="l">4.51 xERA</span></span></div>
+    <hr class="hair" style="margin:10px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P9 -->
+<div class="slot">
+  <h2>P9 · MIRRORED BARS</h2>
+  <div class="note">The duel as instruments — each row a pair of quality bars growing out from the center, values at the edges.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+      <span class="nm">Misiorowski</span><span class="lbl">THE ARMS</span><span class="nm">Gray</span>
+    </div>
+    <div class="lbl2" style="text-align:center;margin-bottom:3px">LAST OUT · ER/9</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="mono w" style="font-size:11.5px;font-weight:700;width:64px">1.8</span>
+      <div class="bar" style="flex:1;transform:scaleX(-1)"><i style="width:14%;background:var(--win)"></i></div>
+      <div class="bar" style="flex:1"><i style="width:88%;background:var(--loss)"></i></div>
+      <span class="mono l" style="font-size:11.5px;font-weight:700;width:64px;text-align:right">9.6</span>
+    </div>
+    <div class="lbl2" style="text-align:center;margin:8px 0 3px">ERA VS THIS OPPONENT</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="mono w" style="font-size:11.5px;font-weight:700;width:64px">1.29</span>
+      <div class="bar" style="flex:1;transform:scaleX(-1)"><i style="width:12%;background:var(--win)"></i></div>
+      <div class="bar" style="flex:1"><i style="width:50%;background:var(--loss)"></i></div>
+      <span class="mono l" style="font-size:11.5px;font-weight:700;width:64px;text-align:right">5.06</span>
+    </div>
+    <div class="lbl2" style="text-align:center;margin:8px 0 3px">SEASON ERA</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="mono w" style="font-size:11.5px;font-weight:700;width:64px">1.47</span>
+      <div class="bar" style="flex:1;transform:scaleX(-1)"><i style="width:15%;background:var(--win)"></i></div>
+      <div class="bar" style="flex:1"><i style="width:34%;background:var(--win)"></i></div>
+      <span class="mono w" style="font-size:11.5px;font-weight:700;width:64px;text-align:right">3.41</span>
+    </div>
+    <hr class="hair" style="margin:11px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P10 -->
+<div class="slot">
+  <h2>P10 · ONE DENSE LINE EACH</h2>
+  <div class="note">Most compact — name bold, then the whole résumé on one divided mono line. Two rows total.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:10px">
+    <div class="lbl" style="margin-bottom:7px">THE ARMS</div>
+    <div class="nm">J. Misiorowski</div>
+    <div class="mono" style="font-size:12.5px;margin-top:3px;color:var(--ink2)"><span class="w" style="font-weight:700">5 IP · 1 ER · 10 K</span> vs CIN <span style="color:rgba(217,180,91,.5)">|</span> <span class="w" style="font-weight:700">1.29</span> vs STL <span style="color:rgba(217,180,91,.5)">|</span> <span class="w" style="font-weight:700">1.47</span> season</div>
+    <div class="nm" style="margin-top:11px">S. Gray</div>
+    <div class="mono" style="font-size:12.5px;margin-top:3px;color:var(--ink2)"><span class="l" style="font-weight:700">4.2 IP · 5 ER</span> at CHC <span style="color:rgba(217,180,91,.5)">|</span> <span class="l" style="font-weight:700">5.06</span> vs MIL <span style="color:rgba(217,180,91,.5)">|</span> <span class="w" style="font-weight:700">3.41</span> season</div>
+    <hr class="hair" style="margin:11px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

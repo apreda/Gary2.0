@@ -6,7 +6,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { formatSeason, nbaSeason } from '../../../../utils/dateUtils.js';
+import { describeSportsCalendar } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { createHash } from 'crypto';
@@ -509,14 +509,15 @@ async function runGeminiGroundingSearch(query, options = {}) {
       const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       const todayISO = today.toISOString().slice(0, 10); // YYYY-MM-DD for filtering
 
-      // Calculate current season context using centralized function
-      const seasonContext = formatSeason(nbaSeason());
+      // Season context is date-derived (Jul 8 2026 fix): the old line hardcoded
+      // a January-flavored parenthetical — false from ~February on.
+      const seasonContext = describeSportsCalendar(today);
 
       // Build the Freshness Protocol query with XML anchoring
       const dateAwareQuery = `<date_anchor>
   System Date: ${todayStr}
   ISO Date: ${todayISO}
-  Season Context: ${seasonContext} (NBA/NHL mid-season, NFL playoffs)
+  Season Context: ${seasonContext}
 </date_anchor>
 
 <grounding_instructions>

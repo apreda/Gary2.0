@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P23 × P25 — 4 builds, useful slot</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12100D; --page:#0C0B09; --ink:rgba(255,255,255,.9); --ink2:rgba(255,255,255,.78);
+    --dim:rgba(255,255,255,.62); --faint:rgba(255,255,255,.45);
+    --gold:#D9B45B; --goldim:rgba(217,180,91,.85); --win:#4CC38A; --loss:#E5534B;
+    --hair:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;padding:34px 26px 90px}
+  .intro{max-width:920px;margin:0 auto 30px}
+  .intro h1{font-family:"Bebas Neue";font-size:42px}
+  .intro p{color:var(--ink2);font-size:15px;line-height:1.55;margin-top:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:34px;max-width:1500px;margin:0 auto}
+  .slot h2{font-family:"JetBrains Mono";font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--gold);margin-bottom:4px}
+  .slot .note{font-size:12.5px;color:var(--faint);margin-bottom:10px;min-height:30px;line-height:1.4}
+  .phone{width:393px;background:var(--bg);border:1px solid rgba(255,255,255,.09);border-radius:22px;padding:18px 16px 20px;margin:0 auto}
+  .beb{font-family:"Bebas Neue";letter-spacing:.4px;line-height:1}
+  .mono{font-family:"JetBrains Mono"}
+  .w{color:var(--win)} .l{color:var(--loss)}
+  .hair{height:1px;background:var(--hair);border:0}
+  .ctx{font-family:"JetBrains Mono";font-size:9.5px;letter-spacing:1px;color:rgba(255,255,255,.28);text-align:center;padding:5px 0}
+  .lbl2{font-family:"JetBrains Mono";font-size:10px;font-weight:700;letter-spacing:1px;color:var(--dim)}
+  .val{font-family:"JetBrains Mono";font-size:12.5px;font-weight:700;color:var(--ink)}
+  .tag{font-family:"JetBrains Mono";font-size:11px;font-weight:700;letter-spacing:.5px}
+  .st{display:flex;gap:12px}
+  .st .zl{width:104px}
+  .st .zr{flex:1}
+  .rule{width:1px;background:var(--hair)}
+  .lh{line-height:2.15}
+  .plate{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>P23 × P25 — THE NAME-ROW SLOT, MADE USEFUL</h1>
+  <p>Bebas plates + the statement ladder in all four; the only thing changing is what earns the right side of the name row. The full menu of what that slot could say is in the chat.</p>
+</div>
+
+<div class="grid">
+
+<!-- P31 -->
+<div class="slot">
+  <h2>P31 · TEAM RECORD IN HIS STARTS</h2>
+  <div class="note">The tail/fade fact — does his team WIN when he pitches. Nobody's preview shows this.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:rgba(255,255,255,.92)">J. MISIOROWSKI</span>
+      <span class="tag"><span class="w">MIL 6-2</span> <span style="color:var(--dim)">IN HIS STARTS</span></span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS CARDINALS</div><div class="lbl2 lh">SEASON</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val w lh">5 IP · 1 ER · 10 K vs CIN</div><div class="val lh"><span class="w">1.29 ERA</span> · 1 start</div><div class="val lh"><span class="w">1.47</span> · <span class="w">2.09 xERA</span></div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:var(--gold)">S. GRAY</span>
+      <span class="tag"><span class="l">STL 5-9</span> <span style="color:var(--dim)">IN HIS STARTS</span></span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS BREWERS</div><div class="lbl2 lh">SEASON</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val l lh">4.2 IP · 5 ER at CHC</div><div class="val lh"><span class="l">5.06 ERA</span> · 3 starts</div><div class="val lh"><span class="w">3.41</span> · <span class="l">4.51 xERA</span></div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P32 -->
+<div class="slot">
+  <h2>P32 · REST</h2>
+  <div class="note">Days since his last start — normal rest reads quiet, short rest flags red, long layoff flags too.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:rgba(255,255,255,.92)">J. MISIOROWSKI</span>
+      <span class="tag" style="color:var(--dim)">5 DAYS REST</span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS CARDINALS</div><div class="lbl2 lh">SEASON</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val w lh">5 IP · 1 ER · 10 K vs CIN</div><div class="val lh"><span class="w">1.29 ERA</span> · 1 start</div><div class="val lh"><span class="w">1.47</span> · <span class="w">2.09 xERA</span></div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:var(--gold)">S. GRAY</span>
+      <span class="tag"><span class="l">SHORT REST · 3 DAYS</span></span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS BREWERS</div><div class="lbl2 lh">SEASON</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val l lh">4.2 IP · 5 ER at CHC</div><div class="val lh"><span class="l">5.06 ERA</span> · 3 starts</div><div class="val lh"><span class="w">3.41</span> · <span class="l">4.51 xERA</span></div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P33 -->
+<div class="slot">
+  <h2>P33 · SEASON ERA AS THE HEADLINE</h2>
+  <div class="note">Season moves up beside the name (colored vs league average) — the ladder tightens to the two matchup rows.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:rgba(255,255,255,.92)">J. MISIOROWSKI</span>
+      <span class="mono" style="font-size:13.5px;font-weight:700"><span class="w">1.47 ERA</span> <span style="color:var(--faint);font-size:11px">· 2.09 x</span></span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS CARDINALS</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val w lh">5 IP · 1 ER · 10 K vs CIN</div><div class="val lh"><span class="w">1.29 ERA</span> · 1 start</div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:var(--gold)">S. GRAY</span>
+      <span class="mono" style="font-size:13.5px;font-weight:700"><span class="w">3.41 ERA</span> <span style="color:var(--faint);font-size:11px">· 4.51 x</span></span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS BREWERS</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val l lh">4.2 IP · 5 ER at CHC</div><div class="val lh"><span class="l">5.06 ERA</span> · 3 starts</div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+<!-- P34 -->
+<div class="slot">
+  <h2>P34 · QUALITY-START FORM</h2>
+  <div class="note">His recent starts graded honestly — "3 straight quality starts" / "1 QS in his last 4". Trend without slang.</div>
+  <div class="phone">
+    <div class="ctx">· · · SERIES + MEETINGS ABOVE · · ·</div>
+    <hr class="hair" style="margin-bottom:8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:rgba(255,255,255,.92)">J. MISIOROWSKI</span>
+      <span class="tag"><span class="w">3 STRAIGHT QUALITY STARTS</span></span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS CARDINALS</div><div class="lbl2 lh">SEASON</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val w lh">5 IP · 1 ER · 10 K vs CIN</div><div class="val lh"><span class="w">1.29 ERA</span> · 1 start</div><div class="val lh"><span class="w">1.47</span> · <span class="w">2.09 xERA</span></div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 8px">
+    <div class="plate">
+      <span class="beb" style="font-size:20px;color:var(--gold)">S. GRAY</span>
+      <span class="tag"><span class="l">1 QS IN HIS LAST 4</span></span>
+    </div>
+    <div class="st">
+      <div class="zl"><div class="lbl2 lh">LAST OUTING</div><div class="lbl2 lh">VS BREWERS</div><div class="lbl2 lh">SEASON</div></div>
+      <div class="rule"></div>
+      <div class="zr"><div class="val l lh">4.2 IP · 5 ER at CHC</div><div class="val lh"><span class="l">5.06 ERA</span> · 3 starts</div><div class="val lh"><span class="w">3.41</span> · <span class="l">4.51 xERA</span></div></div>
+    </div>
+    <hr class="hair" style="margin:9px 0 4px">
+    <div class="ctx">· · · LAST 10 + WIRE BELOW · · ·</div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
