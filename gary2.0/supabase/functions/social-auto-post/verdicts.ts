@@ -44,19 +44,11 @@ export function normalizePick(s: string): string {
     .trim();
 }
 
-// First N words, lowercased and stripped of punctuation — the "opener" fingerprint used to stop the model
-// from stamping the same phrase on back-to-back verdicts ("Never sweated it." twice in one run reads template).
-export function openerOf(s: string, words = 3): string {
-  return String(s ?? "").toLowerCase().replace(/[^\w\s']/g, "").split(/\s+/).filter(Boolean).slice(0, words).join(" ");
-}
-
-// Returns `candidate` unless its opener collides with a line already used today; then the first
-// non-colliding fallback; if everything collides, the candidate goes through anyway (never block a receipt).
-export function avoidRepeat(candidate: string, used: string[], fallbacks: string[]): string {
-  const openers = new Set(used.map((u) => openerOf(u)));
-  if (!openers.has(openerOf(candidate))) return candidate;
-  for (const f of fallbacks) if (!openers.has(openerOf(f))) return f;
-  return candidate;
+// Jul 8 2026 (founder): verdicts read worse the more they try to sound like commentary. Plain deterministic
+// template, no LLM: "Cashed. Final X-Y." / "Lost. Final X-Y." / "Push. Final X-Y." Nothing else, ever.
+export function plainVerdict(result: string, finalScore: string): string {
+  const word = result === "won" ? "Cashed" : result === "push" ? "Push" : "Lost";
+  return finalScore ? `${word}. Final ${finalScore}.` : `${word}.`;
 }
 
 const PICK_FORMATS = new Set(["standard", "top_pick"]);

@@ -24,7 +24,7 @@
 //   force_mode=wc → run ONLY the WC per-game card path (use with dry_run=1 to vet captions/cards without posting).
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { matchVerdicts, avoidRepeat } from "./verdicts.ts";
+import { matchVerdicts, plainVerdict } from "./verdicts.ts";
 import { computeStanding } from "./pl.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -334,67 +334,6 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
 // (late finals grade after midnight ET); WC is excluded (runWcCardMode's finals recap owns it).
 const VERDICT_CAP_PER_RUN = 4;
 
-// Hand-written verdict banks. The model imitates examples far harder than it follows rules, so variety has
-// to start HERE: each call samples a few lines at random instead of showing one fixed list (the fixed list
-// made every verdict open with its first example). Registers mix sharp, dry, and callback; PLAIN IS A
-// FEATURE — a flat factual line is a legitimate verdict, and half the bank is deliberately understated.
-const VERDICT_BANK: Record<string, string[]> = {
-  won: [
-    "Never sweated it. Pirates by three.",
-    "Cashed. That bullpen had no business holding a lead and it didn't.",
-    "Quantrill went three innings, which is exactly why I was on Detroit. Tigers cash.",
-    "Wire to wire. Never close.",
-    "Paid like it should've. Dogs that keep games close cash tickets.",
-    "7 to 1. Some nights the read writes itself.",
-    "The runline was never in danger after the third.",
-    "Final 6-2. On the tape.",
-    "Held them to two hits. Good pitching beats a hot lineup, again.",
-    "Cashed. Next.",
-  ],
-  lost: [
-    "Scored twice all night. I'll wear that one.",
-    "Had the right read and the wrong ninth inning. It stays on the tape.",
-    "The bat I trusted went 0 for 5. That one's on me.",
-    "Lost 4-3. Right side, wrong bounce. Same read, next game.",
-    "No sugar on this one. They got outplayed start to finish.",
-    "Didn't land. Final 2-1.",
-    "I liked the pitching matchup and the pitching didn't show. On the tape.",
-  ],
-  push: [
-    "Push. Money back, nothing learned.",
-    "Landed exactly on the number. Push.",
-    "Dead heat. We go again tomorrow.",
-  ],
-};
-function sampleBank(result: string, n = 4): string[] {
-  const pool = [...(VERDICT_BANK[result] ?? VERDICT_BANK.won)];
-  const out: string[] = [];
-  while (pool.length && out.length < n) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-  return out;
-}
-
-function fallbackVerdict(result: string, finalScore: string): string {
-  if (result === "won") return `Cashed.${finalScore ? ` Final ${finalScore}.` : ""}`;
-  if (result === "push") return "Push. Money back.";
-  return `Didn't land.${finalScore ? ` Final ${finalScore}.` : ""} On the tape like everything else.`;
-}
-
-async function verdictLine(c: { pickText: string; matchup: string; result: string; finalScore: string; league: string }, used: string[]): Promise<string> {
-  try {
-    const user = `Gary is quote-tweeting HIS OWN pick from earlier today, now that the game is final. Write the ONE short verdict line that goes above the quoted pick. Return ONLY JSON: {"verdict":"..."}.
-PICK: ${c.pickText} | GAME: ${c.matchup} (${c.league}) | FINAL SCORE: ${c.finalScore || "n/a"} | RESULT: ${c.result.toUpperCase()}
-${used.length ? `VERDICTS ALREADY POSTED TODAY (write something structurally DIFFERENT: a fresh opening, a different shape; never reuse their opening words or repeat a signature phrase from them):\n${used.slice(-6).map((u) => `- ${u}`).join("\n")}\n` : ""}Match this VOICE (different games, copy the register, NOT the openings; every verdict on the timeline must open differently):
-${sampleBank(c.result).map((e) => `${c.result.toUpperCase()} example: "${e}"`).join("\n")}
-Rules: under 180 characters. Past tense, first person. Reference the real final score or one real detail (calling back to the reason in the quoted pick is the best version). PLAIN IS FINE: a dry factual line is a valid verdict, do not force a quip. On a WIN no gloating cliches (banned: easy, free, told you, never a doubt). On a LOSS own it flat, no excuses, no apology tour. Never mention money or units wagered. Never invent a stat, streak, or detail not provided.`;
-    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
-    const v = clean(out.verdict);
-    return v || fallbackVerdict(c.result, c.finalScore);
-  } catch (e) {
-    console.error("verdictLine LLM failed, using fallback: " + String(e));
-    return fallbackVerdict(c.result, c.finalScore);
-  }
-}
-
 async function runVerdictMode(today: string, dryRun: boolean) {
   const dates = [today, yesterdayOf(today)];
   const { data: logRows, error: logErr } = await sb.from("social_post_log")
@@ -412,23 +351,9 @@ async function runVerdictMode(today: string, dryRun: boolean) {
   );
   if (!cands.length) return { posted: false, reason: "no graded, unverdicted pick tweets" };
 
-  // Variety guard: recent verdict texts (from the log) + the ones composed in THIS run. Two verdicts stamped
-  // with the same opener in one afternoon ("Never sweated it." twice, Jul 5) reads like a template bot.
-  const used: string[] = (logRows ?? [])
-    .filter((r: any) => r.thread_format === "verdict" && r.post_text)
-    .map((r: any) => String(r.post_text));
-
   const verdicts: any[] = [];
   for (const c of cands) {
-    const raw = await verdictLine(c, used);
-    const fs = c.finalScore ? ` Final ${c.finalScore}.` : "";
-    const fallbacks = c.result === "won"
-      ? [`That one paid.${fs}`, `On the tape as a win.${fs}`, `Cashed.${fs}`]
-      : c.result === "push"
-        ? ["Push. Money back.", "Dead heat, money back.", "Push. Nothing learned."]
-        : [`That one missed.${fs} I'll wear it.`, `Didn't land.${fs} On the tape like everything else.`, `Loss.${fs} It goes on the tape.`];
-    const text = avoidRepeat(raw, used, fallbacks);
-    used.push(text);
+    const text = plainVerdict(c.result, c.finalScore);
     if (dryRun) { verdicts.push({ pick: c.pickText, result: c.result, quoting: c.hookTweetId, text }); continue; }
     try {
       const id = await postQuote(text, c.hookTweetId);

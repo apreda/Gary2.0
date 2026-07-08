@@ -2,7 +2,7 @@
 // Run: node --test gary2.0/supabase/functions/social-auto-post/verdicts.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePick, matchVerdicts, type LogRow, type ResultRow } from "./verdicts.ts";
+import { normalizePick, matchVerdicts, plainVerdict, type LogRow, type ResultRow } from "./verdicts.ts";
 
 const log = (o: Partial<LogRow>): LogRow => ({
   id: "L1", post_date: "2026-07-05", league: "MLB", pick_text: "Pirates ML -190",
@@ -56,27 +56,11 @@ test("requires same date and league; matches on normalized pick text", () => {
   assert.equal(out.length, 1); // odds mismatch tolerated via normalization
 });
 
-import { openerOf, avoidRepeat } from "./verdicts.ts";
-
-test("openerOf normalizes the first words", () => {
-  assert.equal(openerOf("Never sweated it. Tigers pitch a 3-0 shutout."), "never sweated it");
-  assert.equal(openerOf("Cashed. Next."), "cashed next");
-});
-
-test("avoidRepeat keeps a fresh opener", () => {
-  assert.equal(avoidRepeat("Cashed. Final 5-2.", ["Never sweated it. Pirates by six."], ["fallback one"]), "Cashed. Final 5-2.");
-});
-
-test("avoidRepeat swaps in the first non-colliding fallback on an opener collision", () => {
-  const used = ["Never sweated it. Pirates by six."];
-  const out = avoidRepeat("Never sweated it. Tigers pitch a shutout.", used, ["Never sweated it again.", "That one paid. Final 3-0."]);
-  assert.equal(out, "That one paid. Final 3-0.");
-});
-
-test("avoidRepeat returns the candidate when everything collides", () => {
-  const used = ["Never sweated it. A.", "That one paid. B."];
-  const out = avoidRepeat("Never sweated it. C.", used, ["That one paid. D."]);
-  assert.equal(out, "Never sweated it. C.");
+test("plainVerdict is a flat deterministic template, no commentary", () => {
+  assert.equal(plainVerdict("won", "5-2"), "Cashed. Final 5-2.");
+  assert.equal(plainVerdict("lost", "3-1"), "Lost. Final 3-1.");
+  assert.equal(plainVerdict("push", "4-4"), "Push. Final 4-4.");
+  assert.equal(plainVerdict("won", ""), "Cashed."); // no score available
 });
 
 test("caps candidates per run", () => {
