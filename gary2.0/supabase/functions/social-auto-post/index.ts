@@ -88,6 +88,23 @@ function ordinalDate(ymd: string): string {
   return `${month} ${day}${suffix}`;
 }
 
+// Jul 8 2026 (founder): for verdicts, he wants to see what the RAW model says with zero customization —
+// no system prompt, no Gary character, no voice rules, no JSON forcing, no emoji/dash filtering. This is
+// the closest an API call gets to "as if you typed it into gemini.google.com yourself." Used ONLY for
+// verdicts; every other surface (pick threads, WC captions) keeps its real voice rules untouched.
+async function nakedLLM(user: string): Promise<string> {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    method: "POST",
+    headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: user }] }] }),
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(`Gemini ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
+  if (!text.trim()) throw new Error("Gemini returned empty output");
+  return text.trim();
+}
+
 async function callLLM(system: string, user: string): Promise<string> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
     method: "POST",
@@ -334,6 +351,20 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
 // (late finals grade after midnight ET); WC is excluded (runWcCardMode's finals recap owns it).
 const VERDICT_CAP_PER_RUN = 4;
 
+// Jul 8 2026 (founder): naked-model verdict — plain factual prompt, zero persona, zero style rules.
+// Falls back to plainVerdict() ONLY on an API error (reliability, not a style choice).
+async function nakedVerdict(c: { pickText: string; matchup: string; result: string; finalScore: string; league: string }): Promise<string> {
+  try {
+    const outcome = c.result === "won" ? "won" : c.result === "push" ? "pushed" : "lost";
+    const user = `The pick was: ${c.pickText}, for the game ${c.matchup} (${c.league}). Final score: ${c.finalScore || "unknown"}. The pick ${outcome}. Write a short reply, like a reply to a tweet, saying whether the pick hit.`;
+    const raw = await nakedLLM(user);
+    return raw.slice(0, 275);
+  } catch (e) {
+    console.error("naked verdict LLM failed, using plain fallback: " + String(e));
+    return plainVerdict(c.result, c.finalScore);
+  }
+}
+
 async function runVerdictMode(today: string, dryRun: boolean) {
   const dates = [today, yesterdayOf(today)];
   const { data: logRows, error: logErr } = await sb.from("social_post_log")
@@ -353,7 +384,7 @@ async function runVerdictMode(today: string, dryRun: boolean) {
 
   const verdicts: any[] = [];
   for (const c of cands) {
-    const text = plainVerdict(c.result, c.finalScore);
+    const text = await nakedVerdict(c);
     if (dryRun) { verdicts.push({ pick: c.pickText, result: c.result, quoting: c.hookTweetId, text }); continue; }
     try {
       const id = await postQuote(text, c.hookTweetId);
@@ -704,69 +735,55 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
   return { posted: done.some((d) => d.thread_url), actions: done };
 }
 
-// Morning-tape voice samples, rotated by day-of-month so consecutive mornings never share a skeleton.
-const RECAP_EXAMPLES = [
-  `"Went 9 and 4 yesterday. The White Sox at plus 124 paid like it should've, and the one Cup match I trusted went sideways in stoppage. Back on the card this afternoon."`,
-  `"An 11 and 3 day. Best of it was Cleveland at plus 132. Worst was watching the Reds give it away in the eighth. Today's card is up this morning."`,
-  `"Went 5 and 9. No way around it, the bullpens I trusted didn't hold. The tape keeps every one of them. Back at it today."`,
-];
-
+// REVIVED Jul 8 2026 (founder): full per-sport list of every GAME pick from yesterday — no LLM, no
+// personality, no mood. Deterministic template only ("no personality needed because its simple
+// instructions"). Format:
+//   July 7th:
+//
+//   MLB: 7-0
+//   - Dodgers -1.5 ✅
+//   - Braves ML ❌
+//
+//   WC: 5-3
+//   - Colombia ML ✅
+//   ...
+// Props excluded (founder: "just do game picks not props"). No hashtags — the account-wide zero-hashtag
+// rule applies here same as everywhere else, even though this is a plain template, not an LLM call.
 async function runRecapMode(today: string, dryRun: boolean) {
-  // RETIRED Jul 7 2026 (founder: "dont do 1"): NO daily recap post of any kind — the verdict loop carries
-  // per-pick results. Early-return keeps the 10am slot quiet; dry-run still previews for testing. To revive,
-  // delete this line. (History: scoreboard recap → Jul 5 Gary-voiced "morning tape" → killed Jul 7.)
-  if (!dryRun) return { posted: false, reason: "daily recap retired Jul 7 (founder)" };
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
   const y = yesterdayOf(today);
-  const { data: results, error } = await sb.from("game_results").select("league, result, pick_text, final_score").eq("game_date", y);
+  const { data: results, error } = await sb.from("game_results").select("league, result, pick_text, confidence").eq("game_date", y);
   if (error) throw error;
-  const graded = (results ?? []).filter((r) => r.result === "won" || r.result === "lost");
+  const graded = (results ?? []).filter((r) => r.result === "won" || r.result === "lost" || r.result === "push");
   if (!graded.length) return { posted: false, reason: "no graded game results for yesterday yet" };
-  const wins = graded.filter((r) => r.result === "won").length;
-  const losses = graded.filter((r) => r.result === "lost").length;
 
-  const byLeague = new Map<string, { w: number; l: number }>();
+  const marker = (result: string) => result === "won" ? "✅" : result === "lost" ? "❌" : "(push)";
+  const bySport = new Map<string, { won: number; lost: number; picks: any[] }>();
   for (const r of graded) {
-    const rec = byLeague.get(r.league) ?? { w: 0, l: 0 };
-    if (r.result === "won") rec.w++; else rec.l++;
-    byLeague.set(r.league, rec);
+    const rec = bySport.get(r.league) ?? { won: 0, lost: 0, picks: [] };
+    if (r.result === "won") rec.won++; else if (r.result === "lost") rec.lost++;
+    rec.picks.push(r);
+    bySport.set(r.league, rec);
   }
-  const leagueLines = [...byLeague.entries()]
-    .sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l) || a[0].localeCompare(b[0]))
-    .map(([lg, rec]) => `${lg} ${rec.w}-${rec.l}`);
-  const fallback = `Results from ${ordinalDate(y)}\n\n${leagueLines.join("\n")}`;
+  const sections = [...bySport.entries()]
+    .sort((a, b) => b[1].picks.length - a[1].picks.length || a[0].localeCompare(b[0]))
+    .map(([league, rec]) => {
+      const lines = [...rec.picks]
+        .sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))
+        .map((p) => `- ${p.pick_text} ${marker(p.result)}`);
+      return `${league}: ${rec.won}-${rec.lost}\n${lines.join("\n")}`;
+    });
+  const text = `${ordinalDate(y)}:\n\n${sections.join("\n\n")}`;
 
-  const mood = moodFor(wins, losses);
-  const dogWins = graded.filter((r) => r.result === "won" && /\+\d{3,}\)?\s*$/.test(String(r.pick_text))).slice(0, 3);
-  const lossRows = graded.filter((r) => r.result === "lost").slice(0, 3);
-  const fact = (r: any) => `${r.pick_text} (${r.result}${r.final_score ? `, final ${r.final_score}` : ""})`;
-
-  let post = "";
-  try {
-    const user = `Write Gary's ONE morning post about yesterday's card. Return ONLY JSON: {"post":"..."}.
-YESTERDAY (ground truth, use ONLY these facts and copy the numbers exactly):
-Overall record: ${wins} and ${losses}. By league: ${leagueLines.join(", ")}.
-${dogWins.length ? `Plus-money wins: ${dogWins.map(fact).join("; ")}.` : ""}
-${lossRows.length ? `Losses include: ${lossRows.map(fact).join("; ")}.` : ""}
-Gary's register this morning (from the record): ${MOODS[mood]}.
-Shape: 2 to 4 short sentences, under 260 characters total. State the real record in prose (say "went 8 and 7", never "an 8-7 record"). Reference ONE concrete result from the facts above (a specific pick that cashed or died, with its real detail). Own losses flat, no spin; on good days stay dry, never gloat. It can end with a plain pointer like "Full card's graded in the app." on some days, or just end on the take. No link, no hashtag.
-Match this VOICE (a DIFFERENT day, copy the register not the facts): ${RECAP_EXAMPLES[new Date().getDate() % RECAP_EXAMPLES.length]}`;
-    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
-    post = clean(out.post);
-  } catch (e) {
-    console.error("recap LLM failed, using plain per-sport lines: " + String(e));
-  }
-  const text = post || fallback;
-
-  if (dryRun) return { posted: false, dry_run: true, mood, record: `${wins}-${losses}`, text };
+  if (dryRun) return { posted: false, dry_run: true, text };
 
   const tweetId = await postTweet(text);
   await sb.from("social_post_log").insert({
     post_date: today, slot: "recap", league: "RECAP", pick_text: `DAILY RECAP ${today}`, thread_format: "recap",
     hook_tweet_id: tweetId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${tweetId}`, post_text: text,
   });
-  return { posted: true, mood, record: `${wins}-${losses}`, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
+  return { posted: true, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
 
 // Daily standalone CHARACTER post (Option A). Grounded in yesterday's mood + today's slate so it's earned, not random. No link, no hashtag.
