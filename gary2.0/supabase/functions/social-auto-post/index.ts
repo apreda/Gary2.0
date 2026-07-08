@@ -747,8 +747,11 @@ async function runWcCardMode(today: string, nowMs: number, _etHour: number, dryR
 //   WC: 5-3
 //   - Colombia ML ✅
 //   ...
-// Props excluded (founder: "just do game picks not props"). No hashtags — the account-wide zero-hashtag
-// rule applies here same as everywhere else, even though this is a plain template, not an LLM call.
+// Props excluded (founder: "just do game picks not props"). Closes with the app plug + 1-2 hashtags
+// (founder, Jul 8 — an explicit exception to the account's usual zero-hashtag rule, THIS SURFACE ONLY).
+// Hashtags are drawn from whichever leagues actually appear that day, so they stay genuinely relevant
+// instead of static filler.
+const RECAP_HASHTAG_NAMES: Record<string, string> = { WC: "WorldCup", MLB: "MLB", NBA: "NBA", NFL: "NFL", NHL: "NHL", NCAAB: "NCAAB", NCAAF: "NCAAF" };
 async function runRecapMode(today: string, dryRun: boolean) {
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
@@ -766,15 +769,17 @@ async function runRecapMode(today: string, dryRun: boolean) {
     rec.picks.push(r);
     bySport.set(r.league, rec);
   }
-  const sections = [...bySport.entries()]
-    .sort((a, b) => b[1].picks.length - a[1].picks.length || a[0].localeCompare(b[0]))
-    .map(([league, rec]) => {
-      const lines = [...rec.picks]
-        .sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))
-        .map((p) => `- ${p.pick_text} ${marker(p.result)}`);
-      return `${league}: ${rec.won}-${rec.lost}\n${lines.join("\n")}`;
-    });
-  const text = `${ordinalDate(y)}:\n\n${sections.join("\n\n")}`;
+  const sortedEntries = [...bySport.entries()].sort((a, b) => b[1].picks.length - a[1].picks.length || a[0].localeCompare(b[0]));
+  const sections = sortedEntries.map(([league, rec]) => {
+    const lines = [...rec.picks]
+      .sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))
+      .map((p) => `- ${p.pick_text} ${marker(p.result)}`);
+    return `${league}: ${rec.won}-${rec.lost}\n${lines.join("\n")}`;
+  });
+  const hashtags = sortedEntries.slice(0, 2)
+    .map(([league]) => `#${RECAP_HASHTAG_NAMES[league] ?? league.replace(/[^A-Za-z0-9]/g, "")}`)
+    .join(" ");
+  const text = `${ordinalDate(y)}:\n\n${sections.join("\n\n")}\n\nFree Daily Picks in the Gary A.I app\n\n${hashtags}`;
 
   if (dryRun) return { posted: false, dry_run: true, text };
 
