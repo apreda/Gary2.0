@@ -18,6 +18,11 @@
 // recap path stays intact as a backfill safety net.
 //
 // Faithful port of the grading + is_winners_pick logic in run-all-results.js.
+//
+// Side-detection (which team a pick is on) + gradeGame/gradeSoccer live in the pure,
+// unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
+// graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
+import { gradeGame, gradeSoccer } from "./grading.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -63,62 +68,10 @@ async function sbGet(table: string, query: string): Promise<any[]> {
   return await res.json();
 }
 
-// ── grading (ported from run-all-results.js + soccerGrading.js) ──────────────
-function gradeGame(pickText: string, homeTeam: string, awayTeam: string, hScore: number, vScore: number): string {
-  const p = pickText.toLowerCase();
-  const hFull = homeTeam.toLowerCase(), vFull = awayTeam.toLowerCase();
-  const hM = hFull.split(" ").pop()!, vM = vFull.split(" ").pop()!;
-  const isML = p.includes(" ml") || p.includes("moneyline");
-  const total = pickText.match(/(over|under)\s+(\d+\.?\d*)/i);
-  if (total) {
-    const line = parseFloat(total[2]), actual = hScore + vScore;
-    if (actual === line) return "push";
-    return (total[1].toLowerCase() === "over" ? actual > line : actual < line) ? "won" : "lost";
-  }
-  if (!isML) {
-    const sp = pickText.match(/([+-][1-9]\d{0,1}(\.\d)?)(?!\d)/);
-    if (sp) {
-      const spread = parseFloat(sp[1]);
-      const isHome = p.includes(hM) || p.includes(hFull);
-      const diff = isHome ? hScore - vScore : vScore - hScore;
-      if (diff + spread === 0) return "push";
-      return diff + spread > 0 ? "won" : "lost";
-    }
-  }
-  if (/\b(draw|tie)\b/.test(p)) return hScore === vScore ? "won" : "lost";
-  const isHome = p.includes(hM) || p.includes(hFull);
-  const isVis = p.includes(vM) || p.includes(vFull);
-  if (isHome && !isVis) return hScore > vScore ? "won" : "lost";
-  if (isVis && !isHome) return vScore > hScore ? "won" : "lost";
-  if (isHome) return hScore > vScore ? "won" : "lost";
-  if (isVis) return vScore > hScore ? "won" : "lost";
-  return "lost";
-}
-
-function gradeSoccer(pick: any, regHome: number, regAway: number): string | null {
-  const type = String(pick.type ?? "moneyline").toLowerCase();
-  const text = String(pick.pick ?? "").toLowerCase();
-  const hFull = String(pick.homeTeam ?? "").toLowerCase(), aFull = String(pick.awayTeam ?? "").toLowerCase();
-  const hM = hFull.split(" ").pop()!, aM = aFull.split(" ").pop()!;
-  const picksHome = !!hFull && (text.includes(hFull) || (!!hM && text.includes(hM)));
-  const picksAway = !!aFull && (text.includes(aFull) || (!!aM && text.includes(aM)));
-  if (type === "draw") return regHome === regAway ? "won" : "lost";
-  if (type === "total") {
-    const line = parseFloat(pick.goal_line), tot = regHome + regAway;
-    if (tot === line) return "push";
-    return (/over/.test(text) ? tot > line : tot < line) ? "won" : "lost";
-  }
-  if (type === "asian_handicap") {
-    const h = parseFloat(pick.handicap);
-    const margin = picksAway ? regAway - regHome : regHome - regAway;
-    const adj = margin + h;
-    if (adj === 0) return "push";
-    return adj > 0 ? "won" : "lost";
-  }
-  if (picksHome && !picksAway) return regHome > regAway ? "won" : "lost";
-  if (picksAway && !picksHome) return regAway > regHome ? "won" : "lost";
-  return null;
-}
+// ── grading ──────────────────────────────────────────────────────────────────
+// gradeGame (MLB 2-way) + gradeSoccer (WC) now live in the pure, unit-tested
+// ./grading.ts (imported above), which resolves the pick's side using only the tokens
+// that distinguish the two teams — never a shared mascot like "Sox".
 
 // 90' regulation for WC: full score when no extra time, else sum of halves.
 function regulationScore(m: any): { home: number; away: number } | null {

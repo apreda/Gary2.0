@@ -15,6 +15,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { gradeSoccerGame } from '../src/services/soccerGrading.js';
+import { pickSide } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame } from '../src/services/gameRecap.js';
 import { runNightHighlights } from '../src/services/nightHighlights.js';
@@ -335,13 +336,11 @@ function matchGame(games, h, v, gameId) {
 
 function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   const pickLower = pickText.toLowerCase();
-  const hFull = homeTeam.toLowerCase(), vFull = awayTeam.toLowerCase();
-  const hMascot = hFull.split(' ').pop(), vMascot = vFull.split(' ').pop();
-  
+
   // 1. Moneyline Detection (Prioritize this)
   const isML = pickLower.includes(' ml') || pickLower.includes('moneyline');
-  
-  // 2. Total (Over/Under)
+
+  // 2. Total (Over/Under) — team-agnostic.
   const totalMatch = pickText.match(/(over|under)\s+(\d+\.?\d*)/i);
   if (totalMatch) {
     const line = parseFloat(totalMatch[2]), actual = hScore + vScore;
@@ -349,15 +348,16 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
     return (totalMatch[1].toLowerCase() === 'over' ? actual > line : actual < line) ? 'won' : 'lost';
   }
 
+  // Side resolved via the tokens that DISTINGUISH the two teams (never a shared mascot
+  // like "Sox"), so a same-mascot matchup can't flip the result. See teamMatch.js.
+  const side = pickSide(pickText, homeTeam, awayTeam);
+
   // 3. Spread (Only if not a Moneyline pick)
   if (!isML) {
     const spreadMatch = pickText.match(/([+-][1-9]\d{0,1}(\.\d)?)(?!\d)/);
     if (spreadMatch) {
       const spread = parseFloat(spreadMatch[1]);
-      const isHome = pickLower.includes(hMascot) || pickLower.includes(hFull);
-      const isVisitor = pickLower.includes(vMascot) || pickLower.includes(vFull);
-      
-      const diff = isHome ? (hScore - vScore) : (vScore - hScore);
+      const diff = side === 'home' ? (hScore - vScore) : (vScore - hScore);
       if (diff + spread === 0) return 'push';
       return (diff + spread > 0) ? 'won' : 'lost';
     }
@@ -368,19 +368,12 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   // misgrade a correct draw pick as a loss.
   if (/\b(draw|tie)\b/.test(pickLower)) return (hScore === vScore) ? 'won' : 'lost';
 
-  // 4. Moneyline Logic (Fallback). A team-to-win ML loses on a draw — (hScore >
-  // vScore) is false on a level result, so a tie correctly grades 'lost'.
-  const isHomePick = pickLower.includes(hMascot) || pickLower.includes(hFull);
-  const isVisitorPick = pickLower.includes(vMascot) || pickLower.includes(vFull);
+  // 4. Moneyline / team-to-win. A team-to-win ML loses on a draw — (hScore > vScore)
+  // is false on a level result, so a tie correctly grades 'lost'.
+  if (side === 'home') return (hScore > vScore) ? 'won' : 'lost';
+  if (side === 'away') return (vScore > hScore) ? 'won' : 'lost';
 
-  if (isHomePick && !isVisitorPick) return (hScore > vScore) ? 'won' : 'lost';
-  if (isVisitorPick && !isHomePick) return (vScore > hScore) ? 'won' : 'lost';
-  
-  // Final fallback
-  if (isHomePick) return (hScore > vScore) ? 'won' : 'lost';
-  if (isVisitorPick) return (vScore > hScore) ? 'won' : 'lost';
-
-  return 'lost'; 
+  return 'lost';
 }
 
 function gradeProp(actual, line, bet) {

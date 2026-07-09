@@ -8,16 +8,17 @@
  * Bet types: moneyline (Home/Away win), draw, total (O/U goals), asian_handicap.
  * The to_advance market is graded separately via getAdvanceResult (Plan A).
  */
+import { pickSide } from './teamMatch.js';
+
 export function gradeSoccerGame(pick, regHome, regAway) {
   if (regHome == null || regAway == null) return null;
   const type = (pick.type || 'moneyline').toLowerCase();
   const text = (pick.pick || '').toLowerCase();
-  const hFull = (pick.homeTeam || '').toLowerCase();
-  const aFull = (pick.awayTeam || '').toLowerCase();
-  const hMascot = hFull.split(' ').pop();
-  const aMascot = aFull.split(' ').pop();
-  const picksHome = !!hFull && (text.includes(hFull) || (!!hMascot && text.includes(hMascot)));
-  const picksAway = !!aFull && (text.includes(aFull) || (!!aMascot && text.includes(aMascot)));
+  // Side resolved via the tokens that DISTINGUISH the two teams (never a shared word like
+  // a common mascot), so an ambiguous match can't fabricate a false loss. See teamMatch.js.
+  const side = pickSide(pick.pick, pick.homeTeam, pick.awayTeam);
+  const picksHome = side === 'home';
+  const picksAway = side === 'away';
 
   if (type === 'draw') {
     return regHome === regAway ? 'won' : 'lost';
