@@ -3039,9 +3039,13 @@ struct HomeView: View {
     }
 
 
+   // Jul 9 2026 fix: this used to take the raw last word ("Boston Red Sox"
+   // and "Chicago White Sox" both collapsed to "Sox" — the exact "SOX / SOX"
+   // bug on the Members Only seal card). Delegates to the one correct,
+   // two-word-mascot-aware implementation instead of re-deriving it here.
    static func shortTeam(_ name: String?) -> String {
-        guard let last = name?.split(separator: " ").last else { return "—" }
-        return String(last)
+        guard let name, !name.isEmpty else { return "—" }
+        return Formatters.shortTeamName(name)
     }
 
    static func propUnit(_ type: String?) -> String {

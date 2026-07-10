@@ -58,7 +58,24 @@
       "Bash(awk '/Running: node scripts\\\\/run-agentic-picks.js --wc --game-id 57/{f=1} f' logs/scheduler/launchd-stdout.log)",
       "Bash(ps -o pid,etime,time,command -p 3471)",
       "Bash(awk '/── WC: 8 game\\\\\\(s\\\\\\) ──/{n++} n>=2' logs/scheduler/launchd-stdout.log)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "mcp__balldontlie-api__mlb_get_games",
+      "Bash(npx vitest *)",
+      "Bash(deno --version)",
+      "Bash(deno check *)",
+      "Bash(npx --yes supabase --version)",
+      "Bash(npx --yes supabase functions list --project-ref xuttubsfgdcjfgmskcol)",
+      "Bash(npx --yes supabase functions deploy grade-results --project-ref xuttubsfgdcjfgmskcol)",
+      "Bash(python3 -m json.tool)",
+      "Bash(git merge *)",
+      "Bash(launchctl print *)",
+      "Bash(launchctl kickstart *)",
+      "Bash(cd /Users/adam.preda/Desktop/Gary2.0 *)",
+      "mcp__plugin_vercel_vercel__list_deployments",
+      "Bash(python3 -c ' *)",
+      "Bash(cd /Users/adam.preda/Desktop/Gary2.0/gary2.0 *)",
+      "Bash(launchctl list *)",
+      "Bash(crontab -l)"
     ]
   },
   "enabledMcpjsonServers": [
