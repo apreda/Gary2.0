@@ -119,8 +119,11 @@ async function geminiGrounding(query) {
 }
 
 async function getScoreGrounding(league, teamA, teamB, date) {
-  // Ask for scores by team name — avoids errors when pick's home/away doesn't match reality
-  const query = `What was the final score of the ${league} game between ${teamA} and ${teamB} on ${date}? Respond ONLY as "${teamA} score"-"${teamB} score" (e.g. 115-102 means ${teamA} scored 115 and ${teamB} scored 102). If unknown, say "null".`;
+  // Ask for scores by team name — avoids errors when pick's home/away doesn't match reality.
+  // Grounding must NEVER settle a game that isn't over: demand a FINAL score and take "null"
+  // for anything in progress/postponed/suspended/scheduled. The caller also gates this to
+  // games the box-score provider lacks; this prompt guard is defense in depth.
+  const query = `What was the FINAL score of the ${league} game between ${teamA} and ${teamB} on ${date}? Only answer if the game is already COMPLETED/FINAL. If it is still in progress, postponed, suspended, scheduled, or has not finished, respond ONLY "null". Respond ONLY as "${teamA} score"-"${teamB} score" (e.g. 115-102 means ${teamA} scored 115 and ${teamB} scored 102). If unknown or not final, say "null".`;
   const text = await geminiGrounding(query);
   if (!text || text.toLowerCase().includes('null')) return null;
   const match = text.match(/(\d+)-(\d+)/);
@@ -767,6 +770,11 @@ async function processGenericGames(table, date, leagueFilter = null) {
       let hs = null, vs = null;
       let matchedGame = null;
       let swapped = false;
+      // Set when the provider HAS this game but reports it non-final. Blocks the
+      // grounding fallback below so an in-progress game is never graded off an LLM
+      // "final score" guess (Jul 9: a live Mariners @ Marlins game graded a 4-1 loss
+      // while it was in the 4th inning, then went out as a result tweet).
+      let gameFoundNotFinal = false;
 
       // Pick may store the BDL game id as `game_id` or `bdl_game_id` (we add this
       // at pick-generation time). Match by ID first to avoid grabbing a different
@@ -840,6 +848,7 @@ async function processGenericGames(table, date, leagueFilter = null) {
           const statusStr = String(result.game.status ?? '').trim();
           if (statusStr && !statusStr.toUpperCase().includes('FINAL')) {
             console.log(`  ⏳ NOT FINAL — skipping grade for ${pick.awayTeam} @ ${pick.homeTeam} (status: ${statusStr})`);
+            gameFoundNotFinal = true; // provider has it but it isn't over — do NOT fall through to grounding
           } else {
             if (!statusStr) {
               console.warn(`  ⚠️ No status on matched game for ${pick.awayTeam} @ ${pick.homeTeam} — grading anyway`);
@@ -874,7 +883,13 @@ async function processGenericGames(table, date, leagueFilter = null) {
         gameDate = typeof normalized === 'string' ? normalized.slice(0, 10) : normalized;
       }
 
-      if (hs === null) {
+      // Grounding is a fallback for a game the PROVIDER LACKS entirely — never for a
+      // game the provider reports as still in progress. Without this guard, an
+      // in-progress game (box-score path skipped by the finality gate above) fell
+      // through here and got graded off an LLM "what was the final score?" answer,
+      // posting a premature/wrong result (Jul 9: Mariners ML graded a 4-1 loss while
+      // the game was in the 4th inning).
+      if (hs === null && !gameFoundNotFinal) {
         const g = await getScoreGrounding(league, pick.homeTeam, pick.awayTeam, date);
         if (g) { hs = g.h; vs = g.v; }
       }
