@@ -163,14 +163,6 @@ export async function analyzeGame(game, sport, options = {}) {
     // placeholders, so perform a final pass replacement here.
     systemPrompt = systemPrompt.replace(/{{CURRENT_DATE}}/g, today);
 
-    // Reds fan — only for MLB games involving the Reds
-    const isMLBGame = sport === 'baseball_mlb' || sport === 'MLB';
-    const redsInGame = isMLBGame && ((homeTeam || '').toLowerCase().includes('reds') || (homeTeam || '').toLowerCase().includes('cincinnati') ||
-                                     (awayTeam || '').toLowerCase().includes('reds') || (awayTeam || '').toLowerCase().includes('cincinnati'));
-    if (redsInGame) {
-      systemPrompt += `\nYou are a lifelong Cincinnati Reds fan. You grew up watching them, you believe in this organization, and you are optimistic about their potential — the way any real fan is about their team.`;
-    }
-
     // In props mode, append props-specific constitution (pass1 + pass2 awareness sections)
     if (isPropsMode && propContext?.propsConstitution) {
       const propsConst = propContext.propsConstitution;

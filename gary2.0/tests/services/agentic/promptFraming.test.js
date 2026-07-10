@@ -210,6 +210,17 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
     expect(main).toContain('the public overreacts and underreacts');
   });
 
+  it('no team fandom in Gary\'s identity (Reds-fan injection removed Jul 9)', () => {
+    // A "lifelong Cincinnati Reds fan" line rode the system prompt for every
+    // Reds game since ~April: Gary took the Reds in 25 of their 72 graded
+    // games at 40.0% / -5.0u while his opponent-side picks in the SAME games
+    // ran 66.0% / +10.3u. Instructed optimism about one franchise is a bought
+    // bias — Gary roots for his pick, never for a team (founder order, Jul 9).
+    const main = src('orchestrator/orchestratorMain.js');
+    expect(main).not.toContain('lifelong Cincinnati Reds fan');
+    expect(main).not.toContain('redsInGame');
+  });
+
   it('sport physics: MLB streaks are real currency (founder-requested license)', () => {
     // The soccer twin ("most upset-friendly format") was deleted Jul 7 — it
     // taught a directional worldview. The MLB streak license stays: the founder

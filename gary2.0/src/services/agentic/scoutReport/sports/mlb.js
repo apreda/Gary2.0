@@ -19,12 +19,14 @@ import { getPitcherXStats, getBatterXStats, getPitcherArsenal, getPitcherStatcas
 import {
   getTeamRoster,
   getMlbRecentGames,
+  getMlbUpcomingGames,
   getProbablePitchers,
   getMlbGameLineups,
   getGameBoxScore,
   getPitcherPlatoonSplits,
   getPlayerSeasonStats,
 } from '../../../mlbStatsApiService.js';
+import { computeMlbSeriesState } from './mlbSeriesState.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -120,6 +122,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     awayRecentGames,
     gameContextGrounding,
     confirmedLineups,
+    homeUpcomingGames,
   ] = await Promise.all([
     homeTeamId ? getTeamRoster(homeTeamId).catch(e => { console.warn(`[Scout Report] Home roster error: ${e.message}`); return []; }) : Promise.resolve([]),
     awayTeamId ? getTeamRoster(awayTeamId).catch(e => { console.warn(`[Scout Report] Away roster error: ${e.message}`); return []; }) : Promise.resolve([]),
@@ -152,6 +155,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       const bdl = await ballDontLieService.getMlbLineups(gameId).catch(() => null);
       return bdl ? { source: 'bdl', data: bdl } : null;
     })(),
+    // SERIES STATE lookahead (Jul 9 2026): remaining meetings vs tonight's
+    // opponent complete the "Game 2 of 3" (a finale reads "Game 4 of 4").
+    // null = lookahead failed → the section omits "of N" rather than guess.
+    homeTeamId ? getMlbUpcomingGames(homeTeamId, 4).catch(() => null) : Promise.resolve(null),
   ]);
 
   console.log(`[Scout Report] BDL standings: ${bdlStandings?.length || 0} teams, BDL injuries: ${bdlInjuries?.length || 0}`);
@@ -1118,6 +1125,9 @@ ${recentPerformanceSection || 'No recent performance data.'}
 
 BULLPEN USAGE — LAST 3 GAMES (real box scores: who has thrown, when, and how many pitches — availability tonight follows from this, and it changes daily):
 ${[homeBullpenUsage, awayBullpenUsage].filter(Boolean).join('\n') || 'No bullpen usage data available.'}
+
+═══ SERIES STATE ═══
+${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}
 
 Recent results:
 ${recentResults}

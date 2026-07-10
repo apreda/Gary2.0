@@ -80,6 +80,32 @@ export async function getMlbRecentGames(teamId, limit = 10) {
   return recent;
 }
 
+/**
+ * Upcoming (not-final) games for a team, tomorrow through +daysAhead days.
+ * Feeds the scout report's SERIES STATE "of N" (Jul 9 2026): remaining
+ * meetings vs tonight's opponent complete "Game 2 of 3". Same /schedule
+ * source and date conventions as getMlbRecentGames above.
+ */
+export async function getMlbUpcomingGames(teamId, daysAhead = 4) {
+  const key = `mlb_upcoming_${teamId}_${daysAhead}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  const start = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const end = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&startDate=${start}&endDate=${end}`);
+  const games = [];
+  for (const dateEntry of (data.dates || [])) {
+    for (const game of (dateEntry.games || [])) {
+      if (game.status?.detailedState === 'Final') continue;
+      games.push(game);
+    }
+  }
+  games.sort((a, b) => new Date(a.gameDate || a.officialDate || 0) - new Date(b.gameDate || b.officialDate || 0));
+  setCache(key, games);
+  return games;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MLB REGULAR SEASON TEAMS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -459,6 +485,7 @@ export function formatMlbGameForPipeline(mlbGame) {
 export default {
   getMlbSchedule,
   getMlbRecentGames,
+  getMlbUpcomingGames,
   getMlbTeams,
   findMlbTeam,
   getMlbStandings,
