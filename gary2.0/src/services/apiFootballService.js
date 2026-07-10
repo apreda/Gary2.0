@@ -73,10 +73,25 @@ async function afFetch(path, params = {}) {
     }
     const json = await res.json();
     // API-Football returns errors as {} (object) when none, or a populated
-    // object/array when present. A populated payload is a deterministic API error.
+    // object/array when present. A populated payload is a deterministic API
+    // error — EXCEPT the per-minute rate limit, which arrives as HTTP 200 with
+    // errors.rateLimit (never a real 429). The scout report fires ~9 calls in
+    // one burst, so the last ones over the cap used to zero availability data
+    // on the storing run (bit the Morocco@France QF, Jul 9 2026). Retry those
+    // with a backoff long enough for the minute window to roll.
     const errs = json?.errors;
     const hasErr = Array.isArray(errs) ? errs.length > 0 : (errs && typeof errs === 'object' && Object.keys(errs).length > 0);
-    if (hasErr) throw new Error(`API-Football error: ${JSON.stringify(errs)}`);
+    if (hasErr) {
+      const isRateLimit = !Array.isArray(errs) && typeof errs?.rateLimit === 'string';
+      if (isRateLimit && i < 2) {
+        lastErr = new Error(`API-Football rate limit: ${errs.rateLimit}`);
+        const backoff = Number(process.env.AF_RATELIMIT_BACKOFF_MS) || 15000;
+        console.warn(`[API-Football] Per-minute rate limit on ${path} — retrying in ${(backoff * (i + 1)) / 1000}s`);
+        await sleep(backoff * (i + 1));
+        continue;
+      }
+      throw new Error(`API-Football error: ${JSON.stringify(errs)}`);
+    }
     return Array.isArray(json?.response) ? json.response : [];
   }
   throw lastErr;
