@@ -24,13 +24,18 @@
 //   force_mode=wc → run ONLY the WC per-game card path (use with dry_run=1 to vet captions/cards without posting).
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { matchVerdicts, plainVerdict } from "./verdicts.ts";
+import { matchVerdicts, plainVerdict, capEmoji } from "./verdicts.ts";
 import { computeStanding } from "./pl.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+// Naked-model verdicts (Jul 10, founder): swapped from Gemini to OpenAI's gpt-5.6-terra via the Responses
+// API — same "zero customization" contract (no system prompt, no persona, no voice rules), different
+// provider. Verified live on this account's key before wiring in (model genuinely exists, July 2026).
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 // Voice work gets its own model knob: SOCIAL_GEMINI_MODEL upgrades the WRITER (captions, verdicts, recap)
 // without touching grade-results or anything else that shares the global GEMINI_MODEL secret.
 const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
@@ -89,20 +94,24 @@ function ordinalDate(ymd: string): string {
 }
 
 // Jul 8 2026 (founder): for verdicts, he wants to see what the RAW model says with zero customization —
-// no system prompt, no Gary character, no voice rules, no JSON forcing, no emoji/dash filtering. This is
-// the closest an API call gets to "as if you typed it into gemini.google.com yourself." Used ONLY for
-// verdicts; every other surface (pick threads, WC captions) keeps its real voice rules untouched.
+// no system prompt, no Gary character, no voice rules, no JSON forcing. This is the closest an API call
+// gets to "as if you typed it into a chat app yourself." Used ONLY for verdicts; every other surface (pick
+// threads, WC captions) keeps its real voice rules untouched. Jul 10: swapped provider Gemini -> OpenAI
+// gpt-5.6-terra (founder wanted "a little smarter"); added a hard cap of 1 emoji regardless of provider.
 async function nakedLLM(user: string): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+  const r = await fetch(OPENAI_RESPONSES_URL, {
     method: "POST",
-    headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: user }] }] }),
+    headers: { Authorization: `Bearer ${OPENAI_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({ model: "gpt-5.6-terra", input: [{ role: "user", content: user }] }),
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(`Gemini ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  const text = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
-  if (!text.trim()) throw new Error("Gemini returned empty output");
-  return text.trim();
+  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.output ?? [])
+    .filter((o: any) => o.type === "message")
+    .flatMap((o: any) => (o.content ?? []).map((c: any) => c.text ?? "").filter(Boolean))
+    .join("");
+  if (!text.trim()) throw new Error("OpenAI returned empty output");
+  return capEmoji(text.trim(), 1);
 }
 
 async function callLLM(system: string, user: string): Promise<string> {

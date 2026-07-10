@@ -44,6 +44,16 @@ export function normalizePick(s: string): string {
     .trim();
 }
 
+// Emoji cap (Jul 10, founder): "naked" model output still keeps zero persona/voice-rule filtering, but
+// emoji COUNT is capped — keep at most `max`, drop the rest in place, in the order they appeared. Same
+// emoji code-point ranges as the rest of the account's killEmoji() for a consistent definition.
+export function capEmoji(text: string, max = 1): string {
+  const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu;
+  let seen = 0;
+  const capped = text.replace(EMOJI_RE, (m) => (++seen <= max ? m : ""));
+  return capped.replace(/[ \t]{2,}/g, " ").replace(/ +\n/g, "\n").trim();
+}
+
 // Jul 8 2026 (founder): verdicts read worse the more they try to sound like commentary. Plain deterministic
 // template, no LLM: "Cashed. Final X-Y." / "Lost. Final X-Y." / "Push. Final X-Y." Nothing else, ever.
 export function plainVerdict(result: string, finalScore: string): string {

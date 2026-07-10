@@ -2,7 +2,7 @@
 // Run: node --test gary2.0/supabase/functions/social-auto-post/verdicts.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePick, matchVerdicts, plainVerdict, type LogRow, type ResultRow } from "./verdicts.ts";
+import { normalizePick, matchVerdicts, plainVerdict, capEmoji, type LogRow, type ResultRow } from "./verdicts.ts";
 
 const log = (o: Partial<LogRow>): LogRow => ({
   id: "L1", post_date: "2026-07-05", league: "MLB", pick_text: "Pirates ML -190",
@@ -61,6 +61,22 @@ test("plainVerdict is a flat deterministic template, no commentary", () => {
   assert.equal(plainVerdict("lost", "3-1"), "Lost. Final 3-1.");
   assert.equal(plainVerdict("push", "4-4"), "Push. Final 4-4.");
   assert.equal(plainVerdict("won", ""), "Cashed."); // no score available
+});
+
+test("capEmoji keeps text with no emoji unchanged", () => {
+  assert.equal(capEmoji("Cashed. Final 5-2.", 1), "Cashed. Final 5-2.");
+});
+
+test("capEmoji keeps a single emoji as-is", () => {
+  assert.equal(capEmoji("Giants cash it ✅ over the Jays.", 1), "Giants cash it ✅ over the Jays.");
+});
+
+test("capEmoji trims extras beyond the cap, keeping the first", () => {
+  assert.equal(capEmoji("Cash it! ✅ Tigers hit with a solid win! 🐅💰", 1), "Cash it! ✅ Tigers hit with a solid win!");
+});
+
+test("capEmoji collapses the whitespace left behind by a removed emoji", () => {
+  assert.equal(capEmoji("Missed ❌ this one badly ❌ tough one.", 1), "Missed ❌ this one badly tough one.");
 });
 
 test("caps candidates per run", () => {
