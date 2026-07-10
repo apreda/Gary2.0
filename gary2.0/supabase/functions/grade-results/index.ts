@@ -17,12 +17,20 @@
 // every fact comes from the real graded evidence — never fabricated. The local
 // recap path stays intact as a backfill safety net.
 //
+// Jul 10 2026: writeRecap() used to treat "a recap row already exists" as
+// permanently sufficient, so a recap generated off a bad early grade (see the
+// Bug A/B history in grading.ts) never got corrected when game_results was later
+// re-graded — game_recaps has no updated_at column, so this drift was invisible.
+// Fixed via recapIsStale() (grading.ts): a stored result that no longer matches
+// the freshly-computed grade triggers regeneration (PATCH in place) instead of
+// a skip.
+//
 // Faithful port of the grading + is_winners_pick logic in run-all-results.js.
 //
 // Side-detection (which team a pick is on) + gradeGame/gradeSoccer live in the pure,
 // unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
 // graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
-import { gradeGame, gradeSoccer } from "./grading.ts";
+import { gradeGame, gradeSoccer, recapIsStale } from "./grading.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -435,21 +443,25 @@ function recapFilterPropsForGame(propRows: any[], homeTeam: string, awayTeam: st
   });
 }
 
-// ── upsert into game_recaps (skip if one exists — mirrors local dedup) ───────
+// ── upsert into game_recaps (skip if one exists AND still matches — else regenerate) ──
 async function writeRecap(args: {
   pick: any; league: string; gameDate: string; result: string;
   hScore: number; vScore: number; mlbGameId: number | null;
   statsCache: Map<string, any[]>; propsCache: Map<string, any[]>;
-}): Promise<"recap" | "exists" | "skip" | "fail"> {
+}): Promise<"recap" | "regenerated" | "exists" | "skip" | "fail"> {
   const { pick, league, gameDate, result, hScore, vScore, mlbGameId, statsCache, propsCache } = args;
   if (!GEMINI_KEY) return "skip";
   const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
 
-  // Idempotency: a recap already on file (from the cloud or a prior local run)
-  // is a no-op — and avoids a needless Gemini call. Same as the local writer.
+  // Idempotency: a recap already on file (from the cloud or a prior local run) whose
+  // result still matches the freshly-computed grade is a no-op — avoids a needless
+  // Gemini call. But if game_results was corrected since this recap was written
+  // (recapIsStale — Jul 10 2026 fix; game_recaps has no updated_at, so this result
+  // comparison is the only signal), regenerate instead of trusting the stale copy.
   const existing = await sbGet("game_recaps",
-    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&select=id`);
-  if (existing.length) return "exists";
+    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&select=id,result`);
+  const stale = existing.length > 0 && recapIsStale(existing[0].result, result);
+  if (existing.length && !stale) return "exists";
 
   const mlbStats = league === "MLB" ? await recapFetchMlbStats(mlbGameId, statsCache) : null;
   const propRows = await recapFetchPropRows(gameDate, propsCache);
@@ -461,6 +473,16 @@ async function writeRecap(args: {
 
   const recap = await recapGenerate({ pick, result, evidence });
   if (!recap) return "fail";
+
+  if (stale) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/game_recaps?id=eq.${existing[0].id}`, {
+      method: "PATCH", headers: { ...sbHeaders, Prefer: "return=minimal" },
+      body: JSON.stringify({
+        result, headline: recap.headline, recap: recap.recap, bullets: recap.bullets || [],
+      }),
+    });
+    return res.ok ? "regenerated" : "fail";
+  }
 
   // INSERT with on-conflict ignore on the (game_date, league, matchup) unique
   // constraint — a concurrent local run that beat us is harmless.
@@ -485,7 +507,7 @@ Deno.serve(async (req) => {
   const dateParam = new URL(req.url).searchParams.get("date");
   const dates = /^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "") ? [dateParam!] : [estDate(0), estDate(-1)];
   const stats = { insert: 0, update: 0, noop: 0, fail: 0, skipped: 0,
-    recap: 0, recap_exists: 0, recap_fail: 0 };
+    recap: 0, recap_regenerated: 0, recap_exists: 0, recap_fail: 0 };
   // Per-run evidence caches shared across recaps (BDL box score + prop_results).
   const statsCache = new Map<string, any[]>();
   const propsCache = new Map<string, any[]>();
@@ -593,6 +615,7 @@ Deno.serve(async (req) => {
             pick, league, gameDate: date, result, hScore, vScore, mlbGameId, statsCache, propsCache,
           });
           if (r === "recap") stats.recap++;
+          else if (r === "regenerated") stats.recap_regenerated++;
           else if (r === "exists") stats.recap_exists++;
           else if (r === "fail") stats.recap_fail++;
         } catch (e) {

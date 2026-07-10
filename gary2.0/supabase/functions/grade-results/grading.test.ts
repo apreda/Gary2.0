@@ -2,7 +2,7 @@
 // Run: node --test gary2.0/supabase/functions/grade-results/grading.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pickSide, gradeGame, gradeSoccer } from "./grading.ts";
+import { pickSide, gradeGame, gradeSoccer, recapIsStale } from "./grading.ts";
 
 // ── The regression this module exists for ────────────────────────────────────
 // Boston Red Sox (away) beat Chicago White Sox (home) 5-0 on 2026-07-08. daily_picks
@@ -74,4 +74,18 @@ test("WC draw + total unaffected", () => {
 
 test("WC ambiguous side stays ungraded (null), never a fabricated loss", () => {
   assert.equal(gradeSoccer({ type: "moneyline", pick: "the pick", homeTeam: "Mexico", awayTeam: "Brazil" }, 0, 2), null);
+});
+
+test("recapIsStale: no existing recap is not stale (fresh insert path)", () => {
+  assert.equal(recapIsStale(null, "won"), false);
+  assert.equal(recapIsStale(undefined, "lost"), false);
+});
+
+test("recapIsStale: existing recap matching the fresh grade is not stale", () => {
+  assert.equal(recapIsStale("won", "won"), false);
+});
+
+test("recapIsStale: existing recap contradicting the fresh grade IS stale", () => {
+  assert.equal(recapIsStale("won", "lost"), true);
+  assert.equal(recapIsStale("lost", "won"), true);
 });

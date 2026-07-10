@@ -654,10 +654,14 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
 
   // Idempotency: skip matchups already recapped for this date (mirrors the
-  // pick_fact_checks dedup check above).
+  // pick_fact_checks dedup check above) — UNLESS the stored recap's result no
+  // longer matches the freshly-computed grade (Jul 10 2026 fix: game_recaps has
+  // no updated_at column, so a re-grade that corrected game_results previously
+  // left a stale recap narrating the old, wrong outcome forever — same class of
+  // bug as writeRecap() in the cloud grade-results function).
   const { data: exist, error: dedupErr } = await supabase
     .from('game_recaps')
-    .select('id')
+    .select('id, result')
     .eq('game_date', gameDate)
     .eq('league', league)
     .eq('matchup', matchup)
@@ -666,7 +670,8 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     console.warn(`  ⚠️ Recap dedup failed for ${matchup}: ${dedupErr.message}`);
     return;
   }
-  if (exist) {
+  const stale = !!exist && exist.result !== result;
+  if (exist && !stale) {
     console.log(`  ⏩ Recap exists: ${league} ${matchup} (${gameDate})`);
     return;
   }
@@ -707,6 +712,19 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   }
   if (!recap) {
     console.warn(`  ⚠️ Recap produced nothing for ${league} ${matchup}`);
+    return;
+  }
+
+  if (stale) {
+    const { error: updateErr } = await supabase
+      .from('game_recaps')
+      .update({ result, headline: recap.headline, recap: recap.recap, bullets: recap.bullets || [] })
+      .eq('id', exist.id);
+    if (updateErr) {
+      console.error(`  ❌ RECAP UPDATE FAILED [game_recaps] ${league} ${matchup} (${gameDate}): ${updateErr.message}`);
+    } else {
+      console.log(`  📰 Re-recapped ${league} ${matchup} (was stale): "${recap.headline}"`);
+    }
     return;
   }
 

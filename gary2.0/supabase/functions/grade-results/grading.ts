@@ -116,3 +116,17 @@ export function gradeSoccer(pick: any, regHome: number, regAway: number): string
   if (side === "away") return regAway > regHome ? "won" : "lost";
   return null; // couldn't map the pick to a side — leave ungraded rather than fabricate a loss
 }
+
+// ── The Jul 10 2026 "stale recap" bug this function fixes ────────────────────
+// game_recaps had NO staleness concept — writeRecap() in index.ts treated "a recap
+// row already exists for this (game_date, league, matchup)" as permanently sufficient,
+// even after a later re-grade corrected game_results to a DIFFERENT result. A recap
+// generated off a bad early grade (Bug A/B, see grading.test.ts) sat in the DB narrating
+// the wrong outcome forever, with no updated_at column to reveal the drift — and this
+// table feeds Home's headline carousel, not just a tweet.
+//
+// Fix: a recap is stale if one already exists AND its stored result no longer matches
+// the freshly-computed grade. index.ts regenerates (PATCH in place) instead of skipping.
+export function recapIsStale(existingResult: string | null | undefined, freshResult: string): boolean {
+  return existingResult != null && existingResult !== freshResult;
+}
