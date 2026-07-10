@@ -294,6 +294,33 @@ const cleanOdds = (v) => {
 const impliedProb = (a) => { const n = Number(a); return n < 0 ? (-n) / (-n + 100) : 100 / (n + 100); };
 const juiceGap = (o1, o2) => Math.abs(impliedProb(o1) - impliedProb(o2));
 
+/**
+ * TO-ADVANCE (qualify) odds from a match's raw vendor rows — the Picks-page
+ * scout header market: a knockout price that never needs to match Gary's
+ * 90'-market pick. First preferred vendor carrying a "To Qualify…" market with
+ * both sides priced wins; null otherwise (group stage, the final, thin boards).
+ * Deliberately NOT cleanOdds: qualify prices legitimately reach the ±8000
+ * sentinel band (Canada -8000 quoted live Jul 10) and must survive.
+ */
+export function extractToQualify(oddsRows, vendors = PREFERRED_VENDORS) {
+  if (!Array.isArray(oddsRows) || oddsRows.length === 0) return null;
+  const price = (v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) || n === 0 ? null : n;
+  };
+  for (const vendor of vendors) {
+    const row = oddsRows.find((o) => o?.vendor === vendor);
+    if (!row) continue;
+    const mkt = (row.markets || []).find((m) => /^to qualify/i.test(m?.name || ''));
+    if (!mkt) continue;
+    const bySide = (s) => (mkt.outcomes || []).find((o) => o?.side === s || o?.type === s);
+    const home = price(bySide('home')?.american_odds);
+    const away = price(bySide('away')?.american_odds);
+    if (home != null && away != null) return { home, away, vendor };
+  }
+  return null;
+}
+
 // Rough main Asian-handicap a favorite's moneyline implies, used to anchor the
 // spread pick so a deep alt line can't masquerade as the main number. A slight
 // favorite (~-140) lines around -0.5; a heavy one (~-1000) around -2.5.

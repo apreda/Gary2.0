@@ -806,6 +806,16 @@ async function buildWcLookahead(slateRows, etDateStr, season) {
     return out;
   }
 
+  // Raw vendor odds once for the slate — the draw price and the TO-ADVANCE
+  // (qualify) market live in the rows' markets[], which the reduced slate
+  // lineRow doesn't carry. ML/spread/total still come from lineRow so the
+  // headline numbers never drift from the board. Empty on any gap (fails safe:
+  // the new fields render only when present).
+  let wcOddsRows = [];
+  try { wcOddsRows = (await wc.getOdds({})) || []; } catch (e) {
+    console.warn(`[TomorrowBoard] WC odds rows fetch failed (no draw/advance prices): ${e.message}`);
+  }
+
   for (const m of Array.isArray(matches) ? matches : []) {
     try {
       if (!m?.home_team?.name || !m?.away_team?.name || !m?.datetime) continue;
@@ -844,13 +854,23 @@ async function buildWcLookahead(slateRows, etDateStr, season) {
         stage: m.round_name || m.stage?.name || null, // plain-text stage/round
         group: m.group?.name || null,
         venue: m.stadium?.name || null,
-        // LINES — straight off the board's slate row. "—"/null when unposted.
-        lines: {
-          spread: lineRow?.spread ?? null,
-          total: lineRow?.total ?? null,
-          ml_home: lineRow?.ml_home ?? null,
-          ml_away: lineRow?.ml_away ?? null,
-        },
+        // LINES — headline numbers straight off the board's slate row ("—"/null
+        // when unposted); draw + TO-ADVANCE prices from the raw vendor rows
+        // (knockout matches only — null in group stage / the final).
+        lines: (() => {
+          const matchOdds = wcOddsRows.filter((o) => o?.match_id === m.id);
+          const consensus = wc.selectConsensusOdds(matchOdds);
+          const qualify = wc.extractToQualify(matchOdds);
+          return {
+            spread: lineRow?.spread ?? null,
+            total: lineRow?.total ?? null,
+            ml_home: lineRow?.ml_home ?? null,
+            ml_away: lineRow?.ml_away ?? null,
+            ml_draw: consensus?.moneyline?.draw ?? null,
+            advance_home: qualify?.home ?? null,
+            advance_away: qualify?.away ?? null,
+          };
+        })(),
         // Per side: projected XI + formation, L5 form, key players. Each field is
         // omitted (null/[]) when its grounded source is unavailable.
         home: {
