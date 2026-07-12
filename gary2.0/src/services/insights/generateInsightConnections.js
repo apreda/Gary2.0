@@ -197,17 +197,21 @@ export async function generateInsightConnections({ date, league = 'mlb', options
       if (games.length === 0) {
         // PREVIEW MODE: no WC match today. If future fixtures still exist
         // (pre-tournament look-ahead, or a knockout rest day), run the
-        // preview lanes against the FULL fixture list instead. After the
-        // final, no future fixtures remain and this self-terminates.
+        // preview lanes against the UPCOMING fixtures only. Completed games
+        // must never enter the tagging pool — lanes pin rows to each team's
+        // earliest fixture in scope, so a full list resurrects long-finished
+        // group games ("ALG @ ARG" stale-lead bug, founder-flagged Jul 12)
+        // and keeps eliminated teams on the board. After the final, no
+        // future fixtures remain and this self-terminates.
         const all = (await fifaWorldCupService.getMatches({ seasons: [2026] })) || [];
-        const hasFuture = all.some((m) =>
-          String(m?.status || '').toLowerCase() === 'scheduled'
+        const upcoming = all.filter((m) =>
+          String(m?.status || '').toLowerCase() !== 'completed'
           && String(m?.datetime || '').slice(0, 10) >= dateStr);
-        if (hasFuture) {
-          games = all;
+        if (upcoming.length > 0) {
+          games = upcoming;
           computers = WC_PREVIEW_COMPUTERS;
           preview = true;
-          console.log(`[insights] WC preview mode — no match today, ${all.length} fixtures in scope.`);
+          console.log(`[insights] WC preview mode — no match today, ${upcoming.length} upcoming fixture(s) in scope (of ${all.length} total).`);
         }
       }
     } else if (leagueKey === 'nba') {

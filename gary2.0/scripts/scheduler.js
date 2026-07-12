@@ -314,7 +314,15 @@ async function writeTomorrowBoardNonFatal(tomorrowDateStr) {
 // partial result (some sport failed but others have games) proceeds rather
 // than holding a good slate hostage to one flaky sport — the failed sport gets
 // another shot on the next daily build. Returns the schedule array.
+// The last ET date a plan was actually BUILT for — the hibernation guard's
+// ledger. A laptop that sleeps through a day boundary mid-execution wakes,
+// finishes the stale day, and must NOT sleep to the next 5 AM while the
+// current day sits unplanned (Jul 11 2026: woke 11:11 AM having finished
+// Jul 10's plan, slept to Jul 12 — both WC semis + 16 MLB games unplanned).
+let lastPlannedDate = null;
+
 async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) {
+  lastPlannedDate = dateStr;
   const start = Date.now();
   let attempt = 0;
   while (true) {
@@ -647,6 +655,23 @@ async function main() {
   // a new day (late West Coast games can finish at 1-3 AM ET). If so, build
   // today's plan immediately instead of sleeping through it.
   while (true) {
+    // HIBERNATION GUARD: if the previous execution crossed a day boundary in
+    // its sleep (dead battery, lid closed overnight), today's plan was never
+    // built — build and run it NOW instead of sleeping to the next 5 AM.
+    const wakeDate = getTodayETDateStr();
+    if (lastPlannedDate !== null && wakeDate !== lastPlannedDate) {
+      log(`\n⚡ ${wakeDate} was never planned (execution slept across the day boundary) — building it now`);
+      const recovered = await buildPlanResilient(wakeDate);
+      const stillUpcoming = recovered.filter(e => e.startTime > new Date());
+      if (stillUpcoming.length > 0) {
+        log(`⚡ ${stillUpcoming.length} game(s) still upcoming today — running`);
+        await executeSchedule(stillUpcoming);
+      } else {
+        log('No upcoming games remain today.');
+      }
+      continue; // re-check: tonight's run may itself cross midnight
+    }
+
     const planDateBefore = getTodayETDateStr();
     await sleepUntilPlanTime();
     const schedule = await buildPlanResilient(getTodayETDateStr());

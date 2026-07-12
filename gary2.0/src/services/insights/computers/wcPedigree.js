@@ -54,6 +54,19 @@ export async function computeWcPedigree(ctx) {
     return [];
   }
 
+  // TOURNAMENT GATE (founder, Jul 12): once the current edition is underway,
+  // this lane goes SILENT — past-edition streaks are stale trivia mid-
+  // tournament, and current-edition win streaks are survivorship (every team
+  // still alive is on one). Pedigree is preview-phase content only; it comes
+  // back before the next edition's first kickoff.
+  const currentYear = games[0]?.season?.year
+    ?? new Date(games[0]?.datetime || Date.now()).getUTCFullYear();
+  const currentEdition = await safe(() => wc.getMatches({ seasons: [currentYear] }), []);
+  if ((currentEdition || []).some((m) => m?.status === 'completed')) {
+    console.log('[wcPedigree] current edition underway — lane silent (preview-phase content only)');
+    return [];
+  }
+
   const futures = await safe(() => wc.getFutures(), []);
   const contenders = topContenders(futures, CONTENDER_CAP);
   if (!contenders.length) {
@@ -80,7 +93,9 @@ export async function computeWcPedigree(ctx) {
       if (!fixture) continue; // must tag to a real upcoming fixture
       const ped = await pedigreeForNation(teamId, c.name);
       if (!ped) continue;
-      if (ped.streakLen < MIN_NOTABLE_STREAK && !ped.wonTitle) continue;
+      // The streak IS the insight — a title alone doesn't clear the bar
+      // (headlines state data, never trivia; the title is detail context).
+      if (ped.streakLen < MIN_NOTABLE_STREAK) continue;
       candidates.push({ ...ped, id: teamId, name: c.name, fixture });
     } catch (err) {
       console.error('[wcPedigree] nation error:', err?.message || err);
@@ -296,10 +311,10 @@ function indexTeamsFromGames(games) {
 
 // --- copy ------------------------------------------------------------------
 
+// The headline states the DATA (the streak). A won title is context and lives
+// in the detail line ("Defending champions from YYYY — ...") — never up top,
+// where it read as the insight itself under a STREAK badge (founder, Jul 12).
 function buildHeadline(c) {
-  if (c.wonTitle && c.latestYear) {
-    return `${c.name} won the ${c.latestYear} World Cup`;
-  }
   if (c.streakType === 'unbeaten') {
     return `${c.name} are unbeaten in their last ${c.streakLen} World Cup matches`;
   }
