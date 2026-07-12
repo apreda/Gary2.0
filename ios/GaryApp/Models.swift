@@ -1792,12 +1792,17 @@ struct TomorrowWcMatch: Decodable {
     let away: TomorrowWcSide?
 }
 
-// LINES — straight off the board's slate row. nil when unposted.
+// LINES — headline numbers off the board's slate row; draw + TO-ADVANCE
+// (qualify) prices from the raw vendor rows (Jul 10 backend). All nil when
+// unposted; advance_* nil outside knockout matches (group stage, the final).
 struct TomorrowWcLines: Decodable {
     let spread: Double?
     let total: Double?
     let ml_home: Double?
     let ml_away: Double?
+    var ml_draw: Double? = nil
+    var advance_home: Double? = nil
+    var advance_away: Double? = nil
 }
 
 // One side of a WC look-ahead match: projected XI + formation, L5 form,

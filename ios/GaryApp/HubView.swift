@@ -34,11 +34,11 @@ fileprivate enum HubFont {
     }
     /// Mono kickers/labels — always uppercase at the call site.
     static func kicker(_ size: CGFloat = 10.5) -> Font {
-        .system(size: size, weight: .semibold, design: .monospaced)
+        .system(size: size, weight: .semibold).monospacedDigit()
     }
-    /// Monospaced data numerals.
+    /// Data numerals — system face with tabular digits (mono retired Jul 12).
     static func data(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        .system(size: max(12, size * 1.18), weight: weight).monospacedDigit()
     }
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight)
@@ -1033,7 +1033,7 @@ fileprivate struct HubMasthead: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                         .frame(width: 28, height: 30)
                 }
                 .buttonStyle(.plain)
@@ -1088,7 +1088,7 @@ fileprivate struct HubMasthead: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                     TextField("Players, teams, edges", text: $searchText)
                         .font(HubFont.body(13.5))
                         .foregroundStyle(.white)
@@ -1100,7 +1100,7 @@ fileprivate struct HubMasthead: View {
                     if !searchText.isEmpty {
                         Button { searchText = "" } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14)).foregroundStyle(.white.opacity(0.45))
+                                .font(.system(size: 14)).foregroundStyle(.white.opacity(0.62))
                         }.buttonStyle(.plain)
                     }
                 }
@@ -1306,7 +1306,7 @@ fileprivate struct HubBestOf: View {
         HStack(alignment: .top, spacing: 14) {
             Text(String(format: "%02d", i + 2))
                 .font(HubFont.data(13, .medium))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.62))
                 .frame(width: 24, alignment: .leading)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {
@@ -1456,7 +1456,7 @@ fileprivate struct HubRegressionBoard: View {
                 HStack(spacing: 12) {
                     Text("\(i + 1)")
                         .font(HubFont.data(12, .medium))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.white.opacity(0.62))
                         .frame(width: 18, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(HubFmt.subject(s.headline))
@@ -1465,7 +1465,7 @@ fileprivate struct HubRegressionBoard: View {
                             .lineLimit(1).minimumScaleFactor(0.65)
                         Text(s.game.uppercased())
                             .font(HubFont.data(9, .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                     Spacer(minLength: 6)
                     if s.spark.count >= 2 { gapBar(s.spark[0], s.spark[1]) }
@@ -1523,7 +1523,7 @@ fileprivate struct HubRegressionBoard: View {
 
     private func stat(_ label: String, _ value: String, tint: Color = Color.white.opacity(0.92)) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label.uppercased()).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
+            Text(label.uppercased()).font(HubFont.kicker(8.5)).tracking(0.6).foregroundStyle(.white.opacity(0.62))
             Text(value).font(HubFont.data(12)).foregroundStyle(tint)
         }
     }
@@ -1671,7 +1671,7 @@ fileprivate struct HubStreakWatch: View {
             if game != nil {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.62))
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 13)
@@ -1795,13 +1795,13 @@ fileprivate struct HubStoryRow: View {
                     if expandable, !dedupedDetail.isEmpty {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(.white.opacity(0.62))
                             .rotationEffect(.degrees(expanded ? 180 : 0))
                             .padding(.top, 4)
                     } else if showsChevron {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.35))
+                            .foregroundStyle(.white.opacity(0.62))
                             .padding(.top, 4)
                     }
                 }
@@ -1856,7 +1856,7 @@ fileprivate struct HubSwapRow: View {
                         Spacer(minLength: 6)
                         Text(s.game.uppercased())
                             .font(HubFont.data(9, .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                             .lineLimit(1)
                     }
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -2166,7 +2166,7 @@ fileprivate struct HubNightBoard: View {
                 switch r.gary_result {
                 case "won":  Text("✓").foregroundStyle(GaryColors.win)
                 case "lost": Text("✗").foregroundStyle(GaryColors.loss)
-                default:     Text("–").foregroundStyle(.white.opacity(0.4))
+                default:     Text("–").foregroundStyle(.white.opacity(0.62))
                 }
             }
             .font(.system(size: 11, weight: .bold))
@@ -2352,7 +2352,7 @@ fileprivate struct HubGameSheet: View {
 
     private func numberStat(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased()).font(HubFont.kicker(10.5)).tracking(0.6).foregroundStyle(.white.opacity(0.5))
+            Text(label.uppercased()).font(HubFont.kicker(10.5)).tracking(0.6).foregroundStyle(.white.opacity(0.62))
             Text(value).font(HubFont.data(15)).foregroundStyle(.white.opacity(0.92))
         }
     }
@@ -2568,7 +2568,7 @@ fileprivate struct HubSearchResults: View {
             if !trail.isEmpty {
                 Text(trail.uppercased())
                     .font(HubFont.data(9, .medium))
-                    .foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                    .foregroundStyle(.white.opacity(0.62)).lineLimit(1)
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 10)

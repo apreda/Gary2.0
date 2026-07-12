@@ -67,7 +67,7 @@ struct GaryPageHeader<Trailing: View>: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
@@ -1630,7 +1630,7 @@ struct DailyRecapOverlay: View {
             Text(label)
                 .font(.system(size: 9, weight: .semibold))
                 .tracking(0.8)
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.62))
         }
         .frame(maxWidth: .infinity)
     }
@@ -2325,7 +2325,7 @@ struct HomeView: View {
             out.append(HomeMarqueeHero.Story(
                 league: r.league ?? "", headline: r.headline ?? "", sub: "",
                 receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
-                receiptPick: pickLine.uppercased(),
+                receiptPick: Formatters.arrowizeOverUnder(pickLine).uppercased(),
                 verdict: cashed ? "CASHED" : (r.result == "push" ? "PUSH" : "LOST"),
                 cashed: cashed, recap: r.recap, bullets: r.bullets ?? []))
         }
@@ -2391,9 +2391,15 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
         // ── WINNERS — the sealed card, slip-styled (the one conversion door).
-        HomeWinnersStub {
+        HomeWinnersStub(onOpen: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-        }
+        },
+        plays: todayPicks.count,
+        leagues: {
+            let ls = Array(Set(todayPicks.compactMap { $0.league?.uppercased() })).sorted()
+            return ls.isEmpty ? nil : ls.joined(separator: " + ")
+        }(),
+        nextSeal: firstCallClock)
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
 
@@ -2412,12 +2418,12 @@ struct HomeView: View {
         // (founder, Jul 6: the combined number dragged in longshot props —
         // 21–39 read like a disaster when the game card went 8–11).
         if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
-            HomeActHead(title: "The Record", sub: "every game pick graded")
+            HomeActHead(title: "The Record")
             scorecard
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
         }
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             homeDoor("Free Pick", "TODAY") { selectedTab = 3 }
             homeDoor("The Hub", "EDGES") { selectedTab = 2 }
             homeDoor("Billfold", "LEDGER") { selectedTab = 4 }
@@ -2434,15 +2440,15 @@ struct HomeView: View {
         Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { act() } } label: {
             VStack(spacing: 3) {
                 Text(title.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.2)
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit()).tracking(1.2)
                     .foregroundStyle(GaryColors.gold)
                 HStack(spacing: 3) {
                     Text(sub)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(.system(size: 13, weight: .bold).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.85))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -2570,9 +2576,9 @@ struct HomeView: View {
             } else if callLine == nil {
                 // Upcoming, call not posted yet — say when it lands.
                 if let ct = g.commence_time, let d = parseISO8601(ct) {
-                    pendingLine = "PICK DROPS ~" + Self.etClock(d.addingTimeInterval(-5400))
+                    pendingLine = "PICK ~" + Self.etClock(d.addingTimeInterval(-5400))
                 } else {
-                    pendingLine = "PICK DROPS SOON"
+                    pendingLine = "PICK SOON"
                 }
             }
             // The game has begun but the score feed hasn't caught it yet —
@@ -2623,7 +2629,7 @@ struct HomeView: View {
     /// — on the Home lines only a MONEYLINE keeps its price, because there the
     /// price IS the pick (founder, Jul 7). Totals and goal/run lines drop it.
     private static func homePickLabel(_ pick: String?) -> String {
-        let parts = Formatters.splitPickAndOdds(pick ?? "")
+        let parts = Formatters.splitPickAndOdds(Formatters.arrowizeOverUnder(pick ?? ""))
         let name = parts.0.uppercased()
         let isTotal = name.hasPrefix("OVER") || name.hasPrefix("UNDER")
         let hasLine = name.split(separator: " ").contains { w in
@@ -2652,9 +2658,9 @@ struct HomeView: View {
             var pendingLine: String? = nil
             if pickLine == nil {
                 if let ct = big.commence_time, let d = parseISO8601(ct) {
-                    pendingLine = "PICK DROPS ~" + Self.etClock(d.addingTimeInterval(-5400))
+                    pendingLine = "PICK ~" + Self.etClock(d.addingTimeInterval(-5400))
                 } else {
-                    pendingLine = "PICK DROPS SOON"
+                    pendingLine = "PICK SOON"
                 }
             }
             let ls = sheetLive(matchup)
@@ -2677,6 +2683,21 @@ struct HomeView: View {
                       let h = big.homePitcher, !h.isEmpty else { return nil }
                 return "\(a.uppercased()) @ \(h.uppercased())"
             }()
+            // Tonight's market, straight off the day board — the bottom row
+            // carries real betting info instead of a third clock (founder, Jul 12).
+            let bRow = todayBoard?.board.first { br in
+                Self.shortTeam(br.away_team).caseInsensitiveCompare(Self.shortTeam(away)) == .orderedSame
+                    && Self.shortTeam(br.home_team).caseInsensitiveCompare(Self.shortTeam(home)) == .orderedSame
+            }
+            var oddsBits: [String] = []
+            if let a = bRow?.ml_away, let h = bRow?.ml_home,
+               let aAb = bRow?.away_abbr, let hAb = bRow?.home_abbr {
+                let f: (Double) -> String = { $0 > 0 ? "+\(Int($0))" : "\(Int($0))" }
+                oddsBits.append("\(aAb) \(f(a)) · \(hAb) \(f(h))")
+            }
+            if let t = bRow?.total {
+                oddsBits.append("O/U \(t == t.rounded() ? String(Int(t)) : String(t))")
+            }
             return HomeMarqueeTracker.Entry(
                 id: "mq-\(big.rank)-\(matchup)",
                 rank: big.rank,
@@ -2687,6 +2708,7 @@ struct HomeView: View {
                 commence: big.commence_time,
                 pickLine: pickLine,
                 pendingLine: pendingLine,
+                oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
                 live: ls,
                 verdict: verdicts.first,
                 result: result
@@ -2724,7 +2746,7 @@ struct HomeView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Text(sheetEarlierOpen ? "SHOW LESS" : "SEE ALL \(settled.count)")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced)).tracking(1.2)
+                            .font(.system(size: 12.5, weight: .semibold).monospacedDigit()).tracking(1.2)
                             .foregroundStyle(GaryColors.gold)
                         Image(systemName: sheetEarlierOpen ? "chevron.up" : "chevron.down")
                             .font(.system(size: 8, weight: .bold))
@@ -2742,7 +2764,7 @@ struct HomeView: View {
         }
         if !up.isEmpty {
             HomeActHead(title: "Tonight", count: up.count,
-                        sub: firstCallClock.map { "FIRST PICK \($0)" })
+                        sub: nil)
             let leagues = Array(Set(up.map(\.league))).sorted { a, b in
                 let ea = up.filter { $0.league == a }.map(\.commence).min() ?? ""
                 let eb = up.filter { $0.league == b }.map(\.commence).min() ?? ""
@@ -2751,7 +2773,7 @@ struct HomeView: View {
             ForEach(leagues, id: \.self) { lg in
                 if leagues.count > 1 {
                     Text(lg)
-                        .font(.system(size: 10.5, weight: .bold, design: .monospaced)).tracking(1.4)
+                        .font(.system(size: 12.5, weight: .bold).monospacedDigit()).tracking(1.4)
                         .foregroundStyle(lg == "MLB" ? GaryColors.mlbGrass : lg == "WC" ? Color(hex: "#3FB6A8") : GaryColors.gold)
                         .padding(.horizontal, 16)
                 }
@@ -3085,7 +3107,7 @@ struct HomeView: View {
             Text(label)
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.8)
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.62))
         }
         .frame(maxWidth: .infinity)
     }
@@ -3136,13 +3158,13 @@ struct HomeView: View {
                         // last result, never as tonight's play.
                         Text("LAST NIGHT'S FREE PICK")
                             .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(.white.opacity(0.62))
                         FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult,
                                           finalScore: yesterdayTopPickScore, showSportBadge: true)
                     } else if !loading {
                         Text("Tonight's plays post closer to first pitch.")
                             .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.62))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 22).padding(.horizontal, 18)
                             .quantPanel()
@@ -3151,7 +3173,7 @@ struct HomeView: View {
                             ProgressView().controlSize(.small).tint(GaryColors.gold.opacity(0.7))
                             Text("Loading tonight's plays…")
                                 .font(.system(size: 13))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 26).padding(.horizontal, 18)
@@ -3172,7 +3194,7 @@ struct HomeView: View {
         HStack {
             Text("TONIGHT'S TOP PLAYS")
                 .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.62))
             Spacer()
             if tonightCarouselPicks.count > 1 {
                 Text("SWIPE \u{2192}")
@@ -3490,7 +3512,7 @@ struct HomeView: View {
             headline: Self.gameHeadline(r, cashed: cashed),
             sub: Self.gameSubLine(r),
             receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
-            receiptPick: pickLine.uppercased(),
+            receiptPick: Formatters.arrowizeOverUnder(pickLine).uppercased(),
             verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "LOST",
             cashed: cashed)
         return (story, r, Array(cashes.prefix(3)), beat, net, graded, bestOdds, record)
@@ -3585,25 +3607,20 @@ struct HomeView: View {
 /// settings dots, one gold hairline. Dynamic sports-tech, never serif.
 /// The green "already cashed" slot under a LIVE row's status — one hit shows
 /// static, two-plus roll on the strip's 3s cadence (founder, Jul 7).
+/// Was a 3-second rolling green ticker — retired Jul 12 (founder: with every
+/// game live it was "too much motion, too much green"). Now ONE static line:
+/// the single hit verbatim, or a muted cashed-count. Green lives only on the
+/// checkmark; the words stay cream. Same 19pt footprint as the old roller.
 struct LiveHitsRoller: View {
     let items: [String]
-    @State private var idx = 0
-    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     var body: some View {
         if !items.isEmpty {
-            Text("✓ \(items[idx % items.count])")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundStyle(GaryColors.win)
+            (Text("✓ ").foregroundColor(GaryColors.win)
+                + Text(items.count == 1 ? items[0] : "\(items.count) PROPS CASHED")
+                    .foregroundColor(.white.opacity(0.72)))
+                .font(GaryFonts.mono(13, bold: true))
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .id(idx)
-                .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
-                                        removal: .move(edge: .top).combined(with: .opacity)))
                 .frame(height: 19)
-                .clipped()
-                .onReceive(timer) { _ in
-                    guard items.count > 1 else { return }
-                    withAnimation(.easeInOut(duration: 0.35)) { idx += 1 }
-                }
         }
     }
 }
@@ -3624,10 +3641,10 @@ struct HomeMasthead: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 (Text("GARY ").foregroundColor(Color(hex: "#F6F1E7"))
                     + Text("A.I.").foregroundColor(GaryColors.gold))
-                    .font(GaryFonts.display(30))
+                    .font(GaryFonts.display(36))
                     .tracking(0.5)
                 Text(dateLine)
-                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.62))
                     .padding(.leading, 2)
                 Spacer()
@@ -3636,7 +3653,7 @@ struct HomeMasthead: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                         .frame(width: 28, height: 30)
                 }
                 .buttonStyle(.plain)
@@ -3661,19 +3678,20 @@ struct HomeActHead: View {
         VStack(alignment: .leading, spacing: 8) {
             Rectangle().fill(tint.opacity(0.25)).frame(height: 1)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
+                BroadcastBar(tint: tint, height: 11)
                 Text(title.uppercased())
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .tracking(1.6)
+                    .font(GaryFonts.accent(12.5))
+                    .tracking(0.5)
                     .foregroundStyle(tint)
                 if let count, count > 0 {
                     Text("\(count)")
-                        .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                        .font(.system(size: 13.5, weight: .bold).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 Spacer(minLength: 0)
                 if let sub, !sub.isEmpty {
                     Text(sub.uppercased())
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
                         .tracking(0.8)
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
@@ -3701,6 +3719,8 @@ struct HomeMarqueeTracker: View {
         let commence: String?
         let pickLine: String?
         let pendingLine: String?
+        /// "ARI +160 · LAD −186 · O/U 8.5" — tonight's market off the board.
+        var oddsLine: String? = nil
         let live: LiveScore?
         let verdict: HomeLiveVerdict?
         let result: (String, Color)?   // settled stamp, nil until final
@@ -3850,7 +3870,7 @@ struct HomeMarqueeTracker: View {
                             .lineLimit(1)
                         Text("TMRW \(tease.time)")
                             .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
                 }
@@ -3884,22 +3904,23 @@ struct HomeMarqueeTracker: View {
     @ViewBuilder private func heroView(_ e: Entry) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
+                BroadcastBar(height: 11)
                 Text("UP NEXT")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
+                    .font(GaryFonts.accent(12)).tracking(0.6)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
-                if let c = e.context, !c.isEmpty {
-                    // Same size/weight/tracking as UP NEXT — the two ends of the
-                    // row differ by COLOR only, so they sit on one plane
-                    // (founder, Jul 7: three stacked cues read as depth).
-                    Text(c.uppercased())
+                if e.pickLine == nil, let pending = e.pendingLine {
+                    // The pick-drop clock rides the header's right end, in the
+                    // slot's own voice — one structured row, paired with UP
+                    // NEXT on the left (founder, Jul 12; pitchers retired).
+                    Text(pending.uppercased())
                         .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
             Text(e.title)
-                .font(GaryFonts.display(30))
+                .font(GaryFonts.display(36))
                 .foregroundStyle(GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.7)
             if let ct = e.commence, let d = parseISO8601(ct) {
@@ -3919,18 +3940,16 @@ struct HomeMarqueeTracker: View {
                                 .lineLimit(1).minimumScaleFactor(0.75)
                         }
                     }
-                } else if let pending = e.pendingLine {
-                    // Gold in the pick's slot even before it posts — the card
-                    // always carries Gary's color in the same place (founder, Jul 7).
-                    Text(pending)
-                        .font(GaryFonts.mono(12.5, bold: true))
-                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                }
+                if e.pickLine == nil, let ol = e.oddsLine {
+                    Text(ol)
+                        .font(GaryFonts.mono(11.5, bold: true))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1).minimumScaleFactor(0.75)
                 }
                 Spacer(minLength: 8)
                 if let ct = e.commence {
                     let time = TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased()
-                    // MLB drops the "FIRST PITCH" label — the clock alone
-                    // already reads clearly; other sports keep their word.
                     let isMLB = (e.league ?? "").uppercased() == "MLB"
                     Text(isMLB ? time : "\(startWord(e.league)) \(time)")
                         .font(GaryFonts.mono(11.5, bold: true))
@@ -3950,7 +3969,7 @@ struct HomeMarqueeTracker: View {
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
                 .foregroundStyle(GaryColors.gold)
             Text(tease.matchup)
-                .font(GaryFonts.display(30))
+                .font(GaryFonts.display(36))
                 .foregroundStyle(GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.7)
             Text(tease.time.uppercased())
@@ -4056,12 +4075,11 @@ struct HomeOvernightStrip: View {
             }
             .padding(.leading, 14).padding(.trailing, 14).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(GaryColors.warmWhite.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
-            )
+            // Flat on the page (founder, Jul 12: the strip + cards + hero read
+            // as stacked containers) — one hairline closes it instead of a box.
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -4076,19 +4094,17 @@ struct HomeOvernightStrip: View {
 
     private var rollSlot: some View {
         let item = rollItems[rollIndex % rollItems.count]
-        return HStack(spacing: 5) {
-            Text("✓")
-                .font(GaryFonts.mono(15, bold: true))
-                .foregroundStyle(GaryColors.win)
-            Text(item.line)
-                .font(GaryFonts.mono(15, bold: true))
-                .foregroundStyle(.white.opacity(0.88))
-                .lineLimit(1).minimumScaleFactor(0.6)
-            Text(item.odds)
-                .font(GaryFonts.mono(15, bold: true))
-                .foregroundStyle(GaryColors.gold)
-                .fixedSize()
-        }
+        // One step under the ramp: this cell shares a row with the record and
+        // net, and the raised sizes squeezed it into truncation ("UN… +120").
+        // ONE concatenated Text so the whole "✓ PICK +ODDS" scales as a
+        // single unit — three separate Texts in this narrow slot kept taking
+        // turns being truncated or squeezed out (✓ vs "UNDER 2.5" vs odds).
+        return (Text("✓ ").foregroundColor(GaryColors.win)
+            + Text(item.line + " ").foregroundColor(.white.opacity(0.88))
+            + Text(item.odds).foregroundColor(GaryColors.gold))
+            .font(GaryFonts.mono(13, bold: true))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         .id(rollIndex)
         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                 removal: .move(edge: .top).combined(with: .opacity)))
@@ -4125,15 +4141,11 @@ struct HomeStoryRail: View {
 
     @ViewBuilder private func card(_ s: HomeMarqueeHero.Story) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(s.league.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.7))
-                Spacer()
-                Text(s.verdict)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(0.8)
-                    .foregroundStyle(s.cashed ? GaryColors.win : s.verdict == "PUSH" ? GaryColors.gold : GaryColors.loss)
-            }
+            // League tag = branding, top-left. The verdict moved DOWN next to
+            // the pick it judges (founder, Jul 12: related info sits together).
+            Text(s.league.uppercased())
+                .font(.system(size: 12, weight: .semibold).monospacedDigit()).tracking(1)
+                .foregroundStyle(.white.opacity(0.7))
             Text(s.headline)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.white.opacity(0.96))
@@ -4141,11 +4153,19 @@ struct HomeStoryRail: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 2)
-            if !s.receiptPick.isEmpty {
-                Text("\(s.receiptLead.uppercased()) \(s.receiptPick)")
-                    .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    .lineLimit(1).minimumScaleFactor(0.75)
+            HStack(alignment: .firstTextBaseline) {
+                if !s.receiptPick.isEmpty {
+                    // Constant size on every card (founder, Jul 12) — the pick
+                    // never shrinks to its neighbors' text lengths.
+                    Text(s.receiptPick)
+                        .font(.system(size: 18, weight: .bold).monospacedDigit())
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text(s.verdict)
+                    .font(.system(size: 12, weight: .bold).monospacedDigit()).tracking(0.8)
+                    .foregroundStyle(s.cashed ? GaryColors.win : s.verdict == "PUSH" ? GaryColors.gold : GaryColors.loss)
             }
         }
         .padding(12)
@@ -4170,12 +4190,13 @@ struct HomeSheetRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     Text(row.title)
-                        .font(.system(size: 15.5, weight: .semibold))
+                        .font(GaryFonts.display(21))
+                        .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
                         .foregroundStyle(.white.opacity(0.96))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     if row.bigOne {
                         Text("THE BIG ONE")
-                            .font(.system(size: 8.5, weight: .bold, design: .monospaced)).tracking(0.8)
+                            .font(.system(size: 12, weight: .bold).monospacedDigit()).tracking(0.8)
                             .foregroundStyle(GaryColors.gold)
                     }
                 }
@@ -4183,14 +4204,14 @@ struct HomeSheetRowView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(call.components(separatedBy: "  ·  "), id: \.self) { line in
                             Text(line)
-                                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                                 .foregroundStyle(GaryColors.gold.opacity(0.95))
                                 .lineLimit(1).minimumScaleFactor(0.75)
                         }
                     }
                 } else if let pending = row.pendingLine {
                     Text(pending)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.system(size: 13, weight: .medium).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.72))
                 }
             }
@@ -4199,7 +4220,7 @@ struct HomeSheetRowView: View {
             // (founder, Jul 7: larger, and further from the red part).
             VStack(alignment: .trailing, spacing: 12) {
                 Text(row.statusText)
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                     .foregroundStyle(row.statusColor)
                     .lineLimit(1)
                 LiveHitsRoller(items: row.hitLines)
@@ -4207,7 +4228,7 @@ struct HomeSheetRowView: View {
             .padding(.top, 2)
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(.white.opacity(0.62))
                 .padding(.top, 3)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
@@ -4219,6 +4240,21 @@ struct HomeSheetRowView: View {
 /// idea, living where slips belong). One tap → Winners.
 struct HomeWinnersStub: View {
     let onOpen: () -> Void
+    /// Real information that earns the tap (founder, Jul 12): how many plays
+    /// are sealed, which sports, and when the next one seals. All optional —
+    /// the strip degrades to the plain door when Home has nothing yet.
+    var plays: Int = 0
+    var leagues: String? = nil
+    var nextSeal: String? = nil
+
+    private var valueLine: String? {
+        if plays > 0 {
+            let count = "\(plays) play\(plays == 1 ? "" : "s") sealed"
+            return leagues.map { "\(count) · \($0)" } ?? count
+        }
+        if let nextSeal { return "First play seals ~\(nextSeal)" }
+        return nil
+    }
 
     private var weekday: String {
         let f = DateFormatter()
@@ -4230,14 +4266,15 @@ struct HomeWinnersStub: View {
     var body: some View {
         Button(action: onOpen) {
             VStack(spacing: 0) {
-                HStack {
+                HStack(spacing: 8) {
+                    BroadcastBar(height: 11)
                     Text("WINNERS")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.4)
+                        .font(GaryFonts.accent(12)).tracking(0.8)
                         .foregroundStyle(GaryColors.gold)
                     Spacer()
                     Text("SEALED")
-                        .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.8))
+                        .font(GaryFonts.accent(10)).tracking(1.2)
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 Rectangle()
@@ -4245,23 +4282,27 @@ struct HomeWinnersStub: View {
                     .frame(height: 1)
                     .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text("The \(weekday) Card")
-                            .font(.system(size: 15, weight: .heavy))
+                            .font(GaryFonts.display(22))
                             .foregroundStyle(GaryColors.warmWhite)
-                        Text("Gary's best of the board · games + props")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.white.opacity(0.7))
+                        Text(valueLine ?? "Gary's best of the board · games + props")
+                            .font(GaryFonts.text(12, .semibold))
+                            .foregroundStyle(GaryColors.sectionSub)
+                        if valueLine != nil {
+                            Text("Gary's best of the board · games + props")
+                                .font(GaryFonts.text(11))
+                                .foregroundStyle(GaryColors.meta)
+                        }
                     }
                     Spacer()
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Text("UNLOCK")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1)
-                            .foregroundStyle(GaryColors.gold)
+                            .font(GaryFonts.accent(12)).tracking(0.8)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(GaryColors.gold)
+                            .font(.system(size: 11, weight: .black))
                     }
+                    .foregroundStyle(GaryColors.gold)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 11)
             }
@@ -4536,7 +4577,7 @@ struct HomeMarqueeHero: View {
                     Spacer()
                     Text("BEFORE THE GAME")
                         .font(GaryFonts.mono(9, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 .padding(.bottom, 14)
 
@@ -4560,7 +4601,7 @@ struct HomeMarqueeHero: View {
                     VStack(alignment: .leading, spacing: 7) {
                         Text("THE FACT CHECK")
                             .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                         ForEach(Array(story.claims.prefix(4).enumerated()), id: \.offset) { _, c in
                             HStack(alignment: .top, spacing: 8) {
                                 Text(c.verdict == "right" ? "✓" : "✗")
@@ -4582,7 +4623,7 @@ struct HomeMarqueeHero: View {
                         HStack(spacing: 6) {
                             Text("CONVICTION")
                                 .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(.white.opacity(0.62))
                             Text(tier)
                                 .font(GaryFonts.mono(11, bold: true))
                                 .foregroundStyle(.white.opacity(0.85))
@@ -4592,7 +4633,7 @@ struct HomeMarqueeHero: View {
                     Button(action: onTap) {
                         Text("FULL CARD ›")
                             .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                     .buttonStyle(.plain)
                 }
@@ -4602,7 +4643,7 @@ struct HomeMarqueeHero: View {
 
                 Text("tap to flip back  ↺")
                     .font(GaryFonts.mono(9, bold: false))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(.white.opacity(0.62))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.bottom, 8)
             }
@@ -4638,7 +4679,7 @@ struct HomeMarqueeHero: View {
                 if let hint {
                     Text(hint)
                         .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 Text(trailing)
                     .font(GaryFonts.mono(12.5, bold: true)).tracking(0.6)
@@ -4682,7 +4723,7 @@ struct HomeCashesSection: View {
                                     .minimumScaleFactor(0.8)
                                 Text(row.sub)
                                     .font(.system(size: 11))
-                                    .foregroundStyle(.white.opacity(0.4))
+                                    .foregroundStyle(.white.opacity(0.62))
                                     .lineLimit(1)
                             }
                             Spacer(minLength: 8)
@@ -4936,11 +4977,11 @@ struct HomeGarysForm: View {
                     HStack {
                         Text("ALL \(model.total) GRADED")
                             .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.62))
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
                 }
@@ -5580,7 +5621,7 @@ struct PremiumPicksView: View {
                     Text(headerDateLabel)
                         .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.4))
+                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.62))
                 }
             }
         ))
@@ -5605,7 +5646,7 @@ struct PremiumPicksView: View {
             Text(selectedDate == nil
                  ? "Gary's best bets post a few hours before first pitch."
                  : "No graded picks on this day.")
-                .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.5))
+                .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.62))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
@@ -5663,7 +5704,7 @@ struct PremiumPicksView: View {
     private var comingSoonIntro: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("TODAY'S CARD ISN'T OUT YET")
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced)).tracking(1.4)
+                .font(.system(size: 12.5, weight: .semibold).monospacedDigit()).tracking(1.4)
                 .foregroundStyle(GaryColors.gold)
             Text("Gary posts his best picks about 90 minutes before each game, once lineups are in. Every pick gets graded here the next morning — wins and losses.")
                 .font(GaryFonts.text(13.5))
@@ -5675,7 +5716,7 @@ struct PremiumPicksView: View {
             } label: {
                 HStack(spacing: 5) {
                     Text("SEE YESTERDAY'S CARD")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1)
+                        .font(.system(size: 13, weight: .bold).monospacedDigit()).tracking(1)
                         .foregroundStyle(GaryColors.gold)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .bold))
@@ -5823,7 +5864,7 @@ struct PremiumPicksView: View {
             } else {
                 Button { withAnimation { isPremium = false } } label: {
                     Text("✓ Premium active · tap to reset preview")
-                        .font(GaryFonts.mono(10)).tracking(1).foregroundStyle(.white.opacity(0.45))
+                        .font(GaryFonts.mono(10)).tracking(1).foregroundStyle(.white.opacity(0.62))
                 }
                 .frame(maxWidth: .infinity).padding(.top, 12)
             }
@@ -5873,7 +5914,7 @@ struct PremiumPicksView: View {
                                 .foregroundStyle(.white.opacity(0.9))
                             Text("All 7 boards · games + props")
                                 .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                         Spacer(minLength: 8)
                         VStack(alignment: .trailing, spacing: 2) {
@@ -5898,7 +5939,7 @@ struct PremiumPicksView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "list.bullet")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                             .frame(width: 20)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("ALL PLANS")
@@ -5906,7 +5947,7 @@ struct PremiumPicksView: View {
                                 .foregroundStyle(.white.opacity(0.9))
                             Text("Free plan · single sports from \(GaryPricing.single)/mo · bundles")
                                 .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                         Spacer(minLength: 8)
                         Text("See ›")
@@ -5931,7 +5972,7 @@ struct PremiumPicksView: View {
         if authManager.isAuthenticated {
             Text("SIGNED IN AS \((authManager.currentUser?.email ?? "—").uppercased())")
                 .font(GaryFonts.mono(10)).tracking(1)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.62))
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 4)
@@ -5950,7 +5991,7 @@ struct PremiumPicksView: View {
                 .buttonStyle(.plain)
                 Text("Unlocks follow your account once you're signed in.")
                     .font(GaryFonts.text(11))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.62))
                     .frame(maxWidth: .infinity)
             }
         }
@@ -5959,7 +6000,7 @@ struct PremiumPicksView: View {
     private var propsEmptyState: some View {
         Text("No props posted yet — they'll appear here with the slate.")
             .font(GaryFonts.text(13))
-            .foregroundStyle(.white.opacity(0.4))
+            .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 28)
@@ -5974,7 +6015,7 @@ struct PremiumPicksView: View {
                 .font(GaryFonts.mono(12, bold: true)).tracking(1)
                 .foregroundStyle(.white.opacity(0.85))
             Text(status)
-                .font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.4))
+                .font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.62))
         }
         .padding(.horizontal, 16)
     }
@@ -6022,7 +6063,12 @@ struct PremiumPicksView: View {
         // On the TODAY board a settled shelf is a STALE prior-day fallback (today's
         // pick hasn't posted/graded yet). Tease it with the blurred lock card
         // instead of showing yesterday's result as if it were tonight's.
+        // "Coming soon" is a promise — it only prints when the league truly
+        // plays today. A rest/dark day keeps the honest LAST RESULT framing
+        // (founder, Jul 12: the WC shelf promised "TONIGHT'S PICK" on a day
+        // with no match).
         let isStaleToday = selectedDate == nil && shelf.settled && !shelf.picks.isEmpty
+            && (todaySlateCounts[shelf.league] ?? 0) > 0
         return VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league,
                         status: shelf.picks.isEmpty
@@ -6157,6 +6203,7 @@ struct PremiumPicksView: View {
         // prior-day fallback — tease it with the blurred lock card, not yesterday's
         // graded result dressed up as tonight's.
         let isStaleToday = selectedDate == nil && shelf.settled && !shelf.props.isEmpty
+            && (todaySlateCounts[shelf.league] ?? 0) > 0
         return VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league, status: shelf.props.isEmpty ? "·  —"
                             : isStaleToday ? "·  COMING SOON"
@@ -6284,7 +6331,7 @@ struct PremiumPicksView: View {
                                  : b.live ? "\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight"
                                  : "Last result posted")
                                 .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                         Spacer(minLength: 8)
                         if let rec = sportRecords[b.league], rec.w + rec.l > 0 {
@@ -6309,7 +6356,7 @@ struct PremiumPicksView: View {
     private func propPlaceholderRow(for league: String) -> some View {
         Text("No \(league) props yet — next slate posts ~90 min before tip.")
             .font(GaryFonts.text(13))
-            .foregroundStyle(.white.opacity(0.4))
+            .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 18)
             .background(
@@ -6327,7 +6374,7 @@ struct PremiumPicksView: View {
         VStack(spacing: 5) {
             Image(systemName: "lock.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(GaryColors.gold)
             Text("MEMBERS ONLY")
-                .font(GaryFonts.mono(9, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
+                .font(GaryFonts.accent(12)).tracking(1.0).foregroundStyle(GaryColors.gold)
         }
     }
 
@@ -6337,7 +6384,7 @@ struct PremiumPicksView: View {
             : "No \(league) pick yet — next slate posts ~90 min before tip."
         return Text(msg)
             .font(GaryFonts.text(13))
-            .foregroundStyle(.white.opacity(0.4))
+            .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 18)
             .background(
@@ -6853,7 +6900,7 @@ struct PlansSheetView: View {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(.white.opacity(0.62))
                     .frame(width: 44, height: 44, alignment: .trailing)
             }
             .buttonStyle(.plain)
@@ -6876,7 +6923,7 @@ struct PlansSheetView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.62))
             Text(value)
                 .font(GaryFonts.mono(19, bold: true))
                 .foregroundStyle(tint)
@@ -6884,7 +6931,7 @@ struct PlansSheetView: View {
             if let sub, !sub.isEmpty {
                 Text(sub)
                     .font(GaryFonts.mono(8.5))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.62))
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
@@ -6909,7 +6956,7 @@ struct PlansSheetView: View {
                     .font(GaryFonts.mono(10, bold: true)).tracking(1.6)
                     .foregroundStyle(GaryColors.gold.opacity(0.92))
                 (Text("\(s.allW.formatted())")
-                    + Text("–").foregroundColor(.white.opacity(0.45))
+                    + Text("–").foregroundColor(.white.opacity(0.62))
                     + Text("\(s.allL.formatted())"))
                     .font(GaryFonts.mono(42, bold: true))
                     .foregroundStyle(.white.opacity(0.96))
@@ -6954,7 +7001,7 @@ struct PlansSheetView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Gary's card.").font(GaryFonts.display(30)).foregroundStyle(.white)
                 Text("One board or every board — every result graded in public.")
-                    .font(.system(size: 13.5)).foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 13.5)).foregroundStyle(.white.opacity(0.62))
             }
             .padding(.horizontal, 16)
 
@@ -7051,7 +7098,7 @@ struct PlansSheetView: View {
                         .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.9))
                     Text("Plans and unlocks follow your account")
-                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.62))
                 }
                 Spacer(minLength: 8)
                 Text("Sign up ›")
@@ -7069,7 +7116,7 @@ struct PlansSheetView: View {
     private var legalFooter: some View {
         Text("Plans bill through Stripe and cancel anytime. The \(GaryPricing.trialPhrase) requires a card and converts to \(GaryPricing.allAccessMonthly)/mo unless cancelled. An account keeps your boards across devices.")
             .font(GaryFonts.text(10))
-            .foregroundStyle(.white.opacity(0.45))
+            .foregroundStyle(.white.opacity(0.62))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 16)
     }
@@ -7100,7 +7147,7 @@ struct PlansSheetView: View {
 
             Text(ctaCaption)
                 .font(GaryFonts.text(11))
-                .foregroundStyle(.white.opacity(0.42))
+                .foregroundStyle(.white.opacity(0.62))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             accountLine
@@ -7250,7 +7297,7 @@ struct PlansSheetView: View {
                         .foregroundStyle(.white.opacity(0.95))
                     Text(sub)
                         .font(.system(size: 12.5))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
@@ -7260,7 +7307,7 @@ struct PlansSheetView: View {
                         .foregroundStyle(GaryColors.gold)
                     Text(per)
                         .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
             }
             .padding(16)
@@ -7299,7 +7346,7 @@ struct PlansSheetView: View {
                         .foregroundStyle(r.w >= r.l ? Self.winColor.opacity(0.85) : .white.opacity(0.5))
                 } else {
                     Text("Winners board")
-                        .font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.45))
+                        .font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.62))
                 }
             }
             .padding(13)
@@ -7317,13 +7364,13 @@ struct PlansSheetView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.5)).frame(width: 20)
+                .foregroundStyle(.white.opacity(0.62)).frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(GaryFonts.mono(12, bold: true)).tracking(0.8).foregroundStyle(.white.opacity(0.9))
-                Text(sub).font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+                Text(sub).font(.system(size: 11)).foregroundStyle(.white.opacity(0.62))
             }
             Spacer(minLength: 8)
-            Text(tag).font(GaryFonts.mono(10, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+            Text(tag).font(GaryFonts.mono(10, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
         }
         .padding(.vertical, 12).padding(.horizontal, 14)
         .accessibilityElement(children: .combine)
@@ -7736,10 +7783,10 @@ struct GaryPicksView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "clock.arrow.counterclockwise")
                                         .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.5))
+                                        .foregroundStyle(.white.opacity(0.62))
                                     Text("Yesterday's Results")
                                         .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(.white.opacity(0.5))
+                                        .foregroundStyle(.white.opacity(0.62))
                                     Text(yesterdayRecord)
                                         .font(.system(size: 12, weight: .bold))
                                         .foregroundStyle(GaryColors.gold)
@@ -8351,7 +8398,7 @@ struct GaryPropsView: View {
                 HStack {
                     Text("CONFIDENCE SHAPE")
                         .font(GaryFonts.mono(8.5, bold: true)).tracking(1.4)
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                     Spacer()
                     Text("\(Int(round(avgConfidence * 100)))% AVG")
                         .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
@@ -8514,7 +8561,7 @@ struct GaryPropsView: View {
             VStack(spacing: 12) {
                 Text("NO PROPS MATCH THESE FILTERS")
                     .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.62))
                 Button {
                     withAnimation { ouFilter = .all; propTypeFilter = nil }
                 } label: {
@@ -8570,7 +8617,7 @@ struct GaryPropsView: View {
                         if let lg = prop.effectiveLeague {
                             Text(lg.uppercased())
                                 .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                         if let r = resultForProp(prop) { resultChip(r) }
                     }
@@ -8580,7 +8627,7 @@ struct GaryPropsView: View {
                     if let take = oneLineTake(prop) {
                         Text(take)
                             .font(.system(size: 11.5, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.5)).lineLimit(2)
+                            .foregroundStyle(.white.opacity(0.62)).lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -8683,7 +8730,7 @@ struct GaryPropsView: View {
                     if !group.time.isEmpty {
                         Text(group.time.uppercased())
                             .font(GaryFonts.mono(9, bold: false)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                     if let entry, !gamePickSummary(entry.pick).isEmpty {
                         Text(gamePickSummary(entry.pick))
@@ -8696,12 +8743,12 @@ struct GaryPropsView: View {
             VStack(alignment: .trailing, spacing: 5) {
                 Text("\(group.props.count) \(group.props.count == 1 ? "PROP" : "PROPS")")
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(.white.opacity(0.62))
                 QuantConfidenceBar(value: avgConf(group.props)).frame(width: 48)
             }
             Image(systemName: "chevron.down")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.white.opacity(0.62))
                 .rotationEffect(.degrees(isOpen ? 0 : -90))
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -8721,14 +8768,14 @@ struct GaryPropsView: View {
                             .font(GaryFonts.text(18)).foregroundStyle(.white)
                         Text("NFL TDs · \(group.label.uppercased())\(group.category == "underdog" ? " · +200+" : "")")
                             .font(GaryFonts.mono(9, bold: false)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                     Spacer(minLength: 8)
                     Text("\(group.picks.count)")
                         .font(GaryFonts.mono(11, bold: true))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.white.opacity(0.62))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white.opacity(0.4))
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white.opacity(0.62))
                         .rotationEffect(.degrees(isOpen ? 0 : -90))
                 }
                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -8775,7 +8822,7 @@ struct GaryPropsView: View {
             Text("").frame(width: 22)
         }
         .font(GaryFonts.mono(8, bold: true)).tracking(1)
-        .foregroundStyle(.white.opacity(0.5))
+        .foregroundStyle(.white.opacity(0.62))
         .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 9)
     }
 
@@ -8817,7 +8864,7 @@ struct GaryPropsView: View {
                         resultChip(result)
                     } else {
                         Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.45))
+                            .font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.62))
                     }
                 }
                 .frame(width: 22)
@@ -9205,14 +9252,14 @@ struct QuantKpiTile: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label)
                 .font(GaryFonts.mono(8.5, bold: true)).tracking(1.4)
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.white.opacity(0.62))
             Text(value)
                 .font(GaryFonts.mono(21, bold: true))
                 .foregroundStyle(accent).lineLimit(1).minimumScaleFactor(0.55)
             if let sub {
                 Text(sub)
                     .font(GaryFonts.mono(8, bold: false)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.45)).lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(.white.opacity(0.62)).lineLimit(1).minimumScaleFactor(0.7)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -9368,9 +9415,12 @@ struct TomorrowView {
             let anyLines = board?.any_lines ?? false
             let count = board?.game_count ?? 0
             return VStack(alignment: .leading, spacing: 0) {
-                Text("THE SLATE")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(2)
-                    .foregroundStyle(GaryColors.gold)
+                HStack(spacing: 7) {
+                    BroadcastBar(height: 10)
+                    Text("THE SLATE")
+                        .font(GaryFonts.accent(11)).tracking(0.6)
+                        .foregroundStyle(GaryColors.gold)
+                }
                 if let iso {
                     Text(TomorrowView.weekdayLabel(iso))
                         .font(GaryFonts.display(34))
@@ -9382,6 +9432,18 @@ struct TomorrowView {
                         .foregroundStyle(.white.opacity(0.66))
                         .lineLimit(1).minimumScaleFactor(0.8)
                         .padding(.top, 8)
+                } else if board != nil && count == 0 {
+                    // The board POSTED and is legitimately empty (All-Star
+                    // break, tournament rest day) — say so. "Posts soon"
+                    // here reads as an outage (founder, Jul 12).
+                    Text("No games tomorrow")
+                        .font(GaryFonts.text(20, .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.top, 8)
+                    Text("The league is dark — the board returns with the next slate.")
+                        .font(GaryFonts.text(13))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(.top, 6)
                 } else {
                     Text("Tomorrow's board posts soon")
                         .font(GaryFonts.text(20, .semibold))
@@ -9540,7 +9602,7 @@ struct TomorrowView {
                 } else {
                     Text("ERA —")
                         .font(GaryFonts.mono(11))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
             }
         }
@@ -9588,12 +9650,12 @@ struct TomorrowView {
                         // Spelled out for US fans — not the cryptic "GF".
                         Text("\(Self.trimNum(gf)) Goals/Gm")
                             .font(GaryFonts.mono(10))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                 } else {
                     Text("—")
                         .font(GaryFonts.mono(11))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
             }
         }
@@ -9684,7 +9746,7 @@ struct TomorrowView {
         private func legendDot(_ c: Color, _ label: String) -> some View {
             HStack(spacing: 4) {
                 Circle().fill(c).frame(width: 6, height: 6)
-                Text(label).font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.4))
+                Text(label).font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.62))
             }
         }
 
@@ -9698,7 +9760,7 @@ struct TomorrowView {
                 Text("ML").frame(width: 46, alignment: .trailing)
             }
             .font(GaryFonts.mono(10))
-            .foregroundStyle(.white.opacity(0.4))
+            .foregroundStyle(.white.opacity(0.62))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
@@ -9731,7 +9793,7 @@ struct TomorrowView {
                     .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
                     .frame(width: 42, alignment: .trailing)
                 Text(Self.mlStr(row.ml_home))
-                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.5))
+                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.62))
                     .frame(width: 46, alignment: .trailing)
             }
             .padding(.horizontal, 12)
@@ -10072,7 +10134,7 @@ struct TomorrowView {
                 if let k = m.kickoff, !k.isEmpty {
                     Text(k.uppercased())
                         .font(GaryFonts.mono(9, bold: true))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -10159,17 +10221,17 @@ struct TomorrowView {
                         .foregroundStyle(wcAccent.opacity(0.9)).lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 6)
                     if let k = m.kickoff, !k.isEmpty {
-                        Text(k.uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(.white.opacity(0.4))
+                        Text(k.uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(.white.opacity(0.62))
                     }
                 }
                 if let hp = homeProj, let ap = awayProj {
                     // Projected scoreline — the higher number wears gold.
                     HStack(spacing: 8) {
-                        Text("PROJECTED").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        Text("PROJECTED").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
                         Spacer(minLength: 4)
                         Text(wcCode(awayName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
                         Text(String(format: "%.1f", ap)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(ap >= hp ? GaryColors.gold : .white.opacity(0.88))
-                        Text("–").font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.5))
+                        Text("–").font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.62))
                         Text(String(format: "%.1f", hp)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(hp >= ap ? GaryColors.gold : .white.opacity(0.88))
                         Text(wcCode(homeName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
                     }
@@ -10177,7 +10239,7 @@ struct TomorrowView {
                     let odds = Self.matchOdds(lambdaHome: hp, lambdaAway: ap, totalLine: m.lines?.total)
                     let topP = max(odds.pHome, odds.pDraw, odds.pAway)
                     HStack(spacing: 6) {
-                        Text("WIN%").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        Text("WIN%").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
                         Spacer(minLength: 4)
                         Text("\(wcCode(awayName)) \(Self.pct(odds.pAway))")
                             .font(GaryFonts.mono(11, bold: true)).foregroundStyle(odds.pAway >= topP ? GaryColors.gold : .white.opacity(0.7))
@@ -10197,23 +10259,23 @@ struct TomorrowView {
                     .frame(height: 5)
                     // Modal scoreline (away–home, matching PROJECTED) + P(over the line).
                     HStack(spacing: 6) {
-                        Text("LIKELY SCORE").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        Text("LIKELY SCORE").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
                         Text("\(odds.likelyAway)–\(odds.likelyHome)").font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.92))
-                        Text("\(wcCode(awayName))–\(wcCode(homeName))").font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.4))
+                        Text("\(wcCode(awayName))–\(wcCode(homeName))").font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.62))
                         if let po = odds.pOver, let t = m.lines?.total {
-                            Text("·").foregroundStyle(.white.opacity(0.45)).font(GaryFonts.mono(11))
+                            Text("·").foregroundStyle(.white.opacity(0.62)).font(GaryFonts.mono(11))
                             Text("Over \(Self.trimNum(t)) \(Self.pct(po))").font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.72))
                         }
                         Spacer(minLength: 0)
                     }
                 } else {
                     Text("Projection posts as both sides log World Cup games.")
-                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.5))
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.62))
                 }
                 // Market context — the board's spread + total.
                 if m.lines?.spread != nil || m.lines?.total != nil {
                     HStack(spacing: 10) {
-                        Text("MARKET").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.4))
+                        Text("MARKET").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
                         if let sp = m.lines?.spread { Text("spread \(Self.trimNum(abs(sp)))").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.6)) }
                         if let t = m.lines?.total { Text("total \(Self.trimNum(t))").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.6)) }
                         Spacer(minLength: 0)
@@ -10318,11 +10380,11 @@ struct TomorrowView {
                                         if parts.count == 2 {
                                             Text(parts[0])
                                                 .foregroundStyle(parts[0] == teamAbbr ? GaryColors.gold : .white.opacity(0.4))
-                                            Text("@").foregroundStyle(.white.opacity(0.45))
+                                            Text("@").foregroundStyle(.white.opacity(0.62))
                                             Text(parts[1])
                                                 .foregroundStyle(parts[1] == teamAbbr ? GaryColors.gold : .white.opacity(0.4))
                                         } else {
-                                            Text(g).foregroundStyle(.white.opacity(0.4))
+                                            Text(g).foregroundStyle(.white.opacity(0.62))
                                         }
                                     }
                                     .font(GaryFonts.mono(9.5, bold: true)).tracking(0.4)
@@ -10347,7 +10409,7 @@ struct TomorrowView {
                             } else {
                                 Text("—")
                                     .font(GaryFonts.mono(10))
-                                    .foregroundStyle(.white.opacity(0.4))
+                                    .foregroundStyle(.white.opacity(0.62))
                                     .frame(width: 164, alignment: .trailing)
                             }
                         }
@@ -10365,7 +10427,7 @@ struct TomorrowView {
             HStack(spacing: 3) {
                 Text(label)
                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(.white.opacity(0.62))
                 Text(String(format: "%.2f", value))
                     .font(GaryFonts.mono(12.5, bold: true))
                     .foregroundStyle(eraColor(value, avg: avg))
@@ -10403,13 +10465,13 @@ struct TomorrowView {
                                 if let t = p.team, !t.isEmpty {
                                     Text(t)
                                         .font(GaryFonts.mono(8.5)).tracking(0.5)
-                                        .foregroundStyle(.white.opacity(0.5))
+                                        .foregroundStyle(.white.opacity(0.62))
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Text((p.detail?.isEmpty == false ? p.detail : "—") ?? "—")
                                 .font(GaryFonts.mono(10))
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(.white.opacity(0.62))
                                 .frame(width: 120, alignment: .trailing)
                                 .lineLimit(1).minimumScaleFactor(0.8)
                         }
@@ -10504,7 +10566,7 @@ struct TomorrowView {
                             if let v = w.venue, !v.isEmpty {
                                 Text(v)
                                     .font(GaryFonts.mono(9.5)).tracking(0.3)
-                                    .foregroundStyle(.white.opacity(0.4))
+                                    .foregroundStyle(.white.opacity(0.62))
                                     .lineLimit(1)
                             }
                         }
@@ -11043,7 +11105,7 @@ struct BillfoldView: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
@@ -11176,7 +11238,7 @@ struct BillfoldView: View {
 
             HStack(spacing: 8) {
                 Text(String(format: "ROI %+.1f%%", journal.roiPct))
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(.system(size: 14, weight: .bold).monospacedDigit())
                     .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
 
                 Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
@@ -11383,7 +11445,7 @@ struct BillfoldView: View {
                     .font(GaryFonts.mono(9.5, bold: true))
                     .tracking(1)
                     .foregroundStyle(ink.opacity(0.58))
-                    .lineLimit(1)
+                    .lineLimit(1).minimumScaleFactor(0.7)
 
                 Spacer()
 
@@ -12163,19 +12225,10 @@ struct BillfoldView: View {
             cleaned = String(cleaned[cleaned.startIndex..<range.lowerBound])
         }
 
-        // Two-word mascots that must stay together
-        let twoWordMascots = [
-            "Trail Blazers", "Blue Devils", "Blue Jays", "Red Sox", "White Sox",
-            "Blue Jackets", "Maple Leafs", "Red Wings", "Golden Knights",
-            "Black Hawks", "Timber Wolves", "Yellow Jackets", "Red Raiders",
-            "Horned Frogs", "Sun Devils", "Golden Bears", "Nittany Lions",
-            "Crimson Tide", "Fighting Irish", "Scarlet Knights", "Mean Green",
-            "Golden Gophers", "Demon Deacons", "Orange Men", "Tar Heels",
-            "Mountain Hawks", "Wild Cats", "Golden Eagles", "Screaming Eagles",
-            "Black Bears", "Sea Hawks"
-        ]
-
-        for mascot in twoWordMascots {
+        // Two-word mascots that must stay together — the ONE canonical list
+        // (Formatters.twoWordMascots); local copies drift and resurrect the
+        // "SOX @ SOX" bug (founder, Jul 10 + 12).
+        for mascot in Formatters.twoWordMascots {
             if cleaned.hasSuffix(mascot) {
                 return mascot + mlSuffix
             }
@@ -12745,22 +12798,23 @@ struct PickCardMobile: View {
             }
         }
 
-        // For NBA, replace short team name with full team name in pick text
+        // For NBA, replace short team name with full team name in pick text.
+        // Shortening goes through the mascot-aware canonical shortener — a raw
+        // last-word split turns "Trail Blazers" into "Blazers" and the replace
+        // then doubles the prefix ("Portland Trail Trail Blazers").
         if league == "NBA" {
             var expandedPick = parts.0
-            
-            // Check if pick contains the short home team name and replace with full name
+
             if let homeTeam = pick.homeTeam {
-                let shortHome = homeTeam.split(separator: " ").last.map(String.init) ?? homeTeam
-                if expandedPick.contains(shortHome) {
+                let shortHome = Formatters.shortTeamName(homeTeam, league: "NBA")
+                if !shortHome.isEmpty, expandedPick.contains(shortHome) {
                     expandedPick = expandedPick.replacingOccurrences(of: shortHome, with: homeTeam)
                 }
             }
-            
-            // Check if pick contains the short away team name and replace with full name
+
             if let awayTeam = pick.awayTeam {
-                let shortAway = awayTeam.split(separator: " ").last.map(String.init) ?? awayTeam
-                if expandedPick.contains(shortAway) {
+                let shortAway = Formatters.shortTeamName(awayTeam, league: "NBA")
+                if !shortAway.isEmpty, expandedPick.contains(shortAway) {
                     expandedPick = expandedPick.replacingOccurrences(of: shortAway, with: awayTeam)
                 }
             }
@@ -12986,7 +13040,7 @@ struct PickCardMobile: View {
                 // @ sign - fixed width
                 Text(pick.isNeutralSite == true ? "vs" : "@")
                     .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(Color.white.opacity(0.62))
                     .frame(width: 40)
 
                 // Home team with optional CFP seed or NCAAB AP ranking
@@ -13511,7 +13565,7 @@ struct MembersOnlyCardFace: View {
             // Eyebrow — membership left, league right.
             HStack {
                 Text("MEMBERS ONLY")
-                    .font(GaryFonts.mono(11.5, bold: true)).tracking(2.4)
+                    .font(GaryFonts.accent(12)).tracking(1.0)
                     .foregroundStyle(GaryColors.gold.opacity(0.85))
                 Spacer()
                 if let leagueTag {
@@ -13571,7 +13625,7 @@ struct MembersOnlyCardFace: View {
             if let noteLine {
                 Text(noteLine)
                     .font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.78))
+                    .foregroundStyle(GaryColors.warmWhite.opacity(0.58))
                     .lineLimit(1).minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -13889,7 +13943,7 @@ struct CeremonyPackFace: View {
                     .frame(width: 128, height: 128)
                     .shadow(color: .black.opacity(0.75), radius: 9, y: 6)
                 Text("MEMBERS ONLY")
-                    .font(GaryFonts.mono(11.5, bold: true)).tracking(5)
+                    .font(GaryFonts.accent(12)).tracking(1.0)
                     .foregroundStyle(Color(hex: "#C8C8CC"))
                     .padding(.leading, 5)
                 Text("1 PICK INSIDE")
@@ -14138,7 +14192,7 @@ struct LockedPickCard: View {
             VStack(spacing: 0) {
                 HStack {
                     Text("MEMBERS ONLY")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(3)
+                        .font(GaryFonts.accent(12)).tracking(1.0)
                         .foregroundStyle(GaryColors.gold.opacity(0.85))
                     Spacer()
                     Text(league.uppercased())
@@ -14598,7 +14652,7 @@ struct CompactPickRow: View {
     /// "MONEYLINE", "KNICKS" / "+6.5"). Totals get a matching two-line shape
     /// ("UNDER 3.5" / "TOTAL GOALS") so every card reads at one uniform height.
     private var heroLines: String {
-        var words = pickParts.pick.split(separator: " ").map(String.init)
+        var words = Formatters.arrowizeOverUnder(pickParts.pick).split(separator: " ").map(String.init)
         // The headline never shows odds or a stray "@" — those belong in the meta line.
         // Strip "@" and any American-odds integer (3+ digits) a malformed/legacy pick
         // string may carry (e.g. "Under 2.5 @ -135"); decimals (handicap/total lines) stay.
@@ -14759,21 +14813,27 @@ struct CompactPickRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 // UNIFORM eyebrow (founder law, Jul 4): mark + GARY'S PICK, same
                 // slot on EVERY pick card — game/prop, gold/silver/dark alike.
+                // Share-card grammar app-wide (founder, Jul 12): eyebrow text
+                // left with air below; the BIG mark floats in the corner as an
+                // overlay (attached after this VStack) so the hero band never
+                // loses a point of height to it.
                 HStack(alignment: .top, spacing: 10) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: 22, height: 22)
-                        // Optical centering with the text (6pt top pad) — offset,
-                        // not padding, so the row height never moves.
-                        .offset(y: 3)
-                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 1.5, y: 1)
                     Text(eyebrowLabel)
-                        .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
+                        .font(GaryFonts.accent(12.5 * pf)).tracking(1.0)
                         .foregroundStyle(eyebrowTint)
                         .padding(.top, 6)
                     Spacer()
                 }
+                .padding(.bottom, 6 * pf)
                 .opacity(d3Dim(0.4))
+                .overlay(alignment: .topTrailing) {
+                    Image(GaryBrand.mark)
+                        .resizable().scaledToFit()
+                        .frame(width: 46 * pf, height: 46 * pf)
+                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
+                        .offset(y: -2)
+                        .allowsHitTesting(false)
+                }
 
                 // Balanced hero (founder, Jul 5): a one-word pick like DRAW
                 // hugged the eyebrow with all the slack pooled below — equal
@@ -14921,7 +14981,7 @@ struct CompactPickRow: View {
             if isGoldWon, payoutPer100 != nil {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("+$\(shownPayout)")
-                        .font(GaryFonts.display(30))
+                        .font(GaryFonts.display(36))
                         .foregroundStyle(GoldBar.inkHero)
                         .shadow(color: GoldBar.sheen.opacity(0.6), radius: 0, y: 1)
                     Text("PER $100 · PAID")
@@ -15263,13 +15323,13 @@ struct ScoreboardPickCard: View {
                         Text(sig.uppercased())
                             .font(GaryFonts.mono(9, bold: true))
                             .tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                             .lineLimit(1)
                     }
                     Spacer()
                     Text(Formatters.formatCommenceTime(pick.displayTime))
                         .font(GaryFonts.mono(10, bold: false))
-                        .foregroundStyle(.white.opacity(0.42))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 11)
@@ -15303,7 +15363,7 @@ struct ScoreboardPickCard: View {
                     Text("CONVICTION")
                         .font(GaryFonts.mono(8.5, bold: true))
                         .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.white.opacity(0.08))
@@ -15475,7 +15535,7 @@ struct SportsbookLinesDropdown: View {
                         .foregroundStyle(GaryColors.gold)
                     Text("(\(odds.count))")
                         .font(GaryFonts.mono(9.5, bold: false))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(GaryColors.gold).rotationEffect(.degrees(open ? 90 : 0))
@@ -15494,7 +15554,7 @@ struct SportsbookLinesDropdown: View {
                         Text("ML").frame(width: 56, alignment: .trailing)
                     }
                     .font(GaryFonts.mono(8)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(.white.opacity(0.62))
                     .padding(.vertical, 6)
                     ForEach(odds) { o in
                         HStack(spacing: 8) {
@@ -15509,7 +15569,7 @@ struct SportsbookLinesDropdown: View {
                                     Text(String(format: "%+.1f", s) + juice)
                                         .foregroundStyle(.white.opacity(0.75))
                                 } else {
-                                    Text("—").foregroundStyle(.white.opacity(0.45))
+                                    Text("—").foregroundStyle(.white.opacity(0.62))
                                 }
                             }
                             .font(GaryFonts.mono(11.5))
@@ -15518,7 +15578,7 @@ struct SportsbookLinesDropdown: View {
                                 if let ml = o.ml, !ml.isEmpty, ml != "-" {
                                     Text(ml).foregroundStyle(GaryColors.gold.opacity(0.9))
                                 } else {
-                                    Text("—").foregroundStyle(.white.opacity(0.45))
+                                    Text("—").foregroundStyle(.white.opacity(0.62))
                                 }
                             }
                             .font(GaryFonts.mono(11.5, bold: true))
@@ -15893,7 +15953,7 @@ struct ShareCardView: View {
                     Spacer()
                     Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
                         .font(GaryFonts.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 .frame(width: cardWidth)
             }
@@ -16083,7 +16143,7 @@ struct SharePropCardView: View {
                     Spacer()
                     Text(GaryPageHeader<EmptyView>.shortDateLabel().uppercased())
                         .font(GaryFonts.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 .frame(width: cardWidth)
             }
@@ -16630,14 +16690,14 @@ struct PickCardBack: View {
                 Spacer()
                 Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
                     .font(GaryFonts.mono(10, bold: false))
-                    .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(.white.opacity(0.62)).lineLimit(1).minimumScaleFactor(0.7)
                 Button {
                     let images = renderPickShareImages(pick: pick, gameResult: gameResult)
                     if !images.isEmpty { shareItem = PickShareItem(images: images) }
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                         .frame(width: 26, height: 26)
                         .contentShape(Rectangle())
                 }
@@ -16670,10 +16730,10 @@ struct PickCardBack: View {
                 HStack(spacing: 5) {
                     Image(systemName: "mappin.and.ellipse")
                         .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                     Text(venue)
                         .font(GaryFonts.mono(9.5)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
@@ -16736,7 +16796,7 @@ struct PickCardBack: View {
 
             Text("tap to flip back  ↺")
                 .font(GaryFonts.mono(9, bold: false))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.62))
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(14)
@@ -16907,7 +16967,7 @@ struct PickDetailPopup: View {
                         if let sig = pick.shortGameSignificance, sig.count < 30 {
                             Text(sig)
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                     }
                     Spacer()
@@ -16916,7 +16976,7 @@ struct PickDetailPopup: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                             .padding(8)
                             .background(Circle().fill(.white.opacity(0.08)))
                     }
@@ -17330,7 +17390,7 @@ struct SportsbookOddsTable: View {
                     .frame(width: 60)
             }
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Color.white.opacity(0.5))
+            .foregroundStyle(Color.white.opacity(0.62))
             .textCase(.uppercase)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -17353,7 +17413,7 @@ struct SportsbookOddsTable: View {
                             .frame(width: 80)
                     } else {
                         Text("-")
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.white.opacity(0.62))
                             .frame(width: 80)
                     }
 
@@ -17366,7 +17426,7 @@ struct SportsbookOddsTable: View {
                             .frame(width: 60)
                     } else {
                         Text("-")
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .foregroundStyle(Color.white.opacity(0.62))
                             .frame(width: 60)
                     }
                 }
@@ -17382,7 +17442,7 @@ struct SportsbookOddsTable: View {
             // Footer hint
             Text("Best odds highlighted in green")
                 .font(.system(size: 10))
-                .foregroundStyle(Color.white.opacity(0.4))
+                .foregroundStyle(Color.white.opacity(0.62))
                 .padding(.top, 8)
                 .padding(.bottom, 4)
         }
@@ -17447,7 +17507,7 @@ struct PropCardMobile: View {
                 if showTimeOnCard, let time = prop.time, !time.isEmpty {
                     Text(time)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
 
                 Spacer()
@@ -17471,7 +17531,7 @@ struct PropCardMobile: View {
                 if let team = prop.team, prop.player != nil {
                     Text(team)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
             }
 
@@ -17495,7 +17555,7 @@ struct PropCardMobile: View {
                 if let ev = Formatters.computeEV(confidence: prop.confidence, american: prop.odds) {
                     HStack(spacing: 3) {
                         Text("EV")
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                         Text(String(format: "+%.1f%%", ev))
                             .foregroundStyle(.green)
                     }
@@ -17718,7 +17778,7 @@ struct PropCardSlate: View {
                                 Text(Formatters.shortTeamName(team, league: prop.effectiveLeague).uppercased())
                                     .font(.system(size: 8, weight: .bold))
                                     .tracking(0.6)
-                                    .foregroundStyle(.white.opacity(0.4))
+                                    .foregroundStyle(.white.opacity(0.62))
                             }
                         }
                     }
@@ -17735,7 +17795,7 @@ struct PropCardSlate: View {
                     Text(propType)
                         .font(.system(size: 9, weight: .bold))
                         .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.42))
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
 
                     Spacer(minLength: 4)
@@ -18818,12 +18878,12 @@ struct EdgesSection: View {
             if !tabbed {
                 Text(title)
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.62))
                     .padding(.horizontal, 16).padding(.top, 4)
             }
             if edges.isEmpty {
                 Text(note)
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.62))
                     .padding(.horizontal, 16).padding(.vertical, 8)
             } else {
                 if tabbed && kinds.count > 1 { categoryTabBar }
@@ -19255,8 +19315,14 @@ struct PicksCarouselView: View {
         // Display priority — WC leads, then MLB (user call Jun 13 2026: the World
         // Cup outranks MLB while it's on, so it sits closest to ALL). Anything
         // else falls back to alphabetical.
+        // A league with games TODAY always outranks an idle one (founder,
+        // Jul 12: WC before MLB on a no-WC day made no sense); canonical
+        // priority only breaks ties inside each group.
+        let todayLeagues = Set(store.slate.compactMap { ($0.league ?? "").uppercased() })
         let priority: [String: Int] = ["WC": 0, "MLB": 1]
         return ["ALL"] + s.sorted { a, b in
+            let ta = todayLeagues.contains(a), tb = todayLeagues.contains(b)
+            if ta != tb { return ta }
             let ra = priority[a] ?? 50, rb = priority[b] ?? 50
             return ra == rb ? a < b : ra < rb
         }
@@ -19571,7 +19637,7 @@ struct PicksCarouselView: View {
             // swap, June 13 2026 — they used to render below the game tabs).
             if sports.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 18) {
+                    HStack(spacing: 20) {
                         ForEach(sports, id: \.self) { s in
                             let on = (s == sport)
                             Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
@@ -19585,19 +19651,19 @@ struct PicksCarouselView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 6)
+                    .padding(.top, 8)
                 }
             }
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .bottom, spacing: 26) {
+                    HStack(alignment: .bottom, spacing: 24) {
                         dayDropdown
                         ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                             gameTab(idx + 1, label: shortMatchup(g.matchup, league: gameLeague(g)).uppercased(), status: statusLine(for: g))
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 10)
+                    .padding(.top, 8)
                 }
                 .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
             }
@@ -19744,34 +19810,83 @@ struct PicksCarouselView: View {
         finalScoreLine(matchup: matchup, raw: raw, league: gameLeague((matchup: matchup, time: "", props: [])))
     }
 
+    /// Pre-pick page with VALUE, not a shrug (founder, Jul 12: the dashed
+    /// "check back later" card was "half assed"). Today: the sport's actual
+    /// slate with each game's pick ETA. Dark day: the honest line. Yesterday
+    /// mode keeps the plain empty note.
     private var emptyState: some View {
-        // A placeholder CARD (not a full-screen takeover) so the page layout — the day
-        // dropdown + structure — stays put when there are no picks yet (user call, Jun 17).
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 11) {
-                Image(systemName: "clock.badge")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.75))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(pickDay == .today ? "TODAY'S PICKS ARE ON THE WAY" : "NO GRADED PICKS THIS DAY")
-                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.7))
-                    Text(pickDay == .today
-                         ? "Gary releases picks as lineups are confirmed — check back closer to game time."
-                         : "Nothing settled for this date.")
-                        .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.45))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
+        let rows: [(matchup: String, eta: String?)] = store.slate
+            .filter { r in
+                let lg = (r.league ?? "").uppercased()
+                return (sport == "ALL" || lg == sport)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(GaryColors.gold.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
-            )
-            .padding(.horizontal, 16).padding(.top, 16)
+            .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+            .prefix(10)
+            .map { r in
+                let a = Formatters.shortTeamName(r.away_team, league: r.league)
+                let h = Formatters.shortTeamName(r.home_team, league: r.league)
+                var eta: String? = nil
+                if let ct = r.commence_time, let d = parseISO8601(ct) {
+                    eta = TomorrowView.etTime(ISO8601DateFormatter().string(from: d.addingTimeInterval(-5400)),
+                                              withZone: false, meridiem: true).uppercased()
+                }
+                return ("\(a) @ \(h)", eta)
+            }
+
+        return VStack(alignment: .leading, spacing: 0) {
+            if pickDay == .yesterday {
+                Text("NO GRADED PICKS THIS DAY")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.horizontal, 16).padding(.top, 20)
+            } else if rows.isEmpty {
+                // Dark day for this sport — say it straight.
+                HStack(spacing: 8) {
+                    BroadcastBar(height: 11)
+                    Text(sport == "ALL" ? "NO GAMES TODAY" : "NO \(sport) TODAY")
+                        .font(GaryFonts.accent(13)).tracking(0.6)
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .padding(.horizontal, 16).padding(.top, 20)
+                Text("The league is dark — Gary's board returns with the next fixture.")
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(GaryColors.sectionSub)
+                    .padding(.horizontal, 16).padding(.top, 8)
+            } else {
+                HStack(spacing: 8) {
+                    BroadcastBar(height: 11)
+                    Text("THE CARD IS COMING")
+                        .font(GaryFonts.accent(13)).tracking(0.6)
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .padding(.horizontal, 16).padding(.top, 20)
+                Text("Gary works game by game — every pick lands about 90 minutes before the start.")
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(GaryColors.sectionSub)
+                    .padding(.horizontal, 16).padding(.top, 8)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(row.matchup)
+                                .font(GaryFonts.display(19))
+                                .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                            Spacer(minLength: 8)
+                            if let eta = row.eta {
+                                Text("PICK ~\(eta)")
+                                    .font(GaryFonts.mono(11.5, bold: true))
+                                    .foregroundStyle(GaryColors.meta)
+                            }
+                        }
+                        .padding(.vertical, 11)
+                        if i < rows.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16).padding(.top, 14)
+            }
             Spacer(minLength: 0)
         }
     }
@@ -19932,10 +20047,19 @@ struct TeasedPickCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: 10) {
                     Text("GARY'S PICK")
-                        .font(GaryFonts.mono(11.5, bold: true)).tracking(2.2)
+                        .font(GaryFonts.accent(12.5)).tracking(1.0)
                         .foregroundStyle(GaryColors.gold)
                         .padding(.top, 6)
                     Spacer()
+                }
+                .padding(.bottom, 6)
+                .overlay(alignment: .topTrailing) {
+                    Image(GaryBrand.mark)
+                        .resizable().scaledToFit()
+                        .frame(width: 46, height: 46)
+                        .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+                        .offset(y: -2)
+                        .allowsHitTesting(false)
                 }
 
                 VStack(alignment: .leading, spacing: -18) {
@@ -20055,6 +20179,10 @@ struct GameScoutSection: View {
     var board: TomorrowBoard? = nil
     var wc: TomorrowWcMatch? = nil
     var wire: [SupabaseAPI.WireItem] = []
+    /// Odds captured at pick time (GaryPick.moneylineAway/Home). When present
+    /// the header wears Gary's exact numbers — never a drifted board snapshot
+    /// (founder, Jul 10: "MLB has to match").
+    var pickMl: (away: Double?, home: Double?)? = nil
 
     private var sides: (away: String, home: String) {
         let p = matchup.components(separatedBy: " @ ")
@@ -20085,9 +20213,27 @@ struct GameScoutSection: View {
         (Formatters.shortTeamName(sides.away, league: league),
          Formatters.shortTeamName(sides.home, league: league))
     }
+    /// Header prices. WC: TO-ADVANCE odds when the knockout market exists —
+    /// a price that never needs to match Gary's 90-minute pick (founder,
+    /// Jul 10) — else the 3-way ML (draw rendered separately below). MLB and
+    /// the rest: the odds CAPTURED AT PICK TIME when a pick exists, so the
+    /// scout header always matches Gary's number; the day board only fills
+    /// the pre-pick morning.
     private var headOdds: (a: String?, h: String?) {
-        if let wc { return (Self.odds(wc.lines?.ml_away), Self.odds(wc.lines?.ml_home)) }
+        if let wc {
+            if wc.lines?.advance_home != nil || wc.lines?.advance_away != nil {
+                return (Self.odds(wc.lines?.advance_away), Self.odds(wc.lines?.advance_home))
+            }
+            return (Self.odds(wc.lines?.ml_away), Self.odds(wc.lines?.ml_home))
+        }
+        if let pickMl, pickMl.away != nil || pickMl.home != nil {
+            return (Self.odds(pickMl.away), Self.odds(pickMl.home))
+        }
         return (Self.odds(row?.ml_away), Self.odds(row?.ml_home))
+    }
+    /// True when the header is wearing the knockout TO-ADVANCE prices.
+    private var headIsAdvance: Bool {
+        wc != nil && (wc?.lines?.advance_home != nil || wc?.lines?.advance_away != nil)
     }
     private var teamAbbrs: (a: String, h: String) {
         (abbr(sides.away, fallback: row?.away_abbr), abbr(sides.home, fallback: row?.home_abbr))
@@ -20160,7 +20306,7 @@ struct GameScoutSection: View {
     private func vsOppText(_ v: TomorrowVsOpp?) -> Text? {
         guard let v, let era = v.era, let gs = v.gs else { return nil }
         return Self.stat(String(format: "%.2f ERA", era))
-            + Text(" · \(gs) start\(gs == 1 ? "" : "s")").font(GaryFonts.mono(13.5)).foregroundColor(.white.opacity(0.62))
+            + Text(" · \(gs) start\(gs == 1 ? "" : "s") this season").font(GaryFonts.mono(13.5)).foregroundColor(.white.opacity(0.62))
     }
     private func seasonText(_ st: TomorrowPerson) -> Text? {
         var bits: [Text] = []
@@ -20228,21 +20374,34 @@ struct GameScoutSection: View {
         if row != nil || wc != nil, hasContent {
             VStack(alignment: .leading, spacing: 0) {
                 Text("SCOUTING REPORT")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(GaryFonts.accent(11.5)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.65))
                     .padding(.bottom, 12)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(headerNames.away + (headOdds.a.map { " \($0)" } ?? ""))
                         .font(GaryFonts.display(24))
                         .foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(1).minimumScaleFactor(0.5)
+                        .lineLimit(1).minimumScaleFactor(0.6)
                     Spacer(minLength: 8)
                     Text(headerNames.home + (headOdds.h.map { " \($0)" } ?? ""))
                         .font(GaryFonts.display(24))
                         .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1).minimumScaleFactor(0.5)
+                        .lineLimit(1).minimumScaleFactor(0.6)
                 }
-                .padding(.bottom, 10)
+                .padding(.bottom, headIsAdvance || (wc?.lines?.ml_draw) != nil ? 4 : 10)
+                // The market caption: names the knockout TO-ADVANCE market, or
+                // carries the draw the 2-way header can't show.
+                if headIsAdvance {
+                    Text("TO ADVANCE")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.6)
+                        .foregroundStyle(GaryColors.gold.opacity(0.7))
+                        .padding(.bottom, 10)
+                } else if let draw = wc?.lines?.ml_draw {
+                    Text("DRAW \(Self.odds(draw) ?? "—")")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.6)
+                        .foregroundStyle(.white.opacity(0.62))
+                        .padding(.bottom, 10)
+                }
                 if let series = wc == nil ? row?.series : nil { seriesBlock(series) }
                 if wc == nil { mlbArms } else { wcRows }
                 wireLines
@@ -20378,7 +20537,7 @@ struct GameScoutSection: View {
             let l = c.l ?? 0
             let tint: Color = w > l ? GaryColors.win : l > w ? GaryColors.loss : .white.opacity(0.9)
             return Self.stat(rec, tint)
-                + Text(" W-D-L").font(GaryFonts.mono(11)).foregroundColor(.white.opacity(0.45))
+                + Text(" W-D-L").font(GaryFonts.mono(11)).foregroundColor(.white.opacity(0.62))
         }
         add("AT THIS CUP", cup(wc.away), cup(wc.home))
         func manLine(_ p: TomorrowWcKeyPlayer) -> String? {
@@ -20610,7 +20769,9 @@ struct PicksGamePage: View {
 
             // THE SCOUT — on the page from the morning, stays as the live
             // sections underneath fill in (founder, Jul 7).
-            GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wc: scoutWc, wire: scoutWire)
+            GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wc: scoutWc, wire: scoutWire,
+                             pickMl: entries.first(where: { !$0.isYesterday && ($0.pick.moneylineAway != nil || $0.pick.moneylineHome != nil) })
+                                 .map { (away: $0.pick.moneylineAway, home: $0.pick.moneylineHome) })
             PlayerIntelSection(matchup: group.matchup)
             if isWorldCup {
                 // World Cup: the plain GAME INTEL edges become the WC game-intel
@@ -20664,7 +20825,7 @@ struct PlayerIntelSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("PLAYER INTEL")
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                         .padding(.horizontal, 16).padding(.top, 4)
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { idx, row in
@@ -20706,7 +20867,7 @@ struct PlayerIntelSection: View {
                     Text(row.player_name ?? p?.name ?? "Player")
                         .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white)
                     if !meta.isEmpty {
-                        Text(meta).font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.45))
+                        Text(meta).font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.62))
                     }
                 }
                 if let line = signalLine {
@@ -20787,7 +20948,7 @@ struct LeaguePulseSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("LEAGUE PULSE")
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                         .padding(.horizontal, 16).padding(.top, 4)
 
                     if orderedRows.count > 1 { tabBar }
@@ -20805,7 +20966,7 @@ struct LeaguePulseSection: View {
                                     .joined(separator: " · ")
                                 if !caption.isEmpty {
                                     Text(caption)
-                                        .font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.4))
+                                        .font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.62))
                                         .lineLimit(2)
                                 }
                             }
@@ -20879,7 +21040,7 @@ struct PulseTable: View {
             Divider().background(Color.white.opacity(0.07))
             if cells.isEmpty {
                 Text("No data yet.")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.62))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 12)
             } else {
@@ -20898,7 +21059,7 @@ struct PulseTable: View {
             ForEach(Array(columns.enumerated()), id: \.offset) { _, col in
                 Text(col.label.uppercased())
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.62))
                     .frame(maxWidth: .infinity, alignment: alignment(col))
             }
         }
@@ -20933,7 +21094,7 @@ struct PulseTable: View {
                 if let team = cell["team"], !team.isEmpty, col.key != "team" {
                     Text(team.uppercased())
                         .font(GaryFonts.mono(9))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 trendChip(cell["trend"])
             }
@@ -21125,7 +21286,7 @@ struct PropSlipCard: View {
                     .foregroundStyle(isMLB ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accent))
                 Text("· \(props.count)")
                     .font(GaryFonts.mono(11, bold: false))
-                    .foregroundStyle(.white.opacity(0.34))
+                    .foregroundStyle(.white.opacity(0.62))
                 Spacer()
                 // One game state for the whole slip (Today); game pages put the
                 // score in the page hero, so their header keeps the start time.
@@ -21134,13 +21295,13 @@ struct PropSlipCard: View {
                     Text(shared)
                         .font(GaryFonts.mono(9.5, bold: false))
                         .tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.34))
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                 } else if !liveInHeader, let t = sharedTimeText {
                     Text(t)
                         .font(GaryFonts.mono(11, bold: false))
                         .tracking(1)
-                        .foregroundStyle(.white.opacity(0.34))
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                 }
             }
@@ -21268,7 +21429,7 @@ struct PropSlipBack: View {
                 if let m = prop.matchup, !m.isEmpty {
                     Text(m.uppercased())
                         .font(GaryFonts.mono(10, bold: false))
-                        .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
+                        .foregroundStyle(.white.opacity(0.62)).lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
 
@@ -21361,7 +21522,7 @@ struct PropSlipBack: View {
 
             Text("tap to flip back  ↺")
                 .font(GaryFonts.mono(9, bold: false)).tracking(0.6)
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.62))
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(14)
@@ -21392,7 +21553,7 @@ struct LiveScoreStrip: View {
             } else {
                 Text("FINAL")
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.62))
             }
             if let line = score.scoreLine {
                 Text(line)
@@ -21417,7 +21578,7 @@ struct LiveScoreStrip: View {
                     }
                     Text("OUT")
                         .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                 }
             }
             Spacer()
@@ -21612,7 +21773,7 @@ struct NightBoard: View {
                 if visible.isEmpty {
                     Text("Nothing on the board from last night.")
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.62))
                         .padding(.horizontal, 14).padding(.vertical, 16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -21675,7 +21836,7 @@ struct NightBoard: View {
                 switch r.gary_result {
                 case "won":  Text("✓").foregroundStyle(GaryColors.win)
                 case "lost": Text("✗").foregroundStyle(GaryColors.loss)
-                default:     Text("–").foregroundStyle(.white.opacity(0.5))
+                default:     Text("–").foregroundStyle(.white.opacity(0.62))
                 }
             }
             .font(.system(size: 11, weight: .bold))
@@ -21743,7 +21904,7 @@ struct EdgeDetailSheet: View {
                             .padding(.trailing, 6)
                     }
                     Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.45))
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.62))
                     }.buttonStyle(.plain)
                 }
                 Text(signal.game.uppercased()).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.55))
@@ -21813,7 +21974,7 @@ struct PlayerInsightSheet: View {
         .background(GaryColors.darkBg.ignoresSafeArea())
         .overlay(alignment: .topTrailing) {
             Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill").font(.system(size: 26)).foregroundStyle(.white.opacity(0.4))
+                Image(systemName: "xmark.circle.fill").font(.system(size: 26)).foregroundStyle(.white.opacity(0.62))
             }.buttonStyle(.plain).padding(.top, 14).padding(.trailing, 16)
         }
         .presentationDetents([.large])
@@ -21888,7 +22049,7 @@ struct FirstInningRow: View {
             }
             Spacer(minLength: 6)
             Text("\(seq.filter { $0 == 0 }.count)/\(seq.count) clean")
-                .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.45))
+                .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.62))
         }
     }
 }
@@ -21940,7 +22101,7 @@ struct HeadToHeadRow: View {
                     Text(last.revenge == true
                          ? "\(oppAbbr) took the last meeting \(score) — revenge spot"
                          : "\(domAbbr) won the last meeting \(score)")
-                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.5))
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.62))
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -21981,7 +22142,7 @@ struct SignalRow: View {
                 HStack(spacing: 8) {
                     Text((s.kind == .ballpark && s.league == .wc) ? "VENUE" : s.kind.chip).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(GaryColors.gold)
                     Spacer()
-                    Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                    Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -22043,7 +22204,7 @@ struct ConfirmedXISheetView: View {
                     .foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                 if let f = s.formation, !f.isEmpty {
                     Text(f).font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
                 }
@@ -22054,7 +22215,7 @@ struct ConfirmedXISheetView: View {
                     HStack(alignment: .top, spacing: 5) {
                         Text(lineLabel(line))
                             .font(GaryFonts.mono(7.5, bold: true)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.62))
                             .frame(width: 24, alignment: .leading).padding(.top, 1)
                         Text(men.map { surname($0.n) }.joined(separator: ", "))
                             .font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
@@ -22310,7 +22471,8 @@ struct CompactPropRow: View {
         let call = compactCall
         let bet = call.isEmpty ? marketName : "\(marketName) \(call)"
         let player = (prop.player ?? "").uppercased()
-        return player.isEmpty ? bet : "\(player)\n\(bet)"
+        let line = player.isEmpty ? bet : "\(player)\n\(bet)"
+        return Formatters.arrowizeOverUnder(line)
     }
 
     /// Matchup context for the meta row — just the team now. The FINAL score + situation
@@ -22378,19 +22540,24 @@ struct CompactPropRow: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                // UNIFORM eyebrow (founder law, Jul 4): mark + GARY'S PICK — the
-                // EXACT slot the game card uses, every finish, every page.
+                // UNIFORM eyebrow (game-card grammar, Jul 12): accent text left,
+                // the mark floats big in the corner via overlay — same slot,
+                // every finish, every page.
                 HStack(alignment: .top, spacing: 10) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: 22, height: 22)
-                        .offset(y: 3)
-                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 1.5, y: 1)
                     Text(eyebrowLabel)
-                        .font(GaryFonts.mono(11.5 * pf, bold: true)).tracking(2.2)
+                        .font(GaryFonts.accent(12.5 * pf)).tracking(1.0)
                         .foregroundStyle(eyebrowTint)
                         .padding(.top, 6)
                     Spacer()
+                }
+                .padding(.bottom, 6 * pf)
+                .overlay(alignment: .topTrailing) {
+                    Image(GaryBrand.mark)
+                        .resizable().scaledToFit()
+                        .frame(width: 46 * pf, height: 46 * pf)
+                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
+                        .offset(y: -2)
+                        .allowsHitTesting(false)
                 }
                 .opacity(d3Dim(0.4))
 
@@ -22498,7 +22665,7 @@ struct CompactPropRow: View {
             if isSilverWon, payoutPer100 != nil {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("+$\(shownPayout)")
-                        .font(GaryFonts.display(30))
+                        .font(GaryFonts.display(36))
                         .foregroundStyle(SilverBar.inkHero)
                         .shadow(color: SilverBar.sheen.opacity(0.6), radius: 0, y: 1)
                     Text("PER $100 · PAID")
@@ -22655,7 +22822,7 @@ struct PropDetailPopup: View {
                         if let category = categoryLabel {
                             Text(category)
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                     }
                     Spacer()
@@ -22664,7 +22831,7 @@ struct PropDetailPopup: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.62))
                             .padding(8)
                             .background(Circle().fill(.white.opacity(0.08)))
                     }
@@ -22693,7 +22860,7 @@ struct PropDetailPopup: View {
                                         if let team = prop.team {
                                             Text(team)
                                                 .font(.system(size: 13, weight: .medium))
-                                                .foregroundStyle(.white.opacity(0.5))
+                                                .foregroundStyle(.white.opacity(0.62))
                                         }
                                     }
 
@@ -22715,7 +22882,7 @@ struct PropDetailPopup: View {
                                 if let time = prop.time, !time.isEmpty, time != "TBD" {
                                     Text(time)
                                         .font(.system(size: 10, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.42))
+                                        .foregroundStyle(.white.opacity(0.62))
                                 }
                             }
 
@@ -22752,7 +22919,7 @@ struct PropDetailPopup: View {
                                 if let ev = Formatters.computeEV(confidence: prop.confidence, american: prop.odds) {
                                     HStack(spacing: 4) {
                                         Text("EV:")
-                                            .foregroundStyle(.white.opacity(0.4))
+                                            .foregroundStyle(.white.opacity(0.62))
                                         Text(String(format: "+%.1f%%", ev))
                                             .foregroundStyle(.green)
                                     }
@@ -22766,7 +22933,7 @@ struct PropDetailPopup: View {
                                         Text("Confidence").font(.system(size: 9, weight: .medium))
                                         Spacer()
                                     }
-                                    .foregroundStyle(.white.opacity(0.45))
+                                    .foregroundStyle(.white.opacity(0.62))
 
                                     GeometryReader { geo in
                                         ZStack(alignment: .leading) {
@@ -22884,7 +23051,7 @@ struct GameResultRow: View {
             HStack {
                 Text(Formatters.formatDate(result.game_date))
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.62))
                 Spacer()
                 Text(Formatters.americanOdds(result.effectiveOdds))
                     .font(.subheadline.bold())
@@ -22927,7 +23094,7 @@ struct PropResultRow: View {
             HStack {
                 Text(Formatters.formatDate(result.game_date))
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.62))
                 Spacer()
                 Text(Formatters.americanOdds(result.odds?.value))
                     .font(.subheadline.bold())
@@ -23477,7 +23644,7 @@ struct TaleOfTapeSection: View {
                                 }
                                 Text(displayName(for: token))
                                     .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .foregroundStyle(.white.opacity(0.62))
                                     .lineLimit(1)
                                 if !leftAdvantage {
                                     Image(systemName: "arrow.right")
@@ -23993,7 +24160,7 @@ struct StatRowView: View {
                     }
                     Text(stat.statName)
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                     if stat.isRightAdvantage {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 8, weight: .bold))
@@ -24490,7 +24657,7 @@ struct PropAnalysisSheet: View {
                                     if let matchup = prop.matchup {
                                         Text(matchup)
                                             .font(.caption)
-                                            .foregroundStyle(.white.opacity(0.4))
+                                            .foregroundStyle(.white.opacity(0.62))
                                     }
                                 }
                                 
@@ -24633,7 +24800,7 @@ struct PropAnalysisSheet: View {
                                     Text(time)
                                         .font(.caption)
                                 }
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(.white.opacity(0.62))
                             }
                             
                             if let league = prop.effectiveLeague {
@@ -24867,20 +25034,37 @@ enum Formatters {
     /// Get short team name for display
     /// - For NCAAB/NCAAF: Returns school name (e.g., "Nebraska" from "Nebraska Cornhuskers")
     /// - For pro sports: Returns mascot (e.g., "Thunder" from "Oklahoma City Thunder")
-    // Multi-word mascots that must stay together when shortening team names
-    // NHL two-word mascots intentionally absent — hockey cards collapse to the
-    // single common word (Knights, Leafs, Jackets, Wings) so matchup rows fit
-    // the way the other sports do.
-    private static let twoWordMascots = [
+    // Multi-word mascots that must stay together when shortening team names —
+    // THE canonical list (founder, Jul 12: Red Sox / White Sox / Blue Jays must
+    // hold app-wide, never "Sox"/"Jays"). Every display-name shortener routes
+    // here; never grow a local copy.
+    static let twoWordMascots = [
         // MLB
         "Red Sox", "White Sox", "Blue Jays",
-        // NHL
+        // NHL (proMascot's hockey-card collapse filters these at its call sites)
         "Maple Leafs", "Red Wings", "Blue Jackets", "Golden Knights",
         // NBA
         "Trail Blazers",
-        // NCAA (most college names are handled by collegeSchoolName)
-        "Tar Heels"
+        // NCAA (most college names are handled by collegeSchoolName; these
+        // cover pick-text and card paths that bypass it)
+        "Tar Heels", "Blue Devils", "Yellow Jackets", "Red Raiders",
+        "Horned Frogs", "Sun Devils", "Golden Bears", "Nittany Lions",
+        "Crimson Tide", "Fighting Irish", "Scarlet Knights", "Mean Green",
+        "Golden Gophers", "Demon Deacons", "Black Bears", "Golden Eagles"
     ]
+
+    /// Card-display transform (founder, Jul 12): the words OVER/UNDER become
+    /// simple arrows on pick displays — "H+R+RBI ▲ 1.5". Word-boundary safe
+    /// (never touches names like "Overton"); logic paths keep the words.
+    static func arrowizeOverUnder(_ text: String) -> String {
+        var t = text
+        for (word, arrow) in [("OVER", "▴"), ("Over", "▴"), ("UNDER", "▾"), ("Under", "▾")] {
+            t = t.replacingOccurrences(of: "(^|\\s)\(word)(\\s|$)",
+                                       with: "$1\(arrow)$2",
+                                       options: .regularExpression)
+        }
+        return t
+    }
 
     /// Last word of a pro team name, but keep two-word mascots whole
     /// ("Toronto Blue Jays" → "Blue Jays", "Chicago White Sox" → "White Sox").

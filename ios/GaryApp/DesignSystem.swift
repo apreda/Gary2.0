@@ -58,10 +58,11 @@ enum GaryColors {
     /// Section descriptions and quiet supporting labels.
     /// (Lifted 0.45→0.62 Jul 3 — founder's standing rule: secondary text on the
     /// near-black bg must sit ≥~0.6 white; 0.4-grey-on-black is a recurring gripe.)
-    static let sectionSub = Color.white.opacity(0.62)
-    /// Metadata: times, game tags, fine print. (Lifted 0.35→0.55, same rule —
-    /// kept a step below sectionSub so the hierarchy survives.)
-    static let meta = Color.white.opacity(0.55)
+    static let sectionSub = Color.white.opacity(0.68)
+    /// Metadata: times, game tags, fine print. (Lifted 0.55→0.62 Jul 12 —
+    /// founder: strip times "unreadable"; hierarchy survives a step below
+    /// sectionSub at 0.68.)
+    static let meta = Color.white.opacity(0.62)
     /// Selected state for toggles/tabs/chips — a bright neutral fill.
     static let selectedText = Color.white.opacity(0.95)
     static let selectedFill = Color.white.opacity(0.12)
@@ -170,11 +171,45 @@ enum GaryFonts {
     /// NOTE: Bebas has no lowercase — everything through display() renders CAPS.
     static let displayFace = "BebasNeue-Regular"
 
-    static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size) }
+    // TYPE RAMP raised Jul 12 2026 (founder: "everything ~20% closer"):
+    // labels/data +18% with a 12pt floor, body +15% with a 13pt floor,
+    // display +8%. Kickers (accent) hold — founder-approved as shipped.
+    static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size * 1.08) }
 
+    /// Data/label workhorse. Was JetBrains Mono (the "Quant Terminal" era) —
+    /// retired Jul 12 2026 (founder: hard to read at label sizes, zeros read
+    /// as eights). Now the system face with TABULAR NUMERALS: digit columns
+    /// stay aligned, words breathe, 0/8 unambiguous. Callers unchanged.
+    /// Label/meta layer — the Broadcast mock's meta voice: SF at REAL weight
+    /// (bold/semibold, never regular — regular read "like the default font on
+    /// Microsoft Word", founder Jul 12) with tabular digits. Callers pair it
+    /// with uppercase + tracking for the scorebug read.
     static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
-        .custom(bold ? "JetBrainsMono-Bold" : "JetBrainsMono-Regular", size: size)
+        .system(size: max(12, size * 1.18), weight: bold ? .bold : .semibold).monospacedDigit()
     }
+
+    /// BROADCAST accent — the scorebug voice (founder-picked Jul 12 off the
+    /// "02 Broadcast" mock): black-weight italic caps for section kickers and
+    /// state moments. Bebas keeps the hero titles; this is the energy layer.
+    static func accent(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .black).italic()
+    }
+}
+
+/// The Broadcast section bar — the skewed gold slab from the "02" mock.
+/// Pairs with GaryFonts.accent kickers: `BroadcastBar() + accent text`.
+struct BroadcastBar: View {
+    var tint: Color = GaryColors.gold
+    var height: CGFloat = 12
+    var body: some View {
+        Rectangle()
+            .fill(tint)
+            .frame(width: 4, height: height)
+            .transformEffect(CGAffineTransform(a: 1, b: 0, c: -0.22, d: 1, tx: 2, ty: 0))
+    }
+}
+
+extension GaryFonts {
 
     enum TextWeight {
         case regular, medium, semibold, bold, heavy
@@ -193,6 +228,6 @@ enum GaryFonts {
     /// native rendering + the Dynamic Type path for the accessibility track.
     /// (Inter stays bundled but unused; remap here if that ever changes.)
     static func text(_ size: CGFloat, _ weight: TextWeight = .regular) -> Font {
-        .system(size: size, weight: weight.sfWeight)
+        .system(size: max(13, size * 1.15), weight: weight.sfWeight)
     }
 }
