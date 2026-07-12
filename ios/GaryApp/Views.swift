@@ -25058,7 +25058,9 @@ enum Formatters {
     /// (never touches names like "Overton"); logic paths keep the words.
     static func arrowizeOverUnder(_ text: String) -> String {
         var t = text
-        for (word, arrow) in [("OVER", "▴"), ("Over", "▴"), ("UNDER", "▾"), ("Under", "▾")] {
+        // Thin arrows (founder, Jul 12): solid triangles read aggressive and
+        // clunky at hero sizes — sleek single-stroke glyphs instead.
+        for (word, arrow) in [("OVER", "↑"), ("Over", "↑"), ("UNDER", "↓"), ("Under", "↓")] {
             t = t.replacingOccurrences(of: "(^|\\s)\(word)(\\s|$)",
                                        with: "$1\(arrow)$2",
                                        options: .regularExpression)
