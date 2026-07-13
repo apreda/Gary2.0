@@ -3930,6 +3930,17 @@ struct DerbyContestSection: View {
     @State private var rows: [SupabaseAPI.AllStarPropRow] = []
     @State private var takeRow: SupabaseAPI.AllStarPropRow? = nil
 
+    /// Ticker abbreviation for the one-line rows (first-list layout).
+    static func abbr(_ team: String?) -> String {
+        switch (team ?? "") {
+        case "Phillies": return "PHI"; case "Rays": return "TB"
+        case "White Sox": return "CHW"; case "Yankees": return "NYY"
+        case "Cardinals": return "STL"; case "Royals": return "KC"
+        case "Red Sox": return "BOS"
+        default: return String((team ?? "").prefix(3)).uppercased()
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -3939,63 +3950,52 @@ struct DerbyContestSection: View {
                     .tracking(0.5)
                     .foregroundStyle(GaryColors.gold)
                 Spacer(minLength: 0)
-                Text("R1 · 20 SWINGS · TOP 4 ADVANCE")
+                Text("R1 CALL · TO WIN")
                     .font(GaryFonts.mono(10.5, bold: true))
                     .tracking(0.8)
                     .foregroundStyle(GaryColors.meta)
             }
+            // The first list layout (founder preferred it): ONE line per
+            // hitter — name + team left, the R1 call in gold and TO WIN on
+            // the right. Tapping the row opens the floating take.
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                     Button { if r.reason != nil { takeRow = r } } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 7) {
-                                Text(r.player ?? "")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.92))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                                Text(Formatters.shortTeamName(r.team, league: "MLB").uppercased())
-                                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
-                                    .foregroundStyle(.white.opacity(0.55))
-                                Spacer(minLength: 8)
-                                if let hr = r.season_hr {
-                                    Text("\(hr) HR")
-                                        .font(GaryFonts.mono(12.5, bold: true))
-                                        .foregroundStyle(.white.opacity(0.85))
-                                }
+                        HStack(spacing: 7) {
+                            Text(r.player ?? "")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.92))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Text(Self.abbr(r.team))
+                                .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
+                                .foregroundStyle(.white.opacity(0.55))
+                            Spacer(minLength: 8)
+                            if let line = r.line, let call = r.call, !call.isEmpty {
+                                Text("R1 \(call.prefix(1).uppercased()) \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))\(r.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                                    .font(GaryFonts.mono(12.5, bold: true))
+                                    .foregroundStyle(GaryColors.gold)
+                            } else {
+                                Text("LINE PENDING")
+                                    .font(GaryFonts.mono(11.5, bold: true))
+                                    .foregroundStyle(GaryColors.meta)
                             }
-                            HStack(spacing: 7) {
-                                if let line = r.line {
-                                    Text("R1 O/U \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))")
-                                        .font(GaryFonts.mono(11.5, bold: true))
-                                        .foregroundStyle(GaryColors.meta)
-                                    if let call = r.call, !call.isEmpty {
-                                        Text("\(call.uppercased())\(r.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
-                                            .font(GaryFonts.mono(11.5, bold: true))
-                                            .foregroundStyle(GaryColors.gold)
-                                    }
-                                } else {
-                                    Text("LINE PENDING")
-                                        .font(GaryFonts.mono(11.5, bold: true))
-                                        .foregroundStyle(GaryColors.meta)
-                                }
-                                Spacer(minLength: 8)
-                                if let w = r.win_odds {
-                                    Text("TO WIN \(w > 0 ? "+" : "")\(w)")
-                                        .font(GaryFonts.mono(11.5, bold: true))
-                                        .foregroundStyle(.white.opacity(0.62))
-                                }
+                            if let w = r.win_odds {
+                                Text("\(w > 0 ? "+" : "")\(w)")
+                                    .font(GaryFonts.mono(12.5, bold: true))
+                                    .foregroundStyle(.white.opacity(0.62))
+                                    .frame(minWidth: 52, alignment: .trailing)
                             }
                             if r.reason != nil {
-                                Text("GARY'S TAKE ›")
-                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                                    .foregroundStyle(GaryColors.gold.opacity(0.75))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
                             }
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 9)
                     if i < rows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                     }
@@ -4059,10 +4059,16 @@ struct DerbyTakeOverlay: View {
                     }
                 }
                 ScrollView(showsIndicators: false) {
-                    Text(row.reason ?? "")
-                        .font(GaryFonts.text(14.5))
-                        .foregroundStyle(.white.opacity(0.88))
-                        .fixedSize(horizontal: false, vertical: true)
+                    // Readable paragraphs (founder): honor authored \n\n breaks;
+                    // a single-block take gets soft-split into sentence groups.
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(Array(Self.paragraphs(row.reason ?? "").enumerated()), id: \.offset) { _, p in
+                            Text(p)
+                                .font(GaryFonts.text(14.5))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 .frame(maxHeight: 380)
             }
@@ -4070,6 +4076,20 @@ struct DerbyTakeOverlay: View {
             .background(RoundedRectangle(cornerRadius: 18).fill(GaryColors.cardBg))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.1), lineWidth: 1))
             .padding(.horizontal, 22)
+        }
+    }
+
+    /// Authored \n\n paragraphs pass through; a single block splits into
+    /// groups of ~3 sentences (layout only — the words are untouched).
+    static func paragraphs(_ text: String) -> [String] {
+        let authored = text.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if authored.count > 1 { return authored }
+        let sentences = text.components(separatedBy: ". ")
+        guard sentences.count > 4 else { return [text] }
+        let per = Int(ceil(Double(sentences.count) / 3.0))
+        return stride(from: 0, to: sentences.count, by: per).map { start in
+            let chunk = sentences[start..<min(start + per, sentences.count)].joined(separator: ". ")
+            return chunk.hasSuffix(".") || chunk.hasSuffix("!") ? chunk : chunk + "."
         }
     }
 }
@@ -4437,7 +4457,9 @@ struct HomeOvernightStrip: View {
         Button(action: onTape) {
             HStack(spacing: 7) {
                 Text(label)
-                    .font(GaryFonts.mono(15, bold: true)).tracking(0.8)
+                    // No tracking — identical render to the record/net/roll
+                    // cells (founder: every cell the SAME size, optically too).
+                    .font(GaryFonts.mono(15, bold: true))
                     .foregroundStyle(GaryColors.gold)
                 stripDivider
                 Text("\(record.w)–\(record.l)")
@@ -4507,11 +4529,12 @@ struct HomeOvernightStrip: View {
         return (Text("✓ ").foregroundColor(GaryColors.win)
             + Text(item.line + " ").foregroundColor(.white.opacity(0.88))
             + Text(item.odds).foregroundColor(GaryColors.gold))
-            // Full strip size (founder, Jul 13: the roll read smaller than its
-            // neighbors) — scale-to-fit still absorbs the long lines.
+            // Full strip size, NO scale-down (founder: same size, period) —
+            // ticker abbreviation guarantees the fit, so the shrink allowance
+            // that made this cell render a point smaller is gone.
             .font(GaryFonts.mono(15, bold: true))
             .lineLimit(1)
-            .minimumScaleFactor(0.6)
+            .fixedSize()
         .id(rollIndex)
         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                 removal: .move(edge: .top).combined(with: .opacity)))
