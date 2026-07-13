@@ -5668,7 +5668,10 @@ struct PremiumPicksView: View {
     /// placeholder cards) instead of yesterday's results — those live under the date
     /// menu's Yesterday. A chosen past date always renders its own graded board.
     private var isTodayComingSoon: Bool {
-        selectedDate == nil && !todayHasFreshPicks
+        // A zero-slate day (All-Star break) must not promise "picks drop ~90
+        // min before each game" — with no games there is no card coming; the
+        // room falls through to the graded board (yesterday's card) instead.
+        selectedDate == nil && !todayHasFreshPicks && !todaySlateCounts.isEmpty
     }
 
     var body: some View {
@@ -5870,7 +5873,11 @@ struct PremiumPicksView: View {
         VStack(spacing: 22) {
             comingSoonIntro
                 .padding(.horizontal, 16)
-            ForEach(gameShelves) { shelf in
+            // Only leagues that actually play today get a coming-soon lane —
+            // a league riding a yesterday-fallback shelf on its dark day
+            // would otherwise promise a card that never comes (Jul 14: WC
+            // plays, MLB doesn't).
+            ForEach(gameShelves.filter { (todaySlateCounts[$0.league.uppercased()] ?? 0) > 0 }) { shelf in
                 comingSoonShelf(shelf.league)
             }
         }
@@ -6839,8 +6846,12 @@ struct PremiumPicksView: View {
             }
         }
 
-        let todayByLeague = Dictionary(grouping: todayGame, by: { leagueKey($0) })
-        let yByLeague = Dictionary(grouping: yGame, by: { leagueKey($0) })
+        // All-Star specials are FREE board content (the week's whole funnel
+        // points at the Picks tab) — they never enter the Winners room. Also
+        // fixes the shelf tripling one special: shelves assume one game pick
+        // per matchup, and the board carries five on one event.
+        let todayByLeague = Dictionary(grouping: todayGame.filter { ($0.type ?? "") != "special" }, by: { leagueKey($0) })
+        let yByLeague = Dictionary(grouping: yGame.filter { ($0.type ?? "") != "special" }, by: { leagueKey($0) })
 
         // Board order (user call, Jun 11): lead with what's playing tonight.
         // A league with picks TODAY outranks one without; among tonight's
