@@ -34,6 +34,10 @@ import { picksService } from '../src/services/picksService.js';
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
+// --park (founder, Jul 13): store to test_daily_picks under 'allstar-parked'
+// instead of production — the live app must not carry these until the App
+// Store update is approved. Un-park = move the picks JSON into daily_picks.
+const PARK = args.includes('--park');
 const RUN_DERBY = args.includes('--derby');
 const RUN_ASG = args.includes('--asg');
 if (!RUN_DERBY && !RUN_ASG) { console.error('Pass --derby and/or --asg'); process.exit(1); }
@@ -227,8 +231,11 @@ async function runAsg() {
   }
   if (DRY_RUN) { console.log('\n[Specials] dry run — nothing stored.'); process.exit(0); }
   for (const job of jobs) {
-    const res = await picksService.storeDailyPicksInDatabase(job.picks, job.override);
-    console.log(`[Specials] store ${job.picks.length} pick(s)${job.override ? ` → ${job.override}` : ''} → ${JSON.stringify(res).slice(0, 180)}`);
+    const res = PARK
+      ? await picksService.storeTestPicks(job.picks, 'allstar-parked',
+          `Parked pending App Store approval (founder). Target date: ${job.override || 'today'}.`)
+      : await picksService.storeDailyPicksInDatabase(job.picks, job.override);
+    console.log(`[Specials] ${PARK ? 'PARKED' : 'stored'} ${job.picks.length} pick(s)${job.override ? ` → ${job.override}` : ''} → ${JSON.stringify(res).slice(0, 180)}`);
   }
   console.log('[Specials] Done.');
   process.exit(0);
