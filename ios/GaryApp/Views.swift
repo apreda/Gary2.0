@@ -2260,6 +2260,16 @@ struct HomeView: View {
                     }
                     playsOnBoard = (todayOnlyPicks?.count ?? 0) + propCount
                     todayPicks = todayOnlyPicks ?? []
+                    #if DEBUG
+                    // Sim preview of the PARKED All-Star boards (production
+                    // daily_picks stays empty until App Store approval — this
+                    // branch compiles out of Release entirely).
+                    if ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST()),
+                       !todayPicks.contains(where: { ($0.type ?? "") == "special" }) {
+                        let parked = await SupabaseAPI.fetchParkedAllStarPicks(date: SupabaseAPI.todayEST())
+                        if !parked.isEmpty { todayPicks.append(contentsOf: parked) }
+                    }
+                    #endif
                     picksByGameId = Dictionary(
                         (todayPicks.compactMap { p in p.game_id.map { (String($0), p) } }),
                         uniquingKeysWith: { a, _ in a })
@@ -3710,6 +3720,33 @@ struct HomeAllStarTakeover: View {
         specials.first { $0.game_id == 20260713 || $0.game_id == 8712499 } ?? specials.first
     }
 
+    /// One runway row: event + detail left, day + clock right-aligned.
+    @ViewBuilder private func runwayRow(event: String, detail: String, day: String, clock: String?) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                Text(detail)
+                    .font(GaryFonts.text(12))
+                    .foregroundStyle(GaryColors.meta)
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(day)
+                    .font(GaryFonts.mono(10, bold: true))
+                    .tracking(0.8)
+                    .foregroundStyle(GaryColors.meta)
+                if let clock {
+                    Text(clock)
+                        .font(GaryFonts.mono(12, bold: true))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+            }
+        }
+        .padding(.vertical, 9)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -3760,23 +3797,20 @@ struct HomeAllStarTakeover: View {
             }
             .buttonStyle(.plain)
 
-            // The week's runway — verified schedule only, quiet meta voice.
-            // (On ASG day the WC semi has its own live pick surfaces — no ad here.)
-            VStack(alignment: .leading, spacing: 5) {
+            // The week's runway — a real schedule block (founder: no wrapping
+            // meta strings): event + detail left, day + time right, hairlines.
+            // (On ASG day the WC semi has its own live surfaces — no ad here.)
+            VStack(alignment: .leading, spacing: 0) {
                 if !isAsgDay {
-                    Text("TOMORROW — ALL-STAR GAME · CEASE vs SÁNCHEZ")
-                        .font(GaryFonts.mono(11, bold: true))
-                        .tracking(0.6)
-                        .foregroundStyle(GaryColors.meta)
-                    Text("TOMORROW — WC SEMIFINAL · SPAIN @ FRANCE · 3 PM")
-                        .font(GaryFonts.mono(11, bold: true))
-                        .tracking(0.6)
-                        .foregroundStyle(GaryColors.meta)
+                    runwayRow(event: "ALL-STAR GAME", detail: "Cease vs Sánchez",
+                              day: "TOMORROW", clock: "8:00 PM ET")
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                    runwayRow(event: "WC SEMIFINAL", detail: "Spain @ France",
+                              day: "TOMORROW", clock: "3:00 PM ET")
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                 }
-                Text("MLB RETURNS FRIDAY")
-                    .font(GaryFonts.mono(11, bold: true))
-                    .tracking(0.6)
-                    .foregroundStyle(GaryColors.meta)
+                runwayRow(event: "MLB RETURNS", detail: "Full slate",
+                          day: "FRIDAY", clock: nil)
             }
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
         }

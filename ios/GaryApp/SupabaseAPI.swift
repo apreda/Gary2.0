@@ -404,6 +404,25 @@ enum SupabaseAPI {
         return parsePicksRow(row.picks).filter { !AppFlags.hidesWorldCupRow($0.league) }
     }
 
+    #if DEBUG
+    /// DEBUG preview only: the All-Star boards parked in test_daily_picks
+    /// (test_name 'allstar-parked') until App Store approval — lets the sim
+    /// render the break surfaces while production stays clean. Compiled out
+    /// of Release, so no shipped build can ever read the parked table.
+    static func fetchParkedAllStarPicks(date: String) async -> [GaryPick] {
+        let url = buildURL(table: "test_daily_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "test_name", value: "eq.allstar-parked")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([DailyPicksRow].self, from: data),
+              let row = rows.first else { return [] }
+        return parsePicksRow(row.picks)
+    }
+    #endif
+
     // MARK: - Insight Connections ("Today's Edges" hub)
 
     /// The day before `todayEST()` — the hub's "yesterday" for the graded-edge
