@@ -43,7 +43,8 @@ const DRY_RUN = args.includes('--dry-run');
 const PARK = args.includes('--park');
 const RUN_DERBY = args.includes('--derby');
 const RUN_ASG = args.includes('--asg');
-if (!RUN_DERBY && !RUN_ASG && !RUN_DERBY_PROPS) { console.error('Pass --derby, --derby-props, and/or --asg'); process.exit(1); }
+const EXTRA_MODES = ['--derby-extras', '--contest-rewrite', '--backfill-ids'].some(f => args.includes(f));
+if (!RUN_DERBY && !RUN_ASG && !RUN_DERBY_PROPS && !EXTRA_MODES) { console.error('Pass --derby, --derby-props, --derby-extras, --contest-rewrite, --backfill-ids, and/or --asg'); process.exit(1); }
 
 const MODEL = process.env.SPECIALS_MODEL || 'gpt-5.6-sol';
 
@@ -276,7 +277,88 @@ async function runDerbyProps() {
   console.log(`[Specials] ✅ allstar_props: ${items.length} rows upserted`);
 }
 
+/** EXTRA plays (founder): 5-6 more Derby picks from the remaining markets,
+ *  simple-list product under the contestants — must NOT contradict the
+ *  locked board or the R1 calls. Stored as market='extra' (subject in
+ *  `player`, the bet line in `call`). */
+async function runDerbyExtras() {
+  console.log(`[Specials] ── DERBY EXTRAS (${MODEL}) ──`);
+  const { data: locked } = await supabaseAdmin.from('allstar_props')
+    .select('player,line,call,odds').eq('date', '2026-07-13').eq('market', 'r1_hr_ou');
+  const lockedBoard = `LOCKED CARD BOARD (do NOT contradict): Caminero to win the Derby +425 · Schwarber to reach semifinal -185 · Longest HR under 484.5 feet +100 · Total HRs under 119.5 -110 · Winner total HRs over 29.5 -125.\nLOCKED R1 CALLS (do NOT contradict): ${(locked || []).map(r => `${r.player} ${r.call} ${r.line}`).join(' · ')}`;
+  const [mb1, mb2, mb3] = [
+    await ground('Tonight July 13 2026 MLB Home Run Derby: TO REACH THE FINAL odds for each of the 8 participants and TO REACH THE SEMIFINAL / advance odds for each, with sportsbook names (DraftKings, FanDuel, Caesars, bet365).'),
+    await ground('Tonight July 13 2026 MLB Home Run Derby: winning LEAGUE market (American League vs National League) odds, the 500-foot homer YES/NO prop, PLAYER TO HIT THE LONGEST home run market prices, and highest exit velocity market — with sportsbook names.'),
+    await ground('Tonight July 13 2026 MLB Home Run Derby: participant facts a bettor would use — season HR totals, longest homers this season, recent hot streaks, Derby history, injury notes for Schwarber (back), Murakami (hamstring), Contreras (foot).'),
+  ];
+  const marketBoard = `${mb1}\n\n${mb2}\n\nFACT BRIEF:\n${mb3}`;
+  const schema = `{"board":[{"subject":"Junior Caminero"|"American League"|"Field","bet":"clean bet line under 45 chars e.g. 'Caminero to reach the final +230'","odds":230,"book":"DraftKings","rationale":"first-person, 100-160 words, 2 paragraphs, varied opener — never start 'I'm taking'"}]}`;
+  const user = `${lockedBoard}\n\nMARKET BOARD (grounded):\n${marketBoard}\n\nTASK: 5-6 MORE Derby plays from markets NOT already used by the locked board and NOT the player R1 over/unders. Every play must be CONSISTENT with every locked call above (e.g. nothing that needs a 485+ foot homer, nothing that needs the event total over 119.5, nothing that fights the Caminero winner call or the R1 calls). Real sportsbook prices only. Vary the rationale openers.\n\nJSON schema: ${schema}`;
+  const board = await solBoard(user, 4);
+  // Indexed market keys — the (date,event,player,market) unique constraint
+  // otherwise rejects two plays on the same subject (Caminero final + exit velo).
+  const items = board.map((b, i) => ({
+    date: '2026-07-13', event: 'hr_derby', player: b.subject || 'Field',
+    team: null, season_hr: null, market: `extra-${i}`,
+    line: null, call: b.bet || null,
+    odds: typeof b.odds === 'number' ? b.odds : null,
+    book: b.book || null, win_odds: null,
+    reason: b.rationale || null,
+  }));
+  for (const it of items) console.log(`  EXTRA: ${it.call} (${it.odds ?? 'no price'} ${it.book ?? ''})`);
+  if (DRY_RUN) return;
+  await supabaseAdmin.from('allstar_props').delete().eq('date', '2026-07-13').like('market', 'extra%');
+  const { error } = await supabaseAdmin.from('allstar_props').insert(items);
+  if (error) throw new Error(`extras insert failed: ${error.message}`);
+  console.log(`[Specials] ✅ extras: ${items.length} rows`);
+}
+
+/** Text-only rewrite of the 8 contest takes (founder rule: calls LOCKED,
+ *  prose regenerated — kills the "I'm taking the OVER because" template). */
+async function rewriteContestTakes() {
+  console.log(`[Specials] ── CONTEST TAKES REWRITE (calls locked) ──`);
+  const { data: rows } = await supabaseAdmin.from('allstar_props')
+    .select('id,player,team,season_hr,line,call,odds,book,reason')
+    .eq('date', '2026-07-13').eq('market', 'r1_hr_ou');
+  const fixed = (rows || []).map(r =>
+    `${r.player} (${r.team}, ${r.season_hr} HR): LOCKED CALL = ${r.call} ${r.line} at ${r.odds} (${r.book}). Current take (facts you may reuse): ${r.reason}`).join('\n\n');
+  const schema = `{"board":[{"player":"Full Name","rationale":"first-person, 120-200 words, 2-3 paragraphs separated by blank lines"}]}`;
+  const user = `These 8 calls are FINAL — you are NOT re-deciding anything. Rewrite each take's PROSE only: same call, same facts (numbers only from the current takes below), better writing. Openers must vary — never start with "I'm taking the OVER/UNDER because" or any repeated template; open each one differently (the thrower, the park, the swing, the format, the health note — wherever that player's real story starts). First person always, never your own name.\n\n${fixed}\n\nJSON schema: ${schema}`;
+  const board = await solBoard(user, 8);
+  for (const b of board) {
+    const row = (rows || []).find(r => r.player === b.player);
+    if (!row || !b.rationale) continue;
+    await supabaseAdmin.from('allstar_props').update({ reason: b.rationale }).eq('id', row.id);
+    console.log(`  rewrote: ${b.player} — "${b.rationale.slice(0, 60)}…"`);
+  }
+  console.log('[Specials] ✅ takes rewritten (calls untouched)');
+}
+
+/** Backfill BDL player ids so the app can open standard player cards. */
+async function backfillPlayerIds() {
+  const { getApiKey, BALLDONTLIE_API_BASE_URL } = await import('../src/services/ballDontLieService.js');
+  for (const p of DERBY_FIELD) {
+    const last = p.name.split(' ').pop();
+    const res = await fetch(`${BALLDONTLIE_API_BASE_URL}/mlb/v1/players?search=${encodeURIComponent(last)}&per_page=50`,
+      { headers: { Authorization: getApiKey() } });
+    if (!res.ok) continue;
+    const json = await res.json();
+    const hit = (json.data || []).find(pl => norm(`${pl.first_name} ${pl.last_name}`) === norm(p.name));
+    if (hit?.id) {
+      await supabaseAdmin.from('allstar_props').update({ player_id: hit.id })
+        .eq('date', '2026-07-13').eq('player', p.name);
+      console.log(`  player_id: ${p.name} → ${hit.id}`);
+    }
+  }
+}
+
 (async () => {
+  if (args.includes('--derby-extras')) { await runDerbyExtras(); }
+  if (args.includes('--contest-rewrite')) { await rewriteContestTakes(); }
+  if (args.includes('--backfill-ids')) { await backfillPlayerIds(); }
+  if (args.includes('--derby-extras') || args.includes('--contest-rewrite') || args.includes('--backfill-ids')) {
+    if (!RUN_DERBY && !RUN_ASG && !RUN_DERBY_PROPS) { console.log('[Specials] Done.'); process.exit(0); }
+  }
   if (RUN_DERBY_PROPS) await runDerbyProps();
   const jobs = [];
   if (RUN_DERBY) jobs.push({ picks: await runDerby(), override: null });

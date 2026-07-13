@@ -3928,8 +3928,16 @@ struct DerbyContestSection: View {
     /// floating pop (tap a row), so rows stay tight everywhere.
     var showReasons = true
     @State private var rows: [SupabaseAPI.AllStarPropRow] = []
+    @State private var extras: [SupabaseAPI.AllStarPropRow] = []
     @State private var takeRow: SupabaseAPI.AllStarPropRow? = nil
+    @State private var cardRow: SupabaseAPI.AllStarPropRow? = nil
     @State private var showRules = false
+
+    /// Bet text sometimes arrives with the price baked in ("… final +210") —
+    /// strip it for display; the gold odds column is the single price source.
+    static func cleanBet(_ s: String?) -> String {
+        (s ?? "").replacingOccurrences(of: #"\s*[+-]\d{3,4}\s*$"#, with: "", options: .regularExpression)
+    }
 
     /// Ticker abbreviation for the one-line rows (first-list layout).
     static func abbr(_ team: String?) -> String {
@@ -3946,12 +3954,12 @@ struct DerbyContestSection: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 BroadcastBar(height: 12)
-                Text("THE CONTEST")
+                Text("THE CONTESTANTS")
                     .font(GaryFonts.accent(12.5))
                     .tracking(0.5)
                     .foregroundStyle(GaryColors.gold)
-                // ⓘ pops the Derby format — rules never sit as page prose
-                // (founder: explain in a pop, not text on the page).
+                // ⓘ pops the full Derby breakdown — rules never sit as page
+                // prose (founder: explain in a pop, nothing else up here).
                 Button { showRules = true } label: {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13, weight: .semibold))
@@ -3962,10 +3970,6 @@ struct DerbyContestSection: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Derby format and rules")
                 Spacer(minLength: 0)
-                Text("R1 CALL · TO WIN")
-                    .font(GaryFonts.mono(10.5, bold: true))
-                    .tracking(0.8)
-                    .foregroundStyle(GaryColors.meta)
             }
             // Two-line rows with air (founder): name + team-colored tag with
             // TO WIN on the top line, the R1 call in gold under the name.
@@ -3974,11 +3978,17 @@ struct DerbyContestSection: View {
                     Button { if r.reason != nil { takeRow = r } } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
-                                Text(r.player ?? "")
-                                    .font(.system(size: 15.5, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.92))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
+                                // Name opens the STANDARD player card (the
+                                // lineup behavior every game page has — founder).
+                                Button { if r.player_id != nil { cardRow = r } } label: {
+                                    Text(r.player ?? "")
+                                        .font(.system(size: 15.5, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.92))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                                 Text(Self.abbr(r.team))
                                     .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
                                     .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.55))
@@ -4013,13 +4023,62 @@ struct DerbyContestSection: View {
                     }
                 }
             }
+
+            // MORE DERBY PLAYS — the extra board (founder): a simple list,
+            // bet line + price, tap for the take. Never contradicts the
+            // locked board (enforced at generation).
+            if !extras.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    BroadcastBar(height: 12)
+                    Text("MORE DERBY PLAYS")
+                        .font(GaryFonts.accent(12.5))
+                        .tracking(0.5)
+                        .foregroundStyle(GaryColors.gold)
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 14)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(extras.enumerated()), id: \.element.id) { i, r in
+                        Button { if r.reason != nil { takeRow = r } } label: {
+                            HStack(spacing: 8) {
+                                Text(Self.cleanBet(r.call))
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                Spacer(minLength: 8)
+                                if let o = r.odds {
+                                    Text("\(o > 0 ? "+" : "")\(o)")
+                                        .font(GaryFonts.mono(13, bold: true))
+                                        .foregroundStyle(GaryColors.gold)
+                                }
+                                if r.reason != nil {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(GaryColors.gold.opacity(0.6))
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 11)
+                        if i < extras.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        }
+                    }
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .task {
             if rows.isEmpty {
                 rows = await SupabaseAPI.fetchAllStarProps(date: SupabaseAPI.todayEST())
+                extras = await SupabaseAPI.fetchAllStarProps(date: SupabaseAPI.todayEST(), market: "extra")
             }
+        }
+        .sheet(item: $cardRow) { r in
+            PlayerInsightSheet(signal: nil, directPlayerId: r.player_id, directName: r.player)
         }
         // Floating center pop (founder: never a bottom pull-up for these) —
         // full-screen dim with the take card centered, tap anywhere to close.
@@ -4119,6 +4178,13 @@ struct DerbyTakeOverlay: View {
                         Text("R1 O/U \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line)) — \(call.uppercased())\(row.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
                             .font(GaryFonts.mono(13.5, bold: true))
                             .foregroundStyle(GaryColors.gold)
+                    } else if row.call != nil {
+                        // Extras: the whole bet line rides `call` (price stripped —
+                        // the odds render once, from the odds field).
+                        Text("\(DerbyContestSection.cleanBet(row.call).uppercased())\(row.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                            .font(GaryFonts.mono(13.5, bold: true))
+                            .foregroundStyle(GaryColors.gold)
+                            .lineLimit(2)
                     }
                     Spacer(minLength: 0)
                     if let w = row.win_odds {
@@ -17333,8 +17399,10 @@ struct PickCardBack: View {
                     let parts = splitTake(pick.rationale)
                     if let take = parts.take {
                         Text(take)
-                            .font(GaryFonts.text(16.5, .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
+                            // No bolded rationale anywhere (founder, Jul 13) —
+                            // the lead paragraph reads at body weight like the rest.
+                            .font(GaryFonts.text(14.5))
+                            .foregroundStyle(.white.opacity(0.88))
                             .lineSpacing(3.5)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -22548,6 +22616,10 @@ struct PlayerInsightSheet: View {
     let signal: Signal?
     /// Game-page path (PLAYER INTEL): the pack already came down with the row.
     var prefetched: PlayerInsightCardRow? = nil
+    /// Direct path (Derby contestants, Jul 13): a bare player id + name opens
+    /// the SAME standard card every other surface uses.
+    var directPlayerId: Int? = nil
+    var directName: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var pack: PlayerInsightPack? = nil
     @State private var loading = true
@@ -22575,8 +22647,11 @@ struct PlayerInsightSheet: View {
         .task {
             if let row = prefetched {
                 pack = row.payload
-            } else if let pid = signal?.playerId {
-                pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid)
+            } else {
+                let resolved: String? = signal?.playerId ?? directPlayerId.map(String.init)
+                if let pid = resolved {
+                    pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid)
+                }
             }
             loading = false
         }
@@ -22592,6 +22667,7 @@ struct PlayerInsightSheet: View {
 
     private var fallbackName: String {
         if let n = prefetched?.player_name, !n.isEmpty { return n }
+        if let n = directName, !n.isEmpty { return n }
         guard let signal else { return "Player" }
         return (signal.headline.components(separatedBy: CharacterSet(charactersIn: "(:'")).first ?? signal.headline)
             .trimmingCharacters(in: .whitespaces)
