@@ -17392,9 +17392,13 @@ struct PickCardBack: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
+                // Two lines before any shrink — the long specials lines
+                // ("Schwarber to reach semifinal") ellipsized at one line
+                // (no-ellipsis law, founder Jul 13).
                 Text(pick.pick ?? "")
                     .font(GaryFonts.text(19, .heavy))
-                    .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(GaryColors.gold).lineLimit(2).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 if pick.confidence != nil {
                     Text(convictionTier(Double(confidence)))
