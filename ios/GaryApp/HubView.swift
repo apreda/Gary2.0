@@ -113,11 +113,18 @@ fileprivate struct HubRule: View {
 // below was verified Jul 13 (field, format, times, starters); the call site's
 // date gate self-retires the card after the break.
 fileprivate struct HubAllStarCard: View {
-    private let field: [(name: String, team: String)] = [
-        ("Kyle Schwarber", "PHI"), ("Bryce Harper", "PHI"),
-        ("Junior Caminero", "TB"), ("Munetaka Murakami", "CHW"),
-        ("Ben Rice", "NYY"), ("Jordan Walker", "STL"),
-        ("Jac Caglianone", "KC"), ("Willson Contreras", "BOS"),
+    // The winner board (FanDuel, grounded midday Jul 13; Rice carries the
+    // pick-time quote from Gary's stored call). Sorted short→long — the fan
+    // reads the market's order, Gary's tick shows where he broke from it.
+    private let field: [(name: String, team: String, price: String, garys: Bool)] = [
+        ("Kyle Schwarber", "PHI", "+310", false),
+        ("Junior Caminero", "TB", "+370", false),
+        ("Munetaka Murakami", "CHW", "+500", false),
+        ("Jordan Walker", "STL", "+600", false),
+        ("Jac Caglianone", "KC", "+600", false),
+        ("Bryce Harper", "PHI", "+800", false),
+        ("Ben Rice", "NYY", "+950", true),
+        ("Willson Contreras", "BOS", "+1700", false),
     ]
     private var isDerbyDay: Bool { SupabaseAPI.todayEST() == "2026-07-13" }
     // ASG identity duotone — local to this self-retiring card.
@@ -148,20 +155,41 @@ fileprivate struct HubAllStarCard: View {
                         .font(HubFont.kicker(10.5)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.62))
 
-                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
-                                        GridItem(.flexible(), alignment: .leading)],
-                              alignment: .leading, spacing: 9) {
-                        ForEach(field, id: \.name) { p in
+                    // The winner board — market order, prices on the right,
+                    // Gary's break-from-chalk row ticked in gold.
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Text("TO WIN")
+                                .font(HubFont.kicker(10)).tracking(1.2)
+                                .foregroundStyle(.white.opacity(0.55))
+                            Spacer(minLength: 8)
+                            Text("FANDUEL · MIDDAY")
+                                .font(HubFont.kicker(10)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                        .padding(.bottom, 7)
+                        ForEach(Array(field.enumerated()), id: \.element.name) { i, p in
                             HStack(spacing: 7) {
                                 Text(p.name)
-                                    .font(.system(size: 14.5, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.92))
+                                    .font(.system(size: 14.5, weight: p.garys ? .bold : .semibold))
+                                    .foregroundStyle(p.garys ? GaryColors.gold : .white.opacity(0.92))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                                 Text(p.team)
                                     .font(HubFont.kicker(10)).tracking(0.6)
                                     .foregroundStyle(.white.opacity(0.55))
+                                if p.garys {
+                                    Text("★ GARY'S CALL")
+                                        .font(HubFont.kicker(9.5)).tracking(0.8)
+                                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                                }
+                                Spacer(minLength: 8)
+                                Text(p.price)
+                                    .font(HubFont.data(14.5))
+                                    .foregroundStyle(p.garys ? GaryColors.gold : .white.opacity(0.85))
                             }
+                            .padding(.vertical, 5)
+                            if i < field.count - 1 { HubRule() }
                         }
                     }
                     .padding(.vertical, 2)
@@ -379,8 +407,12 @@ struct HubView: View {
             return Date() >= start && Date() < end
         }()
         let order: [HubLeagueSel] = [.nba, .wc, .mlb]
+        // All-Star break (Jul 13-14 2026): a dark MLB slate is still an MLB
+        // day — keep the tab so the All-Star card has a home (founder call;
+        // same date-window treatment WC already gets). Self-retires Jul 15.
+        let allStarActive = ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST())
         let present = order.filter { lg in
-            (lg == .wc && wcActive) || fetched.contains { $0.league == lg }
+            (lg == .wc && wcActive) || (lg == .mlb && allStarActive) || fetched.contains { $0.league == lg }
         }
         return present.isEmpty ? [.mlb] : present
     }
