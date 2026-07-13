@@ -3929,6 +3929,7 @@ struct DerbyContestSection: View {
     var showReasons = true
     @State private var rows: [SupabaseAPI.AllStarPropRow] = []
     @State private var takeRow: SupabaseAPI.AllStarPropRow? = nil
+    @State private var showRules = false
 
     /// Ticker abbreviation for the one-line rows (first-list layout).
     static func abbr(_ team: String?) -> String {
@@ -3949,53 +3950,64 @@ struct DerbyContestSection: View {
                     .font(GaryFonts.accent(12.5))
                     .tracking(0.5)
                     .foregroundStyle(GaryColors.gold)
+                // ⓘ pops the Derby format — rules never sit as page prose
+                // (founder: explain in a pop, not text on the page).
+                Button { showRules = true } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Derby format and rules")
                 Spacer(minLength: 0)
                 Text("R1 CALL · TO WIN")
                     .font(GaryFonts.mono(10.5, bold: true))
                     .tracking(0.8)
                     .foregroundStyle(GaryColors.meta)
             }
-            // The first list layout (founder preferred it): ONE line per
-            // hitter — name + team left, the R1 call in gold and TO WIN on
-            // the right. Tapping the row opens the floating take.
+            // Two-line rows with air (founder): name + team-colored tag with
+            // TO WIN on the top line, the R1 call in gold under the name.
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                     Button { if r.reason != nil { takeRow = r } } label: {
-                        HStack(spacing: 7) {
-                            Text(r.player ?? "")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.92))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Text(Self.abbr(r.team))
-                                .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
-                                .foregroundStyle(.white.opacity(0.55))
-                            Spacer(minLength: 8)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text(r.player ?? "")
+                                    .font(.system(size: 15.5, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                Text(Self.abbr(r.team))
+                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
+                                    .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.55))
+                                Spacer(minLength: 8)
+                                if let w = r.win_odds {
+                                    Text("\(w > 0 ? "+" : "")\(w)")
+                                        .font(GaryFonts.mono(12.5, bold: true))
+                                        .foregroundStyle(.white.opacity(0.62))
+                                }
+                                if r.reason != nil {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(GaryColors.gold.opacity(0.6))
+                                }
+                            }
                             if let line = r.line, let call = r.call, !call.isEmpty {
-                                Text("R1 \(call.prefix(1).uppercased()) \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))\(r.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
-                                    .font(GaryFonts.mono(12.5, bold: true))
+                                Text("R1 \(call.uppercased()) \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))\(r.odds.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                                    .font(GaryFonts.mono(12, bold: true))
                                     .foregroundStyle(GaryColors.gold)
                             } else {
                                 Text("LINE PENDING")
                                     .font(GaryFonts.mono(11.5, bold: true))
                                     .foregroundStyle(GaryColors.meta)
                             }
-                            if let w = r.win_odds {
-                                Text("\(w > 0 ? "+" : "")\(w)")
-                                    .font(GaryFonts.mono(12.5, bold: true))
-                                    .foregroundStyle(.white.opacity(0.62))
-                                    .frame(minWidth: 52, alignment: .trailing)
-                            }
-                            if r.reason != nil {
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
-                            }
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.vertical, 9)
+                    .padding(.vertical, 12)
                     if i < rows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                     }
@@ -4014,7 +4026,64 @@ struct DerbyContestSection: View {
         .fullScreenCover(item: $takeRow) { r in
             DerbyTakeOverlay(row: r) { takeRow = nil }
         }
+        .fullScreenCover(isPresented: $showRules) {
+            FloatingRulesOverlay(
+                title: "THE DERBY, EXPLAINED",
+                rows: [
+                    ("ROUND 1", "All 8 hitters, 20 swings each — every swing counts. The top four home run totals advance."),
+                    ("THE BRACKET", "Semifinals seed 1 vs 4 and 2 vs 3 by Round 1 totals; semis and the final are 15 swings each."),
+                    ("NO CLOCK", "No timer anywhere — hitters take pitches freely; only swings count."),
+                    ("FINAL SWING", "Homer on your last swing and you keep swinging until you miss."),
+                    ("TIEBREAKERS", "Round 1 ties break on longest homer; bracket ties go to three-swing swing-offs."),
+                ]) { showRules = false }
+        }
         .transaction { $0.disablesAnimations = false }
+    }
+}
+
+/// Reusable floating rules/info pop (founder: rules live in a pop, never as
+/// prose on the page) — centered card over a dim field, same grammar as the
+/// take overlay. Feed it any title + rows wherever rules need explaining.
+struct FloatingRulesOverlay: View {
+    let title: String
+    let rows: [(String, String)]
+    var onClose: () -> Void
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.9).ignoresSafeArea()
+                .onTapGesture { onClose() }
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    BroadcastBar(height: 13)
+                    Text(title)
+                        .font(GaryFonts.accent(13))
+                        .tracking(1.0)
+                        .foregroundStyle(GaryColors.gold)
+                    Spacer(minLength: 0)
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                }
+                ForEach(rows, id: \.0) { r in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(r.0)
+                            .font(GaryFonts.mono(11, bold: true)).tracking(1.0)
+                            .foregroundStyle(GaryColors.gold)
+                        Text(r.1)
+                            .font(GaryFonts.text(13.5))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(20)
+            .background(RoundedRectangle(cornerRadius: 18).fill(GaryColors.cardBg))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.1), lineWidth: 1))
+            .padding(.horizontal, 22)
+        }
     }
 }
 
@@ -15307,7 +15376,9 @@ struct CompactPickRow: View {
                             .resizable().scaledToFit()
                             .frame(width: 46 * pf, height: 46 * pf)
                             .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
-                            .offset(y: -2)
+                            // Raised (founder, Jul 13): a two-line hero could
+                            // brush the mark at -2; -10 clears every layout.
+                            .offset(y: -10)
                             .allowsHitTesting(false)
                     }
                 }
@@ -17290,6 +17361,10 @@ struct PickCardBack: View {
                             garyPickedHome: pickedHome
                         )
                     }
+                    // Tail room: the last sentence must clear the bottom fade
+                    // fully when scrolled to the end (founder: the rationale
+                    // read as cut off).
+                    Color.clear.frame(height: 30)
                 }
             }
             // The case scrolls INSIDE the card — without a fade the viewport
@@ -22025,6 +22100,8 @@ struct PropSlipBack: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    // Tail room so the last line clears the fade (game-back parity).
+                    Color.clear.frame(height: 30)
                 }
             }
             // Scroll-affordance fade (game-back parity): the read continues
@@ -23076,7 +23153,9 @@ struct CompactPropRow: View {
                             .resizable().scaledToFit()
                             .frame(width: 46 * pf, height: 46 * pf)
                             .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
-                            .offset(y: -2)
+                            // Raised (founder, Jul 13): a two-line hero could
+                            // brush the mark at -2; -10 clears every layout.
+                            .offset(y: -10)
                             .allowsHitTesting(false)
                     }
                 }
