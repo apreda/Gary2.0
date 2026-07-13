@@ -32,7 +32,10 @@ import { auditPickRationale, buildStatAuditRetryMessage } from '../src/services/
 import { createOpenAISession, sendToOpenAISession } from '../src/services/agentic/orchestrator/providerAdapters/openaiSession.js';
 import { picksService } from '../src/services/picksService.js';
 
+import { supabaseAdmin } from '../src/supabaseClient.js';
+
 const args = process.argv.slice(2);
+const RUN_DERBY_PROPS = args.includes('--derby-props');
 const DRY_RUN = args.includes('--dry-run');
 // --park (founder, Jul 13): store to test_daily_picks under 'allstar-parked'
 // instead of production — the live app must not carry these until the App
@@ -40,7 +43,7 @@ const DRY_RUN = args.includes('--dry-run');
 const PARK = args.includes('--park');
 const RUN_DERBY = args.includes('--derby');
 const RUN_ASG = args.includes('--asg');
-if (!RUN_DERBY && !RUN_ASG) { console.error('Pass --derby and/or --asg'); process.exit(1); }
+if (!RUN_DERBY && !RUN_ASG && !RUN_DERBY_PROPS) { console.error('Pass --derby, --derby-props, and/or --asg'); process.exit(1); }
 
 const MODEL = process.env.SPECIALS_MODEL || 'gpt-5.6-sol';
 
@@ -141,7 +144,7 @@ async function solBoard(userMsg, minPicks) {
   let parsed = parseJsonLoose(res.content);
   let board = Array.isArray(parsed.board) ? parsed.board : [];
 
-  const audits = board.map(b => auditPickRationale({ rationale: b.rationale }, userMsg));
+  const audits = board.map(b => auditPickRationale({ rationale: b.rationale ?? b.reason ?? '' }, userMsg));
   const failing = board.filter((_, i) => audits[i].retryable.length > 0);
   if (failing.length) {
     const claims = audits.flatMap(a => a.retryable);
@@ -152,7 +155,7 @@ async function solBoard(userMsg, minPicks) {
       parsed = parseJsonLoose(res.content);
       if (Array.isArray(parsed.board)) board = parsed.board;
     } catch { /* keep first board; failures drop below */ }
-    board = board.filter(b => auditPickRationale({ rationale: b.rationale }, userMsg).retryable.length === 0);
+    board = board.filter(b => auditPickRationale({ rationale: b.rationale ?? b.reason ?? '' }, userMsg).retryable.length === 0);
   }
   console.log(`[Specials] ${MODEL}: ${usage.in} in / ${usage.out} out — ${board.length} call(s) passed audit`);
   if (board.length < minPicks) throw new Error(`board too thin after audit: ${board.length} < ${minPicks}`);
@@ -221,7 +224,52 @@ async function runAsg() {
   }));
 }
 
+/** THE CONTEST board (founder, Jul 13): Sol calls the Round 1 HR over/under
+ *  for EVERY participant with a posted line — a list product (allstar_props
+ *  table → Hub + Picks contest view), never pick cards. */
+async function runDerbyProps() {
+  console.log(`[Specials] ── DERBY R1 O/U BOARD (${MODEL}) ──`);
+  const [linesBoard, hrTotals] = [
+    await ground('DraftKings (or FanDuel) player Round 1 home run OVER/UNDER lines for tonight July 13 2026 MLB Home Run Derby — list EVERY participant with their posted R1 total line and both prices, note any participant without a posted line.'),
+    await ground('2026 season home run totals TODAY (July 13 2026, at the All-Star break) for: Kyle Schwarber, Bryce Harper, Junior Caminero, Munetaka Murakami, Ben Rice, Jordan Walker, Jac Caglianone, Willson Contreras — one line each, exact number.'),
+  ];
+  const savantRows = await getBatterXStats(2026);
+  const rows = Array.isArray(savantRows) ? savantRows : (savantRows?.data || []);
+  const blocks = DERBY_FIELD.map(p => {
+    const sv = exactRow(rows, p.name);
+    return sv ? `${p.name} (${p.team}): ${sv.pa} PA, SLG ${sv.slg}, xSLG ${sv.est_slg}` : `${p.name} (${p.team}): no verified row`;
+  }).join('\n');
+
+  const schema = `{"board":[{"player":"Full Name","team":"Phillies","season_hr":32,"line":10.5,"call":"OVER"|"UNDER"|null,"odds":-110,"book":"DraftKings","reason":"one sharp sentence, Gary voice"}]}`;
+  const user = `R1 O/U LINES (grounded):\n${linesBoard}\n\nSEASON HR TOTALS (grounded):\n${hrTotals}\n\nSTAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: One entry for EACH of the 8 participants. If a player has a posted R1 line, make a real OVER or UNDER call at the posted price (favorites earn it — the 20-swing format and the player's power profile decide, not the shorter juice). If no line is posted for a player, include him with line/call/odds/book null. season_hr comes from the grounded totals. reason: ONE sentence, under 140 characters, Gary's voice, numbers only from this message.\n\nJSON schema: ${schema}`;
+  const board = await solBoard(user, 6);
+
+  const items = board.map(b => ({
+    date: '2026-07-13',
+    event: 'hr_derby',
+    player: b.player,
+    team: b.team || null,
+    season_hr: typeof b.season_hr === 'number' ? b.season_hr : null,
+    market: 'r1_hr_ou',
+    line: typeof b.line === 'number' ? b.line : null,
+    call: b.call || null,
+    odds: typeof b.odds === 'number' ? b.odds : null,
+    book: b.book || null,
+    reason: b.reason || null,
+  }));
+  for (const it of items) {
+    console.log(`  ${it.player} (${it.team ?? '?'}, ${it.season_hr ?? '?'} HR) — ${it.line != null ? `O/U ${it.line}` : 'no line'}${it.call ? ` → ${it.call} ${it.odds ?? ''} ${it.book ?? ''}` : ''}`);
+    if (it.reason) console.log(`    ${it.reason}`);
+  }
+  if (DRY_RUN) { console.log('[Specials] dry run — nothing stored.'); return; }
+  const { error } = await supabaseAdmin.from('allstar_props')
+    .upsert(items, { onConflict: 'date,event,player,market' });
+  if (error) throw new Error(`allstar_props upsert failed: ${error.message}`);
+  console.log(`[Specials] ✅ allstar_props: ${items.length} rows upserted`);
+}
+
 (async () => {
+  if (RUN_DERBY_PROPS) await runDerbyProps();
   const jobs = [];
   if (RUN_DERBY) jobs.push({ picks: await runDerby(), override: null });
   if (RUN_ASG) jobs.push({ picks: await runAsg(), override: '2026-07-14' });

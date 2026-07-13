@@ -3918,63 +3918,87 @@ struct HomeAllStarTakeover: View {
     }
 }
 
-// ── THE FIELD — the Derby game page's "lineup" (Jul 13 2026 one-off; the
-// special's game page swaps team scout/intel for the event's contest field).
-// Verified Jul 13: 8-man field + FanDuel midday winner board.
-struct DerbyFieldSection: View {
-    private let field: [(name: String, team: String, price: String)] = [
-        ("Kyle Schwarber", "PHI", "+310"),
-        ("Junior Caminero", "TB", "+370"),
-        ("Munetaka Murakami", "CHW", "+500"),
-        ("Jordan Walker", "STL", "+600"),
-        ("Jac Caglianone", "KC", "+600"),
-        ("Bryce Harper", "PHI", "+800"),
-        ("Ben Rice", "NYY", "+950"),
-        ("Willson Contreras", "BOS", "+1700"),
-    ]
+// ── THE CONTEST — the Derby's own lineup view (custom, Jul 13 2026): every
+// participant with his season power, tonight's Round 1 line, and Gary's
+// OVER/UNDER call on each posted line (allstar_props — Sol's list board).
+// Lives on the Derby game page AND under the Hub's All-Star card; the pick
+// cards stay untouched — this is the "pump out a ton of picks" list product.
+struct DerbyContestSection: View {
+    /// Hub variant hides the one-line reasons (the Hub card is already long).
+    var showReasons = true
+    @State private var rows: [SupabaseAPI.AllStarPropRow] = []
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 BroadcastBar(height: 12)
-                Text("THE FIELD")
+                Text("THE CONTEST")
                     .font(GaryFonts.accent(12.5))
                     .tracking(0.5)
                     .foregroundStyle(GaryColors.gold)
                 Spacer(minLength: 0)
-                Text("TO WIN · FANDUEL")
+                Text("R1 · 20 SWINGS · TOP 4 ADVANCE")
                     .font(GaryFonts.mono(10.5, bold: true))
                     .tracking(0.8)
                     .foregroundStyle(GaryColors.meta)
             }
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(field.enumerated()), id: \.element.name) { i, p in
-                    HStack(spacing: 8) {
-                        Text(p.name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Text(p.team)
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
-                            .foregroundStyle(.white.opacity(0.55))
-                        Spacer(minLength: 8)
-                        Text(p.price)
-                            .font(GaryFonts.mono(14, bold: true))
-                            .foregroundStyle(GaryColors.gold)
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 7) {
+                            Text(r.player ?? "")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.92))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Text(Formatters.shortTeamName(r.team, league: "MLB").uppercased())
+                                .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
+                                .foregroundStyle(.white.opacity(0.55))
+                            Spacer(minLength: 8)
+                            if let hr = r.season_hr {
+                                Text("\(hr) HR")
+                                    .font(GaryFonts.mono(12.5, bold: true))
+                                    .foregroundStyle(.white.opacity(0.85))
+                            }
+                        }
+                        HStack(spacing: 7) {
+                            if let line = r.line {
+                                Text("R1 O/U \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))")
+                                    .font(GaryFonts.mono(11.5, bold: true))
+                                    .foregroundStyle(GaryColors.meta)
+                                if let call = r.call, !call.isEmpty {
+                                    Text("GARY: \(call.uppercased())\(r.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                                        .font(GaryFonts.mono(11.5, bold: true))
+                                        .foregroundStyle(GaryColors.gold)
+                                }
+                            } else {
+                                Text("LINE PENDING")
+                                    .font(GaryFonts.mono(11.5, bold: true))
+                                    .foregroundStyle(GaryColors.meta)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        if showReasons, let reason = r.reason, !reason.isEmpty {
+                            Text(reason)
+                                .font(GaryFonts.text(12.5))
+                                .foregroundStyle(GaryColors.sectionSub)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    .padding(.vertical, 7)
-                    if i < field.count - 1 {
+                    .padding(.vertical, 8)
+                    if i < rows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                     }
                 }
             }
-            Text("20 SWINGS ROUND ONE · TOP FOUR ADVANCE · SEMIS AND FINAL 15 SWINGS")
-                .font(GaryFonts.mono(10.5, bold: true))
-                .tracking(0.6)
-                .foregroundStyle(GaryColors.meta)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
+        .task {
+            if rows.isEmpty {
+                rows = await SupabaseAPI.fetchAllStarProps(date: SupabaseAPI.todayEST())
+            }
+        }
     }
 }
 
@@ -21161,7 +21185,7 @@ struct PicksGamePage: View {
             // own "lineup": the contest field (founder, Jul 13 — the page works
             // like any other game day, the field IS the lineup view).
             if entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
-                DerbyFieldSection()
+                DerbyContestSection()
             } else {
             GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wc: scoutWc, wire: scoutWire,
                              pickMl: entries.first(where: { !$0.isYesterday && ($0.pick.moneylineAway != nil || $0.pick.moneylineHome != nil) })
@@ -21180,14 +21204,16 @@ struct PicksGamePage: View {
                                     edges: edges,
                                     showHeader: false)
                 }
-            } else if isMLB {
+            } else if isMLB, !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 // MLB: the flat GAME INTEL list becomes the modular dashboard —
                 // a baseball-field anchor + Pitching / Bats / Park & Weather.
                 // The field + real (projected → confirmed) lineup self-load off
                 // mlb_field_lineups, so this mounts from the MORNING now — it no
                 // longer waits for the first intel pass (founder, Jul 7).
+                // (All-Star specials skip it — a team-game ballpark/lineup view
+                // is meaningless for the Derby; THE CONTEST above is its lineup.)
                 MLBGameIntelView(matchup: group.matchup, edges: edges, showHeader: false)
-            } else {
+            } else if !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 EdgesSection(title: "GAME INTEL", edges: edges)
             }
         }

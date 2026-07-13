@@ -419,6 +419,35 @@ enum SupabaseAPI {
         return out
     }
 
+    /// One row of the All-Star contest board (allstar_props): a participant,
+    /// his season power, tonight's R1 line, and Gary's O/U call.
+    struct AllStarPropRow: Decodable, Identifiable {
+        let id: Int
+        let player: String?
+        let team: String?
+        let season_hr: Int?
+        let line: Double?
+        let call: String?
+        let odds: Int?
+        let book: String?
+        let reason: String?
+    }
+
+    /// THE CONTEST list (Jul 13 2026 one-off): Sol's R1 over/under call on
+    /// every Derby participant. Season-power order, heaviest bat first.
+    static func fetchAllStarProps(date: String, event: String = "hr_derby") async -> [AllStarPropRow] {
+        let url = buildURL(table: "allstar_props", query: [
+            URLQueryItem(name: "select", value: "id,player,team,season_hr,line,call,odds,book,reason"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "event", value: "eq.\(event)"),
+            URLQueryItem(name: "order", value: "season_hr.desc.nullslast")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([AllStarPropRow].self, from: data) else { return [] }
+        return rows
+    }
+
     #if DEBUG
     /// DEBUG preview only: the All-Star boards parked in test_daily_picks
     /// (test_name 'allstar-parked') until App Store approval — lets the sim

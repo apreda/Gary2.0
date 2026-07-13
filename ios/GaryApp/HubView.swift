@@ -206,12 +206,19 @@ fileprivate struct HubAllStarCard: View {
                         .foregroundStyle(.white.opacity(0.62))
                 }
 
-                Text(isDerbyDay ? "GARY'S BOARD — 4 PICKS · ON THE PICKS TAB"
+                Text(isDerbyDay ? "GARY'S BOARD — 5 PICKS · ON THE PICKS TAB"
                                 : "GARY'S BOARD — ON THE PICKS TAB")
                     .font(HubFont.kicker(10.5)).tracking(1.0)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
             }
             .padding(.horizontal, 18)
+
+            // THE CONTEST — Sol's R1 over/under on every participant
+            // (founder: the fun list product; reasons included — the Hub
+            // is the insight surface).
+            if isDerbyDay {
+                DerbyContestSection(showReasons: true)
+            }
         }
     }
 }
