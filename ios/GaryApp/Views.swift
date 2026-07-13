@@ -5848,9 +5848,10 @@ struct PremiumPicksView: View {
         VStack(spacing: 12) {
             Image(systemName: selectedDate == nil ? "lock.badge.clock" : "calendar.badge.exclamationmark")
                 .font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
-            Text(selectedDate == nil
-                 ? "Gary's best bets post a few hours before first pitch."
-                 : "No graded picks on this day.")
+            Text(selectedDate != nil ? "No graded picks on this day."
+                 : todaySlateCounts.isEmpty
+                 ? "No games today. Yesterday's card is under the date above."
+                 : "Gary's best bets post a few hours before first pitch.")
                 .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.62))
                 .multilineTextAlignment(.center)
         }
@@ -6889,7 +6890,11 @@ struct PremiumPicksView: View {
             let ordered: ([GaryPick]) -> [GaryPick] = lg == "WC" ? sortedWC : sortedBest
             if let tp = todayByLeague[lg], !tp.isEmpty {
                 gShelves.append(GameShelf(league: lg, picks: Array(ordered(tp).prefix(shelfCap)), settled: false))
-            } else if let yp = yByLeague[lg], !yp.isEmpty {
+            } else if let yp = yByLeague[lg], !yp.isEmpty, (slateCounts[lg] ?? 0) > 0 {
+                // LAST RESULT holds a lane only while the league PLAYS today
+                // and its picks haven't posted yet (the approved Jul 12 gate).
+                // On the league's dark day, yesterday belongs to the date
+                // picker, not the Today page (founder, Jul 13).
                 gShelves.append(GameShelf(league: lg, picks: Array(ordered(yp).prefix(shelfCap)), settled: true))
             } else if slateLeagues.contains(lg) {
                 // In-season (a game on today's slate) but picks haven't posted —
@@ -6921,7 +6926,9 @@ struct PremiumPicksView: View {
         for lg in order {
             if let ps = propsByLeague[lg], !ps.isEmpty {
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps), settled: false))
-            } else if let yps = yPropsByLeague[lg], !yps.isEmpty {
+            } else if let yps = yPropsByLeague[lg], !yps.isEmpty, (slateCounts[lg] ?? 0) > 0 {
+                // Same gate as the game shelves: LAST RESULT only while the
+                // league plays today — dark days keep yesterday under the picker.
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(yps), settled: true))
             } else if propSports.contains(lg) && slateLeagues.contains(lg) {
                 // In-season prop sport (a game on today's slate) holds its lane
@@ -15056,12 +15063,17 @@ struct CompactPickRow: View {
                 .padding(.bottom, 6 * pf)
                 .opacity(d3Dim(0.4))
                 .overlay(alignment: .topTrailing) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: 46 * pf, height: 46 * pf)
-                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
-                        .offset(y: -2)
-                        .allowsHitTesting(false)
+                    // Graded cards surrender the corner — the check + payout
+                    // block owns it (founder, Jul 13: the mark printed over
+                    // "+$68 · PAID" on WON bars).
+                    if displayResult == nil {
+                        Image(GaryBrand.mark)
+                            .resizable().scaledToFit()
+                            .frame(width: 46 * pf, height: 46 * pf)
+                            .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
+                            .offset(y: -2)
+                            .allowsHitTesting(false)
+                    }
                 }
 
                 // Balanced hero (founder, Jul 5): a one-word pick like DRAW
@@ -22800,12 +22812,16 @@ struct CompactPropRow: View {
                 }
                 .padding(.bottom, 6 * pf)
                 .overlay(alignment: .topTrailing) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: 46 * pf, height: 46 * pf)
-                        .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
-                        .offset(y: -2)
-                        .allowsHitTesting(false)
+                    // Parity with the game face: graded cards surrender the
+                    // corner to the check + payout block.
+                    if resolvedResult == nil {
+                        Image(GaryBrand.mark)
+                            .resizable().scaledToFit()
+                            .frame(width: 46 * pf, height: 46 * pf)
+                            .shadow(color: .black.opacity(premiumFinish ? 0.35 : 0.5), radius: 2, y: 1)
+                            .offset(y: -2)
+                            .allowsHitTesting(false)
+                    }
                 }
                 .opacity(d3Dim(0.4))
 
