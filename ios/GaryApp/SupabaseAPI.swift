@@ -389,7 +389,14 @@ enum SupabaseAPI {
             URLQueryItem(name: "select", value: "picks::text,date"),
             URLQueryItem(name: "date", value: "eq.\(date)")
         ])
-        
+
+        #if DEBUG
+        // Kick the parked-preview fetch CONCURRENTLY (perf, Jul 13) — as a
+        // serial tail it added a full round trip to every sim picks load.
+        async let parkedPreview: [GaryPick] = ["2026-07-13", "2026-07-14"].contains(date)
+            ? fetchParkedAllStarPicks(date: date) : []
+        #endif
+
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             print("[SupabaseAPI] fetchDailyPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
@@ -405,9 +412,8 @@ enum SupabaseAPI {
         // until App Store approval). Living here means EVERY picks surface —
         // Picks tab, Home, shelves — behaves exactly like a normal pick day
         // in the sim. Compiled out of Release.
-        if ["2026-07-13", "2026-07-14"].contains(date),
-           !out.contains(where: { ($0.type ?? "") == "special" }) {
-            out += await fetchParkedAllStarPicks(date: date)
+        if !out.contains(where: { ($0.type ?? "") == "special" }) {
+            out += await parkedPreview
         }
         #endif
         return out

@@ -1496,11 +1496,17 @@ struct LiquidGlassBackground: View {
 
                 if grainDensity > 0 {
                     // A light texture pass for decorative screens; dense screens can opt out.
+                    // SEEDED grain (perf pass, Jul 13): the old CGFloat.random redrew a
+                    // DIFFERENT ~2.6k-dot pattern on every layout pass — the whole
+                    // background shimmered each time content committed ("jumpy").
+                    // A deterministic pattern per size renders identically every pass.
                     Canvas { context, size in
+                        var rng = GrainRNG(state: UInt64(size.width) &* 7919 &+ UInt64(size.height))
+                        let span = grainOpacityRange.upperBound - grainOpacityRange.lowerBound
                         for _ in 0..<Int(size.width * size.height * grainDensity) {
-                            let x = CGFloat.random(in: 0..<size.width)
-                            let y = CGFloat.random(in: 0..<size.height)
-                            let opacity = Double.random(in: grainOpacityRange)
+                            let x = rng.next() * size.width
+                            let y = rng.next() * size.height
+                            let opacity = grainOpacityRange.lowerBound + rng.next() * span
                             context.fill(
                                 Path(CGRect(x: x, y: y, width: 1, height: 1)),
                                 with: .color(.white.opacity(opacity))
@@ -1510,8 +1516,25 @@ struct LiquidGlassBackground: View {
                     .allowsHitTesting(false)
                 }
             }
+            // One GPU composite for the gradient stack + grain (no materials
+            // inside, so drawingGroup is safe) — the background stops being
+            // re-blended layer by layer on every content reflow.
+            .drawingGroup()
         }
         .ignoresSafeArea()
+    }
+
+    /// SplitMix64 — tiny deterministic RNG for the grain pass.
+    private struct GrainRNG {
+        var state: UInt64
+        mutating func next() -> CGFloat {
+            state = state &+ 0x9E3779B97F4A7C15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+            z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+            z = z ^ (z >> 31)
+            return CGFloat(z >> 11) * (1.0 / 9007199254740992.0)
+        }
     }
 }
 
@@ -1896,6 +1919,10 @@ struct HomeView: View {
                     async let liveFetch = SupabaseAPI.fetchLiveScores(date: date)
                     async let todayLedgerFetch = SupabaseAPI.fetchInsightLedger(date: date)
                     async let wireFetch = SupabaseAPI.fetchWireItems(date: date)
+                    // Yesterday's top pick/prop ride the SAME parallel wave —
+                    // they were serial awaits on the critical path (perf, Jul 13).
+                    async let yPicksFetch = SupabaseAPI.fetchAllPicks(date: SupabaseAPI.yesterdayEST())
+                    async let yPropsFetch = SupabaseAPI.fetchPropPicks(date: SupabaseAPI.yesterdayEST())
                     // Market pulse anchors to TODAY's rolling row — the builder now
                     // writes a zeroed row at the start of the slate and re-upserts it
                     // as today's games go FINAL, so the strip shows today's counts
@@ -2153,9 +2180,7 @@ struct HomeView: View {
                     // 3am-aware yesterday (one real day before the slate day), not a
                     // raw now-minus-1 that would show two-days-ago before 3am ET.
                     do {
-                        let yDateStr = SupabaseAPI.yesterdayEST()
-
-                        if let yPicks = try? await SupabaseAPI.fetchAllPicks(date: yDateStr), !yPicks.isEmpty {
+                        if let yPicks = try? await yPicksFetch, !yPicks.isEmpty {
                             let top = yPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
                             yesterdayTopPick = top
                             if let pick = top {
@@ -2175,7 +2200,7 @@ struct HomeView: View {
                                 yesterdayTopPickScore = row?.final_score
                             }
                         }
-                        if let yProps = try? await SupabaseAPI.fetchPropPicks(date: yDateStr), !yProps.isEmpty {
+                        if let yProps = try? await yPropsFetch, !yProps.isEmpty {
                             let top = yProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
                             yesterdayTopProp = top
                             if let prop = top {
@@ -5668,10 +5693,10 @@ struct PremiumPicksView: View {
     /// placeholder cards) instead of yesterday's results — those live under the date
     /// menu's Yesterday. A chosen past date always renders its own graded board.
     private var isTodayComingSoon: Bool {
-        // A zero-slate day (All-Star break) must not promise "picks drop ~90
-        // min before each game" — with no games there is no card coming; the
-        // room falls through to the graded board (yesterday's card) instead.
-        selectedDate == nil && !todayHasFreshPicks && !todaySlateCounts.isEmpty
+        // The room's normal system every day (founder, Jul 13): before fresh
+        // picks post, TODAY shows the coming-soon placeholder cards — never
+        // yesterday's board, which lives under the date menu.
+        selectedDate == nil && !todayHasFreshPicks
     }
 
     var body: some View {
@@ -5874,11 +5899,7 @@ struct PremiumPicksView: View {
         VStack(spacing: 22) {
             comingSoonIntro
                 .padding(.horizontal, 16)
-            // Only leagues that actually play today get a coming-soon lane —
-            // a league riding a yesterday-fallback shelf on its dark day
-            // would otherwise promise a card that never comes (Jul 14: WC
-            // plays, MLB doesn't).
-            ForEach(gameShelves.filter { (todaySlateCounts[$0.league.uppercased()] ?? 0) > 0 }) { shelf in
+            ForEach(gameShelves) { shelf in
                 comingSoonShelf(shelf.league)
             }
         }
@@ -6890,11 +6911,10 @@ struct PremiumPicksView: View {
             let ordered: ([GaryPick]) -> [GaryPick] = lg == "WC" ? sortedWC : sortedBest
             if let tp = todayByLeague[lg], !tp.isEmpty {
                 gShelves.append(GameShelf(league: lg, picks: Array(ordered(tp).prefix(shelfCap)), settled: false))
-            } else if let yp = yByLeague[lg], !yp.isEmpty, (slateCounts[lg] ?? 0) > 0 {
-                // LAST RESULT holds a lane only while the league PLAYS today
-                // and its picks haven't posted yet (the approved Jul 12 gate).
-                // On the league's dark day, yesterday belongs to the date
-                // picker, not the Today page (founder, Jul 13).
+            } else if let yp = yByLeague[lg], !yp.isEmpty {
+                // Feeds the coming-soon lane list pre-picks; the settled cards
+                // themselves only render once fresh picks exist elsewhere
+                // (isTodayComingSoon intercepts first) or on a picked date.
                 gShelves.append(GameShelf(league: lg, picks: Array(ordered(yp).prefix(shelfCap)), settled: true))
             } else if slateLeagues.contains(lg) {
                 // In-season (a game on today's slate) but picks haven't posted —
@@ -6926,9 +6946,7 @@ struct PremiumPicksView: View {
         for lg in order {
             if let ps = propsByLeague[lg], !ps.isEmpty {
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps), settled: false))
-            } else if let yps = yPropsByLeague[lg], !yps.isEmpty, (slateCounts[lg] ?? 0) > 0 {
-                // Same gate as the game shelves: LAST RESULT only while the
-                // league plays today — dark days keep yesterday under the picker.
+            } else if let yps = yPropsByLeague[lg], !yps.isEmpty {
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(yps), settled: true))
             } else if propSports.contains(lg) && slateLeagues.contains(lg) {
                 // In-season prop sport (a game on today's slate) holds its lane
@@ -14879,9 +14897,13 @@ struct CompactPickRow: View {
             var w = (pick.pick ?? "").split(separator: " ").map(String.init)
             w.removeAll { $0.range(of: #"^[+-]?\d{3,}$"#, options: .regularExpression) != nil }
             let raw = w.joined(separator: " ")
-            if let r = raw.range(of: " to ", options: .caseInsensitive) {
-                let claim = String(raw[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
-                return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
+            // Name on top, claim below — split at the bet verb ("to win…",
+            // "over 8.5 R1 HRs…") so long specials never shrink to one line.
+            for verb in [" to ", " over ", " under "] {
+                if let r = raw.range(of: verb, options: .caseInsensitive) {
+                    let claim = String(raw[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
+                    return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
+                }
             }
             return raw.uppercased()
         }
@@ -16528,9 +16550,12 @@ struct HeadlineShareCardView: View {
             var w = (pick.pick ?? "").split(separator: " ").map(String.init)
             w.removeAll { $0.range(of: #"^[+-]?\d{3,}$"#, options: .regularExpression) != nil }
             let raw = w.joined(separator: " ")
-            if let r = raw.range(of: " to ", options: .caseInsensitive) {
-                let claim = String(raw[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
-                return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
+            // Same verb split as the on-page face — name line, claim line.
+            for verb in [" to ", " over ", " under "] {
+                if let r = raw.range(of: verb, options: .caseInsensitive) {
+                    let claim = String(raw[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
+                    return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
+                }
             }
             return raw.uppercased()
         }
