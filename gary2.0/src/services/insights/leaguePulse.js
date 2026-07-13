@@ -106,8 +106,10 @@ async function buildMlbPulse(date, { batterIdsOverride, teamAbbrsOverride } = {}
     const packs = [];
     const bats = await safeCall(() => buildMlbHotColdBats({ date, season, bdl, batterIds }), null);
     if (bats) packs.push(bats);
-    const inj = await safeCall(() => buildMlbInjuries({ date, bdl, teamMeta }), null);
-    if (inj) packs.push(inj);
+    // Break edition: league-wide TEAM form beats a slate-filtered injury list
+    // ("hot or cold teams going into the break — more bettor-useful", founder).
+    const teams = await safeCall(() => buildMlbHotColdTeams({ date, season, bdl }), null);
+    if (teams) packs.push(teams);
     console.log(`[leaguePulse] MLB (pool override): built ${packs.length} tab(s): ${packs.map((p) => p.tab).join(', ') || 'none'}.`);
     return packs;
   }
@@ -150,6 +152,9 @@ async function buildMlbPulse(date, { batterIdsOverride, teamAbbrsOverride } = {}
 
   const bats = await safeCall(() => buildMlbHotColdBats({ date, season, bdl, batterIds }), null);
   if (bats) packs.push(bats);
+
+  const hotTeams = await safeCall(() => buildMlbHotColdTeams({ date, season, bdl }), null);
+  if (hotTeams) packs.push(hotTeams);
 
   const pen = await safeCall(() => buildMlbBullpen({ date, season, bdl, games, teamMeta, getLineups }), null);
   if (pen) packs.push(pen);
@@ -310,6 +315,76 @@ async function buildMlbHotColdBats({ date, season, bdl, batterIds }) {
   });
 }
 
+// ─── 2b) HOT & COLD TEAMS ────────────────────────────────────────────────────
+//
+// League-wide team form — L10 record, live streak, L10 run differential —
+// computed purely from the season game index (final scores). Born for the
+// All-Star break ("who's rolling into the second half", founder Jul 13) but
+// honest on any day. Shows BOTH ends: the hottest and the coldest.
+
+async function buildMlbHotColdTeams({ date, season, bdl }) {
+  const index = await safeCall(() => bdl.getMlbSeasonGameIndex(season), new Map());
+  if (!index || !index.size) return null;
+  const teams = asArray(await safeCall(() => bdl.getTeams('baseball_mlb'), []));
+  if (!teams.length) return null;
+
+  const dayMs = dayStartMs(date);
+  // team id -> chronological completed regular-season games (before `date`).
+  const byTeam = new Map();
+  for (const [, g] of index) {
+    if (g.status !== 'STATUS_FINAL' || g.seasonType === 'spring_training' || g.postseason) continue;
+    if (g.homeRuns == null || g.awayRuns == null) continue;
+    const ts = Date.parse(g.date);
+    if (!Number.isFinite(ts) || ts >= dayMs) continue;
+    for (const [tid, mine, theirs] of [[g.homeId, g.homeRuns, g.awayRuns], [g.awayId, g.awayRuns, g.homeRuns]]) {
+      if (tid == null) continue;
+      const k = String(tid);
+      if (!byTeam.has(k)) byTeam.set(k, []);
+      byTeam.get(k).push({ ts, won: mine > theirs, diff: mine - theirs });
+    }
+  }
+
+  const rows = [];
+  for (const t of teams) {
+    const games = (byTeam.get(String(t.id)) || []).sort((a, b) => a.ts - b.ts);
+    if (games.length < 10) continue;   // fail closed — no thin-sample form calls
+    const last10 = games.slice(-10);
+    const wins = last10.filter((g) => g.won).length;
+    const diff = last10.reduce((s, g) => s + g.diff, 0);
+    // Live streak off the full log (newest backwards).
+    let streak = 0; const dir = games[games.length - 1].won;
+    for (let i = games.length - 1; i >= 0 && games[i].won === dir; i--) streak++;
+    rows.push({
+      _sort: wins + diff / 1000,
+      team: t.name || t.abbreviation || t.display_name,
+      l10: `${wins}-${10 - wins}`,
+      streak: `${dir ? 'W' : 'L'}${streak}`,
+      diff: `${diff > 0 ? '+' : ''}${diff}`,
+      ...(wins >= 7 ? { trend: 'hot' } : wins <= 3 ? { trend: 'cold' } : {}),
+    });
+  }
+  if (rows.length < 6) return null;
+  rows.sort((a, b) => b._sort - a._sort);
+  // Both ends of the league — the 8 hottest and the 4 coldest.
+  const top = rows.slice(0, 8);
+  const bottom = rows.slice(-4).filter((r) => !top.includes(r));
+  const shown = [...top, ...bottom].map(stripSort);
+
+  return pack(date, 'MLB', 'hot_cold_teams', {
+    title: 'Hot & Cold Teams',
+    subtitle: 'Last 10 games',
+    sort_note: 'Hottest first, coldest last',
+    columns: [
+      col('team', 'TEAM', 'leading', 'primary'),
+      col('l10', 'L10', 'trailing', 'stat'),
+      col('streak', 'STREAK', 'trailing', 'stat'),
+      col('diff', 'RUN DIFF', 'trailing', 'muted'),
+      col('trend', '', 'trailing', 'muted'),
+    ],
+    rows: shown,
+  });
+}
+
 // ─── 3) BULLPEN WATCH (reduced) ──────────────────────────────────────────────
 //
 // PARTIALLY GROUNDABLE -> ship LEAN. Per-reliever rest / pen ERA are NOT cleanly
@@ -441,16 +516,20 @@ async function buildMlbInjuries({ date, bdl, teamMeta }) {
   rows.sort((a, b) => (a.since === 'FRESH' ? 0 : 1) - (b.since === 'FRESH' ? 0 : 1));
   const capped = rows.slice(0, TOP_N);
 
+  // Column diet (no-ellipsis law): the team abbr already rides beside the
+  // player's name in the primary cell — a second TEAM column is pure width
+  // theft; and a NOTE column where every cell is "—" is a dead slot.
+  const columns = [
+    col('player', 'PLAYER', 'leading', 'primary'),
+    col('status', 'STATUS', 'trailing', 'stat'),
+    ...(capped.some((r) => r.note && r.note !== '—') ? [col('note', 'NOTE', 'trailing', 'muted')] : []),
+    col('since', '', 'trailing', 'muted'),
+  ];
+
   return pack(date, 'MLB', 'injuries', {
     title: 'Key Injuries',
     subtitle: 'Around the league',
-    columns: [
-      col('player', 'PLAYER', 'leading', 'primary'),
-      col('team', 'TEAM', 'leading', 'muted'),
-      col('status', 'STATUS', 'trailing', 'stat'),
-      col('note', 'NOTE', 'trailing', 'muted'),
-      col('since', '', 'trailing', 'muted'),
-    ],
+    columns,
     rows: capped,
   });
 }

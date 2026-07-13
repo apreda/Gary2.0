@@ -21826,13 +21826,17 @@ struct PulseTable: View {
                 Text(p.label.uppercased())
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                     .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: alignment(p))
             }
             HStack(spacing: 8) {
                 ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
+                    // One line, scale before wrap — "TEAM" once broke into
+                    // "TEA/M" in a narrow slot (founder, Jul 13).
                     Text(col.label.uppercased())
                         .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, alignment: alignment(col))
                 }
             }
