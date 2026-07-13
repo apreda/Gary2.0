@@ -3997,11 +3997,6 @@ struct DerbyContestSection: View {
                                         .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
                                         .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.55))
                                     Spacer(minLength: 8)
-                                    if let hr = r.season_hr {
-                                        Text("\(hr) HR")
-                                            .font(GaryFonts.mono(12, bold: true))
-                                            .foregroundStyle(.white.opacity(0.85))
-                                    }
                                 }
                                 if let line = r.line, let call = r.call, !call.isEmpty {
                                     (Text("R1 ").foregroundColor(.white.opacity(0.7))
@@ -4014,10 +4009,19 @@ struct DerbyContestSection: View {
                                         .foregroundStyle(GaryColors.meta)
                                 }
                             }
-                            if let w = r.win_odds {
-                                Text("\(w > 0 ? "+" : "")\(w)")
-                                    .font(GaryFonts.mono(13, bold: true))
-                                    .foregroundStyle(GaryColors.gold)
+                            // One right column, vertically centered: season HR
+                            // stacked over the win odds (founder).
+                            VStack(alignment: .trailing, spacing: 2) {
+                                if let hr = r.season_hr {
+                                    Text("\(hr) HR")
+                                        .font(GaryFonts.mono(11.5, bold: true))
+                                        .foregroundStyle(.white.opacity(0.85))
+                                }
+                                if let w = r.win_odds {
+                                    Text("\(w > 0 ? "+" : "")\(w)")
+                                        .font(GaryFonts.mono(13, bold: true))
+                                        .foregroundStyle(GaryColors.gold)
+                                }
                             }
                             if r.reason != nil {
                                 Image(systemName: "chevron.right")
@@ -20642,13 +20646,19 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
+            // All-Star specials day: page 0 carries the event's board too —
+            // the contestants + extra plays fill what was a void under the
+            // top pick (founder, Jul 13).
+            if (topGamePick?.pick.type ?? "") == "special" {
+                DerbyContestSection()
+            }
             LeaguePulseSection(league: scopeLeague, refreshTick: refreshTick)  // NEW — above TODAY'S EDGES
             // World Cup gets a bespoke section (4 fan-legible lanes + a tap-through
             // team-news card) instead of the generic MLB-shaped EdgesSection. WC-only:
             // the shared EdgesSection / locked MLB design is never touched.
             if scopeLeague == "WC" {
                 WCTodaySection(edges: edges)
-            } else {
+            } else if (topGamePick?.pick.type ?? "") != "special" {
                 EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
             }
         }
