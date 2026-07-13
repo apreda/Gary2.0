@@ -3873,9 +3873,13 @@ struct HomeAllStarTakeover: View {
             }
 
             HStack(alignment: .firstTextBaseline) {
-                Text(isAsgDay ? "ALL-STAR GAME" : "HOME RUN DERBY")
+                // Explicit two-line stack — on wide phones the headline fit one
+                // line and lost the marquee read (founder, Jul 13: the stacked
+                // face IS the view, on every device).
+                Text(isAsgDay ? "ALL-STAR\nGAME" : "HOME RUN\nDERBY")
                     .font(GaryFonts.display(34))
                     .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 Text("TONIGHT · \(featured?.time ?? "8:00 PM") ET")
                     .font(GaryFonts.mono(12, bold: true))
