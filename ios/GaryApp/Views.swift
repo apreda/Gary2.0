@@ -14982,6 +14982,11 @@ struct CompactPickRow: View {
                     return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
                 }
             }
+            // No bet verb ("Walker longest HR") — name still leads its own line.
+            let parts = raw.split(separator: " ").map(String.init)
+            if parts.count >= 3 {
+                return "\(parts[0].uppercased())\n\(parts.dropFirst().joined(separator: " ").uppercased())"
+            }
             return raw.uppercased()
         }
         var words = Formatters.arrowizeOverUnder(pickParts.pick).split(separator: " ").map(String.init)
@@ -16643,6 +16648,11 @@ struct HeadlineShareCardView: View {
                     let claim = String(raw[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
                     return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
                 }
+            }
+            // No bet verb ("Walker longest HR") — name still leads its own line.
+            let parts = raw.split(separator: " ").map(String.init)
+            if parts.count >= 3 {
+                return "\(parts[0].uppercased())\n\(parts.dropFirst().joined(separator: " ").uppercased())"
             }
             return raw.uppercased()
         }
