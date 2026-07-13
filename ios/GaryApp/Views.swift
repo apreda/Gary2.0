@@ -1548,6 +1548,54 @@ struct LiquidGlassBackground: View {
 /// fronted by the Gary emotion that matches how it went. Shows once per day
 /// on first open (props keep their own strip in the box scores). Standard
 /// centered-card modal: dim backdrop, tap anywhere or the button to dismiss.
+/// ⓘ explainer for every pick card (founder, Jul 13): how the drop, the
+/// grade, and the flat-$100 scoring work — told once here, so the cards
+/// themselves stay clean (the "PER $100 · PAID" subline came off the faces).
+struct PickInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    private let rows: [(head: String, body: String)] = [
+        ("THE DROP", "Gary posts picks about 90 minutes before each game, once lineups are in."),
+        ("THE GRADE", "Every pick is graded the next morning — CASHED when it wins, LOST when it doesn't. Nothing gets deleted."),
+        ("THE MONEY", "Results are scored flat: $100 on every pick. A +$87 stamp means a $100 bet at the posted odds paid $87 in profit."),
+        ("THE CARD", "Winners is Gary's sealed best-of-the-board each day — games and props."),
+    ]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                BroadcastBar(height: 13)
+                Text("HOW THE PICKS WORK")
+                    .font(GaryFonts.accent(14))
+                    .tracking(1.0)
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+            }
+            ForEach(rows, id: \.head) { r in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(r.head)
+                        .font(GaryFonts.mono(11.5, bold: true)).tracking(1.0)
+                        .foregroundStyle(GaryColors.gold)
+                    Text(r.body)
+                        .font(GaryFonts.text(14))
+                        .foregroundStyle(GaryColors.sectionSub)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(GaryColors.cardBg.ignoresSafeArea())
+        .presentationDetents([.fraction(0.52), .medium])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 struct DailyRecapOverlay: View {
     let record: (w: Int, l: Int, p: Int)
     let net: Double?
@@ -2160,18 +2208,24 @@ struct HomeView: View {
                     // recaps as games settle), and only fall back to last night when
                     // today has NO recapped result yet — clearly the prior night, no
                     // flicker. Once a today headline exists it does not revert.
-                    var recaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.todayEST())
-                    if recaps.isEmpty {
-                        recaps = await SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
-                    }
-                    nightRecaps = recaps
-                    HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
-                    slateGames = await SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
+                    // PERF (Jul 13): these five were sequential round trips —
+                    // the tail of every Home load. One parallel wave now; the
+                    // recap fallback fetches both days concurrently and picks.
+                    async let recapsTodayF = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.todayEST())
+                    async let recapsGradedF = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
+                    async let slateF = SupabaseAPI.fetchDailySlate(date: SupabaseAPI.todayEST())
                     // The TOMORROW look-ahead board (keyed on tomorrow's EST slate
                     // day) — feeds the Tomorrow pill's countdown + scoreboard.
-                    tomorrowBoard = await SupabaseAPI.fetchTomorrowBoard(date: Self.tomorrowSlateDateEST())
-                    todayBoard = await SupabaseAPI.fetchTodayBoard(date: SupabaseAPI.todayEST())
-                    homeStreaks = await SupabaseAPI.fetchStreaks()
+                    async let tomorrowBoardF = SupabaseAPI.fetchTomorrowBoard(date: Self.tomorrowSlateDateEST())
+                    async let todayBoardF = SupabaseAPI.fetchTodayBoard(date: SupabaseAPI.todayEST())
+                    async let streaksF = SupabaseAPI.fetchStreaks()
+                    let recapsToday = await recapsTodayF
+                    nightRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
+                    HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
+                    slateGames = await slateF
+                    tomorrowBoard = await tomorrowBoardF
+                    todayBoard = await todayBoardF
+                    homeStreaks = await streaksF
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
@@ -2287,6 +2341,18 @@ struct HomeView: View {
                     // (Parked All-Star preview now lives inside fetchDailyPicks —
                     // DEBUG-only there — so every surface gets it from one source.)
                     todayPicks = todayOnlyPicks ?? []
+                    // The "what's on today" sheet lists All-Star events like any
+                    // game (founder, Jul 13): synthesize a slate row per special
+                    // event when the slate table doesn't carry it.
+                    for sp in todayPicks where (sp.type ?? "") == "special" {
+                        guard let away = sp.awayTeam, !away.isEmpty,
+                              !slateGames.contains(where: { $0.away_team == away }) else { continue }
+                        slateGames.append(DailySlateRow(
+                            league: sp.league ?? "MLB",
+                            away_team: away, home_team: sp.homeTeam,
+                            commence_time: sp.commence_time, venue: sp.venue,
+                            spread: nil, ml_home: nil, ml_away: nil, total: nil))
+                    }
                     picksByGameId = Dictionary(
                         (todayPicks.compactMap { p in p.game_id.map { (String($0), p) } }),
                         uniquingKeysWith: { a, _ in a })
@@ -2569,9 +2635,12 @@ struct HomeView: View {
                 (p.awayTeam ?? "").caseInsensitiveCompare(away) == .orderedSame
                     && (p.homeTeam ?? "").caseInsensitiveCompare(home) == .orderedSame
             }
-            let callLine: String? = calls.isEmpty ? nil : calls
-                .map { Self.homePickLabel($0.pick) }
-                .joined(separator: "  ·  ")
+            // All-Star specials: the sheet says the board EXISTS, never what's
+            // on it (founder's no-reveal rule) — picks live on the Picks tab.
+            let hasSpecials = calls.contains { ($0.type ?? "") == "special" }
+            let callLine: String? = calls.isEmpty ? nil
+                : hasSpecials ? "GARY'S BOARD — \(calls.count) PICKS · PICKS TAB"
+                : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  ")
             let ls = sheetLive(full)
             var zone: HomeSheetRow.Zone = .upcoming
             var title = "\(Self.shortTeam(away)) @ \(Self.shortTeam(home))"
@@ -4329,13 +4398,15 @@ struct HomeOvernightStrip: View {
         return (Text("✓ ").foregroundColor(GaryColors.win)
             + Text(item.line + " ").foregroundColor(.white.opacity(0.88))
             + Text(item.odds).foregroundColor(GaryColors.gold))
-            .font(GaryFonts.mono(13, bold: true))
+            // Full strip size (founder, Jul 13: the roll read smaller than its
+            // neighbors) — scale-to-fit still absorbs the long lines.
+            .font(GaryFonts.mono(15, bold: true))
             .lineLimit(1)
             .minimumScaleFactor(0.6)
         .id(rollIndex)
         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                 removal: .move(edge: .top).combined(with: .opacity)))
-        .frame(height: 21)
+        .frame(height: 23)
         .clipped()
         // The rolling cash wins the width fight — the record and THE CARD
         // door are short and fixed; the pick line is the story.
@@ -6932,8 +7003,11 @@ struct PremiumPicksView: View {
         // Premium props from today's slate: best prop per game, capped at 4 per
         // sport. A league with no props yet falls back to YESTERDAY's props as
         // LAST RESULT — graded stamps on, flips intact (mirrors the game shelves).
-        let yProps = (try? await SupabaseAPI.fetchPropPicks(date: yesterday)) ?? []
-        let recentPropResults = (try? await SupabaseAPI.fetchRecentPropResults(limit: 60)) ?? []
+        // PERF (Jul 13): fetch the pair concurrently — they were serial.
+        async let yPropsF = SupabaseAPI.fetchPropPicks(date: yesterday)
+        async let recentPropResultsF = SupabaseAPI.fetchRecentPropResults(limit: 60)
+        let yProps = (try? await yPropsF) ?? []
+        let recentPropResults = (try? await recentPropResultsF) ?? []
         var pMap: [String: String] = [:]
         for r in recentPropResults where r.game_date == yesterday {
             if let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result {
@@ -8145,6 +8219,10 @@ struct GaryPicksView: View {
 
         let date = SupabaseAPI.todayEST()
 
+        // PERF (Jul 13): yesterday's board rides alongside today's fetch —
+        // it was a serial round trip after the 30s-gated today load.
+        async let yesterdayFetch = SupabaseAPI.fetchDailyPicks(date: SupabaseAPI.yesterdayEST())
+
         // Use a timeout to prevent infinite loading
         var picks: [GaryPick] = []
         var didFail = false
@@ -8166,9 +8244,7 @@ struct GaryPicksView: View {
         var hasYesterday = false
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
-            let fetched = try await withTimeout(seconds: 20) {
-                try await SupabaseAPI.fetchDailyPicks(date: yesterday)
-            }
+            let fetched = try await yesterdayFetch
             let filtered = fetched.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
 
             // Only keep yesterday picks for sports that DON'T have fresh picks today
@@ -14775,6 +14851,7 @@ struct CompactPickRow: View {
     /// One-tap share from the card FRONT — renders the Stack Row share card
     /// (story + square) and presents the system sheet.
     @State private var shareItem: PickShareItem? = nil
+    @State private var showPickInfo = false
     private var liveStatus: LiveScore? {
         guard liveInSlot, resolvedResult == nil else { return nil }
         return liveCache.status(forGameId: pick.game_id) ?? liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
@@ -15149,6 +15226,16 @@ struct CompactPickRow: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     Spacer(minLength: 4)
+                    // ⓘ — the how-it-works pop (drop, grading, flat-$100 money).
+                    Button { showPickInfo = true } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(shareTint)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How the picks work")
                     // Share moved up here (compact) — frees the footer for the live line.
                     Button {
                         let images = renderPickShareImages(pick: pick, gameResult: displayResult)
@@ -15165,6 +15252,7 @@ struct CompactPickRow: View {
                 }
                 .padding(.top, metaTopPad)
                 .opacity(d3Dim(0.45))
+                .sheet(isPresented: $showPickInfo) { PickInfoSheet() }
 
                 // Footer — the live line while the game runs (teams + score + COVERING/
                 // TRAILING in green/red), with a tap-to-flip chevron on the right. Share
@@ -15247,9 +15335,8 @@ struct CompactPickRow: View {
                         .font(GaryFonts.display(36))
                         .foregroundStyle(GoldBar.inkHero)
                         .shadow(color: GoldBar.sheen.opacity(0.6), radius: 0, y: 1)
-                    Text("PER $100 · PAID")
-                        .font(GaryFonts.mono(8.5, bold: true)).tracking(1.6)
-                        .foregroundStyle(GoldBar.inkSoft)
+                    // "PER $100 · PAID" subline retired Jul 13 (founder) — the
+                    // ⓘ sheet explains the flat-$100 scoring once, app-wide.
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, 12).padding(.trailing, 16)
@@ -22671,6 +22758,7 @@ struct CompactPropRow: View {
     /// One-tap share from the prop front — renders the prop share card
     /// (story + square) and presents the system sheet.
     @State private var shareItem: PickShareItem? = nil
+    @State private var showPickInfo = false
     private var liveStatus: LiveScore? {
         guard liveInSlot, resolvedResult == nil else { return nil }
         return liveCache.status(forMatchup: prop.matchup ?? "")
@@ -22895,6 +22983,16 @@ struct CompactPropRow: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     Spacer(minLength: 4)
+                    // ⓘ — parity with the game face's how-it-works pop.
+                    Button { showPickInfo = true } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(shareTint)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How the picks work")
                     // Share — same spot as the game card (meta row), frees the footer.
                     Button {
                         let images = renderPropShareImages(prop: prop, gameResult: resolvedResult)
@@ -22911,6 +23009,7 @@ struct CompactPropRow: View {
                 }
                 .padding(.top, metaTopPad)
                 .opacity(d3Dim(0.45))
+                .sheet(isPresented: $showPickInfo) { PickInfoSheet() }
 
                 // Footer — live line (teams + score + situation) or start time on
                 // the left, tap-to-flip chevron on the right. Matches the game card
@@ -22957,9 +23056,8 @@ struct CompactPropRow: View {
                         .font(GaryFonts.display(36))
                         .foregroundStyle(SilverBar.inkHero)
                         .shadow(color: SilverBar.sheen.opacity(0.6), radius: 0, y: 1)
-                    Text("PER $100 · PAID")
-                        .font(GaryFonts.mono(8.5, bold: true)).tracking(1.6)
-                        .foregroundStyle(SilverBar.inkSoft)
+                    // "PER $100 · PAID" subline retired Jul 13 (founder) — the
+                    // ⓘ sheet explains the flat-$100 scoring once, app-wide.
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, 12).padding(.trailing, 16)
