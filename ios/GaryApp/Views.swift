@@ -3705,13 +3705,10 @@ struct HomeAllStarTakeover: View {
 
     /// Derby day vs ASG day, from the data (ASG picks ride AL/NL team slots).
     private var isAsgDay: Bool { specials.contains { $0.awayTeam == "American League" } }
-    /// The featured call: the Winner (Derby, gid 20260713) or the ML (ASG,
-    /// gid 8712499); highest confidence as the fallback.
+    /// Headline pick — only its start time surfaces here (no pick reveals on Home).
     private var featured: GaryPick? {
-        specials.first { $0.game_id == 20260713 || $0.game_id == 8712499 }
-            ?? specials.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
+        specials.first { $0.game_id == 20260713 || $0.game_id == 8712499 } ?? specials.first
     }
-    private var rest: [GaryPick] { specials.filter { $0.id != featured?.id } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -3746,46 +3743,18 @@ struct HomeAllStarTakeover: View {
                     .foregroundStyle(GaryColors.sectionSub)
             }
 
+            // No pick reveals here (founder): Home says the board EXISTS and
+            // where it lives — the picks themselves stay on the Picks tab.
             Button(action: onOpenPicks) {
-                VStack(alignment: .leading, spacing: 12) {
-                    // The featured call — the board's headline shot.
-                    if let f = featured {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("GARY'S BOARD — \(specials.count) CALL\(specials.count == 1 ? "" : "S")")
-                                .font(GaryFonts.accent(11.5))
-                                .tracking(1.0)
-                                .foregroundStyle(GaryColors.gold.opacity(0.9))
-                            Text((f.pick ?? "").uppercased())
-                                .font(GaryFonts.mono(17, bold: true))
-                                .foregroundStyle(GaryColors.gold)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
-                        // Gary's own opening line as the hook — his words, not a caption.
-                        if let r = f.rationale, let first = r.split(separator: ".").first, first.count > 12 {
-                            Text(String(first) + ".")
-                                .font(GaryFonts.text(14))
-                                .foregroundStyle(GaryColors.sectionSub)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                        }
-                    }
-                    // The rest of the board — one tight row per call, tick
-                    // marks alternating the ASG duotone.
-                    VStack(alignment: .leading, spacing: 7) {
-                        ForEach(Array(rest.enumerated()), id: \.element.id) { i, p in
-                            HStack(spacing: 8) {
-                                Rectangle()
-                                    .fill((i % 2 == 0 ? asgRed : asgBlue).opacity(0.85))
-                                    .frame(width: 3, height: 11)
-                                Text((p.pick ?? "").uppercased())
-                                    .font(GaryFonts.mono(12.5, bold: true))
-                                    .foregroundStyle(.white.opacity(0.88))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                            }
-                        }
-                    }
+                HStack(spacing: 8) {
+                    Text("GARY'S BOARD — \(specials.count) PICK\(specials.count == 1 ? "" : "S") · ON THE PICKS TAB")
+                        .font(GaryFonts.mono(14, bold: true))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(GaryColors.gold.opacity(0.8))
                 }
                 .contentShape(Rectangle())
             }

@@ -113,18 +113,17 @@ fileprivate struct HubRule: View {
 // below was verified Jul 13 (field, format, times, starters); the call site's
 // date gate self-retires the card after the break.
 fileprivate struct HubAllStarCard: View {
-    // The winner board (FanDuel, grounded midday Jul 13; Rice carries the
-    // pick-time quote from Gary's stored call). Sorted short→long — the fan
-    // reads the market's order, Gary's tick shows where he broke from it.
-    private let field: [(name: String, team: String, price: String, garys: Bool)] = [
-        ("Kyle Schwarber", "PHI", "+310", false),
-        ("Junior Caminero", "TB", "+370", false),
-        ("Munetaka Murakami", "CHW", "+500", false),
-        ("Jordan Walker", "STL", "+600", false),
-        ("Jac Caglianone", "KC", "+600", false),
-        ("Bryce Harper", "PHI", "+800", false),
-        ("Ben Rice", "NYY", "+950", true),
-        ("Willson Contreras", "BOS", "+1700", false),
+    // The winner board (FanDuel, grounded midday Jul 13), short→long — pure
+    // market data; Gary's picks live on the Picks tab (pointer line below).
+    private let field: [(name: String, team: String, price: String)] = [
+        ("Kyle Schwarber", "PHI", "+310"),
+        ("Junior Caminero", "TB", "+370"),
+        ("Munetaka Murakami", "CHW", "+500"),
+        ("Jordan Walker", "STL", "+600"),
+        ("Jac Caglianone", "KC", "+600"),
+        ("Bryce Harper", "PHI", "+800"),
+        ("Ben Rice", "NYY", "+950"),
+        ("Willson Contreras", "BOS", "+1700"),
     ]
     private var isDerbyDay: Bool { SupabaseAPI.todayEST() == "2026-07-13" }
     // ASG identity duotone — local to this self-retiring card.
@@ -168,25 +167,22 @@ fileprivate struct HubAllStarCard: View {
                                 .foregroundStyle(.white.opacity(0.45))
                         }
                         .padding(.bottom, 7)
+                        // Pure market board — no pick reveals (founder): the
+                        // pointer line below says where Gary's picks live.
                         ForEach(Array(field.enumerated()), id: \.element.name) { i, p in
                             HStack(spacing: 7) {
                                 Text(p.name)
-                                    .font(.system(size: 14.5, weight: p.garys ? .bold : .semibold))
-                                    .foregroundStyle(p.garys ? GaryColors.gold : .white.opacity(0.92))
+                                    .font(.system(size: 14.5, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                                 Text(p.team)
                                     .font(HubFont.kicker(10)).tracking(0.6)
                                     .foregroundStyle(.white.opacity(0.55))
-                                if p.garys {
-                                    Text("★ GARY'S CALL")
-                                        .font(HubFont.kicker(9.5)).tracking(0.8)
-                                        .foregroundStyle(GaryColors.gold.opacity(0.9))
-                                }
                                 Spacer(minLength: 8)
                                 Text(p.price)
                                     .font(HubFont.data(14.5))
-                                    .foregroundStyle(p.garys ? GaryColors.gold : .white.opacity(0.85))
+                                    .foregroundStyle(.white.opacity(0.85))
                             }
                             .padding(.vertical, 5)
                             if i < field.count - 1 { HubRule() }
@@ -210,7 +206,8 @@ fileprivate struct HubAllStarCard: View {
                         .foregroundStyle(.white.opacity(0.62))
                 }
 
-                Text("GARY'S CALL — PICKS TAB")
+                Text(isDerbyDay ? "GARY'S BOARD — 4 PICKS · ON THE PICKS TAB"
+                                : "GARY'S BOARD — ON THE PICKS TAB")
                     .font(HubFont.kicker(10.5)).tracking(1.0)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
             }
