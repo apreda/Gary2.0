@@ -1767,11 +1767,12 @@ struct HomeView: View {
             || !nightRecaps.isEmpty || marquee != nil || !wireItems.isEmpty
     }
 
-    /// Today's All-Star specials — the two synthetic ids the specials lane
-    /// stamps (Derby 20260713, ASG 8712499). Empty every other week of the
-    /// year, so the takeover costs nothing outside the break.
+    /// Today's All-Star specials — everything the specials lane stamps
+    /// (type "special" across the Derby/ASG boards, plus the ASG moneyline
+    /// which rides the real BDL game id). Empty every other week of the year,
+    /// so the takeover costs nothing outside the break.
     private var allStarSpecials: [GaryPick] {
-        todayPicks.filter { $0.game_id == 20260713 || $0.game_id == 8712499 }
+        todayPicks.filter { ($0.type ?? "") == "special" || $0.game_id == 8712499 }
     }
 
     var body: some View {
@@ -3696,18 +3697,38 @@ struct HomeAllStarTakeover: View {
     let specials: [GaryPick]
     var onOpenPicks: () -> Void
 
-    private func eventTitle(_ p: GaryPick) -> String {
-        p.game_id == 8712499 ? "ALL-STAR GAME" : "HOME RUN DERBY"
+    // ASG identity duotone (founder: "add in some All-Star game colors") —
+    // local to this one-week surface so it retires with it; the featured call
+    // and Gary's voice stay gold.
+    private let asgRed = Color(hex: "#D50032")
+    private let asgBlue = Color(hex: "#2D68C4")
+
+    /// Derby day vs ASG day, from the data (ASG picks ride AL/NL team slots).
+    private var isAsgDay: Bool { specials.contains { $0.awayTeam == "American League" } }
+    /// The featured call: the Winner (Derby, gid 20260713) or the ML (ASG,
+    /// gid 8712499); highest confidence as the fallback.
+    private var featured: GaryPick? {
+        specials.first { $0.game_id == 20260713 || $0.game_id == 8712499 }
+            ?? specials.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
     }
+    private var rest: [GaryPick] { specials.filter { $0.id != featured?.id } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                BroadcastBar(height: 14)
+                // The ASG duotone pair replaces the gold slab on this surface.
+                HStack(spacing: 3) {
+                    BroadcastBar(tint: asgRed, height: 14)
+                    BroadcastBar(tint: asgBlue, height: 14)
+                }
                 Text("ALL-STAR WEEK")
                     .font(GaryFonts.accent(15))
                     .foregroundStyle(.white)
                     .tracking(1.2)
+                Text("★")
+                    .font(.system(size: 11, weight: .black))
+                    .foregroundStyle(asgRed)
+                    .baselineOffset(1)
                 Spacer(minLength: 0)
                 Text("CITIZENS BANK PARK")
                     .font(GaryFonts.mono(11, bold: true))
@@ -3715,33 +3736,33 @@ struct HomeAllStarTakeover: View {
                     .foregroundStyle(GaryColors.meta)
             }
 
-            ForEach(specials) { p in
-                Button(action: onOpenPicks) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(eventTitle(p))
-                                .font(GaryFonts.display(34))
-                                .foregroundStyle(.white)
-                            Spacer(minLength: 8)
-                            Text("TONIGHT · \(p.time ?? "8:00 PM") ET")
-                                .font(GaryFonts.mono(12, bold: true))
-                                .foregroundStyle(GaryColors.sectionSub)
-                        }
-                        // Kicker above, call below at full width — beside each
-                        // other the price fell off the row edge ("+3…").
+            HStack(alignment: .firstTextBaseline) {
+                Text(isAsgDay ? "ALL-STAR GAME" : "HOME RUN DERBY")
+                    .font(GaryFonts.display(34))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 8)
+                Text("TONIGHT · \(featured?.time ?? "8:00 PM") ET")
+                    .font(GaryFonts.mono(12, bold: true))
+                    .foregroundStyle(GaryColors.sectionSub)
+            }
+
+            Button(action: onOpenPicks) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // The featured call — the board's headline shot.
+                    if let f = featured {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("GARY'S CALL")
+                            Text("GARY'S BOARD — \(specials.count) CALL\(specials.count == 1 ? "" : "S")")
                                 .font(GaryFonts.accent(11.5))
                                 .tracking(1.0)
                                 .foregroundStyle(GaryColors.gold.opacity(0.9))
-                            Text((p.pick ?? "").uppercased())
-                                .font(GaryFonts.mono(16, bold: true))
+                            Text((f.pick ?? "").uppercased())
+                                .font(GaryFonts.mono(17, bold: true))
                                 .foregroundStyle(GaryColors.gold)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
                         // Gary's own opening line as the hook — his words, not a caption.
-                        if let r = p.rationale, let first = r.split(separator: ".").first, first.count > 12 {
+                        if let r = f.rationale, let first = r.split(separator: ".").first, first.count > 12 {
                             Text(String(first) + ".")
                                 .font(GaryFonts.text(14))
                                 .foregroundStyle(GaryColors.sectionSub)
@@ -3749,20 +3770,41 @@ struct HomeAllStarTakeover: View {
                                 .multilineTextAlignment(.leading)
                         }
                     }
-                    .contentShape(Rectangle())
+                    // The rest of the board — one tight row per call, tick
+                    // marks alternating the ASG duotone.
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(Array(rest.enumerated()), id: \.element.id) { i, p in
+                            HStack(spacing: 8) {
+                                Rectangle()
+                                    .fill((i % 2 == 0 ? asgRed : asgBlue).opacity(0.85))
+                                    .frame(width: 3, height: 11)
+                                Text((p.pick ?? "").uppercased())
+                                    .font(GaryFonts.mono(12.5, bold: true))
+                                    .foregroundStyle(.white.opacity(0.88))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
             // The week's runway — verified schedule only, quiet meta voice.
+            // (On ASG day the WC semi has its own live pick surfaces — no ad here.)
             VStack(alignment: .leading, spacing: 5) {
-                if specials.allSatisfy({ $0.game_id != 8712499 }) {
+                if !isAsgDay {
                     Text("TOMORROW — ALL-STAR GAME · CEASE vs SÁNCHEZ")
                         .font(GaryFonts.mono(11, bold: true))
                         .tracking(0.6)
                         .foregroundStyle(GaryColors.meta)
+                    Text("TOMORROW — WC SEMIFINAL · SPAIN @ FRANCE · 3 PM")
+                        .font(GaryFonts.mono(11, bold: true))
+                        .tracking(0.6)
+                        .foregroundStyle(GaryColors.meta)
                 }
-                Text("MLB RETURNS FRIDAY · WC FINAL SUNDAY")
+                Text("MLB RETURNS FRIDAY")
                     .font(GaryFonts.mono(11, bold: true))
                     .tracking(0.6)
                     .foregroundStyle(GaryColors.meta)

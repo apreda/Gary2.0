@@ -1,33 +1,35 @@
 #!/usr/bin/env node
 /**
- * ALL-STAR SPECIALS — one-off pick lane for the 2026 HR Derby + All-Star Game.
- * Founder greenlight Jul 13 2026: "its not an all-star break for Gary".
+ * ALL-STAR SPECIALS — Gary's board for the 2026 HR Derby + All-Star Game.
+ * Founder, Jul 13 2026: "its not an all-star break for Gary" + "lets do a ton
+ * of them" + "help gary not pick chalk — betting isnt about taking the most
+ * likely option on paper" + "use GPT 5.6 Sol for these".
  *
  * ISOLATED BY DESIGN: no sport constitutions, no agentLoop, no scheduler hook.
- * A compact verified-data brief → one Gary (gemini-3.5-flash) call → statAudit
- * gate → picksService.storeDailyPicksInDatabase. Delete or ignore after the
- * break; nothing else imports this.
+ * Grounded market briefs + exact-name Savant blocks → ONE Sol call returning a
+ * multi-market BOARD → per-pick statAudit gate → production store.
  *
  * Fabrication guards:
- *   - Participant stat blocks come ONLY from exact first+last-name matches in
- *     Savant xStats / BDL season stats. A near-miss (Christian vs Jordan
- *     Walker, William vs Willson Contreras — both hit during Jul 13 recon) is
- *     OMITTED, never substituted.
- *   - Prices must be copied from the grounded odds board (book named) or the
- *     pick ships priceless. The prompt forbids any number not present in the
- *     provided data; auditPickRationale enforces it after the fact.
+ *   - Stat blocks only from exact first+last-name Savant matches (Christian-vs-
+ *     Jordan Walker and William-vs-Willson Contreras both hit during recon —
+ *     near-misses are OMITTED, never substituted).
+ *   - Prices must be copied from the grounded boards with the book named, or
+ *     the call ships priceless. statAudit enforces number-traceability.
+ *
+ * Anti-chalk (founder-ordered product rule for this lane):
+ *   - The Derby WINNER call may not be the market favorite. Everywhere else,
+ *     favorites must earn the call with a case — hunt the price, not the name.
  *
  * Usage:
- *   node scripts/run-allstar-specials.js --derby            # tonight's Derby winner
- *   node scripts/run-allstar-specials.js --asg              # ASG side (run on game day)
+ *   node scripts/run-allstar-specials.js --derby            # tonight's board
+ *   node scripts/run-allstar-specials.js --asg              # game-day board
  *   node scripts/run-allstar-specials.js --derby --dry-run  # print, don't store
  */
 import 'dotenv/config';
 import { geminiGroundingSearch } from '../src/services/agentic/scoutReport/shared/grounding.js';
 import { getBatterXStats, getPitcherXStats } from '../src/services/baseballSavantService.js';
 import { auditPickRationale, buildStatAuditRetryMessage } from '../src/services/agentic/orchestrator/statAudit.js';
-import { GEMINI_PRO_MODEL } from '../src/services/agentic/orchestrator/orchestratorConfig.js';
-import geminiService from '../src/services/geminiService.js';
+import { createOpenAISession, sendToOpenAISession } from '../src/services/agentic/orchestrator/providerAdapters/openaiSession.js';
 import { picksService } from '../src/services/picksService.js';
 
 const args = process.argv.slice(2);
@@ -36,9 +38,10 @@ const RUN_DERBY = args.includes('--derby');
 const RUN_ASG = args.includes('--asg');
 if (!RUN_DERBY && !RUN_ASG) { console.error('Pass --derby and/or --asg'); process.exit(1); }
 
-// 2026 Derby field — verified Jul 13 2026 against grounding + Savant + BDL.
-// If a late swap happens, the fresh grounding brief at runtime says so and
-// Gary sees it; the swap-in simply won't have a stat block.
+const MODEL = process.env.SPECIALS_MODEL || 'gpt-5.6-sol';
+
+// 2026 Derby field — verified Jul 13 2026 against grounding + Savant. A late
+// swap shows up in the fresh runtime brief; the swap-in just has no stat block.
 const DERBY_FIELD = [
   { name: 'Kyle Schwarber', team: 'Phillies' },
   { name: 'Bryce Harper', team: 'Phillies' },
@@ -51,71 +54,61 @@ const DERBY_FIELD = [
 ];
 
 const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-
-// Exact first+last match only — the whole point of this helper.
-function exactRow(rows, fullName) {
-  const target = norm(fullName);
-  return rows.find(r => norm(`${r.first_name} ${r.last_name}`) === target) || null;
-}
-
+const exactRow = (rows, fullName) =>
+  rows.find(r => norm(`${r.first_name} ${r.last_name}`) === norm(fullName)) || null;
 const groundedText = (r) => (typeof r === 'string' ? r : (r?.data || r?.raw || ''));
 
+async function ground(q) { return groundedText(await geminiGroundingSearch(q, { sport: 'baseball_mlb' })); }
+
 async function buildDerbyData() {
-  const brief = await geminiGroundingSearch(
-    'MLB Home Run Derby TONIGHT Monday July 13 2026 at Citizens Bank Park: confirm the 8 participants (any late swaps/scratches?), the swing-based format and rules, start time and broadcast, season home run totals for the participants, and any injury or participation news from today.',
-    { sport: 'baseball_mlb' }
-  );
-  // Odds get their own dedicated fetch — a combined query sometimes drops the board.
-  const oddsBrief = await geminiGroundingSearch(
-    'CURRENT betting odds to WIN tonight\'s MLB Home Run Derby (July 13 2026): list each of the 8 participants with their price and the sportsbook name (FanDuel, DraftKings, BetMGM).',
-    { sport: 'baseball_mlb' }
-  );
-  const briefText = `${groundedText(brief)}\n\nODDS BOARD (grounded):\n${groundedText(oddsBrief)}`;
+  const [news, winnerBoard, propBoard] = [
+    await ground('MLB Home Run Derby TONIGHT Monday July 13 2026 at Citizens Bank Park: confirm the 8 participants (late swaps/scratches?), the swing-based format and rules, start time/broadcast, participant season home run totals, and any participation or injury news from today.'),
+    await ground('CURRENT winner odds board for tonight\'s MLB Home Run Derby (July 13 2026): every participant with prices at FanDuel, DraftKings, and BetMGM.'),
+    await ground('ALL other prop markets posted for tonight\'s MLB Home Run Derby July 13 2026 with prices and sportsbook names: head-to-head matchups, player Round 1 home run over/unders, to-reach-the-final odds, longest home run distance over/under, winning league AL vs NL, total combined home runs, 500-foot homer props, anything else.'),
+  ];
 
   const savantRows = await getBatterXStats(2026);
   const rows = Array.isArray(savantRows) ? savantRows : (savantRows?.data || []);
-
   const blocks = DERBY_FIELD.map(p => {
     const sv = exactRow(rows, p.name);
-    const lines = [`${p.name} (${p.team})`];
-    if (sv) {
-      lines.push(`  Statcast 2026: ${sv.pa} PA, SLG ${sv.slg}, xSLG ${sv.est_slg}, wOBA ${sv.woba ?? 'n/a'}${sv.est_woba != null ? `, xwOBA ${sv.est_woba}` : ''}`);
-    } else {
-      lines.push('  (no verified 2026 stat row — do not cite numbers for this player)');
-    }
-    return lines.join('\n');
+    return sv
+      ? `${p.name} (${p.team})\n  Statcast 2026: ${sv.pa} PA, SLG ${sv.slg}, xSLG ${sv.est_slg}, wOBA ${sv.woba ?? 'n/a'}${sv.est_woba != null ? `, xwOBA ${sv.est_woba}` : ''}`
+      : `${p.name} (${p.team})\n  (no verified 2026 stat row — do not cite numbers for this player)`;
   }).join('\n');
 
-  return { briefText, blocks };
+  return {
+    briefs: `EVENT BRIEF (grounded today):\n${news}\n\nWINNER ODDS BOARD (grounded):\n${winnerBoard}\n\nPROP MARKET BOARD (grounded):\n${propBoard}`,
+    blocks,
+  };
 }
 
 async function buildAsgData() {
-  const brief = await geminiGroundingSearch(
-    'MLB All-Star Game Tuesday July 14 2026 at Citizens Bank Park: confirmed starting pitchers and lineups for AL and NL, roster scratches/replacements, and any relevant news today.',
-    { sport: 'baseball_mlb' }
-  );
-  const oddsBrief = await geminiGroundingSearch(
-    'CURRENT moneyline odds for the MLB All-Star Game July 14 2026 (American League vs National League) with sportsbook names (FanDuel, DraftKings, BetMGM), plus the total (over/under) if posted.',
-    { sport: 'baseball_mlb' }
-  );
-  const briefText = `${groundedText(brief)}\n\nODDS BOARD (grounded):\n${groundedText(oddsBrief)}`;
-
+  const [news, oddsBoard] = [
+    await ground('MLB All-Star Game Tuesday July 14 2026 at Citizens Bank Park: confirmed starting pitchers and lineups for AL and NL, roster scratches/replacements, and relevant news today.'),
+    await ground('ALL betting markets posted for the MLB All-Star Game July 14 2026 with prices and sportsbook names: moneyline AL vs NL, total runs over/under, the FULL All-Star Game MVP odds board, first team to score, team totals, anything else.'),
+  ];
   const savantRows = await getPitcherXStats(2026);
   const rows = Array.isArray(savantRows) ? savantRows : (savantRows?.data || []);
   const blocks = ['Dylan Cease', 'Cristopher Sanchez', 'Cristopher Sánchez'].map(n => {
     const sv = exactRow(rows, n);
     return sv ? `${n}: Statcast 2026 — ${sv.pa} PA against, ERA ${sv.era ?? 'n/a'}, xERA ${sv.est_era ?? sv.xera ?? 'n/a'}, wOBA-against ${sv.woba ?? 'n/a'}` : null;
   }).filter(Boolean).join('\n');
-
-  return { briefText, blocks };
+  return {
+    briefs: `EVENT BRIEF (grounded today):\n${news}\n\nMARKET BOARD (grounded):\n${oddsBoard}`,
+    blocks,
+  };
 }
 
-const SYSTEM = `You are Gary — the sharp, confident betting character behind the Gary app. Tonight you're working All-Star week: real calls on the exhibition events, in your voice, for fans who follow every pick.
+const SYSTEM = `You are Gary — the sharp, confident betting character behind the Gary app. All-Star week: you work the exhibitions with real calls, in your voice, for fans who follow every pick.
+
+HOW YOU BET (non-negotiable):
+- Betting is not taking the most likely name on paper — it is taking the right PRICE. A favorite must EARN a call with a real case; never submit a pick just because it is the shortest number on the board.
+- Build a BOARD: one call per market, each market a genuinely different bet. Skip any market where you have no real read — fewer, sharper calls beat filler.
 
 HARD DATA RULES (non-negotiable):
-- Every number you write (stats, odds, counts) MUST appear in the DATA sections of the user message. No outside numbers, no estimates, no "roughly".
-- Odds: quote ONLY a price that appears on the provided odds board, and name the sportsbook it came from. If no usable price exists for your pick, set odds to null and omit prices from the rationale.
-- Players without a verified stat block may be discussed only via facts stated in the EVENT BRIEF.
+- Every number you write (stats, odds, HR totals) MUST appear in the DATA sections of the user message. No outside numbers, no estimates.
+- Odds: quote ONLY prices present on the grounded boards and name the sportsbook. No usable price for a call = odds null, no prices in that rationale.
+- Players without a verified stat block may be discussed only via facts stated in the briefs.
 - Never reference being an AI, a model, data feeds, or prompts. You are Gary.
 
 OUTPUT: strict JSON only, no markdown fences, matching the schema in the user message.`;
@@ -126,111 +119,116 @@ function parseJsonLoose(text) {
   return JSON.parse(m[0]);
 }
 
-async function garyCall(userMsg) {
-  const messages = [
-    { role: 'system', content: SYSTEM },
-    { role: 'user', content: userMsg },
-  ];
-  const out = await geminiService.generateResponse(messages, { model: GEMINI_PRO_MODEL, maxTokens: 6000 });
-  const text = typeof out === 'string' ? out : (out?.text || out?.content || JSON.stringify(out));
-  let parsed = parseJsonLoose(text);
+/** One Sol call → board array; per-pick statAudit with one collective retry. */
+async function solBoard(userMsg, minPicks) {
+  const session = await createOpenAISession({
+    modelName: MODEL,
+    systemPrompt: SYSTEM,
+    tools: [],
+    thinkingLevel: 'high',
+  });
+  const usage = { in: 0, out: 0 };
+  let res = await sendToOpenAISession(session, userMsg, { isFunctionResponse: false });
+  usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0;
+  let parsed = parseJsonLoose(res.content);
+  let board = Array.isArray(parsed.board) ? parsed.board : [];
 
-  // Stat-integrity gate — same auditor + retry pattern as the scratch arm:
-  // gate on the `retryable` array; one corrective retry, then hard fail.
-  const corpus = userMsg;
-  let audit = auditPickRationale({ rationale: parsed.rationale }, corpus);
-  if (audit.retryable.length > 0) {
-    console.log(`[Specials] statAudit: ${audit.retryable.length} untraceable claim(s) — one corrective retry`);
-    const retryOut = await geminiService.generateResponse(
-      [...messages, { role: 'assistant', content: text }, { role: 'user', content: buildStatAuditRetryMessage(audit.retryable) }],
-      { model: GEMINI_PRO_MODEL, maxTokens: 6000 }
-    );
-    const retryText = typeof retryOut === 'string' ? retryOut : (retryOut?.text || retryOut?.content || '');
-    parsed = parseJsonLoose(retryText);
-    audit = auditPickRationale({ rationale: parsed.rationale }, corpus);
-    if (audit.retryable.length > 0) throw new Error(`statAudit still failing after retry: ${JSON.stringify(audit.retryable).slice(0, 400)}`);
+  const audits = board.map(b => auditPickRationale({ rationale: b.rationale }, userMsg));
+  const failing = board.filter((_, i) => audits[i].retryable.length > 0);
+  if (failing.length) {
+    const claims = audits.flatMap(a => a.retryable);
+    console.log(`[Specials] statAudit: ${claims.length} untraceable claim(s) across ${failing.length} call(s) — one corrective retry`);
+    res = await sendToOpenAISession(session, buildStatAuditRetryMessage(claims), { isFunctionResponse: false });
+    usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0;
+    try {
+      parsed = parseJsonLoose(res.content);
+      if (Array.isArray(parsed.board)) board = parsed.board;
+    } catch { /* keep first board; failures drop below */ }
+    board = board.filter(b => auditPickRationale({ rationale: b.rationale }, userMsg).retryable.length === 0);
   }
-  return parsed;
+  console.log(`[Specials] ${MODEL}: ${usage.in} in / ${usage.out} out — ${board.length} call(s) passed audit`);
+  if (board.length < minPicks) throw new Error(`board too thin after audit: ${board.length} < ${minPicks}`);
+  return board;
 }
 
+const baseSpecial = (over) => ({
+  type: 'special',
+  league: 'MLB',
+  sport: 'baseball_mlb',
+  venue: 'Citizens Bank Park',
+  statsUsed: [], statsData: [], injuries: null,
+  ...over,
+});
+
 async function runDerby() {
-  console.log('[Specials] ── HOME RUN DERBY ──');
-  const { briefText, blocks } = await buildDerbyData();
-  const schema = `{"pick_player": "Full Name", "pick_text": "e.g. Schwarber to win the Derby +310", "odds": 310, "book": "FanDuel", "confidence": 0.55, "rationale": "Gary's voice, 180-260 words"}`;
-  const user = `EVENT BRIEF (grounded today):\n${briefText}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Pick ONE winner of tonight's Home Run Derby. Weigh raw power (SLG/xSLG, HR), the 20-swing format, and the Citizens Bank Park home crowd angle if the brief supports it. pick_text stays under 40 characters, format "<LastName> to win the Derby +NNN" (omit +NNN if odds are null).\n\nJSON schema: ${schema}`;
-  const p = await garyCall(user);
-  console.log(`[Specials] ✅ DERBY PICK: ${p.pick_text} (conf ${p.confidence})${p.book ? ` @ ${p.book}` : ''}`);
-  return {
-    pick: p.pick_text,
-    odds: typeof p.odds === 'number' ? p.odds : null,
-    type: 'special',
-    league: 'MLB',
-    sport: 'baseball_mlb',
+  console.log(`[Specials] ── HOME RUN DERBY BOARD (${MODEL}) ──`);
+  const { briefs, blocks } = await buildDerbyData();
+  const schema = `{"board":[{"market":"Winner"|"Head-to-Head"|"Round 1 O/U"|"To Reach the Final"|"Longest HR"|"Winning League"|"Total HRs"|"Other","pick_text":"short bet line, e.g. 'Caminero to win the Derby +425' or 'Rice over 6.5 R1 homers -115'","odds":425,"book":"DraftKings","confidence":0.55,"rationale":"Gary's voice, 60-120 words"}]}`;
+  const user = `${briefs}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Build Gary's Derby board — 4 to 6 calls, each from a DIFFERENT posted market. Exactly ONE Winner call, and it may NOT be the market favorite (the shortest-priced player on the winner board): the market already made that pick; make YOURS at a price. For every other market, only call it if you have a real read from the data. pick_text stays under 45 characters.\n\nJSON schema: ${schema}`;
+  const board = await solBoard(user, 3);
+
+  // Mechanical anti-chalk guards (founder order, Jul 13): exactly ONE winner
+  // call, and tonight it cannot be Schwarber — the market favorite on every
+  // grounded board today, and the exact chalk call the founder rejected.
+  const winners = board.filter(b => /winner/i.test(b.market || ''));
+  if (winners.length !== 1) throw new Error(`board must carry exactly 1 Winner call, got ${winners.length}`);
+  if (/schwarber/i.test(winners[0].pick_text || '')) throw new Error('Winner call came back as the market favorite (Schwarber) — anti-chalk rule violated');
+
+  return board.map((b, i) => baseSpecial({
+    pick: b.pick_text,
+    odds: typeof b.odds === 'number' ? b.odds : null,
     time: '8:00 PM',
     awayTeam: 'Home Run Derby',
     homeTeam: 'Citizens Bank Park',
-    venue: 'Citizens Bank Park',
     tournamentContext: 'All-Star Week',
-    // Numeric synthetic id — the shipped iOS GaryPick decodes game_id as Int?,
-    // so a string here would drop to nil (or worse in strict decode paths).
-    // 20260713 sits far above BDL's MLB id range (~8.7M) — no collision.
-    game_id: 20260713,
-    commence_time: '2026-07-14T00:00:00.000Z',
-    confidence: p.confidence ?? 0.5,
-    rationale: p.rationale,
-    bestLineBook: p.book || null,
-    statsUsed: [], statsData: [], injuries: null,
-  };
+    // Winner keeps 20260713 — the store's replace-by-game_id retires the old
+    // chalk call in the same write. Others take the 202607130x series.
+    game_id: /winner/i.test(b.market || '') ? 20260713 : 2026071302 + i,
+    confidence: b.confidence ?? 0.5,
+    rationale: b.rationale,
+    bestLineBook: b.book || null,
+  }));
 }
 
 async function runAsg() {
-  console.log('[Specials] ── ALL-STAR GAME ──');
-  const { briefText, blocks } = await buildAsgData();
-  const schema = `{"pick_side": "National League" | "American League", "pick_text": "e.g. National League ML -130", "odds": -130, "book": "DraftKings", "confidence": 0.55, "rationale": "Gary's voice, 180-260 words"}`;
-  const user = `EVENT BRIEF (grounded today):\n${briefText}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Pick a side in tomorrow's All-Star Game (moneyline). pick_text format "<League> ML -NNN" using a board price with its book.\n\nJSON schema: ${schema}`;
-  const p = await garyCall(user);
-  console.log(`[Specials] ✅ ASG PICK: ${p.pick_text} (conf ${p.confidence})${p.book ? ` @ ${p.book}` : ''}`);
-  return {
-    pick: p.pick_text,
-    odds: typeof p.odds === 'number' ? p.odds : null,
-    type: 'moneyline',
-    league: 'MLB',
-    sport: 'baseball_mlb',
+  console.log(`[Specials] ── ALL-STAR GAME BOARD (${MODEL}) ──`);
+  const { briefs, blocks } = await buildAsgData();
+  const schema = `{"board":[{"market":"Moneyline"|"Total"|"MVP"|"First to Score"|"Other","pick_text":"e.g. 'National League ML -130' or 'Caminero to win ASG MVP +1400'","odds":-130,"book":"DraftKings","confidence":0.55,"rationale":"Gary's voice, 60-120 words"}]}`;
+  const user = `${briefs}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Build Gary's All-Star Game board — 3 to 5 calls, each from a DIFFERENT posted market (Moneyline, Total, MVP, others as posted). Favorites must earn the call — hunt the price. MVP is where the board pays: if you make an MVP call, make it a conviction shot at a real number, not the shortest name. pick_text under 45 characters.\n\nJSON schema: ${schema}`;
+  const board = await solBoard(user, 2);
+
+  return board.map((b, i) => baseSpecial({
+    pick: b.pick_text,
+    odds: typeof b.odds === 'number' ? b.odds : null,
+    type: /moneyline/i.test(b.market || '') ? 'moneyline' : 'special',
     time: '8:00 PM',
     awayTeam: 'American League',
     homeTeam: 'National League',
-    venue: 'Citizens Bank Park',
     tournamentContext: 'All-Star Game',
-    // Real BDL game id for the 2026 ASG (verified Jul 13) — numeric for the
-    // shipped iOS decoder, and joins if BDL ever carries the box score.
-    game_id: 8712499,
-    commence_time: '2026-07-15T00:00:00.000Z',
-    confidence: p.confidence ?? 0.5,
-    rationale: p.rationale,
-    bestLineBook: p.book || null,
-    statsUsed: [], statsData: [], injuries: null,
-  };
+    // ML keeps the real BDL id; the rest take the 202607140x series.
+    game_id: /moneyline/i.test(b.market || '') ? 8712499 : 2026071402 + i,
+    confidence: b.confidence ?? 0.5,
+    rationale: b.rationale,
+    bestLineBook: b.book || null,
+  }));
 }
 
 (async () => {
-  const picks = [];
-  const overrides = new Map();
-  if (RUN_DERBY) picks.push(await runDerby());
-  if (RUN_ASG) {
-    const asg = await runAsg();
-    picks.push(asg);
-    overrides.set(asg.game_id, '2026-07-14'); // ASG lives in its game day's row
-  }
-  for (const p of picks) {
-    console.log('\n──────── PICK OBJECT ────────');
-    console.log(JSON.stringify({ ...p, rationale: `${(p.rationale || '').slice(0, 120)}…` }, null, 2));
-    console.log('──────── RATIONALE ────────');
-    console.log(p.rationale);
+  const jobs = [];
+  if (RUN_DERBY) jobs.push({ picks: await runDerby(), override: null });
+  if (RUN_ASG) jobs.push({ picks: await runAsg(), override: '2026-07-14' });
+
+  for (const job of jobs) {
+    for (const p of job.picks) {
+      console.log('\n──────── PICK ────────');
+      console.log(`${p.pick}  (conf ${p.confidence}${p.bestLineBook ? `, ${p.bestLineBook}` : ''}, gid ${p.game_id})`);
+      console.log(p.rationale);
+    }
   }
   if (DRY_RUN) { console.log('\n[Specials] dry run — nothing stored.'); process.exit(0); }
-  for (const p of picks) {
-    const res = await picksService.storeDailyPicksInDatabase([p], overrides.get(p.game_id) || null);
-    console.log(`[Specials] store ${p.game_id} → ${JSON.stringify(res).slice(0, 200)}`);
+  for (const job of jobs) {
+    const res = await picksService.storeDailyPicksInDatabase(job.picks, job.override);
+    console.log(`[Specials] store ${job.picks.length} pick(s)${job.override ? ` → ${job.override}` : ''} → ${JSON.stringify(res).slice(0, 180)}`);
   }
   console.log('[Specials] Done.');
   process.exit(0);

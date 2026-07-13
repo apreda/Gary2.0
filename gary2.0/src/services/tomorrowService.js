@@ -319,10 +319,20 @@ async function buildSlate(etDateStr) {
       console.warn(`[TomorrowBoard] ${sport.league} slate fetch failed (skipping league): ${e.message}`);
     }
   }
+  // Non-franchise events (the All-Star Game rides BDL with UNK teams) would
+  // render "Unknown @ Unknown" on the Tomorrow tab — drop any row whose team
+  // names never resolved; dedicated surfaces cover those events. Recount
+  // byLeague so the published game_count matches what actually shows.
+  const named = board.filter(r =>
+    r.away_team && r.home_team && r.away_team !== 'Unknown' && r.home_team !== 'Unknown');
+  for (const lg of Object.keys(byLeague)) {
+    const n = named.filter(r => r.league === lg).length;
+    if (n) byLeague[lg] = n; else delete byLeague[lg];
+  }
   // Doubleheader de-dupe — keep earliest kickoff per (league|away|home), same
   // guard dailySlateService applies before its upsert.
   const deduped = Object.values(
-    board.slice()
+    named.slice()
       .sort((a, b) => new Date(a.commence_time || 0) - new Date(b.commence_time || 0))
       .reduce((acc, r) => {
         const k = `${r.league}|${r.away_team}|${r.home_team}`;

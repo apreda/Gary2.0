@@ -120,13 +120,20 @@ fileprivate struct HubAllStarCard: View {
         ("Jac Caglianone", "KC"), ("Willson Contreras", "BOS"),
     ]
     private var isDerbyDay: Bool { SupabaseAPI.todayEST() == "2026-07-13" }
+    // ASG identity duotone — local to this self-retiring card.
+    private let asgRed = Color(hex: "#D50032")
+    private let asgBlue = Color(hex: "#2D68C4")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HubHead(title: "All-Star Week", sub: "Citizens Bank Park")
+            HubHead(title: "MLB · All-Star Week", sub: "Citizens Bank Park")
 
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    HStack(spacing: 3) {
+                        Rectangle().fill(asgRed).frame(width: 3, height: 20)
+                        Rectangle().fill(asgBlue).frame(width: 3, height: 20)
+                    }
                     Text(isDerbyDay ? "HOME RUN DERBY" : "ALL-STAR GAME")
                         .font(HubFont.display(30))
                         .foregroundStyle(.white)
@@ -641,7 +648,8 @@ struct HubView: View {
                 // ── ALL-STAR WEEK — one-off break surface (Jul 13-14 2026 only;
                 // the date gate self-retires it). Founder call Jul 13: the break
                 // is an acquisition window — "its not an all-star break for Gary".
-                if ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST()) {
+                // MLB tab only (founder): All-Star is MLB — never mixed into WC.
+                if sel == .mlb, ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST()) {
                     HubAllStarCard()
                 }
 
