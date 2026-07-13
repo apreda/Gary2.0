@@ -39,4 +39,11 @@ extension AppFlags {
     static var insightLeagues: [String] {
         worldCupEnabled ? ["MLB", "NBA", "WC"] : ["MLB", "NBA"]
     }
+
+    /// Picks-page ALL tab (founder, Jul 13 2026: "we don't need an ALL tab at
+    /// all, just the sport leagues — but don't delete it, hide it"). OFF = the
+    /// filter strip shows only real league chips and the selection snaps to the
+    /// day's first league; every ALL code path stays intact. Flip to true to
+    /// bring ALL back exactly as it was.
+    static let picksAllTab = false
 }

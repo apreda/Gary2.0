@@ -430,7 +430,7 @@ async function buildMlbInjuries({ date, bdl, teamMeta }) {
     rows.push({
       player: name,
       ...(abbr ? { team: abbr } : {}),
-      status: status || '—',
+      status: shortStatus(status) || '—',
       note: note || '—',
       ...(since ? { since } : {}),
     });
@@ -715,6 +715,19 @@ function shortName(full) {
   const parts = String(full || '').trim().split(/\s+/);
   if (parts.length < 2) return String(full || '');
   return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+}
+
+/** Fan-standard injury-status shorthand for the narrow STATUS cell (no-ellipsis
+ *  law): "60-Day-IL" → "IL-60", "Day-To-Day" → "DTD". Unknown strings pass
+ *  through untouched. */
+function shortStatus(status) {
+  if (!status) return status;
+  const s = String(status).trim();
+  const il = s.match(/^(\d+)[\s-]*Day[\s-]*IL$/i);
+  if (il) return `IL-${il[1]}`;
+  if (/^day[\s-]*to[\s-]*day$/i.test(s)) return 'DTD';
+  if (/^out for season$/i.test(s)) return 'OUT (SZN)';
+  return s;
 }
 
 /** Resolve a player's display name + team abbr (one batched-by-id call, memoized lite). */

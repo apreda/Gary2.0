@@ -20010,12 +20010,24 @@ struct PicksCarouselView: View {
         // priority only breaks ties inside each group.
         let todayLeagues = Set(store.slate.compactMap { ($0.league ?? "").uppercased() })
         let priority: [String: Int] = ["WC": 0, "MLB": 1]
-        return ["ALL"] + s.sorted { a, b in
+        // ALL is flag-gated (founder, Jul 13: league chips only) — the chip
+        // drops but every ALL code path below survives for an easy restore.
+        return (AppFlags.picksAllTab ? ["ALL"] : []) + s.sorted { a, b in
             let ta = todayLeagues.contains(a), tb = todayLeagues.contains(b)
             if ta != tb { return ta }
             let ra = priority[a] ?? 50, rb = priority[b] ?? 50
             return ra == rb ? a < b : ra < rb
         }
+    }
+
+    /// With ALL hidden, `sport` must always sit on a real league: snap the
+    /// "ALL" default (and any league that dropped off the board) to the day's
+    /// first chip once data lands. No-op while the flag shows ALL.
+    private func snapSportIfAllHidden() {
+        guard !AppFlags.picksAllTab,
+              sport == "ALL" || !sports.contains(sport),
+              let first = sports.first(where: { $0 != "ALL" }) else { return }
+        sport = first
     }
     /// A prop's tab key, with the MLB HR lane corrected to HOME-RUN props only.
     /// Non-HR props (total_bases, strikeouts) get mislabeled "MLB HR" upstream;
@@ -20211,6 +20223,7 @@ struct PicksCarouselView: View {
         .task {
             await store.loadIfNeeded()
             rebuildMemo()          // build the memo before consumeFocus reads `games`
+            snapSportIfAllHidden()
             consumeFocus()
             if !connLoaded { await loadConnections() }
             rebuildMemo()          // fold the just-loaded connections into the edge index
@@ -20228,7 +20241,7 @@ struct PicksCarouselView: View {
         // The store's picks/props/slate settle asynchronously after each load — a
         // count signature fires rebuildMemo() once they land (and after a refresh),
         // so the memo tracks the data without recomputing on every live-score tick.
-        .onChange(of: dataSignature) { _ in rebuildMemo() }
+        .onChange(of: dataSignature) { _ in rebuildMemo(); snapSportIfAllHidden() }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
         .onChange(of: store.loading) { loading in if !loading { consumeFocus() } }
         .onChange(of: scenePhase) { phase in
@@ -20268,10 +20281,21 @@ struct PicksCarouselView: View {
                 withAnimation(.easeInOut(duration: 0.25)) { page = idx + 1 }
             }
         }
-        if sport != "ALL" {
+        if sport != "ALL" && AppFlags.picksAllTab {
             // Widen the filter first; apply after the sport-change page reset.
             sport = "ALL"
             DispatchQueue.main.async { apply() }
+        } else if !AppFlags.picksAllTab {
+            // ALL is hidden: jump the filter to the focused game's own league
+            // (slate first, then today's picks), then land on its page.
+            let lg = store.slate.first { abbrGameMatches(focus, matchup: "\($0.away_team ?? "") @ \($0.home_team ?? "")") }?.league?.uppercased()
+                ?? store.gamePicks.first { abbrGameMatches(focus, matchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")") }?.league?.uppercased()
+            if let lg, sports.contains(lg), sport != lg {
+                sport = lg
+                DispatchQueue.main.async { apply() }
+            } else {
+                apply()
+            }
         } else {
             apply()
         }
@@ -20683,7 +20707,12 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
-            LeaguePulseSection(league: scopeLeague, refreshTick: refreshTick)  // NEW — above TODAY'S EDGES
+            // TODAY only — the Yesterday board is a time capsule of what users
+            // actually saw yesterday; a live today-keyed table doesn't belong
+            // there (founder, Jul 13).
+            if isToday {
+                LeaguePulseSection(league: scopeLeague, refreshTick: refreshTick)  // above TODAY'S EDGES
+            }
             // World Cup gets a bespoke section (4 fan-legible lanes + a tap-through
             // team-news card) instead of the generic MLB-shaped EdgesSection. WC-only:
             // the shared EdgesSection / locked MLB design is never touched.
@@ -21777,14 +21806,37 @@ struct PulseTable: View {
         }
     }
 
+    /// Columns that actually paint — the trend chip rides inside the primary
+    /// cell, so its raw column would otherwise burn a full equal-width slot
+    /// rendering nothing (a third of why names truncated).
+    private var paintedColumns: [LeaguePulseColumn] {
+        columns.filter { $0.key != "trend" }
+    }
+    private var primaryColumn: LeaguePulseColumn? { paintedColumns.first { $0.emphasis == "primary" } }
+    private var restColumns: [LeaguePulseColumn] { paintedColumns.filter { $0.emphasis != "primary" } }
+
+    // Row grammar (no-ellipsis law, founder Jul 13): the NAME gets one flexible
+    // half of the row, the short numeric columns split the other half — an
+    // equal N-way split starved "W. Contreras" into "W. Con…" while "14"
+    // lounged in the same width. Header and rows share the structure so the
+    // columns stay aligned.
     private var header: some View {
         HStack(spacing: 8) {
-            ForEach(Array(columns.enumerated()), id: \.offset) { _, col in
-                Text(col.label.uppercased())
+            if let p = primaryColumn {
+                Text(p.label.uppercased())
                     .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                     .foregroundStyle(.white.opacity(0.62))
-                    .frame(maxWidth: .infinity, alignment: alignment(col))
+                    .frame(maxWidth: .infinity, alignment: alignment(p))
             }
+            HStack(spacing: 8) {
+                ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
+                    Text(col.label.uppercased())
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.62))
+                        .frame(maxWidth: .infinity, alignment: alignment(col))
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
     }
@@ -21792,10 +21844,17 @@ struct PulseTable: View {
     private func dataRow(_ cell: [String: String]) -> some View {
         let isToday = (cell["highlight"] == "today")
         return HStack(spacing: 8) {
-            ForEach(Array(columns.enumerated()), id: \.offset) { _, col in
-                cellView(col, cell)
-                    .frame(maxWidth: .infinity, alignment: alignment(col))
+            if let p = primaryColumn {
+                cellView(p, cell)
+                    .frame(maxWidth: .infinity, alignment: alignment(p))
             }
+            HStack(spacing: 8) {
+                ForEach(Array(restColumns.enumerated()), id: \.offset) { _, col in
+                    cellView(col, cell)
+                        .frame(maxWidth: .infinity, alignment: alignment(col))
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
         .overlay(alignment: .leading) {
@@ -21810,14 +21869,19 @@ struct PulseTable: View {
         let value = cell[col.key] ?? ""
         if col.emphasis == "primary" {
             // Primary cell: bold name + optional team abbr + optional trend chip.
+            // HARD LAW (founder, Jul 13): information NEVER ellipsizes — the name
+            // scales down before it can ever cut off ("Ju…" shipped once; never
+            // again). The feed also sends short names ("J. Caminero") now.
             HStack(spacing: 6) {
                 Text(value)
                     .font(GaryFonts.text(13.5, .semibold)).foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 if let team = cell["team"], !team.isEmpty, col.key != "team" {
                     Text(team.uppercased())
                         .font(GaryFonts.mono(9))
                         .foregroundStyle(.white.opacity(0.62))
+                        .fixedSize()
                 }
                 trendChip(cell["trend"])
             }
@@ -21830,6 +21894,7 @@ struct PulseTable: View {
                 .font(emphasisFont(col.emphasis))
                 .foregroundStyle(emphasisColor(col.emphasis))
                 .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
     }
 
