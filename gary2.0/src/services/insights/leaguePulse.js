@@ -69,11 +69,17 @@ const WC_SUSP_YELLOW_THRESHOLD = 2; // 2 yellows in a tournament = 1 from a ban 
  * @param {object} args
  * @param {string} args.date    YYYY-MM-DD (ET slate day)
  * @param {string} args.league  'MLB' | 'WC'
+ * @param {string[]} [args.batterIdsOverride]  MLB only: explicit batter pool for a
+ *        no-game day (All-Star break — the day's "slate batters" are the event's
+ *        participants). SP/bullpen tabs drop (no probables); bats + injuries build
+ *        from this pool. Ignored when today's slate has real games.
+ * @param {string[]} [args.teamAbbrsOverride]  MLB only: team filter for the
+ *        injuries tab in override mode (the pool players' teams).
  * @returns {Promise<Array<{date,league,tab,title,subtitle,sort_note,columns,rows}>>}
  */
-export async function buildLeaguePulse({ date, league } = {}) {
+export async function buildLeaguePulse({ date, league, batterIdsOverride, teamAbbrsOverride } = {}) {
   const lg = String(league || '').toUpperCase();
-  if (lg === 'MLB') return buildMlbPulse(date);
+  if (lg === 'MLB') return buildMlbPulse(date, { batterIdsOverride, teamAbbrsOverride });
   if (lg === 'WC') return buildWcPulse(date);
   return [];
 }
@@ -82,7 +88,7 @@ export async function buildLeaguePulse({ date, league } = {}) {
 // MLB
 // ═════════════════════════════════════════════════════════════════════════════
 
-async function buildMlbPulse(date) {
+async function buildMlbPulse(date, { batterIdsOverride, teamAbbrsOverride } = {}) {
   const bdl = await loadBdl();
   if (!bdl) return [];
 
@@ -90,6 +96,21 @@ async function buildMlbPulse(date) {
   const games = asArray(await safeCall(() => bdl.getMlbGamesForETDate(date), []))
     .map(normalizeGame)
     .filter(Boolean);
+  // No-game day (All-Star break): the explicit pool stands in for the slate —
+  // bats + injuries build from it, the game-anchored tabs (SP/bullpen) drop.
+  if (!games.length && asArray(batterIdsOverride).length) {
+    const batterIds = new Set(asArray(batterIdsOverride).map(String));
+    const teamMeta = new Map();
+    asArray(teamAbbrsOverride).forEach((abbr, i) => teamMeta.set(`ovr-${i}`, { abbr }));
+
+    const packs = [];
+    const bats = await safeCall(() => buildMlbHotColdBats({ date, season, bdl, batterIds }), null);
+    if (bats) packs.push(bats);
+    const inj = await safeCall(() => buildMlbInjuries({ date, bdl, teamMeta }), null);
+    if (inj) packs.push(inj);
+    console.log(`[leaguePulse] MLB (pool override): built ${packs.length} tab(s): ${packs.map((p) => p.tab).join(', ') || 'none'}.`);
+    return packs;
+  }
   if (!games.length) {
     console.log('[leaguePulse] MLB: empty slate — nothing to build.');
     return [];
@@ -259,7 +280,9 @@ async function buildMlbHotColdBats({ date, season, bdl, batterIds }) {
     const meta = await playerHeader(bdl, pid);
     rows.push({
       _sort: ops != null ? ops : (avg != null ? avg : 0),
-      player: meta.name,
+      // Short display name ("J. Caminero") — the BATTER column is the table's
+      // narrowest cell and full first names truncate to "Ju…" on phones.
+      player: shortName(meta.name),
       ...(meta.abbr ? { team: meta.abbr } : {}),
       avg: avg != null ? pct3(avg) : '—',
       ops: ops != null ? pct3(ops) : '—',
@@ -685,6 +708,13 @@ function col(key, label, align, emphasis) {
 function stripSort(r) {
   const { _sort, ...rest } = r;
   return rest;
+}
+
+/** "Junior Caminero" → "J. Caminero" — narrow-column display name. */
+function shortName(full) {
+  const parts = String(full || '').trim().split(/\s+/);
+  if (parts.length < 2) return String(full || '');
+  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
 }
 
 /** Resolve a player's display name + team abbr (one batched-by-id call, memoized lite). */

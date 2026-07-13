@@ -433,13 +433,16 @@ enum SupabaseAPI {
         let reason: String?
         let win_odds: Int?
         let player_id: Int?
+        /// "won"/"lost"/"push" once the call settles — graded LIVE during the
+        /// event, so rows flip on-screen as rounds finish.
+        let result: String?
     }
 
     /// THE CONTESTANTS list (Jul 13 2026 one-off): Sol's R1 over/under call on
     /// every Derby participant — plus market "extra" for the added plays list.
     static func fetchAllStarProps(date: String, event: String = "hr_derby", market: String = "r1_hr_ou") async -> [AllStarPropRow] {
         let url = buildURL(table: "allstar_props", query: [
-            URLQueryItem(name: "select", value: "id,player,team,season_hr,line,call,odds,book,reason,win_odds,player_id"),
+            URLQueryItem(name: "select", value: "id,player,team,season_hr,line,call,odds,book,reason,win_odds,player_id,result"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "event", value: "eq.\(event)"),
             URLQueryItem(name: "market", value: market == "extra" ? "like.extra*" : "eq.\(market)"),
@@ -1039,6 +1042,10 @@ enum SupabaseAPI {
     struct MLBLineupFielder: Decodable {
         let playerId: String?; let name: String?; let pos: String?; let order: Int?
         let bats: String?; let ops: String?; let heat: String?; let hrEdge: Bool?; let plat: Bool?; let fillIn: Bool?
+        /// The player's OWN team abbreviation — set only on mixed-team rows
+        /// (the HR Derby field, where the eight contestants each wear their
+        /// club's colours). Absent on every normal lineup.
+        let team: String?
     }
 
     // MARK: - Weekly NFL Picks

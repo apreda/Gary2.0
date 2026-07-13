@@ -2073,9 +2073,7 @@ struct HomeView: View {
                     // grammar (founder, Jul 13): the team goes to its abbreviation
                     // ("PHI ML +114") so the cell reads at FULL strip size with
                     // nothing scaled down and nothing truncated. Ever.
-                    gamesNightRoll = gamesNight.cashes
-                        .sorted { $0.units > $1.units }
-                        .prefix(6)
+                    gamesNightRoll = gamesNight.rollCashes
                         .map { row in
                             let words = row.sub.split(separator: " ").map(String.init)
                             let cut = words.firstIndex { w in
@@ -3534,12 +3532,12 @@ struct HomeView: View {
     /// cash, or the owned miss), the Biggest Cashes rows, and net units.
     /// All template — honesty is the brand, so the net includes the losses.
     private static func buildLastNight(games: [GameResult], props: [PropResult], includeToday: Bool = true)
-        -> (story: HomeMarqueeHero.Story?, marqueeGame: GameResult?, cashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?, record: (w: Int, l: Int, p: Int)) {
+        -> (story: HomeMarqueeHero.Story?, marqueeGame: GameResult?, cashes: [HomeCashesSection.Row], rollCashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?, record: (w: Int, l: Int, p: Int)) {
 
         let settledGames = games.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let settledProps = props.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let days = settledGames.compactMap { $0.game_date } + settledProps.compactMap { $0.game_date }
-        guard !days.isEmpty else { return (nil, nil, [], nil, 0, 0, nil, (0, 0, 0)) }
+        guard !days.isEmpty else { return (nil, nil, [], [], nil, 0, 0, nil, (0, 0, 0)) }
         // "Last night" = the most recent COMPLETED EST slate day. game_date already carries
         // the ET slate day a game STARTED on — a late west-coast game that finishes after
         // midnight UTC still keeps its ET day (verified Jun 18: Angels@Athletics graded
@@ -3551,7 +3549,7 @@ struct HomeView: View {
         // today as today's picks grade (label tracks the day). includeToday=false: yesterday-only,
         // for the once-a-day recap pop-up (never this morning's partial slate).
         let candidate = includeToday ? Set(days) : Set(days).filter { $0 < today }
-        guard let anchor = candidate.max() else { return (nil, nil, [], nil, 0, 0, nil, (0, 0, 0)) }
+        guard let anchor = candidate.max() else { return (nil, nil, [], [], nil, 0, 0, nil, (0, 0, 0)) }
         let nightSet: Set<String> = [anchor]
         let nightGames = settledGames.filter { nightSet.contains($0.game_date ?? "") }
         let nightProps = settledProps.filter { nightSet.contains($0.game_date ?? "") }
@@ -3589,6 +3587,10 @@ struct HomeView: View {
             }
         }
         cashes.sort { $0.units > $1.units }
+        // The strip's roller wants EVERY big cash — captured before the rail's
+        // per-league dedup below, which leaves exactly ONE item on a one-sport
+        // night (an all-MLB slate) and froze the roll (founder, Jul 13).
+        let rollCashes = Array(cashes.prefix(6))
         // Sport variety — keep the biggest cash PER league so one hot sport can't
         // sweep the whole Hits & heartbreakers rail (user ask).
         var seenLeagues = Set<String>()
@@ -3630,7 +3632,7 @@ struct HomeView: View {
                 if pri(a) != pri(b) { return pri(a) < pri(b) }
                 return abs(resultOdds(a.odds, pickText: a.pick_text)) > abs(resultOdds(b.odds, pickText: b.pick_text))
             }
-        guard let r = subject else { return (nil, nil, Array(cashes.prefix(3)), beat, net, graded, bestOdds, record) }
+        guard let r = subject else { return (nil, nil, Array(cashes.prefix(3)), rollCashes, beat, net, graded, bestOdds, record) }
 
         let cashed = r.result == "won"
         let o = resultOdds(r.odds, pickText: r.pick_text)
@@ -3643,7 +3645,7 @@ struct HomeView: View {
             receiptPick: Formatters.arrowizeOverUnder(pickLine).uppercased(),
             verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "LOST",
             cashed: cashed)
-        return (story, r, Array(cashes.prefix(3)), beat, net, graded, bestOdds, record)
+        return (story, r, Array(cashes.prefix(3)), rollCashes, beat, net, graded, bestOdds, record)
     }
 
     /// "Knicks over the Spurs, 105–95" — a real game headline from facts.
@@ -3909,8 +3911,9 @@ struct HomeAllStarTakeover: View {
                               day: "TOMORROW", clock: "3:00 PM ET")
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                 }
+                // First pitch back = TB @ BOS 1:35 PM ET Fri Jul 17 (BDL-verified).
                 runwayRow(event: "MLB RETURNS", detail: "Full slate",
-                          day: "FRIDAY", clock: nil)
+                          day: "FRIDAY", clock: "1:35 PM ET")
             }
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
         }
@@ -3938,6 +3941,17 @@ struct DerbyContestSection: View {
     /// strip it for display; the gold odds column is the single price source.
     static func cleanBet(_ s: String?) -> String {
         (s ?? "").replacingOccurrences(of: #"\s*[+-]\d{3,4}\s*$"#, with: "", options: .regularExpression)
+    }
+
+    /// Settled-call mark (✓ / ✗ / –) for the row's trailing seat — nil until
+    /// the live grading writes the row's result mid-event.
+    static func resultMark(_ result: String?) -> (icon: String, color: Color)? {
+        switch result {
+        case "won": ("checkmark", GaryColors.win)
+        case "lost": ("xmark", GaryColors.loss)
+        case "push": ("minus", GaryColors.meta)
+        default: nil
+        }
     }
 
     /// Ticker abbreviation for the one-line rows (first-list layout).
@@ -4023,7 +4037,13 @@ struct DerbyContestSection: View {
                                         .foregroundStyle(GaryColors.gold)
                                 }
                             }
-                            if r.reason != nil {
+                            // Graded LIVE during the event — the mark takes the
+                            // chevron's seat the moment a round settles the call.
+                            if let mark = Self.resultMark(r.result) {
+                                Image(systemName: mark.icon)
+                                    .font(.system(size: 12, weight: .black))
+                                    .foregroundStyle(mark.color)
+                            } else if r.reason != nil {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(GaryColors.gold.opacity(0.6))
@@ -4067,7 +4087,11 @@ struct DerbyContestSection: View {
                                         .font(GaryFonts.mono(13, bold: true))
                                         .foregroundStyle(GaryColors.gold)
                                 }
-                                if r.reason != nil {
+                                if let mark = Self.resultMark(r.result) {
+                                    Image(systemName: mark.icon)
+                                        .font(.system(size: 12, weight: .black))
+                                        .foregroundStyle(mark.color)
+                                } else if r.reason != nil {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 10, weight: .bold))
                                         .foregroundStyle(GaryColors.gold.opacity(0.6))
@@ -20269,7 +20293,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
-                                   edges: sportConnections, scopeLeague: sport, isToday: pickDay == .today, refreshTick: store.refreshTick, onTapProp: { selectedProp = $0 })
+                                   edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, refreshTick: store.refreshTick, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .refreshable { await store.refresh() }
@@ -20599,6 +20623,19 @@ struct PicksCarouselView: View {
         return connections.filter { abbrGameMatches($0.game, matchup: hay) || Self.matchupKey($0.game) == key }
     }
 
+    /// The Today page's working scope: on a ONE-league day (an all-MLB July
+    /// night, the All-Star break) the ALL tab resolves to that league, so the
+    /// league-wide sections (LEAGUE PULSE) run instead of collapsing — the
+    /// normal system, pointed at the only sport playing. Multi-league days
+    /// keep ALL as ALL.
+    private var effectiveScope: String {
+        guard sport == "ALL" else { return sport }
+        let leagues = Set((store.gamePicks.map { ($0.league ?? "").uppercased() }
+                           + store.slate.map { ($0.league ?? "").uppercased() })
+            .filter { !$0.isEmpty })
+        return leagues.count == 1 ? leagues.first! : sport
+    }
+
     /// Today-page edges respect the sport filter — an NBA tab must never
     /// show a Padres edge. Sports without a hub league (NHL) get none.
     private var sportConnections: [Signal] {
@@ -20646,19 +20683,13 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
-            // All-Star specials day: page 0 carries the event's board too —
-            // the contestants + extra plays fill what was a void under the
-            // top pick (founder, Jul 13).
-            if (topGamePick?.pick.type ?? "") == "special" {
-                DerbyContestSection()
-            }
             LeaguePulseSection(league: scopeLeague, refreshTick: refreshTick)  // NEW — above TODAY'S EDGES
             // World Cup gets a bespoke section (4 fan-legible lanes + a tap-through
             // team-news card) instead of the generic MLB-shaped EdgesSection. WC-only:
             // the shared EdgesSection / locked MLB design is never touched.
             if scopeLeague == "WC" {
                 WCTodaySection(edges: edges)
-            } else if (topGamePick?.pick.type ?? "") != "special" {
+            } else {
                 EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
             }
         }
@@ -21664,6 +21695,13 @@ struct LeaguePulseSection: View {
                         .padding(.horizontal, 16)
                     }
                 }
+            } else {
+                // Zero-size anchor so the .task below always has a live view to
+                // ride: a Group whose lone child is behind the `if` renders
+                // NOTHING before the first fetch, an absent view never
+                // "appears", and the task never fired — the section
+                // deadlocked empty forever (found Jul 13).
+                Color.clear.frame(width: 0, height: 0)
             }
         }
         // Key on the EST slate day AND the refresh tick (not just `league`) so the

@@ -42,6 +42,7 @@ private struct MLBFielder: Identifiable {
     var plat = false                 // favourable platoon vs the starter
     var sp = false
     var fillIn = false               // fill-in starter (a regular is resting/out) — Contested
+    var team: String? = nil          // own-club abbr on mixed-team rows (HR Derby field)
     // numbers (revealed on flip)
     var ord = 0, wrc = 0
     var xwoba = "", vR = "", vL = "", form = ""
@@ -139,6 +140,9 @@ struct MLBGameIntelView: View {
 
     private var awayName: String { matchup.components(separatedBy: " @ ").first ?? "Away" }
     private var homeName: String { matchup.components(separatedBy: " @ ").last ?? "Home" }
+    /// The HR Derby field — one shared pool of contestants, not two lineups:
+    /// the away/home toggle is meaningless there and hides.
+    private var isDerby: Bool { awayName.localizedCaseInsensitiveContains("derby") }
     private var ballpark: Ballpark? { MLBParks.park(forTeam: homeName) ?? MLBParks.all["brewers"] }
     /// The team whose lineup is on the field — both bat at the home park (home/away toggle).
     private var shownTeam: SupabaseAPI.MLBTeamLineup? { homeUp ? realHome : realAway }
@@ -316,7 +320,7 @@ struct MLBGameIntelView: View {
             guard let pos = f.pos, let c = Self.posCoord[pos] else { continue }
             out.append(MLBFielder(num: f.order ?? 0, name: Self.surname(f.name ?? ""), pos: pos, playerId: f.playerId ?? "", dx: c.0, dy: c.1,
                 heat: f.heat ?? "steady", bats: f.bats ?? "", hr: f.hrEdge ?? false, plat: f.plat ?? false,
-                fillIn: f.fillIn ?? false, ord: f.order ?? 0, vR: f.ops ?? ""))
+                fillIn: f.fillIn ?? false, team: f.team, ord: f.order ?? 0, vR: f.ops ?? ""))
         }
         if let p = h.pitcher, let c = Self.posCoord["P"] {
             out.append(MLBFielder(num: 0, name: Self.surname(p.name ?? ""), pos: "P", playerId: p.playerId ?? "", dx: c.0, dy: c.1, heat: "steady", bats: "", sp: true))
@@ -419,7 +423,7 @@ struct MLBGameIntelView: View {
                 }
                 // Team toggle floats at the top of the field, above center field (user ask).
                 .overlay(alignment: .top) {
-                    if realHome != nil && realAway != nil { teamToggle.padding(.top, 12) }
+                    if realHome != nil && realAway != nil && !isDerby { teamToggle.padding(.top, 12) }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
@@ -494,16 +498,20 @@ struct MLBGameIntelView: View {
     }
 
     private func token(_ f: MLBFielder) -> some View {
+        // Mixed-team rows (the HR Derby field): each player wears HIS OWN club's
+        // dark identity — eight contestants, eight real uniforms. Normal games
+        // keep the side-wide treatment below.
+        let ownTeam = f.team.flatMap { Self.teamColors[$0.uppercased()] }
         // Real TEAM colours for the side currently on the field (Option A):
         //  • AWAY = the team's DARK primary, number in WHITE.
         //  • HOME = WHITE jersey, number in the team's dark colour, + team pinstripes if they wear them.
-        let tc = Self.teamColor(forName: homeUp ? homeName : awayName)
+        let tc = ownTeam ?? Self.teamColor(forName: homeUp ? homeName : awayName)
         // HOME white jersey softened to a warm off-white (#E7E4DC) — pure white read too glaring.
-        let jersey: Color = homeUp ? Color(hex: "#E7E4DC") : tc.primary
+        let jersey: Color = (ownTeam != nil || !homeUp) ? tc.primary : Color(hex: "#E7E4DC")
         // HOME white jersey → number in the team's bright signature accent (e.g. Pirates GOLD).
         // AWAY dark jersey → number stays WHITE.
-        let textC: Color = homeUp ? tc.accent : .white
-        let pinstripes = homeUp && tc.hasPinstripes
+        let textC: Color = (ownTeam != nil || !homeUp) ? .white : tc.accent
+        let pinstripes = ownTeam == nil && homeUp && tc.hasPinstripes
         // STANDARD players wear the team cap colour; HOT/COLD keep their red/blue heat tint.
         let isNeutral = f.heat != "hot" && f.heat != "cold"
         let cap: Color = isNeutral ? tc.primary : heatColor(f.heat)
