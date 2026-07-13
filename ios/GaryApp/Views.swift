@@ -2068,11 +2068,24 @@ struct HomeView: View {
                     gamesNightRecord = gamesNight.record
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
-                    // The strip's rolling slot — biggest cashes first.
+                    // The strip's rolling slot — biggest cashes first, in TICKER
+                    // grammar (founder, Jul 13): the team goes to its abbreviation
+                    // ("PHI ML +114") so the cell reads at FULL strip size with
+                    // nothing scaled down and nothing truncated. Ever.
                     gamesNightRoll = gamesNight.cashes
                         .sorted { $0.units > $1.units }
                         .prefix(6)
-                        .map { .init(line: $0.sub.uppercased(), odds: $0.odds) }
+                        .map { row in
+                            let words = row.sub.split(separator: " ").map(String.init)
+                            let cut = words.firstIndex { w in
+                                ["ML", "MONEYLINE", "OVER", "UNDER"].contains(w.uppercased())
+                                    || w.hasPrefix("+") || w.hasPrefix("-") || Double(w) != nil
+                            } ?? words.count
+                            let team = words[..<cut].joined(separator: " ")
+                            let line = team.isEmpty ? row.sub
+                                : ([Self.teamAbbrev(team, league: row.league)] + words[cut...]).joined(separator: " ")
+                            return .init(line: line.uppercased(), odds: row.odds)
+                        }
                     let todayKey = SupabaseAPI.todayEST()
                     if gamesNight.graded > 0, dailyRecapShownDate != todayKey {
                         // Mark shown for today the MOMENT it appears — so it's truly once/day even
