@@ -43,7 +43,7 @@ const DRY_RUN = args.includes('--dry-run');
 const PARK = args.includes('--park');
 const RUN_DERBY = args.includes('--derby');
 const RUN_ASG = args.includes('--asg');
-const EXTRA_MODES = ['--derby-extras', '--contest-rewrite', '--backfill-ids'].some(f => args.includes(f));
+const EXTRA_MODES = ['--derby-extras', '--contest-rewrite', '--backfill-ids', '--reconcile-caminero'].some(f => args.includes(f));
 if (!RUN_DERBY && !RUN_ASG && !RUN_DERBY_PROPS && !EXTRA_MODES) { console.error('Pass --derby, --derby-props, --derby-extras, --contest-rewrite, --backfill-ids, and/or --asg'); process.exit(1); }
 
 const MODEL = process.env.SPECIALS_MODEL || 'gpt-5.6-sol';
@@ -123,7 +123,7 @@ RATIONALE VOICE: each rationale is "Gary's Take" — the words that appear on th
 
 HARD DATA RULES (all production rules apply):
 - Every number you write (stats, odds, HR totals, distances) MUST appear in the DATA sections of the user message. No outside numbers, no estimates.
-- Odds: quote ONLY prices present on the grounded boards, attributed to a real SPORTSBOOK (FanDuel, DraftKings, BetMGM, Caesars, bet365, BetRivers, Fanatics, Betano). Media or odds-tracking sites are sources, not books — if a price has no named sportsbook, ship the call with odds null.
+- Odds: quote ONLY prices present on the grounded boards, attributed to a real SPORTSBOOK (FanDuel, DraftKings, BetMGM, Caesars, bet365, BetRivers, Fanatics, Betano). Media or odds-tracking sites are sources, not books — if a price has no named sportsbook, ship the call with odds null. When multiple books price a market, PREFER DraftKings (the app's standard book).
 - pick_text is clean bet grammar ("Caminero to win the Derby +425") — never first-person phrasing; the voice lives in the rationale.
 - Players without a verified stat block may be discussed only via facts stated in the briefs.
 - Never reference being an AI, a model, data feeds, or prompts.
@@ -293,7 +293,7 @@ async function runDerbyExtras() {
   ];
   const marketBoard = `${mb1}\n\n${mb2}\n\nFACT BRIEF:\n${mb3}`;
   const schema = `{"board":[{"subject":"Junior Caminero"|"American League"|"Field","bet":"clean bet line under 45 chars e.g. 'Caminero to reach the final +230'","odds":230,"book":"DraftKings","rationale":"first-person, 100-160 words, 2 paragraphs, varied opener — never start 'I'm taking'"}]}`;
-  const user = `${lockedBoard}\n\nMARKET BOARD (grounded):\n${marketBoard}\n\nTASK: 5-6 MORE Derby plays from markets NOT already used by the locked board and NOT the player R1 over/unders. Every play must be CONSISTENT with every locked call above (e.g. nothing that needs a 485+ foot homer, nothing that needs the event total over 119.5, nothing that fights the Caminero winner call or the R1 calls). Real sportsbook prices only. Vary the rationale openers.\n\nJSON schema: ${schema}`;
+  const user = `${lockedBoard}\n\nMARKET BOARD (grounded):\n${marketBoard}\n\nTASK: 5-6 MORE Derby plays from markets NOT already used by the locked board and NOT the player R1 over/unders. RULES: at most ONE play per subject across the whole set (spread the board — never three plays on the same hitter); every play MUST carry a sportsbook price from the board (DraftKings preferred) — if a market has no priced quote, SKIP it entirely; every play must be CONSISTENT with every locked call above (nothing that needs a 485+ foot homer, nothing that needs the event total over 119.5, nothing that fights the Caminero winner call or the R1 calls). Vary the rationale openers.\n\nJSON schema: ${schema}`;
   const board = await solBoard(user, 4);
   // Indexed market keys — the (date,event,player,market) unique constraint
   // otherwise rejects two plays on the same subject (Caminero final + exit velo).
@@ -334,6 +334,36 @@ async function rewriteContestTakes() {
   console.log('[Specials] ✅ takes rewritten (calls untouched)');
 }
 
+/** Caminero reconciliation (founder): the winner call says Caminero wins it
+ *  all, the R1 call says UNDER 9.5 — both are Gary's. Show him BOTH of his
+ *  own opinions and let him resolve it organically: keep UNDER and own the
+ *  coexistence in the take, or change the call if his read says so. */
+async function reconcileCaminero() {
+  console.log(`[Specials] ── CAMINERO RECONCILE (${MODEL}) ──`);
+  const { data: rows } = await supabaseAdmin.from('allstar_props')
+    .select('id,player,line,call,odds,book,reason').eq('date', '2026-07-13')
+    .eq('market', 'r1_hr_ou').eq('player', 'Junior Caminero');
+  const row = rows?.[0];
+  if (!row) { console.log('no Caminero row'); return; }
+  const { data: parked } = await supabaseAdmin.from('test_daily_picks')
+    .select('picks').eq('date', '2026-07-13').eq('test_name', 'allstar-parked').limit(1);
+  const winner = (parked?.[0]?.picks || []).find(p => /Caminero to win/i.test(p.pick || ''));
+  const schema = `{"call":"OVER"|"UNDER","odds":-125,"book":"DraftKings","rationale":"first-person, 120-200 words, 2-3 paragraphs"}`;
+  const user = `Two of YOUR OWN live Derby positions sit side by side tonight:\n\n1) YOUR WINNER PICK (locked, not under review): ${winner?.pick ?? 'Caminero to win the Derby +425'}. Your reasoning: ${winner?.rationale ?? ''}\n\n2) YOUR ROUND 1 CALL (under review now): Caminero ${row.call} ${row.line} at ${row.odds} (${row.book}). Your reasoning: ${row.reason}\n\nA reader sees both and asks how you can back him to win the whole thing while taking UNDER his Round 1 homers. Resolve it as yourself: either KEEP the under and make the coexistence explicit in the take (a winner can advance on 8-9 homers and peak in the 15-swing rounds — if that is genuinely your read, say it plainly), or CHANGE the call if holding both is not honest. Numbers only from the two rationales above.\n\nJSON schema: ${schema}`;
+  const session = await createOpenAISession({ modelName: MODEL, systemPrompt: SYSTEM, tools: [], thinkingLevel: 'high' });
+  const res = await sendToOpenAISession(session, user, { isFunctionResponse: false });
+  const parsed = parseJsonLoose(res.content);
+  const audit = auditPickRationale({ rationale: parsed.rationale ?? '' }, user);
+  if (audit.retryable.length > 0) { console.log('reconcile take failed audit — keeping existing'); return; }
+  await supabaseAdmin.from('allstar_props').update({
+    call: parsed.call || row.call,
+    odds: typeof parsed.odds === 'number' ? parsed.odds : row.odds,
+    book: parsed.book || row.book,
+    reason: parsed.rationale || row.reason,
+  }).eq('id', row.id);
+  console.log(`  Caminero R1 → ${parsed.call} (was ${row.call}); take: "${(parsed.rationale || '').slice(0, 80)}…"`);
+}
+
 /** Backfill BDL player ids so the app can open standard player cards. */
 async function backfillPlayerIds() {
   const { getApiKey, BALLDONTLIE_API_BASE_URL } = await import('../src/services/ballDontLieService.js');
@@ -355,8 +385,9 @@ async function backfillPlayerIds() {
 (async () => {
   if (args.includes('--derby-extras')) { await runDerbyExtras(); }
   if (args.includes('--contest-rewrite')) { await rewriteContestTakes(); }
+  if (args.includes('--reconcile-caminero')) { await reconcileCaminero(); }
   if (args.includes('--backfill-ids')) { await backfillPlayerIds(); }
-  if (args.includes('--derby-extras') || args.includes('--contest-rewrite') || args.includes('--backfill-ids')) {
+  if (args.includes('--derby-extras') || args.includes('--contest-rewrite') || args.includes('--backfill-ids') || args.includes('--reconcile-caminero')) {
     if (!RUN_DERBY && !RUN_ASG && !RUN_DERBY_PROPS) { console.log('[Specials] Done.'); process.exit(0); }
   }
   if (RUN_DERBY_PROPS) await runDerbyProps();

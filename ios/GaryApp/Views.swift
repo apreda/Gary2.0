@@ -1557,6 +1557,7 @@ struct PickInfoSheet: View {
         ("THE DROP", "Gary posts picks about 90 minutes before each game, once lineups are in."),
         ("THE GRADE", "Every pick is graded the next morning — CASHED when it wins, LOST when it doesn't. Nothing gets deleted."),
         ("THE MONEY", "Results are scored flat: $100 on every pick. A +$87 stamp means a $100 bet at the posted odds paid $87 in profit."),
+        ("THE ODDS", "Prices shown are DraftKings unless a different book is named on the pick. Lines move — check your book before you bet."),
         ("THE CARD", "Winners is Gary's sealed best-of-the-board each day — games and props."),
     ]
     var body: some View {
@@ -3976,42 +3977,52 @@ struct DerbyContestSection: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                     Button { if r.reason != nil { takeRow = r } } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                // Name opens the STANDARD player card (the
-                                // lineup behavior every game page has — founder).
-                                Button { if r.player_id != nil { cardRow = r } } label: {
-                                    Text(r.player ?? "")
-                                        .font(.system(size: 15.5, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.92))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
-                                        .contentShape(Rectangle())
+                        // Odds column vertically CENTERED against the two-line
+                        // left block (founder); gold lives ONLY on the win odds
+                        // and the OVER/UNDER word; R1 rows show no juice.
+                        HStack(alignment: .center, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    // Name opens the STANDARD player card.
+                                    Button { if r.player_id != nil { cardRow = r } } label: {
+                                        Text(r.player ?? "")
+                                            .font(.system(size: 15.5, weight: .semibold))
+                                            .foregroundStyle(.white.opacity(0.92))
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.8)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    Text(Self.abbr(r.team))
+                                        .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
+                                        .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.55))
+                                    Spacer(minLength: 8)
+                                    if let hr = r.season_hr {
+                                        Text("\(hr) HR")
+                                            .font(GaryFonts.mono(12, bold: true))
+                                            .foregroundStyle(.white.opacity(0.85))
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                                Text(Self.abbr(r.team))
-                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
-                                    .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.55))
-                                Spacer(minLength: 8)
-                                if let w = r.win_odds {
-                                    Text("\(w > 0 ? "+" : "")\(w)")
-                                        .font(GaryFonts.mono(12.5, bold: true))
-                                        .foregroundStyle(.white.opacity(0.62))
-                                }
-                                if r.reason != nil {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(GaryColors.gold.opacity(0.6))
+                                if let line = r.line, let call = r.call, !call.isEmpty {
+                                    (Text("R1 ").foregroundColor(.white.opacity(0.7))
+                                        + Text(call.uppercased()).foregroundColor(GaryColors.gold)
+                                        + Text(" \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))").foregroundColor(.white.opacity(0.7)))
+                                        .font(GaryFonts.mono(12, bold: true))
+                                } else {
+                                    Text("LINE PENDING")
+                                        .font(GaryFonts.mono(11.5, bold: true))
+                                        .foregroundStyle(GaryColors.meta)
                                 }
                             }
-                            if let line = r.line, let call = r.call, !call.isEmpty {
-                                Text("R1 \(call.uppercased()) \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))\(r.odds.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")")
-                                    .font(GaryFonts.mono(12, bold: true))
+                            if let w = r.win_odds {
+                                Text("\(w > 0 ? "+" : "")\(w)")
+                                    .font(GaryFonts.mono(13, bold: true))
                                     .foregroundStyle(GaryColors.gold)
-                            } else {
-                                Text("LINE PENDING")
-                                    .font(GaryFonts.mono(11.5, bold: true))
-                                    .foregroundStyle(GaryColors.meta)
+                            }
+                            if r.reason != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
                             }
                         }
                         .contentShape(Rectangle())
@@ -4591,12 +4602,9 @@ struct HomeOvernightStrip: View {
     var body: some View {
         Button(action: onTape) {
             HStack(spacing: 7) {
-                Text(label)
-                    // No tracking — identical render to the record/net/roll
-                    // cells (founder: every cell the SAME size, optically too).
-                    .font(GaryFonts.mono(15, bold: true))
-                    .foregroundStyle(GaryColors.gold)
-                stripDivider
+                // Date cell removed (founder, Jul 13: it wrapped vertically
+                // once the roll stopped shrinking — the strip IS last night,
+                // the date said nothing).
                 Text("\(record.w)–\(record.l)")
                     .font(GaryFonts.mono(15, bold: true))
                     .foregroundStyle(.white)
@@ -14256,8 +14264,10 @@ struct SealDiagonalShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: .zero)
-        p.addLine(to: CGPoint(x: rect.width * 0.62, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * 0.44, y: rect.height))
+        // Seam pushed right (0.62/0.44 -> 0.74/0.56, founder Jul 13): the
+        // raised type made COMING SOON wide enough to cross the old diagonal.
+        p.addLine(to: CGPoint(x: rect.width * 0.74, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * 0.56, y: rect.height))
         p.addLine(to: CGPoint(x: 0, y: rect.height))
         p.closeSubpath()
         return p
@@ -14268,8 +14278,8 @@ struct SealDiagonalShape: Shape {
 struct SealSeamShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        p.move(to: CGPoint(x: rect.width * 0.62, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * 0.44, y: rect.height))
+        p.move(to: CGPoint(x: rect.width * 0.74, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * 0.56, y: rect.height))
         return p
     }
 }
@@ -19588,7 +19598,9 @@ let mlbTeamKeywords: [String: [String]] = [
     "DET": ["tigers", "detroit"], "HOU": ["astros", "houston"], "KC": ["royals", "kansas"],
     "LAA": ["angels"], "LAD": ["dodgers"], "MIA": ["marlins", "miami"], "MIL": ["brewers", "milwaukee"],
     "MIN": ["twins", "minnesota"], "NYM": ["mets"], "NYY": ["yankees"], "ATH": ["athletics", "oakland"],
-    "OAK": ["athletics", "oakland"], "PHI": ["phillies", "philadelphia"], "PIT": ["pirates", "pittsburgh"],
+    // "citizens bank" (Jul 13 2026): the Derby page's home slot carries the
+    // park name — resolves to PHI so the standard field lineup loads.
+    "OAK": ["athletics", "oakland"], "PHI": ["phillies", "philadelphia", "citizens bank"], "PIT": ["pirates", "pittsburgh"],
     "SD": ["padres", "san diego"], "SF": ["giants", "san francisco"], "SEA": ["mariners", "seattle"],
     "STL": ["cardinals", "st. louis", "st louis"], "TB": ["rays", "tampa"], "TEX": ["rangers", "texas"],
     "TOR": ["blue jays", "toronto"], "WSH": ["nationals", "washington"],
@@ -20586,9 +20598,14 @@ struct PicksCarouselView: View {
     /// Today-page edges respect the sport filter — an NBA tab must never
     /// show a Padres edge. Sports without a hub league (NHL) get none.
     private var sportConnections: [Signal] {
-        guard sport != "ALL" else { return connections }
+        // WC lanes ride the Picks page only when the WC actually plays TODAY
+        // (founder, Jul 13: no WC games — no WC content on ALL). The Hub
+        // keeps the lookahead coverage on its own tab.
+        let wcPlaysToday = store.slate.contains { ($0.league ?? "").uppercased() == "WC" }
+        let base = wcPlaysToday ? connections : connections.filter { $0.league != .wc }
+        guard sport != "ALL" else { return base }
         guard let lg = HubLeagueSel.from(sport) else { return [] }
-        return connections.filter { $0.league == lg }
+        return base.filter { $0.league == lg }
     }
 
     private func loadConnections() async {
@@ -21442,14 +21459,13 @@ struct PicksGamePage: View {
                                     edges: edges,
                                     showHeader: false)
                 }
-            } else if isMLB, !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
+            } else if isMLB {
                 // MLB: the flat GAME INTEL list becomes the modular dashboard —
                 // a baseball-field anchor + Pitching / Bats / Park & Weather.
                 // The field + real (projected → confirmed) lineup self-load off
-                // mlb_field_lineups, so this mounts from the MORNING now — it no
-                // longer waits for the first intel pass (founder, Jul 7).
-                // (All-Star specials skip it — a team-game ballpark/lineup view
-                // is meaningless for the Derby; THE CONTEST above is its lineup.)
+                // mlb_field_lineups. The Derby page keeps it too (founder):
+                // a synthetic lineup row carries the 8 contestants, so the
+                // standard field view + tappable player cards just work.
                 MLBGameIntelView(matchup: group.matchup, edges: edges, showHeader: false)
             } else if !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 EdgesSection(title: "GAME INTEL", edges: edges)
