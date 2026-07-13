@@ -2259,17 +2259,9 @@ struct HomeView: View {
                         }
                     }
                     playsOnBoard = (todayOnlyPicks?.count ?? 0) + propCount
+                    // (Parked All-Star preview now lives inside fetchDailyPicks —
+                    // DEBUG-only there — so every surface gets it from one source.)
                     todayPicks = todayOnlyPicks ?? []
-                    #if DEBUG
-                    // Sim preview of the PARKED All-Star boards (production
-                    // daily_picks stays empty until App Store approval — this
-                    // branch compiles out of Release entirely).
-                    if ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST()),
-                       !todayPicks.contains(where: { ($0.type ?? "") == "special" }) {
-                        let parked = await SupabaseAPI.fetchParkedAllStarPicks(date: SupabaseAPI.todayEST())
-                        if !parked.isEmpty { todayPicks.append(contentsOf: parked) }
-                    }
-                    #endif
                     picksByGameId = Dictionary(
                         (todayPicks.compactMap { p in p.game_id.map { (String($0), p) } }),
                         uniquingKeysWith: { a, _ in a })
@@ -3816,6 +3808,66 @@ struct HomeAllStarTakeover: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
+    }
+}
+
+// ── THE FIELD — the Derby game page's "lineup" (Jul 13 2026 one-off; the
+// special's game page swaps team scout/intel for the event's contest field).
+// Verified Jul 13: 8-man field + FanDuel midday winner board.
+struct DerbyFieldSection: View {
+    private let field: [(name: String, team: String, price: String)] = [
+        ("Kyle Schwarber", "PHI", "+310"),
+        ("Junior Caminero", "TB", "+370"),
+        ("Munetaka Murakami", "CHW", "+500"),
+        ("Jordan Walker", "STL", "+600"),
+        ("Jac Caglianone", "KC", "+600"),
+        ("Bryce Harper", "PHI", "+800"),
+        ("Ben Rice", "NYY", "+950"),
+        ("Willson Contreras", "BOS", "+1700"),
+    ]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                BroadcastBar(height: 12)
+                Text("THE FIELD")
+                    .font(GaryFonts.accent(12.5))
+                    .tracking(0.5)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer(minLength: 0)
+                Text("TO WIN · FANDUEL")
+                    .font(GaryFonts.mono(10.5, bold: true))
+                    .tracking(0.8)
+                    .foregroundStyle(GaryColors.meta)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(field.enumerated()), id: \.element.name) { i, p in
+                    HStack(spacing: 8) {
+                        Text(p.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Text(p.team)
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
+                            .foregroundStyle(.white.opacity(0.55))
+                        Spacer(minLength: 8)
+                        Text(p.price)
+                            .font(GaryFonts.mono(14, bold: true))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    .padding(.vertical, 7)
+                    if i < field.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                    }
+                }
+            }
+            Text("20 SWINGS ROUND ONE · TOP FOUR ADVANCE · SEMIS AND FINAL 15 SWINGS")
+                .font(GaryFonts.mono(10.5, bold: true))
+                .tracking(0.6)
+                .foregroundStyle(GaryColors.meta)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 }
 
@@ -20947,10 +20999,17 @@ struct PicksGamePage: View {
 
             // THE SCOUT — on the page from the morning, stays as the live
             // sections underneath fill in (founder, Jul 7).
+            // All-Star specials swap the team-game scout/intel for the event's
+            // own "lineup": the contest field (founder, Jul 13 — the page works
+            // like any other game day, the field IS the lineup view).
+            if entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
+                DerbyFieldSection()
+            } else {
             GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wc: scoutWc, wire: scoutWire,
                              pickMl: entries.first(where: { !$0.isYesterday && ($0.pick.moneylineAway != nil || $0.pick.moneylineHome != nil) })
                                  .map { (away: $0.pick.moneylineAway, home: $0.pick.moneylineHome) })
             PlayerIntelSection(matchup: group.matchup)
+            }
             if isWorldCup {
                 // World Cup: the plain GAME INTEL edges become the WC game-intel
                 // dashboard (Starting XI pitch · The Read), with the existing intel

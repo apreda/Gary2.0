@@ -65,10 +65,14 @@ const groundedText = (r) => (typeof r === 'string' ? r : (r?.data || r?.raw || '
 async function ground(q) { return groundedText(await geminiGroundingSearch(q, { sport: 'baseball_mlb' })); }
 
 async function buildDerbyData() {
-  const [news, winnerBoard, propBoard] = [
+  const [news, fanBrief, winnerBoard, advanceBoard, propBoard] = [
     await ground('MLB Home Run Derby TONIGHT Monday July 13 2026 at Citizens Bank Park: confirm the 8 participants (late swaps/scratches?), the swing-based format and rules, start time/broadcast, participant season home run totals, and any participation or injury news from today.'),
+    // The fan-knowledge layer (founder): everything a lifelong fan would argue
+    // with — pedigree, the man throwing to him, lore, fatigue, the stage.
+    await ground('Fan-level scouting for tonight\'s 2026 Home Run Derby participants (Schwarber, Harper, Caminero, Murakami, Ben Rice, Jordan Walker, Caglianone, Willson Contreras): each player\'s PAST Home Run Derby history and results (titles, finals, famous moments like Harper 2018), who is pitching to each of them tonight if reported, batting-practice power reputation and longest homers this season, recent HR pace since June, fatigue or injury notes, and home-crowd or narrative angles at Citizens Bank Park.'),
     await ground('CURRENT winner odds board for tonight\'s MLB Home Run Derby (July 13 2026): every participant with prices at FanDuel, DraftKings, and BetMGM.'),
-    await ground('ALL other prop markets posted for tonight\'s MLB Home Run Derby July 13 2026 with prices and sportsbook names: head-to-head matchups, player Round 1 home run over/unders, to-reach-the-final odds, longest home run distance over/under, winning league AL vs NL, total combined home runs, 500-foot homer props, anything else.'),
+    await ground('Tonight July 13 2026 MLB Home Run Derby: TO ADVANCE / reach the semifinal (top 4 in Round 1) odds for each participant, TO REACH THE FINAL odds, and the winning LEAGUE market (American League vs National League winner) — exact prices with sportsbook names.'),
+    await ground('Remaining prop markets for tonight\'s MLB Home Run Derby July 13 2026 with prices and sportsbook names: player Round 1 home run over/unders, longest home run distance over/under, any 500-foot homer prop, total home runs in the event, total home runs by the winner.'),
   ];
 
   const savantRows = await getBatterXStats(2026);
@@ -81,7 +85,7 @@ async function buildDerbyData() {
   }).join('\n');
 
   return {
-    briefs: `EVENT BRIEF (grounded today):\n${news}\n\nWINNER ODDS BOARD (grounded):\n${winnerBoard}\n\nPROP MARKET BOARD (grounded):\n${propBoard}`,
+    briefs: `EVENT BRIEF (grounded today):\n${news}\n\nFAN SCOUTING BRIEF (grounded — derby pedigree, throwers, lore):\n${fanBrief}\n\nWINNER ODDS BOARD (grounded):\n${winnerBoard}\n\nADVANCE / FINAL / LEAGUE ODDS (grounded):\n${advanceBoard}\n\nPROP MARKET BOARD (grounded):\n${propBoard}`,
     blocks,
   };
 }
@@ -167,8 +171,8 @@ const baseSpecial = (over) => ({
 async function runDerby() {
   console.log(`[Specials] ── HOME RUN DERBY BOARD (${MODEL}) ──`);
   const { briefs, blocks } = await buildDerbyData();
-  const schema = `{"board":[{"market":"Winner"|"Head-to-Head"|"Round 1 O/U"|"To Reach the Final"|"Longest HR"|"Winning League"|"Total HRs"|"Other","pick_text":"short bet line, e.g. 'Caminero to win the Derby +425' or 'Rice over 6.5 R1 homers -115'","odds":425,"book":"DraftKings","confidence":0.55,"rationale":"Gary's voice, 60-120 words"}]}`;
-  const user = `${briefs}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Build Gary's Derby board — 4 to 6 calls, each from a DIFFERENT posted market. Exactly ONE Winner call, and it may NOT be the market favorite (the shortest-priced player on the winner board): the market already made that pick; make YOURS at a price. For every other market, only call it if you have a real read from the data. pick_text stays under 45 characters.\n\nJSON schema: ${schema}`;
+  const schema = `{"board":[{"market":"Winner"|"Round 1 O/U"|"To Reach the Final"|"To Reach the Semifinal"|"Longest HR"|"Winning League"|"Total HRs"|"Other","pick_text":"short bet line, e.g. 'Caminero to win the Derby +425' or 'Rice over 9.5 R1 homers +110'","odds":425,"book":"DraftKings","confidence":0.55,"rationale":"Gary's voice, 180-280 words"}]}`;
+  const user = `${briefs}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Build Gary's Derby board — 4 to 6 calls, each from a DIFFERENT posted market. Exactly ONE Winner call, and it may NOT be the market favorite (the shortest-priced player on the winner board): the market already made that pick; make YOURS at a price.\n\nEvery call carries a PRICE and BOOK from the boards above — the markets are all priced now, so a call without odds means you looked past the board; only omit a price if the market truly is not listed anywhere above.\n\nRATIONALE DEPTH: argue each call the way a lifelong fan would — Derby pedigree and history, who is throwing to him, batting-practice reputation, the 20-swing format fit, the park and the crowd, fatigue — woven together with the verified numbers. 180-280 words each, Gary's voice, no filler. Facts and stories only from the briefs; numbers only from the data sections. pick_text stays under 45 characters.\n\nJSON schema: ${schema}`;
   const board = await solBoard(user, 3);
 
   // Mechanical anti-chalk guards (founder order, Jul 13): exactly ONE winner
@@ -197,7 +201,7 @@ async function runDerby() {
 async function runAsg() {
   console.log(`[Specials] ── ALL-STAR GAME BOARD (${MODEL}) ──`);
   const { briefs, blocks } = await buildAsgData();
-  const schema = `{"board":[{"market":"Moneyline"|"Total"|"MVP"|"First to Score"|"Other","pick_text":"e.g. 'National League ML -130' or 'Caminero to win ASG MVP +1400'","odds":-130,"book":"DraftKings","confidence":0.55,"rationale":"Gary's voice, 60-120 words"}]}`;
+  const schema = `{"board":[{"market":"Moneyline"|"Total"|"MVP"|"First to Score"|"Other","pick_text":"e.g. 'National League ML -130' or 'Caminero to win ASG MVP +1400'","odds":-130,"book":"DraftKings","confidence":0.55,"rationale":"Gary's voice, 180-280 words, argued like a lifelong fan — starters, rosters, park, history — numbers only from the data"}]}`;
   const user = `${briefs}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Build Gary's All-Star Game board — 3 to 5 calls, each from a DIFFERENT posted market (Moneyline, Total, MVP, others as posted). Favorites must earn the call — hunt the price. MVP is where the board pays: if you make an MVP call, make it a conviction shot at a real number, not the shortest name. pick_text under 45 characters.\n\nJSON schema: ${schema}`;
   const board = await solBoard(user, 2);
 

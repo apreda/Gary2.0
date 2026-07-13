@@ -397,11 +397,20 @@ enum SupabaseAPI {
         }
 
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
-        guard let row = rows.first else { return [] }
-
         // Defense in depth: drop any World Cup-tagged pick when the WC feature is
         // off (Apple 5.2.1) so no WC pick can reach a shelf, list, or card.
-        return parsePicksRow(row.picks).filter { !AppFlags.hidesWorldCupRow($0.league) }
+        var out = rows.first.map { parsePicksRow($0.picks).filter { !AppFlags.hidesWorldCupRow($0.league) } } ?? []
+        #if DEBUG
+        // Sim preview of the PARKED All-Star board (production stays empty
+        // until App Store approval). Living here means EVERY picks surface —
+        // Picks tab, Home, shelves — behaves exactly like a normal pick day
+        // in the sim. Compiled out of Release.
+        if ["2026-07-13", "2026-07-14"].contains(date),
+           !out.contains(where: { ($0.type ?? "") == "special" }) {
+            out += await fetchParkedAllStarPicks(date: date)
+        }
+        #endif
+        return out
     }
 
     #if DEBUG
