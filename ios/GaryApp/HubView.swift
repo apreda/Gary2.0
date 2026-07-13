@@ -109,6 +109,81 @@ fileprivate struct HubRule: View {
     }
 }
 
+// ── ALL-STAR WEEK card — one-off break surface (Jul 13-14 2026). Every line
+// below was verified Jul 13 (field, format, times, starters); the call site's
+// date gate self-retires the card after the break.
+fileprivate struct HubAllStarCard: View {
+    private let field: [(name: String, team: String)] = [
+        ("Kyle Schwarber", "PHI"), ("Bryce Harper", "PHI"),
+        ("Junior Caminero", "TB"), ("Munetaka Murakami", "CHW"),
+        ("Ben Rice", "NYY"), ("Jordan Walker", "STL"),
+        ("Jac Caglianone", "KC"), ("Willson Contreras", "BOS"),
+    ]
+    private var isDerbyDay: Bool { SupabaseAPI.todayEST() == "2026-07-13" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HubHead(title: "All-Star Week", sub: "Citizens Bank Park")
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(isDerbyDay ? "HOME RUN DERBY" : "ALL-STAR GAME")
+                        .font(HubFont.display(30))
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 8)
+                    Text("TONIGHT · 8:00 PM ET")
+                        .font(HubFont.kicker(11.5)).tracking(1.0)
+                        .foregroundStyle(GaryColors.gold)
+                }
+
+                if isDerbyDay {
+                    Text("NEW FORMAT — 20 SWINGS IN ROUND ONE · TOP FOUR ADVANCE · ON NETFLIX")
+                        .font(HubFont.kicker(10.5)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.62))
+
+                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                        GridItem(.flexible(), alignment: .leading)],
+                              alignment: .leading, spacing: 9) {
+                        ForEach(field, id: \.name) { p in
+                            HStack(spacing: 7) {
+                                Text(p.name)
+                                    .font(.system(size: 14.5, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                Text(p.team)
+                                    .font(HubFont.kicker(10)).tracking(0.6)
+                                    .foregroundStyle(.white.opacity(0.55))
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+
+                    HubRule()
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("TOMORROW — ALL-STAR GAME")
+                            .font(HubFont.kicker(10.5)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.62))
+                        Spacer(minLength: 8)
+                        Text("CEASE (AL) VS SÁNCHEZ (NL)")
+                            .font(HubFont.kicker(10.5)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                } else {
+                    Text("CEASE (AL) VS SÁNCHEZ (NL) · MLB RETURNS FRIDAY")
+                        .font(HubFont.kicker(10.5)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+
+                Text("GARY'S CALL — PICKS TAB")
+                    .font(HubFont.kicker(10.5)).tracking(1.0)
+                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+            }
+            .padding(.horizontal, 18)
+        }
+    }
+}
+
 /// The page-wide "See all n / Show less" expander control.
 fileprivate struct HubSeeAllButton: View {
     let isOpen: Bool
@@ -562,6 +637,13 @@ struct HubView: View {
                     searchFocused: $searchFocused
                 )
                 .id("top")
+
+                // ── ALL-STAR WEEK — one-off break surface (Jul 13-14 2026 only;
+                // the date gate self-retires it). Founder call Jul 13: the break
+                // is an acquisition window — "its not an all-star break for Gary".
+                if ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST()) {
+                    HubAllStarCard()
+                }
 
                 if !didLoad {
                     hubLoading

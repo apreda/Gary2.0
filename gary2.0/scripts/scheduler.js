@@ -41,7 +41,14 @@ const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30, 15]; // First → fallbacks → fi
 
 const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js' },
-  { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js' },
+  // NHL PARKED (Jul 13 2026): the BDL NHL tier lapsed, so every fetch 401s. That
+  // permanent failure set fetchFailed=true on every daily build, which on the
+  // all-sports-dark All-Star break made buildPlanResilient treat a legitimate
+  // 0-game day as a fetch outage — it retried for 90 minutes and never published
+  // the (empty) daily slate or tomorrow board, so the app showed a blank void
+  // instead of an honest dark day. No NHL games until October; restore this entry
+  // with the BDL All-Access decision.
+  // { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js' },
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
   // 2026 FIFA World Cup — game picks only. Runs at a FIXED 10:00 AM ET (not the
   // per-game T-90/60/30/15 lead times). Rationale (user call, Jun 13 2026): the
@@ -337,6 +344,12 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
     }
     if (Date.now() - start >= maxWaitMs) {
       log(`⚠️ Plan still empty after ${attempt} attempts / ${Math.round((Date.now() - start) / 60000)}m of fetch failures — proceeding empty.`);
+      // Publish what we know even on give-up. Before Jul 13 2026 this path
+      // returned without writing the slate/tomorrow board, so a day stuck in
+      // "empty from fetch failures" left the app with NO board at all — a dark
+      // day and a dead pipeline looked identical. Both writers are non-fatal.
+      await writeDailySlateNonFatal(dateStr);
+      await writeTomorrowBoardNonFatal(addDaysISO(dateStr, 1));
       return schedule;
     }
     const backoff = Math.min(20 * 60 * 1000, 60 * 1000 * 2 ** (attempt - 1)); // 1,2,4,8,16,20,20…m

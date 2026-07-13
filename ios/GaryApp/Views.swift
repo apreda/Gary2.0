@@ -1767,6 +1767,13 @@ struct HomeView: View {
             || !nightRecaps.isEmpty || marquee != nil || !wireItems.isEmpty
     }
 
+    /// Today's All-Star specials — the two synthetic ids the specials lane
+    /// stamps (Derby 20260713, ASG 8712499). Empty every other week of the
+    /// year, so the takeover costs nothing outside the break.
+    private var allStarSpecials: [GaryPick] {
+        todayPicks.filter { $0.game_id == 20260713 || $0.game_id == 8712499 }
+    }
+
     var body: some View {
         ZStack {
             // Background
@@ -2363,6 +2370,16 @@ struct HomeView: View {
             }
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
+        }
+        // ── ALL-STAR WEEK — the break takeover (Jul 13-14 2026). Gary works
+        // the exhibitions, so the dark days lead with them instead of a void.
+        // Renders only stored pick data + the verified event schedule.
+        if !allStarSpecials.isEmpty {
+            HomeAllStarTakeover(specials: allStarSpecials) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
         if morningLeads, !stories.isEmpty {
             HomeStoryRail(stories: stories) {
@@ -3669,6 +3686,94 @@ struct HomeMasthead: View {
 
 /// Act head — mock language: gold hairline, mono uppercase label, mono count,
 /// quiet sub right-aligned. Twin of the Hub's section head.
+// ── ALL-STAR WEEK takeover ──────────────────────────────────────────────
+// One-week surface (July 2026 break): the exhibitions get the marquee slot.
+// Flat on the page — kicker row, the event in display type, Gary's call in
+// gold, his opening line, then the week's runway. Tap anywhere → Picks tab.
+// Exhibition rules: no seal/Winners language, no pick-promise beyond the
+// call that actually exists in the store.
+struct HomeAllStarTakeover: View {
+    let specials: [GaryPick]
+    var onOpenPicks: () -> Void
+
+    private func eventTitle(_ p: GaryPick) -> String {
+        p.game_id == 8712499 ? "ALL-STAR GAME" : "HOME RUN DERBY"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                BroadcastBar(height: 14)
+                Text("ALL-STAR WEEK")
+                    .font(GaryFonts.accent(15))
+                    .foregroundStyle(.white)
+                    .tracking(1.2)
+                Spacer(minLength: 0)
+                Text("CITIZENS BANK PARK")
+                    .font(GaryFonts.mono(11, bold: true))
+                    .tracking(0.8)
+                    .foregroundStyle(GaryColors.meta)
+            }
+
+            ForEach(specials) { p in
+                Button(action: onOpenPicks) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(eventTitle(p))
+                                .font(GaryFonts.display(34))
+                                .foregroundStyle(.white)
+                            Spacer(minLength: 8)
+                            Text("TONIGHT · \(p.time ?? "8:00 PM") ET")
+                                .font(GaryFonts.mono(12, bold: true))
+                                .foregroundStyle(GaryColors.sectionSub)
+                        }
+                        // Kicker above, call below at full width — beside each
+                        // other the price fell off the row edge ("+3…").
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("GARY'S CALL")
+                                .font(GaryFonts.accent(11.5))
+                                .tracking(1.0)
+                                .foregroundStyle(GaryColors.gold.opacity(0.9))
+                            Text((p.pick ?? "").uppercased())
+                                .font(GaryFonts.mono(16, bold: true))
+                                .foregroundStyle(GaryColors.gold)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        // Gary's own opening line as the hook — his words, not a caption.
+                        if let r = p.rationale, let first = r.split(separator: ".").first, first.count > 12 {
+                            Text(String(first) + ".")
+                                .font(GaryFonts.text(14))
+                                .foregroundStyle(GaryColors.sectionSub)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // The week's runway — verified schedule only, quiet meta voice.
+            VStack(alignment: .leading, spacing: 5) {
+                if specials.allSatisfy({ $0.game_id != 8712499 }) {
+                    Text("TOMORROW — ALL-STAR GAME · CEASE vs SÁNCHEZ")
+                        .font(GaryFonts.mono(11, bold: true))
+                        .tracking(0.6)
+                        .foregroundStyle(GaryColors.meta)
+                }
+                Text("MLB RETURNS FRIDAY · WC FINAL SUNDAY")
+                    .font(GaryFonts.mono(11, bold: true))
+                    .tracking(0.6)
+                    .foregroundStyle(GaryColors.meta)
+            }
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+    }
+}
+
 struct HomeActHead: View {
     let title: String
     var count: Int? = nil
@@ -14652,6 +14757,19 @@ struct CompactPickRow: View {
     /// "MONEYLINE", "KNICKS" / "+6.5"). Totals get a matching two-line shape
     /// ("UNDER 3.5" / "TOTAL GOALS") so every card reads at one uniform height.
     private var heroLines: String {
+        // Specials ("Schwarber to win the Derby +330") carry a phrase, not
+        // team+market grammar — the truncating pick parser cuts them to the
+        // first word. Split name / claim by hand: name huge, claim under it.
+        if (pick.type ?? "") == "special" {
+            var w = (pick.pick ?? "").split(separator: " ").map(String.init)
+            w.removeAll { $0.range(of: #"^[+-]?\d{3,}$"#, options: .regularExpression) != nil }
+            let raw = w.joined(separator: " ")
+            if let r = raw.range(of: " to ", options: .caseInsensitive) {
+                let claim = String(raw[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
+                return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
+            }
+            return raw.uppercased()
+        }
         var words = Formatters.arrowizeOverUnder(pickParts.pick).split(separator: " ").map(String.init)
         // The headline never shows odds or a stray "@" — those belong in the meta line.
         // Strip "@" and any American-odds integer (3+ digits) a malformed/legacy pick
@@ -14696,6 +14814,9 @@ struct CompactPickRow: View {
     /// Meta slot after the league token — opponent + time/live/final + odds.
     /// State-aware: live games show the live line, settled show the score.
     private var metaLine: String {
+        // Specials: the event name already leads the page strip — repeating
+        // "HR Derby @ Philly" here just ellipsizes the price off the row.
+        if (pick.type ?? "") == "special" { return "" }
         let opponent = homeIsPicked ? "vs \(awayName)"
             : awayIsPicked ? "@ \(homeName)"
             : "\(awayName) @ \(homeName)"
@@ -16281,6 +16402,18 @@ struct HeadlineShareCardView: View {
     /// The pick, one word per line, "ML" spelled out — headline type wants
     /// full words stacked tall ("NATIONALS / MONEYLINE").
     private var heroLines: String {
+        // Specials: name on top, the claim on one line under it (the word-per-
+        // line split below would stack "TO/WIN/THE/DERBY" absurdly).
+        if (pick.type ?? "") == "special" {
+            var w = (pick.pick ?? "").split(separator: " ").map(String.init)
+            w.removeAll { $0.range(of: #"^[+-]?\d{3,}$"#, options: .regularExpression) != nil }
+            let raw = w.joined(separator: " ")
+            if let r = raw.range(of: " to ", options: .caseInsensitive) {
+                let claim = String(raw[r.lowerBound...]).trimmingCharacters(in: .whitespaces)
+                return "\(String(raw[..<r.lowerBound]).uppercased())\n\(claim.uppercased())"
+            }
+            return raw.uppercased()
+        }
         var words = pickParts.pick.uppercased().split(separator: " ").map(String.init)
         if let i = words.firstIndex(of: "ML") { words[i] = "MONEYLINE" }
         // "ANYTIME GOAL OVER 1" -> "ANYTIME GOAL" (line 1 is implied; book convention)
@@ -25083,6 +25216,10 @@ enum Formatters {
 
     static func shortTeamName(_ team: String?, league: String? = nil) -> String {
         guard let team = team, !team.isEmpty else { return "" }
+        // All-Star specials ride the team slots with event/venue strings —
+        // the last-word mascot cut would yield "Derby @ Park" (Jul 13 2026).
+        if team == "Home Run Derby" { return "HR Derby" }
+        if team == "Citizens Bank Park" { return "Philly" }
         let words = team.split(separator: " ").map(String.init)
 
         guard words.count > 1 else { return team }
