@@ -431,13 +431,14 @@ enum SupabaseAPI {
         let odds: Int?
         let book: String?
         let reason: String?
+        let win_odds: Int?
     }
 
     /// THE CONTEST list (Jul 13 2026 one-off): Sol's R1 over/under call on
     /// every Derby participant. Season-power order, heaviest bat first.
     static func fetchAllStarProps(date: String, event: String = "hr_derby") async -> [AllStarPropRow] {
         let url = buildURL(table: "allstar_props", query: [
-            URLQueryItem(name: "select", value: "id,player,team,season_hr,line,call,odds,book,reason"),
+            URLQueryItem(name: "select", value: "id,player,team,season_hr,line,call,odds,book,reason,win_odds"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "event", value: "eq.\(event)"),
             URLQueryItem(name: "order", value: "season_hr.desc.nullslast")

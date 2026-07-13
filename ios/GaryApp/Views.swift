@@ -3924,9 +3924,11 @@ struct HomeAllStarTakeover: View {
 // Lives on the Derby game page AND under the Hub's All-Star card; the pick
 // cards stay untouched — this is the "pump out a ton of picks" list product.
 struct DerbyContestSection: View {
-    /// Hub variant hides the one-line reasons (the Hub card is already long).
+    /// Kept for call-site compatibility; the full take now lives in the
+    /// floating pop (tap a row), so rows stay tight everywhere.
     var showReasons = true
     @State private var rows: [SupabaseAPI.AllStarPropRow] = []
+    @State private var takeRow: SupabaseAPI.AllStarPropRow? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -3944,47 +3946,55 @@ struct DerbyContestSection: View {
             }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 7) {
-                            Text(r.player ?? "")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.92))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Text(Formatters.shortTeamName(r.team, league: "MLB").uppercased())
-                                .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
-                                .foregroundStyle(.white.opacity(0.55))
-                            Spacer(minLength: 8)
-                            if let hr = r.season_hr {
-                                Text("\(hr) HR")
-                                    .font(GaryFonts.mono(12.5, bold: true))
-                                    .foregroundStyle(.white.opacity(0.85))
-                            }
-                        }
-                        HStack(spacing: 7) {
-                            if let line = r.line {
-                                Text("R1 O/U \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))")
-                                    .font(GaryFonts.mono(11.5, bold: true))
-                                    .foregroundStyle(GaryColors.meta)
-                                if let call = r.call, !call.isEmpty {
-                                    Text("GARY: \(call.uppercased())\(r.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
-                                        .font(GaryFonts.mono(11.5, bold: true))
-                                        .foregroundStyle(GaryColors.gold)
+                    Button { if r.reason != nil { takeRow = r } } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 7) {
+                                Text(r.player ?? "")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                Text(Formatters.shortTeamName(r.team, league: "MLB").uppercased())
+                                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                Spacer(minLength: 8)
+                                if let hr = r.season_hr {
+                                    Text("\(hr) HR")
+                                        .font(GaryFonts.mono(12.5, bold: true))
+                                        .foregroundStyle(.white.opacity(0.85))
                                 }
-                            } else {
-                                Text("LINE PENDING")
-                                    .font(GaryFonts.mono(11.5, bold: true))
-                                    .foregroundStyle(GaryColors.meta)
                             }
-                            Spacer(minLength: 0)
+                            HStack(spacing: 7) {
+                                if let line = r.line {
+                                    Text("R1 O/U \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line))")
+                                        .font(GaryFonts.mono(11.5, bold: true))
+                                        .foregroundStyle(GaryColors.meta)
+                                    if let call = r.call, !call.isEmpty {
+                                        Text("\(call.uppercased())\(r.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                                            .font(GaryFonts.mono(11.5, bold: true))
+                                            .foregroundStyle(GaryColors.gold)
+                                    }
+                                } else {
+                                    Text("LINE PENDING")
+                                        .font(GaryFonts.mono(11.5, bold: true))
+                                        .foregroundStyle(GaryColors.meta)
+                                }
+                                Spacer(minLength: 8)
+                                if let w = r.win_odds {
+                                    Text("TO WIN \(w > 0 ? "+" : "")\(w)")
+                                        .font(GaryFonts.mono(11.5, bold: true))
+                                        .foregroundStyle(.white.opacity(0.62))
+                                }
+                            }
+                            if r.reason != nil {
+                                Text("GARY'S TAKE ›")
+                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                                    .foregroundStyle(GaryColors.gold.opacity(0.75))
+                            }
                         }
-                        if showReasons, let reason = r.reason, !reason.isEmpty {
-                            Text(reason)
-                                .font(GaryFonts.text(12.5))
-                                .foregroundStyle(GaryColors.sectionSub)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .padding(.vertical, 8)
                     if i < rows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
@@ -3998,6 +4008,68 @@ struct DerbyContestSection: View {
             if rows.isEmpty {
                 rows = await SupabaseAPI.fetchAllStarProps(date: SupabaseAPI.todayEST())
             }
+        }
+        // Floating center pop (founder: never a bottom pull-up for these) —
+        // full-screen dim with the take card centered, tap anywhere to close.
+        .fullScreenCover(item: $takeRow) { r in
+            DerbyTakeOverlay(row: r) { takeRow = nil }
+        }
+        .transaction { $0.disablesAnimations = false }
+    }
+}
+
+/// The floating GARY'S TAKE pop for a contest row — centered card over a
+/// dimmed field, tap-out or ✕ to close.
+struct DerbyTakeOverlay: View {
+    let row: SupabaseAPI.AllStarPropRow
+    var onClose: () -> Void
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.9).ignoresSafeArea()
+                .onTapGesture { onClose() }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    BroadcastBar(height: 13)
+                    Text("GARY'S TAKE")
+                        .font(GaryFonts.accent(13))
+                        .tracking(1.0)
+                        .foregroundStyle(GaryColors.gold)
+                    Spacer(minLength: 0)
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text((row.player ?? "").uppercased())
+                    .font(GaryFonts.display(30))
+                    .foregroundStyle(.white)
+                HStack(spacing: 8) {
+                    if let line = row.line, let call = row.call {
+                        Text("R1 O/U \(line.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(line)) : String(line)) — \(call.uppercased())\(row.odds.map { " \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                            .font(GaryFonts.mono(13.5, bold: true))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    Spacer(minLength: 0)
+                    if let w = row.win_odds {
+                        Text("TO WIN \(w > 0 ? "+" : "")\(w)")
+                            .font(GaryFonts.mono(11.5, bold: true))
+                            .foregroundStyle(GaryColors.meta)
+                    }
+                }
+                ScrollView(showsIndicators: false) {
+                    Text(row.reason ?? "")
+                        .font(GaryFonts.text(14.5))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxHeight: 380)
+            }
+            .padding(20)
+            .background(RoundedRectangle(cornerRadius: 18).fill(GaryColors.cardBg))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.1), lineWidth: 1))
+            .padding(.horizontal, 22)
         }
     }
 }

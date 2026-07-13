@@ -110,17 +110,22 @@ async function buildAsgData() {
   };
 }
 
-const SYSTEM = `You are Gary — the sharp, confident betting character behind the Gary app. All-Star week: you work the exhibitions with real calls, in your voice, for fans who follow every pick.
+// Persona + reasoning language LIFTED from the production pick process
+// (orchestratorMain.js persona line + the passBuilders synthesis framing) —
+// founder, Jul 13: the Derby lane must speak and reason exactly like every
+// other sport. Only the derby-specific awareness lines are new.
+const SYSTEM = `You are Gary — a sports bettor with over 30 years of experience. Gambling is a combination of awareness, insight, luck, and the willingness to trust your read when the time comes. Risk-taking is in your DNA as a gambler. Your 30 years taught you that the sum of the data tells one story, and a specific edge can tell another — your risk-taking is calculated. Tonight is All-Star week and you work the exhibitions like any other card: real picks, real money, your name on every ticket.
 
-HOW YOU BET (non-negotiable):
-- Betting is not taking the most likely name on paper — it is taking the right PRICE. A favorite must EARN a call with a real case; never submit a pick just because it is the shortest number on the board.
-- Build a BOARD: one call per market, each market a genuinely different bet. Skip any market where you have no real read — fewer, sharper calls beat filler.
+THE JOB: the betting options in front of you are what you are picking from — you are not being asked who is better on paper; the prices already say what the world thinks. Hold your read of tonight against the options and take the ticket you would put your own money on. Form the read FIRST — for a Home Run Derby that means what decides derbies: the swing and pull-side power profile, who is throwing to him and their rhythm, the swing-count format and stamina, the park, Derby pedigree, current heat. THEN hold it against the price. Never build a case primarily out of comparing odds to other odds — if your only argument is the price, you have no pick.
 
-HARD DATA RULES (non-negotiable):
-- Every number you write (stats, odds, HR totals) MUST appear in the DATA sections of the user message. No outside numbers, no estimates.
-- Odds: quote ONLY prices present on the grounded boards and name the sportsbook. No usable price for a call = odds null, no prices in that rationale.
+RATIONALE VOICE: each rationale is "Gary's Take" — the words that appear on the pick card, written as yourself in the first person ("I'm...", "we're...", "my read"). Never write your own name, never the third person.
+
+HARD DATA RULES (all production rules apply):
+- Every number you write (stats, odds, HR totals, distances) MUST appear in the DATA sections of the user message. No outside numbers, no estimates.
+- Odds: quote ONLY prices present on the grounded boards, attributed to a real SPORTSBOOK (FanDuel, DraftKings, BetMGM, Caesars, bet365, BetRivers, Fanatics, Betano). Media or odds-tracking sites are sources, not books — if a price has no named sportsbook, ship the call with odds null.
+- pick_text is clean bet grammar ("Caminero to win the Derby +425") — never first-person phrasing; the voice lives in the rationale.
 - Players without a verified stat block may be discussed only via facts stated in the briefs.
-- Never reference being an AI, a model, data feeds, or prompts. You are Gary.
+- Never reference being an AI, a model, data feeds, or prompts.
 
 OUTPUT: strict JSON only, no markdown fences, matching the schema in the user message.`;
 
@@ -175,7 +180,7 @@ async function runDerby() {
   console.log(`[Specials] ── HOME RUN DERBY BOARD (${MODEL}) ──`);
   const { briefs, blocks } = await buildDerbyData();
   const schema = `{"board":[{"market":"Winner"|"Round 1 O/U"|"To Reach the Final"|"To Reach the Semifinal"|"Longest HR"|"Winning League"|"Total HRs"|"Other","pick_text":"short bet line, e.g. 'Caminero to win the Derby +425' or 'Rice over 9.5 R1 homers +110'","odds":425,"book":"DraftKings","confidence":0.55,"rationale":"Gary's voice, 180-280 words"}]}`;
-  const user = `${briefs}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Build Gary's Derby board — 4 to 6 calls, each from a DIFFERENT posted market. Exactly ONE Winner call, and it may NOT be the market favorite (the shortest-priced player on the winner board): the market already made that pick; make YOURS at a price.\n\nEvery call carries a PRICE and BOOK from the boards above — the markets are all priced now, so a call without odds means you looked past the board; only omit a price if the market truly is not listed anywhere above.\n\nRATIONALE DEPTH: argue each call the way a lifelong fan would — Derby pedigree and history, who is throwing to him, batting-practice reputation, the 20-swing format fit, the park and the crowd, fatigue — woven together with the verified numbers. 180-280 words each, Gary's voice, no filler. Facts and stories only from the briefs; numbers only from the data sections. pick_text stays under 45 characters.\n\nJSON schema: ${schema}`;
+  const user = `${briefs}\n\nVERIFIED 2026 STAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: Build the Derby board — 4 to 6 calls, each from a DIFFERENT posted market. Exactly ONE Winner call, and it may NOT be the market favorite (the shortest-priced player on the winner board): the market already made that pick; make YOURS at a price. Do NOT use the player Round 1 over/under market here — that board is its own product with a call on every hitter.\n\nEvery call carries a PRICE and a real SPORTSBOOK from the boards above; only omit a price if the market truly is not listed anywhere above.\n\nRATIONALE DEPTH: 180-280 words each, the read first (pedigree, thrower, format fit, park, heat), the price last. Facts and stories only from the briefs; numbers only from the data sections. pick_text stays under 45 characters, clean bet grammar.\n\nJSON schema: ${schema}`;
   const board = await solBoard(user, 3);
 
   // Mechanical anti-chalk guards (founder order, Jul 13): exactly ONE winner
@@ -229,9 +234,11 @@ async function runAsg() {
  *  table → Hub + Picks contest view), never pick cards. */
 async function runDerbyProps() {
   console.log(`[Specials] ── DERBY R1 O/U BOARD (${MODEL}) ──`);
-  const [linesBoard, hrTotals] = [
+  const [linesBoard, hrTotals, winnerBoard, fanBrief] = [
     await ground('DraftKings (or FanDuel) player Round 1 home run OVER/UNDER lines for tonight July 13 2026 MLB Home Run Derby — list EVERY participant with their posted R1 total line and both prices, note any participant without a posted line.'),
     await ground('2026 season home run totals TODAY (July 13 2026, at the All-Star break) for: Kyle Schwarber, Bryce Harper, Junior Caminero, Munetaka Murakami, Ben Rice, Jordan Walker, Jac Caglianone, Willson Contreras — one line each, exact number.'),
+    await ground('CURRENT winner odds for tonight July 13 2026 MLB Home Run Derby: every participant with his TO WIN price at FanDuel (or DraftKings), one line each.'),
+    await ground('Derby-specific scouting for tonight\'s 8 participants (July 13 2026): who throws to each hitter, batting-practice and pull-side power reputation, longest homers this season, past Derby appearances and results, stamina or injury notes, and how each profile fits a 20-swing no-clock round at Citizens Bank Park.'),
   ];
   const savantRows = await getBatterXStats(2026);
   const rows = Array.isArray(savantRows) ? savantRows : (savantRows?.data || []);
@@ -240,8 +247,8 @@ async function runDerbyProps() {
     return sv ? `${p.name} (${p.team}): ${sv.pa} PA, SLG ${sv.slg}, xSLG ${sv.est_slg}` : `${p.name} (${p.team}): no verified row`;
   }).join('\n');
 
-  const schema = `{"board":[{"player":"Full Name","team":"Phillies","season_hr":32,"line":10.5,"call":"OVER"|"UNDER"|null,"odds":-110,"book":"DraftKings","reason":"one sharp sentence, Gary voice"}]}`;
-  const user = `R1 O/U LINES (grounded):\n${linesBoard}\n\nSEASON HR TOTALS (grounded):\n${hrTotals}\n\nSTAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: One entry for EACH of the 8 participants. If a player has a posted R1 line, make a real OVER or UNDER call at the posted price (favorites earn it — the 20-swing format and the player's power profile decide, not the shorter juice). If no line is posted for a player, include him with line/call/odds/book null. season_hr comes from the grounded totals. reason: ONE sentence, under 140 characters, Gary's voice, numbers only from this message.\n\nJSON schema: ${schema}`;
+  const schema = `{"board":[{"player":"Full Name","team":"Phillies","season_hr":32,"line":10.5,"call":"OVER"|"UNDER"|null,"odds":-110,"book":"DraftKings","win_odds":310,"rationale":"first-person, 120-200 words"}]}`;
+  const user = `R1 O/U LINES (grounded):\n${linesBoard}\n\nSEASON HR TOTALS (grounded):\n${hrTotals}\n\nTO WIN BOARD (grounded):\n${winnerBoard}\n\nDERBY SCOUTING BRIEF (grounded):\n${fanBrief}\n\nSTAT BLOCKS (only citable numbers):\n${blocks}\n\nTASK: One entry for EACH of the 8 participants — these are REAL picks, full pick process, not quick lean lines. If a player has a posted R1 line, make the OVER or UNDER call: argue the DERBY case first (his swing and power profile in a 20-swing no-clock round, who's throwing to him, stamina, pedigree, the park), then close with whether the posted price pays that case. If no line is posted, include him with line/call/odds/book null. win_odds = his TO WIN price from the board (number only). season_hr from the grounded totals. rationale: 120-200 words, first person, never the word "Gary".\n\nJSON schema: ${schema}`;
   const board = await solBoard(user, 6);
 
   const items = board.map(b => ({
@@ -255,7 +262,8 @@ async function runDerbyProps() {
     call: b.call || null,
     odds: typeof b.odds === 'number' ? b.odds : null,
     book: b.book || null,
-    reason: b.reason || null,
+    win_odds: typeof b.win_odds === 'number' ? b.win_odds : null,
+    reason: b.rationale || b.reason || null,
   }));
   for (const it of items) {
     console.log(`  ${it.player} (${it.team ?? '?'}, ${it.season_hr ?? '?'} HR) — ${it.line != null ? `O/U ${it.line}` : 'no line'}${it.call ? ` → ${it.call} ${it.odds ?? ''} ${it.book ?? ''}` : ''}`);
