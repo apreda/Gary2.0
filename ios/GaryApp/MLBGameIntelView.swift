@@ -143,7 +143,14 @@ struct MLBGameIntelView: View {
     /// The HR Derby field — one shared pool of contestants, not two lineups:
     /// the away/home toggle is meaningless there and hides.
     private var isDerby: Bool { awayName.localizedCaseInsensitiveContains("derby") }
-    private var ballpark: Ballpark? { MLBParks.park(forTeam: homeName) ?? MLBParks.all["brewers"] }
+    /// All-Star Game — AL @ NL. The lineups are real and public (both sides
+    /// posted), the park is Citizens Bank; only the team-keyword lookup can't
+    /// resolve a league name, so it's special-cased.
+    private var isAsg: Bool {
+        let a = awayName.uppercased(), h = homeName.uppercased()
+        return (a == "AL" || a == "AMERICAN LEAGUE") && (h == "NL" || h == "NATIONAL LEAGUE")
+    }
+    private var ballpark: Ballpark? { MLBParks.park(forTeam: isAsg ? "Phillies" : homeName) ?? MLBParks.all["brewers"] }
     /// The team whose lineup is on the field — both bat at the home park (home/away toggle).
     private var shownTeam: SupabaseAPI.MLBTeamLineup? { homeUp ? realHome : realAway }
 
@@ -236,7 +243,10 @@ struct MLBGameIntelView: View {
         guard !lineupLoaded else { return }
         lineupLoaded = true
         let n = homeName.lowercased()
-        guard let abbr = mlbTeamKeywords.first(where: { $0.value.contains { n.contains($0) } })?.key else { return }
+        // ASG: the synthetic row is keyed home_team='NL' — a league name never
+        // resolves through the club-keyword map.
+        let asgAbbr: String? = isAsg ? "NL" : nil
+        guard let abbr = asgAbbr ?? mlbTeamKeywords.first(where: { $0.value.contains { n.contains($0) } })?.key else { return }
         if let row = await SupabaseAPI.fetchMlbFieldLineup(date: SupabaseAPI.todayEST(), homeTeam: abbr) {
             await MainActor.run {
                 realHome = row.payload.home

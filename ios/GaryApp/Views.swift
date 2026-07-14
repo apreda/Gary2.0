@@ -3971,6 +3971,10 @@ struct DerbyContestSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Derby-day only: with no contest rows and no extras (the ASG, any
+            // future special) the whole section vanishes — a bare "THE
+            // CONTESTANTS" header leaked onto the ASG page (founder, Jul 14).
+            if !rows.isEmpty || !extras.isEmpty {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 BroadcastBar(height: 12)
                 Text("THE CONTESTANTS")
@@ -4111,6 +4115,7 @@ struct DerbyContestSection: View {
                     }
                 }
             }
+            }   // end rows/extras-present gate
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -15298,7 +15303,7 @@ struct CompactPickRow: View {
             }
             return raw.uppercased()
         }
-        var words = Formatters.arrowizeOverUnder(pickParts.pick).split(separator: " ").map(String.init)
+        var words = pickParts.pick.split(separator: " ").map(String.init)
         // The headline never shows odds or a stray "@" — those belong in the meta line.
         // Strip "@" and any American-odds integer (3+ digits) a malformed/legacy pick
         // string may carry (e.g. "Under 2.5 @ -135"); decimals (handicap/total lines) stay.
@@ -23278,12 +23283,13 @@ struct CompactPropRow: View {
 
     /// "MATT CHAPMAN" over "H+R+RBI OVER 0.5" — the player IS the headline
     /// (user call, Jun 11: the name was hiding in the meta line).
+    /// WORDS, not arrows (founder, Jul 14: "massive fucked up doing the
+    /// arrows — go back to the words Over and Under" on prop cards).
     private var heroLines: String {
         let call = compactCall
         let bet = call.isEmpty ? marketName : "\(marketName) \(call)"
         let player = (prop.player ?? "").uppercased()
-        let line = player.isEmpty ? bet : "\(player)\n\(bet)"
-        return Formatters.arrowizeOverUnder(line)
+        return player.isEmpty ? bet : "\(player)\n\(bet)"
     }
 
     /// Matchup context for the meta row — just the team now. The FINAL score + situation
