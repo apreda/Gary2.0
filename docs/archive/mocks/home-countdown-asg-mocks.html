@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home — Countdown Revival, 3 directions</title>
+<style>
+  :root { --bg:#08080A; --panel:rgba(246,241,231,.03); --pborder:rgba(246,241,231,.08);
+          --gold:#C9A227; --warm:#F6F1E7; --win:#3FB950; --loss:#E5484D; --mut:rgba(255,255,255,.62); }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#131315;color:var(--warm);font-family:-apple-system,system-ui,sans-serif;padding:40px 22px 90px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:26px;font-weight:800}
+  .intro{color:var(--mut);font-size:14px;max-width:880px;line-height:1.55;margin:8px 0 14px}
+  .intro b{color:var(--warm)}
+  .mono{font-family:ui-monospace,SFMono-Regular,monospace}
+  .kick{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+  .dir{display:flex;gap:34px;margin:54px 0;flex-wrap:wrap;align-items:flex-start}
+  .about{flex:1;min-width:360px;max-width:560px}
+  .about h2{font-size:21px;font-weight:800;margin:4px 0 10px}
+  .about .tag{font-family:ui-monospace,monospace;font-size:11px;color:var(--gold);letter-spacing:.12em}
+  .about p{color:rgba(255,255,255,.8);font-size:13.5px;line-height:1.6;margin:8px 0}
+  .about ul{margin:6px 0 6px 18px}
+  .about li{color:rgba(255,255,255,.78);font-size:13px;line-height:1.55;margin-bottom:6px}
+  .about .warn{color:rgba(255,255,255,.55);font-size:12.5px;line-height:1.5;border-left:2px solid rgba(229,72,77,.5);padding-left:10px;margin-top:10px}
+  .lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mut);text-transform:uppercase;margin-top:12px}
+  /* phone */
+  .phone{width:344px;background:var(--bg);border:1px solid rgba(246,241,231,.14);border-radius:34px;padding:16px 15px 24px;box-shadow:0 18px 50px rgba(0,0,0,.55);flex-shrink:0;overflow:hidden}
+  .statusbar{display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.75);margin-bottom:10px;font-weight:600}
+  .mast{display:flex;align-items:center;gap:9px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #E6C558, #9c7d1c);border:1px solid rgba(255,255,255,.25);flex-shrink:0}
+  .mast .gary{font-size:20px;font-weight:850;letter-spacing:.02em}
+  .mast .gary b{color:var(--gold)}
+  .mast .date{font-family:ui-monospace,monospace;font-size:9px;color:var(--mut);letter-spacing:.1em;margin-left:auto}
+  .goldline{height:1px;background:rgba(201,162,39,.4);margin:10px 0 0}
+  .tabs{display:flex;gap:18px;margin-top:12px}
+  .tab{font-size:14px;font-weight:800;letter-spacing:.01em;color:rgba(255,255,255,.4);padding-bottom:7px}
+  .tab.on{color:var(--warm);border-bottom:2px solid var(--gold)}
+  .panel{background:var(--panel);border:1px solid var(--pborder);border-radius:12px}
+  .hr{height:1px;background:rgba(255,255,255,.07)}
+  .g{color:var(--win)} .r{color:var(--loss)} .go{color:var(--gold)}
+  .m9{font-family:ui-monospace,monospace;font-size:9px} .m10{font-family:ui-monospace,monospace;font-size:10px}
+  .m11{font-family:ui-monospace,monospace;font-size:11px} .m12{font-family:ui-monospace,monospace;font-size:12px}
+  .b13{font-size:13px;font-weight:700} .b14{font-size:14px;font-weight:750} .b16{font-size:16px;font-weight:800}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:9px 12px}
+  .countdown{font-family:ui-monospace,monospace;font-weight:800;color:var(--gold)}
+  .broadcast{display:flex;gap:3px}
+  .broadcast i{display:inline-block;width:5px;height:14px;border-radius:1px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Home — bringing the clock back, 3 directions</h1>
+<div class="intro">Same real data on all three so you're comparing structure, not styling: <b>Tue Jul 14</b>, today's result <b>10–5 · +$375 · BOS ML −110 ✓</b>, next up <b>Argentina @ England tomorrow 3:00 PM</b>, live right now <b>Spain @ France</b>. The TODAY/TOMORROW tab and the result row stay put — nobody flagged those. The only zone in play is the "what's next" block below it, since that's exactly where the countdown used to live before it got retired, and where the All-Star takeover's marquee energy could carry over into a normal day.</div>
+
+<!-- ═══════════ A ═══════════ -->
+<div class="dir" id="A">
+  <div class="about">
+    <span class="tag">A · THE CLOCK COMES BACK</span>
+    <h2>Smallest change — just reinsert the countdown</h2>
+    <p>Everything stays exactly as it is today. The "UP NEXT" panel keeps its plain matchup + kickoff time, and gains one line underneath: a live ticking countdown, gold mono digits, the same way it worked before the clock was retired.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Zero risk to anything else on the page — one line added, nothing removed.</li>
+    <li>Answers "how long until Gary's next call" at a glance, which the plain time doesn't.</li></ul>
+    <div class="warn">Watch out: cheapest fix, but doesn't borrow any of the All-Star takeover's energy — still reads as a plain utility panel.</div>
+  </div>
+  <div class="phone">
+    <div class="statusbar"><span>3:54</span><span>●●●● 5G 20</span></div>
+    <div class="mast"><div class="avatar"></div><span class="gary">GARY <b>A.I.</b></span><span class="date">TUE, JUL 14</span></div>
+    <div class="goldline"></div>
+    <div class="tabs"><span class="tab on">TODAY</span><span class="tab">TOMORROW</span></div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin-top:8px"></div>
+    <div class="row" style="padding:14px 4px">
+      <span class="b16">10–5 <span class="g">+$375</span></span>
+      <span class="g m11">✓ BOS ML <span style="color:var(--warm)">−110</span></span>
+      <span class="go" style="font-size:16px">›</span>
+    </div>
+    <div class="panel" style="margin-top:14px;padding:16px">
+      <div class="kick go">UP NEXT · TOMORROW</div>
+      <div class="b16" style="font-size:26px;margin-top:6px">ARG @ ENG</div>
+      <div class="m11" style="color:var(--mut);margin-top:6px">3:00 PM</div>
+      <div class="countdown" id="cdA" style="font-size:22px;margin-top:8px">23:06:14</div>
+      <div class="m9" style="color:var(--mut);letter-spacing:.1em;margin-top:2px">UNTIL KICKOFF</div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <div class="row"><span class="b13">ESP @ FRA <span class="g m10">▶ LIVE</span></span><span class="m11" style="color:var(--mut)">ARG @ ENG TMRW 3:00 PM</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ B ═══════════ -->
+<div class="dir" id="B">
+  <div class="about">
+    <span class="tag">B · MARQUEE TAKEOVER, EVERY DAY</span>
+    <h2>Give the next game the All-Star treatment</h2>
+    <p>You said you liked how the All-Star takeover felt — broadcast bar, big two-line stacked matchup, a gold CTA, a runway of what's coming this week. This direction makes that the everyday "up next" module instead of a one-week-only special: gold broadcast bar (no red/blue duotone — that stays ASG-only), a big countdown as the headline act, and a short runway underneath for the rest of the week.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Home stops feeling like two different apps during a takeover week vs. a normal week — same bones, special weeks just re-skin the bar.</li>
+    <li>The runway answers "what's coming" beyond just tomorrow, which the plain panel never did.</li></ul>
+    <div class="warn">Watch out: biggest structural change of the three — this panel gets taller, so it pushes the live ticker further down.</div>
+  </div>
+  <div class="phone">
+    <div class="statusbar"><span>3:54</span><span>●●●● 5G 20</span></div>
+    <div class="mast"><div class="avatar"></div><span class="gary">GARY <b>A.I.</b></span><span class="date">TUE, JUL 14</span></div>
+    <div class="goldline"></div>
+    <div class="tabs"><span class="tab on">TODAY</span><span class="tab">TOMORROW</span></div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin-top:8px"></div>
+    <div class="row" style="padding:14px 4px">
+      <span class="b16">10–5 <span class="g">+$375</span></span>
+      <span class="g m11">✓ BOS ML <span style="color:var(--warm)">−110</span></span>
+      <span class="go" style="font-size:16px">›</span>
+    </div>
+    <div style="margin-top:16px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="broadcast"><i style="background:var(--gold)"></i><i style="background:var(--gold)"></i></div>
+        <span class="kick" style="font-size:12px;color:var(--warm);letter-spacing:.08em">UP NEXT</span>
+        <span style="margin-left:auto" class="m10" style="color:var(--mut)">WC SEMIFINAL</span>
+      </div>
+      <div style="font-size:30px;font-weight:850;line-height:1.05;margin-top:8px">ARGENTINA<br>@ ENGLAND</div>
+      <div class="countdown" id="cdB" style="font-size:30px;margin-top:10px">23:06:14</div>
+      <div class="m9" style="color:var(--mut);letter-spacing:.1em;margin-top:2px">UNTIL KICKOFF · 3:00 PM ET</div>
+      <div style="margin-top:12px">
+        <span class="m12" style="color:var(--gold);font-weight:800">GARY'S CALL — ON THE PICKS TAB ›</span>
+      </div>
+      <div style="margin-top:14px">
+        <div class="row" style="padding:8px 0"><div><div class="b13">ALL-STAR GAME</div><div class="m9" style="color:var(--mut)">Cease vs Sánchez</div></div><div style="text-align:right"><div class="m10" style="color:var(--mut)">TOMORROW</div><div class="m11" style="color:var(--warm)">8:00 PM ET</div></div></div>
+        <div class="hr"></div>
+        <div class="row" style="padding:8px 0"><div><div class="b13">MLB RETURNS</div><div class="m9" style="color:var(--mut)">Full slate</div></div><div style="text-align:right"><div class="m10" style="color:var(--mut)">FRIDAY</div><div class="m11" style="color:var(--warm)">1:35 PM ET</div></div></div>
+      </div>
+    </div>
+    <div class="hr" style="margin-top:14px"></div>
+    <div class="panel" style="margin-top:12px">
+      <div class="row"><span class="b13">ESP @ FRA <span class="g m10">▶ LIVE</span></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ C ═══════════ -->
+<div class="dir" id="C">
+  <div class="about">
+    <span class="tag">C · THE LIVE DECK</span>
+    <h2>A scrollable row instead of one big panel</h2>
+    <p>Rather than picking one "next" game to feature, this swaps the single panel for a horizontally-scrolling deck of mini-cards — WC semi, All-Star Game, MLB's return — each with its own small countdown or a LIVE tag. Less spotlight on one game, more of a "here's the whole week at a glance" scan.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Scales naturally — a slow week shows 2 cards, a loaded week shows 6, nothing gets cramped into one panel.</li>
+    <li>Live games and countdowns share the same visual language, so "happening now" vs "happening soon" reads instantly.</li></ul>
+    <div class="warn">Watch out: no single moment gets the spotlight — if there's one marquee game you want Home to sell hardest, this direction undersells it next to a swipeable row.</div>
+  </div>
+  <div class="phone">
+    <div class="statusbar"><span>3:54</span><span>●●●● 5G 20</span></div>
+    <div class="mast"><div class="avatar"></div><span class="gary">GARY <b>A.I.</b></span><span class="date">TUE, JUL 14</span></div>
+    <div class="goldline"></div>
+    <div class="tabs"><span class="tab on">TODAY</span><span class="tab">TOMORROW</span></div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin-top:8px"></div>
+    <div class="row" style="padding:14px 4px">
+      <span class="b16">10–5 <span class="g">+$375</span></span>
+      <span class="g m11">✓ BOS ML <span style="color:var(--warm)">−110</span></span>
+      <span class="go" style="font-size:16px">›</span>
+    </div>
+    <div class="kick" style="margin-top:14px;margin-left:2px">THIS WEEK</div>
+    <div style="display:flex;gap:10px;margin-top:8px;overflow:hidden">
+      <div class="panel" style="min-width:150px;padding:12px;border-color:rgba(63,185,80,.35)">
+        <div class="g m10" style="font-weight:800">▶ LIVE</div>
+        <div class="b14" style="margin-top:6px">ESP @ FRA</div>
+        <div class="m9" style="color:var(--mut);margin-top:2px">67' · 1–1</div>
+      </div>
+      <div class="panel" style="min-width:150px;padding:12px">
+        <div class="m10" style="color:var(--mut)">WC SEMIFINAL</div>
+        <div class="b14" style="margin-top:6px">ARG @ ENG</div>
+        <div class="countdown" id="cdC1" style="font-size:14px;margin-top:4px">23:06:14</div>
+      </div>
+      <div class="panel" style="min-width:150px;padding:12px;opacity:.5">
+        <div class="m10" style="color:var(--mut)">ALL-STAR GAME</div>
+        <div class="b14" style="margin-top:6px">AL @ NL</div>
+        <div class="m11" style="color:var(--warm);margin-top:4px">TMRW 8 PM</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+  function tick(id, seconds){
+    const el = document.getElementById(id);
+    if(!el) return;
+    function render(s){
+      if(s < 0) s = 0;
+      const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+      el.textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+    }
+    render(seconds);
+    let remaining = seconds;
+    setInterval(()=>{ remaining = Math.max(0, remaining-1); render(remaining); }, 1000);
+  }
+  const START = 23*3600 + 6*60 + 14;
+  tick('cdA', START); tick('cdB', START); tick('cdC1', START);
+</script>
+</body>
+</html>

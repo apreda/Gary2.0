@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home — Countdown, round 2: three real metaphors</title>
+<style>
+  :root { --bg:#08080A; --panel:rgba(246,241,231,.03); --pborder:rgba(246,241,231,.08);
+          --gold:#C9A227; --warm:#F6F1E7; --win:#3FB950; --loss:#E5484D; --mut:rgba(255,255,255,.62); }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#131315;color:var(--warm);font-family:-apple-system,system-ui,sans-serif;padding:40px 22px 90px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:26px;font-weight:800}
+  .intro{color:var(--mut);font-size:14px;max-width:880px;line-height:1.6;margin:8px 0 14px}
+  .intro b{color:var(--warm)}
+  .kick{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+  .dir{display:flex;gap:34px;margin:54px 0;flex-wrap:wrap;align-items:flex-start}
+  .about{flex:1;min-width:360px;max-width:560px}
+  .about h2{font-size:21px;font-weight:800;margin:4px 0 10px}
+  .about .tag{font-family:ui-monospace,monospace;font-size:11px;color:var(--gold);letter-spacing:.12em}
+  .about p{color:rgba(255,255,255,.8);font-size:13.5px;line-height:1.6;margin:8px 0}
+  .about ul{margin:6px 0 6px 18px}
+  .about li{color:rgba(255,255,255,.78);font-size:13px;line-height:1.55;margin-bottom:6px}
+  .about .warn{color:rgba(255,255,255,.55);font-size:12.5px;line-height:1.5;border-left:2px solid rgba(229,72,77,.5);padding-left:10px;margin-top:10px}
+  .lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mut);text-transform:uppercase;margin-top:12px}
+  .phone{width:344px;background:var(--bg);border:1px solid rgba(246,241,231,.14);border-radius:34px;padding:16px 15px 24px;box-shadow:0 18px 50px rgba(0,0,0,.55);flex-shrink:0;overflow:hidden}
+  .statusbar{display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.75);margin-bottom:10px;font-weight:600}
+  .mast{display:flex;align-items:center;gap:9px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #E6C558, #9c7d1c);border:1px solid rgba(255,255,255,.25);flex-shrink:0}
+  .mast .gary{font-size:20px;font-weight:850;letter-spacing:.02em}
+  .mast .gary b{color:var(--gold)}
+  .mast .date{font-family:ui-monospace,monospace;font-size:9px;color:var(--mut);letter-spacing:.1em;margin-left:auto}
+  .goldline{height:1px;background:rgba(201,162,39,.4);margin:10px 0 0}
+  .tabs{display:flex;gap:18px;margin-top:12px}
+  .tab{font-size:14px;font-weight:800;color:rgba(255,255,255,.4);padding-bottom:7px}
+  .tab.on{color:var(--warm);border-bottom:2px solid var(--gold)}
+  .panel{background:var(--panel);border:1px solid var(--pborder);border-radius:12px}
+  .hr{height:1px;background:rgba(255,255,255,.07)}
+  .g{color:var(--win)} .go{color:var(--gold)}
+  .m9{font-family:ui-monospace,monospace;font-size:9px} .m11{font-family:ui-monospace,monospace;font-size:11px}
+  .b16{font-size:16px;font-weight:800}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:9px 12px}
+
+  /* A — split-flap board */
+  .flap-row{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:10px}
+  .flap-tile{width:32px;height:42px;background:linear-gradient(180deg,#2c2c30,#141416);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;font-weight:800;font-size:23px;color:#F4C542;position:relative;box-shadow:0 2px 4px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08)}
+  .flap-tile::after{content:'';position:absolute;left:2px;right:2px;top:50%;height:1px;background:rgba(0,0,0,.55)}
+  .flap-sep{font-family:ui-monospace,monospace;font-weight:800;font-size:20px;color:rgba(244,197,66,.5)}
+  .board-row{display:flex;align-items:center;padding:8px 2px;gap:8px}
+  .board-row .t{width:54px;flex-shrink:0;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--mut)}
+  .board-row .m{flex:1;font-size:12px;font-weight:700}
+  .board-row .s{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.04em;font-weight:700;flex-shrink:0}
+
+  /* B — the gold watch */
+  .watchWrap{position:relative;width:190px;height:190px;margin:12px auto 0}
+  .watchDigits{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+
+  /* C — jumbotron */
+  .jumbo-frame{position:relative;border-radius:10px;padding:18px 14px;margin-top:14px;background:#0c0c0d;border:5px solid #232326}
+  .rivet{position:absolute;width:6px;height:6px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#555,#111)}
+  .led{font-family:ui-monospace,monospace;font-weight:800;letter-spacing:.12em;color:#FFB300;text-shadow:0 0 6px rgba(255,179,0,.65),0 0 18px rgba(255,179,0,.35)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Home countdown — round 2: three ownable ideas</h1>
+<div class="intro">Round 1 was too safe — a bolted-on line, a recolor of the All-Star takeover, a stories-row every app has. This round is three genuinely different metaphors for "time until Gary's next call," each one a real design idea on its own rather than a rearrangement of existing screens. Same real data throughout: <b>Tue Jul 14</b>, today <b>10–5 · +$375 · BOS ML ✓</b>, next up <b>Argentina @ England, 3:00 PM</b>, live now <b>Spain @ France</b>. All three countdowns actually tick — open the file to watch them run.</div>
+
+<!-- ═══════════ A — DEPARTURE BOARD ═══════════ -->
+<div class="dir" id="A">
+  <div class="about">
+    <span class="tag">A · THE DEPARTURE BOARD</span>
+    <h2>Gary's board as a Solari flip display</h2>
+    <p>The countdown becomes a physical object — split-flap tiles, like an airport or train departure board — sitting above a manifest of the week using real travel-status words: the live game is "EN ROUTE," the next one is "BOARDING," everything further out is "SCHEDULED." It's a metaphor nobody else in sports betting is using: you're not staring at a clock, you're checking when your next flight leaves.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>The countdown is the hero — a crafted object, not a UI label — and the manifest format scales to any number of games without ever needing a new layout.</li>
+    <li>"Boarding" / "en route" / "scheduled" gives Gary a voice even in a data list.</li></ul>
+    <div class="warn">Watch out: the flip tiles need real craft (proper tile shadow, seam, maybe an actual flip animation on change) or they read as a cheap gimmick instead of a designed one.</div>
+  </div>
+  <div class="phone">
+    <div class="statusbar"><span>3:54</span><span>●●●● 5G 20</span></div>
+    <div class="mast"><div class="avatar"></div><span class="gary">GARY <b>A.I.</b></span><span class="date">TUE, JUL 14</span></div>
+    <div class="goldline"></div>
+    <div class="tabs"><span class="tab on">TODAY</span><span class="tab">TOMORROW</span></div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin-top:8px"></div>
+    <div class="row" style="padding:14px 4px">
+      <span class="b16">10–5 <span class="g">+$375</span></span>
+      <span class="g m11">✓ BOS ML <span style="color:var(--warm)">−110</span></span>
+      <span class="go" style="font-size:16px">›</span>
+    </div>
+    <div class="panel" style="margin-top:14px;padding:16px 14px;text-align:center">
+      <div class="kick" style="letter-spacing:.2em">NEXT DEPARTURE</div>
+      <div class="flap-row">
+        <div class="flap-tile" id="fH1">2</div><div class="flap-tile" id="fH2">3</div>
+        <span class="flap-sep">:</span>
+        <div class="flap-tile" id="fM1">0</div><div class="flap-tile" id="fM2">6</div>
+        <span class="flap-sep">:</span>
+        <div class="flap-tile" id="fS1">1</div><div class="flap-tile" id="fS2">4</div>
+      </div>
+      <div class="m9" style="color:var(--mut);letter-spacing:.12em;margin-top:10px">UNTIL ARGENTINA v ENGLAND</div>
+    </div>
+    <div style="margin-top:14px">
+      <div class="kick" style="margin-left:2px">GARY'S BOARD</div>
+      <div class="panel" style="margin-top:6px">
+        <div class="board-row"><span class="t">NOW</span><span class="m">SPAIN v FRANCE</span><span class="s g">● EN ROUTE</span></div>
+        <div class="hr"></div>
+        <div class="board-row"><span class="t">3:00P</span><span class="m">ARGENTINA v ENGLAND</span><span class="s go">BOARDING</span></div>
+        <div class="hr"></div>
+        <div class="board-row"><span class="t">TMRW 8P</span><span class="m">AL v NL</span><span class="s" style="color:var(--mut)">SCHEDULED</span></div>
+        <div class="hr"></div>
+        <div class="board-row"><span class="t">FRI 1:35P</span><span class="m">MLB RETURNS</span><span class="s" style="color:var(--mut)">SCHEDULED</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ B — THE GOLD WATCH ═══════════ -->
+<div class="dir" id="B">
+  <div class="about">
+    <span class="tag">B · THE GOLD WATCH</span>
+    <h2>Check Gary's watch</h2>
+    <p>The countdown becomes a luxury wristwatch face — brushed gold bezel, hour ticks, a sweeping second hand — with the digits sitting where the watch face would be. Instead of borrowing sports-broadcast language, this leans straight into the identity you already have: gold, cigar, high-roller confidence. This is the character checking his watch, not an app showing a timer.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Most "on-brand" of the three — the gold IS the character here, not just the accent color.</li>
+    <li>A single strong image that could anchor a share card or App Store shot too, not just Home.</li></ul>
+    <div class="warn">Watch out: most animation-dependent of the three. A static screenshot sells it far less than seeing the hand actually sweep — needs to be judged live, not as a still.</div>
+  </div>
+  <div class="phone">
+    <div class="statusbar"><span>3:54</span><span>●●●● 5G 20</span></div>
+    <div class="mast"><div class="avatar"></div><span class="gary">GARY <b>A.I.</b></span><span class="date">TUE, JUL 14</span></div>
+    <div class="goldline"></div>
+    <div class="tabs"><span class="tab on">TODAY</span><span class="tab">TOMORROW</span></div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin-top:8px"></div>
+    <div class="row" style="padding:14px 4px">
+      <span class="b16">10–5 <span class="g">+$375</span></span>
+      <span class="g m11">✓ BOS ML <span style="color:var(--warm)">−110</span></span>
+      <span class="go" style="font-size:16px">›</span>
+    </div>
+    <div style="text-align:center;margin-top:8px">
+      <div class="kick">GARY CHECKS HIS WATCH</div>
+      <div class="watchWrap">
+        <svg viewBox="0 0 200 200" width="190" height="190">
+          <defs>
+            <linearGradient id="bezelGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#F6D871"/>
+              <stop offset="0.5" stop-color="#8a6a15"/>
+              <stop offset="1" stop-color="#F6D871"/>
+            </linearGradient>
+          </defs>
+          <circle cx="100" cy="100" r="85" fill="#101012" stroke="url(#bezelGrad)" stroke-width="14"/>
+          <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+          <g stroke="rgba(201,162,39,.55)" stroke-width="2">
+            <line x1="139" y1="32.5" x2="134" y2="41.1"/>
+            <line x1="167.5" y1="61" x2="158.9" y2="66"/>
+            <line x1="167.5" y1="139" x2="158.9" y2="134"/>
+            <line x1="139" y1="167.5" x2="134" y2="158.9"/>
+            <line x1="61" y1="167.5" x2="66" y2="158.9"/>
+            <line x1="32.5" y1="139" x2="41.1" y2="134"/>
+            <line x1="32.5" y1="61" x2="41.1" y2="66"/>
+            <line x1="61" y1="32.5" x2="66" y2="41.1"/>
+          </g>
+          <g stroke="#C9A227" stroke-width="3">
+            <line x1="100" y1="18" x2="100" y2="38"/>
+            <line x1="182" y1="100" x2="162" y2="100"/>
+            <line x1="100" y1="182" x2="100" y2="162"/>
+            <line x1="18" y1="100" x2="38" y2="100"/>
+          </g>
+          <line id="secHand" x1="100" y1="100" x2="100" y2="34" stroke="#C9A227" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="100" cy="100" r="4" fill="#C9A227"/>
+        </svg>
+        <div class="watchDigits">
+          <div id="cdB" style="font-family:ui-monospace,monospace;font-weight:800;font-size:21px;color:var(--warm)">23:06:14</div>
+          <div class="m9" style="color:var(--mut);letter-spacing:.14em;margin-top:2px">TIL KICKOFF</div>
+        </div>
+      </div>
+      <div class="b16" style="margin-top:12px">ARGENTINA @ ENGLAND</div>
+      <div class="m11 go" style="margin-top:6px;font-weight:800">GARY'S CALL — PICKS TAB ›</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ C — THE JUMBOTRON ═══════════ -->
+<div class="dir" id="C">
+  <div class="about">
+    <span class="tag">C · THE JUMBOTRON</span>
+    <h2>Countdown as stadium scoreboard</h2>
+    <p>LED-style digits with an amber glow, a riveted metal frame, team codes blocked out the way they'd sit on the arena screen above the field. This is the most "sports," least "fintech" of the three — it looks like something hanging above a stadium, not something in a trading app.</p>
+    <div class="lbl">Why it wins</div>
+    <ul><li>Instantly reads as sports, reinforcing "the fan's app" instead of any hint of an EV/CLV tool.</li>
+    <li>Pairs naturally with live state — a live game could show a running score right on the same board.</li></ul>
+    <div class="warn">Watch out: LED/glow effects tip into kitsch fast. One glow color, no rainbow, or it reads arcade instead of premium.</div>
+  </div>
+  <div class="phone">
+    <div class="statusbar"><span>3:54</span><span>●●●● 5G 20</span></div>
+    <div class="mast"><div class="avatar"></div><span class="gary">GARY <b>A.I.</b></span><span class="date">TUE, JUL 14</span></div>
+    <div class="goldline"></div>
+    <div class="tabs"><span class="tab on">TODAY</span><span class="tab">TOMORROW</span></div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin-top:8px"></div>
+    <div class="row" style="padding:14px 4px">
+      <span class="b16">10–5 <span class="g">+$375</span></span>
+      <span class="g m11">✓ BOS ML <span style="color:var(--warm)">−110</span></span>
+      <span class="go" style="font-size:16px">›</span>
+    </div>
+    <div class="jumbo-frame">
+      <span class="rivet" style="top:6px;left:6px"></span>
+      <span class="rivet" style="top:6px;right:6px"></span>
+      <span class="rivet" style="bottom:6px;left:6px"></span>
+      <span class="rivet" style="bottom:6px;right:6px"></span>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="m9" style="color:var(--gold);letter-spacing:.14em">GARY'S BOARD</span>
+        <span class="m9 g" style="letter-spacing:.08em">● LIVE ESP–FRA</span>
+      </div>
+      <div style="text-align:center;margin-top:14px">
+        <div style="font-size:22px;font-weight:900;letter-spacing:.05em;color:#eee">ARG <span style="color:var(--mut);font-weight:700">@</span> ENG</div>
+        <div class="led" style="font-size:32px;margin-top:10px" id="cdC">23:06:14</div>
+        <div class="m9" style="color:var(--mut);letter-spacing:.16em;margin-top:6px">UNTIL KICKOFF</div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="kick" style="margin-left:2px">REST OF THE BOARD</div>
+      <div class="panel" style="margin-top:6px">
+        <div class="board-row"><span class="t">TMRW 8P</span><span class="m">ALL-STAR: AL v NL</span><span class="s" style="color:var(--mut)">SCHEDULED</span></div>
+        <div class="hr"></div>
+        <div class="board-row"><span class="t">FRI 1:35P</span><span class="m">MLB RETURNS</span><span class="s" style="color:var(--mut)">SCHEDULED</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+  const START = 23*3600 + 6*60 + 14;
+  let remaining = START, handDeg = 0;
+  function fmt(s){
+    s = Math.max(0,s);
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+    return { h:String(h).padStart(2,'0'), m:String(m).padStart(2,'0'), s:String(sec).padStart(2,'0') };
+  }
+  function renderFlap(t){
+    document.getElementById('fH1').textContent = t.h[0];
+    document.getElementById('fH2').textContent = t.h[1];
+    document.getElementById('fM1').textContent = t.m[0];
+    document.getElementById('fM2').textContent = t.m[1];
+    document.getElementById('fS1').textContent = t.s[0];
+    document.getElementById('fS2').textContent = t.s[1];
+  }
+  function renderPlain(id, t){
+    const el = document.getElementById(id);
+    if (el) el.textContent = `${t.h}:${t.m}:${t.s}`;
+  }
+  function render(){
+    const t = fmt(remaining);
+    renderFlap(t); renderPlain('cdB', t); renderPlain('cdC', t);
+  }
+  render();
+  setInterval(() => {
+    remaining = Math.max(0, remaining - 1);
+    render();
+    handDeg = (handDeg + 6) % 360;
+    const hand = document.getElementById('secHand');
+    if (hand) hand.setAttribute('transform', `rotate(${handDeg} 100 100)`);
+  }, 1000);
+</script>
+</body>
+</html>
