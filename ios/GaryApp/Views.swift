@@ -3816,7 +3816,11 @@ struct HomeAllStarTakeover: View {
     private let asgBlue = Color(hex: "#2D68C4")
 
     /// Derby day vs ASG day, from the data (ASG picks ride AL/NL team slots).
-    private var isAsgDay: Bool { specials.contains { $0.awayTeam == "American League" } }
+    // Both team spellings: the board originally carried "American League" and
+    // was renamed to "AL" (Jul 14) when the long names shortened to
+    // "LEAGUE @ LEAGUE" on the pick card — the rename broke this gate and the
+    // takeover fell back to the Derby face.
+    private var isAsgDay: Bool { specials.contains { $0.awayTeam == "AL" || $0.awayTeam == "American League" } }
     /// Headline pick — only its start time surfaces here (no pick reveals on Home).
     private var featured: GaryPick? {
         specials.first { $0.game_id == 20260713 || $0.game_id == 8712499 } ?? specials.first
