@@ -434,12 +434,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         return true;
       });
 
-      // Filter out existing picks that the new batch replaces. Game picks match
-      // by id when BOTH sides carry one (doubleheader-safe); an existing pick
-      // WITHOUT an id falls back to teams-only matching so a re-pick of a
-      // legacy-stamped game replaces it instead of duplicating it.
+      // Same-game identity. Game picks match by id when BOTH sides carry one
+      // (doubleheader-safe); an existing pick WITHOUT an id falls back to
+      // teams-only matching.
       const checkIsGamePick = (p) => !checkIsProp(p) && !p.soccer_match_id;
-      const replaces = (newPick, oldPick) => {
+      const sameGame = (newPick, oldPick) => {
         if (!checkIsGamePick(newPick) || !checkIsGamePick(oldPick)) {
           return gameKey(newPick) === gameKey(oldPick);
         }
@@ -450,19 +449,36 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         const newId = newPick.bdl_game_id ?? newPick.game_id;
         const oldId = oldPick.bdl_game_id ?? oldPick.game_id;
         if (newId != null && oldId != null) return String(newId) === String(oldId);
-        return true; // legacy un-stamped pick: teams+date identity (old behavior)
+        return true; // legacy un-stamped pick: teams+date identity
       };
-      const filteredExisting = existingPicks.filter(p => !toAppend.some(n => replaces(n, p)));
+
+      // STORE-GUARD — FIRST WRITER WINS (incident #10, Jul 12 2026): two
+      // production hosts run in parallel and both can pass the pre-analysis
+      // "already has a pick" check inside the same window; under the old
+      // later-writer-wins merge the second host's disagreeing pick silently
+      // FLIPPED the published one (CHC→CIN, OAK→CHW sides). A pick that's
+      // stored is the pick — an incoming pick for a game that already has one
+      // is DROPPED, never a replacer. A deliberate re-pick now requires
+      // deleting the game's row first (manual, founder-approved).
+      const kept = toAppend.filter(n => {
+        const clash = existingPicks.find(p => sameGame(n, p));
+        if (clash) {
+          const same = (clash.pick || '') === (n.pick || '');
+          console.warn(`🛡️ STORE-GUARD: kept existing "${clash.pick}" — dropped incoming ${same ? 'duplicate' : `DISAGREEING "${n.pick}"`} for ${n.awayTeam || '?'} @ ${n.homeTeam || '?'} (parallel-host write)`);
+          return false;
+        }
+        return true;
+      });
 
       // Apply cap for props only on the combined set (keep existing first)
-      const combined = [...filteredExisting, ...toAppend];
+      const combined = [...existingPicks, ...kept];
       const props = combined.filter(checkIsProp);
       const nonProps = combined.filter(p => !checkIsProp(p));
       const cappedProps = props.slice(0, 10);
       mergedPicks = [...nonProps, ...cappedProps];
       fallbackPicksRef = mergedPicks;
 
-      console.log(`Merging ${toAppend.length} new picks into existing ${existingPicks.length}; final size ${mergedPicks.length}`);
+      console.log(`Merging ${kept.length} new picks (${toAppend.length - kept.length} guard-dropped) into existing ${existingPicks.length}; final size ${mergedPicks.length}`);
 
       // Use storeDailyPicks (service role key) to upsert merged picks
       const storeResult = await storeDailyPicks(currentDateString, mergedPicks);
