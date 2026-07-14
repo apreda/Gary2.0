@@ -2625,6 +2625,22 @@ struct HomeView: View {
         return f.string(from: d)
     }
 
+    /// Inverse of `etClock` — the All-Star specials pipeline only ever stamps
+    /// a display clock like "8:00 PM" (`GaryPick.time`), never a real
+    /// `commence_time`, so this rebuilds TODAY's ET date at that clock time
+    /// for anything that needs an actual countdown target.
+    private static func todayET(atClock clock: String) -> Date? {
+        let parseF = DateFormatter()
+        parseF.timeZone = TimeZone(identifier: "America/New_York")
+        parseF.dateFormat = "h:mm a"
+        guard let parsed = parseF.date(from: clock) else { return nil }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        let comps = cal.dateComponents([.hour, .minute], from: parsed)
+        guard let hour = comps.hour, let minute = comps.minute else { return nil }
+        return cal.date(bySettingHour: hour, minute: minute, second: 0, of: Date())
+    }
+
     /// "~2:30 PM" — when the first still-unposted call should land (T-90).
     private var firstCallClock: String? {
         let unposted = sheetRows.filter { $0.zone == .upcoming && $0.callLine == nil }
@@ -2766,10 +2782,13 @@ struct HomeView: View {
 
     /// The day's big games joined with Gary's picks + the live board — the
     /// MARQUEE tracker's feed, ranked by the pipeline (todayBoard.big_games).
+    /// A same-day All-Star special rides in too (see `specialMarqueeEntry`) so
+    /// the hero never falls through to TOMORROW while tonight's bigger event
+    /// is still ahead — one ranked pool, one "up next," never wrong (founder,
+    /// Jul 14: "i hate fallback designs... just have the app work").
     private var marqueeEntries: [HomeMarqueeTracker.Entry] {
         let bigs = todayBoard?.big_games ?? []
-        guard !bigs.isEmpty else { return [] }
-        return bigs.compactMap { big -> HomeMarqueeTracker.Entry? in
+        let bigEntries: [HomeMarqueeTracker.Entry] = bigs.isEmpty ? [] : bigs.compactMap { big -> HomeMarqueeTracker.Entry? in
             guard let matchup = big.matchup, matchup.contains(" @ ") else { return nil }
             let sides = matchup.components(separatedBy: " @ ")
             let away = sides[0], home = sides.count > 1 ? sides[1] : ""
@@ -2840,6 +2859,50 @@ struct HomeView: View {
                 result: result
             )
         }
+        return bigEntries + [specialMarqueeEntry].compactMap { $0 }
+    }
+
+    /// A same-day All-Star special — a real MARQUEE candidate, not just a
+    /// banner. Rank 0 so it outranks any leftover today game once it's the
+    /// biggest thing left (matches the takeover's own framing: this IS the
+    /// week's marquee event). Deliberately NOT gated on "still in the future"
+    /// — Entry's own upNext/started logic already handles that transition, so
+    /// the entry ages into a "▶ STARTED" ribbon chip like any other game
+    /// instead of vanishing at kickoff and dropping the hero right back to
+    /// the wrong tomorrow fallback it exists to prevent.
+    /// The specials pipeline (`run-allstar-specials.js`) never sets a real
+    /// `commence_time` on these picks, only a display clock (`time`, e.g.
+    /// "8:00 PM") — so this prefers commence_time if it's ever added, and
+    /// otherwise rebuilds today's ET date from that clock string. No usable
+    /// time at all → no synthetic entry, never a countdown to nothing.
+    private var specialMarqueeEntry: HomeMarqueeTracker.Entry? {
+        let featured = allStarSpecials.first { $0.game_id == 20260713 || $0.game_id == 8712499 } ?? allStarSpecials.first
+        guard let featured else { return nil }
+        let ct: String
+        if let real = featured.commence_time, parseISO8601(real) != nil {
+            ct = real
+        } else if let clock = featured.time, let d = Self.todayET(atClock: clock) {
+            ct = ISO8601DateFormatter().string(from: d)
+        } else {
+            return nil
+        }
+        let away = featured.awayTeam ?? "AL", home = featured.homeTeam ?? "NL"
+        let count = allStarSpecials.count
+        return HomeMarqueeTracker.Entry(
+            id: "asg-\(featured.game_id ?? 0)",
+            rank: 0,
+            league: featured.league ?? "MLB",
+            matchupFull: "\(away) @ \(home)",
+            title: "\(Self.shortTeam(away)) @ \(Self.shortTeam(home))",
+            context: nil,
+            commence: ct,
+            pickLine: "GARY'S BOARD — \(count) PICK\(count == 1 ? "" : "S") · PICKS TAB",
+            pendingLine: nil,
+            oddsLine: nil,
+            live: nil,
+            verdict: nil,
+            result: nil
+        )
     }
 
     /// Tomorrow's #1 big game — the look-ahead row once today's marquee is done.
@@ -14190,6 +14253,15 @@ struct MembersOnlyCardFace: View {
         case .placeholder(let n): return n
         }
     }
+    /// .pickIn's right side only carries the clock + TAP TO REVEAL — narrower
+    /// than COMING SOON's two-line stack, so its seam sits further left
+    /// (restores the pre-Jul-13 position) instead of crossing the words.
+    private var seamX: (top: CGFloat, bottom: CGFloat) {
+        switch state {
+        case .pickIn:                return (0.62, 0.44)
+        case .coming, .placeholder:  return (0.74, 0.56)
+        }
+    }
     var body: some View {
         VStack(spacing: 0) {
             // Eyebrow — membership left, league right.
@@ -14276,9 +14348,9 @@ struct MembersOnlyCardFace: View {
             // sides. The card is the matchup; the seam is Gary in the middle.
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color(hex: "#14110D"))
-                .overlay(SealDiagonalShape().fill(Color(hex: "#2B2620")))
+                .overlay(SealDiagonalShape(topX: seamX.top, bottomX: seamX.bottom).fill(Color(hex: "#2B2620")))
                 .overlay(
-                    SealSeamShape().stroke(
+                    SealSeamShape(topX: seamX.top, bottomX: seamX.bottom).stroke(
                         LinearGradient(colors: [GaryColors.gold.opacity(0), GaryColors.gold, GaryColors.gold.opacity(0)],
                                        startPoint: .top, endPoint: .bottom),
                         lineWidth: 1.5)
@@ -14301,14 +14373,17 @@ struct MembersOnlyCardFace: View {
 }
 
 /// The lit side of the W17 seal — covers the top-left, leaning 25° right.
+/// `topX`/`bottomX` default to the COMING SOON-width position (founder Jul
+/// 13); callers with narrower right-side content (e.g. TAP TO REVEAL) pass a
+/// more-left pair so their own text doesn't cross the seam.
 struct SealDiagonalShape: Shape {
+    var topX: CGFloat = 0.74
+    var bottomX: CGFloat = 0.56
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: .zero)
-        // Seam pushed right (0.62/0.44 -> 0.74/0.56, founder Jul 13): the
-        // raised type made COMING SOON wide enough to cross the old diagonal.
-        p.addLine(to: CGPoint(x: rect.width * 0.74, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * 0.56, y: rect.height))
+        p.addLine(to: CGPoint(x: rect.width * topX, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * bottomX, y: rect.height))
         p.addLine(to: CGPoint(x: 0, y: rect.height))
         p.closeSubpath()
         return p
@@ -14317,10 +14392,12 @@ struct SealDiagonalShape: Shape {
 
 /// The gold seam along the W17 split.
 struct SealSeamShape: Shape {
+    var topX: CGFloat = 0.74
+    var bottomX: CGFloat = 0.56
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        p.move(to: CGPoint(x: rect.width * 0.74, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * 0.56, y: rect.height))
+        p.move(to: CGPoint(x: rect.width * topX, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * bottomX, y: rect.height))
         return p
     }
 }
