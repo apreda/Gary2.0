@@ -32,7 +32,8 @@
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 // gpt-5 family (reasoning models): thinking depth maps to reasoning.effort.
-const EFFORT_BY_THINKING_LEVEL = { high: 'high', medium: 'medium', low: 'low' };
+// xhigh = gpt-5.6's top tier (founder order, Jul 14: WC specials run there).
+const EFFORT_BY_THINKING_LEVEL = { xhigh: 'xhigh', high: 'high', medium: 'medium', low: 'low' };
 
 export function isOpenAiModel(modelName) {
   return typeof modelName === 'string' && modelName.startsWith('gpt-');

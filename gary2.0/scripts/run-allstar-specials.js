@@ -43,8 +43,13 @@ const DRY_RUN = args.includes('--dry-run');
 const PARK = args.includes('--park');
 const RUN_DERBY = args.includes('--derby');
 const RUN_ASG = args.includes('--asg');
+// --wc (founder, Jul 14): today's World Cup picks come from Sol at xhigh —
+// stored STRAIGHT to daily_picks (the WC lane is the public free slate), and
+// stored EARLY so both schedulers' 1:30 T-90 runs see the game already picked
+// and stand down (closes today's parallel-host race at the source).
+const RUN_WC = args.includes('--wc');
 const EXTRA_MODES = ['--derby-extras', '--contest-rewrite', '--backfill-ids', '--reconcile-caminero'].some(f => args.includes(f));
-if (!RUN_DERBY && !RUN_ASG && !RUN_DERBY_PROPS && !EXTRA_MODES) { console.error('Pass --derby, --derby-props, --derby-extras, --contest-rewrite, --backfill-ids, and/or --asg'); process.exit(1); }
+if (!RUN_DERBY && !RUN_ASG && !RUN_WC && !RUN_DERBY_PROPS && !EXTRA_MODES) { console.error('Pass --derby, --derby-props, --derby-extras, --contest-rewrite, --backfill-ids, --asg, and/or --wc'); process.exit(1); }
 
 const MODEL = process.env.SPECIALS_MODEL || 'gpt-5.6-sol';
 
@@ -137,12 +142,12 @@ function parseJsonLoose(text) {
 }
 
 /** One Sol call → board array; per-pick statAudit with one collective retry. */
-async function solBoard(userMsg, minPicks) {
+async function solBoard(userMsg, minPicks, thinkingLevel = 'high') {
   const session = await createOpenAISession({
     modelName: MODEL,
     systemPrompt: SYSTEM,
     tools: [],
-    thinkingLevel: 'high',
+    thinkingLevel,
   });
   const usage = { in: 0, out: 0 };
   let res = await sendToOpenAISession(session, userMsg, { isFunctionResponse: false });
@@ -228,6 +233,69 @@ async function runAsg() {
     rationale: b.rationale,
     bestLineBook: b.book || null,
   }));
+}
+
+/** WORLD CUP day board (founder, Jul 14: "use Sol 5.6 for those picks too,
+ *  reasoning on xhigh"). Two plays per match — side + total — in the exact
+ *  production WC pick shape so cards, grading, and the two-pick product all
+ *  behave like any other WC day. */
+async function runWc() {
+  console.log(`[Specials] ── WORLD CUP BOARD (${MODEL}, xhigh) ──`);
+  const dateStr = '2026-07-14';
+  const fifa = (await import('../src/services/fifaWorldCupService.js')).default;
+  const matches = (await fifa.getMatchesForDate(dateStr)) || [];
+  if (!matches.length) throw new Error('no WC matches today');
+
+  const jobsOut = [];
+  const teamName = (t) => (typeof t === 'string' ? t : (t?.name || t?.team || t?.title || ''));
+  for (const m of matches) {
+    const away = teamName(m.awayTeam) || teamName(m.away_team) || teamName(m.teams?.away);
+    const home = teamName(m.homeTeam) || teamName(m.home_team) || teamName(m.teams?.home);
+    if (!away || !home) throw new Error(`could not resolve team names for match ${m.id ?? '?'}`);
+    const matchId = m.id ?? m.match_id ?? m.fixture?.id;
+    const kickoffIso = m.commence_time || m.date || m.fixture?.date || `${dateStr}T19:00:00.000Z`;
+    console.log(`[Specials] WC match: ${away} @ ${home} (id ${matchId})`);
+
+    const news = groundedText(await geminiGroundingSearch(`FIFA World Cup 2026 semifinal TODAY July 14 2026, ${away} vs ${home}: confirmed or expected lineups, injuries and suspensions, team news from today, venue and kickoff conditions.`));
+    const oddsBoard = groundedText(await geminiGroundingSearch(`Betting odds boards TODAY July 14 2026 for the World Cup semifinal ${away} vs ${home}: three-way moneyline (win/draw/win in 90 minutes) and the total goals over/under lines WITH PRICES at DraftKings, FanDuel, BetMGM, bet365 — exact numbers with sportsbook names.`));
+    const formBrief = groundedText(await geminiGroundingSearch(`${away} and ${home} at the 2026 World Cup: tournament form so far (results, goals for/against, xG and xGA per match if published, clean sheets, possession profile), knockout-round performances, and how the two sides match up tactically.`));
+    const briefs = `TEAM NEWS (grounded today):\n${news}\n\nODDS BOARD (grounded):\n${oddsBoard}\n\nTOURNAMENT FORM BRIEF (grounded):\n${formBrief}`;
+
+    const schema = `{"board":[{"leg":"side","pick_text":"e.g. 'Spain ML +150' or 'France ML -120' (90-minute three-way result; the Draw is a real option too)","odds":150,"book":"DraftKings","confidence":0.6,"rationale":"first-person, 200-300 words, 3 paragraphs separated by blank lines"},{"leg":"total","pick_text":"e.g. 'Under 2.5 -105'","goal_line":2.5,"odds":-105,"book":"DraftKings","confidence":0.6,"rationale":"same rules"}]}`;
+    const user = `${briefs}\n\nTASK: This is a World Cup SEMIFINAL — build BOTH legs of the day's card for ${away} @ ${home}: exactly ONE side call (the 90-minute three-way market: either team ML or the Draw) and exactly ONE total call (over/under at a posted line). Form the read FIRST — tournament form, the tactical matchup, who is missing and who is back, the stage and conditions — THEN hold it against the posted prices. Every call carries a price from the board with a real sportsbook (DraftKings preferred). pick_text under 30 characters, clean bet grammar. Numbers only from the data above.\n\nJSON schema: ${schema}`;
+
+    const board = await solBoard(user, 2, 'xhigh');
+    const side = board.find(b => (b.leg || '').toLowerCase() === 'side');
+    const total = board.find(b => (b.leg || '').toLowerCase() === 'total');
+    if (!side || !total) throw new Error('WC board missing a leg after audit');
+
+    const slug = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const wcBase = {
+      league: 'WC', sport: 'soccer_world_cup', time: '3:00 PM',
+      awayTeam: away, homeTeam: home,
+      game_id: matchId, soccer_match_id: matchId,
+      soccer_round: 'Semifinals', soccer_stage: 'Semifinal',
+      soccer_competition: 'FIFA World Cup 2026',
+      commence_time: kickoffIso,
+      statsUsed: [], statsData: [], injuries: { away: [], home: [] },
+    };
+    jobsOut.push(
+      { ...wcBase, type: 'moneyline', pick_category: 'side',
+        pick: side.pick_text, odds: typeof side.odds === 'number' ? side.odds : null,
+        confidence: side.confidence ?? 0.55,
+        rationale: `Gary's Take\n\n${side.rationale}`,
+        bestLineBook: side.book || null,
+        pick_id: `pick-${dateStr}-wc-${slug(home)}-${slug(side.pick_text)}-0` },
+      { ...wcBase, type: 'total', pick_category: 'total',
+        pick: total.pick_text, odds: typeof total.odds === 'number' ? total.odds : null,
+        goal_line: typeof total.goal_line === 'number' ? total.goal_line : null,
+        confidence: total.confidence ?? 0.55,
+        rationale: `Gary's Take\n\n${total.rationale}`,
+        bestLineBook: total.book || null,
+        pick_id: `pick-${dateStr}-wc-${slug(home)}-${slug(total.pick_text)}-1` },
+    );
+  }
+  return jobsOut;
 }
 
 /** THE CONTEST board (founder, Jul 13): Sol calls the Round 1 HR over/under
@@ -394,6 +462,8 @@ async function backfillPlayerIds() {
   const jobs = [];
   if (RUN_DERBY) jobs.push({ picks: await runDerby(), override: null });
   if (RUN_ASG) jobs.push({ picks: await runAsg(), override: '2026-07-14' });
+  // WC is the PUBLIC free slate — never parked, straight to daily_picks.
+  if (RUN_WC) jobs.push({ picks: await runWc(), override: '2026-07-14', direct: true });
 
   for (const job of jobs) {
     for (const p of job.picks) {
@@ -404,11 +474,11 @@ async function backfillPlayerIds() {
   }
   if (DRY_RUN) { console.log('\n[Specials] dry run — nothing stored.'); process.exit(0); }
   for (const job of jobs) {
-    const res = PARK
+    const res = (PARK && !job.direct)
       ? await picksService.storeTestPicks(job.picks, 'allstar-parked',
           `Parked pending App Store approval (founder). Target date: ${job.override || 'today'}.`)
       : await picksService.storeDailyPicksInDatabase(job.picks, job.override);
-    console.log(`[Specials] ${PARK ? 'PARKED' : 'stored'} ${job.picks.length} pick(s)${job.override ? ` → ${job.override}` : ''} → ${JSON.stringify(res).slice(0, 180)}`);
+    console.log(`[Specials] ${(PARK && !job.direct) ? 'PARKED' : 'stored'} ${job.picks.length} pick(s)${job.override ? ` → ${job.override}` : ''} → ${JSON.stringify(res).slice(0, 180)}`);
   }
   console.log('[Specials] Done.');
   process.exit(0);
