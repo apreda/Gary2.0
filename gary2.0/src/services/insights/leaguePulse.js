@@ -97,15 +97,17 @@ async function buildMlbPulse(date, { batterIdsOverride, teamAbbrsOverride } = {}
     .map(normalizeGame)
     .filter(Boolean);
   // No-game day (All-Star break): the explicit pool stands in for the slate —
-  // bats + injuries build from it, the game-anchored tabs (SP/bullpen) drop.
-  if (!games.length && asArray(batterIdsOverride).length) {
-    const batterIds = new Set(asArray(batterIdsOverride).map(String));
-    const teamMeta = new Map();
-    asArray(teamAbbrsOverride).forEach((abbr, i) => teamMeta.set(`ovr-${i}`, { abbr }));
+  // bats build from it (when present), the league-wide teams tab always
+  // builds, game-anchored tabs (SP/bullpen) drop. An EMPTY pool still means
+  // override mode (ASG day: no contest list, but team form stays).
+  if (!games.length && batterIdsOverride != null) {
+    const ids = asArray(batterIdsOverride).map(String);
 
     const packs = [];
-    const bats = await safeCall(() => buildMlbHotColdBats({ date, season, bdl, batterIds }), null);
-    if (bats) packs.push(bats);
+    if (ids.length) {
+      const bats = await safeCall(() => buildMlbHotColdBats({ date, season, bdl, batterIds: new Set(ids) }), null);
+      if (bats) packs.push(bats);
+    }
     // Break edition: league-wide TEAM form beats a slate-filtered injury list
     // ("hot or cold teams going into the break — more bettor-useful", founder).
     const teams = await safeCall(() => buildMlbHotColdTeams({ date, season, bdl }), null);

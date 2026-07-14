@@ -58,11 +58,9 @@ async function run() {
     .map((r) => TEAM_ABBR[String(r.team || '').toLowerCase()])
     .filter(Boolean))];
 
-  if (!ids.length) {
-    console.log(`[allstar-pulse] No board players with ids for ${date} — nothing to build.`);
-    return;
-  }
-  console.log(`[allstar-pulse] ${date}: pool = ${ids.length} player(s), teams = ${abbrs.join(', ')}`);
+  // An empty pool still builds the league-wide tabs (ASG day: no contest
+  // list, but the Hot & Cold Teams form stays live).
+  console.log(`[allstar-pulse] ${date}: pool = ${ids.length} player(s)${abbrs.length ? `, teams = ${abbrs.join(', ')}` : ''}`);
 
   const packs = await buildLeaguePulse({
     date, league: 'MLB',
