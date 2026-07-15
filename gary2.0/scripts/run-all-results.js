@@ -15,7 +15,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { gradeSoccerGame } from '../src/services/soccerGrading.js';
-import { pickSide } from '../src/services/teamMatch.js';
+import { pickSide, matchGame } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame } from '../src/services/gameRecap.js';
 import { runNightHighlights } from '../src/services/nightHighlights.js';
@@ -299,44 +299,9 @@ async function fetchMLBStats(gameIds) {
 
 /**
  * Matching & Grading
+ * matchGame() now lives in src/services/teamMatch.js (shared + tested) —
+ * see that file for the Jul 15 2026 swapped-by-default fix.
  */
-function matchGame(games, h, v, gameId) {
-  const hn = normalizeName(h), vn = normalizeName(v);
-  const hLast = hn.split(' ').pop(), vLast = vn.split(' ').pop();
-
-  // Prefer exact BDL game_id match when the pick has it stored. This eliminates
-  // all ambiguity — same teams on consecutive nights, UTC bleed, doubleheaders.
-  if (gameId != null) {
-    const byId = games.find(g => String(g.id) === String(gameId));
-    if (byId) {
-      const gh = normalizeName(byId.home_team?.full_name || byId.home_team?.name || '');
-      // If BDL's home team doesn't match the pick's home team, the pick stored
-      // home/away in reversed order — set swapped so score alignment is correct.
-      const swapped = !(gh.includes(hn) || gh.includes(hLast));
-      return { game: byId, swapped };
-    }
-  }
-
-  // Fallback for legacy picks without game_id: match by team names.
-  // Try normal match first (pick's home = API's home)
-  let match = games.find(g => {
-    const gh = normalizeName(g.home_team?.full_name || g.home_team?.name || '');
-    const gv = normalizeName(g.visitor_team?.full_name || g.visitor_team?.name || g.away_team?.full_name || g.away_team?.name || '');
-    return (gh.includes(hn) || gh.includes(hLast)) && (gv.includes(vn) || gv.includes(vLast));
-  });
-  if (match) return { game: match, swapped: false };
-
-  // Try reverse match (pick's home/away may be swapped vs API)
-  match = games.find(g => {
-    const gh = normalizeName(g.home_team?.full_name || g.home_team?.name || '');
-    const gv = normalizeName(g.visitor_team?.full_name || g.visitor_team?.name || g.away_team?.full_name || g.away_team?.name || '');
-    return (gh.includes(vn) || gh.includes(vLast)) && (gv.includes(hn) || gv.includes(hLast));
-  });
-  if (match) return { game: match, swapped: true };
-
-  return null;
-}
-
 function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   const pickLower = pickText.toLowerCase();
 
@@ -376,7 +341,14 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   if (side === 'home') return (hScore > vScore) ? 'won' : 'lost';
   if (side === 'away') return (vScore > hScore) ? 'won' : 'lost';
 
-  return 'lost';
+  // Not classifiable as ML/spread/total/draw AND no distinguishing team token —
+  // this isn't a team-score bet at all (e.g. a player prop like "Freeman to win
+  // ASG MVP" living in daily_picks instead of the dedicated props table).
+  // Mirrors gradeSoccer's fix below: leave it ungraded rather than fabricate a
+  // loss (Jul 15 2026: this used to return 'lost' unconditionally here, so
+  // "Freeman to win ASG MVP" and "Cease 2+ strikeouts" both got marked LOST
+  // with the team's final score attached, regardless of the real outcome).
+  return null;
 }
 
 function gradeProp(actual, line, bet) {
@@ -914,7 +886,15 @@ async function processGenericGames(table, date, leagueFilter = null) {
 
       if (soccerResult != null || hs !== null) {
         const res = soccerResult != null ? soccerResult : gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
-        
+
+        // gradeGame couldn't classify this pick as a team-score bet (e.g. a
+        // player prop) — leave it pending rather than writing a null/garbage
+        // result. See the Jul 15 2026 comment on gradeGame's final return.
+        if (res == null) {
+          console.log(`  ⏭️  UNGRADEABLE (not a team-score bet) — leaving pending: ${league} "${pick.pick}"`);
+          continue;
+        }
+
         // NFL picks go to nfl_results table, others go to game_results.
         // pick_id resolves to the per-pick UUID from the picks[] JSON (so a future
         // server-side join can target the specific pick), with the parent daily_picks

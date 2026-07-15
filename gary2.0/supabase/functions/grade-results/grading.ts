@@ -59,7 +59,7 @@ export function pickSide(pickText: string, homeTeam: string, awayTeam: string): 
 // (ported from run-all-results.js; side-detection now via pickSide)
 export function gradeGame(
   pickText: string, homeTeam: string, awayTeam: string, hScore: number, vScore: number,
-): string {
+): string | null {
   const p = pickText.toLowerCase();
   const isML = p.includes(" ml") || p.includes("moneyline");
 
@@ -90,7 +90,11 @@ export function gradeGame(
   // Moneyline / team-to-win.
   if (side === "home") return hScore > vScore ? "won" : "lost";
   if (side === "away") return vScore > hScore ? "won" : "lost";
-  return "lost";
+  // Not a team-score bet gradeGame can classify (e.g. a player prop) — leave
+  // ungraded rather than fabricate a loss. Mirrors gradeSoccer's return null
+  // below (Jul 15 2026: this returned "lost" unconditionally here, so any
+  // player-prop-shaped pick living in daily_picks got a fabricated result).
+  return null;
 }
 
 // ── World Cup grading (3-way ML / draw / total / Asian handicap on the 90' score) ──

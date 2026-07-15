@@ -46,3 +46,71 @@ export function pickSide(pickText, homeTeam, awayTeam) {
 
   return null; // no distinguishing token present, or both matched — caller decides
 }
+
+/**
+ * Find the game a pick refers to, and whether the pick's home/away labels are
+ * reversed relative to the provider's.
+ *
+ * ── The Jul 15 2026 "swapped-by-default" bug this fixes ──────────────────────
+ * When matching by game_id (the trusted path — "eliminates all ambiguity" per
+ * the original comment), the code used to sanity-check the ID match against
+ * the provider's home-team NAME: if the names didn't line up, it assumed the
+ * pick had home/away reversed and flipped the scores to compensate. That's a
+ * reasonable check for a normal game with a real team name — but for a
+ * synthetic/exhibition game (e.g. the All-Star Game), the provider's
+ * home_team/away_team objects can be unpopulated placeholders (literally
+ * named "Unknown"). "unknown" never contains "nl" or "al", so the check
+ * always concluded "swapped" — inverting the score attribution regardless of
+ * the TRUE orientation. Live fallout: "NL ML -134" (NL actually lost 4-0)
+ * graded WON, because AL's real 4 runs got attributed to NL and NL's real 0
+ * got attributed to AL.
+ *
+ * Fix: an ID match is already unambiguous — that's the whole point of
+ * matching by ID. Only mark `swapped` when the provider's name gives an
+ * ACTUAL, readable signal that contradicts the pick's home team; an
+ * unreadable/placeholder name is not evidence of anything, so it must not
+ * flip the result. Trust the pick's own labeling by default.
+ *
+ * @returns {{game: object, swapped: boolean}|null}
+ */
+export function matchGame(games, h, v, gameId) {
+  const hn = normalizeTeamName(h), vn = normalizeTeamName(v);
+  const hLast = hn.split(' ').pop(), vLast = vn.split(' ').pop();
+
+  if (gameId != null) {
+    const byId = games.find((g) => String(g.id) === String(gameId));
+    if (byId) {
+      const rawHome = byId.home_team?.full_name || byId.home_team?.name || '';
+      const gh = normalizeTeamName(rawHome);
+      // No readable provider name (empty, or a generic "unknown" placeholder)
+      // -> nothing to contradict the pick's own labeling. Default to NOT
+      // swapped rather than guessing.
+      const nameIsReadable = !!gh && gh !== 'unknown';
+      const swapped = nameIsReadable && !(gh.includes(hn) || gh.includes(hLast));
+      return { game: byId, swapped };
+    }
+  }
+
+  // Fallback for legacy picks without game_id: match by team names.
+  let match = games.find((g) => {
+    const gh = normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '');
+    const gv = normalizeTeamName(g.visitor_team?.full_name || g.visitor_team?.name || g.away_team?.full_name || g.away_team?.name || '');
+    return (gh.includes(hn) || gh.includes(hLast)) && (gv.includes(vn) || gv.includes(vLast));
+  });
+  if (match) return { game: match, swapped: false };
+
+  match = games.find((g) => {
+    const gh = normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '');
+    const gv = normalizeTeamName(g.visitor_team?.full_name || g.visitor_team?.name || g.away_team?.full_name || g.away_team?.name || '');
+    return (gh.includes(vn) || gh.includes(vLast)) && (gv.includes(hn) || gv.includes(hLast));
+  });
+  if (match) return { game: match, swapped: true };
+
+  return null;
+}
+
+// normalizeName is exported for pickSide's internal use elsewhere; matchGame
+// needs the exact same lowercase/trim behavior the old inline copy used.
+function normalizeTeamName(name) {
+  return String(name ?? '').toLowerCase().trim();
+}

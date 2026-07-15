@@ -62,6 +62,23 @@ test("undetermined side returns null (no distinguishing token in pick)", () => {
   assert.equal(pickSide("Sox ML", "White Sox", "Red Sox"), null);
 });
 
+// ── The Jul 15 2026 "fabricated loss" bug this fixes ──────────────────────────
+// "Freeman to win ASG MVP +1800" and "Cease 2+ strikeouts +100" are player props
+// that ended up in daily_picks (not the dedicated props table). gradeGame can't
+// classify them as ML/spread/total/draw, and pickSide finds no "NL"/"AL" token
+// in the pick text — so both used to fall through to an unconditional "lost",
+// regardless of what actually happened. gradeSoccer already had this fix
+// (see the "ambiguous side stays ungraded" test above); gradeGame did not.
+test("gradeGame: unclassifiable pick (player prop) stays ungraded, never a fabricated loss", () => {
+  assert.equal(gradeGame("Freeman to win ASG MVP +1800", "NL", "AL", 0, 4), null);
+  assert.equal(gradeGame("Cease 2+ strikeouts +100", "NL", "AL", 0, 4), null);
+});
+
+test("gradeGame: still grades ordinary ML/spread/total normally after the fix", () => {
+  assert.equal(gradeGame("NL ML -134", "NL", "AL", 0, 4), "lost");
+  assert.equal(gradeGame("Under 8.0", "NL", "AL", 0, 4), "won");
+});
+
 // ── World Cup grading paths ──────────────────────────────────────────────────
 test("WC moneyline: away win", () => {
   assert.equal(gradeSoccer({ type: "moneyline", pick: "Brazil ML", homeTeam: "Mexico", awayTeam: "Brazil" }, 0, 2), "won");
