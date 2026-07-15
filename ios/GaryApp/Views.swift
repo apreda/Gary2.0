@@ -4790,10 +4790,21 @@ struct HomeOvernightStrip: View {
             // that made this cell render a point smaller is gone.
             .font(GaryFonts.mono(15, bold: true))
             .lineLimit(1)
-            .fixedSize()
+            // A tiny defensive floor, never the everyday case (ticker
+            // abbreviation already guarantees the fit) — the box below is
+            // what actually keeps things stable, this just stops a freak
+            // long item from clipping instead of shrinking a hair.
+            .minimumScaleFactor(0.85)
         .id(rollIndex)
         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                 removal: .move(edge: .top).combined(with: .opacity)))
+        // Jul 15 2026 fix: was .fixedSize() with no width — the box grew and
+        // shrank to match whichever item was on screen, so every 3s rotation
+        // visibly popped the whole strip open and shut. maxWidth: .infinity
+        // makes the box itself claim all left-over row width permanently —
+        // constant regardless of which item is showing or mid-transition;
+        // only the text inside it changes.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 23)
         .clipped()
         // The rolling cash wins the width fight — the record and THE CARD
