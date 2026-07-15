@@ -45,11 +45,6 @@ struct DailyPicksRow: Decodable {
     let picks: PicksValue<GaryPick>?
 }
 
-struct PropPicksRow: Decodable {
-    let date: String
-    let picks: PicksValue<PropPick>?
-}
-
 struct WeeklyNFLPicksRow: Decodable {
     let week_start: String
     let week_number: Int?
