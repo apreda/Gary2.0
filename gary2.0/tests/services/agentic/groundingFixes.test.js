@@ -5,10 +5,9 @@
 //
 //   (a) SEASON-CONTEXT LIE — every grounding call hardcoded
 //       "(NBA/NHL mid-season, NFL playoffs)" from the NBA calendar. False
-//       from ~February on; in July it misdirects MLB and World Cup queries.
+//       from ~February on; in July it misdirects MLB queries.
 //       Fix: describeSportsCalendar(date) in dateUtils — a truthful,
-//       month-derived line (+ the 2026 World Cup only inside its real
-//       Jun 11 – Jul 19 2026 window).
+//       month-derived line.
 //   (b) UNWRAP-BUG FAMILY — geminiGroundingSearch returns {success, data,
 //       raw}, but several stat-router fetchers were written for an older
 //       `.content` shape: MLB_BULLPEN's day-of news note was dead code
@@ -31,24 +30,16 @@ const root = path.join(__dirname, '../../../src');
 const src = (rel) => readFileSync(path.join(root, rel), 'utf8');
 
 describe('(a) season context is derived from the date, not hardcoded to January', () => {
-  it('July 2026: MLB regular season + World Cup knockout window, no NFL playoffs', () => {
+  it('July 2026: MLB regular season, no NFL playoffs', () => {
     const july = describeSportsCalendar(new Date('2026-07-08T12:00:00'));
     expect(july).toContain('MLB regular season');
-    expect(july).toContain('World Cup');
     expect(july).not.toContain('NFL playoffs');
   });
 
-  it('January: NFL playoffs + NBA/NHL mid-season, no World Cup', () => {
+  it('January: NFL playoffs + NBA/NHL mid-season', () => {
     const jan = describeSportsCalendar(new Date('2026-01-15T12:00:00'));
     expect(jan).toContain('NFL playoffs');
     expect(jan).toContain('NBA');
-    expect(jan).not.toContain('World Cup');
-  });
-
-  it('the World Cup line appears ONLY inside Jun 11 – Jul 19 2026', () => {
-    expect(describeSportsCalendar(new Date('2026-06-05T12:00:00'))).not.toContain('World Cup');
-    expect(describeSportsCalendar(new Date('2026-06-20T12:00:00'))).toContain('World Cup');
-    expect(describeSportsCalendar(new Date('2027-07-08T12:00:00'))).not.toContain('World Cup');
   });
 
   it('grounding.js uses the helper and drops the hardcoded parenthetical', () => {

@@ -14,7 +14,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { gradeSoccerGame } from '../src/services/soccerGrading.js';
 import { pickSide, matchGame } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame } from '../src/services/gameRecap.js';
@@ -22,8 +21,6 @@ import { runNightHighlights } from '../src/services/nightHighlights.js';
 import { writeStreaks } from '../src/services/streaksService.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
-// FIFA service reads the API key at import — must load AFTER loadEnv.
-const fifaWorldCup = await import('../src/services/fifaWorldCupService.js');
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -331,8 +328,8 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
     }
   }
 
-  // 3-way moneyline DRAW pick (soccer/WC: win · tie · lose) — wins only on a
-  // level result. Checked before the team-ML fallback, which would otherwise
+  // 3-way moneyline DRAW pick (win · tie · lose) — wins only on a level
+  // result. Checked before the team-ML fallback, which would otherwise
   // misgrade a correct draw pick as a loss.
   if (/\b(draw|tie)\b/.test(pickLower)) return (hScore === vScore) ? 'won' : 'lost';
 
@@ -344,10 +341,10 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   // Not classifiable as ML/spread/total/draw AND no distinguishing team token —
   // this isn't a team-score bet at all (e.g. a player prop like "Freeman to win
   // ASG MVP" living in daily_picks instead of the dedicated props table).
-  // Mirrors gradeSoccer's fix below: leave it ungraded rather than fabricate a
-  // loss (Jul 15 2026: this used to return 'lost' unconditionally here, so
-  // "Freeman to win ASG MVP" and "Cease 2+ strikeouts" both got marked LOST
-  // with the team's final score attached, regardless of the real outcome).
+  // Leave it ungraded rather than fabricate a loss (Jul 15 2026: this used to
+  // return 'lost' unconditionally here, so "Freeman to win ASG MVP" and "Cease
+  // 2+ strikeouts" both got marked LOST with the team's final score attached,
+  // regardless of the real outcome).
   return null;
 }
 
@@ -491,56 +488,6 @@ function getStatValue(sport, data, name, type) {
       console.warn(`    [Stat] MLB: Found ${name} but no match for prop type "${type}"`);
     }
   }
-  return null;
-}
-
-/**
- * World Cup prop stat extraction. player_match_stats keys on player_id only, so we
- * resolve the prop's player name → id via the lineup-built nameToId map. BDL returns
- * null for a zero stat (a player who didn't score has goals: null), so null coerces
- * to 0. There is no total-shots field in player_match_stats — "shots" comes from the
- * counted match_shots events (shotsByPlayer); if that's empty the caller falls back
- * to grounding.
- */
-function getStatValueSoccer(stats, nameToId, shotsByPlayer, name, type) {
-  if (!stats || !stats.length) return null;
-  const target = normalizeName(name);
-  const targetLast = target.split(' ').pop();
-  // Resolve player → id: exact normalized name, else last-name match (handles
-  // "R. Lukaku" vs "Romelu Lukaku" and accent differences via normalizeName).
-  let pid = nameToId[target];
-  if (pid == null) {
-    const hit = Object.keys(nameToId).find((n) => {
-      const last = n.split(' ').pop();
-      return last === targetLast && last.length > 3;
-    });
-    if (hit != null) pid = nameToId[hit];
-  }
-  if (pid == null) return null;
-  const row = stats.find((s) => s.player_id === pid);
-  if (!row) return null;
-  const t = type.toLowerCase();
-  const num = (v) => (v == null ? 0 : Number(v)); // BDL stores 0 as null
-  // Combined goal-OR-assist props settle on goals + assists together — must be
-  // checked before the plain "goal" branch below, since "goal_or_assist" also
-  // contains the substring "goal" and would otherwise short-circuit to goals
-  // only, silently dropping the assist half of the market (Jul 4 2026: Hakimi
-  // vs Canada graded LOST on 0 goals despite a real assist — should have won).
-  if (t.includes('goal_or_assist') || (t.includes('goal') && t.includes('assist'))) return num(row.goals) + num(row.assists);
-  if (/anytime|goalscorer|to score/.test(t) || (t.includes('goal') && !t.includes('against'))) return num(row.goals);
-  if (t.includes('assist')) return num(row.assists);
-  if (t.includes('save')) return num(row.saves);
-  if (t.includes('tackle')) return num(row.tackles);
-  if (t.includes('interception')) return num(row.interceptions);
-  if (t.includes('clearance')) return num(row.clearances);
-  if (t.includes('pass')) return num(row.key_passes); // "key passes" prop
-  // Shots-on-target before total shots (the word "shots" appears in both).
-  if (t.includes('shot') && (t.includes('target') || t.includes(' on ') || t.includes('sot'))) return num(row.shots_on_target);
-  if (t.includes('shot')) {
-    // No total-shots field on player_match_stats — use counted shot events if present.
-    return (shotsByPlayer && shotsByPlayer[pid] != null) ? shotsByPlayer[pid] : null;
-  }
-  console.warn(`    [Stat] WC: found ${name} but no mapping for prop type "${type}"`);
   return null;
 }
 
@@ -771,40 +718,7 @@ async function processGenericGames(table, date, leagueFilter = null) {
       // day's same-teams game (UTC bleed) or the wrong half of a doubleheader.
       const pickGameId = pick.game_id ?? pick.bdl_game_id ?? null;
 
-      // SOCCER (World Cup): grade from FIFA match data on the 90' REGULATION score
-      // (first half + second half) — NOT BDL (no soccer there) and NOT home_score
-      // (which includes extra time). to_advance uses ET + penalties.
-      let soccerResult = null;
-      const isSoccerPick = pick.league === 'WC' || pick.league === 'soccer_world_cup' || !!pick.soccer_match_id;
-      if (isSoccerPick) {
-        if (!pick.soccer_match_id) continue; // cannot grade without the match id
-        const wcMatches = await fifaWorldCup.getMatches({ matchIds: [pick.soccer_match_id] });
-        const wcMatch = wcMatches[0];
-        if (!wcMatch || wcMatch.status !== 'completed') continue; // not final — leave pending
-        const reg = fifaWorldCup.getRegulationScore(wcMatch);
-        if ((pick.type || '').toLowerCase() === 'to_advance') {
-          const adv = fifaWorldCup.getAdvanceResult(wcMatch);
-          const pickedHome = (pick.pick || '').toLowerCase().includes((wcMatch.home_team?.name || '').toLowerCase());
-          const pickedId = pickedHome ? wcMatch.home_team?.id : wcMatch.away_team?.id;
-          soccerResult = adv ? (adv.teamId === pickedId ? 'won' : 'lost') : null;
-        } else {
-          soccerResult = gradeSoccerGame(
-            { ...pick, homeTeam: wcMatch.home_team?.name, awayTeam: wcMatch.away_team?.name },
-            reg.home, reg.away
-          );
-        }
-        if (soccerResult == null) continue;
-        hs = reg.home; vs = reg.away;
-        // File the result on the ET slate day, NOT the raw UTC date. A late-evening
-        // ET kickoff (e.g. 8:30pm ET) carries the NEXT UTC calendar day (00:30Z), so a
-        // raw `.slice(0,10)` of the UTC datetime files the result one day ahead and
-        // orphans it from the pick's slate — the Picks page matches results strictly by
-        // slate date (game_date), so a misfiled day shows no W/L on that game. Every
-        // other sport gets this ET correction via normalizeToETDate inside the
-        // `if (matchedGame)` block below; WC never sets matchedGame, so apply it here.
-        const wcDate = normalizeToETDate({ datetime: wcMatch.datetime });
-        if (wcDate) gameDate = wcDate;
-      } else if (table === 'weekly_nfl_picks') {
+      if (table === 'weekly_nfl_picks') {
         const dateObj = new Date(date);
         for (let i = 0; i <= 7; i++) {
           const checkDate = new Date(dateObj);
@@ -829,8 +743,8 @@ async function processGenericGames(table, date, leagueFilter = null) {
         if (result) {
           // FINALITY GATE — never grade a non-final game. A suspended or
           // in-progress game carries partial scores in the same fields, and the
-          // results dedup makes a wrong grade PERMANENT. (Same bug class as the
-          // WC halftime fix; NFL already gates on status === 'Final' above.)
+          // results dedup makes a wrong grade PERMANENT. (NFL already gates on
+          // status === 'Final' above.)
           // Status shapes: MLB/NHL 'STATUS_FINAL', NBA 'Final' (scheduled NBA
           // games carry an ISO datetime — correctly excluded). A missing status
           // field grades with a warning so a provider shape change can't
@@ -884,8 +798,8 @@ async function processGenericGames(table, date, leagueFilter = null) {
         if (g) { hs = g.h; vs = g.v; }
       }
 
-      if (soccerResult != null || hs !== null) {
-        const res = soccerResult != null ? soccerResult : gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
+      if (hs !== null) {
+        const res = gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
 
         // gradeGame couldn't classify this pick as a team-score bet (e.g. a
         // player prop) — leave it pending rather than writing a null/garbage
@@ -1017,40 +931,10 @@ async function processPropBets(date) {
   // FINALITY GATE source (props): the set of MLB games that are FINAL. A prop whose game
   // isn't final must NOT be graded — an in-progress/unstarted game returns 0/partial stats
   // and settles the player prematurely (today's live game graded "0 TB -> LOST" before first
-  // pitch). WC is gated on 'completed' below; this mirrors the cloud grade-props gate.
+  // pitch). This mirrors the cloud grade-props gate.
   const mlbFinalIds = new Set(mlbGames.filter(g => String(g.status || '').toUpperCase().includes('FINAL')).map(g => String(g.id)));
 
   console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats`);
-
-  // World Cup: player_match_stats carries only player_id, so build a name→id bridge
-  // from lineups (everyone who played is listed). player_match_stats has no total-shots
-  // field — count shot events from match_shots for "shots" props.
-  let wcStats = [];
-  const wcNameToId = {};
-  const wcShotsByPlayer = {};
-  const wcCompletedIds = new Set();   // FINALITY GATE: only completed WC matches are gradeable
-  try {
-    const wcMatches = (await Promise.all(dates.map(d => fifaWorldCup.getMatchesForDate(d)))).flat()
-      .filter(m => m.status === 'completed');
-    const wcIds = [...new Set(wcMatches.map(m => m.id).filter(Boolean))];
-    wcIds.forEach(id => wcCompletedIds.add(String(id)));
-    if (wcIds.length) {
-      wcStats = await fifaWorldCup.getPlayerMatchStats(wcIds);
-      const lineups = await fifaWorldCup.getMatchLineups(wcIds);
-      for (const l of (lineups || [])) {
-        const nm = l.player?.name, id = l.player?.id;
-        if (nm && id != null) wcNameToId[normalizeName(nm)] = id;
-      }
-      try {
-        const shots = await fifaWorldCup.getMatchShots(wcIds);
-        for (const s of (shots || [])) {
-          const id = s.player_id ?? s.player?.id;
-          if (id != null) wcShotsByPlayer[id] = (wcShotsByPlayer[id] || 0) + 1;
-        }
-      } catch (e) { console.warn(`  ⚠️ WC match_shots unavailable (total-shots props will use grounding): ${e.message}`); }
-      console.log(`  ⚽ WC: ${wcStats.length} player-match-stat rows across ${wcIds.length} match(es), ${Object.keys(wcNameToId).length} players mapped`);
-    }
-  } catch (e) { console.warn(`  ⚠️ WC stat prep failed (props will fall back to grounding): ${e.message}`); }
 
   const stats = { w: 0, l: 0 };
   const handled = new Set();
@@ -1065,22 +949,15 @@ async function processPropBets(date) {
       // props record) but routes to MLB data sources for grading.
       const sport = p.sport?.toUpperCase();
       const dataSport = sport === 'MLB HR' ? 'MLB' : sport;
-      // Soccer props are multi-word ("Shots On Target", "Anytime Goal"); the first-word
-      // truncation used for US sports would collapse them and confuse SoT with total shots.
-      const type = dataSport === 'WC' ? (rawProp || '').trim() : (rawProp?.split(' ')?.[0] || rawProp);
+      const type = rawProp?.split(' ')?.[0] || rawProp;
       const line = p.line || p.line_value, bet = p.bet;
-      // Anytime-goalscorer settles on whether the player scored at all (no over/under
-      // line), so it's allowed through the line guard below.
-      const isAnytimeGoal = dataSport === 'WC' && /anytime|goalscorer|to score/i.test(type);
-      if (!name || !type || (line === undefined && !isAnytimeGoal)) continue;
+      if (!name || !type || line === undefined) continue;
 
       // FINALITY GATE (props) — never grade a prop whose game isn't final. An in-progress or
       // unstarted game returns 0/partial stats and settles the player prematurely (a live MLB
       // game graded "0 total bases -> LOST" before first pitch). Skip -> the prop stays pending
-      // and grades correctly once the game is final. WC = completed match; MLB = the fetched
-      // game's FINAL status. Props with no game_id fall through (legacy).
+      // and grades correctly once the game is final. Props with no game_id fall through (legacy).
       if (dataSport === 'MLB' && p.game_id != null && !mlbFinalIds.has(String(p.game_id))) { skippedNotFinal++; continue; }
-      if (dataSport === 'WC' && p.game_id != null && !wcCompletedIds.has(String(p.game_id))) { skippedNotFinal++; continue; }
 
       const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
       if (handled.has(key)) continue; handled.add(key);
@@ -1096,7 +973,6 @@ async function processPropBets(date) {
       else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
       else if (dataSport === 'MLB') actual = getStatValue('MLB', mlbStats, name, type);
       else if (dataSport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
-      else if (dataSport === 'WC') actual = getStatValueSoccer(wcStats, wcNameToId, wcShotsByPlayer, name, type);
 
       if (actual !== null) {
         source = 'api';

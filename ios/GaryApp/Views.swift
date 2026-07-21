@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import Charts
 import WebKit
 import SafariServices
@@ -3799,7 +3800,8 @@ struct HomeView: View {
 /// "GARY" + gold "A.I.", the date in mono on the same baseline, bear mark,
 /// settings dots, one gold hairline. Dynamic sports-tech, never serif.
 /// The green "already cashed" slot under a LIVE row's status — one hit shows
-/// static, two-plus roll on the strip's 3s cadence (founder, Jul 7).
+/// static, two-plus roll on a slow cadence (founder, Jul 7; slowed further Jul 15 —
+/// "far too fast" at the old ~3-4.6s pace).
 /// Was retired to a static "N PROPS CASHED" line on Jul 12 — over-scoped:
 /// the founder's "too much motion, too much green" note was about THE BOARD
 /// section, not this one. Restored Jul 14 (founder: Live/Earlier Today was
@@ -3807,7 +3809,23 @@ struct HomeView: View {
 struct LiveHitsRoller: View {
     let items: [String]
     @State private var idx = 0
-    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    private let timer: Publishers.Autoconnect<Timer.TimerPublisher>
+
+    /// staggerIndex (a hash of the row's own id — see HomeSheetRowView)
+    /// spreads this instance's period across a few slightly different values
+    /// so a page full of rollers drifts out of sync instead of flipping in
+    /// one synchronized burst every 3s (founder, Jul 15). Different periods
+    /// (no shared small multiple) means they don't resync later either —
+    /// this isn't just a one-time delayed start. A real init (not a computed
+    /// property) so `timer` is built ONCE per instance, not on every
+    /// re-render — a computed var here would spin up a fresh Timer on every
+    /// body evaluation instead of ticking steadily.
+    init(items: [String], staggerIndex: Int = 0) {
+        self.items = items
+        let period = 8.0 + Double(staggerIndex % 5) * 0.6
+        self.timer = Timer.publish(every: period, on: .main, in: .common).autoconnect()
+    }
+
     var body: some View {
         if !items.isEmpty {
             (Text("✓ ").foregroundColor(GaryColors.win)
@@ -4707,10 +4725,11 @@ struct HomeOvernightStrip: View {
     let onTape: () -> Void
 
     // The static "BEST +126" earned its keep by rolling: the slot cycles
-    // through the night's cashes every 3s (founder, Jul 5 — "it feels kind
-    // of pointless in its current form").
+    // through the night's cashes on a slow cadence (founder, Jul 5 — "it feels
+    // kind of pointless in its current form"; slowed from 3s to 8s Jul 15 —
+    // "far too fast").
     @State private var rollIndex = 0
-    private let rollTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    private let rollTimer = Timer.publish(every: 8, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Button(action: onTape) {
@@ -4881,6 +4900,14 @@ struct HomeStoryRail: View {
 /// rolling status on the right. The whole row taps through to the game.
 struct HomeSheetRowView: View {
     let row: HomeView.HomeSheetRow
+    /// Derived from the row's own id, not a passed-in position — homeSheet
+    /// calls homeSheetPanel three separate times (settled/live/upcoming),
+    /// each restarting its own ForEach index at 0, so a positional index
+    /// still collided across zones (founder, Jul 15: "still... synchronized"
+    /// after the first attempt). The id is stable and globally unique across
+    /// every zone/call site, so hashing it spreads rollers apart regardless
+    /// of how many places end up calling this view.
+    private var staggerIndex: Int { abs(row.id.hashValue) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -4920,7 +4947,7 @@ struct HomeSheetRowView: View {
                     .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                     .foregroundStyle(row.statusColor)
                     .lineLimit(1)
-                LiveHitsRoller(items: row.hitLines)
+                LiveHitsRoller(items: row.hitLines, staggerIndex: staggerIndex)
             }
             .padding(.top, 2)
             Image(systemName: "chevron.right")
@@ -19958,27 +19985,11 @@ struct PicksGamePage: View {
             Self.scoutSideMatches($0.home_team, matchSides.home)
         }
     }
-    private var scoutWc: TomorrowWcMatch? {
-        scoutBoard?.wc_lookahead?.first {
-            Self.scoutSideMatches($0.away_team, matchSides.away) &&
-            Self.scoutSideMatches($0.home_team, matchSides.home)
-        }
-    }
-
     private var topProps: [PropPick] {
         // The slip scales — show up to 5, strongest first.
         Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
     }
 
-    /// World Cup games swap the plain GAME INTEL edges for the WC game-intel dashboard.
-    private var isWorldCup: Bool {
-        if (group.props.first?.effectiveLeague ?? "").uppercased() == "WC" { return true }
-        if (entries.first?.pick.league ?? "").uppercased() == "WC" { return true }
-        if scoutWc != nil || scoutRow?.league?.uppercased() == "WC" { return true }
-        return edges.contains { $0.league == .wc }
-    }
-    /// The confirmed-XI edge for this WC match (carries the formation + lineup).
-    private var wcXIEdge: Signal? { edges.first { $0.confirmedXI != nil } }
     /// MLB games swap the flat GAME INTEL list for the modular MLB dashboard.
     private var isMLB: Bool {
         if (group.props.first?.effectiveLeague ?? "").uppercased() == "MLB" { return true }
@@ -20059,24 +20070,12 @@ struct PicksGamePage: View {
             if entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 DerbyContestSection()
             } else {
-            GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wc: scoutWc, wire: scoutWire,
+            GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wire: scoutWire,
                              pickMl: entries.first(where: { !$0.isYesterday && ($0.pick.moneylineAway != nil || $0.pick.moneylineHome != nil) })
                                  .map { (away: $0.pick.moneylineAway, home: $0.pick.moneylineHome) })
             PlayerIntelSection(matchup: group.matchup)
             }
-            if isWorldCup {
-                // World Cup: the plain GAME INTEL edges become the WC game-intel
-                // dashboard (Starting XI pitch · The Read), with the existing intel
-                // rows folded in beneath it. Mounted only once it has SOMETHING —
-                // on a pre-intel morning the scout above carries the page.
-                if wcXIEdge != nil || !edges.isEmpty {
-                    WCGameIntelView(matchup: group.matchup,
-                                    confirmedXI: wcXIEdge?.confirmedXI,
-                                    read: wcXIEdge ?? edges.first,
-                                    edges: edges,
-                                    showHeader: false)
-                }
-            } else if isMLB {
+            if isMLB {
                 // MLB: the flat GAME INTEL list becomes the modular dashboard —
                 // a baseball-field anchor + Pitching / Bats / Park & Weather.
                 // The field + real (projected → confirmed) lineup self-load off

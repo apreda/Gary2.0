@@ -272,13 +272,13 @@ export function pct3(n) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Player Insight Card helpers (shared by the MLB + WC card builders)
+// Player Insight Card helpers
 //
-// These were originally local to playerInsightCards.js (MLB). They are pure,
-// sport-agnostic utilities; lifting them here lets the World Cup card builder
-// reuse the EXACT same prop-formatting / rate-attaching / dedupe logic without a
-// copy. The two sport-specific knobs (the prop display LABEL and the MAX cap) are
-// passed in by each caller, so neither sport's output changes.
+// Originally local to playerInsightCards.js (MLB); lifted here as pure,
+// sport-agnostic utilities so another sport's card builder can reuse the same
+// prop-formatting / rate-attaching / dedupe logic without a copy. The two
+// sport-specific knobs (the prop display LABEL and the MAX cap) are passed in
+// by each caller, so a caller's output never changes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Coerce to a finite Number or null (empty string / null / NaN -> null). */

@@ -39,11 +39,6 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
     return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread);
   }
 
-  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
-  if (isSoccer) {
-    return buildSoccerPass1(scoutReport, today, homeTeam, awayTeam, spread);
-  }
-
   throw new Error(`[Pass 1] No sport-specific builder for "${sport}" — add one to passBuilders.js`);
 }
 
@@ -316,19 +311,9 @@ INVESTIGATION COMPLETE
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
-  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : (isSoccer ? 'side (3-way ML or Asian handicap) AND a total' : 'spread'));
+  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : 'spread');
   const betTypeNote = isNHL
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
-    : isSoccer
-    ? `**TWO PLAYS REQUIRED (World Cup):** Output BOTH of these for this match — they are stored and shown as two separate cards:
-1. A SIDE play — EITHER the 3-WAY MONEYLINE (Home win / Draw / Away win — three separately priced outcomes, settles on 90 minutes) OR the ASIAN HANDICAP (the single standard goal line shown in the odds — e.g. a team -1.5 / the other +1.5; pick a SIDE on THAT line, never an alt line).
-2. A TOTAL play — Over or Under the match-goals line.
-Use only markets the odds actually show, and report the EXACT odds for each play.
-
-FAVORITE DISCIPLINE (side play): a heavy favorite's 3-way moneyline (priced heavier than -200) is NOT offered to you — when a favorite is that short you will see no moneyline price for them in the RAW ODDS VALUES, so backing their bare moneyline is not an available pick. This is a structural constraint on the available prices, NOT a directional hint. The standard Asian handicap is still shown, so you can back that favorite at the goal line (e.g. -1.5), take the underdog's moneyline, or take the Draw — choose whichever side your own analysis of this match supports.
-
-ONE MATCH, ONE READ: both plays come from the same read of the match. They may differ in confidence, but the two rationales must describe the SAME game. If the side case and the total case need contradictory match scripts, one of them is wrong: re-examine before finalizing.`
     : isMLB
     ? `**BET TYPE:** Two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). The mechanics: -1.5 pays only on a win by 2+ runs — a one-run win pays the moneyline and LOSES -1.5; +1.5 cashes on a win or a one-run loss. They are different bets on different outcomes, not two prices for the same opinion — take the bet that pays if your read is right, not the one that makes a price you dislike look better.
 
@@ -341,8 +326,6 @@ Check each offered line in both directions — does your read beat the price on 
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
-  } else if (isSoccer) {
-    lineContext = `Line context: ${homeTeam} (home) vs Draw vs ${awayTeam} (away). Pick the market your investigation supports (3-way ML, Totals, or Asian handicap).`;
   } else {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
   }
@@ -350,31 +333,9 @@ Check each offered line in both directions — does your read beat the price on 
   const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const useOpenDecision = isNCAAB;
 
-  // Soccer ships TWO plays per match (a side + a total), so the "Final Decision"
-  // line and the structured-output JSON differ from the single-pick sports.
-  const finalDecisionInstruction = isSoccer
-    ? `Final Decision — SIDE: [your side at the 3-way ML or Asian handicap, with exact odds]
-Final Decision — TOTAL: [Over or Under the match-goals line, with exact odds]`
-    : `Final Decision: [your side at this ${lineLabel}]`;
+  const finalDecisionInstruction = `Final Decision: [your side at this ${lineLabel}]`;
 
-  const structuredOutputFormat = isSoccer
-    ? `Format (TWO picks — you MUST fill in BOTH the side and the total):
-
-\`\`\`json
-{
-  "side_pick": "[Team] [ML / Draw / -1.5 / +0.5 ...] [odds]",
-  "side_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this SIDE — write it the same way you do for every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs giving the real reasons for this pick; drawn from your read above]",
-  "side_confidence": 0.XX,
-  "total_pick": "[Over/Under] [goals] [odds]",
-  "total_rationale": "Gary's Take\\n\\n[your full prose Gary's Take for this TOTAL — same depth as every other sport: open with a brief announcer-style scene-setter (1-2 sentences), then 2-3 paragraphs giving the real reasons for this pick; drawn from your read above]",
-  "total_confidence": 0.XX
-}
-\`\`\`
-
-**confidence (0.50-1.00):** Set EACH organically from the strength of the evidence for that specific play — do NOT default. The two confidences may differ, but both plays must come from the same read of the match. Confidence measures your read against the price — not the shortness of the price.
-
-Your JSON must include all six fields. A missing field will cause a system error.`
-    : `Format:
+  const structuredOutputFormat = `Format:
 
 \`\`\`json
 {
@@ -542,7 +503,6 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
 
   const sport = options.sport || '';
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
 
   // Build records reminder if available (anti-hallucination for Pass 3)
   const homeRecord = options.homeRecord;
@@ -572,7 +532,7 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isSoccer ? `**TWO PLAYS REQUIRED (World Cup):** Output BOTH a SIDE play (3-WAY MONEYLINE Home/Draw/Away — settles on 90 minutes — OR an ASIAN HANDICAP team ±0.5/1.0/1.5/2.0) and a TOTAL play (Over/Under match goals). Report the EXACT odds for each.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
+${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
@@ -580,20 +540,7 @@ ${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to w
 3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
 4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
-${isSoccer ? `Output your final picks as JSON (BOTH the side and the total — all six fields required):
-
-\`\`\`json
-{
-  "side_pick": "[Team] [ML / Draw / -1.5 / +0.5 ...] [odds]",
-  "side_rationale": "Gary's Take\\n\\n[2-4 sentences on the side]",
-  "side_confidence": 0.XX,
-  "total_pick": "[Over/Under] [goals] [odds]",
-  "total_rationale": "Gary's Take\\n\\n[2-4 sentences on the total]",
-  "total_confidence": 0.XX
-}
-\`\`\`
-
-**confidence (0.50-1.00):** Set each organically; the two plays are independent and may differ.` : `Output your final pick as JSON:
+Output your final pick as JSON:
 
 \`\`\`json
 {
@@ -603,7 +550,7 @@ ${isSoccer ? `Output your final picks as JSON (BOTH the side and the total — a
 }
 \`\`\`
 
-**confidence_score (0.50-1.00):** How confident are you in this pick?`}
+**confidence_score (0.50-1.00):** How confident are you in this pick?
 </output_requirements>
 
 <instructions>
@@ -612,7 +559,7 @@ ${isSoccer ? `Output your final picks as JSON (BOTH the side and the total — a
 Output your final pick JSON now using the exact format above.
 Use the Pass 2.5 decision + rationale draft as source of truth.
 
-${isSoccer ? `Your JSON must include all six fields (side_pick, side_rationale, side_confidence, total_pick, total_rationale, total_confidence). A missing field will cause a system error.` : `Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`}
+Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.
 </instructions>
 `.trim();
 }
@@ -628,8 +575,6 @@ const PROP_TYPE_DESCRIPTIONS = {
   icehockey_nhl: 'Market type ONLY — e.g. "shots_on_goal", "anytime_goal", "points", "assists", "saves". Match the exact prop_type from the available lines.',
   baseball_mlb: 'Market type ONLY — e.g. "hits", "home_runs", "total_bases", "rbis", "runs_scored", "walks", "stolen_bases", "singles", "doubles", "strikeouts", "pitcher_strikeouts", "pitcher_outs", "pitcher_earned_runs", "hits_runs_rbis". Match the exact prop_type from the available lines. Do NOT use NBA prop types like points/rebounds/assists.',
   americanfootball_nfl: 'Market type ONLY — e.g. "passing_yards", "rushing_yards", "receiving_yards", "passing_touchdowns", "anytime_touchdown", "receptions", "completions". Match the exact prop_type from the available lines.',
-  soccer_world_cup: 'Market type ONLY — e.g. "anytime_goal", "shots", "shots_on_target", "assists", "tackles", "saves", "cards". Match the exact prop_type from the available lines. Do NOT use NBA prop types like points/rebounds/assists. For anytime_goal (over-only milestone markets), use bet: "yes".',
-  WC: 'Market type ONLY — e.g. "anytime_goal", "shots", "shots_on_target", "assists", "tackles", "saves", "cards". Match the exact prop_type from the available lines. Do NOT use NBA prop types like points/rebounds/assists. For anytime_goal (over-only milestone markets), use bet: "yes".',
 };
 
 function getPropsPickSchema(sport) {
@@ -836,38 +781,6 @@ Before completing Pass 1, include BOTH sections:
 Case for backing ${homeTeam} tonight
 Case for backing ${awayTeam} tonight
 (Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — how they win this game and what carries it. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture.)
-
-Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
-INVESTIGATION COMPLETE
-</instructions>`.trim();
-}
-
-function buildSoccerPass1(scoutReport, today, homeTeam, awayTeam, spread) {
-  return `
-<scout_report>
-## MATCHUP BRIEFING (TODAY: ${today})
-${scoutReport}
-</scout_report>
-
-<investigation_rules>
-## INJURY & AVAILABILITY TIMING
-
-- Use the AVAILABILITY TIMING tags from the scout report exactly as shown, and date every availability claim from the research.
-- **FRESH (started their last match, flagged since):** the market may still be settling it — investigate the replacement and the news recency, not the name alone.
-- **PRICED IN (already missing from their last match or longer):** the line was set knowing it; the team you are evaluating IS the team without them. Citing it as tonight's edge is using news the price already ate.
-- Suspensions — including yellow-card accumulation bans — are announced in advance and priced the moment they're known.
-- An absence is never the factor by itself: the question is whether the line has moved too far, or not far enough, on a fact everyone can see.
-</investigation_rules>
-
-<instructions>
-Your job in this pass is the READ: how does this match actually go? The betting options come after your read is formed; do not shop prices now.
-
-Investigate BOTH teams with the tape and research you actually have. There is no fixed factor list to walk: some matches turn on availability, some on a stylistic clash, some on heat or altitude, some on what a team needs from the game. Lead with whatever YOUR investigation says decides THIS match. Report findings with specific numbers (say "unavailable" where the tape shows none) — do not state what any factor means for the pick.
-
-Before finishing, include three cases (2-3 full PARAGRAPHS each — actually EXPLAIN each one and tell the story of the matchup, the way you would for any other sport; not a couple of sentences), grounded only in what you investigated. Each case argues for BACKING that outcome tonight — the concrete path on the pitch, what would have to happen:
-Case for backing ${homeTeam}
-Case for backing the Draw
-Case for backing ${awayTeam}
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE

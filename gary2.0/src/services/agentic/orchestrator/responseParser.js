@@ -285,97 +285,7 @@ export function validatePickTeam(pickText, homeTeam, awayTeam) {
   return homeMatch || awayMatch;
 }
 
-// SOCCER (World Cup) dual-pick: one analysis run emits BOTH a side play (3-way
-// ML or Asian handicap) and a total play (Over/Under) in one JSON. Expand into
-// two independently-normalized picks — the side is primary, the total rides in
-// `additionalPicks` so the storage layer writes each as its own card
-// (keyed soccer|match_id|type, they coexist). Degrades to a single pick if the
-// model only fills one play. _dualExpanded guards the recursive normalize calls.
-// Resolve a World Cup pick's odds (and line/handicap) from the consensus MARKET
-// data we already fetched — soccer_three_way_ml { home, draw, away },
-// soccer_spread { homeValue, homeOdds, awayValue, awayOdds }, and
-// soccer_total { line, over, under } — keyed by the pick's market + side. This is
-// the source of truth: Gary's prose is only a label and can drop the +sign or the
-// odds entirely (e.g. "Over 2.5 115"). Returns null when the matching market isn't
-// present, so the caller keeps whatever it parsed from the text as a fallback.
-function resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds) {
-  if (!gameOdds) return null;
-  const ml = gameOdds.soccer_three_way_ml || null;
-  const sp = gameOdds.soccer_spread || null;
-  const tot = gameOdds.soccer_total || null;
-  const lc = (pickText || '').toLowerCase();
-  const refs = (name) => (name || '').toLowerCase().split(/\s+/).some(w => w.length >= 3 && lc.includes(w));
-  const namesHome = refs(homeTeam);
-  const namesAway = refs(awayTeam);
-
-  if (parsed.type === 'total' && tot) {
-    // Defensive band guard (matches the odds-sourcing band): never stamp an
-    // out-of-range goal line like "10". Upstream banding should prevent this;
-    // if it slips through, null the line so the pick is rejected, not shipped.
-    const line = Number(tot.line);
-    if (!(line >= 1.0 && line <= 5.0)) return { odds: null, goal_line: null, handicap: null };
-    const isOver = /\bover\b/.test(lc);
-    return { odds: (isOver ? tot.over : tot.under) ?? null, goal_line: tot.line ?? null, handicap: null };
-  }
-  if (parsed.type === 'asian_handicap' && sp) {
-    if (namesHome && !namesAway) return { odds: sp.homeOdds ?? null, handicap: sp.homeValue ?? null, goal_line: null };
-    if (namesAway && !namesHome) return { odds: sp.awayOdds ?? null, handicap: sp.awayValue ?? null, goal_line: null };
-  }
-  if (parsed.type === 'draw' && ml) {
-    return { odds: ml.draw ?? null, handicap: null, goal_line: null };
-  }
-  if (parsed.type === 'moneyline' && ml) {
-    if (namesHome && !namesAway) return { odds: ml.home ?? null, handicap: null, goal_line: null };
-    if (namesAway && !namesHome) return { odds: ml.away ?? null, handicap: null, goal_line: null };
-  }
-  return null;
-}
-
-function expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds) {
-  const build = (pickText, rationale, conf, forceType) => {
-    if (!pickText || typeof pickText !== 'string' || !pickText.trim()) return null;
-    const sub = {
-      pick: pickText,
-      rationale: rationale || parsed.rationale || '',
-      confidence_score: conf ?? parsed.confidence_score ?? parsed.confidence ?? null,
-      _dualExpanded: true,
-    };
-    if (forceType) sub.type = forceType;
-    return normalizePickFormat(sub, homeTeam, awayTeam, sport, gameOdds);
-  };
-  let side = build(parsed.side_pick, parsed.side_rationale, parsed.side_confidence, null);
-  const total = build(parsed.total_pick, parsed.total_rationale, parsed.total_confidence, 'total');
-  // The side leg must be a 3-way ML / draw / Asian handicap — never a total. If the
-  // side slot parsed to a total (Gary mis-slotted it, or the text read "over/under"),
-  // it's not a valid side: drop it rather than ship two totals with one mislabeled as
-  // the side (which the category-by-role storage would then record as a phantom side).
-  if (side && side.type === 'total') {
-    console.warn(`[Orchestrator] ⚽ WC dual-pick: side_pick "${side.pick}" resolved to a TOTAL — dropping as invalid side`);
-    side = null;
-  }
-  const primary = side || total;
-  if (!primary) {
-    console.error('[Orchestrator] ⚽ WC dual-pick: neither side_pick nor total_pick parsed — null');
-    return null;
-  }
-  if (side && total) {
-    primary.additionalPicks = [primary === side ? total : side];
-    console.log(`[Orchestrator] ⚽ WC dual-pick — SIDE "${side.pick}" (${side.type}) + TOTAL "${total.pick}"`);
-  } else {
-    console.warn(`[Orchestrator] ⚽ WC dual-pick: only one play parsed ("${primary.pick}") — storing single pick`);
-  }
-  return primary;
-}
-
 export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
-  // SOCCER dual-pick expansion — must run before the single-pick logic below.
-  const isSoccerDual = (sport === 'soccer_world_cup' || sport === 'WC')
-    && parsed && !parsed._dualExpanded
-    && (parsed.side_pick || parsed.total_pick);
-  if (isSoccerDual) {
-    return expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds);
-  }
-
   // CRITICAL: Support both legacy format (pick) and new format (final_pick)
   // The new Pass 2.5 format uses "final_pick" instead of "pick"
   if (!parsed.pick && parsed.final_pick) {
@@ -394,7 +304,6 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   
   // NHL: Detect ML vs Puck Line from Gary's pick text
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
   if (isNHL && parsed.pick) {
     const pickLowerNHL = parsed.pick.toLowerCase();
     if (pickLowerNHL.includes('puck line') || pickLowerNHL.includes('pl ') || pickLowerNHL.includes(' pl') ||
@@ -417,90 +326,6 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     parsed.type = 'moneyline';
     console.log(`[Orchestrator] 🏒 NHL: Defaulting to moneyline`);
   }
-  // SOCCER (World Cup): 3-way market — Draw is a valid selection; totals and
-  // Asian handicaps are also offered to Gary (the consensus odds carry both),
-  // so detect them from the pick text and extract the line so grading
-  // (soccerGrading.js reads pick.goal_line / pick.handicap) can settle them.
-  else if (isSoccer && parsed.pick) {
-    const pickText = parsed.pick;
-    const overUnderMatch = pickText.match(/\b(over|under)\s+(\d+(?:\.\d+)?)/i);
-    // Handicap lines are small (±0.25 to ±4ish); larger signed numbers in the
-    // pick text are odds (e.g. "Mexico -230") and must NOT read as a handicap.
-    const signedNums = [...pickText.matchAll(/([+-]\d+(?:\.\d+)?)/g)].map(m => parseFloat(m[1]));
-    // Gary's prose sometimes drops the sign on a handicap ("Cabo Verde 3.3"); a small
-    // unsigned DECIMAL that isn't a 3+ digit odds price is a handicap candidate too.
-    const unsignedHandicap = [...pickText.matchAll(/(?:^|\s)(\d+\.\d+)(?=\s|@|$)/g)]
-      .map(m => parseFloat(m[1])).find(v => Math.abs(v) < 10);
-    const handicapValue = signedNums.find(v => Math.abs(v) < 10) ?? unsignedHandicap ?? null;
-    const handicapMatch = handicapValue != null;
-    if (/\b(draw|tie)\b/i.test(pickText)) {
-      parsed.type = 'draw';
-      console.log(`[Orchestrator] ⚽ WC: Detected Draw pick — bypassing ML caps & team check`);
-    } else if (parsed.type === 'total' || overUnderMatch) {
-      parsed.type = 'total';
-      parsed.goal_line = parsed.goal_line ?? (overUnderMatch ? parseFloat(overUnderMatch[2]) : null);
-      console.log(`[Orchestrator] ⚽ WC: Detected total pick (line ${parsed.goal_line ?? '?'})`);
-    } else if (parsed.type === 'asian_handicap' || (handicapMatch && !/\bml\b|moneyline/i.test(pickText))) {
-      parsed.type = 'asian_handicap';
-      parsed.handicap = parsed.handicap ?? handicapValue ?? null;
-      console.log(`[Orchestrator] ⚽ WC: Detected Asian handicap pick (${parsed.handicap ?? '?'})`);
-    } else if (!parsed.type) {
-      parsed.type = 'moneyline';
-      console.log(`[Orchestrator] ⚽ WC: Detected moneyline pick`);
-    }
-    // HOLISTIC ODDS: take the price (and line/handicap) from the consensus market
-    // data we already fetched, keyed by the pick's market + side — NOT scraped
-    // from Gary's prose, which can drop the +sign or odds entirely. Gary's text
-    // stays the label; the book's number is authoritative.
-    const mkt = resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds);
-    if (mkt) {
-      if (mkt.odds != null) parsed.odds = mkt.odds;
-      if (mkt.goal_line != null) parsed.goal_line = mkt.goal_line;
-      if (mkt.handicap != null) parsed.handicap = mkt.handicap;
-      console.log(`[Orchestrator] ⚽ WC: market odds → odds=${parsed.odds ?? '-'} line=${parsed.goal_line ?? '-'} hcap=${parsed.handicap ?? '-'}`);
-    }
-    // GRID GUARD: a line that survived only from Gary's prose (no consensus market
-    // resolved it) must sit on a real book increment, else it's a phantom that can
-    // never settle ("Cabo Verde +3.3", "Under 2.8"). Totals live on a 0.5 grid in
-    // 1.0–5.0; Asian handicaps on a 0.25 grid. Off-grid → drop the leg (do NOT snap;
-    // the price was never resolved against a real market).
-    const onGrid = (v, step) => { if (v == null) return false; const q = Number(v) / step; return Number.isFinite(q) && Math.abs(q - Math.round(q)) < 1e-9; };
-    if (parsed.type === 'total' && !(onGrid(parsed.goal_line, 0.5) && parsed.goal_line >= 1.0 && parsed.goal_line <= 5.0)) {
-      console.warn(`[Orchestrator] ⚽ WC: REJECTING total — off-grid / no-market line ${parsed.goal_line}`);
-      return null;
-    }
-    if (parsed.type === 'asian_handicap' && !onGrid(parsed.handicap, 0.25)) {
-      console.warn(`[Orchestrator] ⚽ WC: REJECTING handicap — off-grid / no-market line ${parsed.handicap}`);
-      return null;
-    }
-    // ODDS-SOURCE GUARD (#4): an Asian-handicap SIDE must carry a PROVIDER-verified price.
-    // If the book had no spread market for this side (mkt?.odds == null), the only price is
-    // Gary's prose — which the locked rule forbids for WC ("odds from the consensus market,
-    // not prose"). Drop the leg rather than ship an invented/borrowed handicap price (the
-    // Qatar "+3.5 @ -900" / borrowed -170 class). The TOTAL leg of the dual pick is separate
-    // and unaffected.
-    if (parsed.type === 'asian_handicap' && (mkt?.odds == null)) {
-      console.warn(`[Orchestrator] ⚽ WC: REJECTING handicap side — no provider-verified odds (price was prose-only, not a consensus market)`);
-      return null;
-    }
-    // Rebuild a clean, self-contained pick string from the resolved structured
-    // fields. Gary's prose is only a label and arrives malformed (dropped signs,
-    // doubled odds, a dangling "@"); the resolved book number is authoritative, and
-    // both the app card and the X auto-poster read this string — so keep it clean.
-    const sgn = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
-    const soccerSide = detectPickedTeam(pickText, homeTeam, awayTeam);
-    const soccerTeam = soccerSide === 'home' ? homeTeam : soccerSide === 'away' ? awayTeam : null;
-    if (parsed.type === 'total' && parsed.goal_line != null) {
-      const ou = /\bover\b/i.test(pickText) ? 'Over' : 'Under';
-      parsed.pick = [`${ou} ${parsed.goal_line}`, sgn(parsed.odds)].filter(Boolean).join(' ');
-    } else if (parsed.type === 'asian_handicap' && soccerTeam && parsed.handicap != null) {
-      parsed.pick = [`${soccerTeam} ${sgn(parsed.handicap)}`, sgn(parsed.odds)].filter(Boolean).join(' ');
-    } else if (parsed.type === 'draw') {
-      parsed.pick = ['Draw', sgn(parsed.odds)].filter(Boolean).join(' ');
-    } else if (parsed.type === 'moneyline' && soccerTeam) {
-      parsed.pick = [`${soccerTeam} ML`, sgn(parsed.odds)].filter(Boolean).join(' ');
-    }
-  }
   // DETECT TYPE FROM PICK TEXT if not explicitly provided (non-NHL)
   else if (!parsed.type && parsed.pick) {
     const pickLower = parsed.pick.toLowerCase();
@@ -521,7 +346,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   // ML ODDS CEILING:
   // - NHL: No enforcement — Gary decides ML vs puck line organically. Log for diagnostics only.
   // - Other sports: Favorite ML worse than -200 → force to spread (safety net)
-  if (parsed.type === 'moneyline' && gameOdds && !isNHL && !isSoccer) {
+  if (parsed.type === 'moneyline' && gameOdds && !isNHL) {
     const mlCeiling = -200;
     const sideML = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
     const pickedHomeML = sideML === 'home';
@@ -692,14 +517,14 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   }
 
   // Reject picks with too-short or invalid text — do NOT fabricate picks
-  if ((parsed.type !== 'draw' && pickText.length < 5) || !pickText.match(/[A-Za-z]{3,}/)) {
+  if (pickText.length < 5 || !pickText.match(/[A-Za-z]{3,}/)) {
     console.error(`[Orchestrator] REJECTED: Pick text too short/invalid: "${pickText}" — not fabricating a pick`);
     return null;
   }
 
   // Validate that the pick references one of the two teams in the game.
-  // Soccer Draw picks and totals ("Over 2.5") legitimately name neither team — exempt them.
-  if (parsed.type !== 'draw' && parsed.type !== 'total' && !validatePickTeam(pickText, homeTeam, awayTeam)) {
+  // Totals ("Over 2.5") legitimately name neither team — exempt them.
+  if (parsed.type !== 'total' && !validatePickTeam(pickText, homeTeam, awayTeam)) {
     console.error(`[Orchestrator] REJECTED: Pick "${pickText}" does not reference ${homeTeam} or ${awayTeam} — wrong game`);
     return null;
   }
@@ -738,9 +563,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   const isPlaceholderRationale = invalidRationales.some(inv => lowerRationale.includes(inv));
 
   // Minimum 1000 chars — a proper Gary's Take should be 3-4 paragraphs (~300-400 words ≈ 1500-2400 chars).
-  // EXCEPTION: World Cup dual picks ship TWO plays per match, each with its own
-  // focused 2-4 sentence take, so their per-pick rationale is intentionally short.
-  const minRationaleChars = parsed._dualExpanded ? 120 : 1000;
+  const minRationaleChars = 1000;
   const isTooShort = rationale.length < minRationaleChars;
 
   // Retry if rationale is a placeholder, completely missing, or too short for a proper analysis
@@ -787,11 +610,6 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     moneylineAway: parsed.moneylineAway ?? gameOdds.moneyline_away ?? null,
     total: parsed.total ?? gameOdds.total ?? null,
     totalOdds: parsed.totalOdds ?? gameOdds.total_over_odds ?? null,
-    // Soccer market lines — soccerGrading.js settles totals via goal_line and
-    // Asian handicaps via handicap; without these the pick stores null and
-    // can never be graded.
-    goal_line: parsed.goal_line ?? null,
-    handicap: parsed.handicap ?? null,
     // Additional judge fields
     momentum: parsed.momentum || null,
     agentic: true // Flag to identify agentic picks

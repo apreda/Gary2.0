@@ -160,14 +160,7 @@ export function describeSportsCalendar(date = new Date()) {
     'NFL and NCAAF; NBA and NHL early season; NCAAB opens',                                  // Nov
     'NFL late season; NBA and NHL; NCAAB non-conference; college bowl season',               // Dec
   ];
-  let context = byMonth[month];
-  // 2026 FIFA World Cup — real window only (Jun 11 – Jul 19, 2026, North America)
-  const wcStart = new Date('2026-06-11T00:00:00');
-  const wcEnd = new Date('2026-07-19T23:59:59');
-  if (date >= wcStart && date <= wcEnd) {
-    context += '; 2026 FIFA World Cup in North America (Jun 11 – Jul 19, 2026)';
-  }
-  return context;
+  return byMonth[month];
 }
 
 // formatGameTime removed — dead export (3 other files define their own local versions)

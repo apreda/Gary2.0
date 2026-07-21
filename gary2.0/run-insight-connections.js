@@ -29,9 +29,7 @@ import { getESTDate } from './src/utils/dateUtils.js';
 // Import after env is loaded (services read env at module init time)
 const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
 const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
-const { buildWcPlayerInsightCards } = await import('./src/services/insights/wcPlayerInsightCards.js');
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
-const fifaWorldCupService = (await import('./src/services/fifaWorldCupService.js')).default;
 const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,8 +38,7 @@ const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.j
 
 // Leagues we currently generate insight connections for. Add others here as
 // they come online (each needs a computer registry in generateInsightConnections).
-// WC = 2026 FIFA World Cup (kicks off June 11; empty slates no-op until then).
-const ACTIVE_LEAGUES = ['MLB', 'NBA', 'WC'];
+const ACTIVE_LEAGUES = ['MLB', 'NBA'];
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
@@ -57,12 +54,12 @@ const TABLE = 'insight_connections';
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 
 // Per-player breakdown packs (the iOS Hub "full breakdown" view). Built for MLB
-// (hitter/pitcher) and WC (outfield/keeper) after the day's insight_connections
-// insert succeeds; failures here are NON-FATAL to the connections run.
+// (hitter/pitcher) after the day's insight_connections insert succeeds; failures
+// here are NON-FATAL to the connections run.
 const CARDS_TABLE = 'player_insight_cards';
 const CARDS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${CARDS_TABLE}` : null;
 
-// League Pulse: league-wide daily leaderboard tables (MLB + WC). Unlike the
+// League Pulse: league-wide daily leaderboard tables (MLB). Unlike the
 // additive-freeze connections write, pulse is a LIVE SNAPSHOT — full-row UPSERT
 // on (date, league, tab) each run via Prefer: resolution=merge-duplicates. A
 // dropped/ungroundable tab simply never gets a row (iOS hides any tab with no row).
@@ -204,12 +201,12 @@ async function deleteDayRows(date, league) {
  * `situational|||<game_id>` rowKey on every run, so without this the freshly-computed
  * 'confirmed' row gets dropped and a live game stays stuck on "LINEUP NOT CONFIRMED YET".
  *
- * SCOPED by `meta->>'kind'='confirmedXI'`: category='situational' is SHARED by two WC
- * lanes — confirmedXI AND wcRestEdge (the Rest & Fatigue card). A blanket category-only
- * delete would wipe the sibling wcRestEdge row whenever it's absent from this run's fresh
- * rows (e.g. a transient getMatches failure), permanently losing the Rest & Fatigue card
- * for the day. The jsonb `kind` discriminator ensures only confirmedXI rows are removed;
- * the wcRestEdge sibling is never touched and keeps its normal first-write-wins freeze.
+ * SCOPED by `meta->>'kind'='confirmedXI'`: category='situational' can be SHARED by
+ * multiple lanes. A blanket category-only delete would wipe a sibling situational
+ * row whenever it's absent from this run's fresh rows (e.g. a transient fetch
+ * failure), permanently losing that card for the day. The jsonb `kind`
+ * discriminator ensures only confirmedXI rows are removed; a sibling situational
+ * row is never touched and keeps its normal first-write-wins freeze.
  */
 async function deleteSituationalRowForGame(date, league, gameId) {
   await axios({
@@ -339,25 +336,18 @@ async function insertCards(rows) {
 }
 
 /**
- * Build the day's per-player breakdown packs (MLB + WC) and write them with the
+ * Build the day's per-player breakdown packs (MLB) and write them with the
  * same DELETE-then-INSERT idempotency. NON-FATAL: any failure here is caught and
  * warned so it never sinks the connections run. Respects --dry-run (prints the
- * pack count + one sample payload instead of writing). The row-map + write path
- * below are league-generic; only the slate fetch + builder dispatch branch.
+ * pack count + one sample payload instead of writing).
  */
 async function buildAndStoreCards({ date, league, connections }) {
-  if (league !== 'MLB' && league !== 'WC') return;
+  if (league !== 'MLB') return;
   try {
     // generateInsightConnections returns the count but not the slate itself;
-    // re-fetch it here (both fetchers are short-TTL cached, so this is cheap).
-    let packs;
-    if (league === 'WC') {
-      const matches = (await fifaWorldCupService.getMatchesForDate(date)) || [];
-      packs = await buildWcPlayerInsightCards({ date, league, connections, matches });
-    } else {
-      const games = (await ballDontLieService.getMlbGamesForETDate(date)) || [];
-      packs = await buildPlayerInsightCards({ date, league, connections, games });
-    }
+    // re-fetch it here (short-TTL cached, so this is cheap).
+    const games = (await ballDontLieService.getMlbGamesForETDate(date)) || [];
+    const packs = await buildPlayerInsightCards({ date, league, connections, games });
 
     if (!Array.isArray(packs) || packs.length === 0) {
       console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);
@@ -396,14 +386,14 @@ async function buildAndStoreCards({ date, league, connections }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Build the day's League Pulse tab packs (MLB + WC) and UPSERT them on
+ * Build the day's League Pulse tab packs (MLB) and UPSERT them on
  * (date, league, tab) — a full-row replace each run via merge-duplicates, so the
  * board is always the current snapshot (the live-data behavior the spec wants, the
  * opposite of the connections additive-freeze). NON-FATAL: any failure here is
  * caught + warned so it never sinks the connections run. Respects --dry-run.
  */
 async function buildAndStorePulse({ date, league }) {
-  if (league !== 'MLB' && league !== 'WC') return;
+  if (league !== 'MLB') return;
   try {
     const packs = await buildLeaguePulse({ date, league });
     if (!Array.isArray(packs) || packs.length === 0) {
@@ -465,10 +455,7 @@ async function run() {
     console.log(`\n── ${league} ──`);
     let connections;
     try {
-      // WC preview mode emits one 'tournament' row per group (12) — lift the
-      // per-category cap so the whole group picture fits.
-      const options = league === 'WC' ? { maxPerCategory: 12 } : undefined;
-      connections = await generateInsightConnections({ date: targetDate, league, options });
+      connections = await generateInsightConnections({ date: targetDate, league });
     } catch (err) {
       hadError = true;
       console.error(`❌ [${league}] generateInsightConnections failed: ${err.message}`);
@@ -489,8 +476,8 @@ async function run() {
     if (connections.length === 0) {
       console.log(`   No connections generated for ${league} on ${targetDate}.`);
       // League Pulse is INDEPENDENT of the connections (it builds league-wide
-      // tables straight from the slate), so still build it on a 0-connection day
-      // (e.g. a thin WC opener). NON-FATAL + dry-run-aware internally.
+      // tables straight from the slate), so still build it on a 0-connection day.
+      // NON-FATAL + dry-run-aware internally.
       await buildAndStorePulse({ date: targetDate, league });
       continue;
     }
@@ -504,7 +491,7 @@ async function run() {
       // Player insight cards build on the SAME connections (MLB only); in dry-run
       // this prints the pack count + one sample payload instead of writing.
       await buildAndStoreCards({ date: targetDate, league, connections });
-      // League Pulse (MLB + WC) builds its own league-wide tables from the slate.
+      // League Pulse (MLB) builds its own league-wide tables from the slate.
       await buildAndStorePulse({ date: targetDate, league });
       continue;
     }
@@ -560,17 +547,17 @@ async function run() {
         await deleteSituationalRowForGame(targetDate, league, gameId);
         // Re-insert ONLY this run's confirmedXI situational rows for that game — the
         // scoped delete above removed only kind='confirmedXI' rows, so any sibling
-        // situational row (e.g. wcRestEdge / Rest & Fatigue) is untouched in the DB
-        // and must NOT be re-inserted here (that would duplicate it). The sibling
-        // keeps its normal first-write-wins freeze below.
+        // situational row is untouched in the DB and must NOT be re-inserted here
+        // (that would duplicate it). The sibling keeps its normal first-write-wins
+        // freeze below.
         if (gameConfirmedXi.length) await insertRows(gameConfirmedXi);
         upgraded += gameConfirmedXi.length;
       }
 
       // Additive-freeze for every other row (first-write-wins). The confirmedXI rows
       // for those games were just written above, so exclude ONLY them here — sibling
-      // situational rows (e.g. wcRestEdge) still flow through the normal freeze so a
-      // fresh one lands once and an existing one is preserved.
+      // situational rows still flow through the normal freeze so a fresh one lands
+      // once and an existing one is preserved.
       const seen = await existingKeys(targetDate, league);
       const fresh = rows.filter(
         (r) =>
@@ -586,7 +573,7 @@ async function run() {
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });
-      // League Pulse (MLB + WC) — league-wide leaderboard tables, full-row UPSERT
+      // League Pulse (MLB) — league-wide leaderboard tables, full-row UPSERT
       // each run (live snapshot). NON-FATAL — guarded internally.
       await buildAndStorePulse({ date: targetDate, league });
     } catch (err) {

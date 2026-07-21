@@ -8,12 +8,10 @@ import { NCAAB_CONSTITUTION } from './ncaabConstitution.js';
 import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
 import { NHL_CONSTITUTION } from './nhlConstitution.js';
 import { MLB_CONSTITUTION } from './mlbConstitution.js';
-import { SOCCER_CONSTITUTION } from './soccerConstitution.js';
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
 import { MLB_PROPS_CONSTITUTION } from './mlbPropsConstitution.js';
-import { WC_PROPS_CONSTITUTION } from './wcPropsConstitution.js';
 /**
  * BASE RULES - Applied to ALL sports
  * These rules govern data sources and external influence
@@ -93,7 +91,6 @@ const GAME_CONSTITUTIONS = {
   NCAAF: NCAAF_CONSTITUTION,
   NHL: NHL_CONSTITUTION,
   MLB: MLB_CONSTITUTION,
-  WC: SOCCER_CONSTITUTION,
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
   americanfootball_nfl: NFL_CONSTITUTION,
@@ -101,7 +98,6 @@ const GAME_CONSTITUTIONS = {
   americanfootball_ncaaf: NCAAF_CONSTITUTION,
   icehockey_nhl: NHL_CONSTITUTION,
   baseball_mlb: MLB_CONSTITUTION,
-  soccer_world_cup: SOCCER_CONSTITUTION,
 };
 
 /**
@@ -113,12 +109,10 @@ const PROPS_CONSTITUTIONS = {
   NBA_PROPS: NBA_PROPS_CONSTITUTION,
   NHL_PROPS: NHL_PROPS_CONSTITUTION,
   MLB_PROPS: MLB_PROPS_CONSTITUTION,
-  WC_PROPS: WC_PROPS_CONSTITUTION,
   basketball_nba_props: NBA_PROPS_CONSTITUTION,
   americanfootball_nfl_props: NFL_PROPS_CONSTITUTION,
   icehockey_nhl_props: NHL_PROPS_CONSTITUTION,
   baseball_mlb_props: MLB_PROPS_CONSTITUTION,
-  soccer_world_cup_props: WC_PROPS_CONSTITUTION,
 };
 
 /**

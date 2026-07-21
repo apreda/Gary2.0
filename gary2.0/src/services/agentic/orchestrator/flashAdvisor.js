@@ -197,7 +197,6 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
       .replace('americanfootball_', '')
       .replace('icehockey_', '')
       .replace('baseball_', '')
-      .replace('soccer_world_cup', 'WC') // token list is keyed 'WC'; without this the allowlist is empty and ANY token passes
       .toUpperCase();
 
     // Flash token dedup cache — prevents re-fetching the same stat within a single game analysis
@@ -220,7 +219,6 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-    const isWCSport = sport === 'soccer_world_cup' || sport === 'WC';
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
 
     // All sports get high thinking + full output. Baseball especially needs depth
@@ -295,7 +293,7 @@ Investigate using fetch_stats for tokens that ADD information beyond the scout r
 - MLB_STATCAST — last-3-games contact quality (exit velo, launch angle, xwOBA, bat speed, whiff/chase)
 - MLB_PARK_FACTORS, MLB_WEATHER — venue and conditions
 
-Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}${isWCSport ? ` (WORLD CUP — STATS COME FROM fetch_stats, NOT SEARCH: fetch_stats routes to the structured feeds (API-Football recent-international form/xG + BDL FIFA). Use fetch_stats for EVERY statistic — form, xG/xGA, possession, shots, shots on target, goals for/against, clean sheets. If a stat token returns N/A / "no data" / "unavailable", that statistic is simply UNAVAILABLE for that team: report it as unavailable and move on. Do NOT use fetch_narrative_context (web search) to find, estimate, or backfill ANY stat number — a figure pulled from a search summary is not reliable or current enough to trust (it can be stale, approximate, or for the wrong competition). For the World Cup, fetch_narrative_context is ONLY for things that are not statistics and have no structured feed: injuries, suspensions, confirmed lineups/availability, and breaking team news. Never report an xG, possession, shots, goals, or form figure that came from search instead of fetch_stats.)` : ''}`;
+Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}`;
 
     console.log(`[Research Briefing] Sending scout report to Gemini Flash (factor-by-factor investigation)`);
 
@@ -396,12 +394,10 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               }
             } else if (functionName === 'fetch_narrative_context') {
               // Grounding budget per game (Jul 8 2026 cost audit):
-              //   WC 8  — availability, suspensions, and pre-tournament form have
-              //           NO structured source; grounding IS the feed.
               //   NHL 10 — RotoWire-era cap; revisit when the season starts in October.
               //   MLB + others 4 — structured tokens cover stats/lineups/injuries;
               //           grounding is for breaking news no token can answer.
-              const MAX_GROUNDING_CALLS = isNHLSport ? 10 : (isWCSport ? 8 : 4);
+              const MAX_GROUNDING_CALLS = isNHLSport ? 10 : 4;
               if (groundingCalls >= MAX_GROUNDING_CALLS) {
                 console.log(`  → [Research Grounding] SKIPPED (cap reached: ${groundingCalls}/${MAX_GROUNDING_CALLS}): "${(args.query || '').slice(0, 80)}"`);
                 functionResponses.push({ name: functionName, content: `Grounding call limit reached (${MAX_GROUNDING_CALLS}). Use available stat tokens and scout report data instead.` });
@@ -433,7 +429,6 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   'NCAAB': 'basketball_ncaab',
                   'NCAAF': 'americanfootball_ncaaf',
                   'MLB': 'baseball_mlb',
-                  'WC': 'soccer_world_cup'
                 };
                 const sportKey = sportKeyMap[args.sport] || sport;
                 const numGames = args.num_games || 5;

@@ -289,30 +289,6 @@ export const oddsService = {
     return dedupeRequest(cacheKey, async () => {
       console.log(`[Odds Service] Fetching upcoming games for ${sport}...`);
 
-      // World Cup: fixtures + odds come from the FIFA service, not BDL's odds path.
-      // Return games in the same pipeline shape (id/home_team/away_team/commence_time)
-      // so the props CLI can fetch player props by FIFA match id.
-      if (sport === 'soccer_world_cup') {
-        const wc = await import('./fifaWorldCupService.js');
-        const estFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
-        const wcDates = options.targetDate ? options.targetDate.split(',').map(d => d.trim()) : [estFmt.format(new Date())];
-        const out = [];
-        const seen = new Set();
-        for (const d of wcDates) {
-          let matches = [];
-          try { matches = await wc.getMatchesForDate(d); } catch (e) { console.warn(`[Odds Service] WC: fetch failed for ${d}: ${e.message}`); }
-          for (const m of (matches || [])) {
-            if (!m.home_team || !m.away_team || seen.has(m.id)) continue;
-            seen.add(m.id);
-            let consensus = null;
-            try { consensus = wc.selectConsensusOdds(await wc.getOdds({ matchIds: [m.id] })); } catch { /* odds optional */ }
-            out.push(wc.formatMatchForPipeline(m, consensus));
-          }
-        }
-        console.log(`[Odds Service] WC: ${out.length} matches`);
-        return out;
-      }
-
       // ALL SPORTS USE BDL AS PRIMARY SOURCE
       // BDL has comprehensive odds coverage for NBA, NFL, NHL, NCAAB, NCAAF
 

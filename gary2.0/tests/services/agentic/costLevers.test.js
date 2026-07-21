@@ -10,11 +10,9 @@
 //      Flash-covered token is deduplicated to nothing — guaranteed wasted
 //      big-brain round-trips. New contract: the briefing IS the
 //      investigation; fetch only what is genuinely missing.
-//   #4 Grounding budget: WC keeps 8 (availability/suspensions/pre-tournament
-//      form have NO structured source — grounding IS the feed), NHL keeps 10
-//      (RotoWire-era cap, revisit in October), stat-rich sports (MLB + rest)
-//      drop 8 → 4 (structured tokens cover stats/lineups/injuries; grounding
-//      is for breaking news only).
+//   #4 Grounding budget: NHL keeps 10 (RotoWire-era cap, revisit in October),
+//      stat-rich sports (MLB + rest) drop 8 → 4 (structured tokens cover
+//      stats/lineups/injuries; grounding is for breaking news only).
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -66,10 +64,10 @@ describe('#3 Gary trusts the briefing instead of being ordered to re-investigate
   });
 });
 
-describe('#4 grounding budget: WC 8 / NHL 10 / stat-rich sports 4', () => {
+describe('#4 grounding budget: NHL 10 / stat-rich sports 4', () => {
   it('flashAdvisor carries the tiered cap', () => {
     const flash = src('orchestrator/flashAdvisor.js');
-    expect(flash).toContain('isNHLSport ? 10 : (isWCSport ? 8 : 4)');
+    expect(flash).toContain('isNHLSport ? 10 : 4');
     expect(flash).not.toContain('isNHLSport ? 10 : 8');
   });
 });

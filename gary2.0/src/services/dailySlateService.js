@@ -9,8 +9,6 @@
  * Data sources (reuses the exact fetch paths the picks pipeline already pays for):
  *   - MLB / NBA / NHL: oddsService.getUpcomingGames(sportKey, { targetDate })
  *     → BDL games+odds with flat moneyline_home/spread_home/total fields.
- *   - WC (2026 FIFA World Cup): fifaWorldCupService.getMatches + getOdds with
- *     selectConsensusOdds (matches start June 11; empty before then).
  *
  * Write path: service-role REST upsert on (date, league, away_team, home_team)
  * — idempotent, safe to re-run; a later run refreshes the line snapshot.
@@ -34,7 +32,6 @@ const SLATE_SPORTS = [
   { key: 'baseball_mlb', league: 'MLB' },
   { key: 'basketball_nba', league: 'NBA' },
   { key: 'icehockey_nhl', league: 'NHL' },
-  { key: 'soccer_world_cup', league: 'WC' },
 ];
 
 export function getETDateStr(date) {
@@ -73,50 +70,11 @@ export function sanitizeLines(league, { spread, ml_home, ml_away, total }) {
 
 /**
  * Fetch one league's games for the ET date and map them to daily_slate rows.
- * Returns [] when the league has no games (or matches haven't started — WC).
+ * Returns [] when the league has no games.
  */
 export const SLATE_SPORTS_LIST = SLATE_SPORTS;
 
 export async function buildLeagueRows(sport, etDateStr) {
-  if (sport.key === 'soccer_world_cup') {
-    const wc = await import('./fifaWorldCupService.js');
-    const matches = await wc.getMatches({});
-    const dayMatches = (Array.isArray(matches) ? matches : []).filter((m) => {
-      if (!m.home_team || !m.away_team || !m.datetime) return false; // TBD knockout slots
-      const start = new Date(m.datetime);
-      return !Number.isNaN(start.getTime()) && getETDateStr(start) === etDateStr;
-    });
-    if (dayMatches.length === 0) return [];
-
-    // Consensus odds (DK > FD > MGM …) — same selection the picks pipeline uses.
-    let oddsRows = [];
-    try {
-      oddsRows = await wc.getOdds({});
-    } catch (e) {
-      console.warn(`[DailySlate] WC odds fetch failed (rows go in without lines): ${e.message}`);
-    }
-
-    return dayMatches.map((m) => {
-      const consensus = wc.selectConsensusOdds(
-        (Array.isArray(oddsRows) ? oddsRows : []).filter((o) => o.match_id === m.id)
-      );
-      return {
-        date: etDateStr,
-        league: sport.league,
-        away_team: m.away_team.name,
-        home_team: m.home_team.name,
-        commence_time: m.datetime,
-        venue: m.stadium?.name ?? null,
-        ...sanitizeLines(sport.league, {
-          spread: toNum(consensus?.spread?.homeValue),
-          ml_home: toNum(consensus?.moneyline?.home),
-          ml_away: toNum(consensus?.moneyline?.away),
-          total: toNum(consensus?.total?.line),
-        }),
-      };
-    });
-  }
-
   // MLB / NBA / NHL: BDL games + odds, flat fields already extracted by oddsService.
   // The BDL adapter handles the MLB UTC-date bleed (evening ET games indexed under
   // the next UTC date) internally; we still filter by actual ET start date here.

@@ -1020,14 +1020,12 @@ export function normalizeSportToLeague(sport) {
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
     'baseball_mlb': 'MLB',
-    'soccer_world_cup': 'WC',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NHL': 'NHL',
     'NCAAB': 'NCAAB',
     'NCAAF': 'NCAAF',
-    'MLB': 'MLB',
-    'WC': 'WC'
+    'MLB': 'MLB'
   };
   return mapping[sport] || sport;
 }
@@ -1068,13 +1066,6 @@ export const RESEARCH_BRIEFING_FACTORS = Object.freeze({
     'line_play_and_pressure',
     'injuries_and_depth_chart',
     'situational_and_travel'
-  ]),
-  soccer_world_cup: Object.freeze([
-    'form_and_recent_results',
-    'attacking_and_xg',
-    'defensive_solidity',
-    'lineups_injuries_suspensions',
-    'tournament_context_and_fatigue'
   ])
 });
 

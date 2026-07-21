@@ -60,7 +60,7 @@ RATIONALE (ground truth): ${String(chosen.rationale ?? '').slice(0, 4000)}`);
 
   // the share card straight from prod — same image the tweet carries
   const heroLines = String(chosen.pick).replace(/\s*\(?[+-]\d{3,}\)?\s*$/, '').split(/\s+/).map((w) => (/^ml$/i.test(w) ? 'MONEYLINE' : w.toUpperCase()));
-  const league = String(chosen.league ?? 'MLB').toUpperCase() === 'WC' ? 'WORLD CUP' : String(chosen.league ?? 'MLB').toUpperCase();
+  const league = String(chosen.league ?? 'MLB').toUpperCase();
   const cardUrl = `https://www.betwithgary.ai/api/share-card?hero=${encodeURIComponent(heroLines.join('|'))}&league=${encodeURIComponent(league)}&meta=${encodeURIComponent(`${chosen.awayTeam} @ ${chosen.homeTeam}`)}`;
 
   const clip = { s1: out.s1.map(clean), s2: out.s2.map(clean), caption: clean(out.caption), card: 'assets/card-today.png' };

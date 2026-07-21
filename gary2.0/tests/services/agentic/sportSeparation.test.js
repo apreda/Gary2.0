@@ -16,13 +16,12 @@ const { ncaafFetchers } = await import('../../../src/services/agentic/tools/stat
 const { nflFetchers } = await import('../../../src/services/agentic/tools/statRouters/nflFetchers.js');
 const { nhlFetchers } = await import('../../../src/services/agentic/tools/statRouters/nhlFetchers.js');
 const { mlbFetchers } = await import('../../../src/services/agentic/tools/statRouters/mlbFetchers.js');
-const { soccerFetchers } = await import('../../../src/services/agentic/tools/statRouters/soccerFetchers.js');
 const { fetchStats } = await import('../../../src/services/agentic/tools/statRouters/index.js');
 const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
 
 describe('stat token namespace is collision-free across sports', () => {
   it('no token name is defined by two sports (incl. DEFAULT — neutral DEFAULT lives in the router)', () => {
-    const sources = { nba: nbaFetchers, ncaab: ncaabFetchers, ncaaf: ncaafFetchers, nfl: nflFetchers, nhl: nhlFetchers, mlb: mlbFetchers, soccer: soccerFetchers };
+    const sources = { nba: nbaFetchers, ncaab: ncaabFetchers, ncaaf: ncaafFetchers, nfl: nflFetchers, nhl: nhlFetchers, mlb: mlbFetchers };
     const owner = {};
     const collisions = [];
     for (const [sport, map] of Object.entries(sources)) {
@@ -39,11 +38,6 @@ describe('fetchStats never crosses sport families', () => {
   it('an MLB run cannot execute an NHL fetcher', async () => {
     const res = await fetchStats('baseball_mlb', 'GOALIE_STATS', 'Astros', 'Rays', {});
     expect(res.error).toMatch(/belongs to NHL|not available/i);
-  });
-
-  it('an NBA run cannot execute a soccer fetcher', async () => {
-    const res = await fetchStats('basketball_nba', 'WC_TEAM_FORM', 'Lakers', 'Celtics', {});
-    expect(res.error).toMatch(/belongs to SOCCER|not available/i);
   });
 
   it('an unknown sport hard-fails instead of borrowing the NBA season', async () => {

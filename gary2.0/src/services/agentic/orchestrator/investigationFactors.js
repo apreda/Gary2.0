@@ -121,27 +121,7 @@ export const INVESTIGATION_FACTORS = {
     INJURIES: ['INJURIES', 'MLB_INJURIES'],
     GAME_ENVIRONMENT: ['MLB_PARK_FACTORS', 'MLB_WEATHER', 'MLB_ODDS', 'MLB_GAME_PREVIEW', 'MLB_TOP_PLAYERS', 'REST_SITUATION'],  // Park + conditions + betting context + rest
   },
-  // WC AVAILABILITY (injuries/suspensions/lineups) has NO structured API
-  // source — it is investigated via fetch_narrative_context grounding (see the
-  // WC investigation prompts), so it carries no fetch_stats tokens here.
-  // SHOTS_ON_TARGET removed: it is part of TEAM_MATCH_STATS output.
-  soccer_world_cup: {
-    FORM: ['TEAM_FORM', 'RECENT_FORM'],
-    ATTACK_XG: ['EXPECTED_GOALS', 'TEAM_MATCH_STATS', 'GOALS_PER_MATCH'],
-    DEFENSE: ['TEAM_MATCH_STATS', 'GOALS_CONCEDED'],
-    GROUP_CONTEXT: ['GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT'],
-    H2H: ['H2H_HISTORY'],
-    AVAILABILITY: ['LINEUPS'], // confirmed starting XI (structured) + injury timing (scout report AVAILABILITY TIMING); suspensions/cards via grounding only
-    // Jul 8 2026 (fan-parity doctrine): storylines, squad/roster news, fan &
-    // media sentiment, team/player reputation — the fan-knowledge layer no
-    // stat token carries. Own factor slot, same role as MLB's GAME_PREVIEW.
-    STORYLINES: ['GAME_PREVIEW'],
-  },
 };
-
-// 'WC' is an alias for the same World Cup factor set — two sport keys flow through the codebase for the
-// same tournament, so they share ONE definition and can never drift apart.
-INVESTIGATION_FACTORS.WC = INVESTIGATION_FACTORS.soccer_world_cup;
 
 /**
  * Get investigated factors based on tokens called

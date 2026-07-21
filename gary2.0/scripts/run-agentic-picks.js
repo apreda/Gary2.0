@@ -22,7 +22,6 @@ const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-const fifaWorldCupService = await import('../src/services/fifaWorldCupService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
@@ -103,21 +102,6 @@ const tokenToIosKey = {
   'TEAM_ERA': 'team_era',
   'TEAM_OPS_BDL': 'team_ops',
   'RUNS_PER_GAME': 'runs_per_game',
-  // Soccer / World Cup (tokens auto-derived from Tale-of-Tape row labels)
-  'GROUP_POS': 'group_pos',
-  'ADVANCE': 'advance_pct',
-  'TITLE_ODDS': 'title_odds',
-  'POINTS': 'points',
-  'GF_GM': 'goals_for',
-  'GA_GM': 'goals_against',
-  'XG': 'expected_goals',
-  'XGA': 'expected_goals_against',
-  'POSSESSION': 'possession_pct',
-  'SHOTS_GM': 'shots',
-  'SOT_GM': 'shots_on_target',
-  'BIG_CHANCES': 'big_chances',
-  'PASS_ACC': 'pass_accuracy',
-  'CORNERS_GM': 'corners',
 };
 
 /**
@@ -127,35 +111,6 @@ const tokenToIosKey = {
  */
 async function fetchSportsbookOdds(sportKey, gameId, homeTeam, awayTeam) {
   if (!gameId) return null;
-  // WC (F-8a, Jul 5 2026 audit): soccer has no BDL odds endpoint — the generic call
-  // below hit the NBA v2 route and 401'd on every match, which is why every WC pick
-  // stored sportsbook_odds: null. Map the FIFA per-vendor odds rows instead.
-  if (sportKey === 'soccer_world_cup') {
-    try {
-      const rows = await fifaWorldCupService.getOdds({ matchIds: [gameId] });
-      if (!Array.isArray(rows) || rows.length === 0) return null;
-      const plausible = (o) => Number.isFinite(Number(o)) && Math.abs(Number(o)) <= 10000 ? Number(o) : null;
-      return rows
-        .map(r => ({
-          spread_home: r.spread_home_value ?? null,
-          spread_home_odds: plausible(r.spread_home_odds),
-          spread_away: r.spread_away_value ?? null,
-          spread_away_odds: plausible(r.spread_away_odds),
-          ml_home: plausible(r.moneyline_home_odds),
-          ml_away: plausible(r.moneyline_away_odds),
-          ml_draw: plausible(r.moneyline_draw_odds),
-          total: r.total_value ?? null,
-          total_over_odds: plausible(r.total_over_odds),
-          total_under_odds: plausible(r.total_under_odds),
-          displayName: r.vendor || 'Unknown',
-          vendor: r.vendor || 'Unknown'
-        }))
-        .filter(r => r.ml_home != null && r.ml_away != null);
-    } catch (err) {
-      console.warn(`[Sportsbook Odds] FIFA odds fetch failed for match ${gameId}: ${err.message}`);
-      return null;
-    }
-  }
   try {
     const rows = await ballDontLieService.getOddsV2({ game_ids: [gameId] }, sportKey);
     if (!Array.isArray(rows) || rows.length === 0) return null;
@@ -209,7 +164,7 @@ function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
     // BDL returns spread as string ("8.5") — convert to number for consistent storage
     const rawSpread = isHomePick ? row.spread_home : row.spread_away;
     const spreadNum = rawSpread != null ? parseFloat(rawSpread) : NaN;
-    // WC Draw picks: the pick-side "ml" is the draw price, not either team's.
+    // Draw picks: the pick-side "ml" is the draw price, not either team's.
     const isDrawPick = pickLower.startsWith('draw');
     return {
     book: row.displayName || row.vendor || 'Unknown',
@@ -254,7 +209,6 @@ const SPORT_CONFIG = {
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', useToday: true }, // Today's games (EST) — Flash pre-investigates 20-30 stat calls per game; Gary's own fetch_stats are supplementary
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true }, // Today's games (EST)
   mlb: { key: 'baseball_mlb', name: 'MLB', emoji: '⚾', useToday: true },
-  wc: { key: 'soccer_world_cup', name: 'WC', emoji: '⚽', isBeta: true, useToday: true } // 2026 FIFA World Cup — today's matches (EST window)
 };
 
 // FBS Conference IDs from BDL (excludes FCS conferences like Big Sky, SWAC, MEAC, etc.)
@@ -352,7 +306,6 @@ if (runAll) {
   if (args.includes('--ncaab')) sportsToRun.push('ncaab');
   if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
   if (args.includes('--mlb')) sportsToRun.push('mlb');
-  if (args.includes('--wc')) sportsToRun.push('wc');
 }
 
 if (sportsToRun.length === 0) {
@@ -367,7 +320,6 @@ if (sportsToRun.length === 0) {
 ║    node scripts/run-agentic-picks.js --nhl   (BETA)              ║
 ║    node scripts/run-agentic-picks.js --ncaab                     ║
 ║    node scripts/run-agentic-picks.js --ncaaf                     ║
-║    node scripts/run-agentic-picks.js --wc    (BETA — 2026 WC)    ║
 ║    node scripts/run-agentic-picks.js --all                       ║
 ║                                                                  ║
 ║  Or combine sports:                                              ║
@@ -465,26 +417,7 @@ async function main() {
       // Fetch games
       console.log(`[${config.name}] Fetching upcoming games...`);
 
-      let allGames;
-      if (config.key === 'soccer_world_cup') {
-        // World Cup: fetch all 2026 matches + consensus odds from the FIFA service
-        // (Plan A). We deliberately fetch the full fixture list and let the
-        // downstream EST `useToday` filter select the slate — that avoids the
-        // UTC→EST bleed where an EST-evening match lands on the next UTC day.
-        const allMatches = await fifaWorldCupService.getMatches({});
-        const oddsRows = await fifaWorldCupService.getOdds({});
-        allGames = allMatches
-          .filter(m => m.home_team && m.away_team) // skip TBD knockout slots
-          .map(m => {
-            const consensus = fifaWorldCupService.selectConsensusOdds(
-              oddsRows.filter(o => o.match_id === m.id)
-            );
-            return fifaWorldCupService.formatMatchForPipeline(m, consensus);
-          });
-        console.log(`[${config.name}] Fetched ${allGames.length} World Cup matches (full 2026 fixture list; EST filter selects today's slate)`);
-      } else {
-        allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
-      }
+      const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
 
       // Filter to games within time window
       const now = new Date();
@@ -1467,8 +1400,8 @@ async function main() {
           }
 
           // ALWAYS use verifiedTaleOfTape when available — toolCallHistory is inconsistent
-          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb' || config.key === 'soccer_world_cup') && result.verifiedTaleOfTape?.rows) {
-            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'MLB', 'soccer_world_cup': 'WC' };
+          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb') && result.verifiedTaleOfTape?.rows) {
+            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'MLB' };
             const sportLabel = sportLabels[config.key] || config.key;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
@@ -1501,7 +1434,7 @@ async function main() {
             console.log(`   ✓ ${sportLabel}: Added ${statsData.length} stats from verified Tale of Tape`);
 
             // Per-sport expected row counts — drift is a silent iOS rendering bug
-            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14, 'WC': 15 }[sportLabel];
+            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }
@@ -1619,7 +1552,6 @@ async function main() {
             // BDL game id — disambiguates doubleheaders for dedupe
             bdl_game_id: game.bdl_game_id ?? game.id ?? null,
             commence_time: game.commence_time,
-            // Soccer (World Cup) context — threaded from the FIFA match game object
             soccer_match_id: game.soccer_match_id ?? null,
             soccer_three_way_ml: game.soccer_three_way_ml ?? null,
             soccer_competition: game.soccer_competition ?? null,
@@ -1673,53 +1605,16 @@ async function main() {
           // HARD FAIL: a pick whose Tale of the Tape carries no real values means the
           // stats pipeline returned nothing for this game (every row "N/A") — Gary
           // cannot have analyzed it, so the rationale is ungrounded. Never store a
-          // no-stats pick. (WC's BDL feed silently returns empty pre-match / on fetch
-          // failure; this gate is the check that was missing.)
+          // no-stats pick.
           const realStatCount = countRealStats(statsData, tokenToIosKey);
-          // World Cup needs ≥3 real PERFORMANCE rows (metadata excluded in
-          // countRealStats) — a pick resting only on futures/standings is priced
-          // off the market itself (circular). Other sports keep the ZERO floor.
-          const minRealStats = config.key === 'soccer_world_cup' ? 3 : 1;
+          const minRealStats = 1;
           if (realStatCount < minRealStats) {
             console.error(`\n🛑 [${config.name}] HARD FAIL: "${result.pick}" — only ${realStatCount} real performance stat(s) (need ${minRealStats}). Tale of the Tape is metadata-only; the pick is ungrounded. REJECTING — no pick stored.`);
             if (i < finalGames.length - 1) { await sleep(2000); }
             continue;
           }
 
-          // World Cup ships TWO plays per match — a SIDE (3-way ML or Asian
-          // handicap) and a TOTAL (Over/Under) — in one analysis run. The
-          // orchestrator returns the side as the primary result and the total in
-          // result.additionalPicks. Build a sibling pick for each, cloning the
-          // shared game/context fields and overriding only the bet-specific ones.
-          // Each gets a category-suffixed pick_id; the storage layer keys soccer
-          // by (match_id, type) so the two coexist as separate cards.
-          // Category is the BUILD-TIME ROLE, not derived from the resolved type —
-          // deriving from type let a side that resolved to "Over 2.5" collide with
-          // the total leg on the (match_id,category) dedup key and silently drop one
-          // play. The primary result is the SIDE; additionalPicks are the TOTAL.
           const picksForGame = [cleanPick];
-          if (config.key === 'soccer_world_cup') {
-            cleanPick.pick_category = 'side';
-            cleanPick.pick_id = `agentic-${config.key}-${game.id || Date.now()}-side`;
-          }
-          let extraIdx = 0;
-          for (const extra of (result.additionalPicks || [])) {
-            if (!extra || !extra.pick) continue;
-            const cat = extraIdx === 0 ? 'total' : `total${extraIdx + 1}`;
-            extraIdx++;
-            picksForGame.push({
-              ...cleanPick,
-              pick: extra.pick,
-              type: extra.type,
-              odds: extra.odds,
-              confidence: extra.confidence || cleanPick.confidence,
-              rationale: extra.rationale || cleanPick.rationale,
-              goal_line: extra.goal_line ?? extra.total ?? null,
-              handicap: extra.handicap ?? null,
-              pick_category: cat,
-              pick_id: `agentic-${config.key}-${game.id || Date.now()}-${cat}`,
-            });
-          }
 
           // Add to picks
           sportPicks.push(...picksForGame);
@@ -1774,10 +1669,7 @@ async function main() {
 
           const qualifiedPicks = sportPicks.filter(p => {
             // Filter out totals (over/under) - game picks are spread/ML only.
-            // EXCEPT soccer: the WC market is 3-way ML / Asian handicap / total
-            // goals — Gary is explicitly offered totals there and grading
-            // settles them via goal_line (soccerGrading.js).
-            if (p.type === 'total' && config.key !== 'soccer_world_cup') {
+            if (p.type === 'total') {
               console.log(`  ❌ Filtered: ${p.pick} (totals not included for game picks)`);
               return false;
             }

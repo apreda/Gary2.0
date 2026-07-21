@@ -2,7 +2,7 @@
 /**
  * Live Scores Poller
  *
- * Snapshots today's slate (MLB / NBA / NHL / WC) into the `live_scores`
+ * Snapshots today's slate (MLB / NBA / NHL) into the `live_scores`
  * Supabase table so the iOS app can show scores while games are in progress.
  * Designed to run every ~2 minutes via launchd (com.gary2.live-scores): one
  * cached call per league, upsert one row per game, exit. When nothing is live
@@ -30,7 +30,6 @@ import { getESTDate } from '../src/utils/dateUtils.js';
 import { etDateStr } from '../src/services/insights/shared.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
-const fifaWorldCup = await import('../src/services/fifaWorldCupService.js');
 // MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
 // (outs + who's on base) is enriched from statsapi.mlb.com's linescore.
 const mlbStats = await import('../src/services/mlbStatsApiService.js');
@@ -206,39 +205,6 @@ async function nhlRows() {
     });
 }
 
-async function wcRows() {
-  // Same UTC-instant issue as MLB — a 10pm-ET match is the next UTC day. Fetch both
-  // and keep only this ET slate below.
-  const nextUtc = (() => { const d = new Date(`${targetDate}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
-  const seenWc = new Set();
-  const matches = [
-    ...((await fifaWorldCup.getMatchesForDate(targetDate)) || []),
-    ...((await fifaWorldCup.getMatchesForDate(nextUtc)) || []),
-  ].filter((m) => { const id = String(m.id); if (seenWc.has(id)) return false; seenWc.add(id); return true; });
-  return matches.map((m) => {
-    const raw = String(m.status || '').toLowerCase();
-    const status = raw === 'completed' ? 'final' : raw === 'scheduled' ? 'scheduled' : 'live';
-    return {
-      league: 'WC',
-      game_id: String(m.id),
-      away_abbr: m.away_team?.abbreviation ?? null,
-      home_abbr: m.home_team?.abbreviation ?? null,
-      away_score: numOrNull(m.away_score),
-      home_score: numOrNull(m.home_score),
-      status,
-      // Live WC matches carry the match minute in clock_display ("67'") — surface
-      // it as the detail so the card shows the minute, not a bare "LIVE".
-      detail: status === 'final' ? 'FINAL'
-        : status === 'live' ? (String(m.clock_display || '').trim() || 'LIVE')
-        : null,
-      outs: null,
-      bases: null,
-      // ET slate date (a 10pm ET match = next UTC day; keep it on its own day).
-      _etDate: etDateStr(m.datetime || m.commence_time),
-    };
-  }).filter((r) => r._etDate === targetDate);
-}
-
 function numOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -292,43 +258,12 @@ function triggerGrading(date) {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 /* ── LIVE BET-EVENTS (founder, Jul 7) — the prop markets already CASHED in a
- * live game: WC goals (anytime scorer) / assists / cards via BDL FIFA
- * match_events; MLB homers / steals / multi-hit days / K milestones via the
+ * live game: MLB homers / steals / multi-hit days / K milestones via the
  * live box. Written as a surgical PATCH per game so the cloud score poller
  * (which doesn't carry this column) can never clobber it. Honest-empty:
  * a failed fetch writes nothing. */
 
 const evLastName = (n) => String(n || '').trim().split(/\s+/).pop() || '';
-
-async function wcLiveEvents(matchId) {
-  try {
-    const rows = (await fifaWorldCup.getMatchEvents([Number(matchId)])) || [];
-    const out = [];
-    for (const e of rows) {
-      if (e.rescinded) continue;                       // VAR took it back
-      if (e.shootout_sequence != null) continue;       // shootout pens cash nothing
-      const type = String(e.incident_type || '').toLowerCase();
-      const cls = String(e.incident_class || '').toLowerCase();
-      const player = e.player?.name || e.player?.short_name || null;
-      if (!player) continue;
-      const d = e.time_minute != null ? `${e.time_minute}'` : null;
-      const scoredGoal =
-        (type === 'goal' && !cls.includes('own'))
-        || (type === 'ingamepenalty' && cls.includes('scored'));
-      if (scoredGoal) {
-        out.push({ k: 'goal', p: evLastName(player).toUpperCase(), d });
-        const assist = e.assist_player?.name || e.assist_player?.short_name || null;
-        if (assist) out.push({ k: 'assist', p: evLastName(assist).toUpperCase(), d });
-      } else if (type.includes('card') || cls === 'yellow' || cls === 'red') {
-        out.push({ k: 'card', p: evLastName(player).toUpperCase(), d });
-      }
-    }
-    return out.slice(0, 8);
-  } catch (e) {
-    console.warn(`[events] WC ${matchId}: ${e.message}`);
-    return null;
-  }
-}
 
 async function mlbLiveEvents(gameId) {
   try {
@@ -360,7 +295,7 @@ async function run() {
   // ones that flip to final on THIS poll (each game triggers grading exactly once).
   const prevFinalIds = dryRun ? null : await fetchPrevFinalIds(targetDate);
 
-  const settled = await Promise.allSettled([mlbRows(), nbaRows(), nhlRows(), wcRows()]);
+  const settled = await Promise.allSettled([mlbRows(), nbaRows(), nhlRows()]);
   const rows = [];
   for (const r of settled) {
     if (r.status === 'fulfilled' && Array.isArray(r.value)) rows.push(...r.value);
@@ -403,9 +338,7 @@ async function run() {
   // ── the cashed-props pass, live games only ──
   const liveRows = stamped.filter((r) => r.status === 'live');
   for (const r of liveRows) {
-    const events = r.league === 'WC' ? await wcLiveEvents(r.game_id)
-      : r.league === 'MLB' ? await mlbLiveEvents(r.game_id)
-      : null;
+    const events = r.league === 'MLB' ? await mlbLiveEvents(r.game_id) : null;
     if (!events) continue;
     try {
       await axios({

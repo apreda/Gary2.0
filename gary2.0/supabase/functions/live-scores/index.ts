@@ -1,9 +1,9 @@
 // Supabase Edge Function: live-scores
 //
 // Cloud port of scripts/poll-live-scores.js — so live scores stay fresh 24/7,
-// independent of the laptop. Polls today's MLB (BallDontLie) + World Cup (BDL
-// FIFA) slate and upserts one row per game into `live_scores`, exactly the shape
-// the iOS app reads. Fired every ~1 minute by pg_cron during live windows.
+// independent of the laptop. Polls today's MLB (BallDontLie) slate and upserts
+// one row per game into `live_scores`, exactly the shape the iOS app reads.
+// Fired every ~1 minute by pg_cron during live windows.
 //
 // Auth: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 // BALLDONTLIE_API_KEY must be set as a function secret:
@@ -27,7 +27,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
 const BDL_BASE = "https://api.balldontlie.io";
-const WC_SEASON = 2026;
 // A scheduled game this many minutes (or fewer) from its start time counts as
 // "imminent" — we keep polling so the scheduled→live flip is caught at 1-min
 // freshness instead of being missed during the early-exit window.
@@ -143,34 +142,6 @@ async function mlbGames(date: string, now: string): Promise<Game[]> {
   });
 }
 
-async function wcGames(date: string, now: string): Promise<Game[]> {
-  const matches = await bdlGet("/fifa/worldcup/v1/matches", { seasons: [String(WC_SEASON)], per_page: "100" });
-  return matches
-    // Filter by ET slate date, not the UTC date slice — a 10pm-ET match is the
-    // next UTC day, so the old slice excluded today's late matches AND pulled
-    // yesterday's late matches onto today.
-    .filter((m: any) => etDateStr(m.datetime) === date)
-    .map((m: any): Game => {
-      const raw = String(m.status ?? "").toLowerCase();
-      const status = raw === "completed" ? "final" : raw === "scheduled" ? "scheduled" : "live";
-      const detail = status === "final" ? "FINAL"
-        : status === "live" ? (String(m.clock_display ?? "").trim() || "LIVE")
-        : null;
-      const startAt = status === "scheduled" ? (String(m.datetime ?? "") || null) : null;
-      return {
-        startAt,
-        row: {
-          date, league: "WC", game_id: String(m.id),
-          away_abbr: m.away_team?.abbreviation ?? null,
-          home_abbr: m.home_team?.abbreviation ?? null,
-          away_score: num(m.away_score),
-          home_score: num(m.home_score),
-          status, detail, outs: null, bases: null, updated_at: now,
-        },
-      };
-    });
-}
-
 async function upsertLiveScores(rows: Row[]): Promise<void> {
   if (!rows.length) return;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/live_scores?on_conflict=date,league,game_id`, {
@@ -221,7 +192,7 @@ Deno.serve(async () => {
 
   const now = new Date().toISOString();
   const nowMs = Date.parse(now);
-  const results = await Promise.allSettled([mlbGames(date, now), wcGames(date, now)]);
+  const results = await Promise.allSettled([mlbGames(date, now)]);
   const games = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
   const errors = results.filter((r) => r.status === "rejected").map((r: any) => String(r.reason));
 

@@ -2,7 +2,6 @@
 //
 //   F-3  props are no longer forced volume: Gary may pass (no_play) and picks are "up to 2"
 //   F-5  unverified odds are dropped, and internal _flags never reach the stored pick JSON
-//   F-8a WC sportsbook odds come from the FIFA vendor rows (not the NBA endpoint)
 //   F-8b fact-checks key results by pick_text+matchup and re-sync when a grade flips
 //   F-9  props run on the same brain as game picks (no cheap-model discount)
 import { describe, it, expect } from 'vitest';
@@ -69,13 +68,6 @@ describe('no-stats gate: lines without stats never reach Gary', () => {
   });
 });
 
-describe('F-8a: WC sportsbook odds from FIFA vendor rows', () => {
-  it('fetchSportsbookOdds has a soccer branch mapping draw odds', () => {
-    const picksScript = src('scripts/run-agentic-picks.js');
-    expect(picksScript).toContain('moneyline_draw_odds');
-  });
-});
-
 describe('F-8b: fact-check joins and re-syncs correctly', () => {
   it('graded results are keyed by pick_text + matchup, not pick_text alone', () => {
     expect(src('scripts/run-fact-checks.js')).toContain('|${r.matchup}');
@@ -85,7 +77,7 @@ describe('F-8b: fact-check joins and re-syncs correctly', () => {
     expect(src('scripts/run-fact-checks.js')).toContain('result drift');
   });
 
-  it('fact-check idempotency includes pick_text (WC two-pick rows must not overwrite each other)', () => {
+  it('fact-check idempotency includes pick_text (multi-pick rows must not overwrite each other)', () => {
     expect(src('scripts/run-fact-checks.js')).toContain(".eq('pick_text', pick.pick)");
   });
 });

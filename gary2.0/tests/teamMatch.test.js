@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { pickSide, matchGame } from '../src/services/teamMatch.js';
-import { gradeSoccerGame } from '../src/services/soccerGrading.js';
 
 describe('pickSide — shared-mascot collisions cannot flip the side', () => {
   it('Red Sox (away) vs White Sox (home), short stored names', () => {
@@ -79,12 +78,3 @@ describe('matchGame — ID match is never second-guessed by an unreadable name',
   });
 });
 
-describe('gradeSoccerGame uses robust side detection', () => {
-  it('away moneyline win', () => {
-    expect(gradeSoccerGame({ type: 'moneyline', pick: 'Brazil ML', homeTeam: 'Mexico', awayTeam: 'Brazil' }, 0, 2)).toBe('won');
-  });
-  it('shared-word national teams do not fabricate a loss', () => {
-    // "Korea Republic" (home) vs "Congo" — a Korea pick must grade as home, not collide.
-    expect(gradeSoccerGame({ type: 'moneyline', pick: 'Korea Republic ML', homeTeam: 'Korea Republic', awayTeam: 'Congo' }, 2, 0)).toBe('won');
-  });
-});

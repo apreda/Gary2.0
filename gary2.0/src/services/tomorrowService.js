@@ -27,21 +27,7 @@
  *      top-level grounded league_avg_era / league_avg_xera (PA-weighted mean of
  *      the same Savant pitcher corpus) so the iOS can color each pitcher's
  *      ERA/xERA relative to league (below = good). era/xera null when Savant
- *      has no row (never fabricated). WC is NO LONGER mixed in here — it has its
- *      own dedicated lane (see WC LOOK-AHEAD below).
- *   2b. WC LOOK-AHEAD — its own iOS tab, one entry per tomorrow World Cup match
- *      (away vs home + kickoff). Each match carries the grounded, day-before,
- *      bettor-useful look-ahead, all from data the app already pays for:
- *        • projected XI + formation per side — reuses previousXI() (each team's
- *          recent-regulars projection; OUT/suspended dropped). Confirmed sheets
- *          don't post until ~2h pre-kickoff, so the day before is PROJECTED.
- *        • recent FORM per side — getRecentForm() L5 (W-D-L + GF/GA per match).
- *        • the LINES for the match — spread / total / 3-way ML straight off the
- *          SAME slate row the board renders ("—" when a book hasn't posted).
- *        • KEY PLAYERS to watch per side — each team's leading cycle scorers from
- *          getSquadStats (goals/assists, grounded); omitted when unavailable.
- *      GROUNDED only — never fabricates an XI/form/line/scorer; a side with no
- *      usable projection or form simply omits that field.
+ *      has no row (never fabricated).
  *   3. KEY RETURNS — best-effort IL->active roster-status lane; honest-empty
  *      when nothing qualifies (no dedicated return-date feed exists).
  *   3b. EXTRA TABBED LANES (the iOS Starters/Returns section is now a tab strip —
@@ -56,19 +42,18 @@
  *                        fabricate one — we surface the team's actual scoring /
  *                        run-prevention shape instead.
  *        • WEATHER     — first-pitch forecast for OUTDOOR MLB games via Open-Meteo
- *                        (the same key-less, day-before-available source wcWeather
- *                        uses); domed/closed parks skipped, omitted when no coords
- *                        / forecast resolve. temp_f / wind_mph / precip_pct + note.
+ *                        (key-less, day-before-available); domed/closed parks
+ *                        skipped, omitted when no coords / forecast resolve.
+ *                        temp_f / wind_mph / precip_pct + note.
  *   4. BIG GAMES — top-3 marquee games by a grounded newsworthiness weight
- *      (standings rank, division rivalry, primetime window, ace starter, WC
- *      stage). The DISPLAYED context is now each game's ACTUAL current divisional
- *      standing as plain text (e.g. "Brewers 1st · Cubs 2nd, NL Central") via the
- *      `standing` field — not a reason chip. WC games (no MLB-style divisions) use
- *      the group/stage as plain text, or omit. MLB items also carry BOTH probable
+ *      (standings rank, division rivalry, primetime window, ace starter). The
+ *      DISPLAYED context is now each game's ACTUAL current divisional standing
+ *      as plain text (e.g. "Brewers 1st · Cubs 2nd, NL Central") via the
+ *      `standing` field — not a reason chip. MLB items also carry BOTH probable
  *      starters' last names — `awayPitcher` / `homePitcher` (+ a `pitchers:{away,
  *      home}` mirror) — sourced from the SAME schedule read as the starters lane,
  *      "Undecided" per side when a probable is unposted (never blank, never
- *      fabricated). WC items carry no pitcher fields. NO Layer-3 betting conclusions.
+ *      fabricated). NO Layer-3 betting conclusions.
  *   5. COUNTDOWN — earliest commence_time across ALL of tomorrow's slate +
  *      that game's league (drives the hero term + clock).
  *
@@ -427,8 +412,6 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
     console.warn(`[TomorrowBoard] MLB starters fetch failed: ${e.message}`);
   }
 
-  // WC is no longer mixed into starters — it has its own dedicated lane
-  // (buildWcLookahead). starters[] is MLB pitchers only.
   return { starters, acesByGame, pitchersByGame };
 }
 
@@ -673,240 +656,6 @@ async function attachSeriesToBoard(board) {
   }
 }
 
-/* ─────────────────────── 2b. WC LOOK-AHEAD (own tab) ─────────────────────── */
-
-/**
- * Name normalizer IDENTICAL to wcConfirmedXI.js's internal `norm` (diacritic-strip
- * + alphanumeric collapse). previousXI() looks up its injStatus map with that same
- * `norm`, so the OUT/SUS keys we build here MUST match it byte-for-byte — nameKey()
- * (which keeps accents) would silently never match and drop nobody. Kept in lockstep.
- */
-function wcNorm(s) {
-  return String(s || '')
-    .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-/** A team's L5 form as a flat, grounded shape, or null. From getRecentForm().l5:
- *  { record: "3-1-1", w, d, l, gf_per_game, ga_per_game, form: "WWDLW" }. */
-function formShape(recentForm) {
-  const l5 = recentForm?.l5;
-  if (!l5 || !Number.isFinite(Number(l5.played)) || Number(l5.played) === 0) return null;
-  const out = {
-    record: `${l5.w}-${l5.d}-${l5.l}`, // W-D-L
-    w: l5.w, d: l5.d, l: l5.l,
-    gf_per_game: Number.isFinite(Number(l5.gfPerMatch)) ? Number(l5.gfPerMatch) : null,
-    ga_per_game: Number.isFinite(Number(l5.gaPerMatch)) ? Number(l5.gaPerMatch) : null,
-    form: l5.form || null, // "WWDLW" most-recent-first
-    matches: l5.played,
-  };
-  // WC-ONLY record — THIS tournament's games (excludes friendlies + qualifiers),
-  // for the Big Games preview (founder: "only the WC games"). Null when the team
-  // hasn't played a tournament game yet (then iOS falls back to the L5 record).
-  const wcFix = (recentForm.fixtures || []).filter(
-    (f) => /world cup/i.test(f.league || '') && !/qualif/i.test(f.league || ''),
-  );
-  if (wcFix.length) {
-    let w = 0, d = 0, l = 0, gf = 0, ga = 0;
-    for (const f of wcFix) {
-      gf += Number(f.gf) || 0;
-      ga += Number(f.ga) || 0;
-      const res = f.result || (f.gf > f.ga ? 'W' : f.gf < f.ga ? 'L' : 'D');
-      if (res === 'W') w += 1; else if (res === 'L') l += 1; else d += 1;
-    }
-    out.wc = {
-      record: `${w}-${d}-${l}`,
-      w, d, l,
-      gf_per_game: +(gf / wcFix.length).toFixed(1),
-      ga_per_game: +(ga / wcFix.length).toFixed(1),
-      matches: wcFix.length,
-    };
-  }
-  return out;
-}
-
-/** Projected XI + formation for a side as a flat shape, or null. Reuses
- *  previousXI() — the SAME recent-regulars projection the field view + the
- *  situational lane show (OUT/suspended dropped). Confirmed sheets don't post
- *  until ~2h pre-kickoff, so the day before is necessarily PROJECTED. */
-function xiShape(side) {
-  if (!side || !Array.isArray(side.starters) || side.starters.length < 11) return null;
-  return {
-    formation: side.formation || null, // "4-3-3" | null
-    keeper: side.keeper || null,
-    xi: side.starters
-      .map((s) => ({ n: s.player?.name, p: s.position || null, num: s.shirt_number ?? null }))
-      .filter((p) => p.n),
-  };
-}
-
-/** Up to `n` grounded key players for a side from getSquadStats — the leading
- *  cycle scorers (goals desc, then assists). Each { name, goals, assists,
- *  position }. Only players with a real goal/assist tally qualify (no fabricated
- *  rate); [] when the squad map is empty. */
-function keyPlayersFrom(squad, n = 3) {
-  const players = Object.values(squad || {}).filter(
-    (p) => p?.name && (Number(p.goals) > 0 || Number(p.assists) > 0),
-  );
-  if (!players.length) return [];
-  players.sort(
-    (a, b) => (Number(b.goals) - Number(a.goals)) || (Number(b.assists) - Number(a.assists)),
-  );
-  return players.slice(0, n).map((p) => ({
-    name: p.name,
-    goals: Number.isFinite(Number(p.goals)) ? Number(p.goals) : null,
-    assists: Number.isFinite(Number(p.assists)) ? Number(p.assists) : null,
-    position: p.position || null,
-  }));
-}
-
-/**
- * WC LOOK-AHEAD — one entry per tomorrow World Cup match. Joins the WC match feed
- * (for ids/teams/stage) to the SAME slate rows the board renders (for the posted
- * lines), then layers the grounded day-before reads per side:
- *   • projected XI + formation  — previousXI() (recent regulars, OUT/SUS dropped)
- *   • recent form (L5)          — getRecentForm() (W-D-L + GF/GA per game)
- *   • key players to watch      — getSquadStats() leading scorers
- * GROUNDED: a side with no usable projection/form just omits that field; lines
- * are "—"/null when unposted; nothing is ever fabricated. Best-effort per match
- * and per side — one flaky team never sinks the lane.
- *
- * @param {Array} slateRows   the assembled slate rows (carry WC lines per match)
- * @param {string} etDateStr  tomorrow's ET date
- * @param {number} season     WC season (2026)
- */
-async function buildWcLookahead(slateRows, etDateStr, season) {
-  const out = [];
-  // Index the slate's WC line rows by "away|home" so each match reuses the EXACT
-  // line the board shows (no second odds fetch, never drifts from the board).
-  const lineByPair = new Map();
-  for (const r of slateRows) {
-    if (r.league !== 'WC') continue;
-    lineByPair.set(`${r.away_team}|${r.home_team}`, r);
-  }
-  if (!lineByPair.size) return out; // no WC tomorrow
-
-  let wc, previousXI, apiFootball;
-  try {
-    wc = await import('./fifaWorldCupService.js');
-    ({ previousXI } = await import('./insights/computers/wcConfirmedXI.js'));
-    apiFootball = await import('./apiFootballService.js');
-  } catch (e) {
-    console.warn(`[TomorrowBoard] WC look-ahead deps failed (skipping lane): ${e.message}`);
-    return out;
-  }
-
-  // WC injury snapshot once for the slate — lets previousXI drop OUT/suspended
-  // regulars from each projection (same map wcConfirmedXI builds). Empty on any
-  // gap → no doubts dropped (fails safe).
-  let injStatus = new Map();
-  try {
-    const injRows = await wc.getInjuries({ seasons: [season] });
-    for (const r of injRows || []) {
-      const nm = r?.player?.name;
-      if (nm && r?.status) injStatus.set(wcNorm(nm), String(r.status).toUpperCase());
-    }
-  } catch (e) {
-    console.warn(`[TomorrowBoard] WC injuries fetch failed (no doubts dropped): ${e.message}`);
-  }
-
-  let matches = [];
-  try { matches = await wc.getMatches({}); } catch (e) {
-    console.warn(`[TomorrowBoard] WC matches fetch failed (skipping lane): ${e.message}`);
-    return out;
-  }
-
-  // Raw vendor odds once for the slate — the draw price and the TO-ADVANCE
-  // (qualify) market live in the rows' markets[], which the reduced slate
-  // lineRow doesn't carry. ML/spread/total still come from lineRow so the
-  // headline numbers never drift from the board. Empty on any gap (fails safe:
-  // the new fields render only when present).
-  let wcOddsRows = [];
-  try { wcOddsRows = (await wc.getOdds({})) || []; } catch (e) {
-    console.warn(`[TomorrowBoard] WC odds rows fetch failed (no draw/advance prices): ${e.message}`);
-  }
-
-  for (const m of Array.isArray(matches) ? matches : []) {
-    try {
-      if (!m?.home_team?.name || !m?.away_team?.name || !m?.datetime) continue;
-      const start = new Date(m.datetime);
-      if (Number.isNaN(start.getTime()) || getETDateStr(start) !== etDateStr) continue;
-
-      const away = m.away_team, home = m.home_team;
-      const lineRow = lineByPair.get(`${away.name}|${home.name}`);
-
-      // Projected XI per side — reuse the canonical projection. injStatus is keyed
-      // with wcNorm (matching previousXI's internal norm) so OUT/SUS regulars drop.
-      const [hXi, aXi] = await Promise.all([
-        previousXI(home.id, home.name, m.id, season, injStatus).catch(() => null),
-        previousXI(away.id, away.name, m.id, season, injStatus).catch(() => null),
-      ]);
-
-      // Recent form per side (L5) — grounded W-D-L + GF/GA per game.
-      const [hForm, aForm] = await Promise.all([
-        apiFootball.getRecentForm(home.name).catch(() => null),
-        apiFootball.getRecentForm(away.name).catch(() => null),
-      ]);
-
-      // Key players per side — leading cycle scorers from the squad map.
-      const [hSquad, aSquad] = await Promise.all([
-        apiFootball.getSquadStats(home.name).catch(() => ({})),
-        apiFootball.getSquadStats(away.name).catch(() => ({})),
-      ]);
-
-      const entry = {
-        league: 'WC',
-        match: `${away.name} @ ${home.name}`,
-        away_team: away.name,
-        home_team: home.name,
-        commence_time: m.datetime,
-        kickoff: etClock(m.datetime),                 // short ET clock, e.g. "3:00"
-        stage: m.round_name || m.stage?.name || null, // plain-text stage/round
-        group: m.group?.name || null,
-        venue: m.stadium?.name || null,
-        // LINES — headline numbers straight off the board's slate row ("—"/null
-        // when unposted); draw + TO-ADVANCE prices from the raw vendor rows
-        // (knockout matches only — null in group stage / the final).
-        lines: (() => {
-          const matchOdds = wcOddsRows.filter((o) => o?.match_id === m.id);
-          const consensus = wc.selectConsensusOdds(matchOdds);
-          const qualify = wc.extractToQualify(matchOdds);
-          return {
-            spread: lineRow?.spread ?? null,
-            total: lineRow?.total ?? null,
-            ml_home: lineRow?.ml_home ?? null,
-            ml_away: lineRow?.ml_away ?? null,
-            ml_draw: consensus?.moneyline?.draw ?? null,
-            advance_home: qualify?.home ?? null,
-            advance_away: qualify?.away ?? null,
-          };
-        })(),
-        // Per side: projected XI + formation, L5 form, key players. Each field is
-        // omitted (null/[]) when its grounded source is unavailable.
-        home: {
-          team: home.name,
-          xi: xiShape(hXi),               // { formation, keeper, xi:[...] } | null
-          form: formShape(hForm),         // { record, gf_per_game, ... } | null
-          key_players: keyPlayersFrom(hSquad),
-        },
-        away: {
-          team: away.name,
-          xi: xiShape(aXi),
-          form: formShape(aForm),
-          key_players: keyPlayersFrom(aSquad),
-        },
-      };
-      out.push(entry);
-    } catch (e) {
-      console.warn(`[TomorrowBoard] WC look-ahead match skipped: ${e.message}`);
-    }
-  }
-
-  // Earliest kickoff first.
-  out.sort((a, b) => new Date(a.commence_time || 0) - new Date(b.commence_time || 0));
-  return out;
-}
-
 /* ──────────────────────────── 3. KEY RETURNS ────────────────────────────── */
 
 /**
@@ -1034,8 +783,8 @@ const WEATHER_RAIN_PCT = 40;   // % — rain watch
 
 /**
  * WEATHER — first-pitch forecast for tomorrow's OUTDOOR MLB games, via Open-Meteo
- * (the same free, key-less, day-before-available forecast source wcWeather already
- * uses). Each game's venue lat/lon comes from the MLB Stats API venue feed; the
+ * (free, key-less, day-before-available forecast source). Each game's venue
+ * lat/lon comes from the MLB Stats API venue feed; the
  * hourly forecast is read at the game's UTC start hour. GROUNDED: domed/closed
  * parks are skipped, and a game with no resolvable coords or forecast is omitted —
  * never a fabricated reading. Each row carries temp_f / wind_mph / precip_pct + a
@@ -1144,10 +893,10 @@ async function openMeteoHour(lat, lon, dateKey, hourKey) {
 
 /**
  * Score each slate game for newsworthiness and rank the top 3. Grounded inputs
- * only (standings rank, division rivalry, primetime window, ace starter, WC
- * stage) — NO Layer-3 betting conclusions; the chip names WHY it's worth
- * watching, the context string is factual. Falls back to primetime + slate
- * order so we always surface 3 when there are >= 3 games.
+ * only (standings rank, division rivalry, primetime window, ace starter) — NO
+ * Layer-3 betting conclusions; the chip names WHY it's worth watching, the
+ * context string is factual. Falls back to primetime + slate order so we
+ * always surface 3 when there are >= 3 games.
  */
 function buildBigGames(board, { mlb }) {
   const scored = board.map((row) => {
@@ -1157,8 +906,7 @@ function buildBigGames(board, { mlb }) {
     let standing = null;     // plain-text divisional standing -> what iOS renders
     const ctxParts = [];
     // BOTH probable starters' last names for MLB cards => { away, home }.
-    // null for non-MLB (WC carries no pitchers). "Undecided" per side when a
-    // probable is unposted.
+    // null for non-MLB. "Undecided" per side when a probable is unposted.
     let pitchers = null;
 
     const setReason = (label, w) => {
@@ -1217,19 +965,6 @@ function buildBigGames(board, { mlb }) {
       };
     }
 
-    if (row.league === 'WC') {
-      const wcStage = row._wc_stage;
-      if (wcStage && /knock|round of|quarter|semi|final/i.test(wcStage)) {
-        setReason('KNOCKOUT', 34); weight += 34;
-        ctxParts.push(wcStage);
-      } else if (wcStage && /group/i.test(wcStage)) {
-        setReason('GROUP STAGE', 14); weight += 12;
-        if (row._wc_group) ctxParts.push(row._wc_group);
-      }
-      // WC has no MLB-style divisions — use the group/stage as plain-text standing.
-      standing = [row._wc_stage, row._wc_group].filter(Boolean).join(' · ') || null;
-    }
-
     // PRIMETIME — national window weight boost (never a chip alone).
     const h = etHour(row.commence_time);
     if (h != null && h >= PRIMETIME_HOUR_ET) weight += 8;
@@ -1237,26 +972,18 @@ function buildBigGames(board, { mlb }) {
     // Fallback so a 3+-game slate always fills three slots.
     weight += 1;
 
-    // LEAGUE TIER — the World Cup is a marquee global event; ANY WC match outranks
-    // ANY regular-season MLB game (founder: "these should be WC games, those are
-    // bigger than regular season MLB"). Tier sorts first, so WC leads Big Games
-    // whenever the slate has WC; the intra-league weights above only order within
-    // a tier (knockout ahead of group in WC; standings/rivalry/ace in MLB).
-    const tier = row.league === 'WC' ? 1 : 0;
-
-    return { row, weight, tier, reason, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
+    return { row, weight, reason, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
   });
 
   scored.sort((a, b) => {
-    if (b.tier !== a.tier) return b.tier - a.tier;      // WC ahead of regular-season MLB
     if (b.weight !== a.weight) return b.weight - a.weight;
     // tie-break by earliest start (the marquee opener leads)
     return new Date(a.row.commence_time || 0) - new Date(b.row.commence_time || 0);
   });
 
   // BIG GAMES SIZE + MIX — up to 5 (founder is fine with 4–5, not a hard 3), and
-  // always mix in at least one MLB game so a full WC slate doesn't crowd the
-  // domestic games out entirely. WC still leads (tier sort above); MLB rides along.
+  // always mix in at least one MLB game so other leagues don't crowd the
+  // domestic games out entirely.
   const MAX_BIG = 5;
   const picked = scored.slice(0, MAX_BIG);
   if (!picked.some((s) => s.row.league === 'MLB')) {
@@ -1277,7 +1004,7 @@ function buildBigGames(board, { mlb }) {
       commence_time: s.row.commence_time || null,
     };
     // MLB only: BOTH probable starters' last names. "Undecided" per side when a
-    // probable is unposted. WC carries no pitchers (left off entirely).
+    // probable is unposted (left off entirely for other leagues).
     if (s.pitchers) {
       item.awayPitcher = s.pitchers.away;
       item.homePitcher = s.pitchers.home;
@@ -1307,7 +1034,7 @@ function ordinal(n) {
  * Plain-text divisional standing for a big game, e.g. "Brewers 1st · Cubs 2nd, NL
  * Central" when both lead the same division, else the more newsworthy single team's
  * place ("1st, NL Central"). GROUNDED from standings + team index; null when
- * neither side's rank/division resolves (e.g. WC, or a standings gap).
+ * neither side's rank/division resolves (a standings gap).
  */
 function bigGameStanding({ aSt, hSt, aTeam, hTeam, awayTeam, homeTeam }) {
   const aRank = aSt?.divisionRank;
@@ -1378,7 +1105,7 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
  * re-runs (e.g. the evening line refresh) overwrite in place so overnight-posted
  * lines flip "—" to real numbers before users wake.
  *
- * @returns {Promise<{date,game_count,any_lines,big_games,starters,returns,form,run_profile,weather,wc_lookahead,league_avg_era,league_avg_xera,countdown_sport}>}
+ * @returns {Promise<{date,game_count,any_lines,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera,countdown_sport}>}
  */
 export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(etDateStr)) {
@@ -1393,9 +1120,6 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
 
   // 1. SLATE + LINES (single source of truth, in lockstep with the Today slate).
   const { rows: slateRows, byLeague } = await buildSlate(etDateStr);
-
-  // Annotate WC rows with stage/group for big-games (fetched once here).
-  await annotateWcStages(slateRows, etDateStr);
 
   // MLB join indexes (teams / standings / aces) — each best-effort.
   let teams = [];
@@ -1444,16 +1168,6 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     await enrichStartersWithOutings(starters, etDateStr);
   } catch (e) {
     console.warn(`[TomorrowBoard] starter outings failed (honest-empty): ${e.message}`);
-  }
-
-  // 2b. WC LOOK-AHEAD — its own iOS tab (projected XI + formation, L5 form, the
-  // posted lines, and key players per side). GROUNDED; honest-empty when no WC
-  // tomorrow or its sources are short. Joins the slate's WC line rows in place.
-  let wc_lookahead = [];
-  try {
-    wc_lookahead = await buildWcLookahead(slateRows, etDateStr, SEASON);
-  } catch (e) {
-    console.warn(`[TomorrowBoard] WC look-ahead lane failed (honest-empty): ${e.message}`);
   }
 
   // 4. BIG GAMES.
@@ -1523,10 +1237,6 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     form,
     run_profile,
     weather,
-    // Dedicated WC day-before look-ahead (its own iOS tab) — one entry per WC
-    // match with projected XI + formation, L5 form, lines, and key players per
-    // side. Pulled out of starters[] (which is now MLB pitchers only).
-    wc_lookahead,
     // Grounded current MLB league-average ERA / xERA (PA-weighted mean of the
     // Savant pitcher corpus) — the reference the iOS colors each starter's
     // ERA/xERA against (below avg = good/green, above = bad/red).
@@ -1554,7 +1264,6 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     `[TomorrowBoard] ✅ ${etDateStr}: ${board.length} game(s)${summary ? ` (${summary})` : ''}, ` +
     `${bigGames.length} big game(s), ${starters.length} starter(s), ${returns.length} return(s), ` +
     `${form.length} form, ${run_profile.length} run-profile, ${weather.length} weather, ` +
-    `${wc_lookahead.length} wc-lookahead, ` +
     `lgERA=${leagueAvg.league_avg_era ?? '—'}/xERA=${leagueAvg.league_avg_xera ?? '—'}, ` +
     `lines=${any_lines ? 'posted' : 'open soon'}, countdown=${countdown_sport || 'none'}`,
   );
@@ -1569,7 +1278,6 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     form,
     run_profile,
     weather,
-    wc_lookahead,
     league_avg_era: leagueAvg.league_avg_era,
     league_avg_xera: leagueAvg.league_avg_xera,
     countdown_sport,
@@ -1588,37 +1296,6 @@ function buildIdByName(teams) {
     }
   }
   return map;
-}
-
-/**
- * Annotate WC slate rows in place with _wc_stage / _wc_group for big-games
- * weighting (knockout vs group). Best-effort; MLB rows untouched.
- */
-async function annotateWcStages(slateRows, etDateStr) {
-  if (!slateRows.some((r) => r.league === 'WC')) return;
-  try {
-    const wc = await import('./fifaWorldCupService.js');
-    const matches = await wc.getMatches({});
-    const byPair = new Map();
-    for (const m of Array.isArray(matches) ? matches : []) {
-      if (!m?.home_team?.name || !m?.away_team?.name) continue;
-      byPair.set(`${m.away_team.name}|${m.home_team.name}`, {
-        stage: m.stage?.name || null,
-        group: m.group?.name || null,
-        round: m.round_name || null,
-      });
-    }
-    for (const r of slateRows) {
-      if (r.league !== 'WC') continue;
-      const info = byPair.get(`${r.away_team}|${r.home_team}`);
-      if (info) {
-        r._wc_stage = info.round || info.stage;
-        r._wc_group = info.group;
-      }
-    }
-  } catch (e) {
-    console.warn(`[TomorrowBoard] WC stage annotate failed: ${e.message}`);
-  }
 }
 
 export default { writeTomorrowBoard, tomorrowET };

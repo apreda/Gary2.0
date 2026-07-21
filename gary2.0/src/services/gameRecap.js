@@ -57,23 +57,11 @@ function describeBetForPrompt(pick) {
 }
 
 function buildPrompt({ pick, result, evidence }) {
-  const lg = String(pick.league || '').toLowerCase();
-  const isWC = lg.includes('world_cup') || lg === 'wc' || lg.includes('soccer_world_cup');
-  // 2026 World Cup games are at NEUTRAL venues — except the three host nations,
-  // who genuinely play at home. Everyone else has no home-field edge.
-  const homeIsHost = ['united states', 'usa', ' usmnt', 'canada', 'mexico']
-    .some((h) => String(pick.homeTeam || '').toLowerCase().includes(h.trim()));
-  const neutralNote = (isWC && !homeIsHost)
-    ? `NEUTRAL SITE: this is a 2026 World Cup match at a neutral venue — do NOT say either ` +
-      `team is playing "at home", and do NOT cite home-field, home-crowd, or travel advantage. ` +
-      `The "(home)" tag below is only bracket bookkeeping for which side is listed where.\n`
-    : '';
   return (
     `You write a short, ESPN-style recap of a finished game FROM THE BETTING PERSPECTIVE — ` +
     `the voice of a sharp friend recapping last night: the drama, the prices, and how the bet fared, ` +
     `woven into one tight story.\n\n` +
     `GAME: ${pick.awayTeam} (away) @ ${pick.homeTeam} (home) — ${pick.league}\n` +
-    neutralNote +
     `THE BET: ${describeBetForPrompt(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
     `WHAT ACTUALLY HAPPENED — this is the ONLY source of facts you may use:\n${evidence}\n\n` +
@@ -107,11 +95,7 @@ function buildPrompt({ pick, result, evidence }) {
     `STRICTLY from the evidence. Carry a price ONLY where that exact price is in the evidence ` +
     `("Matt Olson 2 HR (+340 to homer)" only if Olson's HR prop price is listed; else "Matt Olson ` +
     `2 HR"). The total is a fine bullet on its own: "Over 9.5 hit · 11 runs". Never invent a price, ` +
-    `line, or stat.\n` +
-    `- SOCCER / WORLD CUP: there is NO per-player box score, so do NOT invent an individual stat ` +
-    `line (no "X 7 shots", no "Y 5 saves"). Use TEAM / result betting facts ("Over 2.5 goals hit · ` +
-    `3 total", "Both teams to score: no", "Brazil 2, Japan 1") and a goal scorer ONLY if the ` +
-    `evidence names who scored. Never invent a player's stat line or a market not in the evidence.\n\n` +
+    `line, or stat.\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
     `{"headline":"...","recap":"...","bullets":["...","..."]}`
   );
@@ -197,34 +181,6 @@ export function sanitizeBulletPrices(bullet, evidence) {
   return out.replace(/\s{2,}/g, ' ').replace(/\s+([.,;)])/g, '$1').trim();
 }
 
-const SOCCER_STAT = /\b(\d+)\s+(saves?|shots?|goals?|assists?|tackles?|interceptions?|clearances?|blocks?|passes?|key\s+passes?|chances?|crosses?|dribbles?)\b/i;
-
-/**
- * Deterministic ground-truth enforcement for SOCCER / World Cup recap bullets —
- * the sibling of sanitizeBulletPrices, but for STAT COUNTS. BDL FIFA returns NO
- * per-player box score, so an individual player-stat line in a WC recap is the
- * model inventing a number (verified live: "Nikola Vasilj 1 save" and "Dan Ndoye
- * 2 shots" shipped on a match whose grading flagged those exact stats as NO DATA).
- * For WC games a stat-count bullet survives ONLY if the evidence literally backs
- * the number next to the stat (e.g. a graded team-shots prop "shots ... 14"); a
- * score/result line ("Switzerland 4, Bosnia 1") carries no stat keyword and is
- * always kept. NOT a heuristic detector that blocks a pick — it only removes an
- * unverifiable stat line from recap text. Non-soccer leagues have real box scores,
- * so they always pass.
- */
-export function keepRecapBullet(bullet, evidence, league) {
-  const lg = String(league || '').toUpperCase();
-  const isSoccer = lg === 'WC' || lg.includes('SOCCER') || lg.includes('WORLD CUP');
-  if (!isSoccer) return true;
-  const m = String(bullet || '').match(SOCCER_STAT);
-  if (!m) return true; // score / outcome line — nothing to verify
-  const num = m[1];
-  const stem = m[2].toLowerCase().slice(0, 4); // save/shot/goal/assi/tack/pass…
-  const ev = String(evidence || '').toLowerCase();
-  const re = new RegExp(`\\b${num}\\b[^\\n]{0,40}${stem}|${stem}[^\\n]{0,40}\\b${num}\\b`, 'i');
-  return re.test(ev);
-}
-
 /**
  * Generate the betting recap for one graded game pick. ONE Flash call, low
  * temperature, evidence only — no tools, no search, no fabrication.
@@ -281,7 +237,6 @@ export async function generateRecap({ pick, result, evidence }) {
     ? parsed.bullets
         .map((b) => String(b).trim())
         .map((b) => sanitizeBulletPrices(b, evidence)) // strip any price the evidence can't source
-        .filter((b) => keepRecapBullet(b, evidence, pick.league)) // drop unverifiable WC player-stat lines
         .filter(Boolean)
         .map((b) => (b.length > MAX_BULLET_CHARS ? b.slice(0, MAX_BULLET_CHARS).trimEnd() : b))
         .slice(0, MAX_BULLETS)

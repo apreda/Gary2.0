@@ -9,8 +9,6 @@
  *
  * Usage:
  *   node scripts/run-scratch-arm.js --mlb            # tonight's MLB slate
- *   node scripts/run-scratch-arm.js --wc             # today's World Cup match(es)
- *   node scripts/run-scratch-arm.js --wc --game-id 171
  *   SCRATCH_MODEL=gpt-5.5 node scripts/run-scratch-arm.js --mlb   # engine override
  */
 import 'dotenv/config';
@@ -36,8 +34,7 @@ const args = process.argv.slice(2);
 const getArg = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : null; };
 const SPORTS = [];
 if (args.includes('--mlb')) SPORTS.push({ key: 'baseball_mlb', league: 'MLB' });
-if (args.includes('--wc')) SPORTS.push({ key: 'soccer_world_cup', league: 'WC' });
-if (SPORTS.length === 0) { console.error('Pass --mlb and/or --wc'); process.exit(1); }
+if (SPORTS.length === 0) { console.error('Pass --mlb'); process.exit(1); }
 const gameIdFilter = getArg('--game-id');
 const MODEL = process.env.SCRATCH_MODEL || SCRATCH_MODEL_DEFAULT;
 const ARM = 'gary-vnext'; // engine-agnostic arm name; scratch_model on each pick records the engine
@@ -46,19 +43,9 @@ const MAX_GROUNDING = 6;
 
 const todayEST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-// Same per-vendor odds mapping production uses (WC: FIFA vendor rows; MLB: BDL v2).
+// Same per-vendor odds mapping production uses (BDL v2).
 async function fetchBoardRows(sportKey, gameId) {
   try {
-    if (sportKey === 'soccer_world_cup') {
-      const { default: fifa } = await import('../src/services/fifaWorldCupService.js').then(m => ({ default: m }));
-      const rows = await fifa.getOdds({ matchIds: [gameId] });
-      return (rows || []).map(r => ({
-        book: r.vendor || 'book', ml_home: r.moneyline_home_odds, ml_away: r.moneyline_away_odds, ml_draw: r.moneyline_draw_odds,
-        spread_home: r.spread_home_value, spread_home_odds: r.spread_home_odds,
-        spread_away: r.spread_away_value, spread_away_odds: r.spread_away_odds,
-        total: r.total_value, total_over_odds: r.total_over_odds, total_under_odds: r.total_under_odds,
-      }));
-    }
     const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
     const rows = await ballDontLieService.getOddsV2({ game_ids: [gameId] }, sportKey);
     return (rows || []).map(r => ({

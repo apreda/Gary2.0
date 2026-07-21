@@ -3,8 +3,7 @@
 // Cloud grade-on-final for GAME picks (props are a separate next layer — they
 // need box-score stat extraction). Runs on pg_cron alongside live-scores so
 // Gary's game picks settle 24/7, no laptop. For each FINAL game it grades the
-// pick (MLB ML/total/spread; WC 3-way ML/draw/total/Asian-handicap on the 90'
-// regulation score) and writes to game_results — dedup'd by (pick_text,
+// pick (MLB ML/total/spread) and writes to game_results — dedup'd by (pick_text,
 // game_date): a wrong early grade self-corrects on the next run (UPDATE), an
 // ungraded one inserts, an already-correct one is a no-op.
 //
@@ -27,10 +26,10 @@
 //
 // Faithful port of the grading + is_winners_pick logic in run-all-results.js.
 //
-// Side-detection (which team a pick is on) + gradeGame/gradeSoccer live in the pure,
+// Side-detection (which team a pick is on) + gradeGame live in the pure,
 // unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
 // graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
-import { gradeGame, gradeSoccer, recapIsStale } from "./grading.ts";
+import { gradeGame, recapIsStale } from "./grading.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -41,7 +40,6 @@ const BDL_BASE = "https://api.balldontlie.io";
 // orchestratorConfig.js) — cheap Flash, one call per graded game.
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const WC_SEASON = 2026;
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
 function estDate(offset = 0): string {
@@ -77,24 +75,9 @@ async function sbGet(table: string, query: string): Promise<any[]> {
 }
 
 // ── grading ──────────────────────────────────────────────────────────────────
-// gradeGame (MLB 2-way) + gradeSoccer (WC) now live in the pure, unit-tested
-// ./grading.ts (imported above), which resolves the pick's side using only the tokens
-// that distinguish the two teams — never a shared mascot like "Sox".
-
-// 90' regulation for WC: full score when no extra time, else sum of halves.
-function regulationScore(m: any): { home: number; away: number } | null {
-  const halves = m.first_half_home_score != null && m.second_half_home_score != null &&
-    m.first_half_away_score != null && m.second_half_away_score != null;
-  const sum = () => ({
-    home: num(m.first_half_home_score)! + num(m.second_half_home_score)!,
-    away: num(m.first_half_away_score)! + num(m.second_half_away_score)!,
-  });
-  if (!m.has_extra_time) {
-    if (m.home_score != null && m.away_score != null) return { home: num(m.home_score)!, away: num(m.away_score)! };
-    return halves ? sum() : null;
-  }
-  return halves ? sum() : null;
-}
+// gradeGame (MLB 2-way) lives in the pure, unit-tested ./grading.ts (imported
+// above), which resolves the pick's side using only the tokens that
+// distinguish the two teams — never a shared mascot like "Sox".
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
 
@@ -231,21 +214,11 @@ function recapDescribeBet(pick: any): string {
 
 function recapBuildPrompt(args: { pick: any; result: string; evidence: string }): string {
   const { pick, result, evidence } = args;
-  const lg = String(pick.league || "").toLowerCase();
-  const isWC = lg.includes("world_cup") || lg === "wc" || lg.includes("soccer_world_cup");
-  const homeIsHost = ["united states", "usa", " usmnt", "canada", "mexico"]
-    .some((h) => String(pick.homeTeam || "").toLowerCase().includes(h.trim()));
-  const neutralNote = (isWC && !homeIsHost)
-    ? `NEUTRAL SITE: this is a 2026 World Cup match at a neutral venue — do NOT say either ` +
-      `team is playing "at home", and do NOT cite home-field, home-crowd, or travel advantage. ` +
-      `The "(home)" tag below is only bracket bookkeeping for which side is listed where.\n`
-    : "";
   return (
     `You write a short, ESPN-style recap of a finished game FROM THE BETTING PERSPECTIVE — ` +
     `the voice of a sharp friend recapping last night: the drama, the prices, and how the bet fared, ` +
     `woven into one tight story.\n\n` +
     `GAME: ${pick.awayTeam} (away) @ ${pick.homeTeam} (home) — ${pick.league}\n` +
-    neutralNote +
     `THE BET: ${recapDescribeBet(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
     `WHAT ACTUALLY HAPPENED — this is the ONLY source of facts you may use:\n${evidence}\n\n` +
@@ -276,10 +249,6 @@ function recapBuildPrompt(args: { pick: any; result: string; evidence: string })
     `line is the bet above). Never invent a price, a line, or a stat.\n` +
     `- A player-prop bullet (shots, saves, goals, assists, tackles, K's, HR) may carry a ` +
     `price ONLY if that exact player's prop price is printed in the evidence above. ` +
-    `SOCCER / WORLD CUP: there is NO per-player box score for these games, so do NOT write any ` +
-    `individual player stat line (no "X 7 shots", no "Y 5 saves", no "Z 1 goal") — you would be ` +
-    `inventing the number. A World Cup bullet must be a TEAM / result fact taken straight from the ` +
-    `evidence ("Switzerland 4, Bosnia & Herzegovina 1", "Switzerland win the group opener"). ` +
     `Never invent a player's stat line or a market that is not in the evidence.\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
     `{"headline":"...","recap":"...","bullets":["...","..."]}`
@@ -320,21 +289,6 @@ function recapSanitizeBulletPrices(bullet: string, evidence: string): string {
   out = out.replace(/\s*\bat\s+([+-]\d{2,4})\b/gi, (mm, p) => (inEv(p) ? mm : ""));
   out = out.replace(/[+-]\d{2,4}\b/g, (p) => (inEv(p) ? p : ""));
   return out.replace(/\s{2,}/g, " ").replace(/\s+([.,;)])/g, "$1").trim();
-}
-
-const RECAP_SOCCER_STAT = /\b(\d+)\s+(saves?|shots?|goals?|assists?|tackles?|interceptions?|clearances?|blocks?|passes?|key\s+passes?|chances?|crosses?|dribbles?)\b/i;
-
-function recapKeepBullet(bullet: string, evidence: string, league: string): boolean {
-  const lg = String(league || "").toUpperCase();
-  const isSoccer = lg === "WC" || lg.includes("SOCCER") || lg.includes("WORLD CUP");
-  if (!isSoccer) return true;
-  const m = String(bullet || "").match(RECAP_SOCCER_STAT);
-  if (!m) return true;
-  const numStr = m[1];
-  const stem = m[2].toLowerCase().slice(0, 4);
-  const ev = String(evidence || "").toLowerCase();
-  const re = new RegExp(`\\b${numStr}\\b[^\\n]{0,40}${stem}|${stem}[^\\n]{0,40}\\b${numStr}\\b`, "i");
-  return re.test(ev);
 }
 
 // ── Gemini Flash call (REST; hardened 3-4 retries with backoff) ──────────────
@@ -387,7 +341,6 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
     ? parsed.bullets
         .map((b: any) => String(b).trim())
         .map((b: string) => recapSanitizeBulletPrices(b, evidence))
-        .filter((b: string) => recapKeepBullet(b, evidence, pick.league))
         .filter(Boolean)
         .map((b: string) => (b.length > RECAP_MAX_BULLET_CHARS ? b.slice(0, RECAP_MAX_BULLET_CHARS).trimEnd() : b))
         .slice(0, RECAP_MAX_BULLETS)
@@ -512,7 +465,7 @@ Deno.serve(async (req) => {
   const statsCache = new Map<string, any[]>();
   const propsCache = new Map<string, any[]>();
 
-  // Pull MLB games + WC matches once (final-status only matters at grade time).
+  // Pull MLB games once (final-status only matters at grade time).
   // MLB games are ET-filtered per date: BDL indexes by UTC instant, so a late-ET game
   // (8pm+ ET) files under tomorrow's UTC date. Fetch BOTH UTC days per ET date and keep
   // only games whose real ET date matches — otherwise last night's late game (e.g. an
@@ -535,10 +488,7 @@ Deno.serve(async (req) => {
       return true;
     });
   };
-  const [mlbGames, wcMatches] = await Promise.all([
-    Promise.all(dates.map(mlbForET)).then((a) => a.flat()),
-    bdlGet("/fifa/worldcup/v1/matches", { seasons: [String(WC_SEASON)], per_page: "100" }),
-  ]);
+  const mlbGames = await Promise.all(dates.map(mlbForET)).then((a) => a.flat());
 
   for (const date of dates) {
     const rows = await sbGet("daily_picks", `date=eq.${date}&select=id,date,picks`);
@@ -567,14 +517,7 @@ Deno.serve(async (req) => {
       let result: string | null = null, vScore: number | null = null, hScore: number | null = null;
       let mlbGameId: number | null = null;
 
-      if (league === "WC" || league === "SOCCER_WORLD_CUP" || pick.soccer_match_id) {
-        const m = wcMatches.find((x: any) => String(x.id) === String(pick.soccer_match_id));
-        if (!m || String(m.status).toLowerCase() !== "completed") { stats.skipped++; continue; }
-        const reg = regulationScore(m);
-        if (!reg) { stats.skipped++; continue; }
-        result = gradeSoccer({ ...pick, homeTeam: m.home_team?.name, awayTeam: m.away_team?.name }, reg.home, reg.away);
-        hScore = reg.home; vScore = reg.away;
-      } else if (league === "MLB") {
+      if (league === "MLB") {
         const g = mlbGames.find((x: any) => {
           // Scope to THIS pick's ET date so a repeated matchup on an adjacent day
           // (Padres@Cubs today vs last night) can't cross-match and grade the pick

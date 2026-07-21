@@ -2,7 +2,7 @@
 // Run: node --test gary2.0/supabase/functions/grade-results/grading.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pickSide, gradeGame, gradeSoccer, recapIsStale } from "./grading.ts";
+import { pickSide, gradeGame, recapIsStale } from "./grading.ts";
 
 // ── The regression this module exists for ────────────────────────────────────
 // Boston Red Sox (away) beat Chicago White Sox (home) 5-0 on 2026-07-08. daily_picks
@@ -67,8 +67,7 @@ test("undetermined side returns null (no distinguishing token in pick)", () => {
 // that ended up in daily_picks (not the dedicated props table). gradeGame can't
 // classify them as ML/spread/total/draw, and pickSide finds no "NL"/"AL" token
 // in the pick text — so both used to fall through to an unconditional "lost",
-// regardless of what actually happened. gradeSoccer already had this fix
-// (see the "ambiguous side stays ungraded" test above); gradeGame did not.
+// regardless of what actually happened.
 test("gradeGame: unclassifiable pick (player prop) stays ungraded, never a fabricated loss", () => {
   assert.equal(gradeGame("Freeman to win ASG MVP +1800", "NL", "AL", 0, 4), null);
   assert.equal(gradeGame("Cease 2+ strikeouts +100", "NL", "AL", 0, 4), null);
@@ -77,20 +76,6 @@ test("gradeGame: unclassifiable pick (player prop) stays ungraded, never a fabri
 test("gradeGame: still grades ordinary ML/spread/total normally after the fix", () => {
   assert.equal(gradeGame("NL ML -134", "NL", "AL", 0, 4), "lost");
   assert.equal(gradeGame("Under 8.0", "NL", "AL", 0, 4), "won");
-});
-
-// ── World Cup grading paths ──────────────────────────────────────────────────
-test("WC moneyline: away win", () => {
-  assert.equal(gradeSoccer({ type: "moneyline", pick: "Brazil ML", homeTeam: "Mexico", awayTeam: "Brazil" }, 0, 2), "won");
-});
-
-test("WC draw + total unaffected", () => {
-  assert.equal(gradeSoccer({ type: "draw", pick: "Draw", homeTeam: "Mexico", awayTeam: "Brazil" }, 1, 1), "won");
-  assert.equal(gradeSoccer({ type: "total", pick: "Over 2.5", goal_line: "2.5", homeTeam: "Mexico", awayTeam: "Brazil" }, 2, 2), "won");
-});
-
-test("WC ambiguous side stays ungraded (null), never a fabricated loss", () => {
-  assert.equal(gradeSoccer({ type: "moneyline", pick: "the pick", homeTeam: "Mexico", awayTeam: "Brazil" }, 0, 2), null);
 });
 
 test("recapIsStale: no existing recap is not stale (fresh insert path)", () => {

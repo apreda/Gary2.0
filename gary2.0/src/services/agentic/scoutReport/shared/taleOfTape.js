@@ -350,41 +350,6 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
 
-  } else if (sport === 'WC' || sport === 'soccer_world_cup') {
-    // 2026 FIFA World Cup — group standings + match-stat aggregates.
-    // seasonStats is populated by sports/soccer.js (group_standings + team_match_stats).
-    const record = formatStat(homeProfile?.record, awayProfile?.record);
-    const l5Form = formatStat(homeL5, awayL5);
-    rows = [
-      { label: 'Group Pos', ...formatStat(homeStats.group_position, awayStats.group_position) },
-      // Futures-implied strength — populated from kickoff (rate stats below are
-      // N/A until a team plays a group game), so the tape is never empty early.
-      { label: 'Advance', ...formatStat(homeStats.advance_pct, awayStats.advance_pct) },
-      { label: 'Title Odds', ...formatStat(homeStats.title_odds, awayStats.title_odds) },
-      { label: 'Points', ...formatStat(homeStats.points, awayStats.points) },
-      { label: 'GF/Gm', ...formatStat(fmtNum(homeStats.goals_for), fmtNum(awayStats.goals_for)) },
-      { label: 'GA/Gm', ...formatStat(fmtNum(homeStats.goals_against), fmtNum(awayStats.goals_against)) },
-      { label: 'xG', ...formatStat(fmtNum(homeStats.xg, 2), fmtNum(awayStats.xg, 2)) },
-      { label: 'xGA', ...formatStat(fmtNum(homeStats.xga, 2), fmtNum(awayStats.xga, 2)) },
-      { label: 'Possession', ...formatStat(fmtPct(homeStats.possession_pct, 0), fmtPct(awayStats.possession_pct, 0)) },
-      { label: 'Shots/Gm', ...formatStat(fmtNum(homeStats.shots), fmtNum(awayStats.shots)) },
-      { label: 'SoT/Gm', ...formatStat(fmtNum(homeStats.shots_on_target), fmtNum(awayStats.shots_on_target)) },
-      { label: 'Big Chances', ...formatStat(fmtNum(homeStats.big_chances), fmtNum(awayStats.big_chances)) },
-      { label: 'Pass Acc', ...formatStat(fmtPct(homeStats.pass_accuracy, 0), fmtPct(awayStats.pass_accuracy, 0)) },
-      { label: 'Corners/Gm', ...formatStat(fmtNum(homeStats.corners), fmtNum(awayStats.corners)) },
-      { label: 'L5 Form', ...formatStat(homeStats.recent_form || homeL5, awayStats.recent_form || awayL5) },
-      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
-    ];
-
-    // Suppress optional advanced rows that are genuinely unavailable. xG/xGA only
-    // exist for API-covered competitions (UEFA yes; African/Asian qualifiers +
-    // friendlies no), so a team like DR Congo/Colombia/Uzbekistan reads N/A while
-    // its opponent has a number. A half-filled xG row is misleading on the card and
-    // tempts the model to fill the gap — show xG/xGA/Big Chances ONLY when BOTH teams
-    // have a real value. Core rows (GF/GA, possession, shots, SoT, form) always stay.
-    const SUPPRESS_IF_NA = new Set(['xG', 'xGA', 'Big Chances']);
-    rows = rows.filter(r => !SUPPRESS_IF_NA.has(r.label) || (r.home !== 'N/A' && r.away !== 'N/A'));
-
   } else {
     // Generic fallback
     const record = formatStat(homeProfile?.record, awayProfile?.record, true);

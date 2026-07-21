@@ -96,7 +96,6 @@ import { nameKey, etDateStr } from './src/services/insights/shared.js';
 
 // Import after env is loaded (services read env at module init time)
 const { ballDontLieService: bdl } = await import('./src/services/ballDontLieService.js');
-const fifaWorldCup = await import('./src/services/fifaWorldCupService.js');
 const mlbStatsApi = (await import('./src/services/mlbStatsApiService.js')).default;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,7 +103,7 @@ const mlbStatsApi = (await import('./src/services/mlbStatsApiService.js')).defau
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Leagues we grade. Matches ACTIVE_LEAGUES in run-insight-connections.js.
-const ACTIVE_LEAGUES = ['MLB', 'NBA', 'WC'];
+const ACTIVE_LEAGUES = ['MLB', 'NBA'];
 
 // Resolve Supabase config exactly like run-insight-connections.js / supabaseClient.js.
 const supabaseUrl =
@@ -830,83 +829,6 @@ async function gradeNba(rows) {
   return verdicts;
 }
 
-/**
- * WC rows grade on the match result with soccer draw semantics:
- *   streak (wcForm)  tone good = "unbeaten" claim -> win OR draw extends it (hit);
- *                    a loss breaks it (miss). tone bad = "winless" -> loss/draw
- *                    confirms (hit), a win breaks it (miss).
- *   owned (wcH2h)    the dominant nation (team_id): win hit / draw push / loss miss.
- *   tournament       context lane (group picture / title odds) — NULL + note.
- * Match is final only when status === 'completed'. Winner resolution prefers
- * getAdvanceResult (handles ET + penalties); a level group-stage match is a draw.
- */
-function gradeWcRow(row, outcome) {
-  if (row.category === 'tournament') {
-    return { result: null, note: 'context row — not graded' };
-  }
-  const teamId = row.team_id != null ? String(row.team_id) : null;
-  if (!teamId) return { result: null, note: 'context row — not graded' };
-
-  const { winnerTeamId, isDraw, score } = outcome;
-  const won = !isDraw && winnerTeamId != null && String(winnerTeamId) === teamId;
-  const lost = !isDraw && winnerTeamId != null && String(winnerTeamId) !== teamId;
-
-  if (row.category === 'streak') {
-    if (isBad(row.tone)) {
-      // Winless claim — anything but a win confirms it.
-      return { result: won ? MISS : HIT, note: `team ${won ? 'won' : isDraw ? 'drew' : 'lost'} ${score}` };
-    }
-    // Unbeaten claim — a draw still extends it.
-    return { result: lost ? MISS : HIT, note: `team ${lost ? 'lost' : isDraw ? 'drew' : 'won'} ${score}` };
-  }
-  if (row.category === 'owned') {
-    if (isDraw) return { result: PUSH, note: `draw ${score}` };
-    return { result: won ? HIT : MISS, note: `team ${won ? 'won' : 'lost'} ${score}` };
-  }
-  return { result: null, note: 'context row — not graded' };
-}
-
-async function gradeWc(rows) {
-  let slate = [];
-  try {
-    slate = (await fifaWorldCup.getMatchesForDate(targetDate)) || [];
-  } catch (err) {
-    console.error(`[grade-insights][WC] slate fetch failed: ${err?.message || err}`);
-    slate = [];
-  }
-  const matchById = new Map(slate.map((m) => [String(m.id), m]));
-
-  const verdicts = [];
-  for (const row of rows) {
-    const match = row.game_id != null ? matchById.get(String(row.game_id)) : null;
-    if (!match) { verdicts.push({ row, verdict: skip('match not on slate') }); continue; }
-    if (String(match.status).toLowerCase() !== 'completed') {
-      verdicts.push({ row, verdict: skip('match not completed') });
-      continue;
-    }
-
-    // Winner: advance result first (covers ET + penalties), then full-time score.
-    const adv = fifaWorldCup.getAdvanceResult(match);
-    const home = Number(match.home_score);
-    const away = Number(match.away_score);
-    const haveScore = Number.isFinite(home) && Number.isFinite(away);
-    const score = haveScore ? `${away}-${home}` : '—';
-    let outcome = null;
-    if (adv?.teamId != null) {
-      outcome = { winnerTeamId: adv.teamId, isDraw: false, score };
-    } else if (haveScore && home !== away) {
-      outcome = { winnerTeamId: home > away ? match.home_team?.id : match.away_team?.id, isDraw: false, score };
-    } else if (haveScore) {
-      outcome = { winnerTeamId: null, isDraw: true, score };
-    }
-    if (!outcome) { verdicts.push({ row, verdict: skip('result unresolvable') }); continue; }
-
-    verdicts.push({ row, verdict: gradeWcRow(row, outcome) });
-  }
-
-  return verdicts;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
@@ -958,7 +880,6 @@ async function run() {
     let verdicts;
     try {
       verdicts = league === 'NBA' ? await gradeNba(rows)
-        : league === 'WC' ? await gradeWc(rows)
         : await gradeMlb(rows);
     } catch (err) {
       hadError = true;

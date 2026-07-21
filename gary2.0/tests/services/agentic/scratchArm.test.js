@@ -78,29 +78,15 @@ describe('stripInterpretiveLabels: raw facts survive, interpretations die', () =
     expect(out).not.toContain('market may still be settling');
   });
 
-  it('removes the WC -200-strip language so the arm never inherits the old rule', () => {
-    const wcScout = '3-way moneyline: Draw +270 / Morocco +500\n  (France ML not offered — priced heavier than -200, so the bare moneyline isn\'t on the menu for them. This is a structural constraint...)';
-    const out = stripInterpretiveLabels(wcScout);
+  it('removes heavy-favorite strip language so the arm never inherits the old rule', () => {
+    const scout = '3-way moneyline: Draw +270 / Morocco +500\n  (France ML not offered — priced heavier than -200, so the bare moneyline isn\'t on the menu for them. This is a structural constraint...)';
+    const out = stripInterpretiveLabels(scout);
     expect(out).not.toContain('priced heavier than -200');
     expect(out).not.toContain('not offered');
   });
 });
 
 describe('renderFullBoard: the whole menu, ugly prices included', () => {
-  it('WC: full 3-way ML shows the heavy favorite the production strip hides', () => {
-    const game = {
-      soccer_three_way_ml: { home: -600, draw: 380, away: 900 },
-      soccer_spread: { homeValue: -1.5, homeOdds: -110, awayValue: 1.5, awayOdds: -110 },
-      soccer_total: { line: 2.5, over: -105, under: -115 },
-    };
-    const board = renderFullBoard(game, 'soccer_world_cup', { homeTeam: 'Spain', awayTeam: 'Belgium' });
-    expect(board).toContain('Spain -600');
-    expect(board).toContain('Draw +380');
-    expect(board).toContain('Belgium +900');
-    expect(board).toContain('-1.5');
-    expect(board).toContain('2.5');
-  });
-
   it('MLB: renders per-book ml/run line/total rows from sportsbook odds', () => {
     const board = renderFullBoard({}, 'baseball_mlb', {
       homeTeam: 'Pirates', awayTeam: 'Braves',

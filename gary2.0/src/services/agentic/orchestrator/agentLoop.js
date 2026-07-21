@@ -115,7 +115,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
   const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
-  const isWCSport = sport === 'soccer_world_cup' || sport === 'WC';
 
   // Pass sport through options so downstream builders (Pass 3) can use it
   options.sport = sport;
@@ -163,11 +162,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Remove fetch_narrative_context (grounding) when it adds no value:
   // - Props mode: all data is in the pre-built scout report + player stats. No grounding needed.
   // - NCAAB game picks: narrative data is already in scout report.
-  // - WC game picks: Flash's research briefing already grounds injuries/availability/
-  //   news, and WC stats must come from fetch_stats (API), never web search. Giving
-  //   Gary his own grounding tool reopened the stat-from-search leak at the decision
-  //   layer (he could pull a stale/wrong-competition xG). Strip it like NCAAB.
-  const needsGrounding = isGamePicksMode && !isNCAABSport && !isWCSport;
+  const needsGrounding = isGamePicksMode && !isNCAABSport;
   const baseTools = needsGrounding
     ? toolDefinitions
     : toolDefinitions.filter(t => t.function?.name !== 'fetch_narrative_context');
@@ -1534,7 +1529,6 @@ INVESTIGATION COMPLETE`;
           if (v.includes('nba')) return 'NBA';
           if (v.includes('nhl')) return 'NHL';
           if (v.includes('mlb') || v.includes('baseball')) return 'MLB';
-          if (v.includes('soccer') || v.includes('world_cup') || v === 'wc') return 'WC';
           // Tool schema uses these values; fall back to NBA
           return 'NBA';
         };

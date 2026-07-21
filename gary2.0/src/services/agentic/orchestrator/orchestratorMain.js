@@ -371,9 +371,7 @@ function getSportIdentity(sport) {
   const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-  const isWC = sport === 'soccer_world_cup' || sport === 'WC';
 
-  if (isWC) return `Today you are betting the 2026 World Cup. You are a sharp soccer gambler — an expert at betting this sport, not just understanding it. You bet the 3-way market (home/draw/away), the Asian handicap, and totals on the half-goal grid.`;
   if (isNHL) return `Tonight you are betting NHL. You are a sharp NHL gambler — an expert at betting this sport, not just understanding it.`;
   if (isNBA) return `Tonight you are betting NBA. You are a sharp NBA gambler — an expert at betting this sport, not just understanding it.`;
   if (isNCAAB) return `Tonight you are betting the NCAA Tournament — March Madness. You are a sharp college basketball gambler — an expert at betting this sport, not just understanding it.`;

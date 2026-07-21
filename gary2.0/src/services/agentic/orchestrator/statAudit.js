@@ -139,38 +139,17 @@ export function extractNumericClaims(text) {
     push(m, m[1], 'sample');
   }
 
-  // ── Soccer claim classes (World Cup) — Gemini knows the 2022 tournament
-  // cold while 2026 squads/form are post-cutoff, so unsourced soccer figures
-  // are the highest-risk stale-memory numbers in the product. ──
-
-  // xG/xGA: "2.3 xG", "xG of 1.8", "1.4 expected goals"
+  // xG/xGA (NHL Corsi/expected-goals analytics): "2.3 xG", "xG of 1.8", "1.4 expected goals"
   for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*(?:xG\b|xGA\b|expected goals)/gi)) push(m, m[1], 'xg');
   for (const m of text.matchAll(/(?:xG|xGA)\s*(?:of|:)?\s*(\d+(?:\.\d+)?)/gi)) push(m, m[1], 'xg');
 
-  // Goals per game/match (soccer unit variants of the per-game class)
-  for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*goals?\s*(?:scored|conceded)?\s*per\s*(?:game|match)/gi)) {
-    push(m, m[1], 'per-game');
-  }
-
-  // Possession percentages, including INTEGER form ("controls 61% of possession")
+  // Possession percentages, including INTEGER form ("controlled 61% of possession") — NHL Corsi/possession stats
   for (const m of text.matchAll(/(\d{1,3}(?:\.\d)?)\s*%[^.]{0,25}possession/gi)) push(m, m[1], 'possession');
   for (const m of text.matchAll(/possession[^.]{0,25}?(\d{1,3}(?:\.\d)?)\s*%/gi)) push(m, m[1], 'possession');
 
-  // Shot/pass/conversion accuracy % (soccer) — same stale-memory class as possession.
-  // A real WC fabrication ("46% shot accuracy", Bosnia 6/24) slipped past because ONLY
-  // the possession regex existed. Require the soccer-DISTINCTIVE phrase (not bare "shot"+%)
-  // so this does NOT fire on NBA/NHL "convert 52% of their shots" / "stopping 92% of shots".
-  for (const m of text.matchAll(/(\d{1,3}(?:\.\d)?)\s*%\s*(?:shot accuracy|shots?\s+on[ -]?target|pass(?:ing)?\s+accuracy|conversion(?:\s+rate)?)/gi)) push(m, m[1], 'soccer-rate');
-  for (const m of text.matchAll(/(?:shot accuracy|shots?\s+on[ -]?target|pass(?:ing)?\s+accuracy|conversion(?:\s+rate)?)[^.]{0,20}?(\d{1,3}(?:\.\d)?)\s*%/gi)) push(m, m[1], 'soccer-rate');
-
-  // FIFA/world ranking: "ranked 12th", "FIFA ranking of 64", "#3-ranked"
+  // Poll/rankings: "ranked 12th", "#3-ranked" (NCAAB/NCAAF)
   for (const m of text.matchAll(/rank(?:ed|ing)?\s*(?:of\s*)?(?:#|No\.?\s*)?(\d{1,3})(?:st|nd|rd|th)?\b/gi)) {
     push(m, m[1], 'ranking');
-  }
-
-  // Caps/international goals: "9 goals in 14 caps" — pure roster-memory class
-  for (const m of text.matchAll(/(\d{1,3})\s+goals?\s+in\s+(\d{1,3})\s+(?:caps|appearances|internationals)/gi)) {
-    push(m, m[2], 'caps', { requireAll: [canon(m[1]), canon(m[2])] });
   }
 
   // Derived match-count claims: "won 3 of the last 4 meetings", "5 clean
@@ -202,15 +181,6 @@ export function auditPickRationale(pick, messages) {
   const corpus = buildNumericCorpus(messages);
   if (corpus.size === 0) return empty; // no data → nothing to audit against
 
-  // Soccer/World Cup now ships a structured scout report (recent form, xG,
-  // possession, GF/GA from BDL + API-Football), so its highest-risk stale-memory
-  // classes are no longer "uncheckable" — if such a number doesn't trace, force a
-  // corrective retry instead of a silent windowed warning. Gated to soccer so
-  // other sports' windowed-warn behavior is untouched.
-  const isSoccer = (Array.isArray(messages) ? messages : [])
-    .some(m => typeof m?.content === 'string' && /world\s*cup|fifa|soccer/i.test(m.content));
-  const SOCCER_STRICT = new Set(['xg', 'per-game', 'possession', 'soccer-rate', 'caps', 'ranking']);
-
   const claims = extractNumericClaims(rationale);
   const unsupported = [];
   const retryable = [];
@@ -228,8 +198,7 @@ export function auditPickRationale(pick, messages) {
       seen.add(c.context);
       const entry = `[${c.kind}${c.windowed ? '/windowed' : ''}] "...${c.context}..."`;
       unsupported.push(entry);
-      const forceRetry = isSoccer && SOCCER_STRICT.has(c.kind);
-      ((c.windowed && !forceRetry) ? warnOnly : retryable).push(entry);
+      (c.windowed ? warnOnly : retryable).push(entry);
     }
   }
   return { unsupported, retryable, warnOnly, checked: claims.length };

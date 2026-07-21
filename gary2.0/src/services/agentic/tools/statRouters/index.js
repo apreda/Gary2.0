@@ -7,7 +7,6 @@ import { nflFetchers } from './nflFetchers.js';
 import { ncaabFetchers } from './ncaabFetchers.js';
 import { ncaafFetchers } from './ncaafFetchers.js';
 import { mlbFetchers } from './mlbFetchers.js';
-import { soccerFetchers } from './soccerFetchers.js';
 
 // Merge all fetchers into one object — WITH OWNERSHIP (Jul 6 2026 audit).
 // Sports share structure, never each other's data paths: every token records
@@ -21,9 +20,8 @@ const SPORT_SOURCES = {
   nfl: nflFetchers,
   nhl: nhlFetchers,
   mlb: mlbFetchers,
-  soccer: soccerFetchers,
 };
-const SPORT_FAMILY = { nba: 'basketball', ncaab: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', nhl: 'icehockey', mlb: 'baseball', soccer: 'soccer' };
+const SPORT_FAMILY = { nba: 'basketball', ncaab: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', nhl: 'icehockey', mlb: 'baseball' };
 // Tokens that take bdlSport and route internally — genuinely sport-agnostic,
 // reachable from any sport (NHL reaches STANDINGS/REST_SITUATION via aliases).
 const SHARED_TOKENS = new Set(['DEFAULT', 'REST_SITUATION', 'STANDINGS', 'H2H_HISTORY']);
@@ -110,8 +108,6 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     defaultSeason = nflSeason();
   } else if (normalizedSportForSeason.includes('mlb') || normalizedSportForSeason.includes('baseball')) {
     defaultSeason = mlbSeason();
-  } else if (normalizedSportForSeason.includes('soccer') || normalizedSportForSeason === 'wc') {
-    defaultSeason = 2026; // FIFA World Cup edition year
   } else {
     // Never borrow another sport's season/endpoints for an unmapped sport.
     throw new Error(`[HARD FAIL] Unknown sport "${sport}" in fetchStats — no season/endpoint mapping. Add the sport explicitly; never default to another sport's routes.`);
@@ -140,29 +136,6 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   }
 
   try {
-    // Soccer (World Cup): standalone FIFA API — there are no BDL teams to look
-    // up (ballDontLieService.getTeams throws for soccer), and the WC_ fetchers
-    // take a ctx object, not the positional (sport, home, away, ...) signature.
-    // Without this branch every WC token died at the team lookup.
-    const isSoccer = bdlSport === 'soccer_world_cup' || normalizedSport === 'WC';
-    if (isSoccer) {
-      const soccerFetcher = FETCHERS[`WC_${token}`] || (String(token).startsWith('WC_') ? FETCHERS[token] : null);
-      if (!soccerFetcher) {
-        return { error: `Unknown stat token for WC: ${token}`, token };
-      }
-      const game = options.game || {};
-      const ctx = {
-        matchId: game.soccer_match_id ?? game.id ?? null,
-        homeTeamId: game.home_team_data?.id ?? null,
-        awayTeamId: game.away_team_data?.id ?? null,
-        homeTeam,
-        awayTeam,
-        seasons: [season],
-      };
-      const result = await soccerFetcher(ctx);
-      return { token, sport, ...result };
-    }
-
     let fetcher = null;
     let resolvedKey = token;
     if (FETCHERS[sportSpecificToken]) {

@@ -981,51 +981,6 @@ MLB betting uses moneyline pricing rather than point spreads. The price reflects
 ### YOUR SCOUT REPORT IS YOUR BASELINE
 The scout report provides the starting point. You are free to re-fetch any stat for deeper investigation.`;
 
-const SOCCER_WC_FACTORS = `## INVESTIGATION CHECKLIST — SOCCER (2026 FIFA World Cup)
-
-Work through each factor for BOTH teams and report findings factually. Do not state what a factor means for the pick — report the facts; Gary decides.
-
-OPPOSITION CONTEXT (applies to every stats factor below): whenever you report a per-match average or aggregate (goals, xG, xGA, shots, clean sheets, form records), name the opponents the sample was compiled against — a line built against group-stage minnows and one built against knockout-calibre sides are different facts. Report the opposition; Gary judges what transfers.
-
-### DATA REALITY CHECK (read first)
-Our structured data covers WORLD CUP FINALS MATCHES ONLY (2018/2022/2026 editions). It contains NO qualifiers, NO friendlies, NO club football, NO pre-tournament form of any kind.
-- **Matchday 1 (each team's first match): there are ZERO completed 2026 matches.** In-tournament form, xG, possession, goals-per-match DO NOT EXIST yet — the tools will say so explicitly. Do NOT substitute numbers from the 2022 World Cup, qualifiers, or memory; your training data predates the 2026 squads entirely.
-- What IS real on matchday 1: the 3-way moneyline / handicap / total odds, group seeding, 26-man rosters, World Cup H2H history (WC_H2H_HISTORY), and anything you ground with a dated source.
-- For qualifying form or recent friendlies, use fetch_narrative_context grounding and ALWAYS attach the date and competition of every result you cite. An undated scoreline is unusable.
-- From matchday 2 onward, the in-tournament tools populate with real per-match data — cite ONLY those figures for tournament form/xG.
-
-### 1. FORM & RECENT RESULTS
-- Completed 2026 tournament results (TEAM_FORM): wins/draws/losses, scorelines, opponent quality. If the tool reports pre-tournament, say "no 2026 matches yet" — then optionally ground for qualifying form WITH dates.
-
-### 2. ATTACK & EXPECTED GOALS
-- In-tournament goals per match, shots/SoT, xG (TEAM_MATCH_STATS, GOALS_PER_MATCH — completed 2026 matches only).
-- Is finishing running ahead of or behind chance quality (xG vs actual)? Only answerable once matches are played.
-
-### 3. DEFENSIVE RECORD
-- In-tournament goals conceded per match and xGA (GOALS_CONCEDED, TEAM_MATCH_STATS). Same rule: tool figures only.
-
-### 4. AVAILABILITY: LINEUPS, INJURIES & SUSPENSIONS
-- Confirmed starting XI (LINEUPS) and injury timing are structured — the scout report's AVAILABILITY TIMING section already tags each absence FRESH or PRICED IN from real lineup data. Read it there first; re-fetch LINEUPS only if you need the freshest confirmed-XI snapshot.
-- Suspensions and yellow-card accumulation have no structured feed anywhere — use fetch_narrative_context, or the scout report's SAME-DAY WIRE section. Distinguish confirmed-out vs doubtful; note the DATE of the latest update. If you cannot date it, do not report it.
-
-### 5. GROUP / TOURNAMENT CONTEXT
-- Group position, points, goal difference (GROUP_STANDINGS — note: before any matches, positions are seeding only). What result does each side need? Any "already qualified" rotation risk (later matchdays)?
-
-### 6. SCHEDULE (report the rest days with dates and stop)
-- Days of rest for each side and travel between host cities — cite the dates and leave it there. Do NOT build a fatigue narrative around the gap: the schedule is fully public and fully priced, and recovery at this level is professionalized. Only elevate it if you ground CONCRETE evidence (visible rotation plans, a manager quoting tired legs, an injury attributed to the schedule) — dated, as always.
-
-### 7. CONDITIONS
-- Venue, altitude (e.g. Mexico City), heat/weather, kickoff time — ground for weather; the venue is in the scout report.
-
-### 8. HEAD-TO-HEAD
-- World Cup meetings from WC_H2H_HISTORY (2018/2022/2026 editions only). Broader all-time H2H requires grounding with dates — never from memory.
-
-### 9. STORYLINES & FAN CONTEXT
-- Squad and roster news, team and player reputations, fan and media sentiment, and how the travel/schedule between host cities is being talked about (GAME_PREVIEW, or the scout report's SAME-DAY WIRE section). This is the fan-knowledge layer no stat token carries — the storylines and context a fan following the tournament would already know. Report it factually, dated where possible; it is awareness, not a reason to pick a side.
-
-### YOUR SCOUT REPORT IS YOUR BASELINE
-The scout report (group standings, odds, any in-tournament stats, AVAILABILITY TIMING, SAME-DAY WIRE) is your starting point. Re-fetch any stat; ground for suspensions/card status, and anything the scout report doesn't already answer. Every number in your findings must come from a tool response, the scout report, or a DATED grounding result.`;
-
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,
   NBA: NBA_FACTORS,
@@ -1039,8 +994,6 @@ const FLASH_INVESTIGATION_FACTORS = {
   NCAAF: NCAAF_FACTORS,
   baseball_mlb: MLB_FACTORS,
   MLB: MLB_FACTORS,
-  soccer_world_cup: SOCCER_WC_FACTORS,
-  WC: SOCCER_WC_FACTORS,
 };
 
 // ═══════════════════════════════════════════════════════════════════════

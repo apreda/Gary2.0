@@ -4,17 +4,17 @@ import Foundation
 ///
 /// `AppFlags` is declared in ContentView.swift (alongside the other ship-level
 /// switches); this extension adds the single switch that gates EVERY World Cup
-/// surface in the iOS build. It was briefly OFF after Apple's Guideline 5.2.1
-/// rejection (FIFA IP), but is back ON (founder's call — the app has passed review
-/// before with WC, and the 5.2.1 flag was judged to be driven by the description
-/// metadata, now cleaned). The entire WC system — picks, Hub lanes, the paywall
-/// pass, the game-intel dashboard — lives behind this flag. Set
-/// `worldCupEnabled = false` to hide everything again.
+/// surface in the iOS build. The 2026 tournament ended Jul 19 — permanently OFF
+/// (founder, Jul 21: the backend pipeline was fully deleted, next Cup is 2030).
+/// The entire WC system — picks, Hub lanes, the paywall pass, the game-intel
+/// dashboard — lives behind this flag; the rendering code stays in place
+/// (unreachable while this is false) rather than tearing out ~17 call sites
+/// blind with no build available to verify the result compiles.
 extension AppFlags {
     /// Master World Cup switch. OFF = the app renders ZERO World Cup anything:
     /// no WC picks, no WC shelf, no WC Hub lanes, no WC paywall pass, no WC
     /// front-page module, and no WC rows leak through the data layer.
-    static let worldCupEnabled = true
+    static let worldCupEnabled = false
 
     /// Canonical World Cup league test, mirroring the normalization in
     /// `Models.swift` (`effectiveLeague`): world_cup / worldcup / wc /

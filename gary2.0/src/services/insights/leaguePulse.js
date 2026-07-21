@@ -5,9 +5,9 @@
 // short table as a generic { columns:[{key,label,align,emphasis}], rows:[{...}] }
 // so a single Swift PulseTable view renders every tab with NO per-tab Swift code.
 //
-// GROUNDING IS THE ONLY RULE (identical to playerInsightCards / wcPlayerInsightCards):
+// GROUNDING IS THE ONLY RULE (identical to playerInsightCards):
 //   - Every cell is computed from a real, verifiable source (BDL GOAT-tier for MLB,
-//     mlb/v1/player_injuries for MLB injuries, API-Football for WC).
+//     mlb/v1/player_injuries for MLB injuries).
 //   - Any stat that cannot be computed is OMITTED, never invented. A tab that can't
 //     be grounded at all simply isn't emitted — iOS hides any tab with no row.
 //   - Cells are display STRINGS (the iOS decodes rows as [String: String?]); a
@@ -26,7 +26,6 @@
 import {
   num, asArray, round, pct3, nameKey, safeCall as safeCallShared,
 } from './shared.js';
-import * as apiFootball from '../apiFootballService.js';
 
 const safeCall = (fn, fallback) => safeCallShared(fn, fallback, 'leaguePulse');
 
@@ -56,9 +55,6 @@ const PEN_HEAVY_IP = 11;          // relief IP over the window flagged "heavy"
 //   is correctly PRICED-IN. See freshnessLabel().
 const INJ_FRESH_MAX_DAYS = 3;
 
-// WC discipline accumulation flag (honest, only when card data present).
-const WC_SUSP_YELLOW_THRESHOLD = 2; // 2 yellows in a tournament = 1 from a ban (group stage rule)
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Public entry
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,7 +64,7 @@ const WC_SUSP_YELLOW_THRESHOLD = 2; // 2 yellows in a tournament = 1 from a ban 
  *
  * @param {object} args
  * @param {string} args.date    YYYY-MM-DD (ET slate day)
- * @param {string} args.league  'MLB' | 'WC'
+ * @param {string} args.league  'MLB'
  * @param {string[]} [args.batterIdsOverride]  MLB only: explicit batter pool for a
  *        no-game day (All-Star break — the day's "slate batters" are the event's
  *        participants). SP/bullpen tabs drop (no probables); bats + injuries build
@@ -80,7 +76,6 @@ const WC_SUSP_YELLOW_THRESHOLD = 2; // 2 yellows in a tournament = 1 from a ban 
 export async function buildLeaguePulse({ date, league, batterIdsOverride, teamAbbrsOverride } = {}) {
   const lg = String(league || '').toUpperCase();
   if (lg === 'MLB') return buildMlbPulse(date, { batterIdsOverride, teamAbbrsOverride });
-  if (lg === 'WC') return buildWcPulse(date);
   return [];
 }
 
@@ -536,238 +531,6 @@ async function buildMlbInjuries({ date, bdl, teamMeta }) {
   });
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// WC (World Cup)
-// ═════════════════════════════════════════════════════════════════════════════
-
-async function buildWcPulse(date) {
-  const wc = await loadFifa();
-  if (!wc) return [];
-
-  const matches = asArray(await safeCall(() => wc.getMatchesForDate(date), []));
-  if (!matches.length) {
-    console.log('[leaguePulse] WC: empty slate — nothing to build.');
-    return [];
-  }
-
-  // Distinct slate nations (name + abbr), de-duped by team id.
-  const nations = new Map(); // teamId -> { name, abbr }
-  for (const m of matches) {
-    for (const side of ['home', 'away']) {
-      const t = m?.[`${side}_team`];
-      const obj = (t && typeof t === 'object') ? t : (typeof t === 'string' ? { name: t } : null);
-      const data = m?.[`${side}_team_data`] || m?._raw?.[`${side}_team`] || obj;
-      const id = data?.id ?? obj?.id ?? (obj?.name || data?.name);
-      if (id == null) continue;
-      const name = data?.name || obj?.name || null;
-      const abbr = data?.abbreviation || data?.country_code || obj?.abbreviation || null;
-      if (name) nations.set(String(id), { name, abbr });
-    }
-  }
-  if (!nations.size) return null;
-
-  const packs = [];
-
-  const scorers = await safeCall(() => buildWcTopScorers({ date, nations }), null);
-  if (scorers) packs.push(scorers);
-
-  const formXg = await safeCall(() => buildWcFormXg({ date, nations }), null);
-  if (formXg) packs.push(formXg);
-
-  const inj = await safeCall(() => buildWcInjuries({ date, nations }), null);
-  if (inj) packs.push(inj);
-
-  const disc = await safeCall(() => buildWcDiscipline({ date, nations }), null);
-  if (disc) packs.push(disc);
-
-  console.log(`[leaguePulse] WC: built ${packs.length} tab(s): ${packs.map((p) => p.tab).join(', ') || 'none'}.`);
-  return packs;
-}
-
-// ─── 1) TOP SCORERS ──────────────────────────────────────────────────────────
-
-async function buildWcTopScorers({ date, nations }) {
-  const rows = [];
-  for (const [, meta] of nations) {
-    const squad = await safeCall(() => apiFootball.getSquadStats(meta.name), {});
-    for (const s of asArray(squad)) {
-      const g = num(s.goals);
-      const a = num(s.assists);
-      const sh = num(s.shots);
-      if (g == null && a == null) continue;
-      // Only surface players with at least a goal or an assist (a leaderboard).
-      if ((g ?? 0) <= 0 && (a ?? 0) <= 0) continue;
-      rows.push({
-        _sort: (g ?? 0) * 1000 + (a ?? 0), // goals primary, assists tiebreak
-        player: s.name,
-        ...(meta.abbr ? { team: meta.abbr } : {}),
-        goals: String(g ?? 0),
-        assists: String(a ?? 0),
-        ...(sh != null ? { shots: String(sh) } : { shots: '—' }),
-      });
-    }
-  }
-  if (!rows.length) return null;
-  rows.sort((a, b) => b._sort - a._sort);
-  const capped = rows.slice(0, TOP_N).map(stripSort);
-
-  return pack(date, 'WC', 'top_scorers', {
-    title: 'Top Scorers',
-    subtitle: 'Current international cycle',
-    sort_note: 'Sorted by goals, high→low',
-    columns: [
-      col('player', 'PLAYER', 'leading', 'primary'),
-      col('goals', 'G', 'trailing', 'stat'),
-      col('assists', 'A', 'trailing', 'stat'),
-      col('shots', 'SH', 'trailing', 'muted'),
-    ],
-    rows: capped,
-  });
-}
-
-// ─── 2) FORM & xG ────────────────────────────────────────────────────────────
-
-async function buildWcFormXg({ date, nations }) {
-  const rows = [];
-  for (const [, meta] of nations) {
-    const form = await safeCall(() => apiFootball.getRecentForm(meta.name, 10), null);
-    const tstats = await safeCall(() => apiFootball.getRecentTeamStats(meta.name, 6), {});
-    const span = form?.l5 || form?.l10;
-    const xg = num(tstats?.xg);
-    const xga = num(tstats?.xga);
-    // Require at least the form row (W-D-L) to surface the nation at all.
-    if (!span || !num(span.played)) continue;
-
-    const gf = num(span.gfPerMatch);
-    const entry = {
-      _sort: xg != null ? xg : -1,
-      team: meta.name,
-    };
-    entry.form = `${span.w}-${span.d}-${span.l}`;
-    if (xg != null) entry.xg = xg.toFixed(2);
-    if (xga != null) entry.xga = xga.toFixed(2);
-    // diff = goals scored per match - xG (the team-level over/under-finishing
-    // signal). NUMBER ONLY (Layer-3-safe): no "fade them" conclusion text.
-    if (gf != null && xg != null) {
-      const diff = round(gf - xg, 1);
-      entry.diff = (diff > 0 ? '+' : '') + diff.toFixed(1);
-      // trend tag mirrors the wcXgRegression idiom: over-finishing => 'cold'
-      // (regression-down risk), under-finishing => 'hot'. Tag only, no text.
-      if (diff >= 0.4) entry.trend = 'cold';
-      else if (diff <= -0.4) entry.trend = 'hot';
-    }
-    rows.push(entry);
-  }
-  if (!rows.length) return null;
-  rows.sort((a, b) => b._sort - a._sort); // best xG-for first
-  const capped = rows.slice(0, TOP_N).map(stripSort);
-
-  return pack(date, 'WC', 'form_xg', {
-    title: 'Form & xG',
-    subtitle: 'Last 6 internationals · over/under-performers',
-    sort_note: 'Sorted by xG for/match, high→low',
-    columns: [
-      col('team', 'NATION', 'leading', 'primary'),
-      col('form', 'L5', 'trailing', 'stat'),
-      col('xg', 'xG', 'trailing', 'stat'),
-      col('xga', 'xGA', 'trailing', 'muted'),
-      col('diff', 'G−xG', 'trailing', 'muted'),
-    ],
-    rows: capped,
-  });
-}
-
-// ─── 3) KEY INJURIES ─────────────────────────────────────────────────────────
-
-async function buildWcInjuries({ date, nations }) {
-  const rows = [];
-  const seen = new Set();
-  for (const [, meta] of nations) {
-    const list = asArray(await safeCall(() => apiFootball.getInjuries(meta.name), []));
-    for (const x of list) {
-      if (!x?.player) continue;
-      const k = `${nameKey(x.player)}|${meta.abbr || meta.name}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      rows.push({
-        player: x.player,
-        ...(meta.abbr ? { team: meta.abbr } : { team: meta.name }),
-        reason: x.reason || '—',
-        type: x.type || '—',
-      });
-    }
-  }
-  if (!rows.length) return null;
-  const capped = rows.slice(0, TOP_N);
-
-  return pack(date, 'WC', 'injuries', {
-    title: 'Key Injuries',
-    subtitle: 'Squad availability',
-    columns: [
-      col('player', 'PLAYER', 'leading', 'primary'),
-      col('team', 'NATION', 'leading', 'muted'),
-      col('reason', 'REASON', 'trailing', 'stat'),
-      col('type', 'TYPE', 'trailing', 'muted'),
-    ],
-    rows: capped,
-  });
-}
-
-// ─── 4) DISCIPLINE ───────────────────────────────────────────────────────────
-//
-// GROUNDABLE ONLY if getSquadStats surfaces cards.yellow/cards.red. As of the WC
-// player-card upgrade, getSquadStats now extracts flat yellow/red (+ saves, conceded,
-// keyPasses, passAccuracy, duels, tackles, minutes, rating) from the SAME /players
-// response, so this tab now lights up. The builder still probes for the fields and
-// emits ONLY when present — if a nation's row lacks card data it is skipped, and if
-// NO nation has card data the whole tab is DROPPED rather than fabricate counts.
-
-async function buildWcDiscipline({ date, nations }) {
-  const rows = [];
-  let sawCardField = false;
-  for (const [, meta] of nations) {
-    const squad = await safeCall(() => apiFootball.getSquadStats(meta.name), {});
-    for (const s of asArray(squad)) {
-      const y = readYellow(s);
-      const r = readRed(s);
-      if (y == null && r == null) continue; // field absent on this row
-      sawCardField = true;
-      if ((y ?? 0) <= 0 && (r ?? 0) <= 0) continue; // no cards: not a discipline-watch row
-      const entry = {
-        _sort: (r ?? 0) * 100 + (y ?? 0),
-        player: s.name,
-        ...(meta.abbr ? { team: meta.abbr } : {}),
-        yellow: String(y ?? 0),
-        red: String(r ?? 0),
-      };
-      const risk = suspensionRisk(y, r);
-      if (risk) entry.suspension_risk = risk;
-      rows.push(entry);
-    }
-  }
-  // No card data anywhere -> DROP the tab (the rule: never fabricate card counts).
-  if (!sawCardField || !rows.length) {
-    console.log('[leaguePulse] WC discipline: no card fields on getSquadStats — tab dropped (no fabrication).');
-    return null;
-  }
-  rows.sort((a, b) => b._sort - a._sort);
-  const capped = rows.slice(0, TOP_N).map(stripSort);
-
-  return pack(date, 'WC', 'discipline', {
-    title: 'Discipline Watch',
-    subtitle: 'Cards this cycle',
-    sort_note: 'Sorted by cards, high→low',
-    columns: [
-      col('player', 'PLAYER', 'leading', 'primary'),
-      col('team', 'NATION', 'leading', 'muted'),
-      col('yellow', 'YEL', 'trailing', 'stat'),
-      col('red', 'RED', 'trailing', 'stat'),
-      col('suspension_risk', '', 'trailing', 'muted'),
-    ],
-    rows: capped,
-  });
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Builders shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -863,29 +626,6 @@ function freshnessLabel(inj, todayMs) {
   return null;
 }
 
-// WC discipline field probes — tolerant of either a flat {yellow,red} extension or
-// a nested cards:{yellow,red} object, so the tab works whichever way the fetcher is
-// extended. Returns null when the field is absent (NOT 0).
-function readYellow(s) {
-  if (s == null) return null;
-  if (s.yellow != null) return num(s.yellow);
-  if (s.cards && s.cards.yellow != null) return num(s.cards.yellow);
-  return null;
-}
-function readRed(s) {
-  if (s == null) return null;
-  if (s.red != null) return num(s.red);
-  if (s.cards && s.cards.red != null) return num(s.cards.red);
-  return null;
-}
-
-/** Honest suspension-risk note, only when card data is present. */
-function suspensionRisk(yellow, red) {
-  const y = num(yellow);
-  if (y != null && y >= WC_SUSP_YELLOW_THRESHOLD) return '1 from ban';
-  return null;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Date / inning helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -966,17 +706,6 @@ async function loadBdl() {
     return mod.ballDontLieService || mod.default || null;
   } catch (err) {
     console.error('[leaguePulse] failed to load ballDontLieService:', err?.message || err);
-    return null;
-  }
-}
-
-/** Lazy-load the FIFA service NAMESPACE (getMatchesForDate is a named export). */
-async function loadFifa() {
-  try {
-    const mod = await import('../fifaWorldCupService.js');
-    return mod || null;
-  } catch (err) {
-    console.error('[leaguePulse] failed to load fifaWorldCupService:', err?.message || err);
     return null;
   }
 }

@@ -260,26 +260,6 @@ const MLB_TOKENS = [
   'MLB_PITCH_TYPES_HITTERS',     // Top hitters' performance vs each pitch type: BA, xwOBA, SLG per pitch type (BDL pitch-type season stats)
 ];
 
-// Every token here resolves to a real WC_ fetcher in soccerFetchers.js.
-// INJURIES + RECENT_INTL_FORM + KEY_PLAYERS are now BACKED by API-Football
-// (getInjuries / getRecentForm / getSquadStats) — added Jun 18 so Gary can drill
-// into the same player + team depth MLB/NBA get, not just read it in the prose
-// scout report. Still unbacked (use grounding via fetch_narrative_context instead):
-// SET_PIECES, SUSPENSIONS, LINEUP_FORMATION (SHOTS_ON_TARGET already rides
-// TEAM_MATCH_STATS). Advertising an unbacked token is the MLB fabrication bug class
-// — prompt asks, no tool answers.
-// Jul 8 2026: LINEUPS + AVAILABILITY were the REVERSE bug — soccerFetchers.js
-// has always exported working WC_LINEUPS/WC_AVAILABILITY fetchers, and
-// investigationFactors.js's AVAILABILITY factor references LINEUPS, but
-// neither name was in this allowlist, so every one of Flash's own calls for
-// them bounced off with "Not available for WC." Added here, plus
-// GAME_PREVIEW (fan-parity doctrine — see feedback-grounding-fan-parity.md).
-const SOCCER_WC_TOKENS = [
-  'TEAM_FORM', 'RECENT_FORM', 'RECENT_INTL_FORM', 'KEY_PLAYERS', 'GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT',
-  'TEAM_MATCH_STATS', 'POSSESSION_STATS', 'EXPECTED_GOALS',
-  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'H2H_HISTORY', 'INJURIES', 'LINEUPS', 'AVAILABILITY', 'GAME_PREVIEW',
-];
-
 // Combine all tokens by sport
 const ALL_TOKENS_BY_SPORT = {
   NBA: NBA_TOKENS,
@@ -288,7 +268,6 @@ const ALL_TOKENS_BY_SPORT = {
   NCAAF: NCAAF_TOKENS,
   NHL: NHL_TOKENS,
   MLB: MLB_TOKENS,
-  WC: SOCCER_WC_TOKENS
 };
 
 // Get all unique tokens across all sports
@@ -299,7 +278,6 @@ const ALL_TOKENS = [...new Set([
   ...NCAAF_TOKENS,
   ...NHL_TOKENS,
   ...MLB_TOKENS,
-  ...SOCCER_WC_TOKENS
 ])];
 
 /**
@@ -320,7 +298,7 @@ Typical analysis needs 2-5 stat categories.`,
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "MLB", "WC"],
+            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "MLB"],
             description: "The sport league"
           },
           token: {

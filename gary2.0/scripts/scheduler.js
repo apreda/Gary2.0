@@ -50,24 +50,12 @@ const SPORTS = [
   // with the BDL All-Access decision.
   // { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js' },
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
-  // 2026 FIFA World Cup — game picks only. Runs at a FIXED 10:00 AM ET (not the
-  // per-game T-90/60/30/15 lead times). Rationale (user call, Jun 13 2026): the
-  // T-90 cascade exists to wait out NBA/NHL/MLB lineup posts; soccer has no such
-  // gate, and fans want the WC read + reasoning early in the day, not 90 min
-  // before kickoff. fixedTriggerET drives the fixed-time path in buildPlan().
-  // WC runs on the same T-90/60/30/15 lead-time path as MLB (was fixed 10:00 ET).
-  // Firing 90 min before each kickoff captures the confirmed starting XI + firm
-  // injury news (both post ~2-2.5h pre-match, after a 10 AM run), and handles early
-  // (e.g. midnight-ET) kickoffs that a fixed wall-clock trigger missed. Cost: WC picks
-  // populate progressively through the day like MLB instead of all at the morning run.
-  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: 'run-wc-props.js' },
 ];
 
 // Within a shared trigger window, process lightweight/time-sensitive slates
-// (WC) before MLB's full picks+props block. Lower number = runs earlier.
+// before MLB's full picks+props block. Lower number = runs earlier.
 // Ordering only — execution stays strictly sequential.
 const SPORT_RUN_PRIORITY = {
-  soccer_world_cup: 0,
   basketball_nba: 1,
   icehockey_nhl: 2,
   baseball_mlb: 3,
@@ -142,32 +130,6 @@ function addDaysISO(dateStr, days) {
 // and the next UTC date, because MLB indexes by UTC date — a 9pm ET game lives
 // under tomorrow's UTC date. Then we filter by actual ET start time.
 async function fetchGamesForETDate(sportKey, etDateStr) {
-  // SOCCER (World Cup): fixtures come from the FIFA service, not BDL. Return raw
-  // FIFA matches (shape: { id, datetime, home_team:{name}, away_team:{name} }),
-  // which buildPlan already reads. Skip TBD knockout slots (null teams).
-  if (sportKey === 'soccer_world_cup') {
-    const wc = await import('../src/services/fifaWorldCupService.js');
-    let matches;
-    try {
-      matches = await wc.getMatches({});
-    } catch (e) {
-      log(`  ❌ ${sportKey}: FIFA fetch failed: ${e.message}`);
-      return null; // null = fetch FAILED (retryable); [] = genuinely no games
-    }
-    const out = [];
-    const seen = new Set();
-    for (const m of (Array.isArray(matches) ? matches : [])) {
-      if (!m.home_team || !m.away_team || !m.datetime) continue;
-      const start = new Date(m.datetime);
-      if (Number.isNaN(start.getTime())) continue;
-      if (getETDateStr(start) !== etDateStr) continue;
-      if (seen.has(m.id)) continue;
-      seen.add(m.id);
-      out.push({ raw: m, startTime: start });
-    }
-    return out;
-  }
-
   const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
   const dates = [etDateStr, addDaysISO(etDateStr, 1)];
   let games;
@@ -238,8 +200,8 @@ async function buildPlan(etDateStr) {
       const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
 
       // Emit one schedule entry per trigger tier. Two shapes:
-      //   • Fixed-time sports (WC): fire at a fixed ET wall-clock time + spaced
-      //     retries (10:00/10:45/11:30 ET), capped so we never trigger after
+      //   • Fixed-time sports (sport.fixedTriggerET set): fire at a fixed ET
+      //     wall-clock time + spaced retries, capped so we never trigger after
       //     kickoff. leadMin is null → distinguishes these in the run logs.
       //   • Lead-time sports (NBA/NHL/MLB): fire at startTime − T-90/60/30/15.
       // Either way, run-agentic-picks.js's "already has pick" dedup turns every
@@ -436,8 +398,8 @@ async function executeSchedule(schedule) {
 
   // Coverage tracking. A game is a confirmed MISS once its FINAL retry tier has
   // fired and no pick is stored. We check the instant that last tier completes —
-  // not at end-of-day — so an early slate (WC at 10 AM) surfaces by late morning
-  // instead of after the night's last MLB game. (log + rollup; no real-time push.)
+  // not at end-of-day — so an early slate surfaces by late morning instead of
+  // after the night's last MLB game. (log + rollup; no real-time push.)
   const lastTierTime = new Map(); // gameId -> latest triggerTime (ms)
   for (const e of schedule) {
     const t = e.triggerTime.getTime();
@@ -473,8 +435,8 @@ async function executeSchedule(schedule) {
       bySport.get(key).push(entry);
     }
 
-    // Process sports by SPORT_RUN_PRIORITY (WC first, MLB last) so a small WC
-    // slate isn't stuck behind MLB's full picks+props block in a shared window.
+    // Process sports by SPORT_RUN_PRIORITY so a lighter slate isn't stuck
+    // behind MLB's full picks+props block in a shared window.
     // Order only — still strictly sequential, still picks→props per sport.
     const orderedSports = [...bySport.entries()].sort(
       (a, b) => (SPORT_RUN_PRIORITY[a[0]] ?? 99) - (SPORT_RUN_PRIORITY[b[0]] ?? 99)
@@ -504,7 +466,7 @@ async function executeSchedule(schedule) {
       }
 
       // Then run props for all games (disk cache from game picks). Sports with no
-      // propsScript (e.g. World Cup — game picks only) skip this entirely.
+      // propsScript configured (game picks only) skip this entirely.
       for (const entry of games) {
         if (!sport.propsScript) break;
         // Same early-fire guard as game picks above.

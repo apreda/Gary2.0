@@ -42,8 +42,8 @@ export function buildScratchUserMessage({ awayTeam, homeTeam, scout, board }) {
 /**
  * Strip interpretive labels from a scout report so only raw facts reach the
  * arm: injury names/positions/dates stay, FRESH / PRICED IN tags and their
- * legend lines go, and the WC -200-strip explanation (an old rule's voice)
- * goes with them. Line-based: a line that ONLY explains semantics is dropped;
+ * legend lines go, and the heavy-favorite strip explanation (an old rule's
+ * voice) goes with them. Line-based: a line that ONLY explains semantics is dropped;
  * a line carrying facts is kept with the tag excised.
  */
 export function stripInterpretiveLabels(scoutText) {
@@ -63,7 +63,7 @@ export function stripInterpretiveLabels(scoutText) {
     // Legend lines exist only to teach semantics — drop whole line.
     if (legendLine.test(rawLine)) continue;
     if (/market may still be settling|line has eaten it|book set tonight'?s line knowing/i.test(rawLine)) continue;
-    // The WC heavy-favorite strip note — the old rule explaining itself.
+    // The heavy-favorite strip note — the old rule explaining itself.
     if (/priced heavier than -200|not offered — priced|structural constraint on the available prices/i.test(rawLine)) continue;
     out.push(stripLegendBodies(rawLine));
   }
@@ -78,28 +78,10 @@ const fmtOdds = (v) => {
 
 /**
  * Render the COMPLETE market board — every price, no strips, no steering.
- * WC: full 3-way ML (heavy favorites included), Asian handicap, total.
  * MLB: per-book moneyline / run line / total rows.
  */
 export function renderFullBoard(game = {}, sportKey, { homeTeam, awayTeam, sportsbookOdds = [] } = {}) {
   const lines = [];
-  const isSoccer = sportKey === 'soccer_world_cup' || sportKey === 'WC';
-
-  if (isSoccer) {
-    const ml = game.soccer_three_way_ml || {};
-    if (ml.home != null || ml.draw != null || ml.away != null) {
-      lines.push(`3-way moneyline: ${homeTeam} ${fmtOdds(ml.home)} / Draw ${fmtOdds(ml.draw)} / ${awayTeam} ${fmtOdds(ml.away)}`);
-    }
-    const sp = game.soccer_spread;
-    if (sp && sp.homeValue != null) {
-      lines.push(`Asian handicap: ${homeTeam} ${fmtOdds(sp.homeValue)} @ ${fmtOdds(sp.homeOdds)} / ${awayTeam} ${fmtOdds(sp.awayValue)} @ ${fmtOdds(sp.awayOdds)}`);
-    }
-    const tot = game.soccer_total;
-    if (tot && tot.line != null) {
-      lines.push(`Total goals ${tot.line}: Over ${fmtOdds(tot.over)} / Under ${fmtOdds(tot.under)}`);
-    }
-    return lines.join('\n') || 'No odds posted yet.';
-  }
 
   // MLB (and any US sport with per-book rows)
   for (const b of sportsbookOdds) {

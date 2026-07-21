@@ -1,5 +1,5 @@
 // gary2.0/supabase/functions/grade-results/grading.ts
-// Pure grading logic for GAME picks (MLB 2-way + World Cup), extracted from index.ts so
+// Pure grading logic for GAME picks (MLB 2-way), extracted from index.ts so
 // it runs under `node --test` with no Deno or network deps. index.ts imports these.
 //
 // ── The Jul 8 2026 "Red Sox @ White Sox" bug this module fixes ────────────────
@@ -84,41 +84,17 @@ export function gradeGame(
     }
   }
 
-  // 3-way DRAW pick (soccer) — checked before the team-ML fallback.
+  // 3-way DRAW pick — checked before the team-ML fallback.
   if (/\b(draw|tie)\b/.test(p)) return hScore === vScore ? "won" : "lost";
 
   // Moneyline / team-to-win.
   if (side === "home") return hScore > vScore ? "won" : "lost";
   if (side === "away") return vScore > hScore ? "won" : "lost";
   // Not a team-score bet gradeGame can classify (e.g. a player prop) — leave
-  // ungraded rather than fabricate a loss. Mirrors gradeSoccer's return null
-  // below (Jul 15 2026: this returned "lost" unconditionally here, so any
-  // player-prop-shaped pick living in daily_picks got a fabricated result).
+  // ungraded rather than fabricate a loss (Jul 15 2026: this returned "lost"
+  // unconditionally here, so any player-prop-shaped pick living in daily_picks
+  // got a fabricated result).
   return null;
-}
-
-// ── World Cup grading (3-way ML / draw / total / Asian handicap on the 90' score) ──
-export function gradeSoccer(pick: any, regHome: number, regAway: number): string | null {
-  const type = String(pick.type ?? "moneyline").toLowerCase();
-  const text = String(pick.pick ?? "");
-  const side = pickSide(text, String(pick.homeTeam ?? ""), String(pick.awayTeam ?? ""));
-
-  if (type === "draw") return regHome === regAway ? "won" : "lost";
-  if (type === "total") {
-    const line = parseFloat(pick.goal_line), tot = regHome + regAway;
-    if (tot === line) return "push";
-    return (/over/i.test(text) ? tot > line : tot < line) ? "won" : "lost";
-  }
-  if (type === "asian_handicap") {
-    const h = parseFloat(pick.handicap);
-    const margin = side === "away" ? regAway - regHome : regHome - regAway;
-    const adj = margin + h;
-    if (adj === 0) return "push";
-    return adj > 0 ? "won" : "lost";
-  }
-  if (side === "home") return regHome > regAway ? "won" : "lost";
-  if (side === "away") return regAway > regHome ? "won" : "lost";
-  return null; // couldn't map the pick to a side — leave ungraded rather than fabricate a loss
 }
 
 // ── The Jul 10 2026 "stale recap" bug this function fixes ────────────────────

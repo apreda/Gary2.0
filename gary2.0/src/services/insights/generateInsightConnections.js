@@ -23,7 +23,6 @@
 //    getMlbPlateAppearances all require."
 
 import { ballDontLieService } from '../ballDontLieService.js';
-import fifaWorldCupService from '../fifaWorldCupService.js';
 import { todayStr, gameLabel, clampScore, etDateStr } from './shared.js';
 
 // MLB connection computers (one file per lane under ./computers/).
@@ -52,39 +51,6 @@ import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
 import { computeNbaStreak } from './computers/nbaStreak.js';
 import { computeNbaBeneficiary } from './computers/nbaBeneficiary.js';
 import { computeNbaOwned } from './computers/nbaOwned.js';
-
-// World Cup connection computers (raw FIFA match objects, fifaWorldCupService).
-import { computeWcForm } from './computers/wcForm.js';
-import { computeWcH2h } from './computers/wcH2h.js';
-import { computeWcStakes } from './computers/wcStakes.js';
-
-// World Cup PREVIEW computers — pre-tournament / rest-day content (groups,
-// pedigree, upcoming-opener history) shown whenever no WC match plays today
-// but future fixtures exist. Hands off to the normal lanes on match days.
-import { computeWcPreviewGroups } from './computers/wcPreviewGroups.js';
-import { computeWcPedigree } from './computers/wcPedigree.js';
-import { computeWcOpeners } from './computers/wcOpeners.js';
-
-// Sharp-angle WC lanes (research-backed: rest differentials, venue altitude/
-// heat, group-winner market value) — run in BOTH preview and match-day modes.
-import { computeWcRestEdge } from './computers/wcRestEdge.js';
-import { computeWcVenueEdge } from './computers/wcVenueEdge.js';
-import { computeWcGroupValue } from './computers/wcGroupValue.js';
-// Tournament-wide knockout/title context — runs in BOTH modes so the Hub stays
-// dense once the group stage starts and the rich preview lanes drop away.
-import { computeWcKnockoutPath } from './computers/wcKnockoutPath.js';
-// xG / possession recap of the most recent completed match day. Silent ([])
-// pre-tournament; lights up once matches are played.
-import { computeWcXg } from './computers/wcXg.js';
-// Forward-looking xG regression — who's over/under-finishing their chances, applied
-// to today's fixtures (the FORWARD counterpart to wcXg's recap). Silent pre-tournament.
-import { computeWcXgRegression } from './computers/wcXgRegression.js';
-// Group-stage advancement odds — the bookmakers' 'to qualify from group' market per team.
-import { computeWcAdvancementOdds } from './computers/wcAdvancementOdds.js';
-import { computeWcConfirmedXI } from './computers/wcConfirmedXI.js';
-// Live match-day weather (Open-Meteo by stadium lat/long) — complements wcVenueEdge's
-// static altitude/roof facts with the actual forecast at kickoff. Skips roofed venues.
-import { computeWcWeather } from './computers/wcWeather.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -121,39 +87,9 @@ const NBA_COMPUTERS = [
   computeNbaOwned,
 ];
 
-const WC_COMPUTERS = [
-  computeWcForm,
-  computeWcH2h,
-  computeWcStakes,
-  computeWcRestEdge,
-  computeWcVenueEdge,
-  computeWcGroupValue,
-  computeWcKnockoutPath,
-  computeWcXg,
-  computeWcXgRegression,
-  computeWcAdvancementOdds,
-  computeWcConfirmedXI, // confirmed-XI shape/availability edges (match-day only — needs posted lineups)
-  computeWcWeather,     // live match-day forecast (heat/wind/rain) per fixture
-];
-
-const WC_PREVIEW_COMPUTERS = [
-  computeWcPreviewGroups,
-  computeWcPedigree,
-  computeWcOpeners,
-  computeWcRestEdge,
-  computeWcVenueEdge,
-  computeWcGroupValue,
-  computeWcKnockoutPath,
-  computeWcXg,
-  computeWcXgRegression,
-  computeWcAdvancementOdds,
-  computeWcWeather,
-];
-
 const COMPUTERS_BY_LEAGUE = {
   mlb: MLB_COMPUTERS,
   nba: NBA_COMPUTERS,
-  wc: WC_COMPUTERS,
 };
 
 /**
@@ -186,35 +122,10 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   //    on this slate; an empty slate short-circuits everything.
   //    MLB: "getMlbGamesForDate(dateStr) — single positional arg (YYYY-MM-DD)."
   //    NBA: getNbaGamesForDate(dateStr) — same contract.
-  //    WC:  fifaWorldCupService.getMatchesForDate(dateStr) — RAW FIFA match
-  //         objects (home_team/away_team are team objects with `abbreviation`
-  //         = the 3-letter FIFA code); the WC computers own that shape.
   let games = [];
   let preview = false;
   try {
-    if (leagueKey === 'wc') {
-      games = (await fifaWorldCupService.getMatchesForDate(dateStr)) || [];
-      if (games.length === 0) {
-        // PREVIEW MODE: no WC match today. If future fixtures still exist
-        // (pre-tournament look-ahead, or a knockout rest day), run the
-        // preview lanes against the UPCOMING fixtures only. Completed games
-        // must never enter the tagging pool — lanes pin rows to each team's
-        // earliest fixture in scope, so a full list resurrects long-finished
-        // group games ("ALG @ ARG" stale-lead bug, founder-flagged Jul 12)
-        // and keeps eliminated teams on the board. After the final, no
-        // future fixtures remain and this self-terminates.
-        const all = (await fifaWorldCupService.getMatches({ seasons: [2026] })) || [];
-        const upcoming = all.filter((m) =>
-          String(m?.status || '').toLowerCase() !== 'completed'
-          && String(m?.datetime || '').slice(0, 10) >= dateStr);
-        if (upcoming.length > 0) {
-          games = upcoming;
-          computers = WC_PREVIEW_COMPUTERS;
-          preview = true;
-          console.log(`[insights] WC preview mode — no match today, ${upcoming.length} upcoming fixture(s) in scope (of ${all.length} total).`);
-        }
-      }
-    } else if (leagueKey === 'nba') {
+    if (leagueKey === 'nba') {
       games = (await ballDontLieService.getNbaGamesForDate(dateStr)) || [];
     } else {
       // BDL dates by UTC instant, so an 8pm+ ET game lands on the NEXT UTC day.
@@ -240,10 +151,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
 
   // BDL game objects expose `away_team` (MLB) or `visitor_team` (NBA); the
   // computers read either. Alias both directions so team abbr/id lookups and
-  // gameLabel resolve (no 'AWY'). WC matches are RAW FIFA shape — the WC
-  // computers read home_team/away_team natively, but the alias is applied for
-  // them too so the postProcess slate filter and any shared helpers see a
-  // consistent pair of keys (it only fills the MISSING alias, never mutates).
+  // gameLabel resolve (no 'AWY'). Only fills the MISSING alias, never mutates.
   for (const g of games) {
     if (g && typeof g === 'object') {
       if (g.away_team && !g.visitor_team) g.visitor_team = g.away_team;
@@ -364,7 +272,6 @@ function isValidRow(row) {
  *      getMlbPlayerSeasonStats / splits / xStats all key on this).
  * NBA: the season's START year — a June 2026 Finals game belongs to season
  *      2025 (the 2025-26 season). Sept (mo 9) is the cutover.
- * WC:  the tournament's calendar year (2026) — same as the default.
  */
 function seasonForDate(dateStr, leagueKey = 'mlb') {
   const y = Number(String(dateStr).slice(0, 4));

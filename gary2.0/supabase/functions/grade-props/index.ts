@@ -3,30 +3,28 @@
 // Cloud grade-on-final for PROP picks (the sibling of grade-results, which does
 // game picks). Runs on pg_cron so props settle 24/7 with no laptop. Ported from
 // scripts/run-all-results.js (processPropBets / getStatValue / gradeProp), scoped
-// to the active sports: MLB (incl. "MLB HR") + World Cup. Other leagues are
-// counted-and-skipped, never silently mis-graded.
+// to the active sports: MLB (incl. "MLB HR"). Other leagues are counted-and-skipped,
+// never silently mis-graded.
 //
 // Two deliberate improvements over the laptop script, both correctness-positive:
-//   1. FINALITY GATE — only grade props whose game is FINAL (MLB STATUS_FINAL,
-//      WC status "completed"). The laptop grader has none and relies on re-grade
-//      self-correction; gating means a prop is never shown "lost" mid-game.
+//   1. FINALITY GATE — only grade props whose game is FINAL (MLB STATUS_FINAL).
+//      The laptop grader has none and relies on re-grade self-correction; gating
+//      means a prop is never shown "lost" mid-game.
 //   2. SKIP-ALREADY-GRADED — read prop_results once up front; any prop already
-//      settled (result not null) is skipped before any BDL/FIFA call. Combined
+//      settled (result not null) is skipped before any BDL call. Combined
 //      with the finality gate this is safe (a final stat won't change) and makes
 //      steady-state nearly free.
 //
 // Writes to prop_results, dedup'd by (player_name, prop_type, game_date) — same
 // shape the laptop writes, so the two graders agree and the dedup is idempotent.
 //
-// prop_type stored to match existing rows: MLB = first token ("home_runs",
-// "total_bases", "hits_runs_rbis"); WC = full prop string ("anytime_goal 1",
-// "shots 2.5").
+// prop_type stored to match existing rows: first token of the prop string
+// ("home_runs", "total_bases", "hits_runs_rbis").
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
 const BDL_BASE = "https://api.balldontlie.io";
-const WC_SEASON = 2026;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function estDate(offset = 0): string {
@@ -50,9 +48,7 @@ async function sbGet(table: string, query: string): Promise<any[]> {
   if (!res.ok) throw new Error(`${table} GET ${res.status}`);
   return await res.json();
 }
-// Follows meta.next_cursor so multi-page results aren't truncated at page 1 —
-// the WC season has 104 matches and a multi-match day's lineups/stats exceed
-// one 100-row page, which silently left late-tournament props ungraded.
+// Follows meta.next_cursor so multi-page results aren't truncated at page 1.
 async function bdlGet(path: string, params: Record<string, string | string[]>): Promise<any[]> {
   const all: any[] = [];
   let cursor: string | null = null;
@@ -119,21 +115,6 @@ function mlbStat(token: string, p: any): number | null {
   return null;
 }
 
-// WC: `t` is the lowercased full prop string. `row` is a player_match_stats row,
-// `shots` the per-player shot-event count (player_match_stats has no total-shots).
-function soccerStat(t: string, row: any, pid: number, shots: Record<number, number>): number | null {
-  if (/anytime|goalscorer|to score/.test(t) || (t.includes("goal") && !t.includes("against"))) return num(row.goals);
-  if (t.includes("assist")) return num(row.assists);
-  if (t.includes("save")) return num(row.saves);
-  if (t.includes("tackle")) return num(row.tackles);
-  if (t.includes("interception")) return num(row.interceptions);
-  if (t.includes("clearance")) return num(row.clearances);
-  if (t.includes("pass")) return num(row.key_passes);
-  if (t.includes("shot") && (t.includes("target") || t.includes(" on ") || t.includes("sot"))) return num(row.shots_on_target);
-  if (t.includes("shot")) return shots[pid] != null ? shots[pid] : null;
-  return null;
-}
-
 function playerMatchesMlb(pickName: string, pl: any): boolean {
   if (!pl) return false;
   const target = normalizeName(pickName);
@@ -191,7 +172,7 @@ Deno.serve(async (req) => {
       const propRaw = String(p.prop ?? p.prop_type ?? "").trim();
       const player = String(p.player ?? p.player_name ?? "");
       if (!propRaw || !player) continue;
-      const propType = sport === "WC" ? propRaw : propRaw.split(/\s+/)[0];
+      const propType = propRaw.split(/\s+/)[0];
       flat.push({ parentId: r.id, date: r.date, p, sport, propType,
         key: `${player}|${propType}|${r.date}` });
     }
@@ -204,8 +185,7 @@ Deno.serve(async (req) => {
   const todo = flat.filter((f) => { if (!force && gradedKeys.has(f.key)) { stats.skippedGraded++; return false; } return true; });
 
   const mlb = todo.filter((f) => f.sport.startsWith("MLB"));
-  const wc = todo.filter((f) => f.sport === "WC");
-  todo.forEach((f) => { if (!f.sport.startsWith("MLB") && f.sport !== "WC") stats.skippedOther++; });
+  todo.forEach((f) => { if (!f.sport.startsWith("MLB")) stats.skippedOther++; });
 
   const writes: any[] = [];
 
@@ -248,64 +228,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 4. WC — finality gate via match status, batched player stats + lineups + shots
-  if (wc.length) {
-    const matches = await bdlGet("/fifa/worldcup/v1/matches", { seasons: [String(WC_SEASON)], per_page: "100" });
-    const completedById = new Map<string, boolean>();
-    for (const m of matches) completedById.set(String(m.id), String(m.status ?? "").toLowerCase() === "completed");
-
-    const matchIds = [...new Set(wc.map((f) => String(f.p.game_id ?? "")).filter((id) => completedById.get(id)))];
-    wc.forEach((f) => { if (!completedById.get(String(f.p.game_id ?? ""))) stats.skippedNotFinal++; });
-
-    if (matchIds.length) {
-      const [pms, lineups, shotEvents] = await Promise.all([
-        bdlGet("/fifa/worldcup/v1/player_match_stats", { match_ids: matchIds, per_page: "100" }),
-        bdlGet("/fifa/worldcup/v1/match_lineups", { match_ids: matchIds, per_page: "100" }),
-        bdlGet("/fifa/worldcup/v1/match_shots", { match_ids: matchIds, per_page: "100" }),
-      ]);
-      // name → player_id from lineups (player_match_stats has no name)
-      const nameToId: Record<string, number> = {}, lastToId: Record<string, number> = {};
-      for (const l of lineups) {
-        const pl = l.player; if (!pl?.id) continue;
-        const nm = normalizeName(pl.name || "");
-        if (!nm) continue;
-        nameToId[nm] = pl.id; nameToId[strip(nm)] = pl.id;
-        const last = nm.split(" ").pop()!; if (last.length > 3) lastToId[last] = pl.id;
-      }
-      const resolvePid = (name: string): number | null => {
-        const t = normalizeName(name);
-        if (nameToId[t] != null) return nameToId[t];
-        if (nameToId[strip(t)] != null) return nameToId[strip(t)];
-        const last = t.split(" ").pop()!;
-        return lastToId[last] != null ? lastToId[last] : null;
-      };
-      const shotsByPid: Record<number, number> = {};
-      for (const s of shotEvents) { const id = s.player_id ?? s.player?.id; if (id != null) shotsByPid[id] = (shotsByPid[id] || 0) + 1; }
-
-      for (const f of wc) {
-        if (!completedById.get(String(f.p.game_id ?? ""))) continue;
-        const pid = resolvePid(String(f.p.player));
-        if (pid == null) { stats.skippedNoStat++; continue; }
-        const row = pms.find((s) => s.player_id === pid);
-        if (!row) { stats.skippedNoStat++; continue; }
-        const t = f.propType.toLowerCase();
-        const actual = soccerStat(t, row, pid, shotsByPid);
-        if (actual == null) { stats.skippedNoStat++; continue; }
-        const line = parseFloat(f.p.line);
-        // Anytime/goalscorer grades on a threshold: plain anytime = 1+, a brace
-        // ("anytime_goal 2") = line+. (The laptop script grades every anytime as
-        // 1+, a latent brace bug — flagged separately.)
-        const isAnytime = /anytime|goalscorer|to score/.test(t);
-        const result = isAnytime
-          ? (actual >= (Number.isFinite(line) && line > 1 ? line : 1) ? "won" : "lost")
-          : gradeProp(actual, line, String(f.p.bet ?? "over"));
-        if (result == null) { stats.skippedNoStat++; continue; }
-        writes.push(buildRow(f, actual, result, line));
-      }
-    }
-  }
-
-  // 5. write (dedup) — or, in dry mode, just sample what would be written
+  // 4. write (dedup) — or, in dry mode, just sample what would be written
   if (dry) {
     for (const w of writes.slice(0, 40)) sample.push({ player: w.player_name, prop: w.prop_type,
       bet: w.bet, line: w.line_value, actual: w.actual_value, result: w.result });
@@ -314,7 +237,7 @@ Deno.serve(async (req) => {
   }
 
   return new Response(JSON.stringify({ ok: true, dry, force, dates, picks: flat.length, todo: todo.length,
-    mlb: mlb.length, wc: wc.length, wouldWrite: writes.length, ...stats, sample },
+    mlb: mlb.length, wouldWrite: writes.length, ...stats, sample },
     null, dry ? 2 : 0), { headers: { "Content-Type": "application/json" } });
 });
 

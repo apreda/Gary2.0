@@ -28,7 +28,7 @@
  *         for totals + h2h, joined to bdl.getNbaGamesForDate(date) for finals.
  *
  * Usage:
- *   node run-market-pulse.js                       # TODAY (EST), rolling — MLB + NBA + WC
+ *   node run-market-pulse.js                       # TODAY (EST), rolling — MLB + NBA
  *   node run-market-pulse.js --yesterday           # the settled prior EST day
  *   node run-market-pulse.js --date 2026-06-04     # specific date
  *   node run-market-pulse.js --league MLB          # single league
@@ -49,14 +49,13 @@ const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_A
 const supabase = createClient(supabaseUrl, adminKey);
 const { ballDontLieService: bdl } = await import('./src/services/ballDontLieService.js');
 const { ballDontLieOddsService } = await import('./src/services/ballDontLieOddsService.js');
-const fifa = await import('./src/services/fifaWorldCupService.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Leagues with full-slate odds + finals coverage. MLB + NBA + WC (soccer 3-way ML).
-const ACTIVE_LEAGUES = ['MLB', 'NBA', 'WC'];
+// Leagues with full-slate odds + finals coverage.
+const ACTIVE_LEAGUES = ['MLB', 'NBA'];
 
 const TABLE = 'market_pulse';
 
@@ -298,47 +297,6 @@ function accumulate(acc, { matchup, awayTeam, homeTeam, homeScore, awayScore, to
   };
 }
 
-/**
- * Soccer twin of accumulate() for the World Cup's 3-way market. O/U is the same
- * (total goals vs the closing total); the moneyline is home/draw/away, so the
- * favorite is the most-negative of the three and "won" only if that exact
- * outcome (incl. draw) is the 90' result. Dog flat-stake units are not tracked
- * (the strip shows records, not units, and a 3-way dog is ambiguous).
- */
-function accumulateSoccer(acc, { matchup, homeScore, awayScore, total, spreadHome }) {
-  const hs = num(homeScore);
-  const as = num(awayScore);
-  if (hs === null || as === null) return null;
-
-  const t = num(total);
-  const sh = num(spreadHome);
-  const hasOdds = t !== null || sh !== null;
-  if (!hasOdds) return null;
-
-  acc.games_counted += 1;
-
-  const combined = hs + as;
-  let ouResult = null;
-  if (t !== null) {
-    if (combined > t) { acc.overs_wins += 1; ouResult = 'over'; }
-    else if (combined < t) { acc.overs_losses += 1; ouResult = 'under'; }
-    else { acc.overs_pushes += 1; ouResult = 'push'; }
-  }
-
-  // 3-way result + favorite from the handicap sign (negative home line → home
-  // favored). The settled feed's 3-way moneyline is circular, same as MLB; the
-  // handicap sign reflects who was favored. A draw or an upset is a favorite loss.
-  const result = hs > as ? 'home' : as > hs ? 'away' : 'draw';
-  let favorite = null;
-  if (sh !== null && sh !== 0) favorite = sh < 0 ? 'home' : 'away';
-  if (favorite) {
-    if (favorite === result) acc.fav_wins += 1;
-    else acc.fav_losses += 1;
-  }
-
-  return { matchup, total: t, combined, ouResult, favorite, result };
-}
-
 function freshAcc() {
   return {
     overs_wins: 0,
@@ -487,45 +445,6 @@ async function buildNba(date) {
   return { acc, meta, slated: (finalGames || []).length };
 }
 
-/**
- * WC: getMatchesForDate(date) for finished matches + getOdds({ matchIds }) for the
- * 3-way moneyline + total (median across vendors). Score is the 90' regulation
- * result (getRegulationScore — half-scores or home_score/away_score). Join by match id.
- */
-async function buildWc(date) {
-  const matches = (await fifa.getMatchesForDate(date)) || [];
-  const completed = matches.filter((m) => String(m.status || '').toLowerCase() === 'completed');
-  if (!completed.length) return { acc: freshAcc(), meta: [], slated: matches.length };
-
-  let oddsRows = [];
-  try {
-    oddsRows = (await fifa.getOdds({ matchIds: completed.map((m) => m.id) })) || [];
-  } catch (err) {
-    console.error('[WC] odds fetch failed:', err?.message || err);
-  }
-  const oddsByMatch = new Map();
-  for (const r of oddsRows) {
-    const mid = r.match_id ?? r.matchId ?? r.match?.id;
-    if (mid == null) continue;
-    if (!oddsByMatch.has(mid)) oddsByMatch.set(mid, []);
-    oddsByMatch.get(mid).push(r);
-  }
-
-  const acc = freshAcc();
-  const meta = [];
-  for (const m of completed) {
-    const sc = fifa.getRegulationScore(m);
-    if (!sc || sc.home == null || sc.away == null) continue;
-    const rows = oddsByMatch.get(m.id) || [];
-    const total = median(rows.map((r) => num(r.total_value)));
-    const spreadHome = median(rows.map((r) => num(r.spread_home_value)));
-    const matchup = `${teamName(m.away_team)} @ ${teamName(m.home_team)}`;
-    const rec = accumulateSoccer(acc, { matchup, homeScore: sc.home, awayScore: sc.away, total, spreadHome });
-    if (rec) meta.push(rec);
-  }
-  return { acc, meta, slated: matches.length };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
@@ -543,8 +462,7 @@ async function run() {
     console.log(`\n── ${league} ──`);
     try {
       const { acc, meta, slated = 0 } = league === 'MLB' ? await buildMlb(targetDate)
-        : league === 'NBA' ? await buildNba(targetDate)
-        : await buildWc(targetDate);
+        : await buildNba(targetDate);
 
       if (acc.games_counted === 0) {
         // TODAY 0-state: if today HAS a slate but nothing's final yet, still write

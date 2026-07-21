@@ -34,8 +34,7 @@ import { getESTDate } from './src/utils/dateUtils.js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Leagues the Wire covers. Mirrors run-insight-connections.js ACTIVE_LEAGUES.
-// WC = 2026 FIFA World Cup (kicks off June 11; empty slates simply yield fewer items).
-const ACTIVE_LEAGUES = ['MLB', 'NBA', 'WC'];
+const ACTIVE_LEAGUES = ['MLB', 'NBA'];
 
 // ── EDIT ME ──────────────────────────────────────────────────────────────────
 // Curated public betting voices the model should PREFER when sourcing a real,
