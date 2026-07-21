@@ -401,7 +401,11 @@ struct GaryCenteredTabBar: View {
     // Tunable hump geometry.
     private let humpRise: CGFloat = 28
     private let humpHalfWidth: CGFloat = 52
-    private let flatHeight: CGFloat = 58
+    // Jul 15 2026: +14 over the original 58 — the logo (72pt, padded 7pt from
+    // the top) only left 7pt of clearance below it, so the new "Hub" caption
+    // was rendering fully underneath the logo's opaque circle instead of
+    // below it. This gives it real room without touching the logo/hump size.
+    private let flatHeight: CGFloat = 72
     private let logoSize: CGFloat = 72
 
     private var barShape: HumpBarShape {
@@ -423,10 +427,17 @@ struct GaryCenteredTabBar: View {
             .frame(height: humpRise + flatHeight)
             .shadow(color: .black.opacity(0.28), radius: 14, y: 6)
 
-            // Tabs live in the flat portion, pinned to the bottom.
+            // Tabs live in the flat portion, pinned to the bottom. The center
+            // slot carries just a caption (Jul 15 2026, founder: the logo had
+            // no text cue at all — "Hub" wasn't obvious as a destination) —
+            // the raised logo above is still the tap target/icon, this only
+            // adds the label every other tab already gets.
             HStack(spacing: 0) {
                 ForEach(leftTabs, id: \.index) { sideTab($0) }
-                Color.clear.frame(width: humpHalfWidth * 2, height: 1)
+                Text("Hub")
+                    .font(GaryFonts.text(10, .semibold))
+                    .foregroundStyle(selectedTab == garyIndex ? GaryColors.gold : .white.opacity(0.45))
+                    .frame(width: humpHalfWidth * 2)
                 ForEach(rightTabs, id: \.index) { sideTab($0) }
             }
             .padding(.horizontal, 14)
@@ -491,7 +502,9 @@ struct GaryCenteredTabBar: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Talk to Gary")
+        // Was "Talk to Gary" — stale since the voice/chat feature was removed
+        // (Jul 2 2026 cleanup); this button has only ever opened the Hub since.
+        .accessibilityLabel("Hub")
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
