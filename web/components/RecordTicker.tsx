@@ -6,7 +6,9 @@ export interface TickerItem { league: string; pick: string; date: string }
 /** Recent WINS reel — intentionally shows only winning picks (a marketing surface, not the record; /results is the honest ledger). */
 export function RecordTicker({ items }: { items: TickerItem[] }) {
   if (items.length === 0) return null;
-  const row = items.map(i => ({ ...i, pick: i.pick.length > 40 ? `${i.pick.slice(0, 40)}…` : i.pick }));
+  // No length cap: the reel scrolls horizontally, so a long pick simply rides
+  // wider — truncation (and its "…") has no place on a scrolling surface.
+  const row = items;
   return (
     <div className="border-y border-line bg-elev/60 py-2.5">
       <p className="px-5 pb-2 font-mono text-[10px] uppercase tracking-[0.04em] text-low">

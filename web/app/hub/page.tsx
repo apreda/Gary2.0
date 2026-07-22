@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Eyebrow } from '@/components/Eyebrow';
+import { ClampFade } from '@/components/ClampFade';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import {
   fetchTodayInsights, fetchGradedYesterday, groupInsightsByLane,
@@ -64,8 +65,8 @@ function RankedRows({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
             {String(i + 1).padStart(2, '0')}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[14.5px] font-medium text-hi">{row.headline}</p>
-            <p className="tnum mt-0.5 truncate font-mono text-[11px] text-low">{row.game}</p>
+            <p className="break-words text-[14.5px] font-medium leading-snug text-hi">{row.headline}</p>
+            <p className="tnum mt-0.5 break-words font-mono text-[11px] text-low">{row.game}</p>
           </div>
           {row.value && <span className="tnum shrink-0 font-mono text-sm font-bold text-hi">{row.value}</span>}
           {Array.isArray(row.spark) && <span className="hidden shrink-0 sm:block"><Spark values={row.spark} tint={tint} /></span>}
@@ -77,7 +78,7 @@ function RankedRows({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
 
 function RailShelf({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
   return (
-    <div className="-mx-5 overflow-x-auto px-5 pb-2">
+    <div className="rail-scroll -mx-5 overflow-x-auto px-5 pb-2">
       <ul className="flex w-max snap-x gap-3">
         {rows.map(row => (
           <li key={row.id} className="quant-panel w-[260px] shrink-0 snap-start p-4">
@@ -85,9 +86,9 @@ function RailShelf({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
               <p className="text-[14px] font-medium leading-snug text-hi">{row.headline}</p>
               {row.value && <span className="tnum shrink-0 font-mono text-sm font-bold text-hi">{row.value}</span>}
             </div>
-            {row.detail && <p className="mt-1.5 text-[12.5px] leading-relaxed text-mid line-clamp-2">{row.detail}</p>}
+            {row.detail && <ClampFade lines={2} className="mt-1.5 text-[12.5px] leading-relaxed text-mid">{row.detail}</ClampFade>}
             <div className="mt-3 flex items-end justify-between gap-3">
-              <p className="tnum truncate font-mono text-[10.5px] text-low">{row.game}</p>
+              <p className="tnum min-w-0 break-words font-mono text-[10.5px] text-low">{row.game}</p>
               {Array.isArray(row.spark) && <Spark values={row.spark} tint={tint} />}
             </div>
           </li>

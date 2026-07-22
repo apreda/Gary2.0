@@ -73,12 +73,12 @@ function CompactProp({ prop }: { prop: PropPick }) {
   const stat = Array.isArray(prop.key_stats) ? prop.key_stats[0] : undefined;
   return (
     <li className="w-[280px] shrink-0 snap-start rounded-card border border-silver/40 bg-card p-4 shadow-card">
-      <p className="truncate">
+      <p className="leading-snug">
         <Eyebrow dim>{league}{prop.matchup ? ` · ${prop.matchup}` : ''}</Eyebrow>
       </p>
-      <p className="mt-1.5 truncate text-[15px] font-medium text-hi">{prop.player}</p>
+      <p className="mt-1.5 break-words text-[15px] font-medium leading-snug text-hi">{prop.player}</p>
       <div className="mt-3"><CallChip prop={prop} compact /></div>
-      {stat && <p className="mt-2.5 truncate font-mono text-[12px] text-low">· {stat}</p>}
+      {stat && <p className="mt-2.5 break-words font-mono text-[12px] leading-relaxed text-low">· {stat}</p>}
     </li>
   );
 }
@@ -117,7 +117,7 @@ export default async function PropsPage() {
           <h2 className="font-display text-2xl uppercase text-hi">Gary Home Run Threats</h2>
           <p className="mt-1 text-sm text-mid">Hitters with the conditions to leave the yard today.</p>
           <StitchRule tone="faint" className="mt-4" />
-          <div className="-mx-5 mt-7 overflow-x-auto px-5 pb-2">
+          <div className="rail-scroll -mx-5 mt-7 overflow-x-auto px-5 pb-2">
             <ul className="flex w-max snap-x gap-3">
               {selectTopProps(hr, 12).map((p, i) => <CompactProp key={i} prop={p} />)}
             </ul>

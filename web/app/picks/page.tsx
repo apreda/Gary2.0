@@ -17,7 +17,7 @@ export const revalidate = 600;
 export const metadata: Metadata = {
   title: "Today's Free Sports Picks — Full Slate | Gary AI",
   description:
-    "Every game on today's board with Gary's pick, written reasoning, and confidence rating. NBA, MLB, NHL, NFL, college, and the 2026 World Cup. Always free.",
+    "Every game on today's board with Gary's pick, written reasoning, and confidence rating. MLB, NBA, NHL, NFL, and college. Always free.",
   alternates: { canonical: '/picks' },
 };
 
@@ -95,7 +95,7 @@ export default async function PicksPage() {
       />
 
       <div className="mt-7 flex flex-wrap gap-2">
-        {SPORTS.map(s => (
+        {SPORTS.filter(s => !s.retired).map(s => (
           <Link
             key={s.slug}
             href={`/picks/${s.slug}`}

@@ -175,9 +175,9 @@ export default async function ResultsPage() {
         <ul className="mt-1">
           {recent.map((r, i) => (
             <li key={i} className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-0">
-              <div className="flex min-w-0 items-center gap-3">
+              <div className="flex min-w-0 items-baseline gap-3">
                 <ResultLetter result={r.result ?? ''} />
-                <span className="truncate font-mono text-[13px] text-mid">{r.pick_text}</span>
+                <span className="min-w-0 break-words font-mono text-[13px] text-mid">{r.pick_text}</span>
               </div>
               <div className="tnum ml-3 flex shrink-0 items-center gap-3 font-mono text-[12px] text-low">
                 <span>{(r.league ?? '').toUpperCase()}</span>

@@ -16,7 +16,7 @@ export const revalidate = 600;
 export const metadata: Metadata = {
   title: 'Gary AI — Free Sports Picks for Every Game, Every Day',
   description:
-    'Free daily picks with written reasoning across NBA, NFL, NHL, MLB, NCAAB, NCAAF, and the 2026 World Cup. Public track record. Free on iOS.',
+    'Free daily picks with written reasoning across MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Public track record. Free on iOS.',
   alternates: { canonical: '/' },
 };
 
@@ -114,7 +114,7 @@ export default async function Home() {
                     Today&apos;s free pick · {(topPick.league ?? '').toUpperCase()}
                   </p>
                   <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                    <span className="truncate font-mono text-[13px] font-bold text-gold">
+                    <span className="min-w-0 break-words font-mono text-[13px] font-bold leading-snug text-gold">
                       {(topPick.pick ?? '').replace(/[+-]\d{3,}\s*$/, '').trim()}
                     </span>
                     {(topPick.odds ?? effectiveOdds(topPick.pick)) != null && (
@@ -174,10 +174,6 @@ export default async function Home() {
           Every game covered, completely free.{' '}
           <Link href="/picks" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
             All of today&apos;s picks →
-          </Link>
-          {' '}· The World Cup knockout rounds are live —{' '}
-          <Link href="/picks/world-cup" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
-            World Cup 2026 picks &amp; predictions →
           </Link>
         </p>
       </section>
@@ -309,7 +305,7 @@ export default async function Home() {
                   ['MLB', 'PHI ML', '-118', false],
                   ['MLB', 'TOTAL BASES O 1.5', '+105', false],
                   ['NBA', 'BOS -3.5', '-110', true],
-                  ['WC', 'DRAW NO BET', '+140', true],
+                  ['NHL', 'EDM ML', '+120', true],
                   ['NBA', 'PG13 PTS O 22.5', '-115', true],
                 ].map(([lg, pick, odds, locked], i) => (
                   <div key={i} className="mt-2.5 rounded-chip border border-line bg-card px-3 py-2.5">

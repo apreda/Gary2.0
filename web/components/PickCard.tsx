@@ -1,4 +1,5 @@
 import { Eyebrow } from './Eyebrow';
+import { ClampFade } from './ClampFade';
 import { sportByCode } from '@/lib/gary/leagues';
 import { effectiveOdds } from '@/lib/gary/results';
 import type { GaryPick } from '@/lib/gary/types';
@@ -35,9 +36,11 @@ export function PickCard({ pick, expanded = false }: { pick: GaryPick; expanded?
         {pick.awayTeam} @ {pick.homeTeam}
       </h3>
       {take && (
-        <p className={`mt-2 text-[15px] leading-relaxed text-mid ${expanded ? '' : 'line-clamp-3'}`}>
-          {take}
-        </p>
+        expanded ? (
+          <p className="mt-2 text-[15px] leading-relaxed text-mid">{take}</p>
+        ) : (
+          <ClampFade lines={3} className="mt-2 text-[15px] leading-relaxed text-mid">{take}</ClampFade>
+        )
       )}
       <div className="mt-4 flex items-center justify-between gap-3 rounded-chip border border-gold/70 bg-chip px-4 py-2.5">
         <span className="font-mono text-sm font-bold tracking-[0.04em] text-gold">{pickLabel}</span>

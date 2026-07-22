@@ -1,4 +1,5 @@
 import { Eyebrow } from './Eyebrow';
+import { ClampFade } from './ClampFade';
 import { normalizeLeague } from '@/lib/gary/leagues';
 import type { PropPick } from '@/lib/gary/types';
 
@@ -21,7 +22,11 @@ export function PropCard({ prop, expanded = false }: { prop: PropPick; expanded?
       </div>
       <h3 className="mt-2.5 font-display text-xl leading-tight text-hi">{prop.player}</h3>
       {rationale && (
-        <p className={`mt-2 text-[15px] leading-relaxed text-mid ${expanded ? '' : 'line-clamp-3'}`}>{rationale}</p>
+        expanded ? (
+          <p className="mt-2 text-[15px] leading-relaxed text-mid">{rationale}</p>
+        ) : (
+          <ClampFade lines={3} className="mt-2 text-[15px] leading-relaxed text-mid">{rationale}</ClampFade>
+        )
       )}
       <div className="mt-4 flex items-center justify-between gap-3 rounded-chip border border-silver/55 bg-chip px-4 py-2.5">
         <span className={`font-mono text-sm font-bold uppercase tracking-[0.04em] ${callColor}`}>

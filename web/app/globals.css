@@ -82,6 +82,24 @@ body {
   color: #fff;
 }
 
+/* Multi-line display headings break on balanced boundaries, not ragged ones. */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+/* ── Clamped prose fades its last line — the "…" glyph is banned site-wide.
+   Applied by ClampFade only when the text actually overflows. ── */
+.clamp-fade {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 1.5em), rgba(0, 0, 0, 0.06) 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 1.5em), rgba(0, 0, 0, 0.06) 100%);
+}
+
+/* ── Horizontal rails scroll on a quiet thin bar, not the chrome default ── */
+.rail-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
 /* ── Stitch seams — the betting-slip dash from iOS (dash 4, gap 5) ── */
 .stitch-gold {
   height: 1px;

@@ -4,6 +4,7 @@ export interface SportConfig {
   name: string;        // display
   longName: string;    // SEO
   accent: string;      // hex — dot/badge use ONLY
+  retired?: boolean;   // ended tournament: record pages stay, off today's surfaces
 }
 
 export const SPORTS: SportConfig[] = [
@@ -13,7 +14,8 @@ export const SPORTS: SportConfig[] = [
   { slug: 'nfl', code: 'NFL', name: 'NFL', longName: 'NFL Football', accent: '#22C55E' },
   { slug: 'ncaab', code: 'NCAAB', name: 'NCAAB', longName: 'College Basketball', accent: '#F97316' },
   { slug: 'ncaaf', code: 'NCAAF', name: 'NCAAF', longName: 'College Football', accent: '#DC2626' },
-  { slug: 'world-cup', code: 'WC', name: 'World Cup', longName: '2026 FIFA World Cup', accent: '#14B8A6' },
+  // Tournament ended Jul 19 2026 — the graded record remains the trophy case.
+  { slug: 'world-cup', code: 'WC', name: 'World Cup', longName: '2026 FIFA World Cup', accent: '#14B8A6', retired: true },
 ];
 
 export const sportBySlug = (slug: string) => SPORTS.find(s => s.slug === slug);
