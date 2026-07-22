@@ -32,8 +32,12 @@ export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
   const homeTeam = typeof game.home_team === 'string' ? game.home_team : (game.home_team?.full_name || game.home_team?.name || 'Home');
   const awayTeam = typeof game.away_team === 'string' ? game.away_team : (game.away_team?.full_name || game.away_team?.name || 'Away');
-  const homeTeamId = game.home_team_data?.id || game.home_team?.id;
-  const awayTeamId = game.away_team_data?.id || game.away_team?.id;
+  // MLBAM team ids. Odds-feed game rows carry NO team ids at all (found Jul 22
+  // 2026: every MLBAM-keyed section — recent games, rosters, rest, series
+  // state — silently emptied), so the schedule match below is the primary
+  // source; any ids already on the game object are the fallback.
+  let homeTeamId = game.home_team_data?.id || game.home_team?.id;
+  let awayTeamId = game.away_team_data?.id || game.away_team?.id;
   let gamePk = game.gamePk || null;
   const venue = game.venue || game._raw?.venue?.name || 'Unknown Venue';
   const gameDesc = game.description || '';
@@ -41,8 +45,9 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   console.log(`[Scout Report] Building MLB report: ${awayTeam} @ ${homeTeam}`);
 
-  // Resolve MLB Stats API gamePk if not present (BDL games don't have it)
-  if (!gamePk && startTime) {
+  // Resolve MLB Stats API gamePk + MLBAM team ids when missing (BDL/odds-feed
+  // games have neither; the schedule match carries both).
+  if ((!gamePk || !homeTeamId || !awayTeamId) && startTime) {
     try {
       const { getMlbSchedule } = await import('../../../mlbStatsApiService.js');
       // MLB Stats API ?date= is keyed by the game's OFFICIAL (ET-local) date.
@@ -68,9 +73,14 @@ export async function buildMlbScoutReport(game, options = {}) {
           Math.abs(new Date(a.gameDate || 0).getTime() - startMs) -
           Math.abs(new Date(b.gameDate || 0).getTime() - startMs)
         )[0];
-        if (match?.gamePk) { gamePk = match.gamePk; break; }
+        if (match?.gamePk) {
+          gamePk = gamePk || match.gamePk;
+          homeTeamId = homeTeamId || match.teams?.home?.team?.id || null;
+          awayTeamId = awayTeamId || match.teams?.away?.team?.id || null;
+          break;
+        }
       }
-      console.log(`[Scout Report] Resolved MLB Stats API gamePk: ${gamePk || 'not found'}`);
+      console.log(`[Scout Report] Resolved MLB Stats API gamePk: ${gamePk || 'not found'}, team ids: ${homeTeam}=${homeTeamId || '?'}, ${awayTeam}=${awayTeamId || '?'}`);
     } catch (e) {
       console.warn(`[Scout Report] gamePk resolution failed: ${e.message}`);
     }
@@ -198,16 +208,29 @@ export async function buildMlbScoutReport(game, options = {}) {
   // undefined → filter(Boolean) emptied the array → zero box stats fetched.
   // Pull BDL games for each team (1 cached call each) and build a
   // date→BDL-id lookup so we can resolve real BDL ids for the recap loop.
+  // Source these from the season game index, NOT getGames — the BDL games
+  // endpoint ignores start_date/end_date and returns the franchise's earliest
+  // rows (2001 games, found Jul 22 2026), which zeroed this whole section.
+  // The index is the same source the stat routers use (cached 60 min).
   const todayIso = new Date().toISOString().slice(0, 10);
   const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const [homeBdlGames, awayBdlGames] = await Promise.all([
-    homeTeamBdlId
-      ? ballDontLieService.getGames('baseball_mlb', { team_ids: [homeTeamBdlId], start_date: thirtyDaysAgoIso, end_date: todayIso, per_page: 50 }).catch(() => [])
-      : [],
-    awayTeamBdlId
-      ? ballDontLieService.getGames('baseball_mlb', { team_ids: [awayTeamBdlId], start_date: thirtyDaysAgoIso, end_date: todayIso, per_page: 50 }).catch(() => [])
-      : []
-  ]);
+  const seasonIndex = (homeTeamBdlId || awayTeamBdlId)
+    ? await ballDontLieService.getMlbSeasonGameIndex(season).catch(() => new Map())
+    : new Map();
+  const indexGamesFor = (bdlTeamId) => {
+    if (!bdlTeamId) return [];
+    const out = [];
+    for (const [id, g] of seasonIndex.entries()) {
+      if (g.homeId !== bdlTeamId && g.awayId !== bdlTeamId) continue;
+      const date = String(g.date || '').slice(0, 10);
+      if (date < thirtyDaysAgoIso || date > todayIso) continue;
+      if (!/final/i.test(String(g.status || ''))) continue;
+      out.push({ id, date });
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  };
+  const homeBdlGames = indexGamesFor(homeTeamBdlId);
+  const awayBdlGames = indexGamesFor(awayTeamBdlId);
   // Date-keyed lookup: each team plays at most one MLB game per calendar date,
   // so date is a reliable join key between MLB Stats API gamePk and BDL id.
   const bdlIdByDate = new Map();
@@ -1226,7 +1249,13 @@ ${gameContextGrounding || 'No same-day breaking news.'}
   // These rows are the current-season Team AVG/OBP/SLG/OPS/ERA/Runs view.
   // Show only when both teams have real current-season data; no fallback.
   {
-    const hasReal = (s) => s && (s.gp || 0) > 0 && (s.gp || 0) < 100; // gp>=100 in season opener = BDL mirroring last year
+    // Stale-mirror guard: early in the season BDL can echo LAST year's full-season
+    // stats (a big gp weeks after opening day). The old check was a flat gp<100,
+    // which became a date-bomb — by late July real gp passes 100 and the block
+    // vanished (found Jul 22 2026, tape stuck at 10 rows). Only distrust big gp
+    // during the opener window (Jan-Apr).
+    const seasonYoung = new Date().getMonth() < 4;
+    const hasReal = (s) => s && (s.gp || 0) > 0 && !(seasonYoung && (s.gp || 0) > 60);
     const hStats = hasReal(homeTeamStats) ? homeTeamStats : null;
     const aStats = hasReal(awayTeamStats) ? awayTeamStats : null;
     if (hStats && aStats) {
