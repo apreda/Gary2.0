@@ -15,6 +15,9 @@ const MODEL_RATES = {
   'gemini-3.5-flash':         { input: 1.50, output: 9.00 },
   'gemini-3.1-pro-preview':   { input: 2.00, output: 12.00 },
   'gemini-3-flash-preview':   { input: 0.50, output: 3.00 },
+  // Released Jul 22 2026; launch pricing not yet published — carrying the
+  // 3-flash-preview rates until verified. VERIFY when Google posts pricing.
+  'gemini-3.6-flash':         { input: 0.50, output: 3.00 },
   // Bake-off brains (verified Jul 6 2026 via web + the account's model list).
   // gpt-5.5 (Apr 2026): $5/$30, cached input $0.50.
   // Sonnet 5 at intro pricing (through 2026-08-31; list is $3/$15).

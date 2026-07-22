@@ -14,9 +14,14 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/agentLoop.js'), 'utf8');
 
-describe('model tiering: props run on Tier 2, games on Tier 1', () => {
+describe('model tiering: props on their own Gemini tier (games are Sol via pickEngine)', () => {
   it('primaryModel branches on props mode', () => {
-    expect(agentLoopSrc).toContain('isPropsMode ? GEMINI_FLASH_MODEL : GEMINI_PRO_MODEL');
+    expect(agentLoopSrc).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GEMINI_PRO_MODEL');
+  });
+
+  it('props run gemini-3.6-flash (founder call, Jul 22 2026 — verified live on our key)', () => {
+    const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
+    expect(configSrc).toMatch(/GEMINI_PROPS_MODEL = 'gemini-3\.6-flash'/);
   });
 
   it('the research briefing stays on the Tier 2 model', () => {

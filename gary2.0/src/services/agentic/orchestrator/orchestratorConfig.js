@@ -21,17 +21,22 @@
 // Note: gemini-3-pro-preview shut down March 9, 2026 — do not reintroduce.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Primary "brain" model — used for game picks (the Gary side).
+// Legacy Tier 1 (game picks moved to GPT-5.6 Sol via pickEngine.js, Jul 22
+// 2026) — still the fallback target for legacy orchestrator paths.
 export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
 // Fallback when the primary errors / rate-limits.
 export const GEMINI_PRO_FALLBACK = 'gemini-3.1-pro-preview';
-// Cheaper Flash for research, props, DFS, and tool-calling investigation.
+// Cheaper Flash for research and tool-calling investigation.
 export const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
+// Props lane (Jul 22 2026, founder call): 3.6 Flash released today —
+// verified live on our key before wiring.
+export const GEMINI_PROPS_MODEL = 'gemini-3.6-flash';
 
 export const ALLOWED_GEMINI_MODELS = [
-  'gemini-3.5-flash',         // Tier 1: Gary's brain — game picks
-  'gemini-3-flash-preview',   // Tier 2: research, props, DFS
-  'gemini-3.1-pro-preview',   // Tier 3: fallback only
+  'gemini-3.5-flash',         // legacy brain (game picks are Sol now)
+  'gemini-3-flash-preview',   // research, DFS
+  'gemini-3.6-flash',         // props lane
+  'gemini-3.1-pro-preview',   // fallback only
 ];
 
 export function validateGeminiModel(model) {

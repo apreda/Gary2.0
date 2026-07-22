@@ -1,4 +1,4 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
@@ -141,7 +141,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // prompts, Jun 25-Jul 4). Founder reverted props to the documented Tier 2
   // on Jul 8; props win-rate stays on the nightly watch — one-line re-upgrade
   // if the lane sags.
-  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? GEMINI_FLASH_MODEL : GEMINI_PRO_MODEL);
+  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? GEMINI_PROPS_MODEL : GEMINI_PRO_MODEL);
   const modelLabel = modelOverride
     ? `OVERRIDE: ${modelOverride}`
     : isPropsMode
