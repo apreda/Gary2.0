@@ -131,3 +131,158 @@ export function bindPickToBoard(finalPick, { homeTeam, awayTeam, boardRows = [] 
   if (!best) return null;
   return { pick: `${team} ML ${fmtOdds(best.odds)}`, type: 'moneyline', odds: best.odds, spread: null, spreadOdds: null, book: best.book, side };
 }
+
+async function executeToolCall(tc, sportKey, homeTeam, awayTeam, game, state) {
+  const name = tc.function?.name;
+  let toolArgs = {};
+  try { toolArgs = JSON.parse(tc.function?.arguments || '{}'); } catch { /* leave empty */ }
+
+  if (name === 'fetch_stats') {
+    const token = toolArgs.token || toolArgs.stat_type;
+    if (!token) return { name, content: 'fetch_stats needs a "token" argument.' };
+    try {
+      const result = await fetchStats(sportKey, token, homeTeam, awayTeam, { game });
+      const summary = summarizeStatForContext(result, token, homeTeam, awayTeam);
+      state.corpus.push({ content: summary });
+      state.toolCallHistory.push({ token, quality: 'ok' });
+      return { name, content: summary };
+    } catch (e) {
+      state.toolCallHistory.push({ token, quality: 'unavailable' });
+      return { name, content: `Error fetching ${token}: ${e.message}` };
+    }
+  }
+  if (name === 'fetch_narrative_context') {
+    if (state.grounding >= MAX_GROUNDING) return { name, content: `Search limit reached (${MAX_GROUNDING}).` };
+    state.grounding++;
+    try {
+      const r = await geminiGroundingSearch(toolArgs.query || '', { maxTokens: 1500 });
+      const text = r?.data || 'No results.';
+      state.corpus.push({ content: text });
+      return { name, content: text };
+    } catch (e) {
+      return { name, content: `Search error: ${e.message}` };
+    }
+  }
+  return { name: name || 'unknown', content: 'Tool not available.' };
+}
+
+const bestAcrossBooks = (values) => {
+  let best = null;
+  for (const v of values) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    if (best === null || n > best) best = n; // American odds: numerically larger = better payout
+  }
+  return best;
+};
+
+/**
+ * Analyze one game with Sol. Returns the production result contract, or null
+ * when no storable pick was produced (a lineup-gate throw from the scout
+ * builder propagates — the runner logs it and the next tier retries).
+ */
+export async function analyzeGameSol(game, sportKey, options = {}) {
+  const homeTeam = game.home_team?.full_name || game.home_team?.name || game.home_team;
+  const awayTeam = game.away_team?.full_name || game.away_team?.name || game.away_team;
+  const boardRows = Array.isArray(options.sportsbookOdds) ? options.sportsbookOdds : [];
+  if (!boardRows.length) {
+    console.warn(`[PickEngine] ${awayTeam} @ ${homeTeam}: no sportsbook rows — no pick this tier (odds discipline).`);
+    return null;
+  }
+
+  const scout = await buildScoutReport(game, sportKey, { sportsbookOdds: options.sportsbookOdds });
+  const scoutText = scout.garyText || scout.text || '';
+  const board = renderMenuBoard({ homeTeam, awayTeam, boardRows });
+
+  const session = await createOpenAISession({
+    modelName: SOL_MODEL,
+    systemPrompt: buildSolSystemPrompt(todayEST()),
+    tools: toolDefinitions,
+    thinkingLevel: 'high',
+  });
+
+  const state = { corpus: [{ content: scoutText }, { content: board }], toolCallHistory: [], grounding: 0 };
+  let message = [
+    `## SCOUT REPORT — ${awayTeam} @ ${homeTeam}`,
+    scoutText,
+    '',
+    "## TONIGHT'S BOARD",
+    board,
+    '',
+    `${awayTeam} @ ${homeTeam}. What's your best bet on this board?`,
+  ].join('\n');
+  let isFunctionResponse = false;
+  const usage = { in: 0, out: 0 };
+  let finalText = null;
+
+  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+    const res = await sendToOpenAISession(session, message, { isFunctionResponse });
+    usage.in += res.usage?.prompt_tokens || 0;
+    usage.out += res.usage?.completion_tokens || 0;
+    if (res.toolCalls?.length) {
+      const responses = [];
+      for (const tc of res.toolCalls) responses.push(await executeToolCall(tc, sportKey, homeTeam, awayTeam, game, state));
+      message = responses;
+      isFunctionResponse = true;
+      continue;
+    }
+    finalText = res.content;
+    break;
+  }
+
+  let parsed = parseSolFinal(finalText);
+  if (!parsed) {
+    console.warn(`[PickEngine] ${awayTeam} @ ${homeTeam}: no valid final JSON — no pick this tier.`);
+    return null;
+  }
+
+  // Hard rail: anti-fabrication. One corrective retry, then no pick this tier.
+  let audit = auditPickRationale({ rationale: parsed.rationale }, state.corpus);
+  if (audit.retryable.length > 0) {
+    console.warn(`[PickEngine] statAudit: ${audit.retryable.length} untraceable claim(s) — one corrective retry`);
+    const res = await sendToOpenAISession(session, buildStatAuditRetryMessage(audit.retryable), { isFunctionResponse: false });
+    usage.in += res.usage?.prompt_tokens || 0;
+    usage.out += res.usage?.completion_tokens || 0;
+    const reparsed = parseSolFinal(res.content);
+    const reaudit = reparsed ? auditPickRationale({ rationale: reparsed.rationale }, state.corpus) : null;
+    if (!reparsed || reaudit.retryable.length > 0) {
+      console.warn(`[PickEngine] still untraceable after retry — no pick this tier.`);
+      return null;
+    }
+    parsed = reparsed;
+    audit = reaudit;
+  }
+
+  const bound = bindPickToBoard(parsed.final_pick, { homeTeam, awayTeam, boardRows });
+  if (!bound) {
+    console.warn(`[PickEngine] "${parsed.final_pick}" did not bind to the board (off-menu or ambiguous) — no pick this tier.`);
+    return null;
+  }
+
+  const cost = (usage.in * 5 + usage.out * 30) / 1e6;
+  console.log(`[PickEngine/Sol] ✅ ${bound.pick} (conf ${parsed.confidence_score}) — ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(2)} @ ${bound.book}`);
+
+  return {
+    pick: bound.pick,
+    type: bound.type,
+    odds: bound.odds,
+    confidence: parsed.confidence_score,
+    homeTeam,
+    awayTeam,
+    league: normalizeSportToLeague(sportKey),
+    sport: sportKey,
+    rationale: parsed.rationale,
+    spread: bound.spread ?? bestAcrossBooks(boardRows.map(b => b.spread_home)),
+    spreadOdds: bound.spreadOdds,
+    moneylineHome: bestAcrossBooks(boardRows.map(b => b.ml_home)),
+    moneylineAway: bestAcrossBooks(boardRows.map(b => b.ml_away)),
+    total: boardRows.find(b => b.total != null && b.total !== '')?.total ?? null,
+    totalOdds: null,
+    toolCallHistory: state.toolCallHistory,
+    verifiedTaleOfTape: scout.verifiedTaleOfTape ?? null,
+    injuries: scout.injuries ?? null,
+    venue: scout.venue ?? null,
+    _statAuditWarnings: audit.warnOnly.length ? audit.warnOnly : null,
+    agentic: true,
+  };
+}
