@@ -309,7 +309,10 @@ export async function buildMlbScoutReport(game, options = {}) {
           const pitches = p?.stats?.pitching?.numberOfPitches;
           apps.push(`${p?.person?.fullName || '?'} ${ip.toFixed(1)} IP${pitches != null ? ` (${pitches} pitches)` : ''}`);
         }
-        const date = (g.gameDate || '').split('T')[0];
+        // officialDate is the ET calendar day; gameDate is a UTC instant that
+        // rolls night games a day forward (yesterday's usage would read as
+        // TODAY's — found Jul 22 on the WSH bullpen block).
+        const date = (g.officialDate || g.gameDate || '').split('T')[0];
         dayLines.push(`${date}: ${apps.length ? apps.join(', ') : 'no reliever appearances'}`);
       }
       return dayLines.length ? `${teamName}:\n  ${dayLines.join('\n  ')}` : null;
