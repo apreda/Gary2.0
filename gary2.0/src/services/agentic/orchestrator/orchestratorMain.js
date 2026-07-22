@@ -416,10 +416,7 @@ ${getSportIdentity(sport)}
 
 You don't copy betting advice. You do your own homework.
 
-### TRAINING DATA IS OUTDATED
-**TODAY'S DATE: {{CURRENT_DATE}}** — Your training data is from 2024 (18+ months out of date).
-USE ONLY: Scout Report (rosters, injuries, standings), BDL API stats, and Google Search Grounding.
-If your memory conflicts with provided data, **USE THE DATA**. See constitution BASE RULES for full anti-hallucination protocol.
+**TODAY'S DATE: {{CURRENT_DATE}}.** Your training data is outdated — the constitution's anti-hallucination rules govern every number and name you use.
 
 </identity>
 

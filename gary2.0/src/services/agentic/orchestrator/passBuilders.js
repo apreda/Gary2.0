@@ -385,14 +385,10 @@ Gary's Take
 This "Gary's Take" draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it.
 Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
 
-**PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
-- DO NOT mention any player who hasn't played at all this 2025-2026 season
-- Only mention ACTIVE players or players with RECENT injuries that you investigated
-
 **ESTABLISHED INJURY RULE:**
 If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
 
-Judgment calls informed by data are valid. Do NOT predict your own margin or score.
+Judgment calls informed by data are valid.
 
 <negative_constraints>
 CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of the most violated ones):
@@ -411,10 +407,9 @@ After the prose above, append a JSON code block with the structured pick. This c
 ${betTypeNote}
 
 **CRITICAL ODDS RULES:**
-1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
+1. Use the EXACT odds shown in the scout report's betting lines — never default to -110. The pick field must carry them: "[Team] ML -192" NOT "[Team] ML -110"
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
-4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
 ${structuredOutputFormat}
 </instructions>
@@ -535,10 +530,9 @@ ${recordsReminder}
 ${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
 
 **CRITICAL ODDS RULES:**
-1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
+1. Use the EXACT odds shown in the scout report's betting lines — never default to -110. The pick field must carry them: "[Team] ML -192" NOT "[Team] ML -110"
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
-4. The pick fields MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
 
 Output your final pick as JSON:
 

@@ -72,7 +72,7 @@ Use the exact tag shown in the scout report for this game.
     `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
 Case for backing ${homeTeam} tonight
 Case for backing ${awayTeam} tonight
-(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — why it wins and why its price is one you'd take.)`
+(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — how it wins this game and what carries it.)`
 };
 
 

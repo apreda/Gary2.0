@@ -291,17 +291,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — run line / moneyline.`
         : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
 
-      const caseReminder = (isGamePicksMode && bilateralFn)
-        ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
-        : '';
-
       // Jul 8 2026 cost audit: this contract used to ORDER Gary to keep
       // investigating on his own even though every Flash-covered token is
       // already seeded into the dedup set — those re-requests return nothing
       // new, so the order guaranteed wasted big-brain round-trips every game.
       // The briefing IS the investigation (the December design); Gary fetches
       // only what is genuinely missing.
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — this briefing IS your investigation. Everything it covers is already fetched; re-requesting those stats returns nothing new.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nUse your own fetch_stats calls ONLY where a specific fact you need is genuinely missing from the briefing and the scout report. If nothing is missing, go straight to your Pass 1 synthesis.${caseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
+      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — this briefing IS your investigation. Everything it covers is already fetched; re-requesting those stats returns nothing new.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nUse your own fetch_stats calls ONLY where a specific fact you need is genuinely missing from the briefing and the scout report. If nothing is missing, go straight to your Pass 1 synthesis.`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
       nextMessageToSend = userMessage;

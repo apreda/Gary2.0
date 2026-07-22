@@ -158,3 +158,26 @@ describe('stale-injury telemetry (log-only monitor)', () => {
     expect(findStaleInjuryMentions('Judge remains out.', injuries)).toEqual([]);
   });
 });
+
+describe('prompt dedup audit (founder-approved, Jul 22): removed duplicates stay removed', () => {
+  const passSrc = src('src/services/agentic/orchestrator/passBuilders.js');
+  const mainSrc = src('src/services/agentic/orchestrator/orchestratorMain.js');
+  const constSrc = src('src/services/agentic/constitution/index.js');
+  const loopSrc = src('src/services/agentic/orchestrator/agentLoop.js');
+  it('stale pointers are gone (RAW ODDS VALUES / 2025-2026 label / duplicate roster+margin lines)', () => {
+    expect(passSrc).not.toContain('RAW ODDS VALUES');
+    expect(passSrc).not.toContain('2025-2026 season');
+    expect(passSrc).not.toContain('PLAYER NAME RULES');
+    expect(mainSrc).not.toContain('TRAINING DATA IS OUTDATED');
+    expect(constSrc).not.toContain('If a player is NOT listed in the scout report roster section');
+  });
+  it('the briefing wrapper no longer duplicates the bilateral ask or the completion marker', () => {
+    const wrapper = loopSrc.slice(loopSrc.indexOf('const briefingBlock'), loopSrc.indexOf('const briefingBlock') + 900);
+    expect(wrapper).not.toContain('caseReminder');
+    expect(wrapper).not.toContain('INVESTIGATION COMPLETE');
+  });
+  it('bilateral case prompts are price-free (Pass 1 design — price enters at 2.5)', () => {
+    expect(src('src/services/agentic/constitution/mlbConstitution.js')).not.toContain("why its price is one you'd take");
+    expect(src('src/services/agentic/constitution/nhlConstitution.js')).not.toContain("why its price is one you'd take");
+  });
+});

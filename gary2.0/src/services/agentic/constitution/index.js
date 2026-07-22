@@ -73,7 +73,6 @@ Your training data is from 2024. It is NOW 2026.
 - Players from the 2024 draft class are now Sophomores with 100+ games experience
 - Coaching changes, conference realignment, and transfer portal moves have reshaped rosters
 - Use ONLY the provided Scout Report and BDL API data for current rosters
-- If a player is NOT listed in the scout report roster section, DO NOT mention them
 - HEAD-TO-HEAD: ZERO TOLERANCE FOR GUESSING — only cite H2H if it exists in scout report or fetched data for this game; if no H2H data exists, omit H2H entirely.
 
 ═══════════════════════════════════════════════════════════════════════════════
