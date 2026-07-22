@@ -70,6 +70,9 @@ describe('pickEngine: model + prompt', () => {
     expect(p).toContain('You are Gary, a professional sports bettor. Today is 2026-07-22.');
     expect(p).toContain("one job: make the bet on tonight's board that wins money");
     expect(p).toContain("Never cite a number that isn't in the report or a tool result");
+    expect(p).toContain('never use undated news');        // rev Jul 22 PM: traceability without card citations
+    expect(p).toContain('4-6 full paragraphs');           // rev Jul 22 PM: founder length cue
+    expect(p).not.toContain('must carry a date');         // the phrasing that printed "per reporting dated..."
     expect(p).toContain('"final_pick"');
   });
 });
@@ -390,5 +393,24 @@ describe('pickEngine: count-claim retry flow', () => {
     expect(sendToOpenAISession).toHaveBeenCalledTimes(2);
     const retryMsg = sendToOpenAISession.mock.calls[1][1];
     expect(retryMsg).toContain('2, 10, 6, 3, 8');
+  });
+});
+
+import { findStaleInjuryMentions } from '../../../src/services/agentic/pickEngine.js';
+
+describe('stale-injury telemetry (log-only monitor)', () => {
+  const injuries = [
+    '[NEW] Aaron Judge (RF) — Ribs (Right): not ready to resume activities. (Jul 18 — 3d ago)',
+    '[KNOWN] Evan Sisk (RP) — Elbow (Left): placed on the 15-day IL. (Jul 4 — 18d ago)',
+    '[KNOWN] Endy Rodriguez (C) — Lower Body (Left): out of the lineup. (Jul 8 — 13d ago)',
+  ].join('\n');
+
+  it('flags only OLD injuries actually mentioned in the rationale', () => {
+    const r = findStaleInjuryMentions('With Sisk still sidelined the bullpen thins out late.', injuries);
+    expect(r).toEqual(['Evan Sisk (18d old)']);
+  });
+  it('ignores fresh injuries and unmentioned names', () => {
+    expect(findStaleInjuryMentions('Judge remains out, which reshapes the lineup.', injuries)).toEqual([]);
+    expect(findStaleInjuryMentions('A clean pitching duel decides this one.', injuries)).toEqual([]);
   });
 });

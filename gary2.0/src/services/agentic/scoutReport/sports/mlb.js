@@ -156,8 +156,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     // the matchup; grounding now only adds what no API has: late-breaking, same-day news.
     geminiGroundingSearch(
       `MLB ${season}: ${awayTeam} at ${homeTeam} TODAY — only same-day breaking news that affects this game: ` +
-      `late injuries or scratches, lineup or rotation changes, bullpen availability notes, and weather. ` +
-      `Report only concrete, same-day facts with names. If there is no breaking news, say so briefly.`,
+      `late injuries or scratches, lineup or rotation changes, and weather. ` +
+      `Name the specific players involved in any injury or roster note — a report without names is not usable. ` +
+      `Report only concrete, same-day facts. If there is no breaking news, say so briefly.`,
       groundingOpts
     ).then(r => r?.data || '').catch(() => ''),
     // Lineups: BDL API first (pre-game, includes handedness + probable pitchers);
