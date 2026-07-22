@@ -18,11 +18,12 @@ import { ncaabSeason } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
 
 // Now import modules that depend on env vars
-const { analyzeGameSol } = await import('../src/services/agentic/pickEngine.js');
+const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
+const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 
 // Map verifiedTaleOfTape tokens to iOS StatValues property names.
 // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.;
@@ -939,7 +940,7 @@ async function main() {
         };
         let result;
         try {
-          result = await analyzeGameSol(game, config.key, runnerOptions);
+          result = await analyzeGame(game, config.key, runnerOptions);
         } catch (err) {
           if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) {
             console.log(`\n⚠️  Request aborted for ${game.away_team} @ ${game.home_team}. Skipping...`);
@@ -1002,6 +1003,12 @@ async function main() {
 
           console.log(`\n✅ PICK: ${result.pick}`);
           console.log(`   Type: ${result.type}`);
+          // Stale-injury telemetry (Jul 22 2026, founder: monitor that old
+          // injuries never carry a pick's case). Log-only, never blocks.
+          try {
+            const staleInj = findStaleInjuryMentions(result.rationale, typeof result.injuries === 'string' ? result.injuries : '');
+            if (staleInj.length) console.warn(`   [InjuryWatch] card cites injuries older than 7d: ${staleInj.join(', ')} — review whether they carry the case.`);
+          } catch { /* telemetry must never break the run */ }
           if (result.toolCallHistory) {
             // Show UNIQUE stats only (not duplicates)
             console.log(`   Stats Requested (${statsCount} unique): ${uniqueTokens.join(', ')}`);

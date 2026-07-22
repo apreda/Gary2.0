@@ -21,8 +21,12 @@
 // Note: gemini-3-pro-preview shut down March 9, 2026 — do not reintroduce.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Legacy Tier 1 (game picks moved to GPT-5.6 Sol via pickEngine.js, Jul 22
-// 2026) — still the fallback target for legacy orchestrator paths.
+// GAME PICKS run the FULL orchestrator prompt stack on GPT-5.6 Sol (founder,
+// Jul 22 2026 PM: "the only thing we should have changed is that we are using
+// Sol 5.6 now" — same pick process, new brain; routed via the OpenAI adapter
+// seam in sessionManager, same as the July 5.5 bake-off).
+export const GAME_PICK_MODEL = 'gpt-5.6-sol';
+// Legacy Gemini Tier 1 — research-era fallback references only.
 export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
 // Fallback when the primary errors / rate-limits.
 export const GEMINI_PRO_FALLBACK = 'gemini-3.1-pro-preview';
@@ -80,4 +84,4 @@ export const GEMINI_SAFETY_SETTINGS = [
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
 export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research finish naturally, never kill due to time
 
-console.log(`[Orchestrator] ${GEMINI_PRO_MODEL} primary + ${GEMINI_FLASH_MODEL} research + ${GEMINI_PRO_FALLBACK} fallback`);
+console.log(`[Orchestrator] game brain ${GAME_PICK_MODEL} + ${GEMINI_FLASH_MODEL} research + props ${GEMINI_PROPS_MODEL}`);

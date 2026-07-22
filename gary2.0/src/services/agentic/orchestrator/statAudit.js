@@ -296,3 +296,30 @@ export function auditCountClaims(rationale, { homeTeam, awayTeam, homeScores, aw
   }
   return out;
 }
+
+/**
+ * Stale-injury telemetry (Jul 22 2026, founder: "monitor that Gary isn't
+ * referencing old injuries as a fresh reason"). Parses the scout's injury
+ * section for names + ages and returns any injured player older than
+ * `staleDays` whose name appears in the rationale. LOG-ONLY — never blocks a
+ * pick; mentioning a KNOWN absence as context is legitimate, so this counts
+ * the rate for review rather than judging intent.
+ */
+export function findStaleInjuryMentions(rationale, injuriesText, staleDays = 7) {
+  if (typeof rationale !== 'string' || typeof injuriesText !== 'string' || !rationale || !injuriesText) return [];
+  const out = [];
+  const seen = new Set();
+  const re = /\[(?:NEW|KNOWN)\]\s+([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+)+)\s*\(.*?(\d+)d ago\)/g;
+  for (const m of injuriesText.matchAll(re)) {
+    const name = m[1].trim();
+    const age = parseInt(m[2], 10);
+    if (!Number.isFinite(age) || age <= staleDays) continue;
+    const lastName = name.split(/\s+/).pop();
+    if (seen.has(lastName)) continue;
+    if (new RegExp(`(^|[^A-Za-z])${lastName}([^A-Za-z]|$)`).test(rationale)) {
+      seen.add(lastName);
+      out.push(`${name} (${age}d old)`);
+    }
+  }
+  return out;
+}

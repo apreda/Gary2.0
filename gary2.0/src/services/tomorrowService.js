@@ -314,16 +314,16 @@ async function buildSlate(etDateStr) {
     const n = named.filter(r => r.league === lg).length;
     if (n) byLeague[lg] = n; else delete byLeague[lg];
   }
-  // Doubleheader de-dupe — keep earliest kickoff per (league|away|home), same
-  // guard dailySlateService applies before its upsert.
+  // Doubleheader-safe (Jul 22 2026, founder-directed): commence_time is part
+  // of a game's identity — a same-matchup doubleheader is TWO board rows.
+  // Only exact duplicates (an odds feed emitting the same game twice)
+  // collapse here. Rows carry bdl_game_id via dailySlateService.buildLeagueRows.
   const deduped = Object.values(
-    named.slice()
-      .sort((a, b) => new Date(a.commence_time || 0) - new Date(b.commence_time || 0))
-      .reduce((acc, r) => {
-        const k = `${r.league}|${r.away_team}|${r.home_team}`;
-        if (!acc[k]) acc[k] = r;
-        return acc;
-      }, {}),
+    named.reduce((acc, r) => {
+      const k = `${r.league}|${r.away_team}|${r.home_team}|${r.commence_time}`;
+      if (!acc[k]) acc[k] = r;
+      return acc;
+    }, {}),
   );
   return { rows: deduped, byLeague };
 }
@@ -332,13 +332,16 @@ async function buildSlate(etDateStr) {
 
 async function buildStarters(etDateStr, teamIndex, eraByName) {
   const starters = [];
-  // Per MLB game (keyed "awayAbbr|homeAbbr"): ace label + both-aces flag
+  // Per MLB matchup (keyed "awayAbbr|homeAbbr"): ace label + both-aces flag
   // for the big-games ACE hook, built from the SAME schedule read.
-  const acesByGame = new Map();
-  // Per MLB game (same "awayAbbr|homeAbbr" key): BOTH probable starters'
-  // last names for the big-games card => { away, home }. "Undecided" when a
-  // side has no posted probable (never blank, never fabricated).
-  const pitchersByGame = new Map();
+  // Doubleheader-safe (Jul 22 2026): the value is an ARRAY of per-GAME
+  // entries, each time-stamped — consumers pick the entry nearest their own
+  // row's start time, so game 2's arms never wear game 1's card.
+  const acesByGame = new Map();      // "AWY|HOM" -> [{ t, label, both }]
+  // Same array shape: BOTH probable starters' last names per GAME =>
+  // { t, away, home }. "Undecided" when a side has no posted probable
+  // (never blank, never fabricated).
+  const pitchersByGame = new Map();  // "AWY|HOM" -> [{ t, away, home }]
 
   // MLB — every named probable pitcher, both sides, all games.
   try {
@@ -376,6 +379,13 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
           era,                          // number | null
           xera,                         // number | null (never fabricated)
           game: gameLabel,              // "HOU @ DET" | null
+          // Game identity (Jul 22 2026, doubleheader-safe): which GAME this
+          // arm starts. Readers select starters BY GAME, never by team alone
+          // — a doubleheader puts two same-team arms on one date, and picking
+          // by abbr is a coin flip between them (the Max Fried mixup).
+          game_time: g?.gameDate ?? null,     // ISO first pitch
+          game_number: g?.gameNumber ?? null, // 1 | 2 within the day
+          game_pk: g?.gamePk ?? null,         // MLB statsapi game id
           opponent: oppAbbr || null,    // opposing team abbr | null
           home,                         // pitching at home?
           detail,                       // legacy "HOU 4.03" string (kept for back-compat)
@@ -387,25 +397,25 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
       }
       // Both-pitchers map for the big-games card — keyed by abbreviations so
       // the slate (nicknames) and schedule (full names) resolve to the same
-      // game. Stored for EVERY game (unlike aces, which gate on ERA).
+      // matchup; entries are per-GAME (time-stamped array) so a doubleheader
+      // holds both games. Stored for EVERY game (unlike aces, which gate on ERA).
+      const gameT = Date.parse(g?.gameDate) || null;
       if (awayName && homeName) {
         const aAbbr = abbrFor(awayName, teamIndex);
         const hAbbr = abbrFor(homeName, teamIndex);
-        pitchersByGame.set(`${aAbbr}|${hAbbr}`, {
-          away: gamePitchers.away,
-          home: gamePitchers.home,
-        });
+        const key = `${aAbbr}|${hAbbr}`;
+        const list = pitchersByGame.get(key) || [];
+        list.push({ t: gameT, away: gamePitchers.away, home: gamePitchers.home });
+        pitchersByGame.set(key, list);
       }
       if (gameAces.length && awayName && homeName) {
         gameAces.sort((a, b) => a.era - b.era);
-        // Key by abbreviations so the slate (nicknames) and schedule (full
-        // names) resolve to the same game.
         const aAbbr = abbrFor(awayName, teamIndex);
         const hAbbr = abbrFor(homeName, teamIndex);
-        acesByGame.set(`${aAbbr}|${hAbbr}`, {
-          label: gameAces.map((a) => a.lastName).join(' vs '),
-          both: gameAces.length >= 2,
-        });
+        const key = `${aAbbr}|${hAbbr}`;
+        const list = acesByGame.get(key) || [];
+        list.push({ t: gameT, label: gameAces.map((a) => a.lastName).join(' vs '), both: gameAces.length >= 2 });
+        acesByGame.set(key, list);
       }
     }
   } catch (e) {
@@ -947,8 +957,19 @@ function buildBigGames(board, { mlb }) {
       // RIVALRY — curated divisional pairs.
       if (isRivalry(awayAbbr, homeAbbr)) { setReason('RIVALRY', 27); weight += 24; }
 
+      // Doubleheader-safe map reads: entries are per-GAME (time-stamped) —
+      // take the entry nearest this row's own start time, so game 2's card
+      // never wears game 1's arms.
+      const rowT = Date.parse(row.commence_time) || null;
+      const nearestEntry = (list) => {
+        if (!Array.isArray(list) || list.length === 0) return null;
+        if (rowT == null || list.length === 1) return list[0];
+        return list.slice().sort((a, b) =>
+          Math.abs((a.t ?? rowT) - rowT) - Math.abs((b.t ?? rowT) - rowT))[0];
+      };
+
       // ACE — a probable with a season ERA at/below the ace threshold (ranking only).
-      const aces = mlb.acesByGame.get(`${awayAbbr}|${homeAbbr}`);
+      const aces = nearestEntry(mlb.acesByGame.get(`${awayAbbr}|${homeAbbr}`));
       if (aces?.label) {
         setReason('ACE', 22);
         weight += aces.both ? 16 : 9;
@@ -958,7 +979,7 @@ function buildBigGames(board, { mlb }) {
       // BOTH probable starters (last names) for the card. "Undecided" per side
       // when no probable is posted; falls back to "Undecided"/"Undecided" if
       // the game didn't resolve in the schedule read at all.
-      const gp = mlb.pitchersByGame?.get(`${awayAbbr}|${homeAbbr}`);
+      const gp = nearestEntry(mlb.pitchersByGame?.get(`${awayAbbr}|${homeAbbr}`));
       pitchers = {
         away: gp?.away || 'Undecided',
         home: gp?.home || 'Undecided',
@@ -1089,6 +1110,9 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
     away_abbr: awayAbbr,
     home_abbr: homeAbbr,
     commence_time: row.commence_time ?? null,
+    // Game identity (Jul 22 2026, doubleheader-safe) — pairs with the
+    // starters' game_time so readers join board row ↔ arms BY GAME.
+    bdl_game_id: row.bdl_game_id ?? null,
     venue: row.venue ?? null,
     spread: row.spread ?? null,
     ml_home: row.ml_home ?? null,

@@ -54,7 +54,6 @@ try {
     `${r.big_games.length} big game(s), ${r.starters.length} starter(s), ` +
     `${r.returns.length} return(s), ${r.form.length} form, ` +
     `${r.run_profile.length} run-profile, ${r.weather.length} weather, ` +
-    `${r.wc_lookahead.length} wc-lookahead, ` +
     `lines=${r.any_lines ? 'posted' : 'open soon'}, ` +
     `countdown=${r.countdown_sport || 'none'}`,
   );

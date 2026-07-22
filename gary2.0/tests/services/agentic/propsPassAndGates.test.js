@@ -91,6 +91,6 @@ describe('F-9 REVERSED (Jul 8 cost audit): props run on Tier 2', () => {
   // cheap tier (GEMINI_PROPS_MODEL since Jul 22 2026), never the big brain.
   it('props mode selects the props-tier model, not the big brain', () => {
     const loop = src('src/services/agentic/orchestrator/agentLoop.js');
-    expect(loop).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GEMINI_PRO_MODEL');
+    expect(loop).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GAME_PICK_MODEL');
   });
 });

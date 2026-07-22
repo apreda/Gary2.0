@@ -1,5 +1,17 @@
 # Sol Cutover — Game Picks Move to GPT-5.6 Sol (Approach A)
 
+> **REVISION (Jul 22 PM, founder):** "I didn't think we were changing any part
+> of our actual pick process — the only thing we should have changed is that
+> we are using Sol 5.6 now." FINAL ARCHITECTURE: the FULL Gemini-era
+> orchestrator pass stack (`analyzeGame` — storyteller identity, era-B
+> awareness, best-bet synthesis, line-evaluation ask, THINK LIKE A SHARP,
+> options menu) runs unchanged with `GAME_PICK_MODEL = 'gpt-5.6-sol'` through
+> the OpenAI adapter seam (the July 5.5 bake-off path). `pickEngine.js` is
+> DELETED. Everything below describing the pickEngine architecture is
+> historical; the data-layer work (facts-only desk, fan-parity sections,
+> count-claim rail, stale-injury monitor) all survives in the scout/statAudit
+> layers and serves the full stack.
+
 **Date:** 2026-07-22 · **Approved by:** founder (this session) · **Target:** deployed to Railway EOD today
 
 ## Decision

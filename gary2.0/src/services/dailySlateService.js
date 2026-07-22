@@ -25,7 +25,10 @@ const supabaseAnonKey =
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const TABLE = 'daily_slate';
-const CONFLICT_KEY = 'date,league,away_team,home_team';
+// Doubleheader-safe (Jul 22 2026, founder-directed after the Max Fried mixup):
+// commence_time joined the unique key, so one row per GAME — a same-matchup
+// doubleheader is two rows, never a collapse to the earliest kickoff.
+const CONFLICT_KEY = 'date,league,away_team,home_team,commence_time';
 
 // Active sports for the slate (same set the scheduler plans for).
 const SLATE_SPORTS = [
@@ -101,6 +104,9 @@ export async function buildLeagueRows(sport, etDateStr) {
       away_team: g.away_team,
       home_team: g.home_team,
       commence_time: g.commence_time,
+      // The game's own identity — lets every reader (iOS pages, insight
+      // attachment) tell doubleheader games apart without string games.
+      bdl_game_id: g.bdl_game_id ?? g.id ?? null,
       venue: null, // BDL games+odds shape carries no venue
       ...sanitizeLines(sport.league, {
         spread: toNum(g.spread_home),
@@ -155,22 +161,20 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
     return { date: etDateStr, total: 0, byLeague };
   }
 
-  // De-dupe on the conflict key BEFORE the upsert. A doubleheader (same matchup, two game
-  // times on one ET date) produces two rows with an identical (date, league, away_team,
-  // home_team) key; PostgREST merge-duplicates then throws "ON CONFLICT DO UPDATE command
-  // cannot affect row a second time" (a 500) and sinks the WHOLE slate — that's the
-  // 2026-06-24 outage (3 MLB doubleheaders). Keep the earliest kickoff per matchup.
+  // De-dupe TRUE duplicates on the (now doubleheader-safe) conflict key before
+  // the upsert — commence_time is in the key since Jul 22 2026, so a real
+  // doubleheader is two legitimate rows and both survive. Only an odds feed
+  // emitting the same game twice collapses here (PostgREST merge-duplicates
+  // 500s when one batch hits the same key twice — the 2026-06-24 outage).
   const dedupedRows = Object.values(
-    rows.slice()
-      .sort((a, b) => new Date(a.commence_time || 0) - new Date(b.commence_time || 0))
-      .reduce((acc, r) => {
-        const k = `${r.date}|${r.league}|${r.away_team}|${r.home_team}`;
-        if (!acc[k]) acc[k] = r;   // first (earliest) wins
-        return acc;
-      }, {}),
+    rows.reduce((acc, r) => {
+      const k = `${r.date}|${r.league}|${r.away_team}|${r.home_team}|${r.commence_time}`;
+      if (!acc[k]) acc[k] = r;
+      return acc;
+    }, {}),
   );
   if (dedupedRows.length < rows.length) {
-    console.log(`[DailySlate] De-duped ${rows.length - dedupedRows.length} doubleheader row(s) on the conflict key (kept earliest kickoff)`);
+    console.log(`[DailySlate] De-duped ${rows.length - dedupedRows.length} exact-duplicate row(s) on the conflict key`);
   }
 
   // Idempotent upsert (PostgREST merge-duplicates on the unique key).

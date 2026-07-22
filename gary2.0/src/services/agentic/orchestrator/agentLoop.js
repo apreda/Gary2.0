@@ -1,4 +1,4 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, GAME_PICK_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
@@ -6,7 +6,7 @@ import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from 
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
-import { auditPickRationale, auditPropsPicks, buildStatAuditRetryMessage } from './statAudit.js';
+import { auditPickRationale, auditPropsPicks, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
@@ -141,7 +141,20 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // prompts, Jun 25-Jul 4). Founder reverted props to the documented Tier 2
   // on Jul 8; props win-rate stays on the nightly watch — one-line re-upgrade
   // if the lane sags.
-  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? GEMINI_PROPS_MODEL : GEMINI_PRO_MODEL);
+  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? GEMINI_PROPS_MODEL : GAME_PICK_MODEL);
+  // Game-pick audit = numeric-corpus trace + count-claim verification over the
+  // structured recent scores (both feed the same corrective-retry rail).
+  const auditGamePick = (p, messages) => {
+    const a = auditPickRationale(p, messages);
+    if (!isPropsMode && options?.recentScores && p?.rationale) {
+      const counts = auditCountClaims(p.rationale, options.recentScores);
+      if (counts.length) {
+        a.retryable = [...a.retryable, ...counts];
+        a.unsupported = [...a.unsupported, ...counts];
+      }
+    }
+    return a;
+  };
   const modelLabel = modelOverride
     ? `OVERRIDE: ${modelOverride}`
     : isPropsMode
@@ -1878,7 +1891,7 @@ INVESTIGATION COMPLETE`
           // (stale-memory signatures a re-prompt can fix); windowed/derived
           // claims get warnings without burning a round-trip — they fire on
           // ~23% of non-MLB picks and no tool can source them anyway.
-          const audit = auditPickRationale(earlyPick, messages);
+          const audit = auditGamePick(earlyPick, messages);
           if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
             _statAuditRetried = true;
             console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
@@ -2013,7 +2026,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     if (pick) {
       // Stat audit (same contract as the Pass 2.5 short-circuit exit above):
       // retry only for retryable claims; windowed/derived claims warn-only.
-      const audit = auditPickRationale(pick, messages);
+      const audit = auditGamePick(pick, messages);
       if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
         _statAuditRetried = true;
         console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);

@@ -14,9 +14,9 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/agentLoop.js'), 'utf8');
 
-describe('model tiering: props on their own Gemini tier (games are Sol via pickEngine)', () => {
+describe('model tiering: props on their own Gemini tier (game brain = Sol through the full orchestrator)', () => {
   it('primaryModel branches on props mode', () => {
-    expect(agentLoopSrc).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GEMINI_PRO_MODEL');
+    expect(agentLoopSrc).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GAME_PICK_MODEL');
   });
 
   it('props run gemini-3.6-flash (founder call, Jul 22 2026 — verified live on our key)', () => {
