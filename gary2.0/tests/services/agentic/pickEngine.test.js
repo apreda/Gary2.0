@@ -189,3 +189,17 @@ describe('pickEngine: analyzeGameSol', () => {
     expect(await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: BOARD })).toBeNull();
   });
 });
+
+const runnerSrc = readFileSync(path.join(__dirname, '../../../scripts/run-agentic-picks.js'), 'utf8');
+
+describe('cutover: the runner is hard-wired to Sol for game picks', () => {
+  it('calls analyzeGameSol at the analysis seam', () => {
+    expect(runnerSrc).toContain('analyzeGameSol(game, config.key, runnerOptions)');
+  });
+  it('has no Gemini game-pick dispatch and no engine toggle', () => {
+    expect(runnerSrc).not.toMatch(/\banalyzeGame\(/);
+    expect(runnerSrc).not.toContain('GARY_ENGINE');
+    expect(runnerSrc).not.toContain('buildSystemPrompt');
+    expect(runnerSrc).not.toContain('getConstitution');
+  });
+});

@@ -18,11 +18,10 @@ import { ncaabSeason } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
 
 // Now import modules that depend on env vars
-const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/orchestrator/index.js');
+const { analyzeGameSol } = await import('../src/services/agentic/pickEngine.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
 // Map verifiedTaleOfTape tokens to iOS StatValues property names.
@@ -877,25 +876,6 @@ async function main() {
       // ═══════════════════════════════════════════════════════════════
       
       // Build system prompt for this sport
-      let constitution = getConstitution(config.key);
-      const today = new Date().toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      // Replace date template — handle both sectioned object and flat string
-      if (typeof constitution === 'object' && constitution.full) {
-        for (const key of ['baseRules', 'domainKnowledge', 'investigationPrompts', 'guardrails', 'full']) {
-          if (constitution[key]) {
-            constitution[key] = constitution[key].replace(/{{CURRENT_DATE}}/g, today);
-          }
-        }
-      } else {
-        constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
-      }
-      const systemPrompt = buildSystemPrompt(constitution, config.key);
-      
       console.log(`[${config.name}] 🎯 Processing ${finalGames.length} games`);
 
       // Process each game
@@ -960,7 +940,7 @@ async function main() {
         };
         let result;
         try {
-          result = await analyzeGame(game, config.key, runnerOptions);
+          result = await analyzeGameSol(game, config.key, runnerOptions);
         } catch (err) {
           if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) {
             console.log(`\n⚠️  Request aborted for ${game.away_team} @ ${game.home_team}. Skipping...`);
