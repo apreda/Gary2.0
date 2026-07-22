@@ -26,7 +26,7 @@ import {
   getPitcherPlatoonSplits,
   getPlayerSeasonStats,
 } from '../../../mlbStatsApiService.js';
-import { computeMlbSeriesState } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, toEtDate } from './mlbSeriesState.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -222,7 +222,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     const out = [];
     for (const [id, g] of seasonIndex.entries()) {
       if (g.homeId !== bdlTeamId && g.awayId !== bdlTeamId) continue;
-      const date = String(g.date || '').slice(0, 10);
+      // ET date, matching MLB Stats API officialDate — the UTC slice put every
+      // West-Coast night game on the wrong day and broke the score-pair join.
+      const date = toEtDate(g.date);
       if (date < thirtyDaysAgoIso || date > todayIso) continue;
       if (!/final/i.test(String(g.status || ''))) continue;
       out.push({ id, date, homeRuns: g.homeRuns, awayRuns: g.awayRuns });
@@ -1000,6 +1002,45 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
+  // LINEUP RECENT BATTING — last 7 / 15 day rolls for tonight's starters
+  // (Jul 22 2026, founder-approved: a fan always knows who is 12-for-28
+  // this week; the desk served only season xStats + raw box lines. BDL
+  // splits byDayMonth, one cached call per starter. Facts only — no
+  // hot/cold labels; the reasoning model decides what a roll means.)
+  // ═══════════════════════════════════════════════════════════════════
+  const battingRollFor = async (batter) => {
+    if (batter?.playerId == null) return null;
+    try {
+      const splits = await ballDontLieService.getMlbPlayerSplits({ playerId: batter.playerId, season });
+      const rows = splits?.byDayMonth || [];
+      const roll = (name) => rows.find(r => r.category === 'batting' && r.split_name === name);
+      const fmt = (r) => r && r.at_bats > 0
+        ? `${r.hits}-${r.at_bats}, ${r.home_runs || 0} HR, ${r.rbis ?? r.rbi ?? 0} RBI, ${r.avg ?? '?'} AVG/${r.ops ?? '?'} OPS`
+        : null;
+      const l7 = fmt(roll('Last 7 Days'));
+      const l15 = fmt(roll('Last 15 Days'));
+      if (!l7 && !l15) return null;
+      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}`;
+    } catch { return null; }
+  };
+  const battingRollsFor = async (data, teamName) => {
+    const lines = (await Promise.all((data?.batters || []).map(battingRollFor))).filter(Boolean);
+    return lines.length ? `${teamName}:\n${lines.join('\n')}` : null;
+  };
+  const [homeBattingRolls, awayBattingRolls] = await Promise.all([
+    battingRollsFor(homeData, homeTeam),
+    battingRollsFor(awayData, awayTeam),
+  ]);
+  const lineupRecentBattingSection = [homeBattingRolls, awayBattingRolls].filter(Boolean).join('\n\n')
+    || 'Recent batting rolls unavailable for tonight\'s starters.';
+
+  // Season head-to-head — computed from the cached season index, zero calls.
+  const seasonSeries = computeMlbSeasonSeries(seasonIndex, homeTeamBdlId, awayTeamBdlId, homeTeam, awayTeam);
+  const seasonSeriesBlock = seasonSeries
+    ? `\n${seasonSeries.line}\n${seasonSeries.results.map(r => `  ${r}`).join('\n')}`
+    : '';
+
+  // ═══════════════════════════════════════════════════════════════════
   // TEAM SEASON STATS — FORMAT COMPARISON SECTION
   // ═══════════════════════════════════════════════════════════════════
   let teamSeasonStatsSection = '';
@@ -1139,6 +1180,9 @@ ${smallSampleFlagsSection}
 ═══ CONFIRMED LINEUPS ═══
 ${confirmedLineupsSection}
 
+═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══
+${lineupRecentBattingSection}
+
 ═══ BETTING CONTEXT ═══
 ${oddsSection}
 
@@ -1162,7 +1206,7 @@ BULLPEN USAGE — LAST 3 GAMES (per-appearance IP and pitch counts from box scor
 ${[homeBullpenUsage, awayBullpenUsage].filter(Boolean).join('\n') || 'No bullpen usage data available.'}
 
 ═══ SERIES STATE ═══
-${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}
+${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}
 
 Recent results:
 ${recentResults}

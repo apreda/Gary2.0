@@ -289,3 +289,39 @@ describe('facts-only data layer (founder law, Jul 22): the desk never interprets
     expect(toolDefsSrc).not.toContain('2-5 stat categories');
   });
 });
+
+import { computeMlbSeasonSeries } from '../../../src/services/agentic/scoutReport/sports/mlbSeriesState.js';
+
+describe('season head-to-head (fan-parity data, Jul 22)', () => {
+  const idx = new Map([
+    [1, { date: '2026-05-05T23:00:00Z', status: 'STATUS_FINAL', homeId: 19, awayId: 22, homeRuns: 7, awayRuns: 2 }],
+    [2, { date: '2026-05-06T23:00:00Z', status: 'STATUS_FINAL', homeId: 19, awayId: 22, homeRuns: 1, awayRuns: 4 }],
+    [3, { date: '2026-07-20T23:00:00Z', status: 'STATUS_FINAL', homeId: 22, awayId: 19, homeRuns: 3, awayRuns: 9 }],
+    [4, { date: '2026-07-22T23:00:00Z', status: 'STATUS_SCHEDULED', homeId: 19, awayId: 22, homeRuns: null, awayRuns: null }],
+    [5, { date: '2026-06-01T23:00:00Z', status: 'STATUS_FINAL', homeId: 19, awayId: 14, homeRuns: 2, awayRuns: 1 }],
+  ]);
+
+  it('tallies only FINAL meetings between the two teams, oriented to tonight\'s home team', () => {
+    const r = computeMlbSeasonSeries(idx, 19, 22, 'Yankees', 'Pirates');
+    expect(r.line).toBe('Yankees lead the season series 2-1 (3 meetings).');
+    expect(r.results).toHaveLength(3);
+    expect(r.results[0]).toBe('2026-05-05: Yankees 7-2 vs Pirates');
+    expect(r.results[2]).toBe('2026-07-20: Yankees 9-3 @ Pirates');
+  });
+
+  it('handles away-team lead and no meetings', () => {
+    const r = computeMlbSeasonSeries(idx, 22, 19, 'Pirates', 'Yankees');
+    expect(r.line).toBe('Yankees lead the season series 2-1 (3 meetings).');
+    expect(computeMlbSeasonSeries(idx, 19, 6, 'Yankees', 'White Sox')).toBeNull();
+    expect(computeMlbSeasonSeries(null, 19, 22, 'A', 'B')).toBeNull();
+  });
+});
+
+import { toEtDate } from '../../../src/services/agentic/scoutReport/sports/mlbSeriesState.js';
+
+describe('ET dates for BDL UTC instants (west-coast night games)', () => {
+  it('rolls a post-midnight-UTC game back to its ET calendar day', () => {
+    expect(toEtDate('2026-07-22T02:10:00.000Z')).toBe('2026-07-21');
+    expect(toEtDate('2026-07-21T23:05:00.000Z')).toBe('2026-07-21');
+  });
+});

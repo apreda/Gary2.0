@@ -107,3 +107,50 @@ export function computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, upcom
     line: `Game ${seriesGame}${ofN} vs ${awayTeam} — ${score} so far.${lastLine}`,
   };
 }
+
+/**
+ * SEASON HEAD-TO-HEAD — pure derivation from the cached BDL season game index
+ * (Jul 22 2026, founder-approved: "Yankees took 4 of 6 from them in May" is
+ * fan knowledge the desk didn't carry; Series State covers only the current
+ * series). Zero API calls — the index is already in memory. Facts only.
+ *
+ * @param {Map} seasonIndex - BDL season index: id -> { date, status, homeId, awayId, homeRuns, awayRuns }
+ * @returns {{ line: string, results: string[] } | null}
+ */
+// BDL index dates are UTC instants — a West-Coast night game rolls past
+// midnight UTC and displays as the wrong day. Always present the ET date.
+export function toEtDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? String(iso).slice(0, 10) : d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+export function computeMlbSeasonSeries(seasonIndex, homeBdlId, awayBdlId, homeTeam, awayTeam) {
+  if (!seasonIndex || typeof seasonIndex.entries !== 'function' || !homeBdlId || !awayBdlId) return null;
+  const meetings = [];
+  for (const [, g] of seasonIndex.entries()) {
+    const pair = (g.homeId === homeBdlId && g.awayId === awayBdlId) ||
+                 (g.homeId === awayBdlId && g.awayId === homeBdlId);
+    if (!pair) continue;
+    if (!/final/i.test(String(g.status || ''))) continue;
+    if (g.homeRuns == null || g.awayRuns == null) continue;
+    meetings.push(g);
+  }
+  if (!meetings.length) return null;
+  meetings.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  let homeWins = 0;
+  let awayWins = 0;
+  const results = meetings.map(g => {
+    const tonightHomeHosted = g.homeId === homeBdlId;
+    const homeTeamRuns = tonightHomeHosted ? g.homeRuns : g.awayRuns;
+    const awayTeamRuns = tonightHomeHosted ? g.awayRuns : g.homeRuns;
+    if (homeTeamRuns > awayTeamRuns) homeWins++; else awayWins++;
+    const d = toEtDate(g.date);
+    return `${d}: ${homeTeam} ${homeTeamRuns}-${awayTeamRuns} ${tonightHomeHosted ? 'vs' : '@'} ${awayTeam}`;
+  });
+  const lead = homeWins > awayWins
+    ? `${homeTeam} lead the season series ${homeWins}-${awayWins}`
+    : awayWins > homeWins
+      ? `${awayTeam} lead the season series ${awayWins}-${homeWins}`
+      : `Season series tied ${homeWins}-${awayWins}`;
+  return { line: `${lead} (${meetings.length} meeting${meetings.length === 1 ? '' : 's'}).`, results };
+}
