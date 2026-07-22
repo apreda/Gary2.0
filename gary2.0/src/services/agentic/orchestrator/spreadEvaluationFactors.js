@@ -93,27 +93,16 @@ Some nights one thing decides it; some nights it's the whole picture. Lead with 
 
 /**
  * MLB Awareness — injected at Pass 1 and in Flash research briefing.
- * Jul 7 restoration: era-B text (May 28-Jun 28, the +18.3u month) verbatim,
- * with exactly three emendations — the F-6 quotable ("shiny ERA is fragile")
- * stays dead, the founder's streak license rides the momentum bullet, and the
- * anti-fixation self-check (the Dodgers guard) is appended.
+ * Jul 22 (founder, knowing item-by-item choice after reading the full prompt
+ * surface): ONLY the variance bullet and the momentum/streaks bullet survive —
+ * everything explaining how baseball works to the model was removed ("why do
+ * we have to tell a nearly super smart intelligence how starting pitching
+ * works"). The data on the desk carries series state, bullpen usage, parks,
+ * schedule; the model judges.
  */
 export function getMlbSeasonAwareness() {
   return `## MLB SEASON AWARENESS
 
-MLB is a 162-game marathon. Unlike short-sample tournaments, you have months of data — but that data needs context. A team's April performance may not reflect who they are in August. Recent form (last 10-15 games) is often more predictive than season-long averages.
-
-**MLB game analysis — what to look at:**
-- **The starting pitcher is one lever, not the whole game.** A starter throws roughly 6 of 18 half-innings and faces the lineup only 2-3 times; the offense across all 9 innings, the bullpen's 3 innings, the defense, and plain variance decide the rest. A clear edge on the mound moves the needle, but it rarely settles a game by itself — weigh it honestly against everything else rather than treating it as decisive. Recent form (last 3-5 starts), pitch count trends, and performance against this specific lineup are more telling than season ERA alone.
-- **The probable pitchers are announced before the line is set — every price already knows who is pitching.** Whether tonight's price over-weighs a starter, under-weighs him, or has him exactly right is yours to judge and factor in or not factor in to your final pick decision.
-- **Bullpen state changes daily.** A team's closer pitching 3 of the last 4 days, a setup man on a back-to-back, or a bullpen game after extra innings yesterday — these affect how the game plays out from the 6th inning onward. Investigate availability for both teams.
-- **Park factors are real.** Coors Field inflates run totals by 20-30%. Pitcher-friendly parks suppress scoring. Indoor stadiums remove weather variables entirely.
-- **Schedule and rest matter.** Day games after night games, long road trips, cross-country travel, and series positioning (rubber games) all affect performance. All of it is public and already in the price — the question is whether the number moved too much, or not enough, on it.
-- **A series is one opponent on consecutive nights.** Game one is priced off the fresh matchup; every game after is priced knowing the night before — the score, the bullpen innings spent on both sides, which hitters just saw which arms. The season series and last night's game are public; tonight's number was set after both.
-- **Division familiarity cuts both ways.** Teams in the same division play 19 times per season. Hitters see the same pitchers repeatedly — familiarity can help the offense or the pitcher depending on adjustments.
 - **Baseball runs on heavy game-to-game variance.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
-- **Expected stats read sustainability and price — not tonight's result.** When a pitcher's ERA outruns his xERA (or a hitter's results outrun their xwOBA), that gap tells you whether the season-long results are built on something solid or fragile, and therefore whether the market price is fair. Treat it as a price question, not a forecast. Over a single start, variance rules and a pitcher "due to regress" throws gems constantly. Let the gap inform how you read the PRICE, and decide the game itself on the full matchup.
-- **One-run games are volatile over small samples.** Teams with extreme records in 1-run games may be overperforming or underperforming their underlying quality. Investigate whether a team's recent results are driven by process or luck.
-- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. Streaks are real currency in this sport — riding a hot team against a cold one is legitimate baseball judgment; weigh it against tonight's matchup. These dynamics are real and worth investigating alongside the statistical matchup.
-- **If you find yourself picking the same team several days running, ask yourself:** am I evaluating tonight's specific matchup — this starter, this lineup, this bullpen state — or leaning on season-level stats and a reputation that haven't moved? Yesterday's result doesn't change tonight's analysis. Investigate what's different.`;
+- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. Streaks are real currency in this sport — riding a hot team against a cold one is legitimate baseball judgment; weigh it against tonight's matchup. These dynamics are real and worth investigating alongside the statistical matchup.`;
 }

@@ -102,10 +102,8 @@ describe('wiring: scout report renders SERIES STATE; awareness carries the appro
     expect(f).toContain('computeMlbSeriesState');
   });
 
-  it('awareness block carries the founder-approved series bullet, verbatim', () => {
+  it('the series-state DATA carries the story — the tutoring bullet was removed (founder, Jul 22)', () => {
     const f = src('services/agentic/orchestrator/spreadEvaluationFactors.js');
-    expect(f).toContain('A series is one opponent on consecutive nights.');
-    expect(f).toContain('Game one is priced off the fresh matchup; every game after is priced knowing the night before');
-    expect(f).toContain("The season series and last night's game are public; tonight's number was set after both.");
+    expect(f).not.toContain('A series is one opponent on consecutive nights.');
   });
 });

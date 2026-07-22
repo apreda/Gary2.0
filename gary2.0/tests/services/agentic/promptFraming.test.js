@@ -80,9 +80,11 @@ describe('F-11 REVERSED (Jul 7 April-shape port): no spot/psychology paragraphs 
   // The winning NBA configuration (Mar 20-21 overhaul) REMOVED motivation and
   // spot narratives entirely — "motivation used as a factor" was a documented
   // loss pattern. Founder: port what NBA had when it was doing well.
-  it('MLB Pass 1 keeps the era-B feel sentence, without the July spot-psychology expansion', () => {
-    expect(mlbPass1).toContain('consider the feel of the game');
+  it('MLB Pass 1 task is the simple read ask — no factor enumeration, no feel-of-game script (founder, Jul 22)', () => {
+    expect(mlbPass1).not.toContain('consider the feel of the game');
+    expect(mlbPass1).not.toContain('the pitchers taking the mound tonight, the lineups');
     expect(mlbPass1).not.toContain('let-down');
+    expect(mlbPass1).toContain('investigate this game and build your honest read');
   });
 });
 
@@ -172,9 +174,11 @@ describe('run-line discipline: bet mechanics only, no routing (Jul 7, trimmed sa
 });
 
 describe('NBA-shape port to MLB (Jul 7 structural audit: the winning sport carries the least methodology)', () => {
-  it('MLB awareness carries the NBA anti-fixation self-check (the Dodgers guard, done as a question)', () => {
-    expect(getMlbSeasonAwareness()).toContain('same team several days running');
-    expect(mlbPass1).toContain('same team several days running');
+  it('awareness is ONLY the two founder-kept bullets (Jul 22): variance + momentum/streaks', () => {
+    const aw = getMlbSeasonAwareness();
+    expect(aw).not.toContain('same team several days running');
+    expect(aw).toContain('heavy game-to-game variance');
+    expect(aw).toContain('Streaks are real currency');
   });
 
   it('the canned run-line-size commentary block is gone', () => {
@@ -182,21 +186,16 @@ describe('NBA-shape port to MLB (Jul 7 structural audit: the winning sport carri
     expect(mlbPass1).not.toContain('At this run line size');
   });
 
-  it('season awareness is the era-B text (Jul 7 restoration) with the three approved emendations', () => {
+  it('season awareness is trimmed to the two kept bullets — all baseball tutoring removed (founder, Jul 22)', () => {
     const aw = getMlbSeasonAwareness();
-    expect(aw).toContain('162-game marathon');
-    expect(aw).toContain('MLB game analysis — what to look at');
-    expect(aw).toContain('same team several days running');
-    expect(aw).toContain('Streaks are real currency');
+    expect(aw).not.toContain('162-game marathon');
+    expect(aw).not.toContain('MLB game analysis — what to look at');
+    expect(aw).not.toContain('one lever, not the whole game');
+    expect(aw).not.toContain('announced before the line is set');
+    expect(aw).not.toContain('Park factors are real');
     expect(aw).not.toContain('shiny ERA is fragile');
-    // MLB's own public-narrative traps carry the NBA lens (founder, Jul 7 eve).
-    expect(aw).toContain('announced before the line is set');
-    expect(aw).toContain('whether the number moved too much, or not enough');
-    // Founder: example stories become templates — the bullet stays fact + open
-    // question, three directions live, Gary's own call from the matchup.
-    expect(aw).not.toContain("an ace's start");
-    expect(aw).toContain('or has him exactly right');
-    expect(aw).toContain('factor in or not factor in to your final pick decision');
+    expect(aw).toContain('heavy game-to-game variance');
+    expect(aw).toContain('Streaks are real currency');
   });
 
   it('no DESCRIPTIVE vs CAUSAL section anywhere in MLB (superseded by best-bet grammar)', () => {
@@ -214,7 +213,6 @@ describe('HOW-to-pick sweep (Jul 7 — founder: "the prompts kept telling Gary h
     expect(mlbPass25).not.toContain('overpaying for a fragile number');
     expect(mlbPass25).not.toContain('frame it exactly that way');
     expect(mlbPass25).not.toContain('context for value');
-    expect(getMlbSeasonAwareness()).toContain('not a forecast');
   });
 
   it('Pass 1 asks whether the story holds up, not where to disagree', () => {

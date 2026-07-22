@@ -765,9 +765,7 @@ ${factors}
 <instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
 
-Your job in this pass is the READ: investigate the game — the pitchers taking the mound tonight, the lineups, the bullpens, the park, the schedule, the recent context — and build your honest read of how this game actually goes. The betting options come after your read is formed; do not shop prices now.
-
-Beyond the stats, consider the feel of the game: which team is rolling right now? Which pitcher is struggling? What's the series context? Is there momentum or pressure from recent results? Your research assistant also surfaced situational details — spring training form, velocity changes, weather, travel, and other context that may not show up in stat lines.
+Your job in this pass is the READ: investigate this game and build your honest read of how it actually goes. The betting options come after your read is formed; do not shop prices now.
 
 Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
 
