@@ -251,3 +251,18 @@ describe('pickEngine: bug-hunt fixes (Jul 22 afternoon)', () => {
     expect(names.sort()).toEqual(['fetch_narrative_context', 'fetch_stats']);
   });
 });
+
+describe('pickEngine: coverage fallback (locked every-game policy)', () => {
+  it('falls back to game-level flat odds when no per-book rows exist', async () => {
+    sendToOpenAISession.mockReset().mockResolvedValueOnce(FINAL);
+    const flatGame = { ...GAME, moneyline_home: -160, moneyline_away: 140, spread_home: -1.5, spread_home_odds: 110, spread_away: 1.5, spread_away_odds: -130, total: 8.5 };
+    const r = await analyzeGameSol(flatGame, 'baseball_mlb', { sportsbookOdds: [] });
+    expect(r).not.toBeNull();
+    expect(r.pick).toBe('Yankees ML -160');
+    expect(r.moneylineAway).toBe(140);
+  });
+  it('still refuses when the game has no odds at all (F-5)', async () => {
+    sendToOpenAISession.mockReset().mockResolvedValueOnce(FINAL);
+    expect(await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: [] })).toBeNull();
+  });
+});

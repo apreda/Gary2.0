@@ -292,10 +292,15 @@ export async function buildMlbScoutReport(game, options = {}) {
         const side = box.teams[sideKey];
         const players = side?.players || {};
         const apps = [];
-        for (const pid of (Array.isArray(side?.pitchers) ? side.pitchers : [])) {
+        // pitchers[] is in appearance order — index 0 is the starter. The old
+        // ip<5 "reliever" heuristic counted every SHORT START as a relief
+        // appearance (a 4.2 IP starter showed as 99 pitches of bullpen usage,
+        // found Jul 22 2026) and dropped real long-relief outings.
+        const pitcherIds = Array.isArray(side?.pitchers) ? side.pitchers.slice(1) : [];
+        for (const pid of pitcherIds) {
           const p = players[`ID${pid}`];
           const ip = parseFloat(p?.stats?.pitching?.inningsPitched);
-          if (!Number.isFinite(ip) || ip <= 0 || ip >= 5) continue; // relievers only
+          if (!Number.isFinite(ip) || ip <= 0) continue;
           const pitches = p?.stats?.pitching?.numberOfPitches;
           apps.push(`${p?.person?.fullName || '?'} ${ip.toFixed(1)} IP${pitches != null ? ` (${pitches} pitches)` : ''}`);
         }

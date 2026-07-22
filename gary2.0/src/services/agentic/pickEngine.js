@@ -219,7 +219,24 @@ export async function analyzeGameSol(game, sportKey, options = {}) {
 async function analyzeGameSolInner(game, sportKey, options = {}) {
   const homeTeam = game.home_team?.full_name || game.home_team?.name || game.home_team;
   const awayTeam = game.away_team?.full_name || game.away_team?.name || game.away_team;
-  const boardRows = Array.isArray(options.sportsbookOdds) ? options.sportsbookOdds : [];
+  let boardRows = Array.isArray(options.sportsbookOdds) ? options.sportsbookOdds : [];
+  if (!boardRows.length) {
+    // Coverage fallback (every-game policy is LOCKED): some games briefly lack
+    // per-book rows, but the game object carries BDL's flat consensus odds —
+    // still board data, never model prose, so F-5 holds. Only a game with no
+    // odds AT ALL is refused (next tier retries).
+    const synth = {
+      vendor: 'consensus', displayName: 'consensus',
+      ml_home: game.moneyline_home ?? null, ml_away: game.moneyline_away ?? null,
+      spread_home: game.spread_home ?? null, spread_home_odds: game.spread_home_odds ?? null,
+      spread_away: game.spread_away ?? null, spread_away_odds: game.spread_away_odds ?? null,
+      total: game.total ?? null, total_over_odds: game.total_over_odds ?? null, total_under_odds: game.total_under_odds ?? null,
+    };
+    if ([synth.ml_home, synth.ml_away, synth.spread_home_odds, synth.spread_away_odds].some(v => v != null)) {
+      console.warn(`[PickEngine] ${awayTeam} @ ${homeTeam}: no per-book rows — using game-level consensus odds.`);
+      boardRows = [synth];
+    }
+  }
   if (!boardRows.length) {
     console.warn(`[PickEngine] ${awayTeam} @ ${homeTeam}: no sportsbook rows — no pick this tier (odds discipline).`);
     return null;
