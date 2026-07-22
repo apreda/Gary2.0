@@ -212,3 +212,42 @@ describe('pickEngine: per-game error containment', () => {
     expect(r).toEqual({ error: expect.stringContaining('HARD FAIL — MLB requires lineups') });
   });
 });
+
+describe('pickEngine: bug-hunt fixes (Jul 22 afternoon)', () => {
+  it('bindPickToBoard: when BOTH teams appear, the earlier mention wins', () => {
+    const b = bindPickToBoard('Yankees ML -150 over the Pirates', TEAMS);
+    expect(b).not.toBeNull();
+    expect(b.side).toBe('home');
+    const b2 = bindPickToBoard('Pirates +1.5 against the Yankees', TEAMS);
+    expect(b2.side).toBe('away');
+    expect(b2.type).toBe('spread');
+  });
+
+  it('normalizes a percent-style confidence (66 -> 0.66) and nulls garbage', async () => {
+    sendToOpenAISession.mockReset().mockResolvedValueOnce({ content: '{"final_pick":"Yankees ML -150","rationale":"Gary\'s Take\\n\\nERA 3.41 vs 4.29.","confidence_score":66}', toolCalls: null, usage: {} });
+    const r = await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: BOARD });
+    expect(r.confidence).toBe(0.66);
+    sendToOpenAISession.mockReset().mockResolvedValueOnce({ content: '{"final_pick":"Yankees ML -150","rationale":"Gary\'s Take\\n\\nERA 3.41 vs 4.29.","confidence_score":-3}', toolCalls: null, usage: {} });
+    const r2 = await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: BOARD });
+    expect(r2.confidence).toBeNull();
+  });
+
+  it('sends ONE finalize nudge when the iteration cap is hit mid-tool-loop', async () => {
+    const toolTurn = { content: null, toolCalls: [{ function: { name: 'fetch_stats', arguments: '{"token":"MLB_BULLPEN"}' } }], usage: {} };
+    sendToOpenAISession.mockReset();
+    for (let i = 0; i < 12; i++) sendToOpenAISession.mockResolvedValueOnce(toolTurn);
+    sendToOpenAISession.mockResolvedValueOnce(FINAL); // the nudge answer
+    const r = await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: BOARD });
+    expect(r).not.toBeNull();
+    expect(r.pick).toBe('Yankees ML -145');
+    expect(sendToOpenAISession).toHaveBeenCalledTimes(13);
+  });
+
+  it('only advertises the tools the engine actually implements', async () => {
+    sendToOpenAISession.mockReset().mockResolvedValueOnce(FINAL);
+    await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: BOARD });
+    const tools = createOpenAISession.mock.calls.at(-1)[0].tools;
+    const names = tools.map(t => t.function?.name);
+    expect(names.sort()).toEqual(['fetch_narrative_context', 'fetch_stats']);
+  });
+});

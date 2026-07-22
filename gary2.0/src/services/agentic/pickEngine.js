@@ -94,16 +94,21 @@ export function parseSolFinal(text) {
 export function bindPickToBoard(finalPick, { homeTeam, awayTeam, boardRows = [] } = {}) {
   if (!finalPick || !boardRows.length) return null;
   const text = String(finalPick).toLowerCase();
-  const matches = (team) => {
-    if (!team) return false;
+  // First mention index, or Infinity. Both teams can appear ("Yankees ML over
+  // the Pirates") — the picked side is the one named first, never a dead null.
+  const firstAt = (team) => {
+    if (!team) return Infinity;
     const t = String(team).toLowerCase();
-    return text.includes(t) || text.includes(t.split(' ').pop());
+    const iFull = text.indexOf(t);
+    const iLast = text.indexOf(t.split(' ').pop());
+    const hits = [iFull, iLast].filter(i => i >= 0);
+    return hits.length ? Math.min(...hits) : Infinity;
   };
-  const homeHit = matches(homeTeam);
-  const awayHit = matches(awayTeam);
-  if (homeHit === awayHit) return null; // neither, or ambiguous both
-  const side = homeHit ? 'home' : 'away';
-  const team = homeHit ? homeTeam : awayTeam;
+  const homeAt = firstAt(homeTeam);
+  const awayAt = firstAt(awayTeam);
+  if (homeAt === Infinity && awayAt === Infinity) return null; // neither team named
+  const side = homeAt <= awayAt ? 'home' : 'away';
+  const team = side === 'home' ? homeTeam : awayTeam;
 
   const isRunLine = /run\s*line|[+-]\d+\.5\b/i.test(finalPick) && !/\bml\b|moneyline/i.test(finalPick);
 
@@ -166,6 +171,24 @@ async function executeToolCall(tc, sportKey, homeTeam, awayTeam, game, state) {
   return { name: name || 'unknown', content: 'Tool not available.' };
 }
 
+/**
+ * Confidence arrives as 0-1; models occasionally emit a percent (66). Fold
+ * percents back to the unit scale; anything else out of range becomes null
+ * (the runner substitutes its display default, never a lie).
+ */
+export function normalizeConfidence(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  if (n >= 0 && n <= 1) return n;
+  if (n > 1 && n <= 100) return n / 100;
+  return null;
+}
+
+// The only tools the engine implements — never advertise stubs the model can
+// waste iterations calling.
+const ENGINE_TOOL_NAMES = new Set(['fetch_stats', 'fetch_narrative_context']);
+const engineTools = toolDefinitions.filter(t => ENGINE_TOOL_NAMES.has(t.function?.name));
+
 const bestAcrossBooks = (values) => {
   let best = null;
   for (const v of values) {
@@ -209,7 +232,7 @@ async function analyzeGameSolInner(game, sportKey, options = {}) {
   const session = await createOpenAISession({
     modelName: SOL_MODEL,
     systemPrompt: buildSolSystemPrompt(todayEST()),
-    tools: toolDefinitions,
+    tools: engineTools,
     thinkingLevel: 'high',
   });
 
@@ -240,6 +263,18 @@ async function analyzeGameSolInner(game, sportKey, options = {}) {
     }
     finalText = res.content;
     break;
+  }
+
+  // Iteration cap hit mid-tool-loop: one finalize nudge (no tools answered
+  // beyond what's in context) so a long investigation still yields a pick
+  // instead of a silent null. The adapter drains any unanswered tool calls.
+  if (finalText == null) {
+    const res = await sendToOpenAISession(session,
+      'Stop investigating — with what you already have, return your final JSON now.',
+      { isFunctionResponse: false });
+    usage.in += res.usage?.prompt_tokens || 0;
+    usage.out += res.usage?.completion_tokens || 0;
+    finalText = res.content;
   }
 
   let parsed = parseSolFinal(finalText);
@@ -278,7 +313,7 @@ async function analyzeGameSolInner(game, sportKey, options = {}) {
     pick: bound.pick,
     type: bound.type,
     odds: bound.odds,
-    confidence: parsed.confidence_score,
+    confidence: normalizeConfidence(parsed.confidence_score),
     homeTeam,
     awayTeam,
     league: normalizeSportToLeague(sportKey),
