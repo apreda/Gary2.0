@@ -16,7 +16,7 @@ import { summarizeStatForContext, normalizeSportToLeague } from './orchestrator/
 import { geminiGroundingSearch } from './scoutReport/shared/grounding.js';
 import { toolDefinitions } from './tools/toolDefinitions.js';
 import { createOpenAISession, sendToOpenAISession } from './orchestrator/providerAdapters/openaiSession.js';
-import { auditPickRationale, buildStatAuditRetryMessage } from './orchestrator/statAudit.js';
+import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './orchestrator/statAudit.js';
 
 export const SOL_MODEL = 'gpt-5.6-sol';
 const MAX_ITERATIONS = 12;
@@ -300,17 +300,22 @@ async function analyzeGameSolInner(game, sportKey, options = {}) {
     return null;
   }
 
-  // Hard rail: anti-fabrication. One corrective retry, then no pick this tier.
+  // Hard rail: anti-fabrication — untraceable numbers AND false counts over
+  // true data ("4 of the last 5" when the scores say 3) share one corrective
+  // retry, then no pick this tier.
+  const countIssues = (r) => scout.recentScores ? auditCountClaims(r, scout.recentScores) : [];
   let audit = auditPickRationale({ rationale: parsed.rationale }, state.corpus);
-  if (audit.retryable.length > 0) {
-    console.warn(`[PickEngine] statAudit: ${audit.retryable.length} untraceable claim(s) — one corrective retry`);
-    const res = await sendToOpenAISession(session, buildStatAuditRetryMessage(audit.retryable), { isFunctionResponse: false });
+  let counts = countIssues(parsed.rationale);
+  if (audit.retryable.length + counts.length > 0) {
+    console.warn(`[PickEngine] statAudit: ${audit.retryable.length} untraceable + ${counts.length} false-count claim(s) — one corrective retry`);
+    const res = await sendToOpenAISession(session, buildStatAuditRetryMessage([...audit.retryable, ...counts]), { isFunctionResponse: false });
     usage.in += res.usage?.prompt_tokens || 0;
     usage.out += res.usage?.completion_tokens || 0;
     const reparsed = parseSolFinal(res.content);
     const reaudit = reparsed ? auditPickRationale({ rationale: reparsed.rationale }, state.corpus) : null;
-    if (!reparsed || reaudit.retryable.length > 0) {
-      console.warn(`[PickEngine] still untraceable after retry — no pick this tier.`);
+    const recounts = reparsed ? countIssues(reparsed.rationale) : [];
+    if (!reparsed || reaudit.retryable.length + recounts.length > 0) {
+      console.warn(`[PickEngine] still bad after retry — no pick this tier.`);
       return null;
     }
     parsed = reparsed;

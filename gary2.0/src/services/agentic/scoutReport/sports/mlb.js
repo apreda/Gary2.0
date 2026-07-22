@@ -1432,10 +1432,23 @@ ${gameContextGrounding || 'No same-day breaking news.'}
 
   console.log(`[Scout Report] MLB report complete: ${text.length} chars, ${tapeRows.length} tape rows`);
 
+  // Structured runs-scored history (chronological) — feeds the count-claim
+  // verifier in the pick engine; same MLB Stats API games the recaps use.
+  const runsFor = (games, teamName) => (games || []).map(g => {
+    const isHome = (g.teams?.home?.team?.name || '').toLowerCase().includes(lastWord(teamName));
+    return isHome ? (g.teams?.home?.score ?? null) : (g.teams?.away?.score ?? null);
+  }).filter(r => r != null);
+  const recentScores = {
+    homeTeam, awayTeam,
+    homeScores: runsFor(homeRecentGames, homeTeam),
+    awayScores: runsFor(awayRecentGames, awayTeam),
+  };
+
   return {
     text,
     injuries: injuriesSection || gameContextGrounding || '',
     verifiedTaleOfTape,
+    recentScores,
     venue: typeof venue === 'string' ? venue : venue?.name || 'Unknown',
     tokenMenu,
     homeRecord: null,

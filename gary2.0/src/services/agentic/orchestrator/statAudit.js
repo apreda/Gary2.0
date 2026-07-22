@@ -244,3 +244,55 @@ ${unsupported.map((u, i) => `${i + 1}. ${u}`).join('\n')}
 
 Rewrite "Gary's Take" with your decision, side, confidence, and odds EXACTLY the same. For each flagged figure: replace it with the correct value from your provided data if one exists, otherwise REMOVE the claim and write around it. Do not introduce any new numbers that are not in your provided data. Output the complete pick JSON again with the corrected rationale.`;
 }
+
+// ── Count-claim verifier (Jul 22 2026) ───────────────────────────────────────
+// A rationale claim like "at least six runs in four of their past five games"
+// contains only small integers, so the numeric-corpus audit can't judge it —
+// yet it is exactly as fabricated as an invented ERA when the tally is wrong
+// (live catch: Sol said 4-of-5 over scores of 2,10,6,3,8 — it's 3). This
+// verifies such claims against the structured recent scores and returns
+// retryable entries carrying the ACTUAL data so the correction is precise.
+// Conservative by design: a claim passes if it holds for EITHER team (sentence
+// subject is ambiguous), counts are read as lower bounds (understatement is
+// not a lie), and unverifiable shapes (runs allowed) are ignored.
+
+const COUNT_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+const asCount = (w) => COUNT_WORDS[String(w).toLowerCase()] ?? parseInt(w, 10);
+
+export function auditCountClaims(rationale, { homeTeam, awayTeam, homeScores, awayScores } = {}) {
+  if (typeof rationale !== 'string' || !rationale) return [];
+  const teams = [
+    { name: homeTeam, scores: homeScores },
+    { name: awayTeam, scores: awayScores },
+  ].filter(t => Array.isArray(t.scores) && t.scores.length);
+  if (!teams.length) return [];
+
+  const out = [];
+  const re = /(?:at least\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\+|\s*or more|\s*plus)?\s+runs?\s+in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+of\s+(?:their\s+|the\s+|its\s+)?(?:past|last|previous)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+games/gi;
+  for (const m of rationale.matchAll(re)) {
+    // Runs ALLOWED/conceded can't be verified from runs-scored data — skip.
+    const prefix = rationale.slice(Math.max(0, m.index - 40), m.index);
+    if (/allow|given up|conced|surrender/i.test(prefix)) continue;
+    const threshold = asCount(m[1]);
+    const claimed = asCount(m[2]);
+    const window = asCount(m[3]);
+    if (![threshold, claimed, window].every(Number.isFinite)) continue;
+
+    let holds = false;
+    const actuals = [];
+    for (const t of teams) {
+      if (t.scores.length < window) continue;
+      const lastN = t.scores.slice(-window);
+      const actual = lastN.filter(r => r >= threshold).length;
+      actuals.push({ name: t.name, lastN, actual });
+      if (actual >= claimed) holds = true;
+    }
+    if (!holds && actuals.length) {
+      const detail = actuals
+        .map(a => `${a.name} last ${a.lastN.length} runs scored: ${a.lastN.join(', ')} — ${a.actual} of the last ${a.lastN.length} reached ${threshold}+`)
+        .join('; ');
+      out.push(`[count] "...${m[0]}..." does not match the provided scores. ${detail}. Correct the count or remove the claim.`);
+    }
+  }
+  return out;
+}

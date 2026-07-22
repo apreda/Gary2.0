@@ -349,3 +349,46 @@ describe('historic head-to-head by season (facts only, never "owns")', () => {
     expect(computeMlbH2hBySeason([], 16, 7, 'Brewers')).toBeNull();
   });
 });
+
+import { auditCountClaims } from '../../../src/services/agentic/orchestrator/statAudit.js';
+
+describe('statAudit: count-claim verifier ("N of last M games" must be true to the scores)', () => {
+  // Rockies last 5 (chronological): 2, 10, 6, 3, 8 -> three games with 6+
+  const scores = { homeTeam: 'Rockies', awayTeam: 'Nationals', homeScores: [4, 2, 10, 6, 3, 8], awayScores: [3, 6, 1, 2, 7, 7] };
+
+  it('flags an overcount with the actual data in the message', () => {
+    const bad = auditCountClaims('scoring at least six runs in four of their past five games', scores);
+    expect(bad).toHaveLength(1);
+    expect(bad[0]).toContain('2, 10, 6, 3, 8');
+    expect(bad[0]).toContain('3 of the last 5');
+  });
+
+  it('passes a correct count and an understatement, for either team', () => {
+    expect(auditCountClaims('six runs in three of their past five games', scores)).toHaveLength(0);
+    expect(auditCountClaims('at least 6 runs in two of the last 5 games', scores)).toHaveLength(0); // understatement = lower bound, true
+    expect(auditCountClaims('seven runs in two of the last four games', scores)).toHaveLength(0); // true for Nationals
+  });
+
+  it('ignores claims it cannot verify (runs allowed, no scores provided)', () => {
+    expect(auditCountClaims('allowed six runs in four of the last five games', scores)).toHaveLength(0);
+    expect(auditCountClaims('six runs in four of the past five games', {})).toHaveLength(0);
+  });
+});
+
+describe('pickEngine: count-claim retry flow', () => {
+  it('retries a miscounted rationale once, then gives up (null)', async () => {
+    const { buildScoutReport } = await import('../../../src/services/agentic/scoutReport/scoutReportBuilder.js');
+    buildScoutReport.mockResolvedValueOnce({
+      garyText: 'SCOUT: ERA 3.41 vs 4.29.', text: 'x', injuries: {}, venue: 'Yankee Stadium',
+      verifiedTaleOfTape: { rows: [] },
+      recentScores: { homeTeam: 'Yankees', awayTeam: 'Pirates', homeScores: [2, 10, 6, 3, 8], awayScores: [1, 2, 3, 4, 5] },
+    });
+    const dirty = { content: '{"final_pick":"Yankees ML -150","rationale":"Gary\'s Take\\n\\nERA 3.41 vs 4.29. Scoring at least six runs in four of their past five games.","confidence_score":0.7}', toolCalls: null, usage: {} };
+    sendToOpenAISession.mockReset().mockResolvedValueOnce(dirty).mockResolvedValueOnce(dirty);
+    const r = await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: BOARD });
+    expect(r).toBeNull();
+    expect(sendToOpenAISession).toHaveBeenCalledTimes(2);
+    const retryMsg = sendToOpenAISession.mock.calls[1][1];
+    expect(retryMsg).toContain('2, 10, 6, 3, 8');
+  });
+});
