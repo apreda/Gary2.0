@@ -177,11 +177,23 @@ const bestAcrossBooks = (values) => {
 };
 
 /**
- * Analyze one game with Sol. Returns the production result contract, or null
- * when no storable pick was produced (a lineup-gate throw from the scout
- * builder propagates — the runner logs it and the next tier retries).
+ * Analyze one game with Sol. Returns the production result contract; null
+ * when no storable pick was produced; { error } when analysis failed (e.g.
+ * the scout builder's lineup gate) — matching the old analyzeGame contract so
+ * one gated game can never abort the rest of a multi-game run. The runner's
+ * retry tiers own recovery in every case.
  */
 export async function analyzeGameSol(game, sportKey, options = {}) {
+  try {
+    return await analyzeGameSolInner(game, sportKey, options);
+  } catch (err) {
+    if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) throw err;
+    console.error(`[PickEngine] analysis failed: ${err.message}`);
+    return { error: err.message };
+  }
+}
+
+async function analyzeGameSolInner(game, sportKey, options = {}) {
   const homeTeam = game.home_team?.full_name || game.home_team?.name || game.home_team;
   const awayTeam = game.away_team?.full_name || game.away_team?.name || game.away_team;
   const boardRows = Array.isArray(options.sportsbookOdds) ? options.sportsbookOdds : [];

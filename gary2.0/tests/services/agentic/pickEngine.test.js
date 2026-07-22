@@ -203,3 +203,12 @@ describe('cutover: the runner is hard-wired to Sol for game picks', () => {
     expect(runnerSrc).not.toContain('getConstitution');
   });
 });
+
+describe('pickEngine: per-game error containment', () => {
+  it('a scout-builder throw (e.g. lineup gate) returns { error }, never propagates', async () => {
+    const { buildScoutReport } = await import('../../../src/services/agentic/scoutReport/scoutReportBuilder.js');
+    buildScoutReport.mockRejectedValueOnce(new Error('[Scout Report] HARD FAIL — MLB requires lineups'));
+    const r = await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: BOARD });
+    expect(r).toEqual({ error: expect.stringContaining('HARD FAIL — MLB requires lineups') });
+  });
+});
