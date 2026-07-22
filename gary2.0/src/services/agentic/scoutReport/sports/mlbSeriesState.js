@@ -203,3 +203,36 @@ export function computeMlbScheduleShape(seasonIndex, teamBdlId, todayEtDate, tod
   else bits.push('played yesterday');
   return { line: bits.join('; ') + '.' };
 }
+
+/**
+ * HISTORIC HEAD-TO-HEAD BY SEASON — pure tally over raw BDL game rows
+ * (Jul 22 2026, founder-approved: "the Brewers own the Reds" is fan
+ * knowledge, but the desk serves only the season-by-season tallies — never
+ * the conclusion). Regular season, final games only; seasons with no
+ * meetings are omitted; null when nothing qualifies (e.g. new interleague
+ * pairs).
+ */
+export function computeMlbH2hBySeason(rows, homeBdlId, awayBdlId, homeTeam) {
+  if (!Array.isArray(rows) || !homeBdlId || !awayBdlId) return null;
+  const bySeason = new Map();
+  for (const g of rows) {
+    const hId = g?.home_team?.id;
+    const aId = g?.away_team?.id;
+    const pair = (hId === homeBdlId && aId === awayBdlId) || (hId === awayBdlId && aId === homeBdlId);
+    if (!pair) continue;
+    if (g.season_type !== 'regular') continue;
+    if (!/final/i.test(String(g.status || ''))) continue;
+    const hr = g.home_team_data?.runs;
+    const ar = g.away_team_data?.runs;
+    if (hr == null || ar == null || hr === ar) continue;
+    const tonightHomeWon = (hId === homeBdlId) ? hr > ar : ar > hr;
+    const t = bySeason.get(g.season) || { w: 0, l: 0 };
+    tonightHomeWon ? t.w++ : t.l++;
+    bySeason.set(g.season, t);
+  }
+  if (!bySeason.size) return null;
+  const parts = [...bySeason.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([yr, t]) => `${yr}: ${homeTeam} ${t.w}-${t.l}`);
+  return { line: `Head-to-head, prior seasons (regular season): ${parts.join(' | ')}` };
+}

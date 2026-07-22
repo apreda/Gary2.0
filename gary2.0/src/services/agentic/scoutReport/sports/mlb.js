@@ -29,7 +29,7 @@ import {
   getPitcherVsTeam,
   getPlayerSeasonStats,
 } from '../../../mlbStatsApiService.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, toEtDate } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, toEtDate } from './mlbSeriesState.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -1069,6 +1069,15 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Season head-to-head — computed from the cached season index, zero calls.
   const seasonSeries = computeMlbSeasonSeries(seasonIndex, homeTeamBdlId, awayTeamBdlId, homeTeam, awayTeam);
 
+  // Historic head-to-head, prior 3 seasons — season-by-season tallies only,
+  // never a characterization (the Reds-Brewers lesson).
+  let historicH2h = null;
+  try {
+    const priorSeasons = [season - 3, season - 2, season - 1];
+    const priorRows = await ballDontLieService.getMlbTeamGamesForSeasons(homeTeamBdlId, priorSeasons);
+    historicH2h = computeMlbH2hBySeason(priorRows, homeTeamBdlId, awayTeamBdlId, homeTeam);
+  } catch { /* omit on failure */ }
+
   // Roster moves, last 7 days (MLB Stats API; minor-league signings filtered,
   // trade-deadline season makes this lane load-bearing through Jul 31).
   const todayEtStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -1092,9 +1101,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     homeShape ? `${homeTeam}: ${homeShape.line}` : null,
     awayShape ? `${awayTeam}: ${awayShape.line}` : null,
   ].filter(Boolean).join('\n');
-  const seasonSeriesBlock = seasonSeries
+  const seasonSeriesBlock = (seasonSeries
     ? `\n${seasonSeries.line}\n${seasonSeries.results.map(r => `  ${r}`).join('\n')}`
-    : '';
+    : '') + (historicH2h ? `\n${historicH2h.line}` : '');
 
   // ═══════════════════════════════════════════════════════════════════
   // TEAM SEASON STATS — FORMAT COMPARISON SECTION

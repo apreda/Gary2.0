@@ -5307,6 +5307,40 @@ const ballDontLieService = {
    * IGNORES ids[] filters (verified live June 3 2026 — it returned year-2000
    * spring games), so chronology joins go through this one cached index.
    */
+  /**
+   * All of one team's games across several seasons (Jul 22 2026, fan-parity:
+   * historic head-to-head). Cursor-paginated; prior seasons are immutable so
+   * the cache TTL is long. Rows come back raw (season_type includes
+   * spring_training — callers filter).
+   */
+  async getMlbTeamGamesForSeasons(teamId, seasons, ttlMinutes = 720) {
+    if (!teamId || !seasons?.length) return [];
+    try {
+      const cacheKey = `mlb_team_games_${teamId}_${seasons.join('_')}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const out = [];
+        let cursor;
+        for (let page = 0; page < 20; page++) {
+          const qs = new URLSearchParams();
+          qs.append('team_ids[]', String(teamId));
+          for (const yr of seasons) qs.append('seasons[]', String(yr));
+          qs.append('per_page', '100');
+          if (cursor != null) qs.append('cursor', String(cursor));
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/games?${qs.toString()}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          out.push(...(response.data?.data || []));
+          cursor = response.data?.meta?.next_cursor;
+          if (cursor == null) break;
+        }
+        console.log(`[BDL] MLB team ${teamId} games for ${seasons.join(',')}: ${out.length} rows`);
+        return out;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB team-season games error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
   async getMlbSeasonGameIndex(season, ttlMinutes = 60) {
     try {
       const cacheKey = `mlb_game_index_${season}`;

@@ -325,3 +325,27 @@ describe('ET dates for BDL UTC instants (west-coast night games)', () => {
     expect(toEtDate('2026-07-21T23:05:00.000Z')).toBe('2026-07-21');
   });
 });
+
+import { computeMlbH2hBySeason } from '../../../src/services/agentic/scoutReport/sports/mlbSeriesState.js';
+
+describe('historic head-to-head by season (facts only, never "owns")', () => {
+  const row = (season, hId, aId, hr, ar, st = 'regular', status = 'STATUS_FINAL') =>
+    ({ season, season_type: st, status, home_team: { id: hId }, away_team: { id: aId }, home_team_data: { runs: hr }, away_team_data: { runs: ar } });
+  const rows = [
+    row(2025, 16, 7, 5, 2), row(2025, 16, 7, 3, 4), row(2025, 7, 16, 1, 6),   // MIL 2-1... oriented to home
+    row(2024, 7, 16, 2, 8), row(2024, 7, 16, 0, 3),
+    row(2025, 16, 7, 9, 1, 'spring_training'),   // excluded: spring
+    row(2025, 16, 7, 4, 4),                       // excluded: tie/suspended artifact
+    row(2025, 16, 12, 5, 2),                      // excluded: different opponent
+  ];
+
+  it('tallies per season, regular-season finals only, oriented to tonight\'s home team', () => {
+    const r = computeMlbH2hBySeason(rows, 16, 7, 'Brewers');
+    expect(r.line).toBe('Head-to-head, prior seasons (regular season): 2025: Brewers 2-1 | 2024: Brewers 2-0');
+  });
+
+  it('null when the pair never met', () => {
+    expect(computeMlbH2hBySeason(rows, 16, 99, 'Brewers')).toBeNull();
+    expect(computeMlbH2hBySeason([], 16, 7, 'Brewers')).toBeNull();
+  });
+});
