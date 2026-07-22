@@ -215,26 +215,43 @@ export async function sendToSession(session, message, options = {}) {
   
   try {
     let result;
-    
+
+    // gemini-3.6+ rejects the legacy 'function' role our SDK (0.24.1) stamps
+    // on functionResponse parts ("Role 'function' is not supported", found on
+    // the Jul 22 3.6-flash props smoke test). For those models, deliver tool
+    // results as a name-tagged plain-text user turn instead — same content,
+    // accepted role. Older models keep the structured functionResponse parts.
+    const modelRejectsFunctionRole = /^gemini-3\.[6-9]|^gemini-[4-9]/.test(session.modelName || '');
+    const asToolResultText = (frs) => frs
+      .map(fr => `[Result of your ${fr.name} call]\n${typeof fr.content === 'string' ? fr.content : JSON.stringify(fr.content)}`)
+      .join('\n\n');
+
     if (isFunctionResponse && Array.isArray(message)) {
-      // Send batched function responses
-      // Gemini expects array of: { functionResponse: { name, response: { content } } }
-      const functionResponseParts = message.map(fr => ({
-        functionResponse: {
-          name: fr.name,
-          response: { content: typeof fr.content === 'string' ? fr.content : JSON.stringify(fr.content) }
-        }
-      }));
-      result = await session.chat.sendMessage(functionResponseParts);
+      if (modelRejectsFunctionRole) {
+        result = await session.chat.sendMessage(asToolResultText(message));
+      } else {
+        // Gemini expects array of: { functionResponse: { name, response: { content } } }
+        const functionResponseParts = message.map(fr => ({
+          functionResponse: {
+            name: fr.name,
+            response: { content: typeof fr.content === 'string' ? fr.content : JSON.stringify(fr.content) }
+          }
+        }));
+        result = await session.chat.sendMessage(functionResponseParts);
+      }
     } else if (isFunctionResponse) {
-      // Single function response (legacy support)
-      const functionResponseParts = [{
-        functionResponse: {
-          name: message.name,
-          response: { content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) }
-        }
-      }];
-      result = await session.chat.sendMessage(functionResponseParts);
+      if (modelRejectsFunctionRole) {
+        result = await session.chat.sendMessage(asToolResultText([message]));
+      } else {
+        // Single function response (legacy support)
+        const functionResponseParts = [{
+          functionResponse: {
+            name: message.name,
+            response: { content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) }
+          }
+        }];
+        result = await session.chat.sendMessage(functionResponseParts);
+      }
     } else {
       // Send text message
       result = await session.chat.sendMessage(message);
