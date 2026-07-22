@@ -996,7 +996,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (!awayHasLineup) missing.push(`${awayTeam} lineup (${awayData?.batters?.length || 0}/9 batters)`);
     if (!homeHasPitcher) missing.push(`${homeTeam} starting pitcher`);
     if (!awayHasPitcher) missing.push(`${awayTeam} starting pitcher`);
-    throw new Error(`[Scout Report] HARD FAIL — MLB requires lineups + starting pitchers for ${awayTeam} @ ${homeTeam} (checked BDL + MLB Stats API). Missing: ${missing.join(', ')}. Run picks closer to game time (lineups typically post 3-4 hours before first pitch).`);
+    throw new Error(`[Scout Report] HARD FAIL — MLB requires lineups + starting pitchers for ${awayTeam} @ ${homeTeam} (checked BDL + MLB Stats API). Missing: ${missing.join(', ')}. Run picks closer to game time (per BDL docs, lineups typically appear 1-2 hours before first pitch — the T-90 tier can race the posting; later tiers pick it up).`);
   }
 
   // ═══════════════════════════════════════════════════════════════════
