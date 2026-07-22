@@ -225,39 +225,46 @@ export async function buildMlbScoutReport(game, options = {}) {
       const date = String(g.date || '').slice(0, 10);
       if (date < thirtyDaysAgoIso || date > todayIso) continue;
       if (!/final/i.test(String(g.status || ''))) continue;
-      out.push({ id, date });
+      out.push({ id, date, homeRuns: g.homeRuns, awayRuns: g.awayRuns });
     }
     return out.sort((a, b) => a.date.localeCompare(b.date));
   };
   const homeBdlGames = indexGamesFor(homeTeamBdlId);
   const awayBdlGames = indexGamesFor(awayTeamBdlId);
-  // Date-keyed lookup: each team plays at most one MLB game per calendar date,
-  // so date is a reliable join key between MLB Stats API gamePk and BDL id.
-  const bdlIdByDate = new Map();
-  for (const g of [...(homeBdlGames || []), ...(awayBdlGames || [])]) {
-    const date = String(g.date || g.game_date || '').slice(0, 10);
-    if (date && g.id != null) bdlIdByDate.set(date, g.id);
-  }
-  const collectBdlIds = (games) => (games || [])
+  // Resolve one MLB Stats API game to its BDL id within ONE team's candidate
+  // list: same official date AND same final score pair. Exact even for
+  // doubleheaders (two games that day = two different score pairs). The old
+  // join was a date map SHARED across both teams — any day both teams played,
+  // one game silently overwrote the other and every recap downstream carried
+  // the wrong box score (found Jul 22 2026: Yankees recaps showing Pirates@
+  // Guardians box lines labeled "vs Dodgers").
+  const resolveBdlId = (mlbGame, candidates) => {
+    const date = String(mlbGame?.officialDate || mlbGame?.gameDate || '').slice(0, 10);
+    const hs = mlbGame?.teams?.home?.score;
+    const as = mlbGame?.teams?.away?.score;
+    const sameDay = (candidates || []).filter(c => c.date === date);
+    const exact = sameDay.find(c => c.homeRuns === hs && c.awayRuns === as);
+    return (exact || (sameDay.length === 1 ? sameDay[0] : null))?.id ?? null;
+  };
+  const collectBdlIds = (games, candidates) => (games || [])
     .slice(-4)
-    .map(g => bdlIdByDate.get(String(g.officialDate || g.gameDate || '').slice(0, 10)))
+    .map(g => resolveBdlId(g, candidates))
     .filter(id => id != null);
-  const allBoxGameIds = [...new Set([...collectBdlIds(homeRecentGames), ...collectBdlIds(awayRecentGames)])];
+  const allBoxGameIds = [...new Set([
+    ...collectBdlIds(homeRecentGames, homeBdlGames),
+    ...collectBdlIds(awayRecentGames, awayBdlGames),
+  ])];
   const recentBoxStats = allBoxGameIds.length > 0
     ? await ballDontLieService.getMlbGameStats({ gameIds: allBoxGameIds }).catch(e => { console.warn(`[Scout Report] BDL box stats error: ${e.message}`); return []; })
     : [];
-  // Build a reverse lookup so the recap loop can resolve box stats by date.
-  // (recentBoxStats records carry BDL game_id; formatGameRecap iterates over
-  // MLB Stats API game objects — date is the reliable bridge.)
-  const dateByBdlId = new Map();
-  for (const [date, id] of bdlIdByDate.entries()) dateByBdlId.set(id, date);
-  const recentBoxStatsByDate = new Map();
+  // Box stats keyed by their own BDL game id; recaps resolve per game via
+  // resolveBdlId and then filter to the team's OWN players (records carry
+  // team_name — without the filter every recap listed both teams' lines).
+  const recentBoxStatsById = new Map();
   for (const s of recentBoxStats) {
-    const d = dateByBdlId.get(s.game_id);
-    if (!d) continue;
-    const list = recentBoxStatsByDate.get(d) || [];
+    const list = recentBoxStatsById.get(s.game_id) || [];
     list.push(s);
-    recentBoxStatsByDate.set(d, list);
+    recentBoxStatsById.set(s.game_id, list);
   }
   // Also fetch last game via MLB Stats API for the detailed box score (SP line, bullpen detail)
   const lastHomeGamePk = homeRecentGames?.[homeRecentGames.length - 1]?.gamePk;
@@ -502,7 +509,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     const lastWord = (name) => name.toLowerCase().split(' ').pop();
 
     // Build per-game recap from BDL box stats + game result
-    const formatGameRecap = (game, teamName, boxStatsByDate) => {
+    const formatGameRecap = (game, teamName, bdlCandidates) => {
       if (!game) return null;
       const tLast = lastWord(teamName);
       const homeName = (game.teams?.home?.team?.name || '').toLowerCase();
@@ -514,10 +521,11 @@ export async function buildMlbScoutReport(game, options = {}) {
       const date = (game.officialDate || game.gameDate || '').split('T')[0];
       const loc = isHome ? 'vs' : '@';
 
-      // Box stats are keyed by date because the array elements use BDL game IDs
-      // while `game` here is an MLB Stats API object (gamePk-keyed). Each team
-      // plays at most one MLB game per calendar day so date is a reliable join.
-      const gameStats = (boxStatsByDate instanceof Map ? boxStatsByDate.get(date) : null) || [];
+      // Per-game join (date + final score) into this TEAM's candidate list,
+      // then keep only this team's own player lines.
+      const bdlId = resolveBdlId(game, bdlCandidates);
+      const gameStats = ((bdlId != null && recentBoxStatsById.get(bdlId)) || [])
+        .filter(s => (s.team_name || '').toLowerCase().includes(tLast));
       let spLine = '';
       let bullpenLines = [];
       let keyHitters = [];
@@ -580,13 +588,13 @@ export async function buildMlbScoutReport(game, options = {}) {
       return gp > 0 ? `${wins}-${losses} (${(runsFor / gp).toFixed(1)} R/G, ${(runsAgainst / gp).toFixed(1)} RA/G)` : null;
     };
 
-    const formatTeamRecent = (teamName, games) => {
+    const formatTeamRecent = (teamName, games, bdlCandidates) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
       const lines = [`${teamName}:`];
       // L1-L4: individual game recaps (most recent first)
       const last4 = games.slice(-4).reverse();
       for (let i = 0; i < last4.length; i++) {
-        const recap = formatGameRecap(last4[i], teamName, recentBoxStatsByDate);
+        const recap = formatGameRecap(last4[i], teamName, bdlCandidates);
         if (recap) lines.push(`  [L${i + 1}]${recap.trim().startsWith(' ') ? recap : ' ' + recap.trim()}`);
       }
       // L5/L10: aggregates
@@ -597,7 +605,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       return lines.join('\n');
     };
 
-    recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames), formatTeamRecent(awayTeam, awayRecentGames)].join('\n\n');
+    recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames)].join('\n\n');
   }
 
   // ═══════════════════════════════════════════════════════════════════
