@@ -482,6 +482,58 @@ export function formatMlbGameForPipeline(mlbGame) {
   };
 }
 
+
+// ─── Fan-parity additions (Jul 22 2026, founder-approved) ────────────────────
+
+/** Roster transactions for a team over a date window. Facts only. */
+export async function getMlbTransactions(teamId, startDate, endDate) {
+  const key = `mlb_tx_${teamId}_${startDate}_${endDate}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/transactions?teamId=${teamId}&startDate=${startDate}&endDate=${endDate}`);
+  const rows = (data.transactions || [])
+    .filter(t => t.description && !/minor league contract/i.test(t.description))
+    .map(t => ({ date: t.date, description: t.description }));
+  setCache(key, rows);
+  return rows;
+}
+
+/** A pitcher's completed starts this season (gameLog), most recent last.
+ *  Excludes any entry dated today ET — an in-progress start would leak a
+ *  partial line onto the desk. */
+export async function getPitcherLastStarts(personId, season, limit = 3) {
+  const key = `mlb_sp_log_${personId}_${season}`;
+  let splits = getCached(key);
+  if (!splits) {
+    const data = await apiFetch(`/people/${personId}/stats?stats=gameLog&season=${season}&group=pitching`);
+    splits = data.stats?.[0]?.splits || [];
+    setCache(key, splits);
+  }
+  const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  return splits
+    .filter(g => g.date && g.date < todayEt && g.stat?.gamesStarted > 0)
+    .slice(-limit)
+    .map(g => ({
+      date: g.date,
+      opponent: g.opponent?.name || '?',
+      isHome: !!g.isHome,
+      ip: g.stat?.inningsPitched, h: g.stat?.hits, er: g.stat?.earnedRuns,
+      k: g.stat?.strikeOuts, bb: g.stat?.baseOnBalls, hr: g.stat?.homeRuns,
+    }));
+}
+
+/** A pitcher's career line vs one opponent (vsTeamTotal). Null when absent. */
+export async function getPitcherVsTeam(personId, opposingTeamId) {
+  const key = `mlb_sp_vsteam_${personId}_${opposingTeamId}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/people/${personId}/stats?stats=vsTeamTotal&group=pitching&opposingTeamId=${opposingTeamId}`);
+  const st = data.stats?.[0]?.splits?.[0]?.stat || null;
+  const out = st ? { games: st.gamesPlayed, starts: st.gamesStarted, era: st.era, avgAgainst: st.avg, ip: st.inningsPitched } : null;
+  setCache(key, out);
+  return out;
+}
+
 export default {
   getMlbSchedule,
   getMlbRecentGames,
@@ -502,4 +554,7 @@ export default {
   getGameFeed,
   getConfirmedLineups,
   getProbablePitchers,
+  getMlbTransactions,
+  getPitcherLastStarts,
+  getPitcherVsTeam,
 };

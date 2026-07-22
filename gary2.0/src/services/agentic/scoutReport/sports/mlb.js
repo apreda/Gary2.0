@@ -24,9 +24,12 @@ import {
   getMlbGameLineups,
   getGameBoxScore,
   getPitcherPlatoonSplits,
+  getMlbTransactions,
+  getPitcherLastStarts,
+  getPitcherVsTeam,
   getPlayerSeasonStats,
 } from '../../../mlbStatsApiService.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, toEtDate } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, toEtDate } from './mlbSeriesState.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -366,12 +369,30 @@ export async function buildMlbScoutReport(game, options = {}) {
       // every pick so the brain never has to fill the gap from memory.
       try {
         const mlbamId = pitcher.id;
-        const [arsenal, platoon, contact, seasonPitching] = await Promise.all([
+        const oppMlbamId = side === 'home' ? awayTeamId : homeTeamId;
+        const [arsenal, platoon, contact, seasonPitching, lastStarts, vsOpp] = await Promise.all([
           getPitcherArsenal(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
           getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPlayerSeasonStats(mlbamId, season, 'pitching').catch(() => null) : Promise.resolve(null),
+          mlbamId ? getPitcherLastStarts(mlbamId, season, 3).catch(() => []) : Promise.resolve([]),
+          mlbamId && oppMlbamId ? getPitcherVsTeam(mlbamId, oppMlbamId).catch(() => null) : Promise.resolve(null),
         ]);
+
+        if (lastStarts.length) {
+          const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}`;
+          parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
+        }
+        if (vsOpp && (vsOpp.games || vsOpp.ip)) {
+          const oppName = side === 'home' ? awayTeam : homeTeam;
+          const vbits = [];
+          if (vsOpp.starts != null) vbits.push(`${vsOpp.starts} starts`);
+          else if (vsOpp.games != null) vbits.push(`${vsOpp.games} games`);
+          if (vsOpp.ip != null) vbits.push(`${vsOpp.ip} IP`);
+          if (vsOpp.era != null) vbits.push(`${vsOpp.era} ERA`);
+          if (vsOpp.avgAgainst != null) vbits.push(`${vsOpp.avgAgainst} BA against`);
+          if (vbits.length) parts.push(`  Career vs ${oppName}: ${vbits.join(', ')}`);
+        }
 
         if (arsenal?.pitches?.length) {
           parts.push(`  Arsenal velocity (Savant): ${arsenal.pitches.map(p => `${p.name} ${p.mph} mph`).join(' | ')}`);
@@ -500,7 +521,8 @@ export async function buildMlbScoutReport(game, options = {}) {
         const l10 = t.last_ten_games || '—';
         const streak = t.streak || '—';
         const gb = t.division_games_behind ?? t.games_behind ?? '—';
-        return `  ${name}: ${w}-${l} (Home: ${home} | Away: ${road} | L10: ${l10} | Streak: ${streak} | GB: ${gb})`;
+        const seed = t.playoff_seed != null ? ` | Playoff seed: ${t.playoff_seed}` : '';
+        return `  ${name}: ${w}-${l} (Home: ${home} | Away: ${road} | L10: ${l10} | Streak: ${streak} | GB: ${gb}${seed})`;
       }).join('\n');
       if (teamLines) lines.push(`${divName}\n${teamLines}`);
     }
@@ -1008,6 +1030,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // splits byDayMonth, one cached call per starter. Facts only — no
   // hot/cold labels; the reasoning model decides what a roll means.)
   // ═══════════════════════════════════════════════════════════════════
+  const isDayGame = startTime
+    ? parseInt(new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10) < 17
+    : false;
   const battingRollFor = async (batter) => {
     if (batter?.playerId == null) return null;
     try {
@@ -1019,8 +1044,15 @@ export async function buildMlbScoutReport(game, options = {}) {
         : null;
       const l7 = fmt(roll('Last 7 Days'));
       const l15 = fmt(roll('Last 15 Days'));
-      if (!l7 && !l15) return null;
-      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}`;
+      // Day games only: the batter's day-game season line rides along (same
+      // splits response, byBreakdown) — a fan checks it for a 1 PM start.
+      let dayBit = '';
+      if (isDayGame) {
+        const day = (splits?.byBreakdown || []).find(r => r.category === 'batting' && r.split_name === 'Day');
+        if (day && day.at_bats > 0) dayBit = ` | Day games: ${day.hits}-${day.at_bats}, ${day.avg ?? '?'} AVG/${day.ops ?? '?'} OPS`;
+      }
+      if (!l7 && !l15 && !dayBit) return null;
+      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}${dayBit}`;
     } catch { return null; }
   };
   const battingRollsFor = async (data, teamName) => {
@@ -1036,6 +1068,30 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // Season head-to-head — computed from the cached season index, zero calls.
   const seasonSeries = computeMlbSeasonSeries(seasonIndex, homeTeamBdlId, awayTeamBdlId, homeTeam, awayTeam);
+
+  // Roster moves, last 7 days (MLB Stats API; minor-league signings filtered,
+  // trade-deadline season makes this lane load-bearing through Jul 31).
+  const todayEtStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const weekAgoStr = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const txFor = async (mlbamTeamId, teamName) => {
+    if (!mlbamTeamId) return null;
+    try {
+      const rows = await getMlbTransactions(mlbamTeamId, weekAgoStr, todayEtStr);
+      if (!rows.length) return `${teamName}: no moves in the last 7 days.`;
+      return `${teamName}:\n${rows.slice(-6).map(r => `  ${r.date}: ${r.description}`).join('\n')}`;
+    } catch { return null; }
+  };
+  const [homeTx, awayTx] = await Promise.all([txFor(homeTeamId, homeTeam), txFor(awayTeamId, awayTeam)]);
+  const rosterMovesSection = [homeTx, awayTx].filter(Boolean).join('\n\n') || 'Transaction data unavailable.';
+
+  // Schedule shape from the season index (homestand/trip position, 7-day load,
+  // night-then-day turnaround).
+  const homeShape = computeMlbScheduleShape(seasonIndex, homeTeamBdlId, todayEtStr, startTime);
+  const awayShape = computeMlbScheduleShape(seasonIndex, awayTeamBdlId, todayEtStr, startTime);
+  const scheduleShapeBlock = [
+    homeShape ? `${homeTeam}: ${homeShape.line}` : null,
+    awayShape ? `${awayTeam}: ${awayShape.line}` : null,
+  ].filter(Boolean).join('\n');
   const seasonSeriesBlock = seasonSeries
     ? `\n${seasonSeries.line}\n${seasonSeries.results.map(r => `  ${r}`).join('\n')}`
     : '';
@@ -1061,7 +1117,12 @@ export async function buildMlbScoutReport(game, options = {}) {
       } else if (stats.pitching_k != null && stats.pitching_ip != null && parseFloat(stats.pitching_ip) > 0) {
         k9 = (parseFloat(stats.pitching_k) / parseFloat(stats.pitching_ip) * 9).toFixed(1);
       }
-      return `${teamName}: ${avg} AVG / ${ops} OPS / ${rpg} R/G | Pitching: ${era} ERA / ${whip} WHIP / ${k9} K/9`;
+      const fp = stats.fielding_fp != null ? parseFloat(stats.fielding_fp).toFixed(3) : null;
+      const errs = stats.fielding_e ?? null;
+      const sb = stats.batting_sb ?? null;
+      const fielding = fp != null || errs != null ? ` | Fielding: ${fp ?? '—'} FP, ${errs ?? '—'} E` : '';
+      const running = sb != null ? ` | SB: ${sb}` : '';
+      return `${teamName}: ${avg} AVG / ${ops} OPS / ${rpg} R/G | Pitching: ${era} ERA / ${whip} WHIP / ${k9} K/9${fielding}${running}`;
     };
     if (homeTeamStats || awayTeamStats) {
       teamSeasonStatsSection = [
@@ -1213,6 +1274,12 @@ ${recentResults}
 
 Last game (inning detail):
 ${lastGameSection}
+
+═══ ROSTER MOVES — LAST 7 DAYS ═══
+${rosterMovesSection}
+
+═══ SCHEDULE SHAPE ═══
+${scheduleShapeBlock || 'Schedule shape unavailable.'}
 
 ═══ REST & SCHEDULE SITUATION ═══
 ${restScheduleSection}

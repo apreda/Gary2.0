@@ -154,3 +154,52 @@ export function computeMlbSeasonSeries(seasonIndex, homeBdlId, awayBdlId, homeTe
       : `Season series tied ${homeWins}-${awayWins}`;
   return { line: `${lead} (${meetings.length} meeting${meetings.length === 1 ? '' : 's'}).`, results };
 }
+
+/**
+ * SCHEDULE SHAPE — pure derivation from the season index (Jul 22 2026,
+ * founder-approved fan-parity): homestand/trip position, games in the last
+ * 7 days, and the night-game-then-day-game turnaround. Facts only.
+ *
+ * @param {Map} seasonIndex - id -> { date, status, homeId, awayId }
+ * @param {number} teamBdlId
+ * @param {string} todayEtDate - 'YYYY-MM-DD' (ET)
+ * @param {string|null} todayStartIso - tonight's first pitch instant
+ */
+export function computeMlbScheduleShape(seasonIndex, teamBdlId, todayEtDate, todayStartIso) {
+  if (!seasonIndex || typeof seasonIndex.entries !== 'function' || !teamBdlId || !todayEtDate) return null;
+  const games = [];
+  for (const [, g] of seasonIndex.entries()) {
+    if (g.homeId !== teamBdlId && g.awayId !== teamBdlId) continue;
+    games.push({ et: toEtDate(g.date), instant: g.date, side: g.homeId === teamBdlId ? 'home' : 'away', final: /final/i.test(String(g.status || '')) });
+  }
+  if (!games.length) return null;
+  games.sort((a, b) => String(a.instant).localeCompare(String(b.instant)));
+  const ti = games.findIndex(g => g.et === todayEtDate);
+  if (ti < 0) return null;
+  const side = games[ti].side;
+
+  let back = 0;
+  for (let i = ti - 1; i >= 0 && games[i].side === side; i--) back++;
+  let ahead = 0;
+  for (let i = ti + 1; i < games.length && games[i].side === side; i++) ahead++;
+  const runTotal = back + 1 + ahead;
+  const runLabel = side === 'home' ? 'homestand' : 'road trip';
+
+  const d = new Date(todayEtDate + 'T12:00:00');
+  const weekAgo = new Date(d.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+  const last7 = games.filter(g => g.final && g.et >= weekAgo && g.et < todayEtDate).length;
+
+  const yesterdayEt = new Date(d.getTime() - 86400000).toISOString().slice(0, 10);
+  const yGame = games.find(g => g.et === yesterdayEt && g.final);
+  const etHour = (iso) => parseInt(new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10);
+  const yWasNight = yGame ? etHour(yGame.instant) >= 18 : false;
+  const todayIsDay = todayStartIso ? etHour(todayStartIso) < 17 : false;
+
+  const bits = [];
+  if (runTotal >= 2) bits.push(`Game ${back + 1} of a ${runTotal}-game ${runLabel}`);
+  bits.push(`${last7} game${last7 === 1 ? '' : 's'} in the last 7 days`);
+  if (!yGame) bits.push('did not play yesterday');
+  else if (yWasNight && todayIsDay) bits.push('night game yesterday, day game today');
+  else bits.push('played yesterday');
+  return { line: bits.join('; ') + '.' };
+}
