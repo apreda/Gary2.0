@@ -24,6 +24,7 @@ const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
+const { translateRationalePlain } = await import('../src/services/agentic/plainRationale.js');
 
 // Map verifiedTaleOfTape tokens to iOS StatValues property names.
 // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.;
@@ -1604,6 +1605,14 @@ async function main() {
             if (i < finalGames.length - 1) { await sleep(2000); }
             continue;
           }
+
+          // Plain-language layer (founder GO Jul 22): the fan rendering of the
+          // SAME audited rationale — re-register only, never new claims, never
+          // blocks the pick (25s cap; field simply absent on failure).
+          try {
+            const plain = await translateRationalePlain(cleanPick.rationale);
+            if (plain) cleanPick.rationale_plain = plain;
+          } catch { /* pick ships without it */ }
 
           const picksForGame = [cleanPick];
 

@@ -181,3 +181,17 @@ describe('prompt dedup audit (founder-approved, Jul 22): removed duplicates stay
     expect(src('src/services/agentic/constitution/nhlConstitution.js')).not.toContain("why its price is one you'd take");
   });
 });
+
+describe('plain-language rationale layer (founder GO, Jul 22)', () => {
+  const plainSrc = src('src/services/agentic/plainRationale.js');
+  it('is a re-register only — no new facts, first-person Gary, never blocks the pick', () => {
+    expect(plainSrc).toContain('Do not add any fact, number, player, team, or claim that is not in the original');
+    expect(plainSrc).toContain('You are Gary');
+    expect(plainSrc).toContain('Promise.race');
+  });
+  it('the runner attaches rationale_plain non-fatally', () => {
+    const runner = src('scripts/run-agentic-picks.js');
+    expect(runner).toContain('translateRationalePlain(cleanPick.rationale)');
+    expect(runner).toContain('rationale_plain');
+  });
+});
