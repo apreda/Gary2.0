@@ -741,6 +741,9 @@ struct StatValues: Codable {
     let teamSlg: String?
     let teamOps: String?
     let teamHr: String?
+    let teamEra: String?
+    let runsPerGame: String?
+    let spStarts: String?
     // MLB context stats
     let game1Result: String?
     let spName: String?
@@ -873,6 +876,9 @@ struct StatValues: Codable {
         case teamSlg = "team_slg"
         case teamOps = "team_ops"
         case teamHr = "team_hr"
+        case teamEra = "team_era"
+        case runsPerGame = "runs_per_game"
+        case spStarts = "sp_starts"
         case game1Result = "game1_result"
         case spName = "sp_name"
         case mlOdds = "ml_odds"
@@ -1024,6 +1030,9 @@ struct StatValues: Codable {
             teamSlg: dict["team_slg"] as? String,
             teamOps: dict["team_ops"] as? String,
             teamHr: dict["team_hr"] as? String,
+            teamEra: dict["team_era"] as? String,
+            runsPerGame: dict["runs_per_game"] as? String,
+            spStarts: dict["sp_starts"] as? String,
             // MLB context stats
             game1Result: dict["game1_result"] as? String,
             spName: dict["sp_name"] as? String,
@@ -1227,6 +1236,9 @@ struct StatValues: Codable {
         case "TEAM_SLG": return teamSlg ?? "N/A"
         case "TEAM_OPS": return teamOps ?? "N/A"
         case "TEAM_HR": return teamHr ?? "N/A"
+        case "TEAM_ERA": return teamEra ?? "N/A"
+        case "RUNS_PER_GAME": return runsPerGame ?? "N/A"
+        case "SP_STARTS": return spStarts ?? "N/A"
         case "GAME1_RESULT": return game1Result ?? "N/A"
         case "SP_NAME": return spName ?? "N/A"
         case "ML_ODDS": return mlOdds ?? "N/A"

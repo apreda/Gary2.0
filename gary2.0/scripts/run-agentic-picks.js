@@ -94,10 +94,9 @@ const tokenToIosKey = {
   'TEAM_OPS': 'team_ops',
   'TEAM_HR': 'team_hr',
   'SP_NAME': 'sp_name',
-  // BDL team season stats — TEAM_ERA and RUNS_PER_GAME have no iOS
-  // StatValues field yet, so the data lands in the row dict but
-  // getValue(for:) falls through to the default. Either add iOS cases
-  // or stop emitting these tokens from the scout report.
+  'SP_STARTS': 'sp_starts',
+  // iOS StatValues carries matching fields for all three since Jul 22 2026
+  // (they rendered N/A before — Models.swift getValue had no cases).
   'TEAM_ERA': 'team_era',
   'TEAM_OPS_BDL': 'team_ops',
   'RUNS_PER_GAME': 'runs_per_game',

@@ -4732,50 +4732,39 @@ struct HomeOvernightStrip: View {
     private let rollTimer = Timer.publish(every: 8, on: .main, in: .common).autoconnect()
 
     var body: some View {
+        // Jul 22 redesign (founder: "all sorts of not well designed"): the
+        // one-line jam of record + red dollars + green tick + gold odds had
+        // no hierarchy and no meaning — four colors shoulder-to-shoulder with
+        // nothing saying what any number was. Now each value sits under a
+        // quiet kicker (the masthead/Hub cell grammar), the gold walls are
+        // gone (air does the separating), and only the values carry color.
         Button(action: onTape) {
-            HStack(spacing: 7) {
-                // Date cell removed (founder, Jul 13: it wrapped vertically
-                // once the roll stopped shrinking — the strip IS last night,
-                // the date said nothing).
-                Text("\(record.w)–\(record.l)")
-                    .font(GaryFonts.mono(15, bold: true))
-                    .foregroundStyle(.white)
-                    .fixedSize()
+            HStack(alignment: .center, spacing: 18) {
+                cell(label, Text("\(record.w)–\(record.l)").foregroundColor(.white))
                 if let net {
-                    // Fixed size so the roller (which already shrinks itself)
-                    // never squeezes the real dollar figure down to a stub.
                     // `net` is in UNITS (1u = $100 stake) — flatStakeDollars
                     // converts it; the old inline formatter treated it as
                     // already-dollars and rounded -1.14u down to "-$1".
-                    Text(Formatters.flatStakeDollars(net))
-                        .font(GaryFonts.mono(15, bold: true))
-                        .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
-                        .fixedSize()
+                    cell("NET", Text(Formatters.flatStakeDollars(net))
+                        .foregroundColor(net >= 0 ? GaryColors.win : GaryColors.loss))
                 }
-                stripDivider
                 if !rollItems.isEmpty {
-                    rollSlot
+                    VStack(alignment: .leading, spacing: 3) {
+                        cellKicker("CASHES")
+                        rollSlot
+                    }
+                    .layoutPriority(2)
                 } else if let best, best > 0 {
-                    Text("BEST +\(Int(best))")
-                        .font(GaryFonts.mono(15, bold: true))
-                        .foregroundStyle(.white.opacity(0.7))
+                    cell("BEST CASH", Text("+\(Int(best))").foregroundColor(GaryColors.gold))
+                    Spacer(minLength: 6)
+                } else {
+                    Spacer(minLength: 6)
                 }
-                Spacer(minLength: 6)
-                // "THE CARD" label retired (founder, Jul 6): the words were
-                // stealing the roller's width — the chevron alone marks the
-                // door, and the whole strip is the tap target anyway. A gold
-                // hairline now fills the gap before it (founder, Jul 6: bare
-                // Spacer space read as an accident, not a design) and the
-                // door itself is bigger + pushed to the true trailing edge.
-                // (Jul 8: the HStack's own spacing already opens a gap on
-                // both sides of that hairline — the old +10 leading padding
-                // on the chevron doubled up and starved the roller's width.)
-                Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(width: 1, height: 26)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(GaryColors.gold)
             }
-            .padding(.leading, 14).padding(.trailing, 14).padding(.vertical, 12)
+            .padding(.leading, 14).padding(.trailing, 14).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
             // Flat on the page (founder, Jul 12: the strip + cards + hero read
             // as stacked containers) — one hairline closes it instead of a box.
@@ -4788,10 +4777,22 @@ struct HomeOvernightStrip: View {
         .padding(.horizontal, 16)
     }
 
-    /// The gold hairline walls between the strip's zones (founder, Jul 7):
-    /// date | record · net | rolling cashes | door.
-    private var stripDivider: some View {
-        Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(width: 1, height: 22)
+    /// Quiet label over a mono value — the masthead's cell grammar.
+    private func cellKicker(_ label: String) -> some View {
+        Text(label)
+            .font(HubFont.kicker(9.5)).tracking(1.2)
+            .foregroundStyle(.white.opacity(0.55))
+            .lineLimit(1)
+            .fixedSize()
+    }
+    private func cell(_ label: String, _ value: Text) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            cellKicker(label)
+            value
+                .font(GaryFonts.mono(15, bold: true))
+                .lineLimit(1)
+                .fixedSize()
+        }
     }
 
     private var rollSlot: some View {
@@ -4871,16 +4872,17 @@ struct HomeStoryRail: View {
             Spacer(minLength: 2)
             HStack(alignment: .firstTextBaseline) {
                 if !s.receiptPick.isEmpty {
-                    // Constant size on every card (founder, Jul 12) — the pick
-                    // never shrinks to its neighbors' text lengths.
+                    // Same size as the headline above and the verdict beside it
+                    // (founder, Jul 22) — 18pt made it the loudest thing on the
+                    // card; constant size (never shrinks to neighbors) stays.
                     Text(s.receiptPick)
-                        .font(.system(size: 18, weight: .bold).monospacedDigit())
+                        .font(.system(size: 14, weight: .bold).monospacedDigit())
                         .foregroundStyle(GaryColors.gold)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 Text(s.verdict)
-                    .font(.system(size: 12, weight: .bold).monospacedDigit()).tracking(0.8)
+                    .font(.system(size: 14, weight: .bold).monospacedDigit()).tracking(0.8)
                     .foregroundStyle(s.cashed ? GaryColors.win : s.verdict == "PUSH" ? GaryColors.gold : GaryColors.loss)
             }
         }
@@ -6406,6 +6408,9 @@ struct PremiumPicksView: View {
                 }
                 .padding(.horizontal, 16)
             }
+            // The rail must never shear the card's drop shadow into a hard
+            // edge (founder, Jul 22: the seal read flat on the page).
+            .unclippedRail()
         }
     }
 
@@ -6836,6 +6841,8 @@ struct PremiumPicksView: View {
                     }
                     .padding(.horizontal, 16)
                 }
+                // Never shear the cards' shadows (founder, Jul 22).
+                .unclippedRail()
             }
         }
     }
@@ -6977,6 +6984,8 @@ struct PremiumPicksView: View {
                     }
                     .padding(.horizontal, 16)
                 }
+                // Never shear the cards' shadows (founder, Jul 22).
+                .unclippedRail()
             }
         }
     }
@@ -13684,8 +13693,11 @@ struct MembersOnlyCardFace: View {
                         .stroke(.white.opacity(0.16), lineWidth: 1)
                         .mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center))
                 }
-                .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
-                .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
+                // Deep two-layer lift (founder, Jul 22: "lifted off the
+                // background significantly") — was invisible anyway while the
+                // shelf rails clipped it; the rails are .unclippedRail() now.
+                .shadow(color: .black.opacity(0.7), radius: 26, y: 12)
+                .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
         )
     }
 }
@@ -18553,6 +18565,12 @@ struct PicksCarouselView: View {
     /// without redoing the grouping or the games×connections edge scan.
     @State private var gamesMemo: [(matchup: String, time: String, props: [PropPick])] = []
     @State private var edgeIndex: [String: [Signal]] = [:]
+    /// Masthead + strip context (founder, Jul 22: the Hub's upper part —
+    /// wordmark, LAST 7 DAYS line, double rule, slate strip — is the Picks
+    /// page's top now): the rolling 7-day pick record, and the day board for
+    /// each strip block's O/U.
+    @State private var record7: (w: Int, l: Int)? = nil
+    @State private var stripBoard: TomorrowBoard? = nil
 
     /// Every league with content: today's props/picks plus the per-sport
     /// yesterday recaps (a sport with no picks today shows its results —
@@ -18788,8 +18806,8 @@ struct PicksCarouselView: View {
         ZStack {
             LiquidGlassBackground(grainDensity: 0)
             VStack(spacing: 0) {
-                GaryPageHeader(title: "Picks", accent: GaryPageHeader<EmptyView>.dateLabel())
-                headerBar
+                masthead
+                slateStrip
                 content
             }
         }
@@ -18801,6 +18819,12 @@ struct PicksCarouselView: View {
             consumeFocus()
             if !connLoaded { await loadConnections() }
             rebuildMemo()          // fold the just-loaded connections into the edge index
+        }
+        .task {
+            // Masthead/strip context — both cached, both safe to miss (the record
+            // line and O/U just stay off until they land).
+            if stripBoard == nil { stripBoard = await TodayBoardCache.get() }
+            if record7 == nil { record7 = await SupabaseAPI.fetchSevenDayPickRecord() }
         }
         .task {
             // Keep the SHARED live-score cache warm while this tab is on screen — the
@@ -18916,97 +18940,147 @@ struct PicksCarouselView: View {
         }
     }
 
-    /// Winners-anatomy nav: underline tabs for TODAY + each matchup (with a
-    /// live-status second line), a hairline, then plain sport chips — no
-    /// bubbles, no gold-filled filters.
-    private var headerBar: some View {
+    /// The Hub masthead, worn by Picks (founder, Jul 22: "the nav bar at the
+    /// top of The Hub and this entire upper part is what I want for the Picks
+    /// page"): bear + THE PICKS wordmark, the rolling 7-day pick record, the
+    /// double gold rule, then the league tabs in the Hub's underline idiom.
+    /// Same ramp (HubFont), same geometry — only the record's source differs
+    /// (real game picks, not insight lanes).
+    private var masthead: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Sport-filter pills sit ABOVE the matchup/game tabs (user-directed
-            // swap, June 13 2026 — they used to render below the game tabs).
+            HStack(alignment: .center, spacing: 10) {
+                Image(GaryBrand.mark)
+                    .resizable().scaledToFit()
+                    .frame(width: 30, height: 30)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                (Text("THE ").foregroundColor(GaryColors.warmWhite)
+                    + Text("PICKS").foregroundColor(GaryColors.gold))
+                    .font(HubFont.display(30))
+                    .tracking(0.5)
+                Spacer()
+                Button {
+                    NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .frame(width: 28, height: 30)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
+            }
+
+            HStack(spacing: 8) {
+                Spacer()
+                if let r = record7 {
+                    let pct = Int((Double(r.w) / Double(max(r.w + r.l, 1)) * 100).rounded())
+                    HStack(spacing: 5) {
+                        Text("LAST 7 DAYS")
+                            .font(HubFont.kicker(9.5)).tracking(1.2)
+                            .foregroundStyle(.white.opacity(0.62))
+                        Text("\(r.w)–\(r.l) · \(pct)%")
+                            .font(HubFont.data(11))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+            }
+            .padding(.top, 5)
+
+            // Double rule — the newspaper masthead seam, straight off the Hub.
+            VStack(spacing: 2.5) {
+                Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 2)
+                Rectangle().fill(GaryColors.gold.opacity(0.3)).frame(height: 1)
+            }
+            .padding(.top, 11)
+
             if sports.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(sports, id: \.self) { s in
-                            let on = (s == sport)
-                            Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
+                HStack(spacing: 22) {
+                    ForEach(sports, id: \.self) { s in
+                        let on = (s == sport)
+                        Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
+                            VStack(spacing: 5) {
                                 Text(s)
-                                    .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
-                                    .foregroundStyle(sportChipStyle(s, on: on))
-                                    .frame(minHeight: 44)
-                                    .contentShape(Rectangle())
+                                    .font(HubFont.kicker(12))
+                                    .tracking(1.6)
+                                    .foregroundStyle(on ? GaryColors.warmWhite : .white.opacity(0.5))
+                                Capsule().fill(GaryColors.gold)
+                                    .frame(width: 22, height: 2)
+                                    .opacity(on ? 1 : 0)
                             }
-                            .buttonStyle(.plain)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    Spacer()
                 }
-            }
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .bottom, spacing: 24) {
-                        dayDropdown
-                        ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
-                            gameTab(idx + 1, label: shortMatchup(g.matchup, league: gameLeague(g)).uppercased(), status: statusLine(for: g))
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                }
-                .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
+                .padding(.top, 10)
             }
         }
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
     }
 
-    /// Selected chip wears its sport accent (gold for ALL); the rest stay dim.
-    private func sportChipStyle(_ s: String, on: Bool) -> AnyShapeStyle {
-        guard on else { return AnyShapeStyle(Color.white.opacity(0.35)) }
-        if s == "ALL" { return AnyShapeStyle(GaryColors.gold) }
-        if s == "MLB" || s == "MLB HR" {
-            // MLB reads in a clean light green (the muddy field gradient was the
-            // olive look the founder kept flagging).
-            return AnyShapeStyle(GaryColors.mlbFieldText)
+    /// The day's slate as the game selector — the Hub strip's exact grammar
+    /// (abbr matchup over time + O/U, hairline-separated blocks), with
+    /// selection: tapping a block pages to that game. The first block is the
+    /// Today/Yesterday day selector; live/final states take the second line.
+    private var slateStrip: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    dayBlock
+                    ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
+                        Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
+                        stripBlock(idx + 1, g)
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+            .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
         }
-        return AnyShapeStyle(Sport.from(league: s).accentColor)
+        .padding(.top, 12)
+        .padding(.bottom, 2)
     }
 
-    /// The Today/Yesterday selector — a dropdown in the first tab slot. Picking a day
-    /// filters the matchup row + the top-pick page to that day (user call, Jun 17).
-    private var dayDropdown: some View {
+    /// The strip's first block: TODAY/YESTERDAY ▾ over the day's date. Tap =
+    /// back to the day board (or flip the day when already there); long-press
+    /// = the explicit menu — the old tab row's behavior in the strip's clothes.
+    private var dayBlock: some View {
         let on = (page == 0)
-        // Tap = quick flip between Today/Yesterday (the "click back to today" the
-        // dropdown-only version lost); long-press = the menu, for an explicit pick.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? cal.timeZone
+        let f = DateFormatter()
+        f.timeZone = cal.timeZone
+        f.dateFormat = "MMM d"
+        let day = f.string(from: cal.date(byAdding: .day, value: pickDay == .today ? 0 : -1, to: Date()) ?? Date()).uppercased()
         return Menu {
             Button("Today")     { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 0 } }
             Button("Yesterday") { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } }
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text(pickDay == .today ? "TODAY" : "YESTERDAY")
-                        .font(GaryFonts.mono(13, bold: true)).tracking(0.5)
-                        .foregroundStyle(on ? .white : .white.opacity(0.45))
+                        .font(HubFont.data(11.5, .semibold))
+                        .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(GaryColors.gold)
                 }
-                Text(" ")
-                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                // Gold selected-underline REMOVED from the day tab (founder call) — the
-                // selected state already reads from the white/bold label vs the dim
-                // matchup tabs, and the bar was crowding GARY'S PICK below. A clear
-                // 2pt spacer stays so the day tab keeps the same height/baseline as
-                // the matchup tabs in the bottom-aligned row.
-                Capsule().fill(Color.clear).frame(height: 2)
+                Text(day)
+                    .font(HubFont.data(9.5, .medium))
+                    .foregroundStyle(.white.opacity(0.55))
             }
+            .padding(.trailing, 13)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         } primaryAction: {
             withAnimation(.easeInOut(duration: 0.25)) {
                 if page != 0 {
-                    // On a matchup tab — tap the day chip to return to THIS day's
+                    // On a game page — tap the day block to return to THIS day's
                     // overview (page 0), keeping the day (Today stays Today).
                     page = 0
                 } else {
-                    // Already on the day tab — flip Today <-> Yesterday.
+                    // Already on the day board — flip Today <-> Yesterday.
                     pickDay = (pickDay == .today ? .yesterday : .today)
                 }
             }
@@ -19014,27 +19088,61 @@ struct PicksCarouselView: View {
         .id(0)
     }
 
-    /// Underline tab (the Winners GAMES/PROPS anatomy): matchup label, a
-    /// status second line (LIVE/score/time), gold capsule underline on active.
-    private func gameTab(_ index: Int, label: String, status: (text: String, color: Color)?) -> some View {
+    /// One game on the strip: "PIT @ NYY" over its status — pre-game the time
+    /// (+ O/U when the board knows it), then ▶ LIVE · score, then FINAL · score.
+    private func stripBlock(_ index: Int, _ g: (matchup: String, time: String, props: [PropPick])) -> some View {
         let on = (index == page)
+        let lg = gameLeague(g)
+        let parts = g.matchup.components(separatedBy: " @ ")
+        let label = parts.count == 2
+            ? "\(teamAbbrev(parts[0], league: lg)) @ \(teamAbbrev(parts[1], league: lg))"
+            : g.matchup.uppercased()
+        let timeLabel = g.time.replacingOccurrences(of: " ET", with: "")
+        let total = totalFor(g)
         return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(label)
-                    .font(GaryFonts.mono(13, bold: true)).tracking(0.5)
-                    .foregroundStyle(on ? .white : .white.opacity(0.45))
-                Text(status?.text ?? " ")
-                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
-                    .foregroundStyle(status?.color ?? .clear)
-                // Underline removed (user call Jun 26) — the selected tab is already
-                // clear from the white/bold font color, matching the TODAY tab. Keep a
-                // clear 2pt spacer so every tab holds the same height/baseline.
-                Capsule().fill(Color.clear).frame(height: 2)
+                    .font(HubFont.data(11.5, .semibold))
+                    .foregroundStyle(.white.opacity(on ? 0.95 : 0.62))
+                HStack(spacing: 6) {
+                    if let lf = liveFinalLine(for: g) {
+                        Text(lf.text)
+                            .font(HubFont.data(9.5, .medium))
+                            .foregroundStyle(lf.color)
+                    } else {
+                        if !timeLabel.isEmpty {
+                            Text(timeLabel)
+                                .font(HubFont.data(9.5, .medium))
+                                .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.55))
+                        }
+                        if let total {
+                            Text("O/U \(HubFmt.stat(total))")
+                                .font(HubFont.data(9.5, .medium))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                        if timeLabel.isEmpty && total == nil {
+                            // Keep every block two lines tall so the strip never
+                            // staggers when one game is missing its time.
+                            Text(" ").font(HubFont.data(9.5, .medium))
+                        }
+                    }
+                }
             }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .id(index)
+    }
+
+    /// Board O/U for a strip block (today only — yesterday's blocks carry FINALs).
+    private func totalFor(_ g: (matchup: String, time: String, props: [PropPick])) -> Double? {
+        guard pickDay == .today, let rows = stripBoard?.board else { return nil }
+        let key = Self.matchupKey(g.matchup)
+        return rows.first {
+            Self.matchupKey("\($0.away_team ?? "") @ \($0.home_team ?? "")") == key
+        }?.total
     }
 
     /// Live-score row for a matchup (poller snapshots, abbr-matched).
@@ -19047,29 +19155,25 @@ struct PicksCarouselView: View {
         LiveScoreCache.shared.status(forMatchup: matchup)
     }
 
-    private func statusLine(for g: (matchup: String, time: String, props: [PropPick])) -> (text: String, color: Color)? {
-        // No per-tab "YESTERDAY" tag anymore — the Today/Yesterday dropdown carries
-        // the day now (user call, Jun 17); the tab just shows live/final/time.
-        // Yesterday's FINAL comes from the graded result, not the live-score cache
-        // (which only reliably has today's games) — otherwise half of yesterday's
-        // tabs fall back to the start time instead of showing the score.
+    /// LIVE / FINAL second line for a strip block; nil pre-game (the block
+    /// shows time + O/U instead). Yesterday's FINAL comes from the graded
+    /// result, not the live-score cache (which only reliably has today's
+    /// games) — otherwise half of yesterday's blocks fall back to start times.
+    private func liveFinalLine(for g: (matchup: String, time: String, props: [PropPick])) -> (text: String, color: Color)? {
         if pickDay == .yesterday, let raw = store.finalScore(forMatchup: g.matchup) {
-            return ("FINAL · \(formatFinalScore(g.matchup, raw))", .white.opacity(0.35))
+            return ("FINAL · \(formatFinalScore(g.matchup, raw))", .white.opacity(0.45))
         }
         if let ls = liveScore(forMatchup: g.matchup) {
             if ls.isLive {
                 let score = ls.scoreLine.map { " · \($0)" } ?? ""
                 let det = (ls.detail?.isEmpty == false) ? " · \(ls.detail!)" : ""
-                return ("▶ LIVE\(score)\(det)", GaryColors.gold)
+                return ("▶ LIVE\(score)\(det)", GaryColors.win)
             }
             if ls.isFinal, let score = ls.scoreLine {
-                return ("FINAL · \(formatFinalScore(g.matchup, score))", .white.opacity(0.35))
+                return ("FINAL · \(formatFinalScore(g.matchup, score))", .white.opacity(0.45))
             }
         }
-        // Pre-game: the start time (restored, user call Jun 16) lives here in the
-        // nav bar now that the matchup page's title/time hero is gone. Live and
-        // final scores take precedence above; this is the quiet pre-game state.
-        return g.time.isEmpty ? nil : (g.time.uppercased(), .white.opacity(0.5))
+        return nil
     }
 
     /// Three-letter team abbreviation from the league keyword maps (sibling of the
@@ -19179,20 +19283,9 @@ struct PicksCarouselView: View {
         }
     }
 
-    private func shortMatchup(_ m: String, league: String) -> String {
-        let parts = m.components(separatedBy: " @ ")
-        guard parts.count == 2 else { return m }
-        // shortTeamName keeps two-word mascots whole ("Toronto Blue Jays" →
-        // "Blue Jays", "Boston Red Sox" → "Red Sox") and leaves WC nations
-        // ("Saudi Arabia") intact — never the bare last word.
-        let a = Formatters.shortTeamName(parts[0], league: league)
-        let h = Formatters.shortTeamName(parts[1], league: league)
-        return "\(a) @ \(h)"
-    }
-
-    /// Best-effort league for a matchup tab so shortMatchup can pick the right
-    /// shortening rule (pro mascot vs WC nation). Reads the game's own props
-    /// first, then the day's picks / slate, falling back to the active filter.
+    /// Best-effort league for a strip block so teamAbbrev can pick the right
+    /// abbreviation map. Reads the game's own props first, then the day's
+    /// picks / slate, falling back to the active filter.
     private func gameLeague(_ g: (matchup: String, time: String, props: [PropPick])) -> String {
         if let lg = g.props.first?.effectiveLeague, !lg.isEmpty { return lg.uppercased() }
         let key = Self.matchupKey(g.matchup)
@@ -19364,14 +19457,6 @@ struct TeasedPickCard: View {
                     Spacer()
                 }
                 .padding(.bottom, 6)
-                .overlay(alignment: .topTrailing) {
-                    Image(GaryBrand.mark)
-                        .resizable().scaledToFit()
-                        .frame(width: 46, height: 46)
-                        .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
-                        .offset(y: -2)
-                        .allowsHitTesting(false)
-                }
 
                 VStack(alignment: .leading, spacing: -18) {
                     Text(gameStarted ? "NO PICK" : "PICKS")
@@ -19953,6 +20038,461 @@ struct GameScoutSection: View {
     }
 }
 
+// MARK: - The Scout Trio (Jul 22 2026 — founder-picked mocks, ported as designed)
+//
+// Three stacked report sections replace GameScoutSection on the game page:
+// THE TUG (mock MY 07: center-out comparison bars), THE NOTEBOOK (MY 08:
+// prose chapters assembled strictly from real fields — never generated), and
+// THE BIG NUMBERS (MY 04: one numeral per fact, pipeline edges leading).
+// GameScoutSection stays in the file unreferenced — the founder may still
+// fold parts of it back in after seeing these live.
+
+/// Shared palette + type for the trio — 1:1 with the approved mock values.
+fileprivate enum ScoutMock {
+    static let card = Color(hex: "#1B1714")
+    static let warm = Color(hex: "#F2EDE4")
+    static let hairline = Color(hex: "#FFF8EB").opacity(0.09)
+    static func kicker(_ s: String, size: CGFloat = 9) -> some View {
+        Text(s.uppercased()).font(.system(size: size, weight: .semibold).monospacedDigit())
+            .tracking(1.2).foregroundStyle(warm.opacity(0.42)).lineLimit(1)
+    }
+    static func value(_ s: String, size: CGFloat = 12.5) -> Text {
+        Text(s).font(.system(size: size, weight: .semibold).monospacedDigit())
+    }
+    static var cardShape: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(card)
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(hairline, lineWidth: 1))
+    }
+}
+
+/// Hairline with the centered gold seam tick — the band separator the founder
+/// screenshotted and asked to keep exactly.
+fileprivate struct ScoutBandTick: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+            RoundedRectangle(cornerRadius: 1).fill(GaryColors.gold)
+                .frame(width: 2, height: 13)
+                .shadow(color: GaryColors.gold.opacity(0.4), radius: 6)
+        }
+    }
+}
+
+/// Flat kicker + prose band (TONIGHT · SERIES / THE WIRE) — flat inside its
+/// parent, never its own container (founder call, Jul 22).
+fileprivate struct ScoutFlatBand: View {
+    let kicker: String
+    let text: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ScoutMock.kicker(kicker)
+            Text(text)
+                .font(.system(size: 12.5).monospacedDigit())
+                .foregroundStyle(ScoutMock.warm.opacity(0.84))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One extraction of everything the trio renders — real board/wire fields only.
+fileprivate struct ScoutTrioData {
+    let awayName: String            // "Reds"
+    let homeName: String            // "Mariners"
+    let awayStarter: TomorrowPerson?
+    let homeStarter: TomorrowPerson?
+    let awayL10: String?            // "6-4"
+    let homeL10: String?
+    let awayStreak: String?         // "W3"
+    let homeStreak: String?
+    let venue: String?
+    let tempF: Int?
+    let windMph: Int?
+    let weatherNote: String?
+    let total: Double?
+    let seriesLine: String?         // split_line
+    let lastMeeting: (d: String, line: String)?
+    let wireLines: [String]
+
+    init(matchup: String, row: TomorrowBoardRow?, board: TomorrowBoard?, wire: [SupabaseAPI.WireItem]) {
+        let sides = matchup.components(separatedBy: " @ ")
+        let awaySide = sides.first ?? "", homeSide = sides.count > 1 ? sides[1] : ""
+        let lg = (row?.league ?? "MLB").uppercased()
+        awayName = Formatters.shortTeamName(awaySide, league: lg)
+        homeName = Formatters.shortTeamName(homeSide, league: lg)
+
+        func abbr(_ side: String, _ fallback: String?) -> String {
+            if let fallback, !fallback.isEmpty { return fallback }
+            let a = teamAbbrevFromName(side, league: row?.league)
+            return a.isEmpty ? side.uppercased() : a
+        }
+        let aAb = abbr(awaySide, row?.away_abbr), hAb = abbr(homeSide, row?.home_abbr)
+        func matches(_ name: String?, _ side: String) -> Bool {
+            guard let b = name?.lowercased(), !b.isEmpty else { return false }
+            let s = side.lowercased()
+            return s == b || s.hasSuffix(b) || b.hasSuffix(s)
+        }
+        awayStarter = board?.starters.first { $0.abbr == aAb }
+        homeStarter = board?.starters.first { $0.abbr == hAb }
+        let fa = board?.form?.first { $0.abbr == aAb || matches($0.team, awaySide) }
+        let fh = board?.form?.first { $0.abbr == hAb || matches($0.team, homeSide) }
+        awayL10 = fa?.l10; homeL10 = fh?.l10
+        awayStreak = fa?.streak; homeStreak = fh?.streak
+
+        let w = board?.weather?.first {
+            ($0.away_abbr == aAb && $0.home_abbr == hAb) || matches($0.matchup, matchup)
+        }
+        venue = w?.venue ?? row?.venue
+        tempF = w?.temp_f; windMph = w?.wind_mph; weatherNote = w?.note
+        total = row?.total
+        seriesLine = row?.series?.split_line
+        if let m = row?.series?.meetings?.last, let d = m.d, let line = m.line {
+            lastMeeting = (d, line)
+        } else { lastMeeting = nil }
+
+        // The wire, one line per team: injury first, else today's move (the
+        // same selection GameScoutSection used).
+        let today = SupabaseAPI.todayEST()
+        func news(_ key: String) -> String? {
+            let k = key.lowercased()
+            guard !k.isEmpty else { return nil }
+            let mine = wire.filter { ($0.league ?? "").uppercased() == lg && ($0.headline ?? "").lowercased().contains(k) }
+            if let inj = mine.first(where: { $0.kind == "injury" }) { return inj.headline }
+            return mine.first(where: { ($0.kind == "line_move" || $0.kind == "pace") && $0.date == today })?.headline
+        }
+        var lines: [String] = []
+        for h in [news(awayName), news(homeName)].compactMap({ $0 }) where !lines.contains(h) { lines.append(h) }
+        wireLines = lines
+    }
+
+    /// "T-Mobile Park · 74° · Wind 9 mph · O/U 7.5 · CIN 2-1" — the shared band.
+    var tonightLine: String? {
+        var bits: [String] = []
+        if let venue { bits.append(venue) }
+        if let tempF { bits.append("\(tempF)°") }
+        if let windMph { bits.append("Wind \(windMph) mph") }
+        if let weatherNote, !weatherNote.isEmpty { bits.append(weatherNote) }
+        if let total { bits.append("O/U " + (total == total.rounded() ? String(format: "%.0f", total) : String(format: "%.1f", total))) }
+        if let seriesLine, !seriesLine.isEmpty { bits.append("Series \(seriesLine)") }
+        return bits.isEmpty ? nil : bits.joined(separator: " · ")
+    }
+    var wireText: String? { wireLines.isEmpty ? nil : wireLines.joined(separator: " · ") }
+    static func l10Wins(_ s: String?) -> Int? {
+        guard let first = s?.split(separator: "-").first else { return nil }
+        return Int(first.trimmingCharacters(in: .whitespaces))
+    }
+}
+
+/// THE TUG (mock MY 07) — every stat a pair of center-out bars, away in warm
+/// white, home in gold; bar length lands before the digits do. Bars stay
+/// neutral: no win/loss coloring, the page never argues the pick.
+fileprivate struct ScoutTugSection: View {
+    let d: ScoutTrioData
+
+    private struct Row: Identifiable {
+        let id: String
+        let label: String
+        let a: Double, h: Double
+        let lowerWins: Bool
+        let fmt: (Double) -> String
+    }
+    private var rows: [Row] {
+        var out: [Row] = []
+        let int: (Double) -> String = { String(format: "%.0f", $0) }
+        if let a = d.awayStarter?.era, let h = d.homeStarter?.era {
+            out.append(Row(id: "era", label: "ERA · LOWER WINS THE PULL", a: a, h: h, lowerWins: true,
+                           fmt: { String(format: "%.2f", $0) }))
+        }
+        if let a = d.awayStarter?.last_outing?.k, let h = d.homeStarter?.last_outing?.k {
+            out.append(Row(id: "k", label: "K'S · LAST OUTING", a: Double(a), h: Double(h), lowerWins: false, fmt: int))
+        }
+        if let a = d.awayStarter?.l3?.er, let h = d.homeStarter?.l3?.er {
+            out.append(Row(id: "er", label: "ER · LAST 3", a: Double(a), h: Double(h), lowerWins: true, fmt: int))
+        }
+        if let a = ScoutTrioData.l10Wins(d.awayL10), let h = ScoutTrioData.l10Wins(d.homeL10) {
+            out.append(Row(id: "w10", label: "WINS · LAST 10", a: Double(a), h: Double(h), lowerWins: false, fmt: int))
+        }
+        return out
+    }
+    /// Better value takes the longer pull; the other side scales down. The
+    /// +1 in the lower-wins score keeps a 0-ER run finite.
+    private func widths(_ r: Row) -> (a: CGFloat, h: CGFloat) {
+        let sa = r.lowerWins ? 1.0 / (r.a + 1) : r.a
+        let sh = r.lowerWins ? 1.0 / (r.h + 1) : r.h
+        let top = max(sa, sh, 0.0001)
+        let maxW: CGFloat = 112
+        return (maxW * CGFloat(sa / top), maxW * CGFloat(sh / top))
+    }
+
+    var body: some View {
+        if rows.count >= 2, let aN = d.awayStarter?.name, let hN = d.homeStarter?.name {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(aN).font(GaryFonts.display(17)).foregroundStyle(ScoutMock.warm)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Spacer(minLength: 8)
+                    Text(hN).font(GaryFonts.display(17)).foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+                .padding(.bottom, 2)
+                ForEach(rows) { r in
+                    let w = widths(r)
+                    VStack(spacing: 6) {
+                        ScoutMock.kicker(r.label, size: 8.5).frame(maxWidth: .infinity)
+                        HStack(spacing: 3) {
+                            HStack(spacing: 7) {
+                                Spacer(minLength: 0)
+                                Text(r.fmt(r.a)).font(.system(size: 11.5, weight: .bold).monospacedDigit())
+                                    .foregroundStyle(ScoutMock.warm)
+                                RoundedRectangle(cornerRadius: 3).fill(ScoutMock.warm.opacity(0.5))
+                                    .frame(width: w.a, height: 9)
+                            }
+                            HStack(spacing: 7) {
+                                RoundedRectangle(cornerRadius: 3).fill(GaryColors.gold.opacity(0.65))
+                                    .frame(width: w.h, height: 9)
+                                Text(r.fmt(r.h)).font(.system(size: 11.5, weight: .bold).monospacedDigit())
+                                    .foregroundStyle(ScoutMock.warm)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                    .padding(.top, 9)
+                }
+                if let tonight = d.tonightLine {
+                    ScoutBandTick().padding(.top, 12)
+                    ScoutFlatBand(kicker: "Tonight · Series", text: tonight).padding(.vertical, 10)
+                }
+                if let wire = d.wireText {
+                    ScoutBandTick()
+                    ScoutFlatBand(kicker: "The Wire", text: wire).padding(.top, 10)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(ScoutMock.cardShape)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+/// THE NOTEBOOK (mock MY 08) — prose chapters assembled from real fields in
+/// fixed templates (never generated), each with its data line underneath.
+fileprivate struct ScoutNotebookSection: View {
+    let d: ScoutTrioData
+
+    /// "three straight quality starts" / "2 quality starts in his last 4" /
+    /// "a 3.44 ERA" — the pitcher's calling card, from qs_form else season ERA.
+    private func armPhrase(_ p: TomorrowPerson?) -> String? {
+        if let s = p?.qs_form?.streak, s >= 2 { return "\(s) straight quality starts" }
+        if let q = p?.qs_form?.qs, let w = p?.qs_form?.window, w >= 2 { return "\(q) quality starts in his last \(w)" }
+        if let e = p?.era { return String(format: "a %.2f ERA", e) }
+        return nil
+    }
+    private var armsProse: Text? {
+        guard let aN = d.awayStarter?.name, let hN = d.homeStarter?.name,
+              let aP = armPhrase(d.awayStarter), let hP = armPhrase(d.homeStarter) else { return nil }
+        var lead = Text("\(aN) brings ").foregroundColor(ScoutMock.warm.opacity(0.88))
+            + Text(aP).bold().foregroundColor(ScoutMock.warm)
+        if let rest = d.awayStarter?.rest?.days {
+            lead = lead + Text(" on \(rest) days' rest").foregroundColor(ScoutMock.warm.opacity(0.88))
+        }
+        return lead + Text(". \(hN) counters with ").foregroundColor(ScoutMock.warm.opacity(0.88))
+            + Text(hP).bold().foregroundColor(ScoutMock.warm)
+            + Text(".").foregroundColor(ScoutMock.warm.opacity(0.88))
+    }
+    private var armsData: String? {
+        func line(_ o: TomorrowOuting?) -> String? {
+            guard let o, let ip = o.ip else { return nil }
+            let ipShow = ip.hasSuffix(".0") ? String(ip.dropLast(2)) : ip
+            var s = "\(ipShow) IP · \(o.er ?? 0) ER"
+            if let k = o.k { s += " · \(k) K" }
+            return s
+        }
+        guard let a = line(d.awayStarter?.last_outing), let h = line(d.homeStarter?.last_outing) else { return nil }
+        return "\(a) last out — vs — \(h)"
+    }
+    private var parkProse: Text? {
+        var parts: [Text] = []
+        if let t = d.tempF, let w = d.windMph {
+            var wind = Text("\(t)°").bold().foregroundColor(ScoutMock.warm)
+                + Text(" with the wind at ").foregroundColor(ScoutMock.warm.opacity(0.88))
+                + Text("\(w) mph").bold().foregroundColor(ScoutMock.warm)
+            if let note = d.weatherNote, !note.isEmpty {
+                wind = wind + Text(" — \(note)").foregroundColor(ScoutMock.warm.opacity(0.88))
+            }
+            parts.append(wind)
+        }
+        if let total = d.total {
+            let tShow = total == total.rounded() ? String(format: "%.0f", total) : String(format: "%.1f", total)
+            parts.append(Text("The total sits at ").foregroundColor(ScoutMock.warm.opacity(0.88))
+                + Text(tShow).bold().foregroundColor(ScoutMock.warm))
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.dropFirst().reduce(parts[0]) { $0 + Text(". ").foregroundColor(ScoutMock.warm.opacity(0.88)) + $1 }
+            + Text(".").foregroundColor(ScoutMock.warm.opacity(0.88))
+    }
+    private var seriesProse: Text? {
+        guard let s = d.seriesLine, !s.isEmpty else { return nil }
+        var t = Text("Series ").foregroundColor(ScoutMock.warm.opacity(0.88))
+            + Text(s).bold().foregroundColor(ScoutMock.warm)
+        if let m = d.lastMeeting {
+            t = t + Text(" — last meeting \(m.d): ").foregroundColor(ScoutMock.warm.opacity(0.88))
+                + Text(m.line).bold().foregroundColor(ScoutMock.warm)
+        }
+        return t + Text(".").foregroundColor(ScoutMock.warm.opacity(0.88))
+    }
+    private var seriesData: String? {
+        var bits: [String] = []
+        if let l = d.awayL10 {
+            var s = "\(d.awayName) \(l) last ten"
+            if let st = d.awayStreak { s += " · \(st)" }
+            bits.append(s)
+        }
+        if let l = d.homeL10 {
+            var s = "\(d.homeName) \(l)"
+            if let st = d.homeStreak { s += " · \(st)" }
+            bits.append(s)
+        }
+        return bits.isEmpty ? nil : bits.joined(separator: " — ")
+    }
+
+    @ViewBuilder private func chapter(_ title: String, prose: Text, data: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title.uppercased())
+                .font(GaryFonts.display(13)).tracking(0.8)
+                .foregroundStyle(GaryColors.gold)
+            prose
+                .font(.system(size: 13.5).monospacedDigit())
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+            if let data {
+                Text(data)
+                    .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(ScoutMock.warm.opacity(0.55))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 12)
+    }
+
+    var body: some View {
+        let arms = armsProse, park = parkProse, series = seriesProse
+        if arms != nil || park != nil || series != nil || !d.wireLines.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                if let arms { chapter("The Arms", prose: arms, data: armsData) }
+                if let park { chapter("The Park", prose: park) }
+                if let wire = d.wireText {
+                    chapter("The News", prose: Text(wire).foregroundColor(ScoutMock.warm.opacity(0.88)))
+                }
+                if let series { chapter("The Series", prose: series, data: seriesData) }
+            }
+            .padding(.horizontal, 15).padding(.top, 2).padding(.bottom, 14)
+            .background(ScoutMock.cardShape)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+/// THE BIG NUMBERS (mock MY 04) — one numeral per fact, the numeral as the
+/// headline; the pipeline's edges lead in gold, context rows follow in white.
+fileprivate struct ScoutBigNumbersSection: View {
+    let d: ScoutTrioData
+    let edges: [Signal]
+
+    private struct Row: Identifiable {
+        let id: String
+        let numeral: String
+        let bold: String
+        let rest: String
+    }
+    private var rows: [Row] {
+        var out: [Row] = []
+        // The game's strongest edges lead — value + headline straight from the
+        // insights pipeline (short numerals only; long values read as text).
+        for s in edges.prefix(4) where out.count < 2 {
+            let v = s.value.trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty, v.count <= 4, !s.headline.isEmpty else { continue }
+            out.append(Row(id: "edge-\(s.id)", numeral: v, bold: s.headline, rest: ""))
+        }
+        // Straight-QS run, whichever starter owns one.
+        for p in [d.awayStarter, d.homeStarter] {
+            if let p, let s = p.qs_form?.streak, s >= 2, out.count < 5 {
+                var rest = ""
+                if let l3 = p.l3, let ip = l3.ip, let er = l3.er {
+                    rest = " — \(ip) IP, \(er) ER" + (l3.k.map { ", \($0) K" } ?? "") + " over the run"
+                }
+                out.append(Row(id: "qs-\(p.abbr ?? "")", numeral: "\(s)",
+                               bold: "Straight quality starts for \(p.name ?? "the starter")", rest: rest))
+                break
+            }
+        }
+        // The hotter team's streak.
+        if out.count < 5 {
+            let aSt = d.awayStreak, hSt = d.homeStreak
+            let pick: (String, String, String?, String?)? =
+                aSt?.hasPrefix("W") == true ? (aSt!, d.awayName, d.awayL10, d.homeL10)
+                : hSt?.hasPrefix("W") == true ? (hSt!, d.homeName, d.homeL10, d.awayL10) : nil
+            if let (streak, team, own, other) = pick {
+                var rest = ""
+                if let own { rest = " — \(own) in their last ten" }
+                if let other { rest += rest.isEmpty ? " — the other side \(other)" : ", the other side \(other)" }
+                out.append(Row(id: "streak", numeral: streak, bold: "\(team) arrive hot", rest: rest))
+            }
+        }
+        if out.count < 5, let t = d.tempF, let w = d.windMph {
+            var rest = ""
+            if let note = d.weatherNote, !note.isEmpty { rest = " — \(note)" }
+            if let total = d.total {
+                let tShow = total == total.rounded() ? String(format: "%.0f", total) : String(format: "%.1f", total)
+                rest += ", total sitting at \(tShow)"
+            }
+            out.append(Row(id: "wx", numeral: "\(t)°", bold: "Wind \(w) mph", rest: rest))
+        }
+        if out.count < 5, let s = d.seriesLine,
+           let numRange = s.range(of: #"\d+\s*[-–]\s*\d+"#, options: .regularExpression) {
+            var rest = ""
+            if let m = d.lastMeeting { rest = " — last one \(m.line), \(m.d)" }
+            out.append(Row(id: "series", numeral: String(s[numRange]).replacingOccurrences(of: "-", with: "–"),
+                           bold: "Series \(s)", rest: rest))
+        }
+        return out
+    }
+
+    var body: some View {
+        let built = rows
+        if built.count >= 2 {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(built.enumerated()), id: \.element.id) { i, r in
+                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                            Text(r.numeral)
+                                .font(GaryFonts.display(40))
+                                .foregroundStyle(i < 2 ? GaryColors.gold : ScoutMock.warm)
+                                .frame(minWidth: 64, alignment: .leading)
+                                .lineLimit(1).minimumScaleFactor(0.5)
+                            (Text(r.bold).bold().foregroundColor(ScoutMock.warm)
+                                + Text(r.rest).foregroundColor(ScoutMock.warm.opacity(0.85)))
+                                .font(.system(size: 12.5).monospacedDigit())
+                                .lineSpacing(2.5)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                        if i < built.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                        }
+                    }
+                }
+                .background(ScoutMock.cardShape)
+                if let wire = d.wireText {
+                    ScoutFlatBand(kicker: "The Wire", text: wire)
+                        .padding(.horizontal, 2).padding(.top, 12)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
 struct PicksGamePage: View {
     let group: (matchup: String, time: String, props: [PropPick])
     let entries: [(pick: GaryPick, isYesterday: Bool)]
@@ -20070,9 +20610,20 @@ struct PicksGamePage: View {
             if entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 DerbyContestSection()
             } else {
-            GameScoutSection(matchup: group.matchup, row: scoutRow, board: scoutBoard, wire: scoutWire,
-                             pickMl: entries.first(where: { !$0.isYesterday && ($0.pick.moneylineAway != nil || $0.pick.moneylineHome != nil) })
-                                 .map { (away: $0.pick.moneylineAway, home: $0.pick.moneylineHome) })
+            // The Scout Trio (founder, Jul 22): the three approved mocks
+            // stacked in his order — THE TUG, THE NOTEBOOK, THE BIG NUMBERS.
+            // One shared extraction feeds all three; GameScoutSection retired
+            // from this page (struct kept while the design settles).
+            let trio = ScoutTrioData(matchup: group.matchup, row: scoutRow, board: scoutBoard, wire: scoutWire)
+            if trio.awayStarter != nil || trio.tonightLine != nil || trio.wireText != nil {
+                Text("SCOUTING REPORT")
+                    .font(GaryFonts.accent(11.5)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.65))
+                    .padding(.horizontal, 16)
+            }
+            ScoutTugSection(d: trio)
+            ScoutNotebookSection(d: trio)
+            ScoutBigNumbersSection(d: trio, edges: edges)
             PlayerIntelSection(matchup: group.matchup)
             }
             if isMLB {
