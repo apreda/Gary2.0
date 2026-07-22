@@ -266,3 +266,26 @@ describe('pickEngine: coverage fallback (locked every-game policy)', () => {
     expect(await analyzeGameSol(GAME, 'baseball_mlb', { sportsbookOdds: [] })).toBeNull();
   });
 });
+
+describe('facts-only data layer (founder law, Jul 22): the desk never interprets', () => {
+  const mlbScoutSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/scoutReport/sports/mlb.js'), 'utf8');
+  const toolDefsSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/tools/toolDefinitions.js'), 'utf8');
+
+  it('scout report carries no interpretive legends, computed verdict-deltas, or alarm dressing', () => {
+    expect(mlbScoutSrc).not.toContain('leans fly-ball');       // GO/AO legend taught the frame
+    expect(mlbScoutSrc).not.toContain('ERA minus xERA');       // pre-computed delta = conclusion-shaped number
+    expect(mlbScoutSrc).not.toContain('EXPECTED VS ACTUAL');   // header named the regression frame
+    expect(mlbScoutSrc).not.toContain('availability tonight follows'); // told him what to conclude
+    expect(mlbScoutSrc).not.toContain('⚠️');                   // alarm labels are judgments
+    expect(mlbScoutSrc).not.toContain('small-sample concerns');
+    expect(mlbScoutSrc).not.toContain('expected vs actual');   // frame survived in sub-headers
+    expect(mlbScoutSrc).not.toContain('minus wOBA');           // hitter-side computed delta
+  });
+
+  it('tool descriptions are plain function statements — no example stories, no process quotas', () => {
+    expect(toolDefsSrc).not.toContain('Revenge spot');
+    expect(toolDefsSrc).not.toContain('birthday performance');
+    expect(toolDefsSrc).not.toContain('narrative momentum');
+    expect(toolDefsSrc).not.toContain('2-5 stat categories');
+  });
+});

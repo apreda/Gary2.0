@@ -189,7 +189,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   console.log(`[Scout Report] MLB player season stats: ${homeTeam}=${homePlayerSeasonStats.length}, ${awayTeam}=${awayPlayerSeasonStats.length}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // BASEBALL SAVANT xSTATS (expected vs actual — presented as raw gaps; Gary interprets)
+  // BASEBALL SAVANT xSTATS — raw values only; the reasoning model interprets.
   // Always use current season — stale prior-year data is misleading.
   // ═══════════════════════════════════════════════════════════════════
   const xStatsSeason = season;
@@ -390,7 +390,7 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (contact.brlPercent != null) bits.push(`Barrel% allowed ${contact.brlPercent}%`);
           if (contact.ev95Percent != null) bits.push(`Hard-hit% allowed ${contact.ev95Percent}%`);
           if (contact.battedBallEvents != null) bits.push(`${contact.battedBallEvents} BBE`);
-          if (goao != null) bits.push(`GO/AO ${goao} (grounders per flyout — above ~1.2 leans ground-ball, below ~0.8 leans fly-ball)`);
+          if (goao != null) bits.push(`GO/AO ${goao}`);
           parts.push(`  Contact quality allowed: ${bits.join(', ')}`);
         } else {
           parts.push(`  Contact quality allowed: NOT AVAILABLE — do not characterize ${pitcher.fullName}'s batted-ball profile`);
@@ -442,7 +442,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (teamCounts.size >= 2 && currentTeamBdlId != null) {
       const otherStarts = totalStarts - currentTeamStarts;
       smallSampleFlags.push(
-        `⚠️ ${pitcher.fullName} (${label}): ${currentTeamStarts}/${totalStarts} ${season} starts with ${label}, ${otherStarts} with prior team. ` +
+        `${pitcher.fullName} (${label}): ${currentTeamStarts}/${totalStarts} ${season} starts with ${label}, ${otherStarts} with prior team. ` +
         `BDL season stats / home-away splits / ERA are aggregated across both teams — most of the sample is NOT from the current team or ballpark.`
       );
     }
@@ -450,7 +450,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     // Home-debut / tiny home sample at current venue
     if (currentTeamBdlId != null && homeStartsAtCurrentVenue <= 1 && currentTeamStarts > 0) {
       smallSampleFlags.push(
-        `⚠️ ${pitcher.fullName} (${label}): ${homeStartsAtCurrentVenue} home start${homeStartsAtCurrentVenue === 1 ? '' : 's'} at current team venue this season. ` +
+        `${pitcher.fullName} (${label}): ${homeStartsAtCurrentVenue} home start${homeStartsAtCurrentVenue === 1 ? '' : 's'} at current team venue this season. ` +
         `Any "home ERA" figure is built on essentially zero sample at this park.`
       );
     }
@@ -458,7 +458,7 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   const smallSampleFlagsSection = smallSampleFlags.length
     ? smallSampleFlags.join('\n')
-    : 'No small-sample concerns detected for tonight\'s starting pitchers.';
+    : 'No mid-season team changes or home debuts for tonight\'s starting pitchers.';
 
   // ═══════════════════════════════════════════════════════════════════
   // STANDINGS / DIVISION RECORD (BDL GOAT-tier structured data)
@@ -1031,7 +1031,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // xSTATS — EXPECTED VS ACTUAL (Baseball Savant, raw gaps; Gary interprets)
+  // xSTATS (Baseball Savant) — raw values only; the reasoning model interprets.
   // ═══════════════════════════════════════════════════════════════════
   let xStatsSection = '';
   {
@@ -1054,9 +1054,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     const awaySPx = findXStats(pitcherXStats,awaySPName);
     const homeSPx = findXStats(pitcherXStats,homeSPName);
     if (awaySPx || homeSPx) {
-      lines.push('Starting Pitchers (expected vs actual):');
-      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} vs xERA ${awaySPx.xera} (ERA minus xERA: ${awaySPx.era_minus_xera_diff >= 0 ? '+' : ''}${awaySPx.era_minus_xera_diff.toFixed(2)}) | opp wOBA ${awaySPx.woba} vs xwOBA ${awaySPx.est_woba}`);
-      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} vs xERA ${homeSPx.xera} (ERA minus xERA: ${homeSPx.era_minus_xera_diff >= 0 ? '+' : ''}${homeSPx.era_minus_xera_diff.toFixed(2)}) | opp wOBA ${homeSPx.woba} vs xwOBA ${homeSPx.est_woba}`);
+      lines.push('Starting Pitchers:');
+      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} | xERA ${awaySPx.xera} | opp wOBA ${awaySPx.woba} | opp xwOBA ${awaySPx.est_woba}`);
+      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} | xERA ${homeSPx.xera} | opp wOBA ${homeSPx.woba} | opp xwOBA ${homeSPx.est_woba}`);
     }
 
     // Key batter xStats (top 3 per team from roster if available)
@@ -1066,12 +1066,11 @@ export async function buildMlbScoutReport(game, options = {}) {
       for (const h of hitters) {
         const x = findXStats(batterXStats,h.name);
         if (x) {
-          const diff = x.est_woba - x.woba;
-          xLines.push(`  ${h.name}: BA ${x.ba} vs xBA ${x.est_ba} | SLG ${x.slg} vs xSLG ${x.est_slg} (xwOBA minus wOBA: ${diff >= 0 ? '+' : ''}${diff.toFixed(3)})`);
+          xLines.push(`  ${h.name}: BA ${x.ba} | xBA ${x.est_ba} | SLG ${x.slg} | xSLG ${x.est_slg} | wOBA ${x.woba} | xwOBA ${x.est_woba}`);
         }
       }
       if (xLines.length > 0) {
-        lines.push(`${teamName} Key Hitters (expected vs actual):`);
+        lines.push(`${teamName} Key Hitters:`);
         lines.push(...xLines);
       }
     }
@@ -1134,7 +1133,7 @@ ${weatherSection}
 ═══ PROBABLE PITCHERS ═══
 ${probablePitchersSection}
 
-═══ ⚠️ SMALL SAMPLE FLAGS ═══
+═══ PITCHER SAMPLE CONTEXT ═══
 ${smallSampleFlagsSection}
 
 ═══ CONFIRMED LINEUPS ═══
@@ -1149,7 +1148,7 @@ ${standingsSection}
 ═══ TEAM SEASON STATS (BDL) ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
 
-═══ EXPECTED VS ACTUAL (Baseball Savant xStats${xStatsSeason !== season ? ` — ${xStatsSeason} season` : ''}) ═══
+═══ BASEBALL SAVANT xSTATS${xStatsSeason !== season ? ` (${xStatsSeason} season)` : ''} ═══
 ${xStatsSection || 'No xStats data available.'}
 
 ═══ INJURIES (BDL Structured) ═══
@@ -1159,7 +1158,7 @@ ${injuriesSection || 'No structured injury data available.'}
 Rolling splits (L1/L3/L5/L10):
 ${recentPerformanceSection || 'No recent performance data.'}
 
-BULLPEN USAGE — LAST 3 GAMES (real box scores: who has thrown, when, and how many pitches — availability tonight follows from this, and it changes daily):
+BULLPEN USAGE — LAST 3 GAMES (per-appearance IP and pitch counts from box scores):
 ${[homeBullpenUsage, awayBullpenUsage].filter(Boolean).join('\n') || 'No bullpen usage data available.'}
 
 ═══ SERIES STATE ═══

@@ -289,10 +289,7 @@ export const toolDefinitions = [
     type: "function",
     function: {
       name: "fetch_stats",
-      description: `Fetches specific statistical data for the matchup analysis. 
-Use this to request the exact stats you need to conduct your investigation.
-Only request stats that are directly relevant to your analysis - don't request everything.
-Typical analysis needs 2-5 stat categories.`,
+      description: `Fetches statistical data for the matchup by category token. Returns structured, verified numbers for one or both teams.`,
       parameters: {
         type: "object",
         properties: {
@@ -522,10 +519,7 @@ Only use for NCAAF games when you need specific player analysis.`,
     type: "function",
     function: {
       name: "fetch_narrative_context",
-      description: `Fetches real-time narrative context, storylines, or player-specific news for the matchup.
-Use this to find the "why" behind the numbers, discover player significance (like high-impact rookies), 
-or identify narrative momentum (e.g., revenge spots, birthday performance, "hot streaks").
-Example queries: "player stepping up with star injured", "breakout performer recent games", "Revenge spot for team X vs team Y".`,
+      description: `Searches current news and reporting for this matchup. Returns dated, sourced text.`,
       parameters: {
         type: "object",
         properties: {
