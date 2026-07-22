@@ -1451,11 +1451,14 @@ async function main() {
 
                   let best = searchOdds[0];
                   for (const odds of searchOdds) {
-                    if (isUnderdog) {
-                      if (odds.spread > best.spread) best = odds;   // +18.5 > +17.5 = more cushion = better
-                    } else {
-                      if (odds.spread > best.spread) best = odds;   // -16.5 > -17.5 = fewer to cover = better
-                    }
+                    // Better number first (+18.5 > +17.5 = more cushion; -16.5 > -17.5 =
+                    // fewer to cover); on the SAME number, better price wins — MLB run
+                    // lines are -1.5 at every book, so without the price tie-break the
+                    // stored odds came from whichever book listed first and could
+                    // contradict the pick text (caught on Sol launch review, Jul 22).
+                    if (odds.spread > best.spread) best = odds;
+                    else if (odds.spread === best.spread &&
+                             (odds.spread_odds ?? -Infinity) > (best.spread_odds ?? -Infinity)) best = odds;
                   }
 
                   bestLine = {
