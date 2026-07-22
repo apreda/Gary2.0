@@ -71,7 +71,7 @@ describe('pickEngine: model + prompt', () => {
     expect(p).toContain("one job: make the bet on tonight's board that wins money");
     expect(p).toContain("Never cite a number that isn't in the report or a tool result");
     expect(p).toContain('never use undated news');        // rev Jul 22 PM: traceability without card citations
-    expect(p).toContain('4-6 full paragraphs');           // rev Jul 22 PM: founder length cue
+    expect(p).not.toContain('paragraphs');                // founder: NO length forcing — Gary writes what Gary writes
     expect(p).not.toContain('must carry a date');         // the phrasing that printed "per reporting dated..."
     expect(p).toContain('"final_pick"');
   });
