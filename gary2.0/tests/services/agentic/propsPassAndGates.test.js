@@ -87,9 +87,10 @@ describe('F-9 REVERSED (Jul 8 cost audit): props run on Tier 2', () => {
   // reality was ~$0.35-0.45/game (≈ half the monthly bill) with NO quality
   // gain (36.6% on Tier 1 vs 43.1% on Tier 2 under the same debiased
   // prompts). Founder reverted Jul 8; modelTiering.test.js carries the
-  // canonical pin — this one just documents the reversal in F-9's own file.
-  it('props mode selects the Tier 2 model again', () => {
+  // canonical pin — this one just documents that props stay on their own
+  // cheap tier (GEMINI_PROPS_MODEL since Jul 22 2026), never the big brain.
+  it('props mode selects the props-tier model, not the big brain', () => {
     const loop = src('src/services/agentic/orchestrator/agentLoop.js');
-    expect(loop).toContain('isPropsMode ? GEMINI_FLASH_MODEL : GEMINI_PRO_MODEL');
+    expect(loop).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GEMINI_PRO_MODEL');
   });
 });
