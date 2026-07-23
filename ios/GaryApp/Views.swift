@@ -17386,6 +17386,163 @@ func gradedMatchupKey(_ matchup: String?) -> String? {
     return nil
 }
 
+/// Live batting lines for prop players — the prop card's analog of the game
+/// card's live self-grading (founder, Jul 23 2026: props must live-grade the
+/// same way game picks do). Tracks today's prop players, polls the public MLB
+/// Stats API box score for their games while LIVE (a handful of games, 60s
+/// cadence, hard back-off when idle), and publishes each player's running
+/// line. The card shows the running value and self-grades the moment the game
+/// reads FINAL — the cron-written prop_results row stays the authoritative
+/// graded record, exactly like the game card's stored grade.
+@MainActor
+final class LivePropStatsCache: ObservableObject {
+    static let shared = LivePropStatsCache()
+
+    struct BattingLine {
+        var hits = 0, runs = 0, rbi = 0, walks = 0, homeRuns = 0, totalBases = 0
+        /// Running value for a prop market string; nil = market we can't read live.
+        func value(forMarket market: String) -> Int? {
+            let t = market.lowercased()
+            if t.contains("hits_runs_rbis") { return hits + runs + rbi }
+            if t.contains("total_bases") { return totalBases }
+            if t.contains("home_run") { return homeRuns }
+            if t.contains("walk") { return walks }
+            if t.contains("rbi") { return rbi }
+            if t.contains("hit") { return hits }
+            if t.contains("run") { return runs }
+            return nil
+        }
+    }
+
+    /// Normalized player name → live batting line (today's tracked games).
+    @Published private(set) var lines: [String: BattingLine] = [:]
+
+    private struct Tracked { let name: String; let matchup: String }
+    private var tracked: [String: Tracked] = [:]
+    private var gamePkByMatchup: [String: Int] = [:]
+    private var scheduleDay = ""
+    /// Matchups whose FINAL box score has been read — a final line never
+    /// changes, so each is fetched exactly once.
+    private var finalRead: Set<String> = []
+    private var started = false
+
+    static func nameKey(_ raw: String?) -> String {
+        (raw ?? "").lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+    }
+
+    /// Register a prop player for live tracking (cards call on appear;
+    /// idempotent). MLB only — the box-score parser reads batting lines.
+    func track(player: String?, matchup: String?) {
+        guard let player, !player.isEmpty, let matchup, !matchup.isEmpty else { return }
+        let key = Self.nameKey(player) + "|" + matchup
+        if tracked[key] == nil { tracked[key] = Tracked(name: player, matchup: matchup) }
+        startIfNeeded()
+    }
+
+    private func startIfNeeded() {
+        guard !started else { return }
+        started = true
+        Task { @MainActor [weak self] in
+            defer { self?.started = false }
+            while !Task.isCancelled {
+                guard let self else { return }
+                let anyLive = await self.pollOnce()
+                // 60s while a tracked game is live; 5 min otherwise (pre-game
+                // and post-final boards don't change).
+                try? await Task.sleep(nanoseconds: anyLive ? 60_000_000_000 : 300_000_000_000)
+            }
+        }
+    }
+
+    /// One pass: read box scores for tracked matchups that are live, plus one
+    /// last read when a game goes final. Returns whether anything is live.
+    private func pollOnce() async -> Bool {
+        let live = LiveScoreCache.shared
+        var anyLive = false
+        var wanted: Set<String> = []
+        for t in tracked.values {
+            guard let st = live.status(forMatchup: t.matchup) else { continue }
+            if st.isLive { anyLive = true }
+            if (st.isLive || st.isFinal) && !finalRead.contains(t.matchup) { wanted.insert(t.matchup) }
+        }
+        guard !wanted.isEmpty else { return anyLive }
+        await resolveGamePksIfNeeded()
+        for mu in wanted {
+            guard let pk = gamePkByMatchup[mu] else { continue }
+            guard let parsed = await Self.fetchBoxLines(gamePk: pk) else { continue }
+            for t in tracked.values where t.matchup == mu {
+                if let line = parsed[Self.nameKey(t.name)] { lines[Self.nameKey(t.name)] = line }
+            }
+            if live.status(forMatchup: mu)?.isFinal == true { finalRead.insert(mu) }
+        }
+        return anyLive
+    }
+
+    /// Matchup ("Padres @ Braves") → MLB gamePk via the day's public schedule.
+    /// Fetched once per ET day; short-name containment join on both sides.
+    private func resolveGamePksIfNeeded() async {
+        let day = SupabaseAPI.todayEST()
+        guard day != scheduleDay else { return }
+        guard let url = URL(string: "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=\(day)"),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let dates = root["dates"] as? [[String: Any]],
+              let games = dates.first?["games"] as? [[String: Any]] else { return }
+        var byMatchup: [String: Int] = [:]
+        for g in games {
+            guard let pk = g["gamePk"] as? Int,
+                  let teams = g["teams"] as? [String: Any],
+                  let awayName = ((teams["away"] as? [String: Any])?["team"] as? [String: Any])?["name"] as? String,
+                  let homeName = ((teams["home"] as? [String: Any])?["team"] as? [String: Any])?["name"] as? String else { continue }
+            for t in tracked.values where byMatchup[t.matchup] == nil {
+                let parts = t.matchup.components(separatedBy: " @ ")
+                guard parts.count == 2 else { continue }
+                if awayName.localizedCaseInsensitiveContains(parts[0]),
+                   homeName.localizedCaseInsensitiveContains(parts[1]) {
+                    byMatchup[t.matchup] = pk
+                }
+            }
+        }
+        // Doubleheader caveat: a same-matchup twin bill maps both props to the
+        // first schedule entry — accepted for v1 (rare, and the cron grade
+        // corrects within its 15-min pass).
+        gamePkByMatchup.merge(byMatchup) { cur, _ in cur }
+        scheduleDay = day
+    }
+
+    /// Both teams' batting lines from the public box score, keyed by
+    /// normalized full name. Total bases computed from components.
+    private static func fetchBoxLines(gamePk: Int) async -> [String: BattingLine]? {
+        guard let url = URL(string: "https://statsapi.mlb.com/api/v1/game/\(gamePk)/boxscore"),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let teams = root["teams"] as? [String: Any] else { return nil }
+        var out: [String: BattingLine] = [:]
+        for side in ["away", "home"] {
+            guard let players = (teams[side] as? [String: Any])?["players"] as? [String: Any] else { continue }
+            for (_, raw) in players {
+                guard let p = raw as? [String: Any],
+                      let person = p["person"] as? [String: Any],
+                      let name = person["fullName"] as? String,
+                      let batting = (p["stats"] as? [String: Any])?["batting"] as? [String: Any],
+                      !batting.isEmpty else { continue }
+                var line = BattingLine()
+                line.hits = batting["hits"] as? Int ?? 0
+                line.runs = batting["runs"] as? Int ?? 0
+                line.rbi = batting["rbi"] as? Int ?? 0
+                line.walks = batting["baseOnBalls"] as? Int ?? 0
+                line.homeRuns = batting["homeRuns"] as? Int ?? 0
+                let doubles = batting["doubles"] as? Int ?? 0
+                let triples = batting["triples"] as? Int ?? 0
+                line.totalBases = line.hits + doubles + 2 * triples + 3 * line.homeRuns
+                out[nameKey(name)] = line
+            }
+        }
+        return out
+    }
+}
+
 final class LiveScoreCache: ObservableObject {
     static let shared = LiveScoreCache()
     @Published private(set) var scores: [LiveScore] = []
@@ -22048,8 +22205,36 @@ struct CompactPropRow: View {
         // Doubleheader guard: suppress the matchup-keyed graded result when THIS prop's game
         // (by game_id) is still live — else it borrows the other doubleheader game's result.
         if let gid = prop.game_id, liveCache.status(forGameId: gid)?.isLive == true { return nil }
-        guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
-        return result
+        if let result = gameResult?.lowercased(), !result.isEmpty { return result }
+        // Game-card parity (founder, Jul 23): no stored grade yet, but the game
+        // is FINAL and we hold the player's final line — grade it ourselves.
+        return livePropGraded
+    }
+
+    // MARK: - Live self-grading (game-card parity)
+    @ObservedObject private var livePropCache = LivePropStatsCache.shared
+    /// The market's line as a number — the stored field first, else the
+    /// trailing number on the prop text ("total_bases 1.5").
+    private var lineValue: Double? {
+        if let l = prop.line, let d = Double(l.trimmingCharacters(in: .whitespaces)) { return d }
+        guard let p = prop.prop,
+              let r = p.range(of: "[0-9]+(\\.[0-9]+)?$", options: .regularExpression) else { return nil }
+        return Double(p[r])
+    }
+    private var isUnderBet: Bool { (prop.bet ?? "").lowercased().contains("under") }
+    /// The player's running value for this market (live box score), nil until
+    /// the tracker has a line or for markets it can't read.
+    private var liveValue: Int? {
+        guard let market = prop.prop else { return nil }
+        return livePropCache.lines[LivePropStatsCache.nameKey(prop.player)]?.value(forMarket: market)
+    }
+    /// The game card's liveGraded, prop edition: FINAL board + final line →
+    /// verdict now, instead of waiting on the grading cron's next pass.
+    private var livePropGraded: String? {
+        guard liveCache.status(forMatchup: prop.matchup ?? "")?.isFinal == true,
+              let v = liveValue, let line = lineValue else { return nil }
+        if Double(v) == line { return "push" }
+        return (Double(v) > line) != isUnderBet ? "won" : "lost"
     }
     // D3 verdict system — IDENTICAL to the game card (user call, Jul 3: props
     // speak the same verdict language; the only split is Winners-silver vs
@@ -22284,7 +22469,16 @@ struct CompactPropRow: View {
             return "FINAL"
         }
         guard let ls = liveStatus else { return nil }
-        if ls.isLive { return liveLineRich(ls, label: "LIVE") }
+        if ls.isLive {
+            // The sweat, live: the player's running value against the line
+            // ("· 1/1.5") rides the game situation. Only when the tracker
+            // actually holds a line — never a fabricated zero.
+            let base = liveLineRich(ls, label: "LIVE")
+            if let v = liveValue, let lv = formattedLineText {
+                return "\(base)  ·  \(v)/\(lv)"
+            }
+            return base
+        }
         if ls.isFinal { return liveLineRich(ls, label: "FINAL") }
         return nil
     }
@@ -22421,11 +22615,13 @@ struct CompactPropRow: View {
                     if let live = liveFooterText {
                         // Settled: the footer line carries the verdict ("✓ CASHED · …")
                         // in win-green / lostTint, full strength on a dimmed lost card.
+                        // Scale floor 0.65: the live line can carry the running
+                        // prop value ("· 1/1.5") — it must shrink, never clip.
                         Text(verdictFooterLine(live))
                             .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
                             .foregroundStyle(resolvedResult != nil ? settledFooterTint : footerTint)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.65)
                     } else if let t = propFrontTime {
                         Text(t)
                             .font(GaryFonts.mono(11 * pf, bold: true)).tracking(0.5)
@@ -22513,6 +22709,8 @@ struct CompactPropRow: View {
         .brightness(isSilverLost ? -0.06 : 0)
         .onAppear {
             LiveScoreCache.shared.startIfNeeded()
+            // MLB props live-track their player's box line (game-card parity).
+            if isMLBProp { LivePropStatsCache.shared.track(player: prop.player, matchup: prop.matchup) }
             if isSilverWon { runWinMoment() }
         }
         // Same transition gap as the gold bar: a live card graded WON while on
