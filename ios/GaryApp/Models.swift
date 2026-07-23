@@ -322,6 +322,9 @@ struct DailySlateRow: Decodable {
     let away_team: String?
     let home_team: String?
     let commence_time: String?
+    /// BallDontLie game id — the game's identity (Jul 22 2026): lets readers
+    /// tell doubleheader games apart and join edges/live scores per game.
+    let bdl_game_id: Int?
     let venue: String?
     let spread: Double?
     let ml_home: Double?
@@ -1633,6 +1636,9 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     let away_abbr: String?           // precomputed short codes (NYY @ BOS)
     let home_abbr: String?
     let commence_time: String?
+    /// BallDontLie game id (Jul 22 2026, doubleheader identity) — nil on
+    /// rows written before the change.
+    let bdl_game_id: Int?
     let venue: String?
     let spread: Double?
     let ml_home: Double?
@@ -1706,6 +1712,11 @@ struct TomorrowPerson: Decodable {   // starters AND returns share this
     let rest: TomorrowRest?
     /// Last 2-3 starts aggregated. nil with fewer than 2 starts.
     let l3: TomorrowL3?
+    /// Which GAME this arm starts (Jul 22 2026, doubleheader identity): ISO
+    /// first pitch + 1/2 ordinal. Readers select starters BY GAME, never by
+    /// team alone — two same-team arms share a date on doubleheader days.
+    let game_time: String?
+    let game_number: Int?
 }
 
 struct TomorrowOuting: Decodable {
