@@ -6900,10 +6900,18 @@ struct PremiumPicksView: View {
         }
     }
 
-    /// Yesterday's graded outcome for a prop (player-name keyed), nil pre-grade.
-    private func propResult(for prop: PropPick) -> String? {
+    /// The prop shelf's slate day: a browsed history date, else yesterday for
+    /// the settled fallback, else today — the lookup day for graded stamps.
+    private func propShelfDay(_ shelf: PropShelf) -> String {
+        selectedDate ?? (shelf.settled ? SupabaseAPI.yesterdayEST() : SupabaseAPI.todayEST())
+    }
+
+    /// Graded outcome for a prop on the given slate day ("date|name" keyed),
+    /// nil while ungraded — so day-game props stamp the moment grading runs,
+    /// not the next morning.
+    private func propResult(for prop: PropPick, on day: String) -> String? {
         guard let name = prop.player?.lowercased(), !name.isEmpty else { return nil }
-        return propResultsMap[name]
+        return propResultsMap["\(day)|\(name)"]
     }
 
     /// The prop's game final ("away-home") — props borrow their matchup's score
@@ -6934,7 +6942,7 @@ struct PremiumPicksView: View {
     private func sortedPropGroups(_ shelf: PropShelf) -> [[PropPick]] {
         func isDone(_ g: [PropPick]) -> Bool {
             guard let p = g.first else { return false }
-            if shelf.settled && propResult(for: p) != nil { return true }
+            if propResult(for: p, on: propShelfDay(shelf)) != nil { return true }
             return LiveScoreCache.shared.status(forMatchup: p.matchup ?? "")?.isFinal == true
         }
         return propGameGroups(shelf.props).enumerated().sorted { l, r in
@@ -7003,7 +7011,7 @@ struct PremiumPicksView: View {
                                                 sealedHeight: group.count > 1 ? UIScreen.main.bounds.height * 0.45 : nil) {
                                         if group.count == 1, let only = group.first {
                                             FlippablePropCard(prop: only,
-                                                              gameResult: shelf.settled ? propResult(for: only) : nil,
+                                                              gameResult: propResult(for: only, on: propShelfDay(shelf)),
                                                               finalScore: shelf.settled ? propScore(for: only) : nil,
                                                               showSportBadge: false,
                                                               alwaysShowStartTime: true,
@@ -7015,7 +7023,7 @@ struct PremiumPicksView: View {
                                             VStack(spacing: 10) {
                                                 ForEach(group) { p in
                                                     FlippablePropCard(prop: p,
-                                                                      gameResult: shelf.settled ? propResult(for: p) : nil,
+                                                                      gameResult: propResult(for: p, on: propShelfDay(shelf)),
                                                                       finalScore: shelf.settled ? propScore(for: p) : nil,
                                                                       showSportBadge: false,
                                                                       alwaysShowStartTime: true,
@@ -7355,7 +7363,8 @@ struct PremiumPicksView: View {
         }
         var pMap: [String: String] = [:]
         for r in propResults where r.game_date == date {
-            if let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result { pMap[n] = res.lowercased() }
+            // Same "date|name" key convention as the live board's map.
+            if let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result { pMap["\(date)|\(n)"] = res.lowercased() }
         }
 
         let byLeague = Dictionary(grouping: games, by: { leagueKey($0) })
@@ -7556,13 +7565,17 @@ struct PremiumPicksView: View {
         // LAST RESULT — graded stamps on, flips intact (mirrors the game shelves).
         // PERF (Jul 13): fetch the pair concurrently — they were serial.
         async let yPropsF = SupabaseAPI.fetchPropPicks(date: yesterday)
-        async let recentPropResultsF = SupabaseAPI.fetchRecentPropResults(limit: 60)
+        async let recentPropResultsF = SupabaseAPI.fetchRecentPropResults(limit: 100)
         let yProps = (try? await yPropsF) ?? []
         let recentPropResults = (try? await recentPropResultsF) ?? []
+        // Day-keyed ("date|name") and NOT yesterday-only: on a day-game slate
+        // props grade mid-afternoon, and the yesterday-only name map left
+        // today's settled props unstamped (founder catch, Jul 23). The day in
+        // the key stops a two-day player repeat from borrowing the wrong result.
         var pMap: [String: String] = [:]
-        for r in recentPropResults where r.game_date == yesterday {
-            if let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result {
-                pMap[n] = res.lowercased()
+        for r in recentPropResults {
+            if let d = r.game_date, let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result {
+                pMap["\(d)|\(n)"] = res.lowercased()
             }
         }
         let propsByLeague = Dictionary(grouping: todayProps, by: { propLeagueKey($0) })
