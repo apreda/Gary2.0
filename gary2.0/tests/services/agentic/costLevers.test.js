@@ -56,11 +56,13 @@ describe('#2 MLB research walk runs 8 factor chats with the full token union', (
   });
 });
 
-describe('#3 Gary trusts the briefing instead of being ordered to re-investigate', () => {
-  it('the briefing contract no longer orders redundant investigation', () => {
+describe('#3 briefing contract: no ordered re-investigation, no leash (Jul 22 eve — Sol investigates freely)', () => {
+  it('neither orders redundant investigation nor forbids the brain from investigating', () => {
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).not.toContain('You MUST still investigate');
-    expect(loop).toContain('IS your investigation');
+    expect(loop).not.toContain('IS your investigation');
+    expect(loop).not.toContain('go straight to your Pass 1 synthesis');
+    expect(loop).toContain('Investigate further with your own fetch_stats calls wherever your read wants more evidence');
   });
 });
 

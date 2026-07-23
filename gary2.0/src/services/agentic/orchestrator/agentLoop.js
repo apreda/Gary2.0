@@ -192,7 +192,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
-    thinkingLevel: 'high',
+    // Game picks run Sol at its TOP reasoning tier (founder GO Jul 22 eve —
+    // the WC specials precedent); props stay on the Gemini path unchanged.
+    thinkingLevel: isPropsMode ? 'high' : 'xhigh',
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
@@ -297,7 +299,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       // new, so the order guaranteed wasted big-brain round-trips every game.
       // The briefing IS the investigation (the December design); Gary fetches
       // only what is genuinely missing.
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — this briefing IS your investigation. Everything it covers is already fetched; re-requesting those stats returns nothing new.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nUse your own fetch_stats calls ONLY where a specific fact you need is genuinely missing from the briefing and the scout report. If nothing is missing, go straight to your Pass 1 synthesis.`;
+      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings. Everything it covers is already fetched.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nInvestigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything.`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
       nextMessageToSend = userMessage;
