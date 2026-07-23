@@ -8,6 +8,8 @@ import { SPORTS } from '@/lib/gary/leagues';
    - Static pages get a hand-stamped date. BUMP STATIC_EDIT when their content
      actually changes (copy, pricing numbers, legal text). */
 const STATIC_EDIT = new Date('2026-06-10');
+/* /nfl launched Jul 23 2026; countdown + live record keep it genuinely fresh. */
+const NFL_LAUNCH_EDIT = new Date('2026-07-23');
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = 'https://www.betwithgary.ai';
@@ -25,6 +27,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     daily('/results', 0.9),
     ...SPORTS.map(s => daily(`/results/${s.slug}`, 0.7)),
     daily('/hub', 0.8),
+    { url: `${base}/nfl`, lastModified: NFL_LAUNCH_EDIT, changeFrequency: 'weekly' as const, priority: 0.8 },
     fixed('/pricing', 0.7, 'weekly'),
     fixed('/how-it-works', 0.6, 'monthly'),
     fixed('/app', 0.6, 'monthly'),

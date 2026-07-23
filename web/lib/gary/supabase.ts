@@ -41,15 +41,22 @@ export async function restAll<T>(path: string, opts: { revalidate?: number } = {
  * One PostgREST INSERT (single row). Uncached — writes must never hit the fetch cache.
  * `Prefer: return=minimal` so PostgREST returns nothing, which means insert-only RLS
  * (no SELECT policy) is enough. Used by the /get redirect to log a click with the anon key.
+ * `onConflict` names a unique COLUMN and turns duplicate rows into silent no-ops
+ * (ignore-duplicates), so repeat submits never surface as errors.
  */
-export async function restInsert(table: string, row: Record<string, unknown>): Promise<void> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+export async function restInsert(
+  table: string,
+  row: Record<string, unknown>,
+  opts: { onConflict?: string } = {},
+): Promise<void> {
+  const qs = opts.onConflict ? `?on_conflict=${opts.onConflict}` : '';
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${qs}`, {
     method: 'POST',
     headers: {
       apikey: ANON_KEY,
       Authorization: `Bearer ${ANON_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
+      Prefer: opts.onConflict ? 'return=minimal,resolution=ignore-duplicates' : 'return=minimal',
     },
     body: JSON.stringify(row),
     cache: 'no-store',
