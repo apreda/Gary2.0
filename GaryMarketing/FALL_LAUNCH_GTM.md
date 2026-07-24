@@ -26,6 +26,13 @@ we are standing in front of one.
 
 **T-minus 48 days.**
 
+**The guardrail on all of it (founder, Jul 24): the launch rides football; Gary stays whole-Gary.**
+MLB runs daily through September and beyond, and NBA/NHL return in October — the account, the app,
+and the daily rhythm never become an NFL feed. Football is where the ads, keywords, CPP, and the
+launch MOMENT point, because kickoff is when the most people care about betting. The product story
+stays "a pick for every game, every day, every sport in season." NFL formats ADD to Gary's week;
+nothing MLB gets displaced.
+
 ---
 
 ## 2. What we promise (the launch covenant)
@@ -150,8 +157,9 @@ story until the record speaks), Product Hunt (wrong audience).
 - CFB soft-open IF lane approved (first CFB Saturday Aug 29). [conditional]
 
 **P4 — Launch week (Sep 3–9): the countdown.**
-- T-7: new NFL pin replaces arc pin (arc continues inside the app's tape). Daily countdown posts,
-  each one a receipt not a tease (a summer number, a promise line, a product screen). [me]
+- T-7: new NFL pin replaces arc pin (arc continues inside the app's tape). Countdown beats capped
+  at ONE post/day inside Gary's normal rhythm, each one a receipt not a tease (a summer number, a
+  promise line, a product screen) — never a feed takeover; MLB cards keep posting. [me]
 - Sep 7: ASA ON. Push notification scheduled. Waitlist email drafted + scheduled. [me + founder]
 - **Sep 9: first NFL card posts in the morning (Patriots–Seahawks pick + full reasoning thread).
   Launch thread + film premiere at midday. In-app launch card flips. Email + push at card drop.
@@ -183,7 +191,8 @@ story until the record speaks), Product Hunt (wrong audience).
 
 ## 7. The NFL content system (what the poster becomes)
 
-MLB's daily grind becomes football's weekly drumbeat. The formats, mapped to what's proven:
+Football adds a weekly drumbeat ON TOP of the daily MLB rhythm — the account stays Gary's whole
+desk. The NFL additions, mapped to what's proven:
 
 | Slot | Format | Basis |
 |---|---|---|
@@ -210,7 +219,8 @@ timing. Everything ships behind `dry_run` previews; founder approves samples bef
 - [ ] Replace stale root PDFs (Gary_AI_Brand_Guide.pdf) + Notion Brand Assets page content.
 - [ ] Press kit regenerated (current claims: free, every game, record; kill "100% free"/GPT-5.1
       leftovers). Press gallery re-listed on /press.
-- [ ] X profile fall pass (T-7): football banner, bio v3, NFL pin + `ct=x_pinned` reply.
+- [ ] X profile pass (T-7): banner stays whole-Gary (the cigar boss), bio v3 states the real
+      all-sports truth; the LAUNCH lives in the pin (NFL Week 1 pin + `ct=x_pinned` reply).
 - [ ] App Store listing coherence: name/subtitle/screenshots/CPP tell the covenant in the same words.
 - [ ] Legal pages lawyer review (carried) + verify legal@/support@ mailboxes route (carried).
 - [ ] One rule everywhere: no emojis, no ellipsis, no tout vocabulary, 21+ line on ads/creator posts.
