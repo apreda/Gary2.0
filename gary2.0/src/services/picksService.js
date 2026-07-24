@@ -268,7 +268,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         sportsbook_odds: pick.sportsbook_odds || null,
         // World Cup side/total tag — set by run-agentic-picks; carry it through so
         // the two WC plays per match stay distinguishable (was being dropped → null).
-        pick_category: pick.pick_category ?? null
+        pick_category: pick.pick_category ?? null,
+        // Plain-language fan rendering of the audited rationale (was being dropped → null).
+        rationale_plain: pick.rationale_plain || null,
+        // Which brain produced this pick — fields absent from this object never reach the DB.
+        model: pick.model || null
       };
 
       // Add the generated pick ID
@@ -336,7 +340,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       // Multi-book sportsbook odds comparison (for iOS app display)
       sportsbook_odds: pick.sportsbook_odds || null,
       // World Cup side/total tag — carry it through (was being dropped → null).
-      pick_category: pick.pick_category ?? null
+      pick_category: pick.pick_category ?? null,
+      // Plain-language fan rendering of the audited rationale (was being dropped → null).
+      rationale_plain: pick.rationale_plain || null,
+      // Which brain produced this pick — fields absent from this object never reach the DB.
+      model: pick.model || null
     };
 
     // Add the generated pick ID

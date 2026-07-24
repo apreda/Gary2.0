@@ -25,6 +25,7 @@ const { ballDontLieService } = await import('../src/services/ballDontLieService.
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { translateRationalePlain } = await import('../src/services/agentic/plainRationale.js');
+const { GAME_PICK_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 
 // Map verifiedTaleOfTape tokens to iOS StatValues property names.
 // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.;
@@ -1493,18 +1494,25 @@ async function main() {
           const finalSpreadOdds = bestLine?.spreadOdds ?? result.spreadOdds;
           const bestLineBook = bestLine?.book ?? null;
 
-          // Update pick text to reflect best available line (not just Gary's raw output)
+          // Update pick text to reflect best available line (not just Gary's raw output).
+          // F-5: the stored odds are the ELECTED board line, so the pick text must say
+          // the same thing — rewrite on a price-only election too, not just a number
+          // change (Jul 23 Tigers: every book sat at -1.5, the price tie-break stored
+          // -108 while the text kept the prose "-110").
           let finalPickText = result.pick;
-          if (bestLine && result.type === 'spread' && finalSpread !== result.spread && finalPickText) {
-            // Replace the spread number in the pick text
+          if (bestLine && result.type === 'spread' && finalPickText) {
+            // Replace the spread number + price in the pick text
             // e.g., "Washington Wizards +6.0 -114" → "Washington Wizards +6.5 -110"
             const spreadStr = finalSpread > 0 ? `+${finalSpread}` : `${finalSpread}`;
-            const oddsStr = finalSpreadOdds ? ` ${finalSpreadOdds > 0 ? '+' + finalSpreadOdds : finalSpreadOdds}` : '';
+            const oddsStr = typeof finalSpreadOdds === 'number' ? ` ${finalSpreadOdds > 0 ? '+' + finalSpreadOdds : finalSpreadOdds}` : '';
             // Match pattern: team name followed by spread number and optional odds
             const pickMatch = finalPickText.match(/^(.+?)\s*[+-]\d+\.?\d*\s*[+-]?\d*$/);
             if (pickMatch) {
-              finalPickText = `${pickMatch[1].trim()} ${spreadStr}${oddsStr}`;
-              console.log(`   📝 Pick text updated: "${result.pick}" → "${finalPickText}"`);
+              const rewritten = `${pickMatch[1].trim()} ${spreadStr}${oddsStr}`;
+              if (rewritten !== finalPickText) {
+                finalPickText = rewritten;
+                console.log(`   📝 Pick text updated: "${result.pick}" → "${finalPickText}"`);
+              }
             }
           }
 
@@ -1538,6 +1546,9 @@ async function main() {
             // Audit trail: rationale numbers that didn't trace to provided data
             // (null when all traced). Visibility/filtering hook — was being dropped.
             statAuditWarnings: result._statAuditWarnings ?? null,
+            // Which brain produced this pick — without it the DB can't distinguish
+            // model eras (the Sol cutover review had to infer brains from timestamps).
+            model: GAME_PICK_MODEL,
             league: config.name,
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
