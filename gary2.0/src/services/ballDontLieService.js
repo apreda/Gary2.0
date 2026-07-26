@@ -5034,56 +5034,25 @@ const ballDontLieService = {
    * Pitcher includes: name, batsThrows, position
    */
   /**
-   * THE TAPE (Jul 26 2026): a finished game's scoring flow, condensed from
-   * play-by-play — every play where the score changed, with inning and
-   * running score. Final games are immutable → cached for a week; one
-   * paginated fetch per game, ever.
+   * THE TAPE (Jul 26 2026): a finished game's scoring flow — every play where
+   * the score changed, with inning and running score. Sourced from the Games
+   * endpoint's curated `scoring_summary` field (one request; replaced the
+   * original 14-page plays crawl the same day once the docs showed the field
+   * rides on game rows). Final games are immutable → cached for a week.
    */
   async getMlbGameScoringFlow(gameId) {
     if (!gameId) return null;
-    const cacheKey = `mlb_scoring_flow_v2_${gameId}`;
+    const cacheKey = `mlb_scoring_flow_v3_${gameId}`;
     return await getCachedOrFetch(cacheKey, async () => {
-      const all = [];
-      let cursor = null;
-      for (let page = 0; page < 14; page++) {
-        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/plays${buildQuery({ game_id: gameId, per_page: 100, ...(cursor ? { cursor } : {}) })}`;
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        const rows = response.data?.data || [];
-        all.push(...rows);
-        cursor = response.data?.meta?.next_cursor;
-        if (!cursor || rows.length === 0) break;
-        await new Promise(r => setTimeout(r, 150));
-      }
-      if (!all.length) return [];
-      // Emit only genuine run-scoring moments: the feed's score fields flap
-      // across pitch-level rows, so we track the last EMITTED total and, when
-      // it rises, attach the nearest real outcome text (never "Pitch 2" or
-      // "pitches to" bookkeeping).
-      const isNoise = (pl) => {
-        const t = String(pl.text || '');
-        return t.length < 12 || /^Pitch \d/.test(t) || / pitches to /.test(t) ||
-          /^(Top|Bottom) of the /.test(t) || /^End of the /.test(t);
-      };
-      const lines = [];
-      let emittedTotal = 0;
-      for (let i = 0; i < all.length; i++) {
-        const pl = all[i];
-        const a = Number(pl.away_score ?? 0);
-        const h = Number(pl.home_score ?? 0);
-        const total = a + h;
-        if (total <= emittedTotal) continue;
-        // Score rose — find the outcome row that caused it (this row or the
-        // nearest non-noise row within 3 back).
-        let src = !isNoise(pl) ? pl : null;
-        for (let back = 1; !src && back <= 3 && i - back >= 0; back++) {
-          if (!isNoise(all[i - back])) src = all[i - back];
-        }
-        if (!src) continue;
-        const inn = `${String(src.inning_type || pl.inning_type || '').toLowerCase().startsWith('t') ? 'T' : 'B'}${src.inning ?? pl.inning ?? '?'}`;
-        lines.push(`[${inn}] ${String(src.text).trim()} (${a}-${h})`);
-        emittedTotal = total;
-      }
-      return lines;
+      const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/games/${gameId}`;
+      const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+      const summary = response.data?.data?.scoring_summary;
+      if (!Array.isArray(summary) || summary.length === 0) return [];
+      return summary.map(p => {
+        const half = String(p.inning || '').toLowerCase().startsWith('t') ? 'T' : 'B';
+        const num = String(p.period || '').replace(/\D/g, '') || '?';
+        return `[${half}${num}] ${String(p.play || '').trim()} (${p.away_score}-${p.home_score})`;
+      });
     }, 7 * 24 * 60); // final games never change
   },
 
