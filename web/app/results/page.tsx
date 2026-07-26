@@ -5,6 +5,7 @@ import {
   fetchAllGameResults, fetchAllPropResults, computeRecord, computePropsRecord,
   recordByLeague, currentStreak, sinceDate,
 } from '@/lib/gary/results';
+import { rest } from '@/lib/gary/supabase';
 import { daysAgoEST } from '@/lib/gary/dates';
 import { SPORTS, LEAGUE_DISPLAY, sportByCode } from '@/lib/gary/leagues';
 
@@ -18,6 +19,36 @@ export const metadata: Metadata = {
 };
 
 const fmtUnits = (u: number) => `${u >= 0 ? '+' : '-'}${Math.abs(u).toFixed(1)}u`;
+
+const fmtET = (iso: string) =>
+  new Date(iso).toLocaleTimeString('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit',
+  }) + ' ET';
+
+/**
+ * Yesterday's concrete receipt: when the card was first stored vs when its
+ * first game started. daily_picks upserts per date and created_at survives
+ * re-runs, so it is the day's FIRST post time. Null (render nothing) when
+ * the row or timestamps are missing — a claim is only shown when the data
+ * backs it.
+ */
+async function fetchYesterdayReceipt(): Promise<{ posted: string; firstPitch: string } | null> {
+  try {
+    const rows = await rest<Array<{ created_at: string | null; picks: Array<{ commence_time?: string }> }>>(
+      `daily_picks?date=eq.${daysAgoEST(1)}&select=created_at,picks`, { revalidate: 3600 });
+    const row = rows[0];
+    if (!row?.created_at || !Array.isArray(row.picks)) return null;
+    const starts = row.picks
+      .map(p => p.commence_time).filter((c): c is string => !!c)
+      .map(c => new Date(c).getTime()).filter(Number.isFinite);
+    if (!starts.length) return null;
+    const first = Math.min(...starts);
+    if (new Date(row.created_at).getTime() >= first) return null; // never show a claim the data contradicts
+    return { posted: fmtET(row.created_at), firstPitch: fmtET(new Date(first).toISOString()) };
+  } catch {
+    return null;
+  }
+}
 
 /* Gary's form — last-10 W/L pip strip, oldest-first so it reads toward today. */
 const PIP_COLOR: Record<string, string> = { won: '#3FB950', lost: '#E5484D', push: '#C9A227' };
@@ -40,9 +71,10 @@ function FormPips({ results }: { results: string[] }) {
 }
 
 export default async function ResultsPage() {
-  const [games, props] = await Promise.all([
+  const [games, props, receipt] = await Promise.all([
     fetchAllGameResults().catch(() => null),
     fetchAllPropResults().catch(() => null),
+    fetchYesterdayReceipt(),
   ]);
 
   // Results page is the record — null data is worse than an error page.
@@ -66,8 +98,35 @@ export default async function ResultsPage() {
       <PageMasthead
         title="Track record"
         meta="EVERY PICK GRADED"
-        sub="Every pick is graded the morning after and stays on the record — wins, losses, and pushes. Units assume flat 1-unit stakes at the listed odds."
+        sub="Every pick is stored before lock, graded after the final, and stays on the record — wins, losses, and pushes. Units assume flat 1-unit stakes at the listed odds."
       />
+
+      {/* The receipts — why this record can be trusted (and most can't) */}
+      <section className="mt-8 grid gap-4 rounded-lg border border-line p-5 md:grid-cols-3">
+        <div>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Posted before lock</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
+            Every pick is stored server-side before the game starts. Nothing is added after the fact.
+            {receipt && (
+              <span className="tnum mt-1 block font-mono text-[12px] text-low">
+                Yesterday: card posted {receipt.posted}, first game {receipt.firstPitch}.
+              </span>
+            )}
+          </p>
+        </div>
+        <div>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Nothing deleted</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
+            Wins, losses, and pushes all stay on the record. The archive below is the complete history.
+          </p>
+        </div>
+        <div>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Graded by machine</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
+            Results grade automatically from final scores — the same pipeline grades Gary and everyone who tails him in the app.
+          </p>
+        </div>
+      </section>
 
       {/* Headline — the all-time figure carries the page */}
       <section className="mt-7 grid items-end gap-8 lg:grid-cols-12">
