@@ -400,21 +400,13 @@ export async function buildMlbScoutReport(game, options = {}) {
       try {
         const mlbamId = pitcher.id;
         const oppMlbamId = side === 'home' ? awayTeamId : homeTeamId;
-        const bdlPitcherId = bdlRow?.player?.id ?? null;
-        const oppBdlTeamId = side === 'home' ? awayTeamBdlId : homeTeamBdlId;
-        const [arsenal, platoon, contact, seasonPitching, lastStarts, vsOpp, bvpRows, pitchTypeRows] = await Promise.all([
+        const [arsenal, platoon, contact, seasonPitching, lastStarts, vsOpp] = await Promise.all([
           getPitcherArsenal(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
           getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPlayerSeasonStats(mlbamId, season, 'pitching').catch(() => null) : Promise.resolve(null),
           mlbamId ? getPitcherLastStarts(mlbamId, season, 3).catch(() => []) : Promise.resolve([]),
           mlbamId && oppMlbamId ? getPitcherVsTeam(mlbamId, oppMlbamId).catch(() => null) : Promise.resolve(null),
-          bdlPitcherId && oppBdlTeamId
-            ? ballDontLieService.getMlbPlayerVsPlayer({ playerId: bdlPitcherId, opponentTeamId: oppBdlTeamId }).catch(() => [])
-            : Promise.resolve([]),
-          bdlPitcherId
-            ? ballDontLieService.getMlbPitcherPitchTypeStats({ playerIds: [bdlPitcherId], season }).catch(() => [])
-            : Promise.resolve([]),
         ]);
 
         if (lastStarts.length) {
@@ -436,41 +428,10 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (vbits.length) parts.push(`  Career vs ${oppName}: ${vbits.join(', ')}`);
         }
 
-        // Batter-by-batter career history vs this starter (the broadcast
-        // graphic), straight from the versus feed. Empty feed = no line —
-        // a fetch failure must never render as "nobody has faced him".
-        const bvp = (bvpRows || []).filter(r => (r.at_bats || 0) > 0)
-          .sort((a, b) => (b.at_bats || 0) - (a.at_bats || 0));
-        if (bvp.length) {
-          const oppName = side === 'home' ? awayTeam : homeTeam;
-          const bvpLine = bvp.slice(0, 12).map(r => {
-            const nm = r.opponent_player?.last_name || r.opponent_player?.full_name || '?';
-            const bits = [`${r.hits}-for-${r.at_bats}`];
-            if (r.home_runs > 0) bits.push(`${r.home_runs} HR`);
-            if (r.doubles > 0) bits.push(`${r.doubles} 2B`);
-            if (r.walks > 0) bits.push(`${r.walks} BB`);
-            if (r.strikeouts > 0) bits.push(`${r.strikeouts} K`);
-            return `${nm} ${bits.join(', ')}`;
-          }).join(' | ');
-          parts.push(`  Career vs current ${oppName} hitters: ${bvpLine}`);
-        }
-
         if (arsenal?.pitches?.length) {
           parts.push(`  Arsenal velocity (Savant): ${arsenal.pitches.map(p => `${p.name} ${p.mph} mph`).join(' | ')}`);
         } else {
           parts.push(`  Arsenal velocity: NOT AVAILABLE — do not cite pitch speeds for ${pitcher.fullName}`);
-        }
-
-        // Per-pitch results, season to date: usage, whiff rate, and what
-        // hitters are doing against each offering (BDL pitch-type aggregates).
-        const fmtAvg = (v) => v == null ? '—' : (v >= 1 ? v.toFixed(2) : v.toFixed(3).replace(/^0/, ''));
-        const pitchTypes = (pitchTypeRows || []).filter(p => (p.pitch_usage_percent || 0) >= 1)
-          .sort((a, b) => (b.pitch_usage_percent || 0) - (a.pitch_usage_percent || 0));
-        if (pitchTypes.length) {
-          const ptLine = pitchTypes.map(p =>
-            `${p.pitch_name} ${Math.round(p.pitch_usage_percent)}% use — ${p.whiff_percent != null ? Math.round(p.whiff_percent) + '% whiff' : 'whiff —'}, ${fmtAvg(p.ba)} BA/${fmtAvg(p.slg)} SLG against`
-          ).join(' | ');
-          parts.push(`  Arsenal results (${season}): ${ptLine}`);
         }
 
         if (platoon?.vsLeft || platoon?.vsRight) {
