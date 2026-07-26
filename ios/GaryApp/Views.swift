@@ -2490,6 +2490,18 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
         }
+
+        // ── THE RECEIPTS LINE + YOUR NIGHT (Jul 26 additions) — proof of
+        // post, then the user's own open action with live state. Both
+        // self-hide without data.
+        HomeReceiptsLine()
+        HomeYourNight {
+            UserDefaults.standard.set("you", forKey: "billfoldScope")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+        }
+        .opacity(animateIn ? 1 : 0)
+        .animation(.easeOut(duration: 0.6).delay(0.045), value: animateIn)
+
         // ── ALL-STAR WEEK — the break takeover (Jul 13-14 2026). Gary works
         // the exhibitions, so the dark days lead with them instead of a void.
         // Renders only stored pick data + the verified event schedule.
@@ -2525,6 +2537,21 @@ struct HomeView: View {
         homeSheet
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
+
+        // ── DISCOVERY (Jul 26 additions) — the fantasy desk's daily add/cut,
+        // the wire pulse, and the standings podium. Each self-hides empty.
+        HomeFantasyTeaser {
+            UserDefaults.standard.set("fantasy", forKey: "hubScope")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+        }
+        HomeWireMini {
+            UserDefaults.standard.set("hub", forKey: "hubScope")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+        }
+        HomeLeaderboardPodium {
+            UserDefaults.standard.set("you", forKey: "billfoldScope")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+        }
 
         // ── WINNERS — the sealed card, slip-styled (the one conversion door).
         HomeWinnersStub(onOpen: {
