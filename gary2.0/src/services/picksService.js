@@ -797,11 +797,31 @@ async function storeTestPicks(picks, testName = null, testNotes = null) {
   }
 }
 
+/**
+ * THE DESK snapshot (spec 2026-07-26): persist exactly what Gary read for one
+ * pick. Non-blocking by contract — a snapshot failure logs and never touches
+ * the pick flow.
+ */
+async function storeDeskSnapshot({ game_date, matchup, pick, desk }) {
+  try {
+    if (!game_date || !matchup || !desk) return { success: false, error: 'missing fields' };
+    const { error } = await supabase
+      .from('pick_desks')
+      .upsert({ game_date, matchup, pick: pick || null, desk }, { onConflict: 'game_date,matchup' });
+    if (error) throw error;
+    return { success: true };
+  } catch (e) {
+    console.warn(`   [Desk snapshot] not stored (${e.message}) — pick unaffected`);
+    return { success: false, error: e.message };
+  }
+}
+
 // Export both styles!
 const picksService = {
   storeDailyPicksInDatabase,
   storeTestPicks,
   storeWeeklyNFLPicks,
+  storeDeskSnapshot,
   nflGameAlreadyHasPick,
   getNFLWeekStart,
   getNFLWeekNumber,

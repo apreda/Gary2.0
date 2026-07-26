@@ -26,6 +26,7 @@ const { geminiGroundingSearch } = await import('../src/services/agentic/scoutRep
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { translateRationalePlain } = await import('../src/services/agentic/plainRationale.js');
 const { GAME_PICK_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
+const { analyzeGameDesk } = await import('../src/services/pickdesk/garyBrain.js');
 
 // Map verifiedTaleOfTape tokens to iOS StatValues property names.
 // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.;
@@ -942,7 +943,12 @@ async function main() {
         };
         let result;
         try {
-          result = await analyzeGame(game, config.key, runnerOptions);
+          // MLB game picks run the pickdesk brain — one desk, one read
+          // (spec 2026-07-26). Other sports still route through analyzeGame
+          // until their own rebuild days.
+          result = config.key === 'baseball_mlb'
+            ? await analyzeGameDesk(game, runnerOptions)
+            : await analyzeGame(game, config.key, runnerOptions);
         } catch (err) {
           if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) {
             console.log(`\n⚠️  Request aborted for ${game.away_team} @ ${game.home_team}. Skipping...`);
@@ -1638,6 +1644,17 @@ async function main() {
               console.log(`\n📤 [${config.name}] Storing ${picksForGame.length} pick(s) immediately: ${picksForGame.map(p => p.pick).join(' | ')}`);
               await storePicks(picksForGame);
               console.log(`✅ [${config.name}] Pick(s) stored to Supabase`);
+              // THE DESK snapshot (spec 2026-07-26): the pick is a pure
+              // function of the desk — persist exactly what Gary read.
+              // Non-blocking by contract.
+              if (result.deskText) {
+                await picksService.storeDeskSnapshot({
+                  game_date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+                  matchup: `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
+                  pick: cleanPick.pick,
+                  desk: result.deskText,
+                });
+              }
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }

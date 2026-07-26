@@ -7,7 +7,7 @@ import { NFL_CONSTITUTION } from './nflConstitution.js';
 import { NCAAB_CONSTITUTION } from './ncaabConstitution.js';
 import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
 import { NHL_CONSTITUTION } from './nhlConstitution.js';
-import { MLB_CONSTITUTION } from './mlbConstitution.js';
+// (mlbConstitution deleted Jul 26 2026 — MLB game picks run pickdesk, constitution-less.)
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
@@ -89,14 +89,14 @@ const GAME_CONSTITUTIONS = {
   NCAAB: NCAAB_CONSTITUTION,
   NCAAF: NCAAF_CONSTITUTION,
   NHL: NHL_CONSTITUTION,
-  MLB: MLB_CONSTITUTION,
+  MLB: '', // game lane deleted Jul 26 2026 — pickdesk
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
   americanfootball_nfl: NFL_CONSTITUTION,
   basketball_ncaab: NCAAB_CONSTITUTION,
   americanfootball_ncaaf: NCAAF_CONSTITUTION,
   icehockey_nhl: NHL_CONSTITUTION,
-  baseball_mlb: MLB_CONSTITUTION,
+  baseball_mlb: '', // game lane deleted Jul 26 2026 — pickdesk
 };
 
 /**

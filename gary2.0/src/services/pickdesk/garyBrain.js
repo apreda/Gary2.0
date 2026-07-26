@@ -15,6 +15,15 @@ import { GAME_PICK_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createOpenAISession, sendToOpenAISession } from '../agentic/orchestrator/providerAdapters/openaiSession.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 
+// MLB awareness — the ONLY two bullets that survived the founder's Jul 22
+// full-surface curation ("why do we have to tell a nearly super smart
+// intelligence how starting pitching works" — everything else was removed).
+// Carried verbatim from the deleted getMlbSeasonAwareness.
+export const MLB_AWARENESS = `## MLB SEASON AWARENESS
+
+- **Baseball runs on heavy game-to-game variance.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
+- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. Streaks are real currency in this sport — riding a hot team against a cold one is legitimate baseball judgment; weigh it against tonight's matchup. These dynamics are real and worth investigating alongside the statistical matchup.`;
+
 // The betting framework — the founder's approved decision language (Pass 2.5
 // lineage, carried verbatim from the Jul 22 sol-native runner). Two deliberate
 // deltas per spec: no tools sentence (the desk is complete), no length bracket
@@ -89,7 +98,7 @@ export async function analyzeGameDesk(game, options = {}) {
     thinkingLevel: 'xhigh',
   });
 
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n${DECISION_ASK(homeTeam, awayTeam)}`;
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n\n${MLB_AWARENESS}\n${DECISION_ASK(homeTeam, awayTeam)}`;
   const usage = { in: 0, out: 0 };
   const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
 

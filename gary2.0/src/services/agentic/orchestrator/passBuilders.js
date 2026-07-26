@@ -1,4 +1,7 @@
-import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
+// MLB GAME LANE DELETED Jul 26 2026 — MLB game picks run src/services/pickdesk/
+// (spec 2026-07-26 "One Desk, One Read"). This file remains for the other
+// sports' game passes and the props-mode builders.
+import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors } from './spreadEvaluationFactors.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -34,9 +37,8 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
     return buildNcaafPass1(scoutReport, today);
   }
 
-  const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-  if (isMLB) {
-    return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread);
+  if (sport === 'baseball_mlb' || sport === 'MLB') {
+    throw new Error('[Pass 1] MLB game picks moved to pickdesk (Jul 26 2026) — this lane is deleted');
   }
 
   throw new Error(`[Pass 1] No sport-specific builder for "${sport}" — add one to passBuilders.js`);
@@ -309,23 +311,17 @@ INVESTIGATION COMPLETE
  * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
+  // (MLB game branches deleted Jul 26 2026 — pickdesk owns MLB games.)
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : 'spread');
+  const lineLabel = isNHL ? 'moneyline or puck line' : 'spread';
   const betTypeNote = isNHL
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
-    : isMLB
-    ? `**BET TYPE:** Two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). The mechanics: -1.5 pays only on a win by 2+ runs — a one-run win pays the moneyline and LOSES -1.5; +1.5 cashes on a win or a one-run loss. They are different bets on different outcomes, not two prices for the same opinion — take the bet that pays if your read is right, not the one that makes a price you dislike look better.
-
-Check each offered line in both directions — does your read beat the price on either side of the moneyline, and on either side of the run line? A line can be wrong toward the favorite or toward the dog; the ticket is wherever your read and the number disagree — and if they nowhere disagree, your strongest conviction is still a real bet.`
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   let lineContext;
   if (isNHL) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
-  } else if (isMLB) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
   } else {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
   }
@@ -498,7 +494,6 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
 
   const sport = options.sport || '';
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
 
   // Build records reminder if available (anti-hallucination for Pass 3)
   const homeRecord = options.homeRecord;
@@ -528,7 +523,7 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isMLB ? `**BET TYPE:** You have two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
+${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds shown in the scout report's betting lines — never default to -110. The pick field must carry them: "[Team] ML -192" NOT "[Team] ML -110"
@@ -729,54 +724,5 @@ Do NOT default to the over — an over pick must beat the under on evidence, not
 `.trim();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MLB PASS 1
-// ═══════════════════════════════════════════════════════════════════════════
-
-function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread) {
-  const factors = getMlbSpreadFactors();
-  const mlbAwareness = getMlbSeasonAwareness();
-
-  return `
-<scout_report>
-## MATCHUP BRIEFING (TODAY: ${today})
-
-${scoutReport}
-</scout_report>
-
-<season_context>
-${mlbAwareness}
-</season_context>
-
-<investigation_rules>
-## INVESTIGATION RULES
-
-**THE SYMMETRY RULE:**
-- If you call a stat for Team A, you MUST call the equivalent for Team B
-- Cherry-picking stats for one side = incomplete picture = bad bet
-
-</investigation_rules>
-
-<reading_the_game>
-## READING THIS GAME
-
-${factors}
-</reading_the_game>
-
-<instructions>
-## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
-
-Your job in this pass is the READ: investigate this game and build your honest read of how it actually goes. The betting options come after your read is formed; do not shop prices now.
-
-Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
-
-Before completing Pass 1, include BOTH sections:
-Case for backing ${homeTeam} tonight
-Case for backing ${awayTeam} tonight
-(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — how they win this game and what carries it. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture.)
-
-Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
-INVESTIGATION COMPLETE
-</instructions>`.trim();
-}
+// (buildMlbPass1 deleted Jul 26 2026 — MLB game picks run pickdesk.)
 

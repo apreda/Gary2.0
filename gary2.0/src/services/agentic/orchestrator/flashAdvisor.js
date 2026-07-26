@@ -1,6 +1,5 @@
 import { createGeminiSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
-import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
@@ -219,7 +218,9 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-    const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
+    // (MLB awareness injection deleted Jul 26 2026 — MLB games run pickdesk,
+    // which never calls the Flash advisor.)
+    const mlbAwarenessBlock = '';
 
     // All sports get high thinking + full output. Baseball especially needs depth
     // due to high variance, ballpark effects, and pitcher dominance.

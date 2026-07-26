@@ -60,7 +60,10 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(msg.indexOf('═══ THE BOARD ═══')).toBeLessThan(msg.indexOf('## YOUR TASK'));
     expect(msg).toContain('BEST BET on this board');
     expect(msg).toContain('Make the bet.');
-    expect(msg).not.toMatch(/investigate/i);
+    // No tools language (the founder-kept awareness bullets legitimately say
+    // "investigate" in the reasoning sense — only the tool ask is banned).
+    expect(msg).not.toContain('with your tools');
+    expect(msg).not.toContain('fetch_stats');
     expect(msg).not.toContain('[3 paragraphs');
   });
 
