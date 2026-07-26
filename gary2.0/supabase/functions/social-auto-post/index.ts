@@ -324,12 +324,13 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
 // pick tweet with a verdict. The quote surfaces the original timestamped call (native receipts) — the pick
 // tweet carries the angle, the verdict grades it. Covers standard/top_pick threads from today AND yesterday
 // (late finals grade after midnight ET).
-// Verdict v3 (Jul 26 2026, founder): "Hit." / "Miss." / "Push." + two plain chat-register sentences about
-// what actually happened, written by a naked gpt-5.6-sol call GROUNDED in the full box-score report from
-// grade-results ?evidence=1 — never ungrounded (no evidence yet -> skip, retry next hourly run; LLM error
-// -> plainVerdict fallback). v2 history: the Jul 8-10 ungrounded naked experiment shipped capper slop
-// ("Cashes easily as the Giants roll 9-2") because the model only knew the score; the cure was real facts,
-// not more style rules.
+// Verdict v3 (Jul 26 2026, founder; register iterated same day): "Hit." / "Miss." / "Push." + what
+// happened in the game in tweet register — well under 100 characters, structure free (deliberately NO
+// example line or template: his compression example was direction, not a shape to bake in). Written by
+// a naked gpt-5.6-sol call GROUNDED in the full box-score report from grade-results ?evidence=1 — never
+// ungrounded (no evidence yet -> skip, retry next hourly run; LLM error -> plainVerdict fallback).
+// v2 history: the Jul 8-10 ungrounded naked experiment shipped capper slop ("Cashes easily as the
+// Giants roll 9-2") because the model only knew the score; the cure was real facts, not style rules.
 const VERDICT_CAP_PER_RUN = 4;
 
 // Fetch the grounded game report for one verdict candidate. null = not available yet (endpoint

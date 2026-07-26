@@ -77,9 +77,10 @@ test("buildVerdictPrompt carries the bet, the outcome, the evidence, and the ope
   assert.ok(p.includes("FINAL SCORE: Angels (away) 2"));
   assert.ok(p.includes('starting with exactly "Hit."'));
   assert.ok(p.includes("only source of facts"));
-  assert.ok(p.includes("one short line"));
-  assert.ok(p.includes("Last names, digits, no filler words"));
+  assert.ok(p.includes("well under 100 characters"));
+  assert.ok(p.includes("It's a tweet"));
   assert.ok(p.includes("No betting phrases, no hype words, no emojis"));
+  assert.ok(!p.includes("Example"), "no baked example line — examples are direction, not templates");
 });
 
 test("trimTweet passes short text through and cuts long text at a sentence end", () => {

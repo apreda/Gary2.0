@@ -55,10 +55,11 @@ export function plainVerdict(result: string, finalScore: string): string {
   return finalScore ? `${word} Final ${finalScore}.` : word;
 }
 
-// Verdict v3 prompt (founder-approved Jul 26 2026; tightened same day — his compression example
-// became the baked shape): naked model — no system prompt, no persona, no voice rules. The full
-// grounded game report (grade-results ?evidence=1 dossier) is the ONLY fact source; the model
-// opens with the result word and writes ONE dense line, last names + digits, score at the end.
+// Verdict v3 prompt (founder-approved Jul 26 2026, register corrected same day): naked model —
+// no system prompt, no persona, no voice rules, and deliberately NO example line or structural
+// template (founder: examples are direction, not templates — a baked example makes every verdict
+// read identical). The stable contract: the grounded game report is the ONLY fact source, the
+// opener word matches the result, and the register is tweet-brevity, not essay prose.
 export function buildVerdictPrompt(
   c: { pickText: string; league: string; result: string; finalScore: string; matchup: string },
   evidence: string,
@@ -68,10 +69,9 @@ export function buildVerdictPrompt(
     `The bet was: ${c.pickText} (${c.league}). It ${outcome}. Final score ${c.finalScore}, ${c.matchup}.\n` +
     `Here is what happened in the game. This is the only source of facts you can use, ` +
     `don't add anything that isn't here:\n\n${evidence}\n\n` +
-    `Reply starting with exactly "${verdictOpener(c.result)}" then one short line: the two or ` +
-    `three things that decided the game, then the final score. Last names, digits, no filler words. ` +
-    `Example of the shape: "Hit. Ray threw 6 scoreless, Devers and Lee both homered, 9-2 final." ` +
-    `No betting phrases, no hype words, no emojis.`
+    `Reply starting with exactly "${verdictOpener(c.result)}" then what happened in the game, only ` +
+    `the stuff that mattered, in well under 100 characters. It's a tweet: drop every word you don't ` +
+    `need, no need for full sentences or formal grammar. No betting phrases, no hype words, no emojis.`
   );
 }
 
