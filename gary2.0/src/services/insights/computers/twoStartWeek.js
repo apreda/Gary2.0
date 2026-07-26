@@ -71,10 +71,18 @@ export function nextScoringWeek(todayEt) {
   return days;
 }
 
-/** Club display name: "Cleveland Guardians" -> "Guardians". */
+/**
+ * Club display name: "Cleveland Guardians" -> "Guardians". NEVER a bare shared
+ * mascot: "Chicago White Sox" -> "White Sox", "Boston Red Sox" -> "Red Sox",
+ * "Toronto Blue Jays" -> "Blue Jays" (the Jul 9 grading bug class — "Sox"
+ * alone is ambiguous between two teams).
+ */
 function clubName(fullName) {
   const parts = String(fullName || '').trim().split(/\s+/);
-  return parts.length > 1 ? parts.slice(-1)[0] : (fullName || '');
+  if (parts.length < 2) return fullName || '';
+  const last = parts[parts.length - 1];
+  if (last === 'Sox' || last === 'Jays') return parts.slice(-2).join(' ');
+  return last;
 }
 
 export async function computeTwoStartWeek(ctx) {
@@ -172,7 +180,7 @@ async function writeReads(rows) {
   if (!rows.length) return;
   const facts = rows.map((r, i) => {
     const m = r.meta || {};
-    const starts = (m.starts || []).map((s) => `${s.home ? 'vs' : 'at'} ${s.opp} (${s.date})`).join(', ');
+    const starts = (m.starts || []).map((s) => `${s.home ? 'vs' : 'at'} ${s.opp} (${etWeekday(s.date)} ${s.date})`).join(', ');
     return `${i}. ${r.headline} (${m.team}) — ${(m.starts || []).length} posted starts next week: ${starts}.` +
       (m.xera != null ? ` Season xERA ${m.xera}.` : ' No xERA figure available.') +
       ` Tier: ${m.tier}.`;
@@ -182,7 +190,8 @@ async function writeReads(rows) {
 
 HARD RULES:
 - Use ONLY the facts listed for that pitcher. Never introduce any statistic, matchup detail, injury, or player not provided. If no xERA is listed, do not mention any number.
-- 2 sentences per pitcher, plain confident analyst voice — what two starts from this arm means for a weekly lineup.
+- 2 sentences per pitcher, plain confident analyst voice. The first states what the week gives him; the second must say something SPECIFIC about his two opponents or the shape of the pair (a home pair, a soft opponent twice, a tough draw in one of the two) — drawn only from the listed starts.
+- BANNED phrasing: "high-upside opportunity", "solidify your categories", "valuable asset", "a chance to deliver", "looking to", and any sentence that could describe any pitcher. If a sentence would fit every arm on the list, rewrite it.
 - Then one short verdict sentence matched to his tier: PLAN_AROUND = "Anchor your week around both starts." style; STREAM_BOTH = start him twice in standard leagues; MATCHUP_CALL = check the matchups before committing.
 - No hedging boilerplate, no exclamation marks, never mention being an AI or a model.
 
