@@ -181,24 +181,55 @@ struct SettingsView: View {
 
     // MARK: - Display
 
+    @AppStorage("userUnitDollars") private var userUnitDollars = 0.0
+    @State private var showUnitSheet = false
+
     private var displayRows: some View {
-        HStack(spacing: 14) {
-            SettingsRowIcon(icon: "dollarsign.circle.fill")
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Results in dollars")
-                    .font(GaryFonts.text(15))
-                    .foregroundStyle(.white)
-                Text("Hypothetical $100/bet view. Off shows units.")
-                    .font(GaryFonts.text(12))
-                    .foregroundStyle(.white.opacity(0.45))
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                SettingsRowIcon(icon: "dollarsign.circle.fill")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Results in dollars")
+                        .font(GaryFonts.text(15))
+                        .foregroundStyle(.white)
+                    Text("Hypothetical $100/bet view. Off shows units.")
+                        .font(GaryFonts.text(12))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+                Spacer()
+                Toggle("", isOn: $showDollarResults)
+                    .labelsHidden()
+                    .tint(GaryColors.gold)
             }
-            Spacer()
-            Toggle("", isOn: $showDollarResults)
-                .labelsHidden()
-                .tint(GaryColors.gold)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            // Your Book's unit size — the same value the inline YOU-page ask sets.
+            Button {
+                showUnitSheet = true
+            } label: {
+                HStack(spacing: 14) {
+                    SettingsRowIcon(icon: "banknote.fill")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Your unit size")
+                            .font(GaryFonts.text(15))
+                            .foregroundStyle(.white)
+                        Text("What Your Book counts a unit as, in dollars.")
+                            .font(GaryFonts.text(12))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    Spacer()
+                    Text(userUnitDollars > 0 ? String(format: "$%.0f", userUnitDollars) : "Not set")
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(userUnitDollars > 0 ? GaryColors.gold : .white.opacity(0.45))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
     }
 
     // MARK: - Account
