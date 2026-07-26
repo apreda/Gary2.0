@@ -21,6 +21,8 @@
 // prop_type stored to match existing rows: first token of the prop string
 // ("home_runs", "total_bases", "hits_runs_rbis").
 
+import { settleUserBet, patchUserBet } from "../grade-results/userbets.ts";
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
@@ -234,6 +236,35 @@ Deno.serve(async (req) => {
       bet: w.bet, line: w.line_value, actual: w.actual_value, result: w.result });
   } else {
     for (const w of writes) { stats[await writeProp(w)]++; }
+
+    // Your Book: settle prop tail/fades against this run's grades; never fatal.
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_bets?game_date=in.(${dates.join(",")})` +
+        `&pick_type=eq.prop&status=eq.pending&kind=in.(tail,fade)` +
+        `&select=id,kind,game_date,player_name,prop_type,stake_units,odds_american`,
+        { headers: sbHeaders },
+      );
+      if (res.ok) {
+        const rows: any[] = await res.json();
+        const byKey = new Map(writes.map((w) => [
+          `${w.game_date}|${normalizeName(w.player_name)}|${String(w.prop_type).toLowerCase()}`, w.result,
+        ]));
+        for (const r of rows) {
+          const result = byKey.get(
+            `${r.game_date}|${normalizeName(r.player_name ?? "")}|${String(r.prop_type ?? "").toLowerCase()}`);
+          if (!result) continue;
+          const s = settleUserBet(r.kind, result, Number(r.stake_units), r.odds_american ?? null);
+          await patchUserBet(SUPABASE_URL, sbHeaders, r.id, {
+            status: s.status, units_net: s.units,
+            ...(s.estimated ? { odds_estimated: true } : {}),
+            graded_at: new Date().toISOString(), graded_by: "system",
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[UserBets] prop settle failed: ${(e as Error).message}`);
+    }
   }
 
   return new Response(JSON.stringify({ ok: true, dry, force, dates, picks: flat.length, todo: todo.length,
