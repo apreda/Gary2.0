@@ -115,3 +115,27 @@ describe('stakesLine', () => {
     expect(stakesLine([], 'Cardinals')).toBe('Cardinals: standings unavailable.');
   });
 });
+
+describe('sanitizeBoardRows', () => {
+  it('drops a frozen/glitch moneyline row and keeps honest books', async () => {
+    const { sanitizeBoardRows } = await import('../../../src/services/pickdesk/mlbDesk.js');
+    const rows = [
+      { vendor: 'fanduel', moneyline_home_odds: -104, moneyline_away_odds: -112 },
+      { vendor: 'draftkings', moneyline_home_odds: -105, moneyline_away_odds: -110 },
+      { vendor: 'betmgm', moneyline_home_odds: -102, moneyline_away_odds: -115 },
+      { vendor: 'frozen', moneyline_home_odds: -20000, moneyline_away_odds: 5000 },
+    ];
+    const out = sanitizeBoardRows(rows);
+    expect(out.map(r => r.vendor)).toEqual(['fanduel', 'draftkings', 'betmgm']);
+  });
+
+  it('keeps run-line-only rows and tolerates normal book-to-book spread', async () => {
+    const { sanitizeBoardRows } = await import('../../../src/services/pickdesk/mlbDesk.js');
+    const rows = [
+      { vendor: 'a', moneyline_home_odds: -130, moneyline_away_odds: 110 },
+      { vendor: 'b', moneyline_home_odds: -138, moneyline_away_odds: 116 },
+      { vendor: 'c', spread_home_value: -1.5, spread_home_odds: 150 },
+    ];
+    expect(sanitizeBoardRows(rows)).toHaveLength(3);
+  });
+});

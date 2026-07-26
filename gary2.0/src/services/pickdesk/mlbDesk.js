@@ -70,6 +70,34 @@ export function deadlineLine(today = todayEST()) {
   return `Trade deadline: July 31 (${days} day${days === 1 ? '' : 's'} away).`;
 }
 
+/**
+ * Drop board rows whose moneyline is a per-book glitch (frozen in-play price,
+ * fat-finger, crossed market). A row survives only when both ML sides sit
+ * within 15 implied-probability points of the cross-book median — with one
+ * honest majority of books, a +5000 artifact can never reach Gary's desk.
+ * (Caught live on the Jul 26 smoke run: a settled game's frozen +5000 row.)
+ */
+export function sanitizeBoardRows(rows) {
+  const num = (v) => (v == null ? null : Number(v));
+  const implied = (o) => (o == null || !Number.isFinite(o) || o === 0)
+    ? null
+    : (o < 0 ? -o / (-o + 100) : 100 / (o + 100));
+  const median = (a) => {
+    const s = a.filter((x) => Number.isFinite(x)).sort((x, y) => x - y);
+    return s.length ? s[Math.floor(s.length / 2)] : null;
+  };
+  const homeMed = median((rows || []).map((r) => implied(num(r.moneyline_home_odds))));
+  const awayMed = median((rows || []).map((r) => implied(num(r.moneyline_away_odds))));
+  return (rows || []).filter((r) => {
+    const h = implied(num(r.moneyline_home_odds));
+    const a = implied(num(r.moneyline_away_odds));
+    if (h == null && a == null) return true; // RL-only row — keep
+    if (homeMed != null && h != null && Math.abs(h - homeMed) > 0.15) return false;
+    if (awayMed != null && a != null && Math.abs(a - awayMed) > 0.15) return false;
+    return true;
+  });
+}
+
 export function buildBoardSection(rows, homeTeam, awayTeam) {
   const lines = (rows || []).map(r =>
     `${r.vendor}: ML ${awayTeam} ${r.moneyline_away_odds} / ${homeTeam} ${r.moneyline_home_odds}` +
@@ -111,12 +139,16 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRows, standings] = await Promise.all([
+  const [oddsRowsRaw, standings] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
     ballDontLieService.getMlbStandings(season).catch(() => []),
   ]);
+  const oddsRows = sanitizeBoardRows(oddsRowsRaw);
+  if (oddsRows.length < (oddsRowsRaw || []).length) {
+    console.warn(`   [Desk] dropped ${(oddsRowsRaw || []).length - oddsRows.length} outlier board row(s)`);
+  }
 
   const board = buildBoardSection(oddsRows, homeTeam, awayTeam);
   const stakes = `═══ THE STAKES ═══\n${stakesLine(standings, homeTeam)}\n${stakesLine(standings, awayTeam)}\n${deadlineLine()}`;
