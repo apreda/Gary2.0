@@ -4,6 +4,8 @@
 // void carry through untouched. Units pay at the row's stored odds — the
 // place RPC resolved real prices where it could; rows without a price settle
 // at an assumed -110 and stay flagged odds_estimated so the UI shows "est".
+import { updateUserStreak } from "./streaks.ts";
+
 export type SettleStatus = "won" | "lost" | "push";
 
 export function settleUserBet(
@@ -50,7 +52,7 @@ export async function settleUserBetsForDates(
   const res = await fetch(
     `${sbBase}/rest/v1/user_bets?game_date=in.(${dates.join(",")})` +
     `&status=eq.pending&kind=in.(tail,fade)` +
-    `&select=id,kind,pick_type,game_date,pick_text,stake_units,odds_american,lock_at`,
+    `&select=id,kind,pick_type,game_date,pick_text,stake_units,odds_american,lock_at,user_id,streak_pick`,
     { headers: sbHeaders },
   );
   if (!res.ok) { out.failed++; return out; }
@@ -66,12 +68,18 @@ export async function settleUserBetsForDates(
         graded_at: new Date().toISOString(), graded_by: "system",
       });
       ok ? out.settled++ : out.failed++;
+      if (ok && r.streak_pick && r.user_id) {
+        await updateUserStreak(sbBase, sbHeaders, r.user_id, r.game_date, s.status);
+      }
     } else if (r.lock_at && Date.now() - new Date(r.lock_at).getTime() > 48 * 3600_000) {
       const ok = await patchUserBet(sbBase, sbHeaders, r.id, {
         status: "void", units_net: 0,
         graded_at: new Date().toISOString(), graded_by: "system",
       });
       ok ? out.voided++ : out.failed++;
+      if (ok && r.streak_pick && r.user_id) {
+        await updateUserStreak(sbBase, sbHeaders, r.user_id, r.game_date, "void");
+      }
     }
   }
   return out;

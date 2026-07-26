@@ -22,6 +22,7 @@
 // ("home_runs", "total_bases", "hits_runs_rbis").
 
 import { settleUserBet, patchUserBet } from "../grade-results/userbets.ts";
+import { updateUserStreak } from "../grade-results/streaks.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -242,7 +243,7 @@ Deno.serve(async (req) => {
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/user_bets?game_date=in.(${dates.join(",")})` +
         `&pick_type=eq.prop&status=eq.pending&kind=in.(tail,fade)` +
-        `&select=id,kind,game_date,player_name,prop_type,stake_units,odds_american`,
+        `&select=id,kind,game_date,player_name,prop_type,stake_units,odds_american,user_id,streak_pick`,
         { headers: sbHeaders },
       );
       if (res.ok) {
@@ -255,11 +256,14 @@ Deno.serve(async (req) => {
             `${r.game_date}|${normalizeName(r.player_name ?? "")}|${String(r.prop_type ?? "").toLowerCase()}`);
           if (!result) continue;
           const s = settleUserBet(r.kind, result, Number(r.stake_units), r.odds_american ?? null);
-          await patchUserBet(SUPABASE_URL, sbHeaders, r.id, {
+          const ok = await patchUserBet(SUPABASE_URL, sbHeaders, r.id, {
             status: s.status, units_net: s.units,
             ...(s.estimated ? { odds_estimated: true } : {}),
             graded_at: new Date().toISOString(), graded_by: "system",
           });
+          if (ok && r.streak_pick && r.user_id) {
+            await updateUserStreak(SUPABASE_URL, sbHeaders, r.user_id, r.game_date, s.status);
+          }
         }
       }
     } catch (e) {
