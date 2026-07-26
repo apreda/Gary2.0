@@ -42,6 +42,118 @@ struct UserBet: Codable, Identifiable {
     var isPending: Bool { status == "pending" }
 }
 
+// ── Money display (founder, Jul 26: "don't do units, do money") ─────────────
+// Stakes/results STORE as units (the server math is unit-based and unfakeable);
+// the DISPLAY is dollars once the user tells us what a unit is worth to them.
+// Until they do, units show — and the YOU page asks them right there, inline,
+// never a trip to Settings.
+enum BookMoney {
+    static var unitDollars: Double {
+        UserDefaults.standard.double(forKey: "userUnitDollars")
+    }
+    static var isSet: Bool { unitDollars > 0 }
+
+    private static func dollars(_ value: Double) -> String {
+        let v = (value * 100).rounded() / 100
+        return v == v.rounded() ? String(format: "$%.0f", v) : String(format: "$%.2f", v)
+    }
+
+    /// A stake: "$25" once the unit is set, else "1.0u".
+    static func stake(_ units: Double) -> String {
+        isSet ? dollars(units * unitDollars) : String(format: "%.1fu", units)
+    }
+
+    /// A net result: "+$63" / "-$25", else "+0.63u" / "-1.00u".
+    static func net(_ units: Double) -> String {
+        if isSet {
+            let d = units * unitDollars
+            return (d >= 0 ? "+" : "-") + dollars(abs(d))
+        }
+        return String(format: "%+.2fu", units)
+    }
+
+    /// Ledger totals, one decimal in unit mode: "+$140" / "+1.4u".
+    static func netTotal(_ units: Double) -> String {
+        if isSet {
+            let d = units * unitDollars
+            return (d >= 0 ? "+" : "-") + dollars(abs(d))
+        }
+        return String(format: "%+.1fu", units)
+    }
+}
+
+/// Inline unit-size ask — appears the first time a signed-in user lands on
+/// their book without one set. Save drops them right back where they were.
+struct UnitSizeSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("userUnitDollars") private var userUnitDollars = 0.0
+    @State private var amountText = ""
+    private let quick: [Double] = [10, 25, 50, 100]
+
+    var body: some View {
+        ZStack {
+            Color(hex: "#1C1A1A").ignoresSafeArea()
+            unitForm
+        }
+        .presentationDetents([.height(300)])
+    }
+
+    private var unitForm: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("WHAT'S A UNIT WORTH TO YOU?")
+                .font(GaryFonts.mono(12, bold: true)).tracking(1.2)
+                .foregroundStyle(GaryColors.gold)
+            Text("Your typical bet, in dollars. Your book shows real money from then on — change it anytime in Settings.")
+                .font(GaryFonts.text(13))
+                .foregroundStyle(.white.opacity(0.65))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                ForEach(quick, id: \.self) { amt in
+                    Button {
+                        amountText = String(format: "%.0f", amt)
+                    } label: {
+                        Text("$\(Int(amt))")
+                            .font(GaryFonts.mono(12, bold: true))
+                            .foregroundStyle(amountText == String(format: "%.0f", amt) ? .black : .white.opacity(0.75))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(Capsule().fill(amountText == String(format: "%.0f", amt) ? GaryColors.gold : Color.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            HStack(spacing: 10) {
+                Text("$")
+                    .font(GaryFonts.mono(14, bold: true))
+                    .foregroundStyle(.white.opacity(0.6))
+                TextField("25", text: $amountText)
+                    .keyboardType(.decimalPad)
+                    .font(GaryFonts.mono(15, bold: true))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+            Button {
+                if let v = Double(amountText), v > 0 {
+                    userUnitDollars = v
+                }
+                dismiss()
+            } label: {
+                Text(Double(amountText).map { $0 > 0 } == true ? "Save" : "Keep units for now")
+                    .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(20)
+    }
+}
+
+/// Once per app session — an inline ask, never a nag.
+@MainActor private var unitPromptShownThisSession = false
+
 enum UserBookError: LocalizedError {
     case notSignedIn
     case server(String)
@@ -283,7 +395,7 @@ struct TailFadeRow: View {
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
                 .foregroundStyle(side == "tail" ? GaryColors.gold : Color(hex: "#8B93A7"))
             Stepper(value: $stake, in: 0.5...5, step: 0.5) {
-                Text(String(format: "%.1fu", stake))
+                Text(BookMoney.stake(stake))
                     .font(GaryFonts.mono(12, bold: true))
                     .foregroundStyle(.white.opacity(0.85))
             }
@@ -310,7 +422,7 @@ struct TailFadeRow: View {
         HStack(spacing: 8) {
             let label = bet.kind == "tail" ? "YOU TAILED" : "YOU FADED"
             let tint: Color = bet.kind == "tail" ? GaryColors.gold : Color(hex: "#8B93A7")
-            Text("\(label) · \(String(format: "%.1fu", bet.stake_units))")
+            Text("\(label) · \(BookMoney.stake(bet.stake_units))")
                 .font(GaryFonts.mono(10, bold: true)).tracking(1)
                 .foregroundStyle(tint)
                 .padding(.horizontal, 10).padding(.vertical, 6)
@@ -333,7 +445,7 @@ struct TailFadeRow: View {
         let won = bet.status == "won"
         let wash = bet.status == "push" || bet.status == "void"
         let units = bet.units_net ?? 0
-        let text = wash ? bet.status.uppercased() : String(format: "%@%.2fu", won ? "+" : "", units)
+        let text = wash ? bet.status.uppercased() : BookMoney.net(units)
         let est = (bet.odds_estimated ?? false) && won ? " est" : ""
         return Text(text + est)
             .font(GaryFonts.mono(10, bold: true))
@@ -394,6 +506,8 @@ struct UserBookSection: View {
     @State private var loading = true
     @State private var showQuickLog = false
     @State private var showAuthSheet = false
+    @State private var showUnitSheet = false
+    @AppStorage("userUnitDollars") private var userUnitDollars = 0.0
     @State private var shareImage: UserBookShareImage? = nil
 
     private var withGary: [UserBet] { bets.filter { $0.isVerified } }
@@ -485,7 +599,14 @@ struct UserBookSection: View {
             // over data we already have.
             if !rows.isEmpty || bets.isEmpty { bets = rows }
             loading = false
+            // First landing on YOUR page without a unit size: ask right here,
+            // inline — never send anyone to Settings (founder, Jul 26).
+            if expanded, !BookMoney.isSet, !unitPromptShownThisSession {
+                unitPromptShownThisSession = true
+                showUnitSheet = true
+            }
         }
+        .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet { newBet in bets.insert(newBet, at: 0) }
         }
@@ -516,7 +637,7 @@ struct UserBookSection: View {
                 Text("\(g.w)-\(g.l)\(g.p > 0 ? "-\(g.p)" : "")")
                     .font(GaryFonts.text(22, .heavy))
                     .foregroundStyle(.white.opacity(0.92))
-                Text(String(format: "%+.1fu", g.units))
+                Text(BookMoney.netTotal(g.units))
                     .font(GaryFonts.mono(13, bold: true))
                     .foregroundStyle(g.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
                 Spacer()
@@ -529,7 +650,7 @@ struct UserBookSection: View {
                     Text("\(m.w)-\(m.l)\(m.p > 0 ? "-\(m.p)" : "")")
                         .font(GaryFonts.mono(12, bold: true))
                         .foregroundStyle(.white.opacity(0.65))
-                    Text(String(format: "%+.1fu", m.units))
+                    Text(BookMoney.netTotal(m.units))
                         .font(GaryFonts.mono(11, bold: true))
                         .foregroundStyle(m.units >= 0 ? Color(hex: "#22C55E").opacity(0.8) : Color(hex: "#EF4444").opacity(0.8))
                     Text("self-tracked")
@@ -600,7 +721,7 @@ private struct UserBetSlipRow: View {
                     .lineLimit(2).minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
                 // Conviction-vs-Gary read: your stake beside Gary's own tier.
-                Text("\(bet.game_date) · You \(String(format: "%.1fu", bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")\(bet.gary_confidence.map { " · Gary \(convictionTier($0))" } ?? "")")
+                Text("\(bet.game_date) · You \(BookMoney.stake(bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")\(bet.gary_confidence.map { " · Gary \(convictionTier($0))" } ?? "")")
                     .font(GaryFonts.mono(9))
                     .foregroundStyle(.white.opacity(0.4))
             }
@@ -624,7 +745,7 @@ private struct UserBetSlipRow: View {
         } else {
             let won = bet.status == "won"
             let wash = bet.status == "push" || bet.status == "void"
-            Text(wash ? bet.status.uppercased() : String(format: "%@%.2fu", won ? "+" : "", bet.units_net ?? 0))
+            Text(wash ? bet.status.uppercased() : BookMoney.net(bet.units_net ?? 0))
                 .font(GaryFonts.mono(11, bold: true))
                 .foregroundStyle(wash ? .white.opacity(0.45) : (won ? Color(hex: "#22C55E") : Color(hex: "#EF4444")))
         }
@@ -681,7 +802,7 @@ struct QuickLogSheet: View {
                     TextField("Odds (American, like -120 or +145)", text: $oddsText)
                         .keyboardType(.numbersAndPunctuation)
                     Stepper(value: $draft.stake, in: 0.5...10, step: 0.5) {
-                        Text(String(format: "Stake: %.1fu", draft.stake))
+                        Text("Stake: \(BookMoney.stake(draft.stake))")
                     }
                 }
                 if let e = errorText { Section { Text(e).foregroundStyle(.red) } }
@@ -728,7 +849,7 @@ struct RideShareCardView: View {
                 Text("\(record.w)-\(record.l)\(record.p > 0 ? "-\(record.p)" : "")")
                     .font(GaryFonts.text(56, .heavy))
                     .foregroundStyle(.white)
-                Text(String(format: "%+.1fu", record.units))
+                Text(BookMoney.netTotal(record.units))
                     .font(GaryFonts.mono(24, bold: true))
                     .foregroundStyle(record.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
             }
