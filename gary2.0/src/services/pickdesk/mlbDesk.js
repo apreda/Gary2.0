@@ -13,6 +13,8 @@
  */
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../ballDontLieService.js';
+import { fetchStats } from '../agentic/tools/statRouters/index.js';
+import { summarizeStatForContext } from '../agentic/orchestrator/orchestratorHelpers.js';
 import { extractSection, insertAfterHeader } from './sectionText.js';
 
 const TRADE_DEADLINE = '2026-07-31'; // MLB calendar fact; update each season
@@ -125,6 +127,30 @@ function boardMeta(rows, homeTeam, awayTeam) {
   };
 }
 
+// THE MATCHUP LAB (Jul 26 2026): the four data layers that previously lived
+// only in the research assistant's tool lane. No tools in the new system, so
+// they are permanent desk sections — same fetchers, now data instead of calls.
+const MATCHUP_SECTIONS = [
+  ['MLB_PITCH_TYPES_SP', '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══'],
+  ['MLB_PITCH_TYPES_HITTERS', '═══ HITTERS vs PITCH TYPES ═══'],
+  ['MLB_BATTER_VS_PITCHER', `═══ BATTER vs PITCHER — career vs tonight's starters ═══`],
+  ['MLB_PLAYER_SPLITS', '═══ HITTER L/R SPLITS ═══'],
+];
+
+async function buildMatchupLab(game, homeTeam, awayTeam, gamePk) {
+  const opt = { game: { ...game, gamePk: gamePk ?? game.gamePk, id: game.id ?? game.bdl_game_id } };
+  const parts = await Promise.all(MATCHUP_SECTIONS.map(async ([token, header]) => {
+    try {
+      const r = await fetchStats('baseball_mlb', token, homeTeam, awayTeam, opt);
+      if (!r || r.error) return null;
+      const text = summarizeStatForContext(r, token, homeTeam, awayTeam);
+      if (!text || text.trim().length < 20) return null;
+      return `${header}\n${text.trim()}`;
+    } catch { return null; }
+  }));
+  return parts.filter(Boolean).join('\n\n');
+}
+
 /**
  * Build the complete desk for one MLB game.
  * Returns { deskText, tapeRows, verifiedTaleOfTape, recentScores, scout, meta }.
@@ -140,11 +166,12 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRowsRaw, standings] = await Promise.all([
+  const [oddsRowsRaw, standings, matchupLab] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
     ballDontLieService.getMlbStandings(season).catch(() => []),
+    buildMatchupLab(game, homeTeam, awayTeam, scout.gamePk).catch(() => ''),
   ]);
   const oddsRows = sanitizeBoardRows(oddsRowsRaw);
   if (oddsRows.length < (oddsRowsRaw || []).length) {
@@ -158,7 +185,15 @@ export async function buildMlbDesk(game, options = {}) {
   const worldBody = news ? news.replace(NEWS_HEADER, '').trim() : 'No same-day news.';
   const world = `═══ THE WORLD ═══\n${worldBody}`;
 
-  const shelf = insertAfterHeader(shelfBase, INJURIES_HEADER, INJURY_LEGEND);
+  let shelf = insertAfterHeader(shelfBase, INJURIES_HEADER, INJURY_LEGEND);
+  // The matchup lab slots ahead of the lineups; if the marker ever drifts,
+  // append at the end — the data must reach the desk either way.
+  if (matchupLab) {
+    const LINEUPS_HEADER = '═══ CONFIRMED LINEUPS ═══';
+    shelf = shelf.includes(LINEUPS_HEADER)
+      ? shelf.replace(LINEUPS_HEADER, `${matchupLab}\n\n${LINEUPS_HEADER}`)
+      : `${shelf}\n\n${matchupLab}`;
+  }
 
   const deskText = `${board}\n\n${stakes}\n\n${world}\n\n${shelf}`;
   return {

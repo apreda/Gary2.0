@@ -6,9 +6,13 @@ vi.mock('../../../src/services/agentic/scoutReport/scoutReportBuilder.js', () =>
 vi.mock('../../../src/services/ballDontLieService.js', () => ({
   ballDontLieService: { getOddsV2: vi.fn(), getMlbStandings: vi.fn() },
 }));
+vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({ fetchStats: vi.fn() }));
+vi.mock('../../../src/services/agentic/orchestrator/orchestratorHelpers.js', () => ({ summarizeStatForContext: vi.fn() }));
 
 import { buildScoutReport } from '../../../src/services/agentic/scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
+import { fetchStats } from '../../../src/services/agentic/tools/statRouters/index.js';
+import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
 import { buildMlbDesk, stakesLine, deadlineLine } from '../../../src/services/pickdesk/mlbDesk.js';
 
 const SCOUT_TEXT = `MATCHUP: Reds @ Cardinals
@@ -18,6 +22,9 @@ pitchers here
 
 ═══ INJURIES (BDL Structured) ═══
 injuries here
+
+═══ CONFIRMED LINEUPS ═══
+lineups here
 
 ═══ TODAY'S BREAKING NEWS ═══
 fresh news here`;
@@ -41,6 +48,8 @@ beforeEach(() => {
   });
   ballDontLieService.getOddsV2.mockResolvedValue(ODDS);
   ballDontLieService.getMlbStandings.mockResolvedValue(STANDINGS);
+  fetchStats.mockResolvedValue({ homeValue: 'x', awayValue: 'y' });
+  summarizeStatForContext.mockReturnValue('MATCHUP DATA LINES LONG ENOUGH TO PASS THE FLOOR');
 });
 
 describe('buildMlbDesk', () => {
@@ -99,6 +108,28 @@ describe('buildMlbDesk', () => {
       moneylineHome: -104, moneylineAway: -112,
       spreadHome: -1.5, spreadHomeOdds: 148, spreadAway: 1.5, spreadAwayOdds: -178,
     });
+  });
+});
+
+describe('buildMlbDesk matchup lab', () => {
+  const game = { homeTeam: 'Cardinals', awayTeam: 'Reds', bdl_game_id: 99 };
+
+  it('adds the four tool-lane layers as desk sections ahead of the lineups', async () => {
+    const { deskText } = await buildMlbDesk(game);
+    const lab = deskText.indexOf('═══ SP PITCH TYPES');
+    const lineups = deskText.indexOf('═══ CONFIRMED LINEUPS ═══');
+    expect(lab).toBeGreaterThan(-1);
+    expect(lab).toBeLessThan(lineups);
+    expect(deskText).toContain('═══ HITTERS vs PITCH TYPES ═══');
+    expect(deskText).toContain("═══ BATTER vs PITCHER — career vs tonight's starters ═══");
+    expect(deskText).toContain('═══ HITTER L/R SPLITS ═══');
+  });
+
+  it('a failed fetcher drops its section silently, never the desk', async () => {
+    fetchStats.mockResolvedValue({ error: 'nope' });
+    const { deskText } = await buildMlbDesk(game);
+    expect(deskText).not.toContain('═══ SP PITCH TYPES');
+    expect(deskText).toContain('═══ CONFIRMED LINEUPS ═══');
   });
 });
 
