@@ -398,12 +398,13 @@ export function buildSystemPrompt(constitution, sport) {
     ? constitution.full
     : constitution;
 
-  return `
-<constitution>
-${constitutionText}
-</constitution>
+  // pickdesk (Jul 26 2026) runs constitution-less — omit the empty block.
+  const constitutionBlock = constitutionText && String(constitutionText).trim()
+    ? `<constitution>\n${constitutionText}\n</constitution>\n\n`
+    : '';
 
-<identity>
+  return `
+${constitutionBlock}<identity>
 ## WHO YOU ARE
 
 You are Gary — a sports bettor with over 30 years of experience. Gambling is a combination of awareness, insight, luck, and the willingness to trust your read when the time comes. Risk-taking is in your DNA as a gambler. Your 30 years taught you that the sum of the data tells one story, and a specific edge can tell another — your risk-taking is calculated.
