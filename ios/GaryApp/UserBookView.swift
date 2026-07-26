@@ -240,6 +240,48 @@ enum UserBookAPI {
         return (try? JSONDecoder().decode([UserStreak].self, from: data))?.first
     }
 
+    struct BoardRow: Codable, Identifiable {
+        let display_name: String
+        let wins: Int
+        let losses: Int
+        let pushes: Int
+        let units: Double
+        let best_streak: Int
+        var id: String { display_name }
+    }
+
+    /// Public standings (aggregate-only RPC; anon-readable by design).
+    static func fetchLeaderboard(window: String) async -> [BoardRow] {
+        guard let url = URL(string: "\(Secrets.supabaseURL.absoluteString)/rest/v1/rpc/your_book_leaderboard") else { return [] }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_window": window])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+        return (try? JSONDecoder().decode([BoardRow].self, from: data)) ?? []
+    }
+
+    /// The signed-in user's claimed handle, if any (owner-only select).
+    @MainActor static func fetchMyHandle() async -> String? {
+        guard var comps = URLComponents(url: rest.appendingPathComponent("public_profiles"), resolvingAgainstBaseURL: false) else { return nil }
+        comps.queryItems = [URLQueryItem(name: "select", value: "display_name")]
+        guard let url = comps.url, let req = try? authedRequest(url) else { return nil }
+        guard let data = try? await run(req) else { return nil }
+        struct Row: Decodable { let display_name: String }
+        return (try? JSONDecoder().decode([Row].self, from: data))?.first?.display_name
+    }
+
+    @MainActor static func claimHandle(_ name: String) async throws -> String {
+        let url = rest.appendingPathComponent("rpc/claim_handle")
+        let body = try JSONSerialization.data(withJSONObject: ["p_name": name])
+        let data = try await run(try authedRequest(url, method: "POST", body: body))
+        struct Row: Decodable { let display_name: String }
+        return (try JSONDecoder().decode(Row.self, from: data)).display_name
+    }
+
     struct ManualBetDraft {
         var league: String = "MLB"
         var description: String = ""
@@ -629,6 +671,7 @@ struct UserBookSection: View {
                 ledgerHeader
                 slipsList
             }
+            if expanded { UserBookLeaderboard() }
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.035)))
@@ -959,4 +1002,176 @@ func renderRideShareImage(record: (w: Int, l: Int, p: Int, units: Double), strea
     let renderer = ImageRenderer(content: RideShareCardView(record: record, streakText: streakText))
     renderer.scale = 3
     return renderer.uiImage
+}
+
+// ── LEADERBOARD (YOU page) ──────────────────────────────────────────────────
+// Standings nobody can fake: verified tail/fade ledgers only, opt-in by
+// handle, five decided plays to appear. Units are the board's shared
+// currency (a viewer's own dollar setting never re-prices someone else).
+struct UserBookLeaderboard: View {
+    @State private var window = "30d"
+    @State private var rows: [UserBookAPI.BoardRow] = []
+    @State private var myHandle: String? = nil
+    @State private var checkedHandle = false
+    @State private var showClaim = false
+    private let windows = [("7d", "7D"), ("30d", "30D"), ("season", "SEASON")]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("LEADERBOARD")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                Spacer()
+                ForEach(windows, id: \.0) { w in
+                    Button {
+                        window = w.0
+                        Task { await load(force: true) }
+                    } label: {
+                        Text(w.1)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                            .foregroundStyle(window == w.0 ? .black : .white.opacity(0.55))
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Capsule().fill(window == w.0 ? GaryColors.gold : Color.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if rows.isEmpty {
+                Text("Standings appear once verified books cross five graded plays. Yours can be first.")
+                    .font(GaryFonts.text(12.5))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.prefix(10).enumerated()), id: \.element.id) { i, r in
+                        HStack(spacing: 10) {
+                            Text("\(i + 1)")
+                                .font(GaryFonts.mono(10, bold: true))
+                                .foregroundStyle(i == 0 ? GaryColors.gold : .white.opacity(0.45))
+                                .frame(width: 18, alignment: .leading)
+                            Text(r.display_name)
+                                .font(GaryFonts.text(13, .semibold))
+                                .foregroundStyle(r.display_name == myHandle ? GaryColors.gold : .white.opacity(0.88))
+                                .lineLimit(1)
+                            if r.best_streak >= 3 {
+                                Text("BEST \(r.best_streak)")
+                                    .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
+                                    .foregroundStyle(Color(hex: "#E5844B").opacity(0.85))
+                            }
+                            Spacer()
+                            Text("\(r.wins)-\(r.losses)")
+                                .font(GaryFonts.mono(11, bold: true))
+                                .foregroundStyle(.white.opacity(0.6))
+                            Text(String(format: "%+.1fu", r.units))
+                                .font(GaryFonts.mono(11, bold: true))
+                                .foregroundStyle(r.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                                .frame(width: 52, alignment: .trailing)
+                        }
+                        .padding(.vertical, 6)
+                        if i < min(rows.count, 10) - 1 {
+                            Rectangle().fill(.white.opacity(0.04)).frame(height: 0.5)
+                        }
+                    }
+                }
+            }
+
+            if checkedHandle, myHandle == nil, AuthManager.shared.bearerToken != nil {
+                Button {
+                    showClaim = true
+                } label: {
+                    Text("Claim a handle to enter the standings")
+                        .font(GaryFonts.mono(10, bold: true)).tracking(0.5)
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 6)
+        .task { await load(force: false) }
+        .sheet(isPresented: $showClaim) {
+            HandleClaimSheet { claimed in myHandle = claimed }
+        }
+    }
+
+    private func load(force: Bool) async {
+        let fresh = await UserBookAPI.fetchLeaderboard(window: window)
+        // Cancellation guard: never latch an empty result over live rows
+        // unless this is an explicit window switch.
+        if force || !fresh.isEmpty || rows.isEmpty { rows = fresh }
+        if !checkedHandle, AuthManager.shared.bearerToken != nil {
+            myHandle = await UserBookAPI.fetchMyHandle()
+            checkedHandle = true
+        } else if AuthManager.shared.bearerToken == nil {
+            checkedHandle = true
+        }
+    }
+}
+
+/// Inline handle claim — same philosophy as the unit-size ask: do it right
+/// here, save, land back where you were.
+struct HandleClaimSheet: View {
+    var onClaimed: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var busy = false
+    @State private var errorText: String? = nil
+
+    var body: some View {
+        ZStack {
+            Color(hex: "#1C1A1A").ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 16) {
+                Text("CLAIM YOUR HANDLE")
+                    .font(GaryFonts.mono(12, bold: true)).tracking(1.2)
+                    .foregroundStyle(GaryColors.gold)
+                Text("This is the name the standings show. 3-18 characters, letters, numbers, underscores. Your record stays private until you claim one.")
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("Handle", text: $name)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(GaryFonts.mono(15, bold: true))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+                if let e = errorText {
+                    Text(e)
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(Color(hex: "#EF4444").opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button {
+                    save()
+                } label: {
+                    Text(busy ? "Claiming" : "Enter the standings")
+                        .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(GaryColors.gold))
+                }
+                .buttonStyle(.plain)
+                .disabled(busy || name.trimmingCharacters(in: .whitespaces).count < 3)
+            }
+            .padding(20)
+        }
+        .presentationDetents([.height(300)])
+    }
+
+    private func save() {
+        busy = true
+        errorText = nil
+        Task {
+            defer { busy = false }
+            do {
+                let claimed = try await UserBookAPI.claimHandle(name.trimmingCharacters(in: .whitespaces))
+                onClaimed(claimed)
+                dismiss()
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
+    }
 }
