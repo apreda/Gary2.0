@@ -10,12 +10,12 @@
  *   node scripts/run-mlb-hr-picks.js --store=0
  */
 import { runAgenticPropsCli } from './run-agentic-props-cli.js';
-import { buildMlbPropsAgenticContext } from '../src/services/agentic/mlbPropsAgenticContext.js';
 
+// HR-only runs ride the PROPS DESK LANE (propsBrain over buildMlbDesk,
+// Jul 26 2026) with an HR-filtered board — no context builder.
 runAgenticPropsCli({
   sportKey: 'baseball_mlb',
   leagueLabel: 'MLB HR',
-  buildContext: buildMlbPropsAgenticContext,
   windowHours: 24,
   useESTDayFiltering: true,
   propsPerGame: 5,

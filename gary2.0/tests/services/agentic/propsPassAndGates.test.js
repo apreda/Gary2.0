@@ -62,9 +62,16 @@ describe('F-5: odds gate + no internal flags in stored picks', () => {
   });
 });
 
-describe('no-stats gate: lines without stats never reach Gary', () => {
-  it('MLB props context drops candidates that have neither season stats nor game logs', () => {
-    expect(src('src/services/agentic/mlbPropsAgenticContext.js')).toContain('No-stats gate');
+describe('no-stats gate: unvalidated players never reach a stored pick', () => {
+  it('MLB desk lane pool is the board (lineup-filtered) and the CLI gate applies to both lanes', () => {
+    // Old MLB context builder deleted Jul 26 2026 — the desk lane's validated
+    // pool is THE PROP BOARD's players, tightened to posted lineups.
+    const brain = src('src/services/pickdesk/propsBrain.js');
+    expect(brain).toContain('validatedPlayers: board.players');
+    expect(brain).toMatch(/lineupNames\.has\(norm\(p\.player\)\)/);
+    const cli = src('scripts/run-agentic-props-cli.js');
+    expect(cli).toContain('validatedPlayerNames = deskRes.validatedPlayers');
+    expect(cli).toMatch(/No-stats gate: dropped/);
   });
 });
 

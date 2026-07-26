@@ -12,6 +12,7 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { getPropsConstitution, applyPropsPerGameConstraint, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
+const { analyzeMlbPropsDesk } = await import('../src/services/pickdesk/propsBrain.js');
 
 const defaultArgv = process.argv.slice(2);
 
@@ -70,7 +71,9 @@ export async function runAgenticPropsCli({
   regularOnly = false,  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
   hrOnly = false         // If true for MLB HR, only include home_runs props
 }) {
-  if (!sportKey || !buildContext) {
+  // MLB rides the desk lane (propsBrain) and carries no context builder;
+  // every other sport still requires one for the orchestrator path.
+  if (!sportKey || (!buildContext && sportKey !== 'baseball_mlb')) {
     throw new Error('runAgenticPropsCli requires sportKey and buildContext');
   }
 
@@ -272,51 +275,65 @@ export async function runAgenticPropsCli({
       let result;
 
       {
-        console.log(`[Orchestrator Props] Building context for ${matchup}...`);
-        const context = await buildContext(game, playerProps, { nocache, regularOnly: cliRegularOnly });
+        // PROPS DESK LANE (Jul 26 2026): MLB props read the SAME desk as game
+        // picks — one Sol xhigh call over buildMlbDesk + THE PROP BOARD (spec
+        // docs/superpowers/specs/2026-07-26-props-desk.md). The validated pool
+        // is the board's players (lineup-filtered when lineups are posted).
+        // NBA/NFL/NHL keep the orchestrator path. Every gate below (no-stats,
+        // odds reconciliation + hard gate, caps, HR routing) is shared chassis.
+        let validatedPlayerNames;
+        if (sportKey === 'baseball_mlb') {
+          const deskRes = await analyzeMlbPropsDesk(game, playerProps, { nocache, hrOnly });
+          if (deskRes.error) console.warn(`[Props CLI] desk lane: ${deskRes.error}`);
+          result = { picks: deskRes.picks || [] };
+          validatedPlayerNames = deskRes.validatedPlayers || new Set();
+        } else {
+          console.log(`[Orchestrator Props] Building context for ${matchup}...`);
+          const context = await buildContext(game, playerProps, { nocache, regularOnly: cliRegularOnly });
 
-        // Prepare prop candidates and available lines for orchestrator
-        const propCandidates = (context.propCandidates || []).slice(0, 14).map(p => ({
-          player: p.player,
-          team: p.team,
-          props: p.props,
-          recentForm: p.recentForm ? {
-            targetTrend: p.recentForm.targetTrend,
-            usageTrend: p.recentForm.usageTrend,
-            formTrend: p.recentForm.formTrend
-          } : null
-        }));
-
-        // Filter available lines to only validated players
-        const validatedPlayerNames = new Set(
-          (context.propCandidates || []).map(p => p.player.toLowerCase())
-        );
-        const availableLines = playerProps
-          .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
-          .slice(0, 80)
-          .map(p => ({
+          // Prepare prop candidates and available lines for orchestrator
+          const propCandidates = (context.propCandidates || []).slice(0, 14).map(p => ({
             player: p.player,
-            prop_type: p.prop_type,
-            line: p.line,
-            over_odds: p.over_odds,
-            under_odds: p.under_odds
+            team: p.team,
+            props: p.props,
+            recentForm: p.recentForm ? {
+              targetTrend: p.recentForm.targetTrend,
+              usageTrend: p.recentForm.usageTrend,
+              formTrend: p.recentForm.formTrend
+            } : null
           }));
 
-        const propsConstitution = getPropsConstitution(leagueLabel);
+          // Filter available lines to only validated players
+          validatedPlayerNames = new Set(
+            (context.propCandidates || []).map(p => p.player.toLowerCase())
+          );
+          const availableLines = playerProps
+            .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
+            .slice(0, 80)
+            .map(p => ({
+              player: p.player,
+              prop_type: p.prop_type,
+              line: p.line,
+              over_odds: p.over_odds,
+              under_odds: p.under_odds
+            }));
 
-        result = await analyzeGame(game, sportKey, {
-          mode: 'props',
-          propContext: {
-            propCandidates,
-            availableLines,
-            playerStats: context.playerStats || '',
-            gameSummary: context.gameSummary || {},
-            propsConstitution,
-            narrativeContext: context.narrativeContext || null
-          }
-        });
+          const propsConstitution = getPropsConstitution(leagueLabel);
 
-        // Post-process orchestrator picks: normalize line + format prop for iOS display
+          result = await analyzeGame(game, sportKey, {
+            mode: 'props',
+            propContext: {
+              propCandidates,
+              availableLines,
+              playerStats: context.playerStats || '',
+              gameSummary: context.gameSummary || {},
+              propsConstitution,
+              narrativeContext: context.narrativeContext || null
+            }
+          });
+        }
+
+        // Post-process picks (both lanes): normalize line + format prop for iOS display
         if (result.picks && result.picks.length > 0) {
           // HR lane (hrOnly) must store ONLY home-run props. The candidate pool is
           // already HR-filtered, but the orchestrator can still surface non-HR props
