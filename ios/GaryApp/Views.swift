@@ -4618,6 +4618,16 @@ struct HomeMarqueeTracker: View {
             }
             .padding(.horizontal, 2)
         }
+        // The viewport edge must read as a FADE, never a mid-word chop
+        // (A pass, Jul 26 — the clip law applies to tickers too). The color
+        // is the card's COMPOSITE surface (warmWhite 3% over the page), not
+        // the raw page tone — a mismatched fade is an invisible fade.
+        .overlay(alignment: .trailing) {
+            LinearGradient(colors: [Color(hex: "#1A1817").opacity(0), Color(hex: "#1A1817")],
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(width: 48)
+                .allowsHitTesting(false)
+        }
     }
 
     @ViewBuilder private func railStatus(_ e: Entry) -> some View {
@@ -4626,13 +4636,19 @@ struct HomeMarqueeTracker: View {
                 .font(GaryFonts.mono(10.5, bold: true))
                 .foregroundStyle(color)
         } else if e.isLive, let det = e.live?.detail {
-            Text("▶ \(det.uppercased())")
-                .font(GaryFonts.mono(10.5, bold: true))
-                .foregroundStyle(GaryColors.win)
+            HStack(spacing: 5) {
+                Circle().fill(GaryColors.win).frame(width: 6, height: 6)
+                Text(det.uppercased())
+                    .font(GaryFonts.mono(10.5, bold: true))
+                    .foregroundStyle(GaryColors.win)
+            }
         } else if e.started {
-            Text("▶ STARTED")
-                .font(GaryFonts.mono(10.5, bold: true))
-                .foregroundStyle(GaryColors.win)
+            HStack(spacing: 5) {
+                Circle().fill(GaryColors.win).frame(width: 6, height: 6)
+                Text("STARTED")
+                    .font(GaryFonts.mono(10.5, bold: true))
+                    .foregroundStyle(GaryColors.win)
+            }
         } else {
             Text(TomorrowView.etTime(e.commence, withZone: false, meridiem: true).uppercased())
                 .font(GaryFonts.mono(10.5))
@@ -4647,7 +4663,7 @@ struct HomeMarqueeTracker: View {
             HStack(spacing: 8) {
                 BroadcastBar(height: 11)
                 Text("UP NEXT")
-                    .font(GaryFonts.accent(12)).tracking(0.6)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1.4)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if e.pickLine == nil, let pending = e.pendingLine {
@@ -4655,13 +4671,13 @@ struct HomeMarqueeTracker: View {
                     // slot's own voice — one structured row, paired with UP
                     // NEXT on the left (founder, Jul 12; pitchers retired).
                     Text(pending.uppercased())
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
             Text(e.title)
-                .font(GaryFonts.display(36))
+                .font(GaryFonts.display(40))
                 .foregroundStyle(GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.7)
             if let ct = e.commence, let d = parseISO8601(ct) {
@@ -4669,7 +4685,7 @@ struct HomeMarqueeTracker: View {
             }
             // Bottom row: Gary's line left, the hard start time right — the
             // chevron retired; the whole card is the tap (founder, Jul 7).
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let pick = e.pickLine {
                     // ONE pick per line — the words always fit; the design
                     // never falls back to an ellipsis (founder, Jul 7).
@@ -4693,8 +4709,8 @@ struct HomeMarqueeTracker: View {
                     let time = TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased()
                     let isMLB = (e.league ?? "").uppercased() == "MLB"
                     Text(isMLB ? time : "\(startWord(e.league)) \(time)")
-                        .font(GaryFonts.mono(11.5, bold: true))
-                        .foregroundStyle(.white.opacity(0.72))
+                        .font(GaryFonts.mono(12.5, bold: true))
+                        .foregroundStyle(.white.opacity(0.95))
                 }
             }
         }
@@ -5094,9 +5110,11 @@ struct HomeCountdownText: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let s = max(0, Int(target.timeIntervalSince(ctx.date)))
+            // Gold and tabular (A pass, Jul 26): the clock reads as the card's
+            // pulse, one register below the matchup — and never jitters.
             Text(s == 0 ? "ANY MINUTE" : String(format: "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60))
-                .font(GaryFonts.mono(21, bold: true))
-                .foregroundStyle(GaryColors.warmWhite)
+                .font(GaryFonts.mono(24, bold: true))
+                .foregroundStyle(GaryColors.gold)
         }
     }
 }
