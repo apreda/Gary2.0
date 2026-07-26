@@ -46,6 +46,7 @@ import { computeRunningGame } from './computers/runningGame.js';
 import { computeParkWeather } from './computers/parkWeather.js';
 import { computeFantasyPickups } from './computers/fantasyPickups.js';
 import { computeTwoStartWeek } from './computers/twoStartWeek.js';
+import { computeCloserWatch } from './computers/closerWatch.js';
 
 // NBA connection computers.
 import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
@@ -80,6 +81,7 @@ const MLB_COMPUTERS = [
   computeParkWeather,
   computeFantasyPickups,
   computeTwoStartWeek,
+  computeCloserWatch,
 ];
 
 const NBA_COMPUTERS = [
