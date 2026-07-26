@@ -161,8 +161,19 @@ export async function computeCutList(ctx) {
   return rows;
 }
 
-/** Fenced flash pass — the cut case per player (facts only). */
+/**
+ * Fenced flash pass — the cut case per player (facts only). CHUNKED in
+ * threes: thinking-model output budgets are shared with reasoning tokens,
+ * so big single calls truncate mid-JSON (bit twice Jul 26). Small chunks
+ * always fit; a failed chunk degrades only its three rows.
+ */
 async function writeReads(rows) {
+  for (let i = 0; i < rows.length; i += 3) {
+    await writeReadsChunk(rows.slice(i, i + 3));
+  }
+}
+
+async function writeReadsChunk(rows) {
   if (!rows.length) return;
   const facts = rows.map((r, i) => {
     const m = r.meta || {};

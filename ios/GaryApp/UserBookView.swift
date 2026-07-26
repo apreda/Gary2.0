@@ -108,16 +108,19 @@ struct UnitSizeSheet: View {
                 .font(GaryFonts.text(13))
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
+            HStack(spacing: 16) {
                 ForEach(quick, id: \.self) { amt in
+                    let isOn = amountText == String(format: "%.0f", amt)
                     Button {
                         amountText = String(format: "%.0f", amt)
                     } label: {
-                        Text("$\(Int(amt))")
-                            .font(GaryFonts.mono(12, bold: true))
-                            .foregroundStyle(amountText == String(format: "%.0f", amt) ? .black : .white.opacity(0.75))
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Capsule().fill(amountText == String(format: "%.0f", amt) ? GaryColors.gold : Color.white.opacity(0.08)))
+                        VStack(spacing: 3) {
+                            Text("$\(Int(amt))")
+                                .font(GaryFonts.mono(12, bold: true))
+                                .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.6))
+                            Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
+                        }
+                        .fixedSize()
                     }
                     .buttonStyle(.plain)
                 }
@@ -464,11 +467,13 @@ struct TailFadeRow: View {
             // One play a day rides the streak — claiming it here releases any
             // other claim the user holds for the date (server-enforced).
             Button { streakOn.toggle() } label: {
-                Text("STREAK")
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(streakOn ? .black : .white.opacity(0.55))
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(Capsule().fill(streakOn ? Color(hex: "#E5844B") : Color.white.opacity(0.08)))
+                VStack(spacing: 3) {
+                    Text("STREAK")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                        .foregroundStyle(streakOn ? Color(hex: "#E5844B") : .white.opacity(0.5))
+                    Rectangle().fill(streakOn ? Color(hex: "#E5844B") : .clear).frame(height: 1.5)
+                }
+                .fixedSize()
             }
             .buttonStyle(.plain)
             Button { place(side) } label: {
@@ -875,15 +880,18 @@ struct UserBookSection: View {
     }
 
     private func filterChip(_ label: String, key: String, group: Int) -> some View {
+        // Underline-tab grammar — never a pill (founder law, Jul 26).
         let isOn = group == 0 ? timeframe == key : kindFilter == key
         return Button {
             if group == 0 { timeframe = key } else { kindFilter = key }
         } label: {
-            Text(label)
-                .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
-                .foregroundStyle(isOn ? .black : .white.opacity(0.55))
-                .padding(.horizontal, 9).padding(.vertical, 4)
-                .background(Capsule().fill(isOn ? GaryColors.gold : Color.white.opacity(0.08)))
+            VStack(spacing: 3) {
+                Text(label)
+                    .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                    .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
+                Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
+            }
+            .fixedSize()
         }
         .buttonStyle(.plain)
     }
@@ -1369,11 +1377,13 @@ struct UserBookLeaderboard: View {
                         window = w.0
                         Task { await load(force: true) }
                     } label: {
-                        Text(w.1)
-                            .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
-                            .foregroundStyle(window == w.0 ? .black : .white.opacity(0.55))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(Capsule().fill(window == w.0 ? GaryColors.gold : Color.white.opacity(0.08)))
+                        VStack(spacing: 3) {
+                            Text(w.1)
+                                .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                                .foregroundStyle(window == w.0 ? GaryColors.gold : .white.opacity(0.5))
+                            Rectangle().fill(window == w.0 ? GaryColors.gold : .clear).frame(height: 1.5)
+                        }
+                        .fixedSize()
                     }
                     .buttonStyle(.plain)
                 }

@@ -123,6 +123,19 @@ struct SwapMeta: Decodable {
     let batting_order: Int?  // lineup spot
     let opp_sp: String?      // opposing starter (hitter pickups)
     let opp_sp_era: Double?  // opposing starter xERA
+    // Fantasy Corner lane payloads (two_start / closer_watch / return_watch /
+    // cut_list): the full Gary read + the numbers the card's stat strip shows.
+    let read: String?              // full analyst read (verdict rides `verdict`)
+    let week: String?              // two-start: "Mon 7/27 - Sun 8/2"
+    let starts: [FantasyStart]?    // two-start: the posted turns
+    let committee: Bool?           // closer watch: shared ninth
+    let leader: FantasyArm?        // closer watch: save leader
+    let runner: FantasyArm?        // closer watch: next in line
+    let injury: String?            // return watch: "oblique strain"
+    let return_date: String?       // return watch: YYYY-MM-DD
+    let days_out: Int?
+    let season_line: String?       // return watch: ".839 OPS" / "3.10 ERA"
+    let drop_note: String?         // cut list: the number that says cut
     // Head-to-head payload (kind == "h2h"): season series dominance + last meeting.
     let dominant: String?
     let opponent: String?
@@ -150,6 +163,20 @@ struct SwapMeta: Decodable {
 }
 
 /// The last meeting in a head-to-head series (revenge read).
+/// One posted start on a two-start card ("Tue 7/29 at Guardians").
+struct FantasyStart: Decodable {
+    let date: String?
+    let opp: String?
+    let home: Bool?
+}
+
+/// One arm on the closer-watch ladder (saves + holds).
+struct FantasyArm: Decodable {
+    let name: String?
+    let sv: Int?
+    let hld: Int?
+}
+
 struct H2HLast: Decodable {
     let score: String?
     let winner: String?

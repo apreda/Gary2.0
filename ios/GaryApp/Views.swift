@@ -12016,22 +12016,24 @@ struct BillfoldView: View {
     }
 
     /// GARY / YOU book switch — whose record the page shows. Persisted so the
-    /// reader's choice sticks across launches (founder, Jul 26).
+    /// reader's choice sticks across launches (founder, Jul 26). House selector
+    /// grammar: text + underline bar, never a pill (founder law, Jul 26).
     private var bookScopeToggle: some View {
-        HStack(spacing: 0) {
-            bookScopeChip("GARY", isOn: billfoldScope != "you") { billfoldScope = "gary" }
-            bookScopeChip("YOU", isOn: billfoldScope == "you") { billfoldScope = "you" }
+        HStack(spacing: 14) {
+            bookScopeTab("GARY", isOn: billfoldScope != "you") { billfoldScope = "gary" }
+            bookScopeTab("YOU", isOn: billfoldScope == "you") { billfoldScope = "you" }
         }
-        .background(Capsule().stroke(brass.opacity(0.45), lineWidth: 1))
     }
 
-    private func bookScopeChip(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
+    private func bookScopeTab(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
-            Text(label)
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                .foregroundStyle(isOn ? .black : .white.opacity(0.6))
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(Capsule().fill(isOn ? brass : .clear))
+            VStack(spacing: 3) {
+                Text(label)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .foregroundStyle(isOn ? brass : .white.opacity(0.5))
+                Rectangle().fill(isOn ? brass : .clear).frame(height: 1.5)
+            }
+            .fixedSize()
         }
         .buttonStyle(.plain)
     }
@@ -18367,8 +18369,8 @@ enum SignalKind {
     // MLB fantasy streamers — today's most pickup-worthy starting pitchers
     case fantasyPickups
     // Fantasy Corner lanes (Jul 26): two-start arms, the ninth-inning ladder,
-    // and IL players listed back inside the stash window
-    case twoStart, closerWatch, returnWatch
+    // IL players listed back inside the stash window, and the drop side
+    case twoStart, closerWatch, returnWatch, cutList
     // MLB team angle — a team's record in tonight's starter's last N starts
     case teamRecord
     // MLB team angle — bullpen workload (relief IP) over the last 3 games
@@ -18397,6 +18399,7 @@ enum SignalKind {
         case .twoStart: return "2.circle.fill"
         case .closerWatch: return "9.circle.fill"
         case .returnWatch: return "arrow.uturn.backward.circle.fill"
+        case .cutList: return "scissors"
         case .teamRecord: return "person.3.fill"
         case .bullpenFatigue: return "bolt.slash.fill"
         }
@@ -18437,6 +18440,7 @@ enum SignalKind {
         case .twoStart: return "TWO-START"
         case .closerWatch: return "CLOSER WATCH"
         case .returnWatch: return "BACK SOON"
+        case .cutList: return "CUT LIST"
         case .teamRecord: return "RECORD"
         case .bullpenFatigue: return "BULLPEN"
         }
@@ -21697,6 +21701,7 @@ extension SignalKind {
         case "two_start_week", "two_start": return .twoStart
         case "closer_watch": return .closerWatch
         case "return_watch": return .returnWatch
+        case "cut_list": return .cutList
         default: return nil
         }
     }
@@ -21753,7 +21758,8 @@ extension Connection {
             nrfi: (meta?.kind == "nrfi") ? meta : nil,
             slateDate: date,
             weather: (meta?.kind == "park_weather") ? meta : nil,
-            fantasy: (meta?.kind == "fantasy_pickup") ? meta : nil,
+            fantasy: ["fantasy_pickup", "two_start", "closer_watch", "return_watch", "cut_list"]
+                .contains(meta?.kind ?? "") ? meta : nil,
             position: meta?.position,
             gameId: game_id
         )

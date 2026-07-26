@@ -544,7 +544,7 @@ struct HubView: View {
         case .regression:                            anchor = "regression"
         case .streak:                                anchor = "streaks"
         case .fantasyPickups, .twoStart,
-             .closerWatch, .returnWatch:             anchor = "fantasy"
+             .closerWatch, .returnWatch, .cutList:   anchor = "fantasy"
         case .hot, .cold, .platoon:                  anchor = "bats"
         case .hrThreat:                              anchor = HubView.hrThreatsLive ? "hr" : "bats"
         case .starterForm, .teamRecord,
@@ -662,21 +662,25 @@ struct HubView: View {
     @AppStorage("hubScope") private var hubScope = "hub"
 
     private var hubScopeToggle: some View {
-        HStack(spacing: 0) {
-            hubScopeChip("THE HUB", isOn: hubScope != "fantasy") { hubScope = "hub" }
-            hubScopeChip("FANTASY", isOn: hubScope == "fantasy") { hubScope = "fantasy" }
+        // House selector grammar: text + underline bar, never a pill
+        // (founder law, Jul 26 — no oval bubbles).
+        HStack(spacing: 18) {
+            hubScopeTab("THE HUB", isOn: hubScope != "fantasy") { hubScope = "hub" }
+            hubScopeTab("FANTASY", isOn: hubScope == "fantasy") { hubScope = "fantasy" }
+            Spacer()
         }
-        .background(Capsule().stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
         .padding(.horizontal, 18)
     }
 
-    private func hubScopeChip(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
+    private func hubScopeTab(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
-            Text(label)
-                .font(HubFont.data(10, .bold)).tracking(1)
-                .foregroundStyle(isOn ? .black : .white.opacity(0.6))
-                .padding(.horizontal, 14).padding(.vertical, 6)
-                .background(Capsule().fill(isOn ? GaryColors.gold : .clear))
+            VStack(spacing: 4) {
+                Text(label)
+                    .font(HubFont.data(11, .bold)).tracking(1.2)
+                    .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
+                Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
+            }
+            .fixedSize()
         }
         .buttonStyle(.plain)
     }
@@ -685,7 +689,7 @@ struct HubView: View {
     /// lane always renders somewhere instead of vanishing.
     private var overflow: [Signal] {
         var placed: Set<SignalKind> = [.regression, .fantasyPickups, .streak,
-                                       .twoStart, .closerWatch, .returnWatch]
+                                       .twoStart, .closerWatch, .returnWatch, .cutList]
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
@@ -713,6 +717,7 @@ struct HubView: View {
                 if hubScope == "fantasy" {
                     FantasyCornerPage(
                         pickups: items(.fantasyPickups),
+                        cuts: items(.cutList),
                         twoStarts: items(.twoStart),
                         closers: items(.closerWatch),
                         returners: items(.returnWatch),
@@ -2172,152 +2177,184 @@ fileprivate struct HubDotsRow: View {
 
 // MARK: - Fantasy Corner
 
-fileprivate struct HubFantasyCorner: View {
-    let signals: [Signal]
-    /// The dedicated Fantasy page shows the complete waiver-column read.
-    var fullReads: Bool = false
+// MARK: - Fantasy Corner (the dedicated page behind the header toggle)
+
+/// One player on the Fantasy desk: the name, the numbers strip, and — the
+/// whole point — Gary's full case with his verdict pulled out, so a manager
+/// reads the argument and just decides whether they agree (founder, Jul 26).
+fileprivate struct FantasyCard: View {
+    let s: Signal
+    var accent: Color = GaryColors.gold
     let onTap: (Signal) -> Void
 
-    private var pitchers: [Signal] { signals.filter { ($0.fantasy?.role ?? "") == "SP" } }
-    private var hitters: [Signal] { signals.filter { ($0.fantasy?.role ?? "") == "HITTER" } }
+    private var m: SwapMeta? { s.fantasy }
+
+    private var tierWord: (String, Color)? {
+        switch m?.tier {
+        case "MUST_ADD": return ("MUST ADD", GaryColors.gold)
+        case "STREAM": return ("STREAM", HubPalette.green)
+        case "DEEP": return ("DEEP LEAGUES", Color.white.opacity(0.5))
+        case "PLAN_AROUND": return ("PLAN AROUND", GaryColors.gold)
+        case "STREAM_BOTH": return ("START BOTH", HubPalette.green)
+        case "MATCHUP_CALL": return ("MATCHUP CALL", Color.white.opacity(0.5))
+        case "CUT": return ("CUT", HubPalette.red)
+        default: return nil
+        }
+    }
+
+    /// The supporting numbers, kind by kind — every figure is the computer's
+    /// own stored fact, never re-derived here.
+    private var statStrip: String? {
+        guard let m else { return nil }
+        var bits: [String] = []
+        switch m.kind {
+        case "fantasy_pickup":
+            if m.role == "SP" {
+                if let x = m.xera { bits.append("\(x) xERA") }
+                if let k = m.k9 { bits.append("\(k) K/9") }
+                if let w = m.whip { bits.append("\(w) WHIP") }
+                if let o = m.opp, !o.isEmpty { bits.append("vs \(o)") }
+            } else {
+                if let o = m.ops { bits.append(String(format: "%.3f OPS", o)) }
+                if let a = m.avg { bits.append(String(format: "%.3f AVG", a)) }
+                if let b = m.batting_order { bits.append("bats \(b)") }
+                if let sp = m.opp_sp, !sp.isEmpty {
+                    bits.append("vs \(sp)" + (m.opp_sp_era.map { " (\($0) xERA)" } ?? ""))
+                }
+            }
+        case "two_start":
+            for st in m.starts ?? [] {
+                if let opp = st.opp { bits.append("\(st.home == true ? "vs" : "at") \(opp)") }
+            }
+            if let x = m.xera { bits.append("\(x) xERA") }
+        case "closer_watch":
+            if let l = m.leader { bits.append("\(l.name ?? "") \(l.sv ?? 0) SV") }
+            if let r = m.runner { bits.append("next \(r.name ?? "") \(r.sv ?? 0) SV") }
+        case "return_watch":
+            if let st = m.status, !st.isEmpty { bits.append(st) }
+            if let inj = m.injury, !inj.isEmpty { bits.append(inj) }
+            if let line = m.season_line { bits.append(line) }
+        case "cut_list":
+            if m.role == "SP" {
+                if let x = m.xera { bits.append("\(x) xERA") }
+                if let e = m.era { bits.append("\(e) ERA") }
+            } else {
+                if let o = m.ops { bits.append(String(format: "%.3f OPS", o)) }
+                if let a = m.avg { bits.append(String(format: "%.3f AVG", a)) }
+                if let b = m.batting_order { bits.append("bats \(b)") }
+            }
+        default: break
+        }
+        return bits.isEmpty ? nil : bits.joined(separator: "  ·  ")
+    }
 
     var body: some View {
-        // ONE column, two groups (Jul 5 founder fix: side-by-side columns
-        // with 4 pitchers vs 10 hitters stretched a half-screen void under
-        // the short column). Stat rides the right edge; rows tightened.
-        VStack(alignment: .leading, spacing: 14) {
-            group("Pitchers", pitchers, stat: GaryColors.gold)
-            group("Hitters", hitters, stat: HubPalette.green)
-        }
-        .padding(.horizontal, 18)
-    }
-
-    @ViewBuilder private func group(_ title: String, _ items: [Signal], stat: Color) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                HubKicker(text: title, size: 10, color: .white.opacity(0.62))
-                    .padding(.bottom, 4)
-                ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
-                    Button { onTap(s) } label: { row(s, stat: stat) }.buttonStyle(.plain)
-                    if i < items.count - 1 { HubRule() }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private func row(_ s: Signal, stat: Color) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 5) {
+        Button { onTap(s) } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(s.headline)
-                        .font(HubFont.body(13.5, .semibold)).foregroundStyle(.white.opacity(0.95))
+                        .font(HubFont.body(14.5, .bold)).foregroundStyle(.white.opacity(0.95))
                         .lineLimit(1).minimumScaleFactor(0.7)
-                    if let pos = s.fantasy?.position, !pos.isEmpty, pos != "SP" {
+                    if let pos = m?.position, !pos.isEmpty, pos != "SP" {
                         Text(pos)
-                            .font(HubFont.data(8.5, .semibold)).foregroundStyle(.white.opacity(0.55))
+                            .font(HubFont.data(9, .semibold)).foregroundStyle(.white.opacity(0.5))
                     }
-                    if let tier = s.fantasy?.tier {
-                        Text(tier == "MUST_ADD" ? "MUST ADD" : tier)
-                            .font(HubFont.data(8.5, .semibold)).tracking(0.8)
-                            .foregroundStyle(tier == "MUST_ADD" ? GaryColors.gold
-                                             : tier == "STREAM" ? HubPalette.green
-                                             : .white.opacity(0.45))
+                    if let t = m?.team, !t.isEmpty {
+                        Text(t)
+                            .font(HubFont.data(9, .semibold)).foregroundStyle(.white.opacity(0.4))
+                    }
+                    Spacer(minLength: 8)
+                    Text(s.value)
+                        .font(HubFont.data(15)).foregroundStyle(accent)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    if let tier = tierWord {
+                        Text(tier.0)
+                            .font(HubFont.data(9, .bold)).tracking(0.9)
+                            .foregroundStyle(tier.1)
+                    }
+                    if let strip = statStrip {
+                        Text(strip)
+                            .font(HubFont.data(10, .semibold)).foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Text(fullReads ? s.detail : (s.fantasy?.reason ?? s.detail))
-                    .font(HubFont.body(fullReads ? 12.5 : 11))
-                    .foregroundStyle(.white.opacity(fullReads ? 0.72 : 0.62))
-                    .lineLimit(fullReads ? nil : 1)
-                    .lineSpacing(fullReads ? 2.5 : 0)
+
+                // Gary's case in full — the product. Verdict pulled onto its
+                // own line so the call lands.
+                Text(m?.read ?? s.detail)
+                    .font(HubFont.body(12.5)).foregroundStyle(.white.opacity(0.78))
+                    .lineSpacing(2.5)
                     .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: fullReads)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let v = m?.verdict, !v.isEmpty {
+                    Text(v)
+                        .font(HubFont.body(12.5, .bold)).foregroundStyle(accent)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            Spacer(minLength: 8)
-            Text(s.value)
-                .font(HubFont.data(14)).foregroundStyle(stat)
-                .lineLimit(1).minimumScaleFactor(0.7)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
     }
 }
 
-/// One Fantasy Corner lane (two-start / closer watch / back soon): a kicker,
-/// then plain headline-read-stat rows in the corner's one-column language.
-/// Renders nothing on empty days — the corner never shows an empty frame.
-/// `fullReads` (the dedicated Fantasy page) shows the whole analyst read.
-fileprivate struct HubFantasyLane: View {
-    let title: String
+/// A kicker-titled run of FantasyCards. Hides itself when empty.
+fileprivate struct FantasyCardList: View {
+    let kicker: String
     let items: [Signal]
-    let stat: Color
-    var fullReads: Bool = false
+    var accent: Color = GaryColors.gold
     let onTap: (Signal) -> Void
 
     var body: some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                HubKicker(text: title, size: 10, color: .white.opacity(0.62))
-                    .padding(.bottom, 4)
+                HubKicker(text: kicker, size: 10, color: .white.opacity(0.62))
+                    .padding(.bottom, 2)
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
-                    Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
+                    FantasyCard(s: s, accent: accent, onTap: onTap)
                     if i < items.count - 1 { HubRule() }
                 }
             }
             .padding(.horizontal, 18)
         }
     }
-
-    @ViewBuilder private func row(_ s: Signal) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(s.headline)
-                    .font(HubFont.body(13.5, .semibold)).foregroundStyle(.white.opacity(0.95))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text(s.detail)
-                    .font(HubFont.body(fullReads ? 12.5 : 11))
-                    .foregroundStyle(.white.opacity(fullReads ? 0.72 : 0.62))
-                    .lineLimit(fullReads ? nil : 2)
-                    .lineSpacing(fullReads ? 2.5 : 0)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Text(s.value)
-                .font(HubFont.data(13)).foregroundStyle(stat)
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .padding(.vertical, fullReads ? 10 : 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-    }
 }
 
-// MARK: - Fantasy Corner (the dedicated page behind the header toggle)
-
 /// The season-long manager's daily desk — a FULL page, not a feed section
-/// (founder, Jul 26): the waiver wire with complete reads, the week's
-/// two-start arms, the ninth-inning ladder, and the IL stash list. Every
-/// lane is honest about its data: a quiet lane says why it's quiet.
+/// (founder, Jul 26): adds and drops with Gary's complete case on every name,
+/// the week's two-start arms, the ninth-inning ladder, and the stash list.
+/// Every lane is honest about its data: a quiet lane says why it's quiet.
 fileprivate struct FantasyCornerPage: View {
     let pickups: [Signal]
+    let cuts: [Signal]
     let twoStarts: [Signal]
     let closers: [Signal]
     let returners: [Signal]
     let loaded: Bool
     let onTap: (Signal) -> Void
 
-    private var total: Int { pickups.count + twoStarts.count + closers.count + returners.count }
+    private var total: Int {
+        pickups.count + cuts.count + twoStarts.count + closers.count + returners.count
+    }
+    private var addArms: [Signal] { pickups.filter { ($0.fantasy?.role ?? "") == "SP" } }
+    private var addBats: [Signal] { pickups.filter { ($0.fantasy?.role ?? "") != "SP" } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
-            // Masthead: what this desk is, refreshed with the pipeline.
             VStack(alignment: .leading, spacing: 6) {
                 (Text("FANTASY ").foregroundColor(GaryColors.warmWhite)
                     + Text("CORNER").foregroundColor(GaryColors.gold))
                     .font(HubFont.display(26))
                     .tracking(0.5)
-                Text("The season-long desk — waivers, two-start arms, saves, and returns. Refreshed through the day with the board.")
+                Text("The season-long desk — who to add, who to cut, and why, in Gary's own words. Refreshed through the day with the board.")
                     .font(HubFont.body(12.5))
                     .foregroundStyle(.white.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
@@ -2338,15 +2375,24 @@ fileprivate struct FantasyCornerPage: View {
                     .padding(.horizontal, 18)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                // THE WAIVER WIRE — the lead: today's adds with the full case.
                 if !pickups.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         HubHead(title: "The Waiver Wire", count: pickups.count)
-                        HubFantasyCorner(signals: pickups, fullReads: true, onTap: onTap)
+                        FantasyCardList(kicker: "Arms to add", items: addArms,
+                                        accent: GaryColors.gold, onTap: onTap)
+                        FantasyCardList(kicker: "Bats to add", items: addBats,
+                                        accent: HubPalette.green, onTap: onTap)
                     }
                 }
 
-                // TWO-START WEEK — fills as MLB posts probables; says so when thin.
+                if !cuts.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "The Cut List", count: cuts.count)
+                        FantasyCardList(kicker: "Roster spots you can take back", items: cuts,
+                                        accent: HubPalette.red, onTap: onTap)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
                     HubHead(title: "Two-Start Week", count: twoStarts.count)
                     if twoStarts.isEmpty {
@@ -2356,26 +2402,24 @@ fileprivate struct FantasyCornerPage: View {
                             .padding(.horizontal, 18)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        HubFantasyLane(title: "Both turns, posted by MLB", items: twoStarts,
-                                       stat: GaryColors.gold, fullReads: true, onTap: onTap)
+                        FantasyCardList(kicker: "Both turns, posted by MLB", items: twoStarts,
+                                        accent: GaryColors.gold, onTap: onTap)
                     }
                 }
 
-                // CLOSER WATCH — tonight's ninth-inning ladder.
                 if !closers.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         HubHead(title: "Closer Watch", count: closers.count)
-                        HubFantasyLane(title: "Who gets the ninth tonight", items: closers,
-                                       stat: HubPalette.green, fullReads: true, onTap: onTap)
+                        FantasyCardList(kicker: "Who gets the ninth tonight", items: closers,
+                                        accent: HubPalette.green, onTap: onTap)
                     }
                 }
 
-                // BACK SOON — the stash list.
                 if !returners.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         HubHead(title: "Back Soon", count: returners.count)
-                        HubFantasyLane(title: "Listed returns inside ten days", items: returners,
-                                       stat: .white.opacity(0.75), fullReads: true, onTap: onTap)
+                        FantasyCardList(kicker: "Listed returns inside ten days", items: returners,
+                                        accent: .white.opacity(0.75), onTap: onTap)
                     }
                 }
             }
