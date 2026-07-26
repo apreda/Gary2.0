@@ -77,6 +77,8 @@ test("buildVerdictPrompt carries the bet, the outcome, the evidence, and the ope
   assert.ok(p.includes("FINAL SCORE: Angels (away) 2"));
   assert.ok(p.includes('starting with exactly "Hit."'));
   assert.ok(p.includes("only source of facts"));
+  assert.ok(p.includes("one short line"));
+  assert.ok(p.includes("Last names, digits, no filler words"));
   assert.ok(p.includes("No betting phrases, no hype words, no emojis"));
 });
 
