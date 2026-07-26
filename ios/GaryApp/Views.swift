@@ -20604,10 +20604,10 @@ fileprivate struct ScoutArmsSection: View {
 
     @ViewBuilder private func stack(_ label: String, _ value: String?) -> some View {
         if let value {
-            VStack(alignment: .leading, spacing: 2) {
-                ScoutMock.kicker(label, size: 8.5)
+            VStack(alignment: .leading, spacing: 3) {
+                ScoutMock.kicker(label, size: 10)
                 Text(value)
-                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                    .font(.system(size: 15.5, weight: .semibold).monospacedDigit())
                     .foregroundStyle(ScoutMock.warm)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
@@ -20616,9 +20616,9 @@ fileprivate struct ScoutArmsSection: View {
 
     @ViewBuilder private func plate(_ p: TomorrowPerson?, home: Bool) -> some View {
         if let p {
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(surname(p))
-                    .font(GaryFonts.display(15)).tracking(0.5)
+                    .font(GaryFonts.display(17)).tracking(0.5)
                     .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 stack("Season", seasonLine(p))
