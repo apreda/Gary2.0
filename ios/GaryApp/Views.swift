@@ -18366,6 +18366,9 @@ enum SignalKind {
     case advancement, xgRecap
     // MLB fantasy streamers — today's most pickup-worthy starting pitchers
     case fantasyPickups
+    // Fantasy Corner lanes (Jul 26): two-start arms, the ninth-inning ladder,
+    // and IL players listed back inside the stash window
+    case twoStart, closerWatch, returnWatch
     // MLB team angle — a team's record in tonight's starter's last N starts
     case teamRecord
     // MLB team angle — bullpen workload (relief IP) over the last 3 games
@@ -18391,6 +18394,9 @@ enum SignalKind {
         case .advancement: return "flag.checkered"
         case .xgRecap: return "soccerball"
         case .fantasyPickups: return "star.fill"
+        case .twoStart: return "2.circle.fill"
+        case .closerWatch: return "9.circle.fill"
+        case .returnWatch: return "arrow.uturn.backward.circle.fill"
         case .teamRecord: return "person.3.fill"
         case .bullpenFatigue: return "bolt.slash.fill"
         }
@@ -18428,6 +18434,9 @@ enum SignalKind {
         case .advancement: return "ADVANCEMENT"
         case .xgRecap: return "XG RECAP"
         case .fantasyPickups: return "FANTASY PICKUPS"
+        case .twoStart: return "TWO-START"
+        case .closerWatch: return "CLOSER WATCH"
+        case .returnWatch: return "BACK SOON"
         case .teamRecord: return "RECORD"
         case .bullpenFatigue: return "BULLPEN"
         }
@@ -21685,6 +21694,9 @@ extension SignalKind {
         case "running_game": return .runningGame
         case "park_weather": return .parkWeather
         case "fantasy_pickups", "streamers", "pickups": return .fantasyPickups
+        case "two_start_week", "two_start": return .twoStart
+        case "closer_watch": return .closerWatch
+        case "return_watch": return .returnWatch
         default: return nil
         }
     }

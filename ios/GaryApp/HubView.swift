@@ -543,8 +543,10 @@ struct HubView: View {
         switch lane {
         case .regression:                            anchor = "regression"
         case .streak:                                anchor = "streaks"
-        case .fantasyPickups:                        anchor = "fantasy"
-        case .hot, .cold, .platoon, .hrThreat:       anchor = "bats"
+        case .fantasyPickups, .twoStart,
+             .closerWatch, .returnWatch:             anchor = "fantasy"
+        case .hot, .cold, .platoon:                  anchor = "bats"
+        case .hrThreat:                              anchor = HubView.hrThreatsLive ? "hr" : "bats"
         case .starterForm, .teamRecord,
              .bullpenFatigue, .ballpark:             anchor = sel == .wc ? "matchups" : "arms"
         case .situational:                           anchor = sel == .wc ? "matchups" : "arms"
@@ -790,14 +792,30 @@ struct HubView: View {
                         }
 
                         let fantasy = items(.fantasyPickups)
-                        if !fantasy.isEmpty {
+                        let twoStarts = items(.twoStart)
+                        let closers = items(.closerWatch)
+                        let returners = items(.returnWatch)
+                        if !fantasy.isEmpty || !twoStarts.isEmpty || !closers.isEmpty || !returners.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
-                                HubHead(title: "Fantasy Corner", count: fantasy.count)
-                                HubFantasyCorner(signals: fantasy) { s in
-                                    // The row's payoff is Gary's waiver read —
-                                    // open the insight, not the stat profile.
-                                    selectedSignal = s
+                                HubHead(title: "Fantasy Corner",
+                                        count: fantasy.count + twoStarts.count + closers.count + returners.count)
+                                if !fantasy.isEmpty {
+                                    HubFantasyCorner(signals: fantasy) { s in
+                                        // The row's payoff is Gary's waiver read —
+                                        // open the insight, not the stat profile.
+                                        selectedSignal = s
+                                    }
                                 }
+                                // Season-long lanes: the week's two-start arms, the
+                                // ninth-inning ladder, and the IL stash list. Each
+                                // self-hides on empty days (two-start fills late-week
+                                // as MLB posts probables).
+                                HubFantasyLane(title: "Two-Start Week", items: twoStarts,
+                                               stat: GaryColors.gold) { selectedSignal = $0 }
+                                HubFantasyLane(title: "Closer Watch", items: closers,
+                                               stat: HubPalette.green) { selectedSignal = $0 }
+                                HubFantasyLane(title: "Back Soon", items: returners,
+                                               stat: .white.opacity(0.75)) { selectedSignal = $0 }
                             }
                             .id("fantasy")
                         }
@@ -976,7 +994,10 @@ struct HubView: View {
                 out.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
             }
             if sel == .wc, !wcIntelSignals.isEmpty { out.append(("wcIntel", "Intel")) }
-            if !items(.fantasyPickups).isEmpty { out.append(("fantasy", "Fantasy")) }
+            if !items(.fantasyPickups).isEmpty || !items(.twoStart).isEmpty
+                || !items(.closerWatch).isEmpty || !items(.returnWatch).isEmpty {
+                out.append(("fantasy", "Fantasy Corner"))
+            }
         }
         if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
         if !selYdaySignals.isEmpty { out.append(("receipts", "Receipts")) }
@@ -2210,10 +2231,59 @@ fileprivate struct HubFantasyCorner: View {
     }
 }
 
+/// One Fantasy Corner lane (two-start / closer watch / back soon): a kicker,
+/// then plain headline-read-stat rows in the corner's one-column language.
+/// Renders nothing on empty days — the corner never shows an empty frame.
+fileprivate struct HubFantasyLane: View {
+    let title: String
+    let items: [Signal]
+    let stat: Color
+    let onTap: (Signal) -> Void
+
+    var body: some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HubKicker(text: title, size: 10, color: .white.opacity(0.62))
+                    .padding(.bottom, 4)
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
+                    Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
+                    if i < items.count - 1 { HubRule() }
+                }
+            }
+            .padding(.horizontal, 18)
+        }
+    }
+
+    @ViewBuilder private func row(_ s: Signal) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.headline)
+                    .font(HubFont.body(13.5, .semibold)).foregroundStyle(.white.opacity(0.95))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text(s.detail)
+                    .font(HubFont.body(11)).foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Text(s.value)
+                .font(HubFont.data(13)).foregroundStyle(stat)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
 // MARK: - Last Night board
 
 fileprivate struct HubNightBoard: View {
     let rows: [NightHighlightRow]
+    /// Tap-a-name → player card (only names with a resolved card).
+    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
+    var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
     @State private var tab = 0
     @State private var showAll = false
 
