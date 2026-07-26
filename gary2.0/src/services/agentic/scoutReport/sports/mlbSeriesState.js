@@ -139,11 +139,16 @@ export function computeMlbSeasonSeries(seasonIndex, homeBdlId, awayBdlId, homeTe
   meetings.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   let homeWins = 0;
   let awayWins = 0;
+  let venueHomeWins = 0;
+  let venueHomeLosses = 0;
   const results = meetings.map(g => {
     const tonightHomeHosted = g.homeId === homeBdlId;
     const homeTeamRuns = tonightHomeHosted ? g.homeRuns : g.awayRuns;
     const awayTeamRuns = tonightHomeHosted ? g.awayRuns : g.homeRuns;
     if (homeTeamRuns > awayTeamRuns) homeWins++; else awayWins++;
+    if (tonightHomeHosted) {
+      if (homeTeamRuns > awayTeamRuns) venueHomeWins++; else venueHomeLosses++;
+    }
     const d = toEtDate(g.date);
     return `${d}: ${homeTeam} ${homeTeamRuns}-${awayTeamRuns} ${tonightHomeHosted ? 'vs' : '@'} ${awayTeam}`;
   });
@@ -152,7 +157,10 @@ export function computeMlbSeasonSeries(seasonIndex, homeBdlId, awayBdlId, homeTe
     : awayWins > homeWins
       ? `${awayTeam} lead the season series ${awayWins}-${homeWins}`
       : `Season series tied ${homeWins}-${awayWins}`;
-  return { line: `${lead} (${meetings.length} meeting${meetings.length === 1 ? '' : 's'}).`, results };
+  const venueLine = (venueHomeWins + venueHomeLosses) > 0
+    ? ` At tonight's venue: ${homeTeam} ${venueHomeWins}-${venueHomeLosses} vs ${awayTeam}.`
+    : '';
+  return { line: `${lead} (${meetings.length} meeting${meetings.length === 1 ? '' : 's'}).${venueLine}`, results };
 }
 
 /**
