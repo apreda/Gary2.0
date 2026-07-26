@@ -71,6 +71,7 @@ struct Connection: Decodable {
     let line_val: Double?        // optional reference line for the bars
     let relevance_score: Double? // 0–100 ranking score
     let player_id: String?
+    let team_id: String?
     let game_id: String?
     let meta: SwapMeta?          // structured lane payload (beneficiary swap rows)
     let result: String?          // "hit" / "miss" / "push" / nil — graded the next morning

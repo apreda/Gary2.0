@@ -325,6 +325,16 @@ struct HubView: View {
     @State private var sel: HubLeagueSel = .mlb
     @State private var selectedSignal: Signal? = nil
     @State private var breakdownSignal: Signal? = nil
+    @State private var teamCardSignal: Signal? = nil
+
+    /// Routing law (founder, Jul 26): a player-backed signal ALWAYS opens the
+    /// player card; a team-backed one opens the team card; the small signal
+    /// pop-up survives only when neither identity exists.
+    private func openSignal(_ s: Signal) {
+        if s.playerId != nil { breakdownSignal = s }
+        else if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
+        else { selectedSignal = s }
+    }
     @State private var wcIntel: Signal? = nil
     /// Slate-strip tap → the in-place game sheet (everything the Hub knows
     /// about that matchup). Picks is a CTA inside it, not a forced jump.
@@ -722,7 +732,7 @@ struct HubView: View {
                         closers: items(.closerWatch),
                         returners: items(.returnWatch),
                         loaded: didLoad
-                    ) { s in selectedSignal = s }
+                    ) { s in openSignal(s) }
                 } else {
 
                 // ── ALL-STAR WEEK — one-off break surface (Jul 13-14 2026 only;
@@ -743,7 +753,7 @@ struct HubView: View {
                         streaks: streakRows,
                         night: nightRows,
                         nightLabel: nightLabel,
-                        onEdge: { s in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } }
+                        onEdge: { s in openSignal(s) }
                     )
                 } else if fetchErrored && leagueSignals.isEmpty && ydaySignals.isEmpty
                             && nightRows.isEmpty && streakRows.isEmpty {
@@ -760,7 +770,7 @@ struct HubView: View {
                     } else {
                         if let lead {
                             HubLeadStory(s: lead) { s in
-                                if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                openSignal(s)
                             }
                             .id("lead")
                         }
@@ -768,7 +778,7 @@ struct HubView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 HubHead(title: "The Best of the Board")
                                 HubBestOf(signals: bestOfBoard) { s in
-                                    if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    openSignal(s)
                                 }
                             }
                             .id("bestof")
@@ -777,7 +787,7 @@ struct HubView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 HubHead(title: "The Regression Board", sub: "ERA vs expected")
                                 HubRegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
-                                    if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    openSignal(s)
                                 }
                             }
                             .id("regression")
@@ -786,7 +796,7 @@ struct HubView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 HubHead(title: "The xG Board", sub: "goals vs expected")
                                 HubBeatList(rows: items(.xgRegression), open: true, kickerFor: kickerText,
-                                            onRow: { s in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } },
+                                            onRow: { s in openSignal(s) },
                                             onProfile: { breakdownSignal = $0 })
                             }
                             .id("xgboard")
@@ -811,7 +821,7 @@ struct HubView: View {
                                     rows: rows,
                                     openBeats: $openBeats,
                                     kickerFor: kickerText,
-                                    onRow: { s in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } },
+                                    onRow: { s in openSignal(s) },
                                     onProfile: { breakdownSignal = $0 }
                                 )
                                 .id(beat.anchor)
@@ -843,7 +853,7 @@ struct HubView: View {
                                 rows: overflow,
                                 openBeats: $openBeats,
                                 kickerFor: kickerText,
-                                onRow: { s in if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s } },
+                                onRow: { s in openSignal(s) },
                                 onProfile: { breakdownSignal = $0 }
                             )
                             .id("more")
@@ -906,6 +916,31 @@ struct HubView: View {
                 }
                 return
             }
+            // "hubscope fantasy|hub" — flip the header toggle (sim QA).
+            if verb == "hubscope" {
+                hubScope = arg.lowercased() == "fantasy" ? "fantasy" : "hub"
+                return
+            }
+            // "hubtap <lane> <i>" — run the EXACT tap router a row's button
+            // calls (openSignal), so sim QA verifies the real routing law:
+            // player-backed → player card, team-backed → team card.
+            if verb == "hubtap" {
+                let parts = arg.split(separator: " ")
+                let lane = parts.first.map(String.init)?.lowercased() ?? ""
+                let idx = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
+                let pool: [Signal]
+                switch lane {
+                case "fantasy": pool = items(.fantasyPickups)
+                case "cut": pool = items(.cutList)
+                case "twostart": pool = items(.twoStart)
+                case "closer": pool = items(.closerWatch)
+                case "return": pool = items(.returnWatch)
+                case "h2h": pool = items(.h2h)
+                default: pool = leagueSignals
+                }
+                if pool.indices.contains(idx) { openSignal(pool[idx]) }
+                return
+            }
             guard verb == "hub" else { return }
             switch arg.lowercased() {
             case "mlb": withAnimation { sel = .mlb }
@@ -929,6 +964,20 @@ struct HubView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: selectedSignal?.id)
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+        .sheet(item: $teamCardSignal) { s in
+            HubTeamCardSheet(
+                signal: s,
+                related: leagueSignals.filter { r in
+                    r.id != s.id && r.teamId != nil && r.teamId == s.teamId
+                },
+                onSignal: { next in
+                    teamCardSignal = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openSignal(next) }
+                }
+            )
+        }
+        // Tap-a-name → the same breakdown card, prefetched by name.
+        .sheet(item: $namedCard) { PlayerInsightSheet(signal: nil, prefetched: $0) }
         // Centered pop-up, not a pull-up (founder, Jul 6: no bottom sheets
         // on the game widget) — dim + scale, tap outside to close.
         .overlay {
@@ -2210,10 +2259,12 @@ fileprivate struct FantasyCard: View {
         switch m.kind {
         case "fantasy_pickup":
             if m.role == "SP" {
+                // Matchup leads, numbers follow — the same construction the
+                // bats rows use (founder, Jul 26: arms mirror bats).
+                if let o = m.opp, !o.isEmpty { bits.append("vs \(o)") }
                 if let x = m.xera { bits.append("\(x) xERA") }
                 if let k = m.k9 { bits.append("\(k) K/9") }
                 if let w = m.whip { bits.append("\(w) WHIP") }
-                if let o = m.opp, !o.isEmpty { bits.append("vs \(o)") }
             } else {
                 if let o = m.ops { bits.append(String(format: "%.3f OPS", o)) }
                 if let a = m.avg { bits.append(String(format: "%.3f AVG", a)) }
@@ -2251,6 +2302,9 @@ fileprivate struct FantasyCard: View {
     var body: some View {
         Button { onTap(s) } label: {
             VStack(alignment: .leading, spacing: 6) {
+                // No stat anchors the card (founder, Jul 26): the TAKE is the
+                // anchor — the tier word rides the right edge, the numbers
+                // live quietly in the strip, and the read carries the case.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(s.headline)
                         .font(HubFont.body(14.5, .bold)).foregroundStyle(.white.opacity(0.95))
@@ -2264,24 +2318,19 @@ fileprivate struct FantasyCard: View {
                             .font(HubFont.data(9, .semibold)).foregroundStyle(.white.opacity(0.4))
                     }
                     Spacer(minLength: 8)
-                    Text(s.value)
-                        .font(HubFont.data(15)).foregroundStyle(accent)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     if let tier = tierWord {
                         Text(tier.0)
-                            .font(HubFont.data(9, .bold)).tracking(0.9)
+                            .font(HubFont.data(10, .bold)).tracking(0.9)
                             .foregroundStyle(tier.1)
                     }
-                    if let strip = statStrip {
-                        Text(strip)
-                            .font(HubFont.data(10, .semibold)).foregroundStyle(.white.opacity(0.55))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                }
+
+                if let strip = statStrip {
+                    Text(strip)
+                        .font(HubFont.data(10, .semibold)).foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // Gary's case in full — the product. Verdict pulled onto its
@@ -2424,6 +2473,109 @@ fileprivate struct FantasyCornerPage: View {
                 }
             }
         }
+    }
+}
+
+/// The TEAM CARD (founder, Jul 26): tapping a team name anywhere in the Hub
+/// lands here — the tapped signal rides the top the same way a player signal
+/// rides the player card, then everything else the board knows about this
+/// team today, each row routing onward by the same law.
+fileprivate struct HubTeamCardSheet: View {
+    let signal: Signal
+    let related: [Signal]
+    let onSignal: (Signal) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private var teamName: String {
+        if let h = signal.h2h, let d = h.dominant_name, !d.isEmpty { return d }
+        if let t = signal.fantasy?.team, !t.isEmpty { return t }
+        if let t = signal.swap?.team, !t.isEmpty { return t }
+        return signal.headline
+    }
+
+    var body: some View {
+        ZStack {
+            Color(hex: "#151312").ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HubKicker(text: "TEAM", size: 10, color: GaryColors.gold)
+                            Text(teamName.uppercased())
+                                .font(HubFont.display(28)).tracking(0.5)
+                                .foregroundStyle(GaryColors.warmWhite)
+                            if !signal.game.isEmpty {
+                                Text(signal.game)
+                                    .font(HubFont.data(11, .semibold))
+                                    .foregroundStyle(.white.opacity(0.55))
+                            }
+                        }
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.6))
+                                .frame(width: 30, height: 30)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // The tapped signal — same treatment as the player card's
+                    // signal banner: the edge that brought you here, in full.
+                    VStack(alignment: .leading, spacing: 6) {
+                        HubKicker(text: signal.kind.chip, size: 10, color: GaryColors.gold)
+                        Text(signal.headline)
+                            .font(HubFont.body(15, .bold)).foregroundStyle(.white.opacity(0.95))
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if !signal.detail.isEmpty {
+                            Text(signal.detail)
+                                .font(HubFont.body(12.5)).foregroundStyle(.white.opacity(0.75))
+                                .lineSpacing(2.5)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.04)))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.gold.opacity(0.35), lineWidth: 1))
+
+                    if !related.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HubKicker(text: "MORE ON THIS TEAM TODAY", size: 10, color: .white.opacity(0.62))
+                                .padding(.bottom, 4)
+                            ForEach(Array(related.enumerated()), id: \.element.id) { i, r in
+                                Button { onSignal(r) } label: {
+                                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HubKicker(text: r.kind.chip, size: 8.5, color: .white.opacity(0.45))
+                                            Text(r.headline)
+                                                .font(HubFont.body(13, .semibold))
+                                                .foregroundStyle(.white.opacity(0.9))
+                                                .multilineTextAlignment(.leading)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                        Spacer(minLength: 8)
+                                        Text(r.value)
+                                            .font(HubFont.data(12)).foregroundStyle(.white.opacity(0.6))
+                                            .lineLimit(1).minimumScaleFactor(0.7)
+                                    }
+                                    .padding(.vertical, 9)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                if i < related.count - 1 { HubRule() }
+                            }
+                        }
+                    }
+                }
+                .padding(18)
+                .padding(.bottom, 30)
+            }
+        }
+        .presentationDragIndicator(.visible)
     }
 }
 

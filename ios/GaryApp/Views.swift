@@ -18461,6 +18461,10 @@ struct Signal: Identifiable {
     /// BDL player id when the edge is player-backed — unlocks the full
     /// Player Insights breakdown from the card back.
     var playerId: String? = nil
+    /// BDL team id when the edge is team-backed — routes to the team card
+    /// (routing law, founder Jul 26: player tap = player card, team tap =
+    /// team card; the small pop-up only when neither exists).
+    var teamId: String? = nil
     /// "hit" / "miss" / "push" once graded (the Hub's morning receipts view).
     var result: String? = nil
     /// Grader's one-liner ("2-for-4, double") — the receipts row subline.
@@ -21749,6 +21753,7 @@ extension Connection {
             spark: spark ?? [],
             lineVal: line_val,
             playerId: player_id,
+            teamId: team_id,
             result: result,
             resultNote: result_note,
             swap: (meta?.kind == "swap") ? meta : nil,

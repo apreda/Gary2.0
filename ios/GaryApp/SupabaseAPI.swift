@@ -985,7 +985,7 @@ enum SupabaseAPI {
     /// nothing exists; the hub renders an honest empty state.
     static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
         let url = buildURL(table: "insight_connections", query: [
-            URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,game_id,meta,result,result_note"),
+            URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,team_id,game_id,meta,result,result_note"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "league", value: "eq.\(league)"),
             URLQueryItem(name: "order", value: "relevance_score.desc")
