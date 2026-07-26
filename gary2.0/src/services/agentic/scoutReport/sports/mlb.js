@@ -574,6 +574,23 @@ export async function buildMlbScoutReport(game, options = {}) {
   // L1-L4: INDIVIDUAL GAME RECAPS (what actually happened — narrative box scores)
   // L5/L10: STATISTICAL AGGREGATES (trend lines)
   // ═══════════════════════════════════════════════════════════════════
+  // THE TAPE prefetch: scoring flows for the recent games shown below.
+  // Cached-forever per game; a failed fetch just omits that game's flow line.
+  const scoringFlowById = new Map();
+  {
+    const wanted = new Set();
+    for (const g of [...(homeRecentGames || []).slice(-4), ...(awayRecentGames || []).slice(-4)]) {
+      const id = resolveBdlId(g, g && (homeRecentGames || []).includes(g) ? homeBdlGames : awayBdlGames) ?? resolveBdlId(g, homeBdlGames) ?? resolveBdlId(g, awayBdlGames);
+      if (id != null) wanted.add(id);
+    }
+    await Promise.all([...wanted].map(async (id) => {
+      try {
+        const flow = await ballDontLieService.getMlbGameScoringFlow(id);
+        if (flow && flow.length) scoringFlowById.set(id, flow);
+      } catch { /* tape optional */ }
+    }));
+  }
+
   let recentPerformanceSection = '';
   {
     const lastWord = (name) => name.toLowerCase().split(' ').pop();
@@ -632,6 +649,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (spLine) recap += `\n    ${spLine}`;
       if (bullpenLines.length) recap += `\n    Bullpen: ${bullpenLines.join(' | ')}`;
       if (keyHitters.length) recap += `\n    Batting: ${keyHitters.join(' | ')}`;
+      // THE TAPE (Jul 26): how the runs actually arrived — the game's scoring
+      // flow from play-by-play, inning by inning. Facts verbatim from the feed.
+      const flow = bdlId != null ? scoringFlowById.get(bdlId) : null;
+      if (flow && flow.length) recap += `\n    How it went: ${flow.slice(0, 14).join(' · ')}`;
       return recap;
     };
 
