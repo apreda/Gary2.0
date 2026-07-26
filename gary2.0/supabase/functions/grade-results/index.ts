@@ -30,6 +30,7 @@
 // unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
 // graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
 import { gradeGame, recapIsStale } from "./grading.ts";
+import { settleUserBetsForDates } from "./userbets.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -464,6 +465,8 @@ Deno.serve(async (req) => {
   // Per-run evidence caches shared across recaps (BDL box score + prop_results).
   const statsCache = new Map<string, any[]>();
   const propsCache = new Map<string, any[]>();
+  // Your Book: every pick graded this run, so user tail/fades settle after the loop.
+  const gradedForUserBets: Array<{ game_date: string; pick_text: string; result: string }> = [];
 
   // Pull MLB games once (final-status only matters at grade time).
   // MLB games are ET-filtered per date: BDL indexes by UTC instant, so a late-ET game
@@ -542,6 +545,7 @@ Deno.serve(async (req) => {
         matchup: `${pick.awayTeam} @ ${pick.homeTeam}`, is_winners_pick: isWinner(pick),
       });
       stats[outcome]++;
+      if (outcome !== "fail") gradedForUserBets.push({ game_date: date, pick_text: pick.pick, result });
 
       // GROUNDED betting recap (game_recaps) — fired the moment the grade lands
       // so Home's headline carousel renders without waiting for the next local
@@ -569,6 +573,15 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, dates, ...stats }),
+  // Your Book: settle tail/fade rows against this run's grades; never fatal —
+  // a settle failure can't stall the grader.
+  let userBets = { settled: 0, voided: 0, failed: 0 };
+  try {
+    userBets = await settleUserBetsForDates(dates, gradedForUserBets, SUPABASE_URL, sbHeaders);
+  } catch (e) {
+    console.warn(`[UserBets] settle sweep failed: ${(e as Error).message}`);
+  }
+
+  return new Response(JSON.stringify({ ok: true, dates, ...stats, user_bets: userBets }),
     { headers: { "Content-Type": "application/json" } });
 });
