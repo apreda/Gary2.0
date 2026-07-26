@@ -32,6 +32,7 @@ struct UserBet: Codable, Identifiable {
     let odds_estimated: Bool?
     let stake_units: Double
     let gary_confidence: Double?
+    let streak_pick: Bool?
     let status: String          // pending | won | lost | push | void
     let units_net: Double?
     let lock_at: String?
@@ -193,10 +194,10 @@ enum UserBookAPI {
 
     private struct PostgrestError: Decodable { let message: String? }
 
-    @MainActor static func placeBet(gameDate: String, pickId: String?, pickText: String, kind: String, stake: Double) async throws -> UserBet {
+    @MainActor static func placeBet(gameDate: String, pickId: String?, pickText: String, kind: String, stake: Double, streak: Bool = false) async throws -> UserBet {
         let url = rest.appendingPathComponent("rpc/place_user_bet")
         var payload: [String: Any] = ["p_game_date": gameDate, "p_pick_text": pickText,
-                                      "p_kind": kind, "p_stake": stake]
+                                      "p_kind": kind, "p_stake": stake, "p_streak": streak]
         payload["p_pick_id"] = pickId ?? NSNull()
         let body = try JSONSerialization.data(withJSONObject: payload)
         let data = try await run(try authedRequest(url, method: "POST", body: body))
@@ -220,6 +221,23 @@ enum UserBookAPI {
         guard let url = comps.url, let req = try? authedRequest(url) else { return [] }
         guard let data = try? await run(req) else { return [] }
         return (try? JSONDecoder().decode([UserBet].self, from: data)) ?? []
+    }
+
+    struct UserStreak: Codable {
+        let current: Int
+        let best: Int
+        let last_counted_date: String?
+        let last_result: String?
+    }
+
+    /// The signed-in user's streak row (owner-only RLS). Nil until the first
+    /// streak play settles.
+    @MainActor static func fetchMyStreak() async -> UserStreak? {
+        guard var comps = URLComponents(url: rest.appendingPathComponent("user_streaks"), resolvingAgainstBaseURL: false) else { return nil }
+        comps.queryItems = [URLQueryItem(name: "select", value: "current,best,last_counted_date,last_result")]
+        guard let url = comps.url, let req = try? authedRequest(url) else { return nil }
+        guard let data = try? await run(req) else { return nil }
+        return (try? JSONDecoder().decode([UserStreak].self, from: data))?.first
     }
 
     struct ManualBetDraft {
@@ -316,6 +334,7 @@ struct TailFadeRow: View {
     @State private var showAuth = false
     @State private var loaded = false
     @State private var riders: (tails: Int, fades: Int)? = nil
+    @State private var streakOn = false
 
     /// "3 riding · 1 fading" — shown only once real bodies are on the pick.
     private var ridersLine: String? {
@@ -400,6 +419,16 @@ struct TailFadeRow: View {
                     .foregroundStyle(.white.opacity(0.85))
             }
             .fixedSize()
+            // One play a day rides the streak — claiming it here releases any
+            // other claim the user holds for the date (server-enforced).
+            Button { streakOn.toggle() } label: {
+                Text("STREAK")
+                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                    .foregroundStyle(streakOn ? .black : .white.opacity(0.55))
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(Capsule().fill(streakOn ? Color(hex: "#E5844B") : Color.white.opacity(0.08)))
+            }
+            .buttonStyle(.plain)
             Button { place(side) } label: {
                 Text("Lock it in")
                     .font(GaryFonts.mono(11, bold: true))
@@ -427,6 +456,11 @@ struct TailFadeRow: View {
                 .foregroundStyle(tint)
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .background(RoundedRectangle(cornerRadius: 6).fill(tint.opacity(0.12)))
+            if bet.streak_pick == true {
+                Text("STREAK")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(Color(hex: "#E5844B"))
+            }
             if bet.status != "pending" {
                 resultTag(bet)
             } else if !locked {
@@ -466,7 +500,7 @@ struct TailFadeRow: View {
             do {
                 mine = try await UserBookAPI.placeBet(
                     gameDate: dateStr, pickId: pick.pick_id,
-                    pickText: pick.pick ?? "", kind: side, stake: stake)
+                    pickText: pick.pick ?? "", kind: side, stake: stake, streak: streakOn)
                 arming = nil
             } catch {
                 errorText = error.localizedDescription
@@ -509,6 +543,7 @@ struct UserBookSection: View {
     @State private var showUnitSheet = false
     @AppStorage("userUnitDollars") private var userUnitDollars = 0.0
     @State private var shareImage: UserBookShareImage? = nil
+    @State private var streak: UserBookAPI.UserStreak? = nil
 
     private var withGary: [UserBet] { bets.filter { $0.isVerified } }
     private var yourPlays: [UserBet] { bets.filter { $0.kind == "manual" } }
@@ -537,7 +572,12 @@ struct UserBookSection: View {
                 if withGary.contains(where: { !$0.isPending }) {
                     Button {
                         let g = record(withGary.filter { !$0.isPending })
-                        if let img = renderRideShareImage(record: g, streakText: currentStreakText(withGary)) {
+                        // Server streak leads the card when it's alive; the
+                        // ledger heater line is the fallback flavor.
+                        let line = (streak?.current ?? 0) >= 2
+                            ? "Day \(streak!.current) of the streak"
+                            : currentStreakText(withGary)
+                        if let img = renderRideShareImage(record: g, streakText: line) {
                             shareImage = UserBookShareImage(image: img)
                         }
                     } label: {
@@ -585,6 +625,7 @@ struct UserBookSection: View {
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
             } else {
+                if expanded { streakCrown }
                 ledgerHeader
                 slipsList
             }
@@ -598,6 +639,7 @@ struct UserBookSection: View {
             // Day-cache law: a cancelled fetch returns [] — never latch it
             // over data we already have.
             if !rows.isEmpty || bets.isEmpty { bets = rows }
+            if expanded, let s = await UserBookAPI.fetchMyStreak() { streak = s }
             loading = false
             // First landing on YOUR page without a unit size: ask right here,
             // inline — never send anyone to Settings (founder, Jul 26).
@@ -614,6 +656,43 @@ struct UserBookSection: View {
         .sheet(item: $shareImage) { item in
             UserBookShareSheet(items: [item.image])
         }
+    }
+
+    /// THE STREAK crown — the one-play-a-day game. Server-written numbers only.
+    private var streakCrown: some View {
+        let todayPlay = bets.first { $0.streak_pick == true && $0.isPending }
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("THE STREAK")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(Color(hex: "#E5844B"))
+                Text(streakStateLine(todayPlay: todayPlay))
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 0) {
+                Text("\(streak?.current ?? 0)")
+                    .font(GaryFonts.text(30, .heavy))
+                    .foregroundStyle((streak?.current ?? 0) > 0 ? Color(hex: "#E5844B") : .white.opacity(0.45))
+                Text("BEST \(streak?.best ?? 0)")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "#E5844B").opacity(0.07)))
+    }
+
+    private func streakStateLine(todayPlay: UserBet?) -> String {
+        if let p = todayPlay {
+            return "Tonight's streak play is set: \(p.pick_text)"
+        }
+        if (streak?.current ?? 0) > 0 {
+            return "One play a day keeps it alive. Pick tonight's from any card."
+        }
+        return "One play a day. Win and it grows, lose and it resets. Mark any tail or fade as your streak play."
     }
 
     private func currentStreakText(_ rows: [UserBet]) -> String? {
@@ -763,7 +842,7 @@ private struct UserBetSlipRow: View {
                         matchup: bet.matchup, player_name: bet.player_name, prop_type: bet.prop_type,
                         description: bet.description, odds_american: bet.odds_american,
                         odds_estimated: bet.odds_estimated, stake_units: bet.stake_units,
-                        gary_confidence: bet.gary_confidence,
+                        gary_confidence: bet.gary_confidence, streak_pick: bet.streak_pick,
                         status: status, units_net: units, lock_at: bet.lock_at,
                         placed_at: bet.placed_at, graded_by: "user"))
                 }
