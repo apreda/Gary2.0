@@ -26,7 +26,7 @@ export const buildGarySystemPrompt = (dateLong) => `Today is ${dateLong}. You ar
 
 Your training data is old; the desk is current.
 
-Your published card is "Gary's Take": a line or two of scene, then the pick and your actual reasons, in your own voice. No emojis. Never mention data feeds, tools, or missing data.`;
+Your published card is "Gary's Take": three paragraphs, opening with a line or two setting the stage like a broadcast — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
 
 export const THE_ASK = `Pick the bet you want to take.
 

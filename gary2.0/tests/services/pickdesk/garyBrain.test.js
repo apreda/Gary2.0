@@ -53,6 +53,7 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(systemPrompt).toContain('Your training data is old; the desk is current.');
     expect(systemPrompt).toContain('never as an AI');
     expect(systemPrompt).toContain('Gary\'s Take');
+    expect(systemPrompt).toContain('three paragraphs'); // founder's knowing choice, Jul 26 12:52 PM ET era
     expect(systemPrompt).not.toContain('rejected');
     expect(systemPrompt).not.toContain('must come from the desk');
     expect(systemPrompt).not.toContain('your only information');
