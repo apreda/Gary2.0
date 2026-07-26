@@ -657,10 +657,35 @@ struct HubView: View {
         return leagueSignals.filter { kinds.contains($0.kind) && $0.confirmedXI == nil && $0.reg == nil }
     }
 
+    /// "hub" | "fantasy" — which desk the page shows (header toggle, persisted).
+    /// Fantasy is its OWN page (founder, Jul 26): never a section in the feed.
+    @AppStorage("hubScope") private var hubScope = "hub"
+
+    private var hubScopeToggle: some View {
+        HStack(spacing: 0) {
+            hubScopeChip("THE HUB", isOn: hubScope != "fantasy") { hubScope = "hub" }
+            hubScopeChip("FANTASY", isOn: hubScope == "fantasy") { hubScope = "fantasy" }
+        }
+        .background(Capsule().stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
+        .padding(.horizontal, 18)
+    }
+
+    private func hubScopeChip(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(label)
+                .font(HubFont.data(10, .bold)).tracking(1)
+                .foregroundStyle(isOn ? .black : .white.opacity(0.6))
+                .padding(.horizontal, 14).padding(.vertical, 6)
+                .background(Capsule().fill(isOn ? GaryColors.gold : .clear))
+        }
+        .buttonStyle(.plain)
+    }
+
     /// Everything not already on the page — a safety net so a future backend
     /// lane always renders somewhere instead of vanishing.
     private var overflow: [Signal] {
-        var placed: Set<SignalKind> = [.regression, .fantasyPickups, .streak]
+        var placed: Set<SignalKind> = [.regression, .fantasyPickups, .streak,
+                                       .twoStart, .closerWatch, .returnWatch]
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
@@ -682,6 +707,18 @@ struct HubView: View {
                     searchFocused: $searchFocused
                 )
                 .id("top")
+
+                hubScopeToggle
+
+                if hubScope == "fantasy" {
+                    FantasyCornerPage(
+                        pickups: items(.fantasyPickups),
+                        twoStarts: items(.twoStart),
+                        closers: items(.closerWatch),
+                        returners: items(.returnWatch),
+                        loaded: didLoad
+                    ) { s in selectedSignal = s }
+                } else {
 
                 // ── ALL-STAR WEEK — one-off break surface (Jul 13-14 2026 only;
                 // the date gate self-retires it). Founder call Jul 13: the break
@@ -791,34 +828,8 @@ struct HubView: View {
                             .id("wcIntel")
                         }
 
-                        let fantasy = items(.fantasyPickups)
-                        let twoStarts = items(.twoStart)
-                        let closers = items(.closerWatch)
-                        let returners = items(.returnWatch)
-                        if !fantasy.isEmpty || !twoStarts.isEmpty || !closers.isEmpty || !returners.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HubHead(title: "Fantasy Corner",
-                                        count: fantasy.count + twoStarts.count + closers.count + returners.count)
-                                if !fantasy.isEmpty {
-                                    HubFantasyCorner(signals: fantasy) { s in
-                                        // The row's payoff is Gary's waiver read —
-                                        // open the insight, not the stat profile.
-                                        selectedSignal = s
-                                    }
-                                }
-                                // Season-long lanes: the week's two-start arms, the
-                                // ninth-inning ladder, and the IL stash list. Each
-                                // self-hides on empty days (two-start fills late-week
-                                // as MLB posts probables).
-                                HubFantasyLane(title: "Two-Start Week", items: twoStarts,
-                                               stat: GaryColors.gold) { selectedSignal = $0 }
-                                HubFantasyLane(title: "Closer Watch", items: closers,
-                                               stat: HubPalette.green) { selectedSignal = $0 }
-                                HubFantasyLane(title: "Back Soon", items: returners,
-                                               stat: .white.opacity(0.75)) { selectedSignal = $0 }
-                            }
-                            .id("fantasy")
-                        }
+                        // Fantasy lives on its OWN page behind the header toggle
+                        // (founder, Jul 26) — never as a section in this feed.
 
                         if !overflow.isEmpty {
                             HubBeatSection(
@@ -857,7 +868,7 @@ struct HubView: View {
             .task { if !didLoad { await load() } }
         }
         .overlay(alignment: .bottomTrailing) {
-            if !searchOpen, didLoad, !jumpItems.isEmpty {
+            if !searchOpen, didLoad, !jumpItems.isEmpty, hubScope != "fantasy" {
                 HubSectionNav(items: jumpItems, open: $sectionNavOpen) { anchor in
                     withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
                 }
@@ -994,10 +1005,6 @@ struct HubView: View {
                 out.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
             }
             if sel == .wc, !wcIntelSignals.isEmpty { out.append(("wcIntel", "Intel")) }
-            if !items(.fantasyPickups).isEmpty || !items(.twoStart).isEmpty
-                || !items(.closerWatch).isEmpty || !items(.returnWatch).isEmpty {
-                out.append(("fantasy", "Fantasy Corner"))
-            }
         }
         if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
         if !selYdaySignals.isEmpty { out.append(("receipts", "Receipts")) }
@@ -2167,6 +2174,8 @@ fileprivate struct HubDotsRow: View {
 
 fileprivate struct HubFantasyCorner: View {
     let signals: [Signal]
+    /// The dedicated Fantasy page shows the complete waiver-column read.
+    var fullReads: Bool = false
     let onTap: (Signal) -> Void
 
     private var pitchers: [Signal] { signals.filter { ($0.fantasy?.role ?? "") == "SP" } }
@@ -2215,10 +2224,13 @@ fileprivate struct HubFantasyCorner: View {
                                              : .white.opacity(0.45))
                     }
                 }
-                Text(s.fantasy?.reason ?? s.detail)
-                    .font(HubFont.body(11)).foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
+                Text(fullReads ? s.detail : (s.fantasy?.reason ?? s.detail))
+                    .font(HubFont.body(fullReads ? 12.5 : 11))
+                    .foregroundStyle(.white.opacity(fullReads ? 0.72 : 0.62))
+                    .lineLimit(fullReads ? nil : 1)
+                    .lineSpacing(fullReads ? 2.5 : 0)
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: fullReads)
             }
             Spacer(minLength: 8)
             Text(s.value)
@@ -2234,10 +2246,12 @@ fileprivate struct HubFantasyCorner: View {
 /// One Fantasy Corner lane (two-start / closer watch / back soon): a kicker,
 /// then plain headline-read-stat rows in the corner's one-column language.
 /// Renders nothing on empty days — the corner never shows an empty frame.
+/// `fullReads` (the dedicated Fantasy page) shows the whole analyst read.
 fileprivate struct HubFantasyLane: View {
     let title: String
     let items: [Signal]
     let stat: Color
+    var fullReads: Bool = false
     let onTap: (Signal) -> Void
 
     var body: some View {
@@ -2261,8 +2275,10 @@ fileprivate struct HubFantasyLane: View {
                     .font(HubFont.body(13.5, .semibold)).foregroundStyle(.white.opacity(0.95))
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Text(s.detail)
-                    .font(HubFont.body(11)).foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(2)
+                    .font(HubFont.body(fullReads ? 12.5 : 11))
+                    .foregroundStyle(.white.opacity(fullReads ? 0.72 : 0.62))
+                    .lineLimit(fullReads ? nil : 2)
+                    .lineSpacing(fullReads ? 2.5 : 0)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -2271,9 +2287,99 @@ fileprivate struct HubFantasyLane: View {
                 .font(HubFont.data(13)).foregroundStyle(stat)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, fullReads ? 10 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Fantasy Corner (the dedicated page behind the header toggle)
+
+/// The season-long manager's daily desk — a FULL page, not a feed section
+/// (founder, Jul 26): the waiver wire with complete reads, the week's
+/// two-start arms, the ninth-inning ladder, and the IL stash list. Every
+/// lane is honest about its data: a quiet lane says why it's quiet.
+fileprivate struct FantasyCornerPage: View {
+    let pickups: [Signal]
+    let twoStarts: [Signal]
+    let closers: [Signal]
+    let returners: [Signal]
+    let loaded: Bool
+    let onTap: (Signal) -> Void
+
+    private var total: Int { pickups.count + twoStarts.count + closers.count + returners.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            // Masthead: what this desk is, refreshed with the pipeline.
+            VStack(alignment: .leading, spacing: 6) {
+                (Text("FANTASY ").foregroundColor(GaryColors.warmWhite)
+                    + Text("CORNER").foregroundColor(GaryColors.gold))
+                    .font(HubFont.display(26))
+                    .tracking(0.5)
+                Text("The season-long desk — waivers, two-start arms, saves, and returns. Refreshed through the day with the board.")
+                    .font(HubFont.body(12.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 18)
+
+            if !loaded {
+                HStack {
+                    Spacer()
+                    ProgressView().tint(.white.opacity(0.4))
+                    Spacer()
+                }
+                .padding(.vertical, 40)
+            } else if total == 0 {
+                Text("The desk sets up with the morning run — check back once today's board is in.")
+                    .font(HubFont.body(13))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.horizontal, 18)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // THE WAIVER WIRE — the lead: today's adds with the full case.
+                if !pickups.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "The Waiver Wire", count: pickups.count)
+                        HubFantasyCorner(signals: pickups, fullReads: true, onTap: onTap)
+                    }
+                }
+
+                // TWO-START WEEK — fills as MLB posts probables; says so when thin.
+                VStack(alignment: .leading, spacing: 12) {
+                    HubHead(title: "Two-Start Week", count: twoStarts.count)
+                    if twoStarts.isEmpty {
+                        Text("MLB posts probables only a few days out, so next week's two-start arms land here late in the week. Nothing is listed twice yet.")
+                            .font(HubFont.body(12.5))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.horizontal, 18)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        HubFantasyLane(title: "Both turns, posted by MLB", items: twoStarts,
+                                       stat: GaryColors.gold, fullReads: true, onTap: onTap)
+                    }
+                }
+
+                // CLOSER WATCH — tonight's ninth-inning ladder.
+                if !closers.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "Closer Watch", count: closers.count)
+                        HubFantasyLane(title: "Who gets the ninth tonight", items: closers,
+                                       stat: HubPalette.green, fullReads: true, onTap: onTap)
+                    }
+                }
+
+                // BACK SOON — the stash list.
+                if !returners.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "Back Soon", count: returners.count)
+                        HubFantasyLane(title: "Listed returns inside ten days", items: returners,
+                                       stat: .white.opacity(0.75), fullReads: true, onTap: onTap)
+                    }
+                }
+            }
+        }
     }
 }
 
