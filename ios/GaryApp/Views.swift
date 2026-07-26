@@ -4537,9 +4537,12 @@ struct HomeMarqueeTracker: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if !rail.isEmpty || tomorrowTease != nil {
-                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
-                    .padding(.horizontal, 12)
+                // C1's dark crawl band: the slate runs on its own darker
+                // surface under a gold rule, so it reads as the wire and the
+                // hero keeps the room.
+                Rectangle().fill(GaryColors.gold.opacity(0.3)).frame(height: 1)
                 ribbonView
+                    .background(Color(hex: "#0F0E10"))
             }
         }
         .background(
@@ -4623,9 +4626,11 @@ struct HomeMarqueeTracker: View {
         // is the card's COMPOSITE surface (warmWhite 3% over the page), not
         // the raw page tone — a mismatched fade is an invisible fade.
         .overlay(alignment: .trailing) {
-            LinearGradient(colors: [Color(hex: "#1A1817").opacity(0), Color(hex: "#1A1817")],
+            LinearGradient(stops: [.init(color: Color(hex: "#0F0E10").opacity(0), location: 0),
+                                   .init(color: Color(hex: "#0F0E10"), location: 0.55),
+                                   .init(color: Color(hex: "#0F0E10"), location: 1)],
                            startPoint: .leading, endPoint: .trailing)
-                .frame(width: 48)
+                .frame(width: 64)
                 .allowsHitTesting(false)
         }
     }
@@ -4656,10 +4661,12 @@ struct HomeMarqueeTracker: View {
         }
     }
 
-    // The hero face — ALWAYS the countdown to the next big one (founder,
-    // Jul 7): the live sweat lives on the sheet's LIVE zone and the ribbon.
+    // The hero face — C1 (founder-picked Jul 26): the matchup as two Bebas
+    // wire lines with the market inline, and the clock ALONE in its own
+    // right-hand column — a simple timer to first pitch, nothing else.
+    // Falls back to the single-line title when the market line can't split.
     @ViewBuilder private func heroView(_ e: Entry) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 BroadcastBar(height: 11)
                 Text("UP NEXT")
@@ -4667,55 +4674,98 @@ struct HomeMarqueeTracker: View {
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if e.pickLine == nil, let pending = e.pendingLine {
-                    // The pick-drop clock rides the header's right end, in the
-                    // slot's own voice — one structured row, paired with UP
-                    // NEXT on the left (founder, Jul 12; pitchers retired).
+                    // The pick-drop clock rides the header's right end.
                     Text(pending.uppercased())
                         .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
                         .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
-            Text(e.title)
-                .font(GaryFonts.display(40))
-                .foregroundStyle(GaryColors.warmWhite)
-                .lineLimit(1).minimumScaleFactor(0.7)
-            if let ct = e.commence, let d = parseISO8601(ct) {
-                HomeCountdownText(target: d)
-            }
-            // Bottom row: Gary's line left, the hard start time right — the
-            // chevron retired; the whole card is the tap (founder, Jul 7).
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if let pick = e.pickLine {
-                    // ONE pick per line — the words always fit; the design
-                    // never falls back to an ellipsis (founder, Jul 7).
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(pick.components(separatedBy: "  ·  "), id: \.self) { line in
-                            Text(line)
-                                .font(GaryFonts.mono(13.5, bold: true))
-                                .foregroundStyle(GaryColors.gold)
-                                .lineLimit(1).minimumScaleFactor(0.75)
+            .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 8)
+
+            let sides = wireSides(e)
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let s = sides {
+                        wireLine(name: s.away.name, price: s.away.price, home: false)
+                        wireLine(name: s.home.name, price: s.home.price, home: true)
+                    } else {
+                        Text(e.title)
+                            .font(GaryFonts.display(40))
+                            .foregroundStyle(GaryColors.warmWhite)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    Group {
+                        if let pick = e.pickLine {
+                            // ONE pick per line — the words always fit; the
+                            // design never falls back to an ellipsis.
+                            VStack(alignment: .leading, spacing: 3) {
+                                ForEach(pick.components(separatedBy: "  ·  "), id: \.self) { line in
+                                    Text(line)
+                                        .font(GaryFonts.mono(12.5, bold: true))
+                                        .foregroundStyle(GaryColors.gold)
+                                        .lineLimit(1).minimumScaleFactor(0.75)
+                                }
+                            }
+                        } else if let total = sides?.total {
+                            Text(total.uppercased())
+                                .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
+                                .foregroundStyle(.white.opacity(0.38))
                         }
                     }
+                    .padding(.top, 7)
                 }
-                if e.pickLine == nil, let ol = e.oddsLine {
-                    Text(ol)
-                        .font(GaryFonts.mono(11.5, bold: true))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(1).minimumScaleFactor(0.75)
-                }
-                Spacer(minLength: 8)
-                if let ct = e.commence {
-                    let time = TomorrowView.etTime(ct, withZone: false, meridiem: true).uppercased()
-                    let isMLB = (e.league ?? "").uppercased() == "MLB"
-                    Text(isMLB ? time : "\(startWord(e.league)) \(time)")
-                        .font(GaryFonts.mono(12.5, bold: true))
-                        .foregroundStyle(.white.opacity(0.95))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 14).padding(.trailing, 12)
+
+                if let ct = e.commence, let d = parseISO8601(ct) {
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
+                        .padding(.vertical, 2)
+                    // The simple timer — time to first pitch, nothing else.
+                    // Inset from the card edge so the digits never kiss it.
+                    HomeCountdownText(target: d, size: 17)
+                        .lineLimit(1).minimumScaleFactor(0.65)
+                        .frame(width: 88)
+                        .padding(.horizontal, 8)
                 }
             }
+            .padding(.bottom, 14)
         }
-        .padding(.horizontal, 14).padding(.vertical, 13)
         .contentShape(Rectangle())
+    }
+
+    /// "ROCKIES @ BREWERS" + "COL +270 · MIL -335 · O/U 8" → the two wire
+    /// sides with their prices, and the total. Nil when either half doesn't
+    /// parse — the caller falls back to the plain title.
+    private func wireSides(_ e: Entry)
+        -> (away: (name: String, price: String?), home: (name: String, price: String?), total: String?)? {
+        let names = e.title.components(separatedBy: " @ ")
+        guard names.count == 2 else { return nil }
+        var away: String? = nil, home: String? = nil, total: String? = nil
+        for (i, part) in (e.oddsLine ?? "").components(separatedBy: " · ").enumerated() {
+            let p = part.trimmingCharacters(in: .whitespaces)
+            if p.uppercased().hasPrefix("O/U") { total = p }
+            else if i == 0 { away = p.components(separatedBy: " ").last }
+            else if i == 1 { home = p.components(separatedBy: " ").last }
+        }
+        return (away: (names[0], away), home: (names[1], home), total: total)
+    }
+
+    /// One wire line: the club in Bebas, its price inline. Home side carries
+    /// the gold; the away price stays dim so the pair reads as a hierarchy.
+    @ViewBuilder private func wireLine(name: String, price: String?, home: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(name)
+                .font(GaryFonts.display(34))
+                .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            if let price {
+                Text(price)
+                    .font(GaryFonts.display(21))
+                    .foregroundStyle(home ? GaryColors.warmWhite.opacity(0.9) : .white.opacity(0.5))
+                    .lineLimit(1)
+            }
+        }
     }
 
     /// The all-live / all-done state still keeps an UP NEXT on the wall —
@@ -5106,14 +5156,17 @@ struct DashedLine: Shape {
 /// 1Hz live countdown to the next first pitch/kickoff — a chip, not a hero.
 struct HomeCountdownText: View {
     let target: Date
+    /// Base size — the hero's clock column runs it smaller than the old
+    /// full-width clock did.
+    var size: CGFloat = 24
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let s = max(0, Int(target.timeIntervalSince(ctx.date)))
-            // Gold and tabular (A pass, Jul 26): the clock reads as the card's
-            // pulse, one register below the matchup — and never jitters.
+            // Gold and tabular (A pass, Jul 26): the clock is the card's
+            // pulse — and never jitters.
             Text(s == 0 ? "ANY MINUTE" : String(format: "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60))
-                .font(GaryFonts.mono(24, bold: true))
+                .font(GaryFonts.mono(size, bold: true))
                 .foregroundStyle(GaryColors.gold)
         }
     }
