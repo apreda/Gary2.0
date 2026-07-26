@@ -180,7 +180,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     // STORYLINES (Jul 26 2026, situational layer): the narrative a fan holds —
     // separate from same-day hard news. Facts and reported narratives only.
     openaiWebSearch(
-      `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, post-game comments from managers or players after each team's last game, and tonight's scheduled starting pitchers' situations (role changes such as a converted reliever or an opener/bullpen game, innings or pitch limits, rehab returns, rotation shuffles). ` +
+      `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, post-game comments from managers or players after each team's last game, tonight's scheduled starting pitchers' situations (role changes such as a converted reliever or an opener/bullpen game, innings or pitch limits, rehab returns, rotation shuffles), and trade-deadline rumors involving either team's players as reported. ` +
       `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
       { maxTokens: 2200 }
     ).then(r => r?.data || '').catch(() => ''),

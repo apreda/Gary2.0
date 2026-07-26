@@ -148,14 +148,21 @@ function boardMeta(rows, homeTeam, awayTeam) {
   };
 }
 
-// THE MATCHUP LAB (Jul 26 2026): the four data layers that previously lived
-// only in the research assistant's tool lane. No tools in the new system, so
-// they are permanent desk sections — same fetchers, now data instead of calls.
+// THE MATCHUP LAB (Jul 26 2026): every data layer that previously lived only
+// in the research assistant's tool lane. No tools in the new system, so they
+// are permanent desk sections — same fetchers, now data instead of calls.
+// (Second wave, same day: RISP, defenses, catcher, closer/pen detail, park.)
 const MATCHUP_SECTIONS = [
   ['MLB_PITCH_TYPES_SP', '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══'],
   ['MLB_PITCH_TYPES_HITTERS', '═══ HITTERS vs PITCH TYPES ═══'],
   ['MLB_BATTER_VS_PITCHER', `═══ BATTER vs PITCHER — career vs tonight's starters ═══`],
   ['MLB_PLAYER_SPLITS', '═══ HITTER L/R SPLITS ═══'],
+  ['MLB_RISP_SITUATIONAL', '═══ SITUATIONAL HITTING (RISP) ═══'],
+  ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
+  ['MLB_CATCHER_DEFENSE', '═══ CATCHERS (framing / arm / SB game) ═══'],
+  ['MLB_CLOSER_RELIEVER_STATS', '═══ CLOSERS & HIGH-LEVERAGE ARMS ═══'],
+  ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (season) ═══'],
+  ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
 ];
 
 async function buildMatchupLab(game, homeTeam, awayTeam, gamePk) {
