@@ -586,6 +586,11 @@ struct UserBookSection: View {
     @AppStorage("userUnitDollars") private var userUnitDollars = 0.0
     @State private var shareImage: UserBookShareImage? = nil
     @State private var streak: UserBookAPI.UserStreak? = nil
+    // Tracker controls (YOU page): window + source filters, live-slip context.
+    @State private var timeframe = "all"          // 7d | 30d | season | all
+    @State private var kindFilter = "all"         // all | tail | fade | manual
+    @State private var liveScores: [LiveScore] = []
+    @State private var todayPicks: [GaryPick] = []
 
     private var withGary: [UserBet] { bets.filter { $0.isVerified } }
     private var yourPlays: [UserBet] { bets.filter { $0.kind == "manual" } }
@@ -666,8 +671,17 @@ struct UserBookSection: View {
                     .font(GaryFonts.text(13))
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
+            } else if expanded {
+                // The full tracker: crown, filters, records, tiles, the profit
+                // line, open slips with live context, then the day ledger.
+                streakCrown
+                trackerFilters
+                ledgerHeader
+                statTiles
+                if profitPoints.count >= 2 { profitChart }
+                pendingBlock
+                settledByDay
             } else {
-                if expanded { streakCrown }
                 ledgerHeader
                 slipsList
             }
@@ -683,6 +697,17 @@ struct UserBookSection: View {
             // over data we already have.
             if !rows.isEmpty || bets.isEmpty { bets = rows }
             if expanded, let s = await UserBookAPI.fetchMyStreak() { streak = s }
+            if expanded {
+                // Live context for open slips: today's picks carry the game_id
+                // bridge into live_scores (slip pick_text == pick.pick is the
+                // system-wide identity). Cancellation-safe: never latch empties.
+                let today = SupabaseAPI.todayEST()
+                if let picks = try? await SupabaseAPI.fetchDailyPicks(date: today), !picks.isEmpty {
+                    todayPicks = picks
+                }
+                let scores = await SupabaseAPI.fetchLiveScores(date: today)
+                if !scores.isEmpty { liveScores = scores }
+            }
             loading = false
             // First landing on YOUR page without a unit size: ask right here,
             // inline — never send anyone to Settings (founder, Jul 26).
@@ -749,8 +774,8 @@ struct UserBookSection: View {
     }
 
     private var ledgerHeader: some View {
-        let g = record(withGary.filter { !$0.isPending })
-        let m = record(yourPlays.filter { !$0.isPending })
+        let g = record(scopedWithGary.filter { !$0.isPending })
+        let m = record(scopedYourPlays.filter { !$0.isPending })
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("WITH GARY")
@@ -795,6 +820,322 @@ struct UserBookSection: View {
                 }
                 if bet.id != visible.last?.id {
                     Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5)
+                }
+            }
+        }
+    }
+
+    // ── Tracker: scope filters ──────────────────────────────────────────────
+
+    private func inTimeframe(_ b: UserBet) -> Bool {
+        guard timeframe != "all" else { return true }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: b.game_date), let today = f.date(from: SupabaseAPI.todayEST()) else { return true }
+        switch timeframe {
+        case "7d": return d >= today.addingTimeInterval(-7 * 86400)
+        case "30d": return d >= today.addingTimeInterval(-30 * 86400)
+        case "season": return b.game_date >= "2026-03-01"
+        default: return true
+        }
+    }
+
+    private var scopedBets: [UserBet] {
+        bets.filter { b in
+            inTimeframe(b) && (kindFilter == "all" || b.kind == kindFilter)
+        }
+    }
+    private var scopedWithGary: [UserBet] { expanded ? scopedBets.filter { $0.isVerified } : withGary }
+    private var scopedYourPlays: [UserBet] { expanded ? scopedBets.filter { $0.kind == "manual" } : yourPlays }
+    private var scopedSettled: [UserBet] { scopedBets.filter { !$0.isPending } }
+    /// Open slips ignore the timeframe — a pending bet is always "now".
+    private var openSlips: [UserBet] {
+        bets.filter { $0.isPending && (kindFilter == "all" || $0.kind == kindFilter) }
+            .sorted { ($0.lock_at ?? "9999") < ($1.lock_at ?? "9999") }
+    }
+
+    private var trackerFilters: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                filterChip("7D", key: "7d", group: 0)
+                filterChip("30D", key: "30d", group: 0)
+                filterChip("SEASON", key: "season", group: 0)
+                filterChip("ALL", key: "all", group: 0)
+                Spacer()
+            }
+            HStack(spacing: 6) {
+                filterChip("EVERYTHING", key: "all", group: 1)
+                filterChip("TAILS", key: "tail", group: 1)
+                filterChip("FADES", key: "fade", group: 1)
+                filterChip("YOUR PLAYS", key: "manual", group: 1)
+                Spacer()
+            }
+        }
+    }
+
+    private func filterChip(_ label: String, key: String, group: Int) -> some View {
+        let isOn = group == 0 ? timeframe == key : kindFilter == key
+        return Button {
+            if group == 0 { timeframe = key } else { kindFilter = key }
+        } label: {
+            Text(label)
+                .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                .foregroundStyle(isOn ? .black : .white.opacity(0.55))
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(Capsule().fill(isOn ? GaryColors.gold : Color.white.opacity(0.08)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // ── Tracker: stat tiles ─────────────────────────────────────────────────
+
+    private var statTiles: some View {
+        let settled = scopedSettled.filter { $0.status != "void" }
+        let decisive = settled.filter { $0.status == "won" || $0.status == "lost" }
+        let wins = decisive.filter { $0.status == "won" }.count
+        let winPct = decisive.isEmpty ? nil : Double(wins) / Double(decisive.count) * 100
+        let staked = decisive.reduce(0.0) { $0 + $1.stake_units }
+        let net = settled.reduce(0.0) { $0 + ($1.units_net ?? 0) }
+        let roi = staked > 0 ? net / staked * 100 : nil
+        let oddsVals = decisive.compactMap { $0.odds_american }
+        let avgOdds = oddsVals.isEmpty ? nil : oddsVals.reduce(0, +) / oddsVals.count
+        let bestDay = dayGroups.map { $0.net }.max()
+
+        return HStack(spacing: 8) {
+            statTile("WIN%", winPct.map { String(format: "%.0f%%", $0) } ?? "--")
+            statTile("ROI", roi.map { String(format: "%+.0f%%", $0) } ?? "--",
+                     tint: (roi ?? 0) >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+            statTile("AVG ODDS", avgOdds.map { "\($0 > 0 ? "+" : "")\($0)" } ?? "--")
+            statTile("BEST DAY", bestDay.map { BookMoney.netTotal($0) } ?? "--",
+                     tint: GaryColors.gold)
+        }
+    }
+
+    private func statTile(_ label: String, _ value: String, tint: Color = .white.opacity(0.88)) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(GaryFonts.mono(13, bold: true))
+                .foregroundStyle(tint)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(label)
+                .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.04)))
+    }
+
+    // ── Tracker: profit line ────────────────────────────────────────────────
+
+    /// Cumulative settled units in play order (game_date, then placement).
+    private var profitPoints: [Double] {
+        let settled = scopedSettled
+            .filter { $0.status != "void" }
+            .sorted { a, b in
+                a.game_date == b.game_date
+                    ? (a.placed_at ?? "") < (b.placed_at ?? "")
+                    : a.game_date < b.game_date
+            }
+        var running = 0.0
+        return settled.map { running += ($0.units_net ?? 0); return running }
+    }
+
+    private var profitChart: some View {
+        let pts = profitPoints
+        let lo = min(0, pts.min() ?? 0), hi = max(0, pts.max() ?? 0)
+        let span = max(hi - lo, 0.001)
+        let final = pts.last ?? 0
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("THE RIDE")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                Spacer()
+                Text(BookMoney.netTotal(final))
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(final >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+            }
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                let x = { (i: Int) in pts.count > 1 ? w * CGFloat(i) / CGFloat(pts.count - 1) : 0 }
+                let y = { (v: Double) in h - h * CGFloat((v - lo) / span) }
+                ZStack {
+                    // zero baseline
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: y(0)))
+                        p.addLine(to: CGPoint(x: w, y: y(0)))
+                    }
+                    .stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 0.5, dash: [3, 4]))
+                    // area
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: y(0)))
+                        for (i, v) in pts.enumerated() { p.addLine(to: CGPoint(x: x(i), y: y(v))) }
+                        p.addLine(to: CGPoint(x: w, y: y(0)))
+                        p.closeSubpath()
+                    }
+                    .fill(GaryColors.gold.opacity(0.10))
+                    // line
+                    Path { p in
+                        for (i, v) in pts.enumerated() {
+                            let pt = CGPoint(x: x(i), y: y(v))
+                            i == 0 ? p.move(to: pt) : p.addLine(to: pt)
+                        }
+                    }
+                    .stroke(GaryColors.gold, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                }
+            }
+            .frame(height: 72)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.03)))
+    }
+
+    // ── Tracker: open slips with live context ───────────────────────────────
+
+    /// slip -> tonight's live score, bridged through today's pick identity
+    /// (slip.pick_text == pick.pick, pick.game_id == live_scores.game_id).
+    private func liveScore(for bet: UserBet) -> LiveScore? {
+        guard bet.game_date == SupabaseAPI.todayEST(), bet.pick_type == "game" else { return nil }
+        guard let gid = todayPicks.first(where: { ($0.pick ?? "") == bet.pick_text })?.game_id else { return nil }
+        return liveScores.first { $0.game_id == String(gid) }
+    }
+
+    private func startTime(for bet: UserBet) -> String? {
+        guard let lock = bet.lock_at else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let d = iso.date(from: lock) ?? ISO8601DateFormatter().date(from: lock)
+        guard let date = d else { return nil }
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        return f.string(from: date)
+    }
+
+    @ViewBuilder private var pendingBlock: some View {
+        if !openSlips.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("OPEN SLIPS")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.bottom, 4)
+                ForEach(openSlips) { bet in
+                    HStack(spacing: 10) {
+                        Text(bet.kind == "fade" ? "FADE" : bet.kind == "tail" ? "TAIL" : "YOURS")
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                            .foregroundStyle(bet.kind == "fade" ? Color(hex: "#8B93A7") : GaryColors.gold)
+                            .frame(width: 38, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(bet.pick_text)
+                                    .font(GaryFonts.text(13))
+                                    .foregroundStyle(.white.opacity(0.88))
+                                    .lineLimit(1).minimumScaleFactor(0.75)
+                                if bet.streak_pick == true {
+                                    Text("STREAK")
+                                        .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
+                                        .foregroundStyle(Color(hex: "#E5844B"))
+                                }
+                            }
+                            Text("\(BookMoney.stake(bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                                .font(GaryFonts.mono(9))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                        Spacer(minLength: 8)
+                        pendingTrailing(bet)
+                    }
+                    .padding(.vertical, 8)
+                    if bet.id != openSlips.last?.id {
+                        Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func pendingTrailing(_ bet: UserBet) -> some View {
+        if let live = liveScore(for: bet) {
+            if live.isLive {
+                HStack(spacing: 5) {
+                    Circle().fill(Color(hex: "#EF4444")).frame(width: 5, height: 5)
+                    Text("\(live.away_score ?? 0)-\(live.home_score ?? 0)\(live.detail.map { " · \($0)" } ?? "")")
+                        .font(GaryFonts.mono(10, bold: true))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            } else if live.isFinal {
+                Text("FINAL · SETTLING")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.45))
+            } else if let t = startTime(for: bet) {
+                Text(t)
+                    .font(GaryFonts.mono(10, bold: true))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+        } else if let t = startTime(for: bet) {
+            Text(t)
+                .font(GaryFonts.mono(10, bold: true))
+                .foregroundStyle(.white.opacity(0.5))
+        } else {
+            Text("OPEN")
+                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                .foregroundStyle(.white.opacity(0.35))
+        }
+    }
+
+    // ── Tracker: the day ledger ─────────────────────────────────────────────
+
+    private var dayGroups: [(date: String, net: Double, rows: [UserBet])] {
+        let settled = scopedSettled
+        let grouped = Dictionary(grouping: settled, by: { $0.game_date })
+        return grouped.keys.sorted(by: >).map { d in
+            let rows = (grouped[d] ?? []).sorted { ($0.placed_at ?? "") > ($1.placed_at ?? "") }
+            let net = rows.reduce(0.0) { $0 + ($1.units_net ?? 0) }
+            return (d, net, rows)
+        }
+    }
+
+    private func dayLabel(_ dateStr: String) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: dateStr) else { return dateStr }
+        let out = DateFormatter()
+        out.dateFormat = "EEE M/d"
+        out.timeZone = TimeZone(identifier: "America/New_York")
+        return out.string(from: d).uppercased()
+    }
+
+    @ViewBuilder private var settledByDay: some View {
+        if !dayGroups.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("THE LEDGER")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.bottom, 2)
+                ForEach(dayGroups.prefix(30), id: \.date) { group in
+                    HStack {
+                        Text(dayLabel(group.date))
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.55))
+                        Spacer()
+                        Text(BookMoney.netTotal(group.net))
+                            .font(GaryFonts.mono(10, bold: true))
+                            .foregroundStyle(group.net > 0 ? Color(hex: "#22C55E")
+                                             : group.net < 0 ? Color(hex: "#EF4444") : .white.opacity(0.45))
+                    }
+                    .padding(.top, 10).padding(.bottom, 2)
+                    ForEach(group.rows) { bet in
+                        UserBetSlipRow(bet: bet) { updated in
+                            if let i = bets.firstIndex(where: { $0.id == updated.id }) { bets[i] = updated }
+                        } onDelete: {
+                            bets.removeAll { $0.id == bet.id }
+                        }
+                        if bet.id != group.rows.last?.id {
+                            Rectangle().fill(.white.opacity(0.04)).frame(height: 0.5)
+                        }
+                    }
                 }
             }
         }
