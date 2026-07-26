@@ -44,24 +44,23 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(args.tools).toEqual([]);
   });
 
-  it('system prompt is the final contract — numbers-law scoped narrow, zero steering', async () => {
+  it('system prompt is minimal — identity, one staleness line, card contract; zero steering', async () => {
     await analyzeGameDesk({});
     const { systemPrompt } = createOpenAISession.mock.calls[0][0];
-    expect(systemPrompt).toContain('must come from the desk');
-    expect(systemPrompt).toContain('the desk is current');
+    // Founder, Jul 26: "the only real anti-hallucination we need is to say
+    // don't use training data as it's old" — statAudit stays as the silent
+    // rail; the prompt carries no threats, no bans, no enumerations.
+    expect(systemPrompt).toContain('Your training data is old; the desk is current.');
     expect(systemPrompt).toContain('never as an AI');
     expect(systemPrompt).toContain('Gary\'s Take');
-    // The over-ban is dead (founder, Jul 26: the model knows baseball — the
-    // contract bans off-desk NUMBERS, never understanding).
+    expect(systemPrompt).not.toContain('rejected');
+    expect(systemPrompt).not.toContain('must come from the desk');
     expect(systemPrompt).not.toContain('your only information');
-    expect(systemPrompt).not.toContain('write nothing');
     expect(systemPrompt).not.toContain('opinions');
-    expect(systemPrompt).not.toContain('You know baseball');
     expect(systemPrompt).not.toContain('FACT-CHECKING PROTOCOL');
     expect(systemPrompt).not.toContain('THINK LIKE A SHARP');
     expect(systemPrompt).not.toContain('<constitution>');
-    expect(systemPrompt).not.toContain('thirty years');
-    expect(systemPrompt.length).toBeLessThan(1000);
+    expect(systemPrompt.length).toBeLessThan(700);
   });
 
   it('one user message: the desk, then the bare ask — no coaching, no tutoring', async () => {

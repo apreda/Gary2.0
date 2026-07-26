@@ -530,16 +530,23 @@ export async function buildMlbScoutReport(game, options = {}) {
         relevantDivisions.add(entry.division_name || entry.team?.division || 'Division');
       }
     }
-    // Group by division
+    // Group by division — ALL of them (Jul 26 2026, founder: the desk must
+    // carry the current state of the whole league, not just tonight's two
+    // divisions, so stale training-data fame self-corrects against 2026
+    // reality). Tonight's divisions render first.
     const divisionMap = {};
     for (const entry of bdlStandings) {
       const divName = entry.division_name || entry.team?.division || 'Division';
-      if (relevantDivisions.size > 0 && !relevantDivisions.has(divName)) continue;
       if (!divisionMap[divName]) divisionMap[divName] = [];
       divisionMap[divName].push(entry);
     }
     const lines = [];
-    for (const [divName, teams] of Object.entries(divisionMap)) {
+    const orderedDivisions = Object.entries(divisionMap).sort(([a], [b]) => {
+      const ra = relevantDivisions.has(a) ? 0 : 1;
+      const rb = relevantDivisions.has(b) ? 0 : 1;
+      return ra - rb || a.localeCompare(b);
+    });
+    for (const [divName, teams] of orderedDivisions) {
       // Sort by wins descending (or win_percent)
       teams.sort((a, b) => (b.wins || 0) - (a.wins || 0));
       const teamLines = teams.map(t => {
