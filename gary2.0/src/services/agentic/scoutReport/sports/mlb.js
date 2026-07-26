@@ -182,7 +182,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     openaiWebSearch(
       `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, what local media are focused on. ` +
       `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
-      { maxTokens: 1200 }
+      { maxTokens: 2200 }
     ).then(r => r?.data || '').catch(() => ''),
     // LAST GAME, THE STORY (Jul 26 2026): our own nightly recap rows — the
     // narrative of each team's most recent game, already generated and graded.
@@ -695,7 +695,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (seriesGames.length >= 1 && recentBoxStatsById.size > 0) {
       const perTeam = new Map(); // teamLastWord -> Map(player -> agg)
       for (const g of seriesGames) {
-        const bdlId = resolveBdlId(g, bdlCandidates);
+        const bdlId = resolveBdlId(g, homeBdlGames);
         const rows = (bdlId != null && recentBoxStatsById.get(bdlId)) || [];
         for (const r of rows) {
           const tKey = (r.team_name || '').toLowerCase().split(' ').pop();
@@ -749,6 +749,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       for (const [, g] of (seasonIndex?.entries?.() ? seasonIndex.entries() : [])) {
         if (g.homeId !== teamBdlId && g.awayId !== teamBdlId) continue;
         if (!/final/i.test(String(g.status || ''))) continue;
+        if (g.seasonType === 'spring_training') continue; // regular season only
         if (g.homeRuns == null || g.awayRuns == null) continue;
         const isHome = g.homeId === teamBdlId;
         rows.set(toEtDate(g.date), (isHome ? g.homeRuns > g.awayRuns : g.awayRuns > g.homeRuns));
@@ -779,13 +780,14 @@ export async function buildMlbScoutReport(game, options = {}) {
         if (!pid || !pname) continue;
         try {
           const logs = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, seasonYear);
-          const playedDates = new Set((logs || []).map(l => toEtDate(l.game?.date || l.date)).filter(Boolean));
+          const playedDates = new Set((logs || []).map(l => toEtDate(l._game?.date || l.game?.date || l.date)).filter(Boolean));
           let wW = 0, wL = 0, woW = 0, woL = 0;
           for (const [d, won] of games.entries()) {
             if (playedDates.has(d)) { won ? wW++ : wL++; } else { won ? woW++ : woL++; }
           }
-          if (woW + woL >= 3) {
-            lines.push(`${side.name} without ${pname} (out): ${woW}-${woL} | with him: ${wW}-${wL}`);
+          // Only meaningful when he has actually played AND missed real time.
+          if (woW + woL >= 3 && wW + wL >= 3) {
+            lines.push(`${side.name} without ${pname}: ${woW}-${woL} | with: ${wW}-${wL}`);
           }
         } catch { /* one player's logs missing — skip him */ }
       }
@@ -1442,14 +1444,25 @@ ${lastGameSection}
 
 ═══ LAST GAME, THE STORY ═══
 ${(() => {
-  const pickRecap = (nick) => {
+  // Our own nightly recap rows. Strip Gary-self-referential sentences (the
+  // rows recap HIS pick too — the desk carries the GAME story only), and
+  // when both teams' last game is the same game (they played each other),
+  // render it once.
+  const cleanBody = (row) => String(row.recap || '')
+    .split(/(?<=[.!?])\s+/)
+    .filter(sent => sent && !/gary/i.test(sent))
+    .slice(0, 3).join(' ');
+  const findRow = (nick) => {
     const lw = nick.toLowerCase().split(' ').pop();
-    const row = (lastGameRecaps || []).find(r => (r.matchup || '').toLowerCase().includes(lw));
-    if (!row) return null;
-    const body = String(row.recap || '').split('\n').filter(Boolean).slice(0, 3).join(' ');
-    return `${nick} — ${row.headline || ''}${body ? `\n  ${body}` : ''}`;
+    return (lastGameRecaps || []).find(r => (r.matchup || '').toLowerCase().includes(lw)) || null;
   };
-  return [pickRecap(homeTeam), pickRecap(awayTeam)].filter(Boolean).join('\n') || 'No recap rows for the last games.';
+  const h = findRow(homeTeam);
+  const a = findRow(awayTeam);
+  if (h && a && h === a) {
+    return `These two, last night — ${h.headline || ''}\n  ${cleanBody(h)}`;
+  }
+  const line = (nick, row) => row ? `${nick} — ${row.headline || ''}\n  ${cleanBody(row)}` : null;
+  return [line(homeTeam, h), line(awayTeam, a)].filter(Boolean).join('\n') || 'No recap rows for the last games.';
 })()}
 
 ═══ SITUATIONAL RECORDS ═══

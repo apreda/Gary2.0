@@ -257,6 +257,7 @@ export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
   for (const [, g] of seasonIndex.entries()) {
     if (g.homeId !== teamBdlId && g.awayId !== teamBdlId) continue;
     if (!/final/i.test(String(g.status || ''))) continue;
+    if (g.seasonType === 'spring_training') continue; // regular season only
     if (g.homeRuns == null || g.awayRuns == null) continue;
     const isHome = g.homeId === teamBdlId;
     const my = isHome ? g.homeRuns : g.awayRuns;

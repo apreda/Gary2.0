@@ -203,7 +203,7 @@ ${facts}`;
   try {
     const resp = await geminiService.generateResponse(
       [{ role: 'user', content: prompt }],
-      { model: 'gemini-3-flash-preview', maxTokens: 3000 }
+      { model: 'gemini-3-flash-preview', maxTokens: 9000 }
     );
     const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
     const jsonStr = text.replace(/```json|```/g, '').trim();

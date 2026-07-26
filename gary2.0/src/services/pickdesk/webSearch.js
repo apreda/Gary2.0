@@ -101,10 +101,16 @@ export async function openaiWebSearch(query, options = {}) {
       data = await attempt();
     }
     const outputItems = Array.isArray(data.output) ? data.output : [];
-    const text = outputItems
+    let text = outputItems
       .filter((o) => o.type === 'message')
       .flatMap((o) => (o.content || []).map((c) => c.text).filter(Boolean))
       .join('');
+    // Never hand the desk a mid-sentence cutoff: if the output hit the token
+    // cap, trim back to the last completed sentence.
+    if (text && !/[.!?)\]"”]\s*$/.test(text)) {
+      const cut = Math.max(text.lastIndexOf('. '), text.lastIndexOf('.\n'), text.lastIndexOf('! '), text.lastIndexOf('? '));
+      if (cut > text.length * 0.5) text = text.slice(0, cut + 1);
+    }
     console.log(`[Web Search] ${WEB_SEARCH_MODEL} returned ${text.length} chars`);
     return { success: text.length > 0, data: text, raw: data };
   } catch (e) {

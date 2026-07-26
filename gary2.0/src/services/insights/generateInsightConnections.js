@@ -48,6 +48,7 @@ import { computeFantasyPickups } from './computers/fantasyPickups.js';
 import { computeTwoStartWeek } from './computers/twoStartWeek.js';
 import { computeCloserWatch } from './computers/closerWatch.js';
 import { computeReturnWatch } from './computers/returnWatch.js';
+import { computeCutList } from './computers/cutList.js';
 
 // NBA connection computers.
 import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
@@ -84,6 +85,7 @@ const MLB_COMPUTERS = [
   computeTwoStartWeek,
   computeCloserWatch,
   computeReturnWatch,
+  computeCutList,
 ];
 
 const NBA_COMPUTERS = [
