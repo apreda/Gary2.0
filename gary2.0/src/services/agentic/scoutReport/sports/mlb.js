@@ -14,7 +14,7 @@
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
-import { ballDontLieService } from '../../../ballDontLieService.js';
+import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
 import { getPitcherXStats, getBatterXStats, getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import {
   getTeamRoster,
@@ -574,6 +574,30 @@ export async function buildMlbScoutReport(game, options = {}) {
   // L1-L4: INDIVIDUAL GAME RECAPS (what actually happened — narrative box scores)
   // L5/L10: STATISTICAL AGGREGATES (trend lines)
   // ═══════════════════════════════════════════════════════════════════
+  // THE WIRE (Jul 26 2026): the official MLB.com game story for each team's
+  // most recent final — the AP-style factual narrative, sourced as DATA from
+  // the Stats API content endpoint (no search). Finals are immutable → 7d cache.
+  const fetchGameStory = async (gamePk) => {
+    if (!gamePk) return null;
+    return await getCachedOrFetch(`mlb_game_story_${gamePk}`, async () => {
+      const resp = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/content`);
+      if (!resp.ok) return null;
+      const j = await resp.json();
+      const rec = j?.editorial?.recap?.mlb || j?.editorial?.wrap?.mlb || null;
+      if (!rec?.body) return null;
+      const clean = String(rec.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return { headline: rec.headline || '', body: clean.slice(0, 4000) };
+    }, 7 * 24 * 60).catch(() => null);
+  };
+  const lastFinal = (games) => {
+    const arr = (games || []).filter(g => g?.gamePk || g?.id);
+    return arr.length ? arr[arr.length - 1] : null;
+  };
+  const [homeWire, awayWire] = await Promise.all([
+    (async () => { const g = lastFinal(homeRecentGames); return g ? await fetchGameStory(g.gamePk ?? g.id) : null; })(),
+    (async () => { const g = lastFinal(awayRecentGames); return g ? await fetchGameStory(g.gamePk ?? g.id) : null; })(),
+  ]);
+
   // THE TAPE prefetch: scoring flows for the recent games shown below.
   // Cached-forever per game; a failed fetch just omits that game's flow line.
   const scoringFlowById = new Map();
@@ -1478,12 +1502,19 @@ ${recentResults}
 Last game (inning detail):
 ${lastGameSection}
 
-═══ LAST GAME, THE STORY ═══
+═══ LAST GAME, THE STORY (official game stories) ═══
 ${(() => {
-  // Our own nightly recap rows. Strip Gary-self-referential sentences (the
-  // rows recap HIS pick too — the desk carries the GAME story only), and
-  // when both teams' last game is the same game (they played each other),
-  // render it once.
+  // Primary: the official MLB.com story per team's last game (THE WIRE).
+  // Same-game dedupe when the teams just played each other. Fallback: our
+  // own recap rows, Gary-sentences stripped.
+  const wires = [];
+  if (homeWire && awayWire && homeWire.headline === awayWire.headline) {
+    wires.push(`These two, last game — ${homeWire.headline}\n${homeWire.body}`);
+  } else {
+    if (homeWire) wires.push(`${homeTeam}, last game — ${homeWire.headline}\n${homeWire.body}`);
+    if (awayWire) wires.push(`${awayTeam}, last game — ${awayWire.headline}\n${awayWire.body}`);
+  }
+  if (wires.length) return wires.join('\n\n');
   const cleanBody = (row) => String(row.recap || '')
     .split(/(?<=[.!?])\s+/)
     .filter(sent => sent && !/gary/i.test(sent))
@@ -1494,11 +1525,9 @@ ${(() => {
   };
   const h = findRow(homeTeam);
   const a = findRow(awayTeam);
-  if (h && a && h === a) {
-    return `These two, last night — ${h.headline || ''}\n  ${cleanBody(h)}`;
-  }
+  if (h && a && h === a) return `These two, last night — ${h.headline || ''}\n  ${cleanBody(h)}`;
   const line = (nick, row) => row ? `${nick} — ${row.headline || ''}\n  ${cleanBody(row)}` : null;
-  return [line(homeTeam, h), line(awayTeam, a)].filter(Boolean).join('\n') || 'No recap rows for the last games.';
+  return [line(homeTeam, h), line(awayTeam, a)].filter(Boolean).join('\n') || 'No game stories available.';
 })()}
 
 ═══ SITUATIONAL RECORDS ═══
