@@ -16375,26 +16375,45 @@ struct PickCardBack: View {
                 .frame(height: 2)
             }
 
+            if AppFlags.userBookEnabled {
+                TailFadeRow(pick: pick)
+            }
+
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    // The rationale's first paragraph leads at quote weight;
-                    // the rest of the case follows as the receipts.
-                    let parts = splitTake(pick.rationale)
-                    if let take = parts.take {
-                        Text(take)
-                            // No bolded rationale anywhere (founder, Jul 13) —
-                            // the lead paragraph reads at body weight like the rest.
+                    if let plain = pick.rationale_plain, !plain.isEmpty {
+                        HStack(spacing: 16) {
+                            registerTab("PLAIN", active: showPlain) { showPlain = true }
+                            registerTab("ANALYSIS", active: !showPlain) { showPlain = false }
+                            Spacer()
+                        }
+                    }
+                    if showPlain, let plain = pick.rationale_plain, !plain.isEmpty {
+                        Text(plain)
                             .font(GaryFonts.text(14.5))
                             .foregroundStyle(.white.opacity(0.88))
                             .lineSpacing(3.5)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if let rest = parts.rest {
-                        Text(rest)
-                            .font(GaryFonts.text(14.5))
-                            .foregroundStyle(.white.opacity(0.72))
-                            .lineSpacing(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        // The rationale's first paragraph leads at quote weight;
+                        // the rest of the case follows as the receipts.
+                        let parts = splitTake(pick.rationale)
+                        if let take = parts.take {
+                            Text(take)
+                                // No bolded rationale anywhere (founder, Jul 13) —
+                                // the lead paragraph reads at body weight like the rest.
+                                .font(GaryFonts.text(14.5))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineSpacing(3.5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        if let rest = parts.rest {
+                            Text(rest)
+                                .font(GaryFonts.text(14.5))
+                                .foregroundStyle(.white.opacity(0.72))
+                                .lineSpacing(3)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
 
                     if let odds = pick.sportsbook_odds, !odds.isEmpty {

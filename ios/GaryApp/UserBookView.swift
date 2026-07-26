@@ -171,3 +171,182 @@ enum UserBookAPI {
         }
     }
 }
+
+// ── Tail/Fade row (pick card back) ──────────────────────────────────────────
+// Sits under the conviction bar — the "I've read the case" moment. One tap
+// arms a stake stepper; confirm logs it through the lock-checked RPC. After
+// lock the row freezes into a receipt chip; after grading it shows the result.
+struct TailFadeRow: View {
+    let pick: GaryPick
+    @State private var mine: UserBet? = nil
+    @State private var arming: String? = nil      // "tail" | "fade" while picking stake
+    @State private var stake: Double = 1.0
+    @State private var busy = false
+    @State private var errorText: String? = nil
+    @State private var showAuth = false
+    @State private var loaded = false
+
+    private var locked: Bool {
+        guard let ct = pick.commence_time, let d = ISO8601DateFormatter().date(from: ct) else { return false }
+        return Date() >= d
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let bet = mine {
+                placedChip(bet)
+            } else if locked {
+                EmptyView()   // never advertise a bet you can no longer place
+            } else if let side = arming {
+                stakePicker(side)
+            } else {
+                armButtons
+            }
+            if let e = errorText {
+                Text(e)
+                    .font(GaryFonts.mono(9.5))
+                    .foregroundStyle(Color(hex: "#EF4444").opacity(0.9))
+                    .lineLimit(2)
+            }
+        }
+        .task(id: pick.id) {
+            guard !loaded, AuthManager.shared.bearerToken != nil else { return }
+            let all = await UserBookAPI.fetchMyBets()
+            // Cancellation guard: never latch an empty result over a live row.
+            if !all.isEmpty {
+                mine = all.first { $0.pick_text == (pick.pick ?? "") && $0.pick_type == "game" }
+            }
+            loaded = true
+        }
+        .sheet(isPresented: $showAuth) { AuthView() }
+    }
+
+    private var armButtons: some View {
+        HStack(spacing: 8) {
+            tailFadeButton("TAIL", tint: GaryColors.gold) { arm("tail") }
+            tailFadeButton("FADE", tint: Color(hex: "#8B93A7")) { arm("fade") }
+            Spacer()
+            Text("On the record at lock")
+                .font(GaryFonts.mono(9))
+                .foregroundStyle(.white.opacity(0.38))
+        }
+    }
+
+    private func tailFadeButton(_ label: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                .foregroundStyle(tint)
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 6).stroke(tint.opacity(0.55), lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+
+    private func stakePicker(_ side: String) -> some View {
+        HStack(spacing: 10) {
+            Text(side.uppercased())
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                .foregroundStyle(side == "tail" ? GaryColors.gold : Color(hex: "#8B93A7"))
+            Stepper(value: $stake, in: 0.5...5, step: 0.5) {
+                Text(String(format: "%.1fu", stake))
+                    .font(GaryFonts.mono(12, bold: true))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .fixedSize()
+            Button { place(side) } label: {
+                Text("Lock it in")
+                    .font(GaryFonts.mono(11, bold: true))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+            Button { arming = nil } label: {
+                Text("Back")
+                    .font(GaryFonts.mono(10))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func placedChip(_ bet: UserBet) -> some View {
+        HStack(spacing: 8) {
+            let label = bet.kind == "tail" ? "YOU TAILED" : "YOU FADED"
+            let tint: Color = bet.kind == "tail" ? GaryColors.gold : Color(hex: "#8B93A7")
+            Text("\(label) · \(String(format: "%.1fu", bet.stake_units))")
+                .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                .foregroundStyle(tint)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 6).fill(tint.opacity(0.12)))
+            if bet.status != "pending" {
+                resultTag(bet)
+            } else if !locked {
+                Button { remove(bet) } label: {
+                    Text("Undo")
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+    }
+
+    private func resultTag(_ bet: UserBet) -> some View {
+        let won = bet.status == "won"
+        let wash = bet.status == "push" || bet.status == "void"
+        let units = bet.units_net ?? 0
+        let text = wash ? bet.status.uppercased() : String(format: "%@%.2fu", won ? "+" : "", units)
+        let est = (bet.odds_estimated ?? false) && won ? " est" : ""
+        return Text(text + est)
+            .font(GaryFonts.mono(10, bold: true))
+            .foregroundStyle(wash ? .white.opacity(0.5) : (won ? Color(hex: "#22C55E") : Color(hex: "#EF4444")))
+    }
+
+    private func arm(_ side: String) {
+        errorText = nil
+        guard AuthManager.shared.bearerToken != nil else { showAuth = true; return }
+        arming = side
+    }
+
+    private func place(_ side: String) {
+        guard let dateStr = pickDateEST() else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                mine = try await UserBookAPI.placeBet(
+                    gameDate: dateStr, pickId: pick.pick_id,
+                    pickText: pick.pick ?? "", kind: side, stake: stake)
+                arming = nil
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
+    }
+
+    private func remove(_ bet: UserBet) {
+        busy = true
+        Task {
+            defer { busy = false }
+            if await UserBookAPI.deleteBet(id: bet.id) { mine = nil }
+        }
+    }
+
+    /// The pick's ET calendar date — derived from its own commence_time so a
+    /// late-night card can never post against the wrong daily_picks row.
+    private func pickDateEST() -> String? {
+        guard let ct = pick.commence_time, let d = ISO8601DateFormatter().date(from: ct) else {
+            return SupabaseAPI.todayEST()
+        }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = TimeZone(identifier: "America/New_York")
+        return fmt.string(from: d)
+    }
+}
