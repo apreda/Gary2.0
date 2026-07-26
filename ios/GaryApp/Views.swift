@@ -2883,6 +2883,14 @@ struct HomeView: View {
             if let t = bRow?.total {
                 oddsBits.append("O/U \(t == t.rounded() ? String(Int(t)) : String(t))")
             }
+            // The run line (founder, Jul 26): the favorite's spread off the
+            // board. The row stores the line only — no price is invented.
+            if let s = bRow?.spread, s != 0,
+               let aAb = bRow?.away_abbr, let hAb = bRow?.home_abbr {
+                let fav = s < 0 ? hAb : aAb
+                let line = -abs(s)
+                oddsBits.append("RL \(fav) \(line == line.rounded() ? String(Int(line)) : String(line))")
+            }
             return HomeMarqueeTracker.Entry(
                 id: "mq-\(big.rank)-\(matchup)",
                 rank: big.rank,
@@ -4695,22 +4703,25 @@ struct HomeMarqueeTracker: View {
                             .foregroundStyle(GaryColors.warmWhite)
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
-                    Group {
+                    VStack(alignment: .leading, spacing: 4) {
                         if let pick = e.pickLine {
                             // ONE pick per line — the words always fit; the
                             // design never falls back to an ellipsis.
-                            VStack(alignment: .leading, spacing: 3) {
-                                ForEach(pick.components(separatedBy: "  ·  "), id: \.self) { line in
-                                    Text(line)
-                                        .font(GaryFonts.mono(12.5, bold: true))
-                                        .foregroundStyle(GaryColors.gold)
-                                        .lineLimit(1).minimumScaleFactor(0.75)
-                                }
+                            ForEach(pick.components(separatedBy: "  ·  "), id: \.self) { line in
+                                Text(line)
+                                    .font(GaryFonts.mono(12.5, bold: true))
+                                    .foregroundStyle(GaryColors.gold)
+                                    .lineLimit(1).minimumScaleFactor(0.75)
                             }
-                        } else if let total = sides?.total {
-                            Text(total.uppercased())
+                        }
+                        // The rest of the board — total and run line — rides
+                        // as one dim market row whether or not a pick posted.
+                        let market = [sides?.total, sides?.runLine].compactMap { $0 }.joined(separator: " · ")
+                        if !market.isEmpty {
+                            Text(market.uppercased())
                                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
                                 .foregroundStyle(.white.opacity(0.38))
+                                .lineLimit(1).minimumScaleFactor(0.8)
                         }
                     }
                     .padding(.top, 7)
@@ -4734,21 +4745,24 @@ struct HomeMarqueeTracker: View {
         .contentShape(Rectangle())
     }
 
-    /// "ROCKIES @ BREWERS" + "COL +270 · MIL -335 · O/U 8" → the two wire
-    /// sides with their prices, and the total. Nil when either half doesn't
-    /// parse — the caller falls back to the plain title.
+    /// "ROCKIES @ BREWERS" + "COL +270 · MIL -335 · O/U 8 · RL MIL -1.5" →
+    /// the two wire sides with their prices, the total, and the run line.
+    /// Nil when either half doesn't parse — the caller falls back to the
+    /// plain title.
     private func wireSides(_ e: Entry)
-        -> (away: (name: String, price: String?), home: (name: String, price: String?), total: String?)? {
+        -> (away: (name: String, price: String?), home: (name: String, price: String?),
+            total: String?, runLine: String?)? {
         let names = e.title.components(separatedBy: " @ ")
         guard names.count == 2 else { return nil }
-        var away: String? = nil, home: String? = nil, total: String? = nil
+        var away: String? = nil, home: String? = nil, total: String? = nil, runLine: String? = nil
         for (i, part) in (e.oddsLine ?? "").components(separatedBy: " · ").enumerated() {
             let p = part.trimmingCharacters(in: .whitespaces)
             if p.uppercased().hasPrefix("O/U") { total = p }
+            else if p.uppercased().hasPrefix("RL ") { runLine = p }
             else if i == 0 { away = p.components(separatedBy: " ").last }
             else if i == 1 { home = p.components(separatedBy: " ").last }
         }
-        return (away: (names[0], away), home: (names[1], home), total: total)
+        return (away: (names[0], away), home: (names[1], home), total: total, runLine: runLine)
     }
 
     /// One wire line: the club in Bebas, its price inline. Home side carries
