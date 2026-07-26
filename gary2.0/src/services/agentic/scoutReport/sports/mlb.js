@@ -11,7 +11,7 @@
  * - Odds, live context, game preview, season storylines
  */
 
-import { geminiGroundingSearch } from '../shared/grounding.js';
+import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
@@ -122,7 +122,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // CONSOLIDATED GROUNDING: 2 mega-queries instead of 6 small ones
   // Uses thinkingLevel 'low' — these are fact-retrieval, not reasoning
   // ═══════════════════════════════════════════════════════════════════
-  const groundingOpts = { thinkingLevel: 'low', maxTokens: 1500 };
+  const groundingOpts = { maxTokens: 1500 };
   const season = new Date().getFullYear();
 
   const [
@@ -154,12 +154,14 @@ export async function buildMlbScoutReport(game, options = {}) {
     // blobs ("game preview/storylines" + "offseason moves/spring training/team outlook") that duplicated the structured
     // sections (odds, lineups, standings, pitchers) and dragged in stale preseason narrative. The structured data carries
     // the matchup; grounding now only adds what no API has: late-breaking, same-day news.
-    geminiGroundingSearch(
+    // Jul 26 2026 (founder GO, de-Gemini step one): the game lane's news search
+    // runs on OpenAI web_search; the freshness protocol rode along verbatim.
+    openaiWebSearch(
       `MLB ${season}: ${awayTeam} at ${homeTeam} TODAY — only same-day breaking news that affects this game: ` +
       `late injuries or scratches, lineup or rotation changes, and weather. ` +
       `Name the specific players involved in any injury or roster note — a report without names is not usable. ` +
       `Report only concrete, same-day facts. If there is no breaking news, say so briefly.`,
-      groundingOpts
+      { maxTokens: groundingOpts.maxTokens }
     ).then(r => r?.data || '').catch(() => ''),
     // Lineups: BDL API first (pre-game, includes handedness + probable pitchers);
     // the MLB Stats API boxscore fills any side BDL leaves short, downstream.
