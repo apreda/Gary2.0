@@ -54,30 +54,35 @@ export function applyStreakResult(
   };
 }
 
-/** Fetch-apply-upsert for one settled streak play. Never throws. */
+/**
+ * Fetch-apply-upsert for one settled streak play. Never throws.
+ * Returns the post-update row (the prior row when nothing changed), or
+ * null on failure — callers use `current` for the settle push copy.
+ */
 export async function updateUserStreak(
   sbBase: string, sbHeaders: Record<string, string>,
   userId: string, gameDate: string, status: string,
-): Promise<boolean> {
+): Promise<StreakRow | null> {
   try {
     const res = await fetch(
       `${sbBase}/rest/v1/user_streaks?user_id=eq.${userId}` +
       `&select=current,best,prev_current,last_counted_date,last_result`,
       { headers: sbHeaders },
     );
-    if (!res.ok) return false;
+    if (!res.ok) return null;
     const rows: StreakRow[] = await res.json();
+    const prev = rows[0] ?? { current: 0, best: 0, prev_current: 0, last_counted_date: null, last_result: null };
     const next = applyStreakResult(rows[0] ?? null, gameDate, status);
-    if (!next) return true; // no change needed is a success
+    if (!next) return prev; // no change needed is a success
 
     const up = await fetch(`${sbBase}/rest/v1/user_streaks`, {
       method: "POST",
       headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({ user_id: userId, ...next, updated_at: new Date().toISOString() }),
     });
-    return up.ok;
+    return up.ok ? next : null;
   } catch (e) {
     console.warn(`[Streaks] update failed for ${userId}: ${(e as Error).message}`);
-    return false;
+    return null;
   }
 }

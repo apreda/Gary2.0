@@ -5,6 +5,7 @@
 // place RPC resolved real prices where it could; rows without a price settle
 // at an assumed -110 and stay flagged odds_estimated so the UI shows "est".
 import { updateUserStreak } from "./streaks.ts";
+import { notifySettles, type UserSettleBatch } from "./push.ts";
 
 export type SettleStatus = "won" | "lost" | "push";
 
@@ -58,6 +59,11 @@ export async function settleUserBetsForDates(
   if (!res.ok) { out.failed++; return out; }
   const rows: any[] = await res.json();
   const byKey = new Map(graded.map((g) => [`${g.game_date}|${g.pick_text}`, g.result]));
+  const pushBatch = new Map<string, UserSettleBatch>();
+  const batchFor = (uid: string) => {
+    if (!pushBatch.has(uid)) pushBatch.set(uid, { events: [], streakAfter: null });
+    return pushBatch.get(uid)!;
+  };
   for (const r of rows) {
     const result = r.pick_type === "game" ? byKey.get(`${r.game_date}|${r.pick_text}`) : undefined;
     if (result) {
@@ -68,8 +74,13 @@ export async function settleUserBetsForDates(
         graded_at: new Date().toISOString(), graded_by: "system",
       });
       ok ? out.settled++ : out.failed++;
-      if (ok && r.streak_pick && r.user_id) {
-        await updateUserStreak(sbBase, sbHeaders, r.user_id, r.game_date, s.status);
+      if (ok && r.user_id) {
+        const b = batchFor(r.user_id);
+        b.events.push({ kind: r.kind, status: s.status, units: s.units, streak_pick: !!r.streak_pick });
+        if (r.streak_pick) {
+          const after = await updateUserStreak(sbBase, sbHeaders, r.user_id, r.game_date, s.status);
+          if (after) b.streakAfter = { current: after.current };
+        }
       }
     } else if (r.lock_at && Date.now() - new Date(r.lock_at).getTime() > 48 * 3600_000) {
       const ok = await patchUserBet(sbBase, sbHeaders, r.id, {
@@ -81,6 +92,13 @@ export async function settleUserBetsForDates(
         await updateUserStreak(sbBase, sbHeaders, r.user_id, r.game_date, "void");
       }
     }
+  }
+  // One push per user summarizing the run's settles — never fatal to grading.
+  try {
+    const p = await notifySettles(sbBase, sbHeaders, pushBatch);
+    if (p.sent || p.failed) console.log(`[SettlePush] sent=${p.sent} skipped=${p.skipped} failed=${p.failed}`);
+  } catch (e) {
+    console.warn(`[SettlePush] sweep-level failure: ${(e as Error).message}`);
   }
   return out;
 }

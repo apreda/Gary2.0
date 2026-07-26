@@ -23,6 +23,7 @@
 
 import { settleUserBet, patchUserBet } from "../grade-results/userbets.ts";
 import { updateUserStreak } from "../grade-results/streaks.ts";
+import { notifySettles, type UserSettleBatch } from "../grade-results/push.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -251,6 +252,7 @@ Deno.serve(async (req) => {
         const byKey = new Map(writes.map((w) => [
           `${w.game_date}|${normalizeName(w.player_name)}|${String(w.prop_type).toLowerCase()}`, w.result,
         ]));
+        const pushBatch = new Map<string, UserSettleBatch>();
         for (const r of rows) {
           const result = byKey.get(
             `${r.game_date}|${normalizeName(r.player_name ?? "")}|${String(r.prop_type ?? "").toLowerCase()}`);
@@ -261,10 +263,18 @@ Deno.serve(async (req) => {
             ...(s.estimated ? { odds_estimated: true } : {}),
             graded_at: new Date().toISOString(), graded_by: "system",
           });
-          if (ok && r.streak_pick && r.user_id) {
-            await updateUserStreak(SUPABASE_URL, sbHeaders, r.user_id, r.game_date, s.status);
+          if (ok && r.user_id) {
+            if (!pushBatch.has(r.user_id)) pushBatch.set(r.user_id, { events: [], streakAfter: null });
+            const b = pushBatch.get(r.user_id)!;
+            b.events.push({ kind: r.kind, status: s.status, units: s.units, streak_pick: !!r.streak_pick });
+            if (r.streak_pick) {
+              const after = await updateUserStreak(SUPABASE_URL, sbHeaders, r.user_id, r.game_date, s.status);
+              if (after) b.streakAfter = { current: after.current };
+            }
           }
         }
+        const p = await notifySettles(SUPABASE_URL, sbHeaders, pushBatch);
+        if (p.sent || p.failed) console.log(`[SettlePush] props sent=${p.sent} skipped=${p.skipped} failed=${p.failed}`);
       }
     } catch (e) {
       console.warn(`[UserBets] prop settle failed: ${(e as Error).message}`);
