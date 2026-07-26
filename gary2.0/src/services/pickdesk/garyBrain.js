@@ -50,7 +50,9 @@ const parseFinalJson = (t) => {
 
 /** Map Sol's final_pick text onto the chassis contract fields. */
 export function mapFinalPick(parsed, meta) {
-  const fp = String(parsed.final_pick || '');
+  // Normalize "(−126)" → "−126": every downstream parser (grading, ledgers,
+  // F-5 text rules) expects bare trailing odds.
+  const fp = String(parsed.final_pick || '').replace(/\(\s*([+-]\d{3,4})\s*\)/g, '$1').replace(/\s{2,}/g, ' ').trim();
   const isSpread = /run\s*line|[+-]1\.5/i.test(fp);
   const fpLower = fp.toLowerCase();
   const homeSide = fpLower.includes(String(meta.homeTeam || '').toLowerCase().split(' ').pop());

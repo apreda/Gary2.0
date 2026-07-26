@@ -100,6 +100,12 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
 });
 
 describe('mapFinalPick', () => {
+  it('normalizes parenthesized odds in the pick text', () => {
+    const m = mapFinalPick({ final_pick: 'Royals +1.5 (-126)' }, META);
+    expect(m.pick).toBe('Royals +1.5 -126');
+    expect(m).toMatchObject({ type: 'spread', odds: -126 });
+  });
+
   it('run line pick maps to spread with side values', () => {
     const m = mapFinalPick({ final_pick: 'Cardinals -1.5 +148' }, META);
     expect(m).toMatchObject({ type: 'spread', odds: 148, spread: -1.5, spreadOdds: 148 });
