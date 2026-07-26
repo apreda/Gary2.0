@@ -19,18 +19,13 @@
 // Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { matchVerdicts, plainVerdict, capEmoji } from "./verdicts.ts";
+import { matchVerdicts, plainVerdict } from "./verdicts.ts";
 import { computeStanding } from "./pl.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
-// Naked-model verdicts (Jul 10, founder): swapped from Gemini to OpenAI's gpt-5.6-terra via the Responses
-// API — same "zero customization" contract (no system prompt, no persona, no voice rules), different
-// provider. Verified live on this account's key before wiring in (model genuinely exists, July 2026).
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 // Voice work gets its own model knob: SOCIAL_GEMINI_MODEL upgrades the WRITER (captions, verdicts, recap)
 // without touching grade-results or anything else that shares the global GEMINI_MODEL secret.
 const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
@@ -86,27 +81,6 @@ function ordinalDate(ymd: string): string {
   const day = d.getUTCDate();
   const suffix = (day % 100 >= 11 && day % 100 <= 13) ? "th" : (["th", "st", "nd", "rd"][day % 10] ?? "th");
   return `${month} ${day}${suffix}`;
-}
-
-// Jul 8 2026 (founder): for verdicts, he wants to see what the RAW model says with zero customization —
-// no system prompt, no Gary character, no voice rules, no JSON forcing. This is the closest an API call
-// gets to "as if you typed it into a chat app yourself." Used ONLY for verdicts; every other surface (pick
-// threads) keeps its real voice rules untouched. Jul 10: swapped provider Gemini -> OpenAI
-// gpt-5.6-terra (founder wanted "a little smarter"); added a hard cap of 1 emoji regardless of provider.
-async function nakedLLM(user: string): Promise<string> {
-  const r = await fetch(OPENAI_RESPONSES_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${OPENAI_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ model: "gpt-5.6-terra", input: [{ role: "user", content: user }] }),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  const text = (j.output ?? [])
-    .filter((o: any) => o.type === "message")
-    .flatMap((o: any) => (o.content ?? []).map((c: any) => c.text ?? "").filter(Boolean))
-    .join("");
-  if (!text.trim()) throw new Error("OpenAI returned empty output");
-  return capEmoji(text.trim(), 1);
 }
 
 async function callLLM(system: string, user: string): Promise<string> {
@@ -341,24 +315,13 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
 }
 
 // VERDICT LOOP (Engine 0, Jul 2026): when a game Gary tweeted a pick for goes FINAL, quote-tweet HIS OWN
-// pick tweet with a one-line verdict. Win = short swagger, loss = owned flat, push = shrug. The quote surfaces
-// the original timestamped call (native receipts). Covers standard/top_pick threads from today AND yesterday
-// (late finals grade after midnight ET).
+// pick tweet with a one-line verdict. The quote surfaces the original timestamped call (native receipts) —
+// the pick tweet carries the angle, the verdict just grades it. Covers standard/top_pick threads from today
+// AND yesterday (late finals grade after midnight ET).
+// Jul 26 2026 (founder): verdict = plainVerdict(), ALWAYS. The Jul 8-10 "naked model" experiment (raw LLM,
+// zero rules) shipped capper slop ("Giants ML -130 ✅ Cashes easily as the Giants roll 9-2") and was killed;
+// this re-locks the founder's Jul 8 template ruling: "Cashed. Final X-Y." Nothing else, ever. No LLM here.
 const VERDICT_CAP_PER_RUN = 4;
-
-// Jul 8 2026 (founder): naked-model verdict — plain factual prompt, zero persona, zero style rules.
-// Falls back to plainVerdict() ONLY on an API error (reliability, not a style choice).
-async function nakedVerdict(c: { pickText: string; matchup: string; result: string; finalScore: string; league: string }): Promise<string> {
-  try {
-    const outcome = c.result === "won" ? "won" : c.result === "push" ? "pushed" : "lost";
-    const user = `The pick was: ${c.pickText}, for the game ${c.matchup} (${c.league}). Final score: ${c.finalScore || "unknown"}. The pick ${outcome}. Write a short reply, like a reply to a tweet, saying whether the pick hit.`;
-    const raw = await nakedLLM(user);
-    return raw.slice(0, 275);
-  } catch (e) {
-    console.error("naked verdict LLM failed, using plain fallback: " + String(e));
-    return plainVerdict(c.result, c.finalScore);
-  }
-}
 
 async function runVerdictMode(today: string, dryRun: boolean) {
   const dates = [today, yesterdayOf(today)];
@@ -379,7 +342,7 @@ async function runVerdictMode(today: string, dryRun: boolean) {
 
   const verdicts: any[] = [];
   for (const c of cands) {
-    const text = await nakedVerdict(c);
+    const text = plainVerdict(c.result, c.finalScore);
     if (dryRun) { verdicts.push({ pick: c.pickText, result: c.result, quoting: c.hookTweetId, text }); continue; }
     try {
       const id = await postQuote(text, c.hookTweetId);
