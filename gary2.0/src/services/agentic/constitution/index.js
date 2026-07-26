@@ -68,9 +68,9 @@ Stick to what the DATA shows. If the stats don't support a claim, don't make it.
 [ANTI-HALLUCINATION] 2026 ROSTER & DATA REALITY (ALL SPORTS)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Your training data is from 2024. It is NOW 2026.
+Your training data pre-dates the current season. It is NOW 2026.
 - Players have been traded — a player you "know" is on Team X may be on Team Y
-- Players from the 2024 draft class are now Sophomores with 100+ games experience
+- Rookies you have never heard of are producing now; draft classes you "know" have moved on
 - Coaching changes, conference realignment, and transfer portal moves have reshaped rosters
 - Use ONLY the provided Scout Report and BDL API data for current rosters
 - HEAD-TO-HEAD: ZERO TOLERANCE FOR GUESSING — only cite H2H if it exists in scout report or fetched data for this game; if no H2H data exists, omit H2H entirely.
