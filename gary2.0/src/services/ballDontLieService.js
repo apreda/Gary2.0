@@ -5474,12 +5474,18 @@ const ballDontLieService = {
       const params = useGames
         ? { player_ids: playerIds, game_ids: gameIds, per_page: perPage }
         : { player_ids: playerIds, season, per_page: perPage };
-      const cacheKey = `mlb_pitcher_pitch_type_${useGames ? 'game' : 'season'}_${JSON.stringify(params)}`;
+      const cacheKey = `mlb_pitcher_pitch_type_v2_${useGames ? 'game' : 'season'}_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB pitcher pitch-type ${useGames ? 'game' : 'season'} stats for ${playerIds.length} pitcher(s)`);
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        const data = response.data?.data || [];
+        const data = [];
+        let cursor;
+        for (let page = 0; page < 4; page++) {
+          const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(cursor != null ? { ...params, cursor } : params)}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          data.push(...(response.data?.data || []));
+          cursor = response.data?.meta?.next_cursor;
+          if (cursor == null) break;
+        }
         console.log(`[BDL] MLB pitcher pitch-type ${useGames ? 'game' : 'season'} stats: ${data.length} records`);
         return data;
       }, ttlMinutes);
@@ -5502,12 +5508,18 @@ const ballDontLieService = {
       const params = useGames
         ? { player_ids: playerIds, game_ids: gameIds, per_page: perPage }
         : { player_ids: playerIds, season, per_page: perPage };
-      const cacheKey = `mlb_hitter_pitch_type_${useGames ? 'game' : 'season'}_${JSON.stringify(params)}`;
+      const cacheKey = `mlb_hitter_pitch_type_v2_${useGames ? 'game' : 'season'}_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB hitter pitch-type ${useGames ? 'game' : 'season'} stats for ${playerIds.length} hitter(s)`);
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        const data = response.data?.data || [];
+        const data = [];
+        let cursor;
+        for (let page = 0; page < 4; page++) {
+          const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(cursor != null ? { ...params, cursor } : params)}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          data.push(...(response.data?.data || []));
+          cursor = response.data?.meta?.next_cursor;
+          if (cursor == null) break;
+        }
         console.log(`[BDL] MLB hitter pitch-type ${useGames ? 'game' : 'season'} stats: ${data.length} records`);
         return data;
       }, ttlMinutes);
