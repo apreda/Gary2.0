@@ -18,7 +18,7 @@ const META = {
 };
 
 const DESK = {
-  deskText: '═══ THE BOARD ═══\nboard rows\n\n═══ PROBABLE PITCHERS ═══\nshelf',
+  deskText: '═══ THE LINES (DraftKings) ═══\nlines\n\n═══ PROBABLE PITCHERS ═══\nshelf',
   tapeRows: [{ name: 'Record' }],
   verifiedTaleOfTape: { rows: [{ name: 'Record' }] },
   recentScores: null,
@@ -67,8 +67,8 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     await analyzeGameDesk({});
     expect(sendToOpenAISession).toHaveBeenCalledTimes(1);
     const msg = sendToOpenAISession.mock.calls[0][1];
-    expect(msg.indexOf('═══ THE BOARD ═══')).toBeLessThan(msg.indexOf('Pick the bet you want to take'));
-    expect(msg).toContain('Pick the bet you want to take from tonight\'s board.');
+    expect(msg.indexOf('═══ THE LINES')).toBeLessThan(msg.indexOf('Pick the bet you want to take'));
+    expect(msg).toContain('Pick the bet you want to take.');
     expect(msg).toContain('confidence_score');
     // The razor: no decision coaching, no mechanics tutoring, no old-system asks.
     expect(msg).not.toContain('BEST BET');
@@ -87,7 +87,7 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
       moneylineHome: -104, moneylineAway: -112,
     });
     expect(r.verifiedTaleOfTape.rows).toHaveLength(1);
-    expect(r.deskText).toContain('THE BOARD');
+    expect(r.deskText).toContain('THE LINES');
     expect(r.rationale).toContain("Gary's Take");
   });
 

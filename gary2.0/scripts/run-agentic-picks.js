@@ -1451,8 +1451,11 @@ async function main() {
               sportsbookOdds = formatOddsForStorage(rawOdds, result.pick, result.homeTeam, result.awayTeam);
               console.log(`   Found odds from ${sportsbookOdds?.length || 0} sportsbooks`);
 
-              // BEST LINE SELECTION: Find the best spread for Gary's pick
-              if (sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
+              // BEST LINE SELECTION: Find the best spread for Gary's pick.
+              // MLB is exempt (Jul 26 2026, founder: one standard book —
+              // Gary quotes the chosen book's line; electing a different
+              // book's price here would contradict the card).
+              if (config.key !== 'baseball_mlb' && sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
                 const validOdds = sportsbookOdds.filter(o => typeof o.spread === 'number' && !isNaN(o.spread));
                 if (validOdds.length > 0) {
                   const firstSpread = validOdds[0].spread;
@@ -1498,7 +1501,7 @@ async function main() {
           // Use best available line if found, otherwise fall back to default
           const finalSpread = bestLine?.spread ?? result.spread;
           const finalSpreadOdds = bestLine?.spreadOdds ?? result.spreadOdds;
-          const bestLineBook = bestLine?.book ?? null;
+          const bestLineBook = bestLine?.book ?? result.book ?? null;
 
           // Update pick text to reflect best available line (not just Gary's raw output).
           // F-5: the stored odds are the ELECTED board line, so the pick text must say

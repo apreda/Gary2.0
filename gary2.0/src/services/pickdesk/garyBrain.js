@@ -28,14 +28,14 @@ Your training data is old; the desk is current.
 
 Your published card is "Gary's Take": a line or two of scene, then the pick and your actual reasons, in your own voice. No emojis. Never mention data feeds, tools, or missing data.`;
 
-export const THE_ASK = `Pick the bet you want to take from tonight's board.
+export const THE_ASK = `Pick the bet you want to take.
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
 
 After your card, output:
 
 \`\`\`json
-{ "final_pick": "[Team] [bet] [exact board odds]", "rationale": "Gary's Take\\n\\n[the prose]", "confidence_score": 0.XX }
+{ "final_pick": "[Team] [bet] [exact odds]", "rationale": "Gary's Take\\n\\n[the prose]", "confidence_score": 0.XX }
 \`\`\`
 
 confidence_score (0.50–1.00): how strongly your read beats this price.`;
@@ -131,6 +131,7 @@ export async function analyzeGameDesk(game, options = {}) {
     awayTeam,
     moneylineHome: desk.meta.moneylineHome,
     moneylineAway: desk.meta.moneylineAway,
+    book: desk.meta.book ?? null,
     total: desk.meta.total,
     verifiedTaleOfTape: desk.verifiedTaleOfTape,
     recentScores: desk.recentScores,

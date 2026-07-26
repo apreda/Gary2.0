@@ -57,7 +57,7 @@ describe('buildMlbDesk', () => {
 
   it('orders the desk BOARD → STAKES → WORLD → shelf', async () => {
     const { deskText } = await buildMlbDesk(game);
-    const board = deskText.indexOf('═══ THE BOARD ═══');
+    const board = deskText.indexOf('═══ THE LINES');
     const stakes = deskText.indexOf('═══ THE STAKES ═══');
     const world = deskText.indexOf('═══ THE WORLD ═══');
     const shelf = deskText.indexOf('═══ PROBABLE PITCHERS ═══');
@@ -67,11 +67,24 @@ describe('buildMlbDesk', () => {
     expect(shelf).toBeGreaterThan(world);
   });
 
-  it('board carries every book, both ML sides, both RL sides, and the mechanics legend', async () => {
-    const { deskText } = await buildMlbDesk(game);
-    expect(deskText).toContain('fanduel: ML Reds -112 / Cardinals -104 | Run line Reds 1.5 (-178) / Cardinals -1.5 (148)');
-    expect(deskText).toContain('draftkings:');
+  it('the lines are ONE standard book — DraftKings preferred, four options, no board', async () => {
+    const { deskText, meta } = await buildMlbDesk(game);
+    expect(deskText).toContain('═══ THE LINES (DraftKings) ═══');
+    expect(deskText).toContain('Reds ML -110 | Cardinals ML -105');
+    expect(deskText).toContain('Reds +1.5 (-180) | Cardinals -1.5 (+150)');
+    expect(deskText).not.toContain('fanduel:');
     expect(deskText).not.toContain('Bet mechanics');
+    expect(meta).toMatchObject({ book: 'draftkings', moneylineHome: -105, moneylineAway: -110, spreadHomeOdds: 150, spreadAwayOdds: -180 });
+  });
+
+  it('falls back down the book preference when DraftKings is missing', async () => {
+    ballDontLieService.getOddsV2.mockResolvedValue([
+      { vendor: 'betrivers', moneyline_home_odds: -108, moneyline_away_odds: -102 },
+      { vendor: 'fanduel', moneyline_home_odds: -104, moneyline_away_odds: -112 },
+    ]);
+    const { deskText, meta } = await buildMlbDesk(game);
+    expect(deskText).toContain('═══ THE LINES (FanDuel) ═══');
+    expect(meta.book).toBe('fanduel');
   });
 
   it('stakes carry record, division position, GB, seed, streak, and the deadline', async () => {
@@ -104,9 +117,9 @@ describe('buildMlbDesk', () => {
     expect(out.tapeRows).toHaveLength(1);
     expect(out.recentScores).toEqual({ some: 'scores' });
     expect(out.meta).toMatchObject({
-      homeTeam: 'Cardinals', awayTeam: 'Reds',
-      moneylineHome: -104, moneylineAway: -112,
-      spreadHome: -1.5, spreadHomeOdds: 148, spreadAway: 1.5, spreadAwayOdds: -178,
+      homeTeam: 'Cardinals', awayTeam: 'Reds', book: 'draftkings',
+      moneylineHome: -105, moneylineAway: -110,
+      spreadHome: -1.5, spreadHomeOdds: 150, spreadAway: 1.5, spreadAwayOdds: -180,
     });
   });
 });

@@ -101,29 +101,50 @@ export function sanitizeBoardRows(rows) {
   });
 }
 
+// ONE standard book (founder, Jul 26: "there are only 4 options… I just want
+// standard normal"). DraftKings preferred, then the next most-used book that
+// has tonight's lines. All books are still fetched (the app's multi-book
+// dropdown keeps them; the outlier filter needs them) — Gary sees one.
+const BOOK_PREFERENCE = ['draftkings', 'fanduel', 'betmgm', 'caesars', 'betrivers', 'fanatics'];
+const BOOK_LABELS = { draftkings: 'DraftKings', fanduel: 'FanDuel', betmgm: 'BetMGM', caesars: 'Caesars', betrivers: 'BetRivers', fanatics: 'Fanatics' };
+
+export function chooseBook(rows) {
+  const usable = (rows || []).filter(r => r.moneyline_home_odds != null && r.moneyline_away_odds != null);
+  for (const v of BOOK_PREFERENCE) {
+    const hit = usable.find(r => (r.vendor || '').toLowerCase() === v);
+    if (hit) return hit;
+  }
+  return usable[0] || (rows || [])[0] || null;
+}
+
+const fmtOdds = (o) => (o == null ? '—' : (o > 0 ? `+${o}` : `${o}`));
+
 export function buildBoardSection(rows, homeTeam, awayTeam) {
-  const lines = (rows || []).map(r =>
-    `${r.vendor}: ML ${awayTeam} ${r.moneyline_away_odds} / ${homeTeam} ${r.moneyline_home_odds}` +
-    (r.spread_home_value != null
-      ? ` | Run line ${awayTeam} ${r.spread_away_value} (${r.spread_away_odds}) / ${homeTeam} ${r.spread_home_value} (${r.spread_home_odds})`
-      : '')
-  ).join('\n') || 'No board rows.';
-  return `═══ THE BOARD ═══\n${lines}`;
+  const book = chooseBook(rows);
+  if (!book) return `═══ THE LINES ═══\nNo lines available.`;
+  const label = BOOK_LABELS[(book.vendor || '').toLowerCase()] || book.vendor || 'Book';
+  const lines = [
+    `${awayTeam} ML ${fmtOdds(book.moneyline_away_odds)} | ${homeTeam} ML ${fmtOdds(book.moneyline_home_odds)}`,
+  ];
+  if (book.spread_home_value != null) {
+    lines.push(`${awayTeam} ${fmtOdds(book.spread_away_value)} (${fmtOdds(book.spread_away_odds)}) | ${homeTeam} ${book.spread_home_value} (${fmtOdds(book.spread_home_odds)})`);
+  }
+  return `═══ THE LINES (${label}) ═══\n${lines.join('\n')}`;
 }
 
 function boardMeta(rows, homeTeam, awayTeam) {
-  const first = (rows || []).find(r => r.moneyline_home_odds != null) || {};
-  const spread = (rows || []).find(r => r.spread_home_value != null) || {};
+  const book = chooseBook(rows) || {};
   return {
     homeTeam,
     awayTeam,
-    moneylineHome: first.moneyline_home_odds ?? null,
-    moneylineAway: first.moneyline_away_odds ?? null,
-    spreadHome: spread.spread_home_value ?? null,
-    spreadAway: spread.spread_away_value ?? null,
-    spreadHomeOdds: spread.spread_home_odds ?? null,
-    spreadAwayOdds: spread.spread_away_odds ?? null,
-    total: first.total ?? null,
+    book: (book.vendor || null),
+    moneylineHome: book.moneyline_home_odds ?? null,
+    moneylineAway: book.moneyline_away_odds ?? null,
+    spreadHome: book.spread_home_value ?? null,
+    spreadAway: book.spread_away_value ?? null,
+    spreadHomeOdds: book.spread_home_odds ?? null,
+    spreadAwayOdds: book.spread_away_odds ?? null,
+    total: book.total ?? null,
   };
 }
 
