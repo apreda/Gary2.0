@@ -16,8 +16,9 @@ import { ballDontLieService } from '../ballDontLieService.js';
 import { extractSection, insertAfterHeader } from './sectionText.js';
 
 const TRADE_DEADLINE = '2026-07-31'; // MLB calendar fact; update each season
-const BET_MECHANICS = `Bet mechanics (facts): MONEYLINE pays if the team wins outright. RUN LINE -1.5 pays only on a win by 2+ runs (a one-run win pays the moneyline and loses -1.5); +1.5 cashes on a win or a one-run loss.`;
-const INJURY_LEGEND = `Tags: [NEW] = listed/scratched within 3 days (may not be in the line yet). [KNOWN] = 4+ days (the line and recent stats already reflect it). [SP SCRATCH] = scheduled starter replaced — the highest-impact roster change in baseball.`;
+// (Bet-mechanics legend deleted Jul 26 2026 — founder razor: never explain a
+// run line to a frontier model. The board rows carry the offered bets.)
+const INJURY_LEGEND = `Tags: [NEW] = listed/scratched within 3 days (may not be in the line yet). [KNOWN] = 4+ days (the line and recent stats already reflect it). [SP SCRATCH] = scheduled starter replaced.`;
 const NEWS_HEADER = `═══ TODAY'S BREAKING NEWS ═══`;
 const INJURIES_HEADER = `═══ INJURIES (BDL Structured) ═══`;
 
@@ -105,7 +106,7 @@ export function buildBoardSection(rows, homeTeam, awayTeam) {
       ? ` | Run line ${awayTeam} ${r.spread_away_value} (${r.spread_away_odds}) / ${homeTeam} ${r.spread_home_value} (${r.spread_home_odds})`
       : '')
   ).join('\n') || 'No board rows.';
-  return `═══ THE BOARD ═══\n${lines}\n\n${BET_MECHANICS}`;
+  return `═══ THE BOARD ═══\n${lines}`;
 }
 
 function boardMeta(rows, homeTeam, awayTeam) {

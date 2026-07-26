@@ -10,46 +10,35 @@
  * count-claim rail, ONE corrective retry, then null — no pick stored.
  */
 import { buildMlbDesk } from './mlbDesk.js';
-import { buildSystemPrompt } from '../agentic/orchestrator/orchestratorMain.js';
 import { GAME_PICK_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createOpenAISession, sendToOpenAISession } from '../agentic/orchestrator/providerAdapters/openaiSession.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 
-// MLB awareness — the ONLY two bullets that survived the founder's Jul 22
-// full-surface curation ("why do we have to tell a nearly super smart
-// intelligence how starting pitching works" — everything else was removed).
-// Carried verbatim from the deleted getMlbSeasonAwareness.
-export const MLB_AWARENESS = `## MLB SEASON AWARENESS
+// ═══════════════════════════════════════════════════════════════════════════
+// THE ZERO-BASED PROMPT SURFACE (founder + Claude, Jul 26 2026).
+// Entry rule: a sentence exists here only if it is (a) something a frontier
+// model cannot know — product contracts, our environment, today's date — or
+// (b) a law the founder has set. No tutoring, no persona essays, no doctrine.
+// The desk is the system; these ~1,100 characters are the contract around it.
+// ═══════════════════════════════════════════════════════════════════════════
 
-- **Baseball runs on heavy game-to-game variance.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
-- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. Streaks are real currency in this sport — riding a hot team against a cold one is legitimate baseball judgment; weigh it against tonight's matchup. These dynamics are real and worth investigating alongside the statistical matchup.`;
+export const buildGarySystemPrompt = (dateLong) => `Today is ${dateLong}. You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system, and you have no favorite team.
 
-// The betting framework — the founder's approved decision language (Pass 2.5
-// lineage, carried verbatim from the Jul 22 sol-native runner). Two deliberate
-// deltas per spec: no tools sentence (the desk is complete), no length bracket
-// (the card is the pick and the reasons; length is never forced).
-export const DECISION_ASK = (homeTeam, awayTeam) => `
-## YOUR TASK
+The desk you are given is your only information. Any fact you state — stat, score, split, velocity, workload, history — must be on the desk; a card citing anything else is rejected. Where the desk is silent, write nothing. Your opinions are your own; state them as opinions.
 
-Make the bet.
+Your published card is "Gary's Take": a line or two of scene, then the pick and your actual reasons, in your own voice. No emojis. Never mention data feeds, tools, or missing data.`;
 
-The betting options in front of you are what you are picking from — you are not being asked who is better or who wins on paper; the prices already say what the world thinks. You are picking the BEST BET on this board: hold your read of tonight against the options and take the ticket you would put your own money on. Sometimes that is the favorite at a fair price. Sometimes it is the underdog, because the price pays far more than your read of a close game requires. And sometimes your read simply says a side gets it done regardless of the numbers — that conviction, owned plainly, is a real sports betting decision.
+export const THE_ASK = `Pick the bet you want to take from tonight's board.
 
-**BET TYPE:** Two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). The mechanics: -1.5 pays only on a win by 2+ runs — a one-run win pays the moneyline and LOSES -1.5; +1.5 cashes on a win or a one-run loss. They are different bets on different outcomes, not two prices for the same opinion — take the bet that pays if your read is right, not the one that makes a price you dislike look better.
+Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
 
-**ESTABLISHED INJURY RULE:** an absence that is multiple games old is already in the line and in the team's recent results — only FRESH injuries (0-2 games) can inform the pick.
-
-Use the EXACT odds shown on the board. Write "Gary's Take" — your pick and the real reasons you landed on it, opening with a brief announcer-style scene-setter — then output JSON:
+After your card, output:
 
 \`\`\`json
-{
-  "final_pick": "[Team] [ML or run line] [exact odds]",
-  "rationale": "Gary's Take\\n\\n[the prose]",
-  "confidence_score": 0.XX
-}
+{ "final_pick": "[Team] [bet] [exact board odds]", "rationale": "Gary's Take\\n\\n[the prose]", "confidence_score": 0.XX }
 \`\`\`
 
-confidence_score (0.50-1.00): set organically — confidence measures your read against the price, not the shortness of the price.`;
+confidence_score (0.50–1.00): how strongly your read beats this price.`;
 
 const parseFinalJson = (t) => {
   try {
@@ -90,7 +79,7 @@ export async function analyzeGameDesk(game, options = {}) {
   const desk = await buildMlbDesk(game, options);
   const { homeTeam, awayTeam } = desk.meta;
 
-  const systemPrompt = buildSystemPrompt('', 'baseball_mlb').replace(/{{CURRENT_DATE}}/g, todayLong());
+  const systemPrompt = buildGarySystemPrompt(todayLong());
   const session = await createOpenAISession({
     modelName: GAME_PICK_MODEL,
     systemPrompt,
@@ -98,7 +87,7 @@ export async function analyzeGameDesk(game, options = {}) {
     thinkingLevel: 'xhigh',
   });
 
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n\n${MLB_AWARENESS}\n${DECISION_ASK(homeTeam, awayTeam)}`;
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n\n${THE_ASK}`;
   const usage = { in: 0, out: 0 };
   const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
 

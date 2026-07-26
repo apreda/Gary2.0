@@ -8,7 +8,7 @@ vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/openaiSessi
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
 import { createOpenAISession, sendToOpenAISession } from '../../../src/services/agentic/orchestrator/providerAdapters/openaiSession.js';
-import { analyzeGameDesk, mapFinalPick, DECISION_ASK } from '../../../src/services/pickdesk/garyBrain.js';
+import { analyzeGameDesk, mapFinalPick, THE_ASK } from '../../../src/services/pickdesk/garyBrain.js';
 
 const META = {
   homeTeam: 'Cardinals', awayTeam: 'Reds',
@@ -44,26 +44,32 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(args.tools).toEqual([]);
   });
 
-  it('system prompt carries the curated survivors, no constitution block', async () => {
+  it('system prompt is the zero-based contract — no inherited doctrine, no tutoring', async () => {
     await analyzeGameDesk({});
     const { systemPrompt } = createOpenAISession.mock.calls[0][0];
-    expect(systemPrompt).toContain('FACT-CHECKING PROTOCOL');
-    expect(systemPrompt).toContain('THINK LIKE A SHARP');
+    expect(systemPrompt).toContain('your only information');
+    expect(systemPrompt).toContain('never as an AI');
+    expect(systemPrompt).toContain('Gary\'s Take');
+    expect(systemPrompt).not.toContain('FACT-CHECKING PROTOCOL');
+    expect(systemPrompt).not.toContain('THINK LIKE A SHARP');
     expect(systemPrompt).not.toContain('<constitution>');
-    expect(systemPrompt).not.toContain('{{CURRENT_DATE}}');
+    expect(systemPrompt).not.toContain('thirty years');
+    expect(systemPrompt.length).toBeLessThan(1200);
   });
 
-  it('one user message: desk first, then the approved ask; no tools language, no length bracket', async () => {
+  it('one user message: the desk, then the bare ask — no coaching, no tutoring', async () => {
     await analyzeGameDesk({});
     expect(sendToOpenAISession).toHaveBeenCalledTimes(1);
     const msg = sendToOpenAISession.mock.calls[0][1];
-    expect(msg.indexOf('═══ THE BOARD ═══')).toBeLessThan(msg.indexOf('## YOUR TASK'));
-    expect(msg).toContain('BEST BET on this board');
-    expect(msg).toContain('Make the bet.');
-    // No tools language (the founder-kept awareness bullets legitimately say
-    // "investigate" in the reasoning sense — only the tool ask is banned).
+    expect(msg.indexOf('═══ THE BOARD ═══')).toBeLessThan(msg.indexOf('Pick the bet you want to take'));
+    expect(msg).toContain('Pick the bet you want to take from tonight\'s board.');
+    expect(msg).toContain('confidence_score');
+    // The razor: no decision coaching, no mechanics tutoring, no old-system asks.
+    expect(msg).not.toContain('BEST BET');
+    expect(msg).not.toContain('MONEYLINE pays');
+    expect(msg).not.toContain('own money');
+    expect(msg).not.toContain('MLB SEASON AWARENESS');
     expect(msg).not.toContain('with your tools');
-    expect(msg).not.toContain('fetch_stats');
     expect(msg).not.toContain('[3 paragraphs');
   });
 
@@ -104,12 +110,11 @@ describe('mapFinalPick', () => {
   });
 });
 
-describe('DECISION_ASK text', () => {
-  it('is the approved language with the two spec deltas only', () => {
-    const ask = DECISION_ASK('Cardinals', 'Reds');
-    expect(ask).toContain('take the bet that pays if your read is right');
-    expect(ask).toContain('ESTABLISHED INJURY RULE');
-    expect(ask).toContain('confidence measures your read against the price');
-    expect(ask).not.toMatch(/tools/i);
+describe('THE_ASK text', () => {
+  it('is task, injury law, and output contract — nothing else', () => {
+    expect(THE_ASK).toContain('Pick the bet you want to take');
+    expect(THE_ASK).toContain('already games old is already in the price');
+    expect(THE_ASK).toContain('final_pick');
+    expect(THE_ASK.length).toBeLessThan(700);
   });
 });

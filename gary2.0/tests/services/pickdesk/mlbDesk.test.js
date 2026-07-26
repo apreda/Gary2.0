@@ -62,7 +62,7 @@ describe('buildMlbDesk', () => {
     const { deskText } = await buildMlbDesk(game);
     expect(deskText).toContain('fanduel: ML Reds -112 / Cardinals -104 | Run line Reds 1.5 (-178) / Cardinals -1.5 (148)');
     expect(deskText).toContain('draftkings:');
-    expect(deskText).toContain('Bet mechanics (facts):');
+    expect(deskText).not.toContain('Bet mechanics');
   });
 
   it('stakes carry record, division position, GB, seed, streak, and the deadline', async () => {

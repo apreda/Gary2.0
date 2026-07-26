@@ -38,10 +38,10 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
     expect(main).not.toContain('redsInGame');
   });
 
-  it('sport physics: MLB streaks license survives in its pickdesk home (founder-kept, Jul 22 curation)', () => {
+  it('the pickdesk surface is zero-based — no inherited doctrine text', () => {
     const brain = pickdesk('garyBrain.js');
-    expect(brain).toContain('Streaks are real currency');
-    expect(brain).toContain('Baseball runs on heavy game-to-game variance');
+    expect(brain).not.toContain('Streaks are real currency');
+    expect(brain).not.toContain('THINK LIKE A SHARP');
   });
 });
 
