@@ -11819,6 +11819,7 @@ struct BillfoldView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 26) {
                             balanceBlock
+                            if AppFlags.userBookEnabled { UserBookSection() }
                             performanceChart
                             recentCarousel
                             dailyLedger

@@ -350,3 +350,362 @@ struct TailFadeRow: View {
         return fmt.string(from: d)
     }
 }
+
+// ── YOUR BOOK (Billfold section) ────────────────────────────────────────────
+// Two ledgers, never mixed: WITH GARY = system-graded tails/fades (the
+// flagship, unfakeable number); YOUR PLAYS = self-logged bets, labeled.
+struct UserBookSection: View {
+    @State private var bets: [UserBet] = []
+    @State private var loading = true
+    @State private var showQuickLog = false
+    @State private var shareImage: UserBookShareImage? = nil
+
+    private var withGary: [UserBet] { bets.filter { $0.isVerified } }
+    private var yourPlays: [UserBet] { bets.filter { $0.kind == "manual" } }
+
+    private func record(_ rows: [UserBet]) -> (w: Int, l: Int, p: Int, units: Double) {
+        var w = 0, l = 0, p = 0; var u = 0.0
+        for b in rows {
+            switch b.status {
+            case "won": w += 1
+            case "lost": l += 1
+            case "push": p += 1
+            default: break
+            }
+            u += b.units_net ?? 0
+        }
+        return (w, l, p, u)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("YOUR BOOK")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer()
+                if withGary.contains(where: { !$0.isPending }) {
+                    Button {
+                        let g = record(withGary.filter { !$0.isPending })
+                        if let img = renderRideShareImage(record: g, streakText: currentStreakText(withGary)) {
+                            shareImage = UserBookShareImage(image: img)
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share your record")
+                }
+                Button {
+                    showQuickLog = true
+                } label: {
+                    Text("+ Log a bet")
+                        .font(GaryFonts.mono(10, bold: true))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if AuthManager.shared.bearerToken == nil {
+                Text("Sign in and every pick you tail or fade goes on your own record — graded by the same system that grades Gary.")
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if loading {
+                ProgressView().tint(.white.opacity(0.4)).frame(maxWidth: .infinity)
+            } else if withGary.isEmpty && yourPlays.isEmpty {
+                Text("No entries yet. Tail or fade any pick from its card — your side locks at first pitch and grades itself.")
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ledgerHeader
+                slipsList
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.035)))
+        .padding(.horizontal, 16)
+        .task {
+            guard AuthManager.shared.bearerToken != nil else { loading = false; return }
+            let rows = await UserBookAPI.fetchMyBets()
+            // Day-cache law: a cancelled fetch returns [] — never latch it
+            // over data we already have.
+            if !rows.isEmpty || bets.isEmpty { bets = rows }
+            loading = false
+        }
+        .sheet(isPresented: $showQuickLog) {
+            QuickLogSheet { newBet in bets.insert(newBet, at: 0) }
+        }
+        .sheet(item: $shareImage) { item in
+            UserBookShareSheet(items: [item.image])
+        }
+    }
+
+    private func currentStreakText(_ rows: [UserBet]) -> String? {
+        let graded = rows.filter { !$0.isPending && $0.status != "void" && $0.status != "push" }
+            .sorted { ($0.placed_at ?? "") > ($1.placed_at ?? "") }
+        guard let first = graded.first, first.status == "won" else { return nil }
+        var count = 0
+        for b in graded { if b.status == "won" { count += 1 } else { break } }
+        guard count >= 2 else { return nil }
+        return "Riding a \(count)-bet heater"
+    }
+
+    private var ledgerHeader: some View {
+        let g = record(withGary.filter { !$0.isPending })
+        let m = record(yourPlays.filter { !$0.isPending })
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("WITH GARY")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+                Text("\(g.w)-\(g.l)\(g.p > 0 ? "-\(g.p)" : "")")
+                    .font(GaryFonts.text(22, .heavy))
+                    .foregroundStyle(.white.opacity(0.92))
+                Text(String(format: "%+.1fu", g.units))
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(g.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                Spacer()
+            }
+            if !yourPlays.isEmpty {
+                HStack(spacing: 10) {
+                    Text("YOUR PLAYS")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.4))
+                    Text("\(m.w)-\(m.l)\(m.p > 0 ? "-\(m.p)" : "")")
+                        .font(GaryFonts.mono(12, bold: true))
+                        .foregroundStyle(.white.opacity(0.65))
+                    Text(String(format: "%+.1fu", m.units))
+                        .font(GaryFonts.mono(11, bold: true))
+                        .foregroundStyle(m.units >= 0 ? Color(hex: "#22C55E").opacity(0.8) : Color(hex: "#EF4444").opacity(0.8))
+                    Text("self-tracked")
+                        .font(GaryFonts.mono(8.5)).tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.35))
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var slipsList: some View {
+        let visible = Array(bets.prefix(12))
+        return VStack(spacing: 0) {
+            ForEach(visible) { bet in
+                UserBetSlipRow(bet: bet) { updated in
+                    if let i = bets.firstIndex(where: { $0.id == updated.id }) { bets[i] = updated }
+                } onDelete: {
+                    bets.removeAll { $0.id == bet.id }
+                }
+                if bet.id != visible.last?.id {
+                    Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5)
+                }
+            }
+        }
+    }
+}
+
+struct UserBookShareImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+/// Plain UIActivityViewController wrapper for the Your Book share card
+/// (mirrors the pick-card share sheet pattern).
+struct UserBookShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
+private struct UserBetSlipRow: View {
+    let bet: UserBet
+    var onUpdate: (UserBet) -> Void
+    var onDelete: () -> Void
+    @State private var busy = false
+
+    private var kindLabel: String {
+        switch bet.kind {
+        case "tail": return "TAIL"
+        case "fade": return "FADE"
+        default: return "YOURS"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(kindLabel)
+                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                .foregroundStyle(bet.kind == "fade" ? Color(hex: "#8B93A7") : GaryColors.gold)
+                .frame(width: 38, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(bet.pick_text)
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(2).minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("\(bet.game_date) · \(String(format: "%.1fu", bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                    .font(GaryFonts.mono(9))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+        .padding(.vertical, 9)
+    }
+
+    @ViewBuilder private var trailing: some View {
+        if bet.isPending && bet.kind == "manual" {
+            HStack(spacing: 6) {
+                gradeChip("W", "won", Color(hex: "#22C55E"))
+                gradeChip("L", "lost", Color(hex: "#EF4444"))
+                gradeChip("P", "push", .white.opacity(0.5))
+            }
+        } else if bet.isPending {
+            Text("PENDING")
+                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                .foregroundStyle(.white.opacity(0.35))
+        } else {
+            let won = bet.status == "won"
+            let wash = bet.status == "push" || bet.status == "void"
+            Text(wash ? bet.status.uppercased() : String(format: "%@%.2fu", won ? "+" : "", bet.units_net ?? 0))
+                .font(GaryFonts.mono(11, bold: true))
+                .foregroundStyle(wash ? .white.opacity(0.45) : (won ? Color(hex: "#22C55E") : Color(hex: "#EF4444")))
+        }
+    }
+
+    private func gradeChip(_ label: String, _ status: String, _ tint: Color) -> some View {
+        Button {
+            busy = true
+            let units = UserBookAPI.manualUnits(status: status, stake: bet.stake_units, odds: bet.odds_american)
+            Task {
+                defer { busy = false }
+                if await UserBookAPI.gradeManual(id: bet.id, status: status, unitsNet: units) {
+                    onUpdate(UserBet(id: bet.id, kind: bet.kind, pick_type: bet.pick_type,
+                        game_date: bet.game_date, league: bet.league, pick_text: bet.pick_text,
+                        matchup: bet.matchup, player_name: bet.player_name, prop_type: bet.prop_type,
+                        description: bet.description, odds_american: bet.odds_american,
+                        odds_estimated: bet.odds_estimated, stake_units: bet.stake_units,
+                        status: status, units_net: units, lock_at: bet.lock_at,
+                        placed_at: bet.placed_at, graded_by: "user"))
+                }
+            }
+        } label: {
+            Text(label)
+                .font(GaryFonts.mono(10, bold: true))
+                .foregroundStyle(tint)
+                .frame(width: 26, height: 26)
+                .background(Circle().stroke(tint.opacity(0.5), lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+}
+
+// ── Quick-log sheet (manual outside bets) ───────────────────────────────────
+struct QuickLogSheet: View {
+    var onLogged: (UserBet) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft = UserBookAPI.ManualBetDraft()
+    @State private var oddsText = ""
+    @State private var busy = false
+    @State private var errorText: String? = nil
+    private let leagues = ["MLB", "NFL", "NBA", "NHL", "OTHER"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("The bet") {
+                    Picker("League", selection: $draft.league) {
+                        ForEach(leagues, id: \.self) { Text($0) }
+                    }
+                    TextField("What did you bet? (Yankees ML, Over 8.5, a parlay)", text: $draft.description, axis: .vertical)
+                    TextField("Odds (American, like -120 or +145)", text: $oddsText)
+                        .keyboardType(.numbersAndPunctuation)
+                    Stepper(value: $draft.stake, in: 0.5...10, step: 0.5) {
+                        Text(String(format: "Stake: %.1fu", draft.stake))
+                    }
+                }
+                if let e = errorText { Section { Text(e).foregroundStyle(.red) } }
+                Section {
+                    Button(busy ? "Saving" : "Add to Your Plays") { save() }
+                        .disabled(busy || draft.description.trimmingCharacters(in: .whitespaces).isEmpty)
+                } footer: {
+                    Text("Self-tracked entries stay in YOUR PLAYS — separate from your verified record with Gary.")
+                }
+            }
+            .navigationTitle("Log a bet")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+        }
+    }
+
+    private func save() {
+        draft.odds = Int(oddsText.replacingOccurrences(of: "+", with: ""))
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                let bet = try await UserBookAPI.logManual(draft)
+                onLogged(bet)
+                dismiss()
+            } catch { errorText = error.localizedDescription }
+        }
+    }
+}
+
+// ── MY RIDE WITH GARY share card ────────────────────────────────────────────
+// WITH GARY ledger only — every number on this card is system-graded and
+// lock-verified. YOUR PLAYS never appears here; the share card IS the receipt.
+struct RideShareCardView: View {
+    let record: (w: Int, l: Int, p: Int, units: Double)
+    let streakText: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("MY RIDE WITH GARY")
+                .font(GaryFonts.mono(13, bold: true)).tracking(2)
+                .foregroundStyle(GaryColors.gold)
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                Text("\(record.w)-\(record.l)\(record.p > 0 ? "-\(record.p)" : "")")
+                    .font(GaryFonts.text(56, .heavy))
+                    .foregroundStyle(.white)
+                Text(String(format: "%+.1fu", record.units))
+                    .font(GaryFonts.mono(24, bold: true))
+                    .foregroundStyle(record.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+            }
+            if let s = streakText {
+                Text(s)
+                    .font(GaryFonts.mono(13, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            Spacer(minLength: 0)
+            HStack {
+                Text("Locked before first pitch. Graded by machine.")
+                    .font(GaryFonts.mono(10)).tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.45))
+                Spacer()
+                Text("betwithgary.ai")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+            }
+        }
+        .padding(28)
+        .frame(width: 420, height: 420, alignment: .topLeading)
+        .background(Color(hex: "#141212"))
+    }
+}
+
+@MainActor
+func renderRideShareImage(record: (w: Int, l: Int, p: Int, units: Double), streakText: String?) -> UIImage? {
+    let renderer = ImageRenderer(content: RideShareCardView(record: record, streakText: streakText))
+    renderer.scale = 3
+    return renderer.uiImage
+}
