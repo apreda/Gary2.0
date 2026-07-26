@@ -161,7 +161,8 @@ const MATCHUP_SECTIONS = [
   ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
   ['MLB_CATCHER_DEFENSE', '═══ CATCHERS (framing / arm / SB game) ═══'],
   ['MLB_CLOSER_RELIEVER_STATS', '═══ CLOSERS & HIGH-LEVERAGE ARMS ═══'],
-  ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (season) ═══'],
+  ['MLB_BULLPEN', '═══ BULLPEN (season numbers) ═══'],
+  ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (recent appearances) ═══'],
   ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
 ];
 

@@ -412,6 +412,10 @@ export async function buildMlbScoutReport(game, options = {}) {
         if (lastStarts.length) {
           const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}`;
           parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
+          // Innings arc (Jul 26): stretching out vs managed down, as bare IP.
+          if (lastStarts.length >= 2) {
+            parts.push(`  IP by start (oldest→newest): ${lastStarts.slice().reverse().map(g => g.ip ?? '?').join(', ')}`);
+          }
         }
         if (vsOpp && (vsOpp.games || vsOpp.ip)) {
           const oppName = side === 'home' ? awayTeam : homeTeam;
@@ -1289,7 +1293,18 @@ export async function buildMlbScoutReport(game, options = {}) {
       const sb = stats.batting_sb ?? null;
       const fielding = fp != null || errs != null ? ` | Fielding: ${fp ?? '—'} FP, ${errs ?? '—'} E` : '';
       const running = sb != null ? ` | SB: ${sb}` : '';
-      return `${teamName}: ${avg} AVG / ${ops} OPS / ${rpg} R/G | Pitching: ${era} ERA / ${whip} WHIP / ${k9} K/9${fielding}${running}`;
+      // Offense shape (Jul 26): how the runs arrive — power, walks, whiffs —
+      // as per-game counts. Facts only; the fingerprint is Gary's to read.
+      const per = (v) => (v != null && gp > 0 ? (parseFloat(v) / gp).toFixed(2) : null);
+      const hrG = per(stats.batting_hr);
+      const bbG = per(stats.batting_bb);
+      const soG = per(stats.batting_so ?? stats.batting_k);
+      const shapeBits = [];
+      if (hrG != null) shapeBits.push(`${hrG} HR/gm`);
+      if (bbG != null) shapeBits.push(`${bbG} BB/gm`);
+      if (soG != null) shapeBits.push(`${soG} K/gm`);
+      const shape = shapeBits.length ? ` | Shape: ${shapeBits.join(', ')}` : '';
+      return `${teamName}: ${avg} AVG / ${ops} OPS / ${rpg} R/G | Pitching: ${era} ERA / ${whip} WHIP / ${k9} K/9${fielding}${running}${shape}`;
     };
     if (homeTeamStats || awayTeamStats) {
       teamSeasonStatsSection = [
@@ -1474,6 +1489,38 @@ ${rosterMovesSection}
 
 ═══ SCHEDULE SHAPE ═══
 ${scheduleShapeBlock || 'Schedule shape unavailable.'}
+${(() => {
+  // Lookahead / getaway / travel (Jul 26): facts for letdown-lookahead spots.
+  const TZ = { rays: 'ET', guardians: 'ET', tigers: 'ET', yankees: 'ET', 'red sox': 'ET', 'blue jays': 'ET', orioles: 'ET', phillies: 'ET', mets: 'ET', braves: 'ET', marlins: 'ET', nationals: 'ET', pirates: 'ET', reds: 'ET', brewers: 'CT', cubs: 'CT', 'white sox': 'CT', cardinals: 'CT', royals: 'CT', twins: 'CT', astros: 'CT', rangers: 'CT', rockies: 'MT', diamondbacks: 'MT', dodgers: 'PT', angels: 'PT', padres: 'PT', giants: 'PT', athletics: 'PT', mariners: 'PT' };
+  const nameOf = (id) => {
+    const row = (bdlStandings || []).find(r => r.team?.id === id);
+    return row?.team?.display_name?.split(' ').pop() || null;
+  };
+  const tzOf = (id) => { const n = nameOf(id); return n ? (TZ[n.toLowerCase()] || null) : null; };
+  const line = (teamId, teamName) => {
+    if (!teamId || !seasonIndex?.entries) return null;
+    let next = null;
+    for (const [, g] of seasonIndex.entries()) {
+      if (g.homeId !== teamId && g.awayId !== teamId) continue;
+      if (g.seasonType === 'spring_training') continue;
+      const et = toEtDate(g.date);
+      if (et <= todayEtStr) continue;
+      if (!next || et < next.et) next = { et, oppId: g.homeId === teamId ? g.awayId : g.homeId, hostId: g.homeId };
+    }
+    if (!next) return `${teamName}: no scheduled game found after today.`;
+    const tomorrow = new Date(new Date(todayEtStr + 'T12:00:00').getTime() + 86400000).toISOString().slice(0, 10);
+    const when = next.et === tomorrow ? 'tomorrow' : `next on ${next.et}`;
+    const opp = nameOf(next.oppId) || 'TBD';
+    const sameOppAsTonight = next.oppId === (teamId === homeTeamBdlId ? awayTeamBdlId : homeTeamBdlId);
+    const hereTz = tzOf(homeTeamBdlId);
+    const nextTz = tzOf(next.hostId);
+    const travel = hereTz && nextTz && hereTz !== nextTz ? ` (${hereTz}→${nextTz})` : '';
+    if (sameOppAsTonight) return `${teamName}: same series continues ${when}.`;
+    return `${teamName}: new series ${when} ${next.hostId === teamId ? 'vs' : '@'} ${opp}${travel} — tonight is the getaway game of this set.`;
+  };
+  const out = [line(homeTeamBdlId, homeTeam), line(awayTeamBdlId, awayTeam)].filter(Boolean).join('\n');
+  return out ? `\nLooking ahead:\n${out}` : '';
+})()}
 
 ═══ REST & SCHEDULE SITUATION ═══
 ${restScheduleSection}

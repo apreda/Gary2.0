@@ -268,6 +268,8 @@ export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
       oppId: isHome ? g.awayId : g.homeId,
       won: my > opp,
       margin: my - opp,
+      rf: my,
+      ra: opp,
     });
   }
   if (games.length < 10) return null;
@@ -298,8 +300,16 @@ export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
   }
 
   const fmt = (r) => `${r.w}-${r.l}`;
+  // Run environment trend: last 14 days vs full season, runs for/against per game.
+  const anchor = games[games.length - 1].et;
+  const cutoff = new Date(new Date(anchor + 'T12:00:00').getTime() - 13 * 86400000).toISOString().slice(0, 10);
+  const recent = games.filter(g => g.et >= cutoff);
+  const avg = (arr, k) => (arr.length ? (arr.reduce((a, g) => a + g[k], 0) / arr.length).toFixed(1) : '—');
+  const runsLine = recent.length >= 5
+    ? ` | runs last 14 days: ${avg(recent, 'rf')} for / ${avg(recent, 'ra')} against per game (season ${avg(games, 'rf')}/${avg(games, 'ra')})`
+    : '';
   const lines = [
-    `${teamName} this season: after a loss ${fmt(afterLoss)} | after a loss by 5+ ${fmt(afterBlowoutLoss)} | after a win ${fmt(afterWin)} | in series finales ${fmt(seriesFinales)} | after an off day ${fmt(afterOffDay)}`,
+    `${teamName} this season: after a loss ${fmt(afterLoss)} | after a loss by 5+ ${fmt(afterBlowoutLoss)} | after a win ${fmt(afterWin)} | in series finales ${fmt(seriesFinales)} | after an off day ${fmt(afterOffDay)}${runsLine}`,
   ];
   return { line: lines.join('\n'), records: { afterLoss, afterBlowoutLoss, afterWin, afterOffDay, seriesFinales } };
 }
