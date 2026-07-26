@@ -31,6 +31,7 @@ struct UserBet: Codable, Identifiable {
     let odds_american: Int?
     let odds_estimated: Bool?
     let stake_units: Double
+    let gary_confidence: Double?
     let status: String          // pending | won | lost | push | void
     let units_net: Double?
     let lock_at: String?
@@ -160,6 +161,23 @@ enum UserBookAPI {
         return (try? await run(req)) != nil
     }
 
+    /// Public riders/faders counts per pick for a date (aggregate only — the
+    /// RPC exposes no user data). Anon-capable so counts show pre-sign-in.
+    static func fetchTailCounts(gameDate: String) async -> [String: (tails: Int, fades: Int)] {
+        guard let url = URL(string: "\(Secrets.supabaseURL.absoluteString)/rest/v1/rpc/pick_tail_counts") else { return [:] }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_game_date": gameDate])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return [:] }
+        struct Row: Decodable { let pick_text: String; let tails: Int; let fades: Int }
+        let rows = (try? JSONDecoder().decode([Row].self, from: data)) ?? []
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.pick_text, (tails: $0.tails, fades: $0.fades)) })
+    }
+
     /// Manual settle math mirrors the server's: win pays at the row's odds
     /// (assumed -110 when none was entered), loss is -stake, push is zero.
     static func manualUnits(status: String, stake: Double, odds: Int?) -> Double {
@@ -185,6 +203,16 @@ struct TailFadeRow: View {
     @State private var errorText: String? = nil
     @State private var showAuth = false
     @State private var loaded = false
+    @State private var riders: (tails: Int, fades: Int)? = nil
+
+    /// "3 riding · 1 fading" — shown only once real bodies are on the pick.
+    private var ridersLine: String? {
+        guard let r = riders, r.tails + r.fades > 0 else { return nil }
+        var parts: [String] = []
+        if r.tails > 0 { parts.append("\(r.tails) riding") }
+        if r.fades > 0 { parts.append("\(r.fades) fading") }
+        return parts.joined(separator: " · ")
+    }
 
     private var locked: Bool {
         guard let ct = pick.commence_time, let d = ISO8601DateFormatter().date(from: ct) else { return false }
@@ -210,6 +238,10 @@ struct TailFadeRow: View {
             }
         }
         .task(id: pick.id) {
+            if riders == nil, let date = pickDateEST() {
+                let counts = await UserBookAPI.fetchTailCounts(gameDate: date)
+                if let c = counts[pick.pick ?? ""] { riders = c }
+            }
             guard !loaded, AuthManager.shared.bearerToken != nil else { return }
             let all = await UserBookAPI.fetchMyBets()
             // Cancellation guard: never latch an empty result over a live row.
@@ -226,7 +258,7 @@ struct TailFadeRow: View {
             tailFadeButton("TAIL", tint: GaryColors.gold) { arm("tail") }
             tailFadeButton("FADE", tint: Color(hex: "#8B93A7")) { arm("fade") }
             Spacer()
-            Text("On the record at lock")
+            Text(ridersLine ?? "On the record at lock")
                 .font(GaryFonts.mono(9))
                 .foregroundStyle(.white.opacity(0.38))
         }
@@ -567,7 +599,8 @@ private struct UserBetSlipRow: View {
                     .foregroundStyle(.white.opacity(0.85))
                     .lineLimit(2).minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("\(bet.game_date) · \(String(format: "%.1fu", bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                // Conviction-vs-Gary read: your stake beside Gary's own tier.
+                Text("\(bet.game_date) · You \(String(format: "%.1fu", bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")\(bet.gary_confidence.map { " · Gary \(convictionTier($0))" } ?? "")")
                     .font(GaryFonts.mono(9))
                     .foregroundStyle(.white.opacity(0.4))
             }
@@ -609,6 +642,7 @@ private struct UserBetSlipRow: View {
                         matchup: bet.matchup, player_name: bet.player_name, prop_type: bet.prop_type,
                         description: bet.description, odds_american: bet.odds_american,
                         odds_estimated: bet.odds_estimated, stake_units: bet.stake_units,
+                        gary_confidence: bet.gary_confidence,
                         status: status, units_net: units, lock_at: bet.lock_at,
                         placed_at: bet.placed_at, graded_by: "user"))
                 }
