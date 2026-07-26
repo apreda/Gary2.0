@@ -244,3 +244,61 @@ export function computeMlbH2hBySeason(rows, homeBdlId, awayBdlId, homeTeam) {
     .map(([yr, t]) => `${yr}: ${homeTeam} ${t.w}-${t.l}`);
   return { line: `Head-to-head, prior seasons (regular season): ${parts.join(' | ')}` };
 }
+
+/**
+ * SITUATIONAL RECORDS (Jul 26 2026, pickdesk situational layer) — how a team's
+ * season has actually gone in the spots a bettor asks about: after a loss,
+ * after getting blown out, after a win, in series finales, after an off day.
+ * Pure compute over the cached season index; facts only, no labels.
+ */
+export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
+  if (!seasonIndex || typeof seasonIndex.entries !== 'function' || !teamBdlId) return null;
+  const games = [];
+  for (const [, g] of seasonIndex.entries()) {
+    if (g.homeId !== teamBdlId && g.awayId !== teamBdlId) continue;
+    if (!/final/i.test(String(g.status || ''))) continue;
+    if (g.homeRuns == null || g.awayRuns == null) continue;
+    const isHome = g.homeId === teamBdlId;
+    const my = isHome ? g.homeRuns : g.awayRuns;
+    const opp = isHome ? g.awayRuns : g.homeRuns;
+    games.push({
+      et: toEtDate(g.date),
+      instant: String(g.date),
+      oppId: isHome ? g.awayId : g.homeId,
+      won: my > opp,
+      margin: my - opp,
+    });
+  }
+  if (games.length < 10) return null;
+  games.sort((a, b) => a.instant.localeCompare(b.instant));
+
+  const rec = () => ({ w: 0, l: 0 });
+  const tally = (r, won) => { if (won) r.w++; else r.l++; };
+  const afterLoss = rec();
+  const afterBlowoutLoss = rec(); // lost previous game by 5+
+  const afterWin = rec();
+  const afterOffDay = rec();      // 1+ full calendar day without a game
+  const seriesFinales = rec();    // last game of a 2+ game set vs the same opponent
+
+  for (let i = 1; i < games.length; i++) {
+    const prev = games[i - 1];
+    const cur = games[i];
+    tally(prev.won ? afterWin : afterLoss, cur.won);
+    if (!prev.won && prev.margin <= -5) tally(afterBlowoutLoss, cur.won);
+    const dayGap = (new Date(cur.et) - new Date(prev.et)) / 86400000;
+    if (dayGap >= 2) tally(afterOffDay, cur.won);
+  }
+  for (let i = 0; i < games.length; i++) {
+    const cur = games[i];
+    const next = games[i + 1];
+    const prevSameOpp = i > 0 && games[i - 1].oppId === cur.oppId;
+    const nextSameOpp = next && next.oppId === cur.oppId;
+    if (prevSameOpp && !nextSameOpp) tally(seriesFinales, cur.won);
+  }
+
+  const fmt = (r) => `${r.w}-${r.l}`;
+  const lines = [
+    `${teamName} this season: after a loss ${fmt(afterLoss)} | after a loss by 5+ ${fmt(afterBlowoutLoss)} | after a win ${fmt(afterWin)} | in series finales ${fmt(seriesFinales)} | after an off day ${fmt(afterOffDay)}`,
+  ];
+  return { line: lines.join('\n'), records: { afterLoss, afterBlowoutLoss, afterWin, afterOffDay, seriesFinales } };
+}

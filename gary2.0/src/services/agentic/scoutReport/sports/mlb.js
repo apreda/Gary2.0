@@ -29,7 +29,7 @@ import {
   getPitcherVsTeam,
   getPlayerSeasonStats,
 } from '../../../mlbStatsApiService.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, toEtDate } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, computeMlbSituationalRecords, toEtDate } from './mlbSeriesState.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -136,6 +136,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     gameContextGrounding,
     confirmedLineups,
     homeUpcomingGames,
+    storylinesGrounding,
+    lastGameRecaps,
   ] = await Promise.all([
     homeTeamId ? getTeamRoster(homeTeamId).catch(e => { console.warn(`[Scout Report] Home roster error: ${e.message}`); return []; }) : Promise.resolve([]),
     awayTeamId ? getTeamRoster(awayTeamId).catch(e => { console.warn(`[Scout Report] Away roster error: ${e.message}`); return []; }) : Promise.resolve([]),
@@ -175,6 +177,28 @@ export async function buildMlbScoutReport(game, options = {}) {
     // opponent complete the "Game 2 of 3" (a finale reads "Game 4 of 4").
     // null = lookahead failed → the section omits "of N" rather than guess.
     homeTeamId ? getMlbUpcomingGames(homeTeamId, 4).catch(() => null) : Promise.resolve(null),
+    // STORYLINES (Jul 26 2026, situational layer): the narrative a fan holds —
+    // separate from same-day hard news. Facts and reported narratives only.
+    openaiWebSearch(
+      `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, what local media are focused on. ` +
+      `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
+      { maxTokens: 1200 }
+    ).then(r => r?.data || '').catch(() => ''),
+    // LAST GAME, THE STORY (Jul 26 2026): our own nightly recap rows — the
+    // narrative of each team's most recent game, already generated and graded.
+    (async () => {
+      try {
+        const { supabase } = await import('../../../../supabaseClient.js');
+        const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const { data } = await supabase
+          .from('game_recaps')
+          .select('game_date, matchup, headline, recap')
+          .gte('game_date', twoDaysAgo)
+          .order('game_date', { ascending: false })
+          .limit(60);
+        return data || [];
+      } catch { return []; }
+    })(),
   ]);
 
   console.log(`[Scout Report] BDL standings: ${bdlStandings?.length || 0} teams, BDL injuries: ${bdlInjuries?.length || 0}`);
@@ -642,6 +666,125 @@ export async function buildMlbScoutReport(game, options = {}) {
 
     recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames)].join('\n\n');
   }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // THIS SERIES — WHO'S DOING WHAT (Jul 26 2026): per-player aggregates over
+  // the current series' games, from the same box rows as RECENT FORM.
+  // ═══════════════════════════════════════════════════════════════════
+  let thisSeriesHotSection = '';
+  try {
+    const pairGame = (g) => {
+      const an = (g?.teams?.away?.team?.name || '').toLowerCase();
+      const hn = (g?.teams?.home?.team?.name || '').toLowerCase();
+      const hl = homeTeam.toLowerCase().split(' ').pop();
+      const al = awayTeam.toLowerCase().split(' ').pop();
+      return (an.includes(al) && hn.includes(hl)) || (an.includes(hl) && hn.includes(al));
+    };
+    const seriesGames = [];
+    for (let i = (homeRecentGames || []).length - 1; i >= 0; i--) {
+      if (pairGame(homeRecentGames[i])) seriesGames.unshift(homeRecentGames[i]);
+      else break;
+    }
+    if (seriesGames.length >= 1 && recentBoxStatsById.size > 0) {
+      const perTeam = new Map(); // teamLastWord -> Map(player -> agg)
+      for (const g of seriesGames) {
+        const bdlId = resolveBdlId(g, bdlCandidates);
+        const rows = (bdlId != null && recentBoxStatsById.get(bdlId)) || [];
+        for (const r of rows) {
+          const tKey = (r.team_name || '').toLowerCase().split(' ').pop();
+          if (!perTeam.has(tKey)) perTeam.set(tKey, new Map());
+          const players = perTeam.get(tKey);
+          const nm = r.player?.last_name || '?';
+          if (!players.has(nm)) players.set(nm, { ab: 0, h: 0, hr: 0, rbi: 0, ip: 0, er: 0, k: 0 });
+          const a = players.get(nm);
+          a.ab += r.at_bats || 0; a.h += r.hits || 0; a.hr += r.hr || 0; a.rbi += r.rbi || 0;
+          a.ip += parseFloat(r.ip || 0) || 0; a.er += r.er || 0; a.k += r.p_k || 0;
+        }
+      }
+      const teamLine = (nick) => {
+        const players = perTeam.get(nick.toLowerCase().split(' ').pop());
+        if (!players) return null;
+        const bats = [...players.entries()].filter(([, a]) => a.ab > 0)
+          .sort((x, y) => (y[1].h + y[1].hr * 2) - (x[1].h + x[1].hr * 2)).slice(0, 5)
+          .map(([nm, a]) => `${nm} ${a.h}-${a.ab}${a.hr ? ` ${a.hr}HR` : ''}${a.rbi ? ` ${a.rbi}RBI` : ''}`);
+        const arms = [...players.entries()].filter(([, a]) => a.ip > 0)
+          .sort((x, y) => y[1].ip - x[1].ip).slice(0, 3)
+          .map(([nm, a]) => `${nm} ${a.ip.toFixed(1)}IP ${a.er}ER ${a.k}K`);
+        const bits = [];
+        if (bats.length) bits.push(`Bats: ${bats.join(' | ')}`);
+        if (arms.length) bits.push(`Arms: ${arms.join(' | ')}`);
+        return bits.length ? `${nick} this series — ${bits.join('  ·  ')}` : null;
+      };
+      thisSeriesHotSection = [teamLine(homeTeam), teamLine(awayTeam)].filter(Boolean).join('\n');
+    }
+  } catch { thisSeriesHotSection = ''; }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SITUATIONAL RECORDS (Jul 26 2026) — after a loss / blowout / win,
+  // series finales, off days. Pure compute from the season index.
+  // ═══════════════════════════════════════════════════════════════════
+  let situationalSection = '';
+  {
+    const homeSit = computeMlbSituationalRecords(seasonIndex, homeTeamBdlId, homeTeam);
+    const awaySit = computeMlbSituationalRecords(seasonIndex, awayTeamBdlId, awayTeam);
+    situationalSection = [homeSit?.line, awaySit?.line].filter(Boolean).join('\n');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // WITHOUT KEY PLAYERS (Jul 26 2026) — team record in games each currently
+  // injured position player has missed this season. Facts only.
+  // ═══════════════════════════════════════════════════════════════════
+  let withoutPlayersSection = '';
+  try {
+    const seasonYear = new Date().getFullYear();
+    const teamGamesByDate = (teamBdlId) => {
+      const rows = new Map();
+      for (const [, g] of (seasonIndex?.entries?.() ? seasonIndex.entries() : [])) {
+        if (g.homeId !== teamBdlId && g.awayId !== teamBdlId) continue;
+        if (!/final/i.test(String(g.status || ''))) continue;
+        if (g.homeRuns == null || g.awayRuns == null) continue;
+        const isHome = g.homeId === teamBdlId;
+        rows.set(toEtDate(g.date), (isHome ? g.homeRuns > g.awayRuns : g.awayRuns > g.homeRuns));
+      }
+      return rows;
+    };
+    const sideDefs = [
+      { name: homeTeam, bdlId: homeTeamBdlId },
+      { name: awayTeam, bdlId: awayTeamBdlId },
+    ];
+    const lines = [];
+    for (const side of sideDefs) {
+      if (!side.bdlId) continue;
+      const games = teamGamesByDate(side.bdlId);
+      if (games.size < 20) continue;
+      const lw = side.name.toLowerCase().split(' ').pop();
+      const teamInjuries = (bdlInjuries || []).filter(r => {
+        const tn = (r.player?.team?.display_name || r.team?.display_name || r.team_name || '').toLowerCase();
+        return tn.includes(lw);
+      });
+      const positionPlayers = teamInjuries.filter(r => {
+        const pos = (r.player?.position || r.position || '').toUpperCase();
+        return pos && !pos.includes('P');
+      }).slice(0, 3);
+      for (const inj of positionPlayers) {
+        const pid = inj.player?.id;
+        const pname = [inj.player?.first_name, inj.player?.last_name].filter(Boolean).join(' ');
+        if (!pid || !pname) continue;
+        try {
+          const logs = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, seasonYear);
+          const playedDates = new Set((logs || []).map(l => toEtDate(l.game?.date || l.date)).filter(Boolean));
+          let wW = 0, wL = 0, woW = 0, woL = 0;
+          for (const [d, won] of games.entries()) {
+            if (playedDates.has(d)) { won ? wW++ : wL++; } else { won ? woW++ : woL++; }
+          }
+          if (woW + woL >= 3) {
+            lines.push(`${side.name} without ${pname} (out): ${woW}-${woL} | with him: ${wW}-${wL}`);
+          }
+        } catch { /* one player's logs missing — skip him */ }
+      }
+    }
+    withoutPlayersSection = lines.join('\n');
+  } catch { withoutPlayersSection = ''; }
 
   // ═══════════════════════════════════════════════════════════════════
   // RECENT RESULTS (last 10 games for each team — individual game scores)
@@ -1282,13 +1425,29 @@ BULLPEN USAGE — LAST 3 GAMES (per-appearance IP and pitch counts from box scor
 ${[homeBullpenUsage, awayBullpenUsage].filter(Boolean).join('\n') || 'No bullpen usage data available.'}
 
 ═══ SERIES STATE ═══
-${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}
+${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}
 
 Recent results:
 ${recentResults}
 
 Last game (inning detail):
 ${lastGameSection}
+
+═══ LAST GAME, THE STORY ═══
+${(() => {
+  const pickRecap = (nick) => {
+    const lw = nick.toLowerCase().split(' ').pop();
+    const row = (lastGameRecaps || []).find(r => (r.matchup || '').toLowerCase().includes(lw));
+    if (!row) return null;
+    const body = String(row.recap || '').split('\n').filter(Boolean).slice(0, 3).join(' ');
+    return `${nick} — ${row.headline || ''}${body ? `\n  ${body}` : ''}`;
+  };
+  return [pickRecap(homeTeam), pickRecap(awayTeam)].filter(Boolean).join('\n') || 'No recap rows for the last games.';
+})()}
+
+═══ SITUATIONAL RECORDS ═══
+${situationalSection || 'Insufficient season data.'}
+${withoutPlayersSection ? `\n═══ WITHOUT KEY PLAYERS (this season) ═══\n${withoutPlayersSection}\n` : ''}
 
 ═══ ROSTER MOVES — LAST 7 DAYS ═══
 ${rosterMovesSection}
@@ -1301,6 +1460,7 @@ ${restScheduleSection}
 
 ═══ TODAY'S BREAKING NEWS ═══
 ${gameContextGrounding || 'No same-day breaking news.'}
+${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
 `.trim();
 
   // Token menu for Flash

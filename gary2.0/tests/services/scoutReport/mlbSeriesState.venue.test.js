@@ -31,3 +31,42 @@ describe('computeMlbSeasonSeries at-venue aggregate', () => {
     expect(out.line).not.toContain("At tonight's venue");
   });
 });
+
+import { computeMlbSituationalRecords } from '../../../src/services/agentic/scoutReport/sports/mlbSeriesState.js';
+
+describe('computeMlbSituationalRecords', () => {
+  const T = 1, OPP = 2, OPP2 = 3;
+  const g = (date, homeId, awayId, homeRuns, awayRuns) =>
+    [date, { homeId, awayId, homeRuns, awayRuns, status: 'Final', date }];
+
+  it('computes after-loss, blowout, finale, and off-day records from the index', () => {
+    // 12 games: alternating series vs OPP (3 games) and OPP2 (3 games) x2
+    const entries = [
+      g('2026-06-01T17:00:00Z', T, OPP, 2, 8),   // L by 6 (blowout)
+      g('2026-06-02T17:00:00Z', T, OPP, 5, 3),   // W (after blowout loss)
+      g('2026-06-03T17:00:00Z', T, OPP, 1, 4),   // L (finale of 3-game set)
+      g('2026-06-05T17:00:00Z', OPP2, T, 1, 6),  // W (off day before: Jun 4)
+      g('2026-06-06T17:00:00Z', OPP2, T, 7, 2),  // L
+      g('2026-06-07T17:00:00Z', OPP2, T, 0, 3),  // W (finale)
+      g('2026-06-08T17:00:00Z', T, OPP, 4, 2),   // W
+      g('2026-06-09T17:00:00Z', T, OPP, 3, 9),   // L by 6 (blowout)
+      g('2026-06-10T17:00:00Z', T, OPP, 6, 5),   // W (finale, after blowout)
+      g('2026-06-12T17:00:00Z', OPP2, T, 2, 1),  // L (off day before)
+      g('2026-06-13T17:00:00Z', OPP2, T, 4, 6),  // W
+      g('2026-06-14T17:00:00Z', OPP2, T, 8, 1),  // L (finale)
+    ];
+    const idx = new Map(entries);
+    const out = computeMlbSituationalRecords(idx, T, 'Rays');
+    // Blowout losses (5+ margin): Jun 1 (2-8), Jun 6 (2-7), Jun 9 (3-9) — the
+    // team won the game after each one.
+    expect(out.records.afterBlowoutLoss).toEqual({ w: 3, l: 0 });
+    expect(out.records.afterOffDay).toEqual({ w: 1, l: 1 });
+    expect(out.records.seriesFinales).toEqual({ w: 2, l: 2 });
+    expect(out.line).toContain('Rays this season: after a loss');
+  });
+
+  it('returns null under 10 games', () => {
+    const idx = new Map([g('2026-06-01T17:00:00Z', T, OPP, 2, 8)]);
+    expect(computeMlbSituationalRecords(idx, T, 'Rays')).toBeNull();
+  });
+});
