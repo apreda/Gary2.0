@@ -19,13 +19,19 @@
 // Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { matchVerdicts, plainVerdict } from "./verdicts.ts";
+import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet } from "./verdicts.ts";
 import { computeStanding } from "./pl.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+// Verdict v3 (Jul 26 2026, founder): verdicts run on a NAKED OpenAI call — the same gpt-5.6-sol
+// brain that makes the picks, zero system prompt, zero persona — grounded by the full game report
+// from grade-results ?evidence=1. See buildVerdictPrompt in verdicts.ts for the approved contract.
+const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const VERDICT_MODEL = "gpt-5.6-sol";
 // Voice work gets its own model knob: SOCIAL_GEMINI_MODEL upgrades the WRITER (captions, verdicts, recap)
 // without touching grade-results or anything else that shares the global GEMINI_MODEL secret.
 const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
@@ -315,13 +321,64 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
 }
 
 // VERDICT LOOP (Engine 0, Jul 2026): when a game Gary tweeted a pick for goes FINAL, quote-tweet HIS OWN
-// pick tweet with a one-line verdict. The quote surfaces the original timestamped call (native receipts) —
-// the pick tweet carries the angle, the verdict just grades it. Covers standard/top_pick threads from today
-// AND yesterday (late finals grade after midnight ET).
-// Jul 26 2026 (founder): verdict = plainVerdict(), ALWAYS. The Jul 8-10 "naked model" experiment (raw LLM,
-// zero rules) shipped capper slop ("Giants ML -130 ✅ Cashes easily as the Giants roll 9-2") and was killed;
-// this re-locks the founder's Jul 8 template ruling: "Cashed. Final X-Y." Nothing else, ever. No LLM here.
+// pick tweet with a verdict. The quote surfaces the original timestamped call (native receipts) — the pick
+// tweet carries the angle, the verdict grades it. Covers standard/top_pick threads from today AND yesterday
+// (late finals grade after midnight ET).
+// Verdict v3 (Jul 26 2026, founder): "Hit." / "Miss." / "Push." + two plain chat-register sentences about
+// what actually happened, written by a naked gpt-5.6-sol call GROUNDED in the full box-score report from
+// grade-results ?evidence=1 — never ungrounded (no evidence yet -> skip, retry next hourly run; LLM error
+// -> plainVerdict fallback). v2 history: the Jul 8-10 ungrounded naked experiment shipped capper slop
+// ("Cashes easily as the Giants roll 9-2") because the model only knew the score; the cure was real facts,
+// not more style rules.
 const VERDICT_CAP_PER_RUN = 4;
+
+// Fetch the grounded game report for one verdict candidate. null = not available yet (endpoint
+// down, game missing, BDL gap) — the caller skips and the next hourly run retries.
+async function fetchGameEvidence(c: { postDate: string; matchup: string }): Promise<string | null> {
+  try {
+    const qs = `evidence=1&date=${encodeURIComponent(c.postDate)}&matchup=${encodeURIComponent(c.matchup)}`;
+    const r = await fetch(`${SB_URL}/functions/v1/grade-results?${qs}`, {
+      headers: { Authorization: `Bearer ${ANON_KEY}` },
+    });
+    const j = await r.json();
+    return j.ok && j.evidence ? String(j.evidence) : null;
+  } catch (e) {
+    console.error(`evidence fetch failed for ${c.matchup} ${c.postDate}: ` + String(e));
+    return null;
+  }
+}
+
+// Naked model call: no system prompt, no persona — the grounded evidence in the user prompt is
+// the entire contract. clean() (emoji/dash strip) + trimTweet stay as mechanical backstops.
+async function nakedLLM(user: string): Promise<string> {
+  const r = await fetch(OPENAI_RESPONSES_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({ model: VERDICT_MODEL, input: [{ role: "user", content: user }] }),
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.output ?? [])
+    .filter((o: any) => o.type === "message")
+    .flatMap((o: any) => (o.content ?? []).map((c: any) => c.text ?? "").filter(Boolean))
+    .join("");
+  if (!text.trim()) throw new Error("OpenAI returned empty output");
+  return text.trim();
+}
+
+// null = no grounded evidence yet, skip this candidate this run (never post ungrounded).
+async function groundedVerdict(
+  c: { pickText: string; matchup: string; result: string; finalScore: string; league: string; postDate: string },
+): Promise<string | null> {
+  const evidence = await fetchGameEvidence(c);
+  if (!evidence) return null;
+  try {
+    return trimTweet(clean(await nakedLLM(buildVerdictPrompt(c, evidence))));
+  } catch (e) {
+    console.error("grounded verdict LLM failed, using plain fallback: " + String(e));
+    return plainVerdict(c.result, c.finalScore);
+  }
+}
 
 async function runVerdictMode(today: string, dryRun: boolean) {
   const dates = [today, yesterdayOf(today)];
@@ -342,7 +399,8 @@ async function runVerdictMode(today: string, dryRun: boolean) {
 
   const verdicts: any[] = [];
   for (const c of cands) {
-    const text = plainVerdict(c.result, c.finalScore);
+    const text = await groundedVerdict(c);
+    if (text === null) { verdicts.push({ pick: c.pickText, result: c.result, skipped: "no grounded evidence yet, retrying next run" }); continue; }
     if (dryRun) { verdicts.push({ pick: c.pickText, result: c.result, quoting: c.hookTweetId, text }); continue; }
     try {
       const id = await postQuote(text, c.hookTweetId);

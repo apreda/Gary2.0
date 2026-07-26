@@ -82,6 +82,15 @@ async function sbGet(table: string, query: string): Promise<any[]> {
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
 
+// Team-name match for one BDL game row against pick-side team names (norm-token
+// containment both ways — the same rule the grading loop has always used).
+function mlbGameMatches(g: any, homeTeam: string, awayTeam: string): boolean {
+  const gh = norm(g.home_team?.full_name ?? g.home_team?.name ?? "");
+  const gv = norm(g.away_team?.full_name ?? g.away_team?.name ?? "");
+  const ph = norm(homeTeam ?? ""), pv = norm(awayTeam ?? "");
+  return (gh.includes(ph) || ph.includes(gh)) && (gv.includes(pv) || pv.includes(gv));
+}
+
 // ── game_results dedup write (re-grade on exist) ─────────────────────────────
 async function writeResult(row: any): Promise<"insert" | "update" | "noop" | "fail"> {
   const existing = await sbGet("game_results",
@@ -491,6 +500,34 @@ Deno.serve(async (req) => {
       return true;
     });
   };
+  // Verdict v3 (Jul 26 2026): read-only evidence endpoint —
+  //   ?evidence=1&date=YYYY-MM-DD&matchup=Away Team @ Home Team
+  // returns the SAME grounded box-score dossier writeRecap feeds the recap model
+  // (final score + pitching lines + HRs + notable batting + graded props), so
+  // social-auto-post can ground the verdict quote-tweet in the full game report.
+  // No grading, no writes. MLB only (mirrors the grader's coverage).
+  const evUrl = new URL(req.url);
+  if (evUrl.searchParams.get("evidence") === "1") {
+    const evDate = evUrl.searchParams.get("date") ?? "";
+    const evMatchup = evUrl.searchParams.get("matchup") ?? "";
+    const [awayTeam, homeTeam] = evMatchup.split(" @ ").map((s) => s.trim());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(evDate) || !awayTeam || !homeTeam) {
+      return Response.json({ ok: false, error: "need date=YYYY-MM-DD and matchup=Away Team @ Home Team" }, { status: 400 });
+    }
+    const games = await mlbForET(evDate);
+    const g = games.find((x: any) => mlbGameMatches(x, homeTeam, awayTeam));
+    if (!g) return Response.json({ ok: false, error: `no MLB game for ${evMatchup} on ${evDate}` }, { status: 404 });
+    if (!isFinalStatus(g.status)) return Response.json({ ok: false, error: "game not final yet" }, { status: 409 });
+    const evH = num(g.home_team_data?.runs), evV = num(g.away_team_data?.runs);
+    const mlbStats = await recapFetchMlbStats(num(g.id), statsCache);
+    const propRows = await recapFetchPropRows(evDate, propsCache);
+    const gradedProps = recapFilterPropsForGame(propRows, homeTeam, awayTeam);
+    const evidence = recapBuildEvidence({
+      league: "MLB", homeTeam, awayTeam, homeScore: evH ?? 0, awayScore: evV ?? 0, mlbStats, gradedProps,
+    });
+    return Response.json({ ok: true, evidence, final_score: `${evV}-${evH}`, matchup: `${awayTeam} @ ${homeTeam}` });
+  }
+
   const mlbGames = await Promise.all(dates.map(mlbForET)).then((a) => a.flat());
 
   for (const date of dates) {
@@ -526,10 +563,7 @@ Deno.serve(async (req) => {
           // (Padres@Cubs today vs last night) can't cross-match and grade the pick
           // against the wrong game.
           if (!x.date || etDateOf(x.date) !== date) return false;
-          const gh = norm(x.home_team?.full_name ?? x.home_team?.name ?? "");
-          const gv = norm(x.away_team?.full_name ?? x.away_team?.name ?? "");
-          const ph = norm(pick.homeTeam ?? ""), pv = norm(pick.awayTeam ?? "");
-          return (gh.includes(ph) || ph.includes(gh)) && (gv.includes(pv) || pv.includes(gv));
+          return mlbGameMatches(x, pick.homeTeam, pick.awayTeam);
         });
         if (!g || !isFinalStatus(g.status)) { stats.skipped++; continue; }
         hScore = num(g.home_team_data?.runs); vScore = num(g.away_team_data?.runs);

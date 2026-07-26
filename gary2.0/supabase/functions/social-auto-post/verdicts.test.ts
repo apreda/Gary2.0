@@ -2,7 +2,7 @@
 // Run: node --test gary2.0/supabase/functions/social-auto-post/verdicts.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePick, matchVerdicts, plainVerdict, type LogRow, type ResultRow } from "./verdicts.ts";
+import { normalizePick, matchVerdicts, plainVerdict, verdictOpener, buildVerdictPrompt, trimTweet, type LogRow, type ResultRow } from "./verdicts.ts";
 
 const log = (o: Partial<LogRow>): LogRow => ({
   id: "L1", post_date: "2026-07-05", league: "MLB", pick_text: "Pirates ML -190",
@@ -56,11 +56,43 @@ test("requires same date and league; matches on normalized pick text", () => {
   assert.equal(out.length, 1); // odds mismatch tolerated via normalization
 });
 
-test("plainVerdict is a flat deterministic template, no commentary", () => {
-  assert.equal(plainVerdict("won", "5-2"), "Cashed. Final 5-2.");
-  assert.equal(plainVerdict("lost", "3-1"), "Lost. Final 3-1.");
+test("plainVerdict is a flat deterministic template in the v3 vocabulary", () => {
+  assert.equal(plainVerdict("won", "5-2"), "Hit. Final 5-2.");
+  assert.equal(plainVerdict("lost", "3-1"), "Miss. Final 3-1.");
   assert.equal(plainVerdict("push", "4-4"), "Push. Final 4-4.");
-  assert.equal(plainVerdict("won", ""), "Cashed."); // no score available
+  assert.equal(plainVerdict("won", ""), "Hit."); // no score available
+});
+
+test("verdictOpener maps result to the chat-register word", () => {
+  assert.equal(verdictOpener("won"), "Hit.");
+  assert.equal(verdictOpener("lost"), "Miss.");
+  assert.equal(verdictOpener("push"), "Push.");
+});
+
+test("buildVerdictPrompt carries the bet, the outcome, the evidence, and the opener contract", () => {
+  const c = { pickText: "Giants ML -130", league: "MLB", result: "won", finalScore: "2-9", matchup: "Angels @ Giants" };
+  const p = buildVerdictPrompt(c, "FINAL SCORE: Angels (away) 2 — Giants (home) 9");
+  assert.ok(p.includes("The bet was: Giants ML -130 (MLB). It won."));
+  assert.ok(p.includes("Final score 2-9, Angels @ Giants"));
+  assert.ok(p.includes("FINAL SCORE: Angels (away) 2"));
+  assert.ok(p.includes('starting with exactly "Hit."'));
+  assert.ok(p.includes("only source of facts"));
+  assert.ok(p.includes("No betting phrases, no hype words, no emojis"));
+});
+
+test("trimTweet passes short text through and cuts long text at a sentence end", () => {
+  assert.equal(trimTweet("Hit. Short and done."), "Hit. Short and done.");
+  const long = "Hit. " + "Robbie Ray threw six shutout innings. ".repeat(12);
+  const out = trimTweet(long);
+  assert.ok(out.length <= 275);
+  assert.ok(out.endsWith("."));
+  assert.ok(!out.endsWith(" ")); // no dangling fragment
+});
+
+test("trimTweet never splits on a decimal like an ERA", () => {
+  const s = "Miss. Johnson's 7.36 road ERA held true. " + "x".repeat(300);
+  const out = trimTweet(s);
+  assert.ok(out.includes("7.36 road ERA held true."));
 });
 
 test("caps candidates per run", () => {

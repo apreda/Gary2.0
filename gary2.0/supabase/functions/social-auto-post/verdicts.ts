@@ -44,12 +44,42 @@ export function normalizePick(s: string): string {
     .trim();
 }
 
-// Jul 8 2026 (founder): verdicts read worse the more they try to sound like commentary. Plain deterministic
-// template, no LLM: "Cashed. Final X-Y." / "Lost. Final X-Y." / "Push. Final X-Y." Nothing else, ever.
-// (Re-locked Jul 26 after the naked-LLM verdict experiment shipped capper slop and was deleted.)
+// Verdict v3 vocabulary (founder, Jul 26 2026): plain chat register — "Hit." / "Miss." / "Push."
+export function verdictOpener(result: string): string {
+  return result === "won" ? "Hit." : result === "push" ? "Push." : "Miss.";
+}
+
+// Deterministic fallback when the grounded LLM verdict errors: opener + final score, nothing else.
 export function plainVerdict(result: string, finalScore: string): string {
-  const word = result === "won" ? "Cashed" : result === "push" ? "Push" : "Lost";
-  return finalScore ? `${word}. Final ${finalScore}.` : `${word}.`;
+  const word = verdictOpener(result);
+  return finalScore ? `${word} Final ${finalScore}.` : word;
+}
+
+// Verdict v3 prompt (founder-approved Jul 26 2026): naked model — no system prompt, no persona,
+// no voice rules. The full grounded game report (grade-results ?evidence=1 dossier: final score,
+// pitching lines, HRs, notable batting, graded props) is the ONLY fact source; the model opens
+// with the result word and writes two plain chat-register sentences about the game.
+export function buildVerdictPrompt(
+  c: { pickText: string; league: string; result: string; finalScore: string; matchup: string },
+  evidence: string,
+): string {
+  const outcome = c.result === "won" ? "won" : c.result === "push" ? "pushed" : "lost";
+  return (
+    `The bet was: ${c.pickText} (${c.league}). It ${outcome}. Final score ${c.finalScore}, ${c.matchup}.\n` +
+    `Here is what happened in the game. This is the only source of facts you can use, ` +
+    `don't add anything that isn't here:\n\n${evidence}\n\n` +
+    `Reply starting with exactly "${verdictOpener(c.result)}" then two normal sentences about ` +
+    `what happened in the game, like you'd say in a chat. No betting phrases, no hype words, no emojis.`
+  );
+}
+
+// Sentence-aware tweet cap: cut at the last sentence end inside the limit; hard-slice only if
+// there is none. "9-2. The" splits on ". " so decimals like 1.63 never break.
+export function trimTweet(s: string, max = 275): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf(".\n"));
+  return end > 0 ? cut.slice(0, end + 1) : cut.trimEnd();
 }
 
 const PICK_FORMATS = new Set(["standard", "top_pick"]);
