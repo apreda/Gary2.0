@@ -11570,6 +11570,8 @@ struct BillfoldView: View {
     @State private var spreadSport = "NBA"
     @State private var topdTimeframe = "7d"
     @State private var showingSettings = false
+    /// "gary" | "you" — whose book the page shows (header toggle, persisted).
+    @AppStorage("billfoldScope") private var billfoldScope = "gary"
     @State private var gameResultLookup: [String: GameResult] = [:]
     @State private var topPickCandidates: [BillfoldTopPickCandidate] = []
     @State private var billfoldSecondaryGeneration = 0
@@ -11804,6 +11806,16 @@ struct BillfoldView: View {
             VStack(spacing: 0) {
                 // Pinned wallet header + index tabs; the paper statements scroll beneath.
                 headerBar
+
+                if AppFlags.userBookEnabled, billfoldScope == "you" {
+                    // YOUR book takes the whole page below the header —
+                    // Gary's tabs/timeframes are his-book controls only.
+                    ScrollView(showsIndicators: false) {
+                        UserBookSection(expanded: true)
+                            .padding(.top, 14)
+                            .padding(.bottom, 120)
+                    }
+                } else {
                 billfoldTopBar
                     .padding(.top, 10)
 
@@ -11819,7 +11831,6 @@ struct BillfoldView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 26) {
                             balanceBlock
-                            if AppFlags.userBookEnabled { UserBookSection() }
                             performanceChart
                             recentCarousel
                             dailyLedger
@@ -11980,6 +11991,9 @@ struct BillfoldView: View {
                     .font(GaryFonts.mono(10))
                     .foregroundStyle(.white.opacity(0.55))
                 Spacer()
+                if AppFlags.userBookEnabled {
+                    bookScopeToggle
+                }
                 Button {
                     showingSettings = true
                 } label: {
@@ -11999,6 +12013,27 @@ struct BillfoldView: View {
                 .padding(.horizontal, 12)
         }
         .padding(.top, 12)
+    }
+
+    /// GARY / YOU book switch — whose record the page shows. Persisted so the
+    /// reader's choice sticks across launches (founder, Jul 26).
+    private var bookScopeToggle: some View {
+        HStack(spacing: 0) {
+            bookScopeChip("GARY", isOn: billfoldScope != "you") { billfoldScope = "gary" }
+            bookScopeChip("YOU", isOn: billfoldScope == "you") { billfoldScope = "you" }
+        }
+        .background(Capsule().stroke(brass.opacity(0.45), lineWidth: 1))
+    }
+
+    private func bookScopeChip(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(label)
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                .foregroundStyle(isOn ? .black : .white.opacity(0.6))
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Capsule().fill(isOn ? brass : .clear))
+        }
+        .buttonStyle(.plain)
     }
 
     private static let statementDateFormatter: DateFormatter = {

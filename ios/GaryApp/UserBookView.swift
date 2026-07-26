@@ -355,9 +355,13 @@ struct TailFadeRow: View {
 // Two ledgers, never mixed: WITH GARY = system-graded tails/fades (the
 // flagship, unfakeable number); YOUR PLAYS = self-logged bets, labeled.
 struct UserBookSection: View {
+    /// Compact = inline module; expanded = the Billfold YOU page (more slips,
+    /// sign-in button instead of a pitch line).
+    var expanded: Bool = false
     @State private var bets: [UserBet] = []
     @State private var loading = true
     @State private var showQuickLog = false
+    @State private var showAuthSheet = false
     @State private var shareImage: UserBookShareImage? = nil
 
     private var withGary: [UserBet] { bets.filter { $0.isVerified } }
@@ -415,6 +419,18 @@ struct UserBookSection: View {
                     .font(GaryFonts.text(13))
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
+                if expanded {
+                    Button {
+                        showAuthSheet = true
+                    } label: {
+                        Text("Sign in")
+                            .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .background(RoundedRectangle(cornerRadius: 7).fill(GaryColors.gold))
+                    }
+                    .buttonStyle(.plain)
+                }
             } else if loading {
                 ProgressView().tint(.white.opacity(0.4)).frame(maxWidth: .infinity)
             } else if withGary.isEmpty && yourPlays.isEmpty {
@@ -441,6 +457,7 @@ struct UserBookSection: View {
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet { newBet in bets.insert(newBet, at: 0) }
         }
+        .sheet(isPresented: $showAuthSheet) { AuthView() }
         .sheet(item: $shareImage) { item in
             UserBookShareSheet(items: [item.image])
         }
@@ -493,7 +510,7 @@ struct UserBookSection: View {
     }
 
     private var slipsList: some View {
-        let visible = Array(bets.prefix(12))
+        let visible = Array(bets.prefix(expanded ? 50 : 12))
         return VStack(spacing: 0) {
             ForEach(visible) { bet in
                 UserBetSlipRow(bet: bet) { updated in
