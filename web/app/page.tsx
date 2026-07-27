@@ -8,6 +8,7 @@ import { RecordTicker } from '@/components/RecordTicker';
 import { Eyebrow } from '@/components/Eyebrow';
 import { StitchRule, StatTile, GhostLink } from '@/components/Terminal';
 import { fetchTodayGamePicks, fetchTodayPropPicks, selectTopPick, selectTopProps } from '@/lib/gary/picks';
+import { fetchDailySlate } from '@/lib/gary/board';
 import { fetchAllGameResults, computeRecord, currentStreak, sinceDate, effectiveOdds } from '@/lib/gary/results';
 import { todayEST, daysAgoEST } from '@/lib/gary/dates';
 
@@ -21,9 +22,10 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  const [gamePicks, propPicks, results] = await Promise.all([
+  const [gamePicks, propPicks, slate, results] = await Promise.all([
     fetchTodayGamePicks().catch(() => null),
     fetchTodayPropPicks().catch(() => null),
+    fetchDailySlate(todayEST()).catch(() => []),
     fetchAllGameResults().catch(() => null),
   ]);
 
@@ -58,8 +60,20 @@ export default async function Home() {
         <div className="relative mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-14 md:pt-20 lg:grid-cols-12 lg:gap-6">
           <div className="lg:col-span-7">
             <p className="rise font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">
-              {gamePicks && gamePicks.length > 0 ? (
-                <><span className="tnum">{gamePicks.length}</span> picks on today&apos;s board · {todayEST()}</>
+              {/* The board is the slate, not the count of posted calls: at
+                  breakfast one pick was live and the front door read
+                  "1 PICKS ON TODAY'S BOARD" on a twelve-game day. */}
+              {slate.length > 0 ? (
+                <>
+                  <span className="tnum">{slate.length}</span> games on today&apos;s board ·{' '}
+                  <span className="tnum">{gamePicks?.length ?? 0}</span>{' '}
+                  {(gamePicks?.length ?? 0) === 1 ? 'call posted' : 'calls posted'}
+                </>
+              ) : gamePicks && gamePicks.length > 0 ? (
+                <>
+                  <span className="tnum">{gamePicks.length}</span>{' '}
+                  {gamePicks.length === 1 ? 'pick' : 'picks'} on today&apos;s board · {todayEST()}
+                </>
               ) : allTime ? (
                 <><span className="tnum">{allTime.graded.toLocaleString()}</span> graded picks · public record</>
               ) : (

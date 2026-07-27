@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Eyebrow } from '@/components/Eyebrow';
 import { ClampFade } from '@/components/ClampFade';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import {
@@ -180,11 +179,11 @@ export default async function HubPage() {
             <h2 className="font-display text-2xl uppercase text-hi">{lg === 'WC' ? '2026 World Cup' : lg}</h2>
             {lanes.map((k: LaneKey, laneIdx: number) => (
               <div key={k} className="mt-7">
+                {/* One heading, not two: the eyebrow used to print the lane's
+                    chip ("HEAT CHECK") directly above the uppercased title of
+                    the same name, so every lane on the page said itself twice. */}
                 <div className="flex items-baseline justify-between gap-3">
-                  <div>
-                    <Eyebrow>{LANES[k].chip}</Eyebrow>
-                    <h3 className="mt-1 font-display text-xl uppercase text-hi">{LANES[k].title}</h3>
-                  </div>
+                  <h3 className="font-display text-xl uppercase text-hi">{LANES[k].title}</h3>
                   <span className="tnum font-mono text-[11px] text-low">{laneMap.get(k)!.length}</span>
                 </div>
                 <div className="mt-3">

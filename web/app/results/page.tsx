@@ -163,7 +163,7 @@ export default async function ResultsPage() {
           <StatTile
             label="Streak"
             value={streak ? `${streak.count}${streak.kind === 'won' ? 'W' : 'L'}` : '—'}
-            sub={streak?.kind === 'won' ? 'riding it' : streak ? 'owning it' : ''}
+            sub={streak ? `${streak.kind === 'won' ? 'wins' : 'losses'} in a row` : ''}
             valueClassName={streak?.kind === 'won' ? 'text-win' : streak ? 'text-loss' : 'text-hi'}
           />
         </div>

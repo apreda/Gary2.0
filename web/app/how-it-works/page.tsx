@@ -21,7 +21,7 @@ const faqItems = [
   {
     question: 'What sports does Gary cover?',
     answer:
-      'NBA, NFL, NHL, MLB, NCAAB, NCAAF, and the 2026 FIFA World Cup. Game picks and player props are covered across all active seasons.',
+      'MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Game picks and player props are covered across all active seasons — and the complete 2026 FIFA World Cup record stays on the board.',
   },
   {
     question: 'Does Gary place bets?',
@@ -79,7 +79,7 @@ export default function HowItWorksPage() {
       <PageMasthead
         title="How Gary works"
         meta="METHODOLOGY"
-        sub="Gary covers NBA, NFL, NHL, MLB, NCAAB, NCAAF, and the 2026 World Cup. Every pick follows the same four-step process from research to graded result."
+        sub="Gary covers MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Every pick follows the same four-step process, from research to graded result."
       />
 
       {/* Four-step methodology — numbered rail, not gray boxes */}
