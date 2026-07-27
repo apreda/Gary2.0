@@ -604,7 +604,8 @@ export async function runAgenticPropsCli({
   validPicks.forEach((pick, i) => {
     const conf = pick.confidence ? (pick.confidence * 100).toFixed(0) : '?';
     const bet = pick.bet ? pick.bet.toUpperCase() : '?';
-    console.log(`${i + 1}. ${pick.player || 'Unknown'} (${pick.team || '?'}): ${bet} ${pick.prop || '?'} ${pick.line || '?'} @ ${pick.odds || '?'} (${conf}% confidence)`);
+    // pick.prop already carries the line ("total_bases 1.5") — don't print it twice.
+    console.log(`${i + 1}. ${pick.player || 'Unknown'} (${pick.team || '?'}): ${bet} ${pick.prop || '?'} @ ${pick.odds || '?'} (${conf}% confidence)`);
   });
 
   console.log(`\n🏁 Agentic ${leagueLabel} Props Runner Complete.\n`);
