@@ -5056,6 +5056,35 @@ const ballDontLieService = {
     }, 7 * 24 * 60); // final games never change
   },
 
+  /**
+   * Active-player name index (Jul 27 2026, hub tap-through fix): normalized
+   * full name -> { id, teamId, teamAbbr }. Names that collide (two active
+   * players, same normalized name) map to null so a wrong card can never
+   * open. Cached for a day — roster churn tolerance, not correctness.
+   */
+  async getMlbActivePlayerNameIndex() {
+    const cacheKey = 'mlb_active_player_name_index_v1';
+    return await getCachedOrFetch(cacheKey, async () => {
+      const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.']/g, '').trim().toLowerCase();
+      const map = new Map();
+      let cursor;
+      for (let page = 0; page < 20; page++) {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players/active${buildQuery({ per_page: 100, ...(cursor != null ? { cursor } : {}) })}`;
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+        for (const p of (response.data?.data || [])) {
+          const key = norm(p.full_name || `${p.first_name} ${p.last_name}`);
+          if (!key) continue;
+          if (map.has(key)) { map.set(key, null); continue; } // ambiguous — never guess
+          map.set(key, { id: p.id, teamId: p.team?.id ?? null, teamAbbr: p.team?.abbreviation ?? null });
+        }
+        cursor = response.data?.meta?.next_cursor;
+        if (cursor == null) break;
+      }
+      console.log(`[BDL] MLB active player name index: ${map.size} names`);
+      return map;
+    }, 24 * 60);
+  },
+
   async getMlbLineups(gameId) {
     if (!gameId) return null;
     try {

@@ -18,7 +18,7 @@
 // Defensive: missing fields skip the row; failures return [].
 
 import { makeRow, TONES, clampScore, round } from '../shared.js';
-import { geminiService } from '../../geminiService.js';
+import { generateSolText } from '../solText.js';
 
 const WINDOW_DAYS = 10;   // listed return inside this many days = stashable
 const MAX_ROWS = 8;
@@ -160,10 +160,7 @@ PLAYERS:
 ${facts}`;
 
   try {
-    const resp = await geminiService.generateResponse(
-      [{ role: 'user', content: prompt }],
-      { model: 'gemini-3-flash-preview', maxTokens: 9000 }
-    );
+    const resp = await generateSolText(prompt, { maxTokens: 9000 });
     const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
     const jsonStr = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));

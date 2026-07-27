@@ -210,6 +210,17 @@ export async function generateInsightConnections({ date, league = 'mlb', options
 
   const connections = postProcess(raw, { slateGameIds, minRelevance, maxRows, maxPerCategory });
 
+  // Tap-through contract (Jul 27 2026): back-fill missing player ids so every
+  // player name on the hub opens its card. Exact-name hits only; MLB only.
+  if (leagueKey === 'mlb' && connections.length) {
+    try {
+      const { resolveInsightIds } = await import('./resolveIds.js');
+      await resolveInsightIds(connections);
+    } catch (e) {
+      console.warn(`[insights] id resolver skipped: ${e.message}`);
+    }
+  }
+
   console.log(
     `[insights] ${leagueKey.toUpperCase()} ${dateStr}: ${games.length} games, ` +
       `${raw.length} raw connections -> ${connections.length} after filter/sort/cap.`,

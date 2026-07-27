@@ -21,7 +21,7 @@
 import { makeRow, TONES, clampScore, round, nameKey } from '../shared.js';
 import { getMlbSchedule } from '../../mlbStatsApiService.js';
 import { getPitcherXStats } from '../../baseballSavantService.js';
-import { geminiService } from '../../geminiService.js';
+import { generateSolText } from '../solText.js';
 
 const MAX_ARMS = 8;
 const BASE_SCORE = 68;
@@ -201,10 +201,7 @@ PITCHERS:
 ${facts}`;
 
   try {
-    const resp = await geminiService.generateResponse(
-      [{ role: 'user', content: prompt }],
-      { model: 'gemini-3-flash-preview', maxTokens: 9000 }
-    );
+    const resp = await generateSolText(prompt, { maxTokens: 9000 });
     const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
     const jsonStr = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));

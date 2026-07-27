@@ -15,7 +15,7 @@
 // Defensive: a team with no saves yet, or a failed fetch, is skipped; returns [].
 
 import { makeRow, TONES, clampScore } from '../shared.js';
-import { geminiService } from '../../geminiService.js';
+import { generateSolText } from '../solText.js';
 
 const COMMITTEE_GAP = 2;   // leader within this of runner-up = shared ninth
 const MAX_TEAMS = 8;
@@ -133,10 +133,7 @@ TEAMS:
 ${facts}`;
 
   try {
-    const resp = await geminiService.generateResponse(
-      [{ role: 'user', content: prompt }],
-      { model: 'gemini-3-flash-preview', maxTokens: 9000 }
-    );
+    const resp = await generateSolText(prompt, { maxTokens: 9000 });
     const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
     const jsonStr = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));

@@ -22,7 +22,7 @@
 
 import { makeRow, TONES, clampScore, round, pct3, nameKey } from '../shared.js';
 import { getPitcherXStats } from '../../baseballSavantService.js';
-import { geminiService } from '../../geminiService.js';
+import { generateSolText } from '../solText.js';
 
 const MIN_XERA_PA = 80;           // batters faced — xERA unstable below this
 // Availability gates — exclude owned aces so we surface PICKUPS, not stars.
@@ -120,10 +120,7 @@ PLAYERS:
 ${facts}`;
 
   try {
-    const resp = await geminiService.generateResponse(
-      [{ role: 'user', content: prompt }],
-      { model: 'gemini-3-flash-preview', maxTokens: 4000 }
-    );
+    const resp = await generateSolText(prompt, { maxTokens: 4000 });
     const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
     const jsonStr = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));

@@ -265,6 +265,31 @@ async function insertRows(rows) {
   });
 }
 
+/** Stored rows for (date, league) with the fields the content patch needs. */
+async function existingRowsForPatch(date, league) {
+  const { data } = await axios.get(REST_URL, {
+    headers: restHeaders,
+    params: {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+      select: 'id,category,headline,game,player_id,team_id,game_id,meta',
+      limit: 500,
+    },
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+/** PATCH one stored row by primary key. */
+async function patchRowById(id, patch) {
+  await axios({
+    method: 'PATCH',
+    url: REST_URL,
+    params: { id: `eq.${id}` },
+    data: JSON.parse(JSON.stringify(patch)),
+    headers: { ...restHeaders, Prefer: 'return=minimal' },
+  });
+}
+
 /**
  * Stable identity of a connection within a day+league — the ENTITY it describes,
  * so a re-run never replaces or duplicates an already-posted card. Entity cards
@@ -473,6 +498,18 @@ async function run() {
       }
     }
 
+    // Gary's voice pass (Jul 27 2026): rows leave with Gary's read on tonight
+    // written over the computer's evidence; the computed sentence moves to
+    // meta.evidence for the expanded card. Failure ships template details.
+    if (connections.length > 0) {
+      try {
+        const { applyGaryVoice } = await import('./src/services/insights/garyInsightVoice.js');
+        connections = await applyGaryVoice(connections, { league });
+      } catch (e) {
+        console.warn(`   [Gary voice] pass skipped (${e.message}) — template details ship`);
+      }
+    }
+
     if (connections.length === 0) {
       console.log(`   No connections generated for ${league} on ${targetDate}.`);
       // League Pulse is INDEPENDENT of the connections (it builds league-wide
@@ -569,7 +606,40 @@ async function run() {
           !seen.has(rowKey(r))
       );
       if (fresh.length) await insertRows(fresh);
-      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${rows.length - fresh.length - upgraded} already posted (frozen); ${upgraded} confirmedXI situational row(s) upgraded-in-place.`);
+
+      // CONTENT PATCH (Jul 27 2026): the freeze protects a card's IDENTITY from
+      // churn — it was never meant to trap a card on pre-Gary template copy or
+      // a missing tap-through id. For stored rows this run recomputed, patch
+      // detail/meta/ids IN PLACE when (a) the stored row predates the voice
+      // pass (no meta.evidence) or (b) it lacks a player_id the fresh row has.
+      // Headline, value, tone, relevance stay frozen — zero visible churn.
+      let patched = 0;
+      try {
+        const stored = await existingRowsForPatch(targetDate, league);
+        const storedByKey = new Map(stored.map((s) => [rowKey(s), s]));
+        for (const r of rows) {
+          const s = storedByKey.get(rowKey(r));
+          if (!s) continue;
+          const needsVoice = !(s.meta && typeof s.meta === 'object' && s.meta.evidence) && r.meta?.evidence;
+          const needsId = s.player_id == null && r.player_id != null;
+          if (!needsVoice && !needsId) continue;
+          const patch = {};
+          if (needsVoice) {
+            patch.detail = r.detail;
+            patch.meta = { ...(s.meta || {}), ...(r.meta || {}) };
+          }
+          if (needsId) {
+            patch.player_id = String(r.player_id);
+            if (s.team_id == null && r.team_id != null) patch.team_id = String(r.team_id);
+          }
+          await patchRowById(s.id, patch);
+          patched++;
+        }
+      } catch (e) {
+        console.warn(`   [Content patch] skipped: ${e.message}`);
+      }
+
+      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${rows.length - fresh.length - upgraded} already posted (frozen); ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids).`);
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });
