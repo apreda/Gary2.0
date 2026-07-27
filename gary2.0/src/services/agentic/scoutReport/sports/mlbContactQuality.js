@@ -46,11 +46,13 @@ export async function computeHitterContact({ gameIds = [], hitterIds = [] }) {
   return out;
 }
 
-/** "92.4 avg EV, 7 hard-hit, 2 barrels on 21 balls in play, whiff 24%, chase 31%" — or null. */
+/** "92.4 mph avg exit velo, 7 hard-hit, 2 barrels on 21 balls in play, whiff 24%, chase 31%" — or null.
+ *  Never abbreviate exit velocity to "EV" — on a betting desk that reads as
+ *  expected value (founder, Jul 27: no EV language anywhere). */
 export function hitterContactLine(agg) {
   if (!agg || agg.bip < MIN_BIP) return null;
   const bits = [
-    `${(agg.evSum / agg.bip).toFixed(1)} avg EV`,
+    `${(agg.evSum / agg.bip).toFixed(1)} mph avg exit velo`,
     `${agg.hardHit} hard-hit`,
     `${agg.barrels} barrel${agg.barrels === 1 ? '' : 's'} on ${agg.bip} balls in play`,
   ];
