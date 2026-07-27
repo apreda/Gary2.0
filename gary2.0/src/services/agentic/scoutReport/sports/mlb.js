@@ -30,6 +30,7 @@ import {
   getPlayerSeasonStats,
 } from '../../../mlbStatsApiService.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, computeMlbSituationalRecords, toEtDate } from './mlbSeriesState.js';
+import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -433,6 +434,13 @@ export async function buildMlbScoutReport(game, options = {}) {
         } else {
           parts.push(`  Arsenal velocity: NOT AVAILABLE — do not cite pitch speeds for ${pitcher.fullName}`);
         }
+
+        // Swing-and-miss trend across his own recent starts (BDL Statcast
+        // plate appearances, cached per finished game). Facts only.
+        try {
+          const whiffTrend = await computePitcherWhiffByStart({ pitcherId: bdlRow?.player?.id, season });
+          if (whiffTrend) parts.push(`  Whiff% by start (oldest→newest): ${whiffTrend}`);
+        } catch { /* trend optional */ }
 
         if (platoon?.vsLeft || platoon?.vsRight) {
           const fmt = (p) => p ? `${p.avg ?? '—'} AVG / ${p.ops ?? '—'} OPS, ${p.hr ?? '—'} HR (${p.ab ?? '—'} AB)` : 'no data';
@@ -1241,6 +1249,24 @@ export async function buildMlbScoutReport(game, options = {}) {
   const isDayGame = startTime
     ? parseInt(new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10) < 17
     : false;
+
+  // CONTACT QUALITY, LAST ~7 (Jul 27): per-hitter Statcast aggregates over
+  // both teams' recent finals — loud-contact-unlucky vs genuinely-lost is
+  // visible instead of inferred. One cached fetch per game, shared by every
+  // hitter in it; failures just omit the clause.
+  let contactByPid = new Map();
+  try {
+    const recentGameIds = [
+      ...homeBdlGames.slice(-7).map(g => g.id),
+      ...awayBdlGames.slice(-7).map(g => g.id),
+    ];
+    const lineupHitterIds = [...(homeData?.batters || []), ...(awayData?.batters || [])]
+      .map(b => b?.playerId).filter(id => id != null);
+    if (recentGameIds.length && lineupHitterIds.length) {
+      contactByPid = await computeHitterContact({ gameIds: recentGameIds, hitterIds: lineupHitterIds });
+    }
+  } catch { /* contact layer optional */ }
+
   const battingRollFor = async (batter) => {
     if (batter?.playerId == null) return null;
     try {
@@ -1259,8 +1285,10 @@ export async function buildMlbScoutReport(game, options = {}) {
         const day = (splits?.byBreakdown || []).find(r => r.category === 'batting' && r.split_name === 'Day');
         if (day && day.at_bats > 0) dayBit = ` | Day games: ${day.hits}-${day.at_bats}, ${day.avg ?? '?'} AVG/${day.ops ?? '?'} OPS`;
       }
-      if (!l7 && !l15 && !dayBit) return null;
-      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}${dayBit}`;
+      const contact = hitterContactLine(contactByPid.get(String(batter.playerId)));
+      const contactBit = contact ? `\n     Contact (recent): ${contact}` : '';
+      if (!l7 && !l15 && !dayBit && !contactBit) return null;
+      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}${dayBit}${contactBit}`;
     } catch { return null; }
   };
   const battingRollsFor = async (data, teamName) => {
