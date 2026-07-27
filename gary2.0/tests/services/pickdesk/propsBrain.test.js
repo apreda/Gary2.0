@@ -53,6 +53,17 @@ describe('buildPropBoard', () => {
     expect(board.text).not.toContain('total_bases');
   });
 
+  it('merges split over/under rows into one two-sided line — never prints null', () => {
+    const board = buildPropBoard([
+      { player: 'Dominic Canzone', team: 'Mariners', prop_type: 'total_bases', line: 1.5, over_odds: 142, under_odds: null },
+      { player: 'Dominic Canzone', team: 'Mariners', prop_type: 'total_bases', line: 1.5, over_odds: null, under_odds: -165 },
+      { player: 'Dominic Canzone', team: 'Mariners', prop_type: 'hits', line: 0.5, over_odds: null, under_odds: 155 },
+    ]);
+    expect(board.text).toContain('total_bases 1.5 (Over +142 / Under -165)');
+    expect(board.text).toContain('hits 0.5 (Under +155)');
+    expect(board.text).not.toContain('null');
+  });
+
   it('empty input → empty board, no throw', () => {
     const board = buildPropBoard([], {});
     expect(board.text).toBe('');

@@ -63,15 +63,32 @@ export function buildPropBoard(playerProps, { lineupNames = null, hrOnly = false
   }
   if (!rows.length) return { text: '', players: new Set() };
 
-  const byPlayer = new Map();
+  // The feed can deliver a market's over and under as SEPARATE rows (the
+  // second row carries over_odds: null) — merge by player+type+line first so
+  // the board prints one clean two-sided line, never a "null" price.
+  const merged = new Map();
   for (const p of rows) {
-    const key = norm(p.player);
-    if (!byPlayer.has(key)) byPlayer.set(key, { player: p.player, team: p.team, entries: [] });
+    const mk = `${norm(p.player)}|${norm(p.prop_type)}|${p.line}`;
+    const cur = merged.get(mk) || { ...p };
+    if (cur.over_odds == null && p.over_odds != null) cur.over_odds = p.over_odds;
+    if (cur.under_odds == null && p.under_odds != null) cur.under_odds = p.under_odds;
+    merged.set(mk, cur);
+  }
+
+  const byPlayer = new Map();
+  for (const p of merged.values()) {
     const over = fmtOdds(p.over_odds);
     const under = fmtOdds(p.under_odds);
-    const price = under != null ? `Over ${over} / Under ${under}` : `${over}`;
+    const price = over != null && under != null ? `Over ${over} / Under ${under}`
+      : over != null ? `${over}`
+      : under != null ? `Under ${under}`
+      : null;
+    if (!price) continue; // no priced side — nothing to bet, nothing to print
+    const key = norm(p.player);
+    if (!byPlayer.has(key)) byPlayer.set(key, { player: p.player, team: p.team, entries: [] });
     byPlayer.get(key).entries.push(`${p.prop_type} ${p.line} (${price})`);
   }
+  if (!byPlayer.size) return { text: '', players: new Set() };
 
   const lines = [...byPlayer.values()]
     .sort((a, b) => a.player.localeCompare(b.player))
