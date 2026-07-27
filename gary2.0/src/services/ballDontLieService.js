@@ -5085,6 +5085,27 @@ const ballDontLieService = {
     }, 24 * 60);
   },
 
+  /**
+   * Exact-name player lookup for names the active index misses (BDL flags
+   * IL/transacted players active=false — Langeliers class, Jul 27 2026).
+   * Single exact normalized match required; anything else returns null.
+   */
+  async findMlbPlayerIdByExactName(name) {
+    const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.']/g, '').trim().toLowerCase();
+    const key = norm(name);
+    if (!key) return null;
+    const cacheKey = `mlb_player_by_name_${key.replace(/\s+/g, '_')}`;
+    return await getCachedOrFetch(cacheKey, async () => {
+      const lastWord = key.split(' ').pop();
+      const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery({ search: lastWord, per_page: 100 })}`;
+      const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+      const exact = (response.data?.data || []).filter(p => norm(p.full_name || `${p.first_name} ${p.last_name}`) === key);
+      if (exact.length !== 1) return null; // none or ambiguous — never guess
+      const p = exact[0];
+      return { id: p.id, teamId: p.team?.id ?? null, teamAbbr: p.team?.abbreviation ?? null };
+    }, 24 * 60);
+  },
+
   async getMlbLineups(gameId) {
     if (!gameId) return null;
     try {

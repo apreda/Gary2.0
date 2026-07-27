@@ -43,7 +43,12 @@ export async function resolveInsightIds(rows) {
   let hits = 0;
   for (const row of missing) {
     for (const cand of nameCandidates(row)) {
-      const entry = index.get(norm(cand));
+      let entry = index.get(norm(cand));
+      // IL/transacted players sit outside the active index (active=false) —
+      // fall through to the exact-name search before giving up on a candidate.
+      if (!entry && norm(cand).includes(' ')) {
+        entry = await ballDontLieService.findMlbPlayerIdByExactName(cand).catch(() => null);
+      }
       if (!entry) continue; // no hit or ambiguous — try next candidate
       row.player_id = entry.id;
       if (row.team_id == null && entry.teamId != null) row.team_id = entry.teamId;

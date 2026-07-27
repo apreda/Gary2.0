@@ -372,7 +372,27 @@ async function buildAndStoreCards({ date, league, connections }) {
     // generateInsightConnections returns the count but not the slate itself;
     // re-fetch it here (short-TTL cached, so this is cheap).
     const games = (await ballDontLieService.getMlbGamesForETDate(date)) || [];
-    const packs = await buildPlayerInsightCards({ date, league, connections, games });
+    // Streak-watch subjects (founder, Jul 27): every player named on the hub
+    // must open a card, including players whose team is idle tonight — pass
+    // the latest streak-board names so packs exist for them too.
+    let extraPlayerNames = [];
+    try {
+      const { data } = await axios.get(`${supabaseUrl}/rest/v1/streaks`, {
+        headers: restHeaders,
+        params: {
+          subject_type: 'eq.player',
+          select: 'subject,game_date',
+          order: 'game_date.desc',
+          limit: 60,
+        },
+      });
+      const rows = Array.isArray(data) ? data : [];
+      const latest = rows[0]?.game_date;
+      extraPlayerNames = [...new Set(rows.filter((r) => r.game_date === latest).map((r) => r.subject).filter(Boolean))];
+    } catch (e) {
+      console.warn(`   [Cards] streak-subject fetch skipped: ${e.message}`);
+    }
+    const packs = await buildPlayerInsightCards({ date, league, connections, games, extraPlayerNames });
 
     if (!Array.isArray(packs) || packs.length === 0) {
       console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);

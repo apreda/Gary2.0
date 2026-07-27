@@ -100,7 +100,7 @@ const RATE_MIN_ROWS_PITCHER = 3;
  * @param {Array}  args.games        the BDL slate (getMlbGamesForDate shape)
  * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
  */
-export async function buildPlayerInsightCards({ date, league, connections, games } = {}) {
+export async function buildPlayerInsightCards({ date, league, connections, games, extraPlayerNames = [] } = {}) {
   // MLB only for now — every other league returns an empty pack list.
   if (String(league || '').toUpperCase() !== 'MLB') return [];
 
@@ -143,7 +143,26 @@ export async function buildPlayerInsightCards({ date, league, connections, games
       }
     }
   }
-  const playerIds = [...new Set([...distinctPlayerIds(connections).map(String), ...lineupIds])];
+  // Extra named subjects (founder, Jul 27: "every player name opens its card")
+  // — streak-watch players etc. Resolved via the exact-name index; ambiguous
+  // or unknown names silently skip.
+  const extraIds = new Set();
+  if (extraPlayerNames.length) {
+    try {
+      const idx = await bdl.getMlbActivePlayerNameIndex();
+      const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.']/g, '').trim().toLowerCase();
+      for (const nm of extraPlayerNames) {
+        let hit = idx.get(norm(nm));
+        // Active-index miss (IL/transacted, BDL active=false) — exact search.
+        if (!hit) hit = await safeCall(() => bdl.findMlbPlayerIdByExactName(nm), null);
+        if (hit) extraIds.add(String(hit.id));
+      }
+    } catch (e) {
+      console.warn(`[playerInsightCards] extra-name resolve skipped: ${e.message}`);
+    }
+  }
+
+  const playerIds = [...new Set([...distinctPlayerIds(connections).map(String), ...lineupIds, ...extraIds])];
   if (!playerIds.length) {
     console.log('[playerInsightCards] no players in connections or lineups — nothing to build.');
     return [];
@@ -164,11 +183,17 @@ export async function buildPlayerInsightCards({ date, league, connections, games
   for (const playerId of playerIds) {
     stats.examined += 1;
     try {
-      const pack = await buildOnePack({
+      let pack = await buildOnePack({
         playerId, season, slate, bdl,
         playersById, seasonById, batterX, pitcherX,
         getLineups, getProps,
       });
+      // Off-slate fallback (Jul 27): a named subject who isn't in tonight's
+      // lineups (streak-watch player on an idle team, tomorrow's projected
+      // starter) still gets an identity/season/form card — never a dead tap.
+      if (!pack) {
+        pack = await buildOffSlatePack({ playerId, season, bdl, playersById, seasonById, batterX, pitcherX });
+      }
       if (!pack) { stats.skipped += 1; continue; }
       if (pack.payload.type === 'pitcher') stats.pitcher += 1; else stats.hitter += 1;
       packs.push({
@@ -227,6 +252,50 @@ async function buildOnePack(args) {
     playerId, season, bdl, game, gameId, oppAbbr, name, teamAbbr, position,
     bats, seasonRec, batterX, lineups, gameLabel, getProps,
   });
+}
+
+// ─── OFF-SLATE (identity/season/form only — no tonight sections) ────────────
+
+async function buildOffSlatePack({ playerId, season, bdl, playersById, seasonById, batterX, pitcherX }) {
+  const header = playersById[playerId] || playersById[String(playerId)] || {};
+  const seasonRec = seasonById.get(String(playerId)) || null;
+  const name = header.name || seasonRec?.player?.full_name || null;
+  if (!name) return null; // nothing to hang a card on
+  const position = header.position || seasonRec?.player?.position || null;
+  const isPitcher = /pitcher|^s?p$|^rp$/i.test(String(position || '')) ||
+    (seasonRec?.pitching_gp != null && seasonRec?.batting_gp == null);
+  const { bats, throws } = parseBatsThrows(header.batsThrows || '');
+
+  const payload = {
+    type: isPitcher ? 'pitcher' : 'hitter',
+    name,
+    team: header.teamAbbr || seasonRec?.player?.team?.abbreviation || null,
+    position,
+    context: 'NOT ON TONIGHT\'S SLATE',
+  };
+  if (isPitcher) {
+    if (throws) payload.throws = throws;
+    const sd = pitcherSeasonDisplay ? pitcherSeasonDisplay(seasonRec) : null;
+    if (sd) payload.seasonDisplay = sd;
+    const x = pitcherX.get?.(nameKey(name));
+    const xs = x ? pitcherXStats(x) : null;
+    if (xs) payload.xstats = xs;
+  } else {
+    if (bats) payload.bats = bats;
+    const sd = hitterSeasonDisplay(seasonRec);
+    if (sd) payload.seasonDisplay = sd;
+    const x = batterX.get?.(nameKey(name));
+    const xs = x ? hitterXStats(x) : null;
+    if (xs) payload.xstats = xs;
+    const splits = await safeCall(() => bdl.getMlbPlayerSplits({ playerId, season }), null);
+    const form = splits ? hitterForm(splits) : null;
+    if (form) payload.form = form;
+    const chrono = await safeCall(() => bdl.getMlbPlayerGameRowsChrono(playerId, season), []);
+    const batRows = asArray(chrono).filter((r) => num(r.at_bats) != null);
+    const formRows = hitterFormRows(batRows);
+    if (formRows.length) payload.formRows = formRows;
+  }
+  return { payload, gameId: null };
 }
 
 // ─── HITTER ──────────────────────────────────────────────────────────────────
