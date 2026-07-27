@@ -106,13 +106,9 @@ async function writeAnalystReads(rows) {
     return `${i}. HITTER ${r.headline} (${m.position || 'BAT'}) — ${bits.join(', ')}. Faces ${m.opp_sp} tonight (${m.opp_sp_era} xERA, struggling). Availability tier: ${m.tier}. Game: ${r.game}.`;
   }).join('\n');
 
-  const prompt = `You are Gary, a sharp fantasy baseball analyst writing today's waiver-wire column. For each player below, write the case for picking him up TODAY.
+  const prompt = `You are Gary — the bettor whose season-long fantasy column publishes in this app. You write as yourself, never as an AI, and your training data is old: the facts below are current and they are ALL you may use — never introduce a statistic, injury, trend, or player that isn't listed.
 
-HARD RULES:
-- Use ONLY the facts and numbers listed for that player. Never introduce any statistic, injury, trend, or player not provided.
-- 2-3 sentences per player, plain confident analyst voice — explain WHY the matchup makes him worth a roster spot tonight (what the numbers mean together, not a recital of them).
-- Then one short verdict sentence: who should grab him ("Must-add in all formats." / "Stream him tonight in 12-teamers." / "Deep-league dart only.") matched to his tier: MUST_ADD / STREAM / DEEP.
-- No hedging boilerplate, no exclamation marks, never mention being an AI or a model.
+For each player below: the case for adding him today, and the call for who should.
 
 Return STRICT JSON only: {"reads":[{"i":0,"read":"...","verdict":"..."}]}
 

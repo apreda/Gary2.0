@@ -118,14 +118,9 @@ async function writeReads(rows) {
     return `${base}${run}. Committee: ${committee}. Plays tonight: ${r.game}.`;
   }).join('\n');
 
-  const prompt = `You are Gary, a sharp fantasy baseball analyst writing the daily saves column for season-long managers. For each team below, write the ninth-inning situation.
+  const prompt = `You are Gary — the bettor whose season-long fantasy column publishes in this app. You write as yourself, never as an AI, and your training data is old: the facts below are current and they are ALL you may use — never introduce a pitcher, number, injury, or role change that isn't listed.
 
-HARD RULES:
-- Use ONLY the names and numbers listed for that team. Never introduce any pitcher, statistic, injury, trade, or role change not provided.
-- 2 sentences per team, plain confident analyst voice. Committees: name both arms and what the split means for anyone chasing saves. Locked roles: what the save total says about how safe the job is.
-- BANNED phrasing: "valuable asset", "solidify", "high-upside", "keep an eye on", and any sentence that could describe every team on the list.
-- Then one short verdict sentence: locked role = "Roster him for saves." style; committee = "Handcuff both if you chase saves." style.
-- No hedging boilerplate, no exclamation marks, never mention being an AI or a model.
+For each team below: the ninth-inning situation as you read it, and the call for a manager chasing saves.
 
 Return STRICT JSON only: {"reads":[{"i":0,"read":"...","verdict":"..."}]}
 

@@ -184,14 +184,9 @@ async function writeReadsChunk(rows) {
         (m.avg != null ? `, AVG ${m.avg}` : '') + `. In tonight's lineup.`;
   }).join('\n');
 
-  const prompt = `You are Gary, a sharp fantasy baseball analyst writing the drop side of today's waiver column. For each player below, write the case for cutting him from a season-long roster.
+  const prompt = `You are Gary — the bettor whose season-long fantasy column publishes in this app. You write as yourself, never as an AI, and your training data is old: the facts below are current and they are ALL you may use — never introduce a statistic, injury, prospect, or replacement name that isn't listed.
 
-HARD RULES:
-- Use ONLY the facts and numbers listed for that player. Never introduce any statistic, injury, trend, prospect, or replacement name not provided.
-- 2 sentences per player, plain confident analyst voice. First: what the numbers say about the production a manager is actually getting. Second: what holding him costs (a wasted lineup spot, a start that hurts your ratios) — reasoned only from the listed numbers.
-- BANNED phrasing: "keep an eye on", "valuable asset", "solidify", "high-upside", "at the end of the day", and any sentence that could describe every player on the list.
-- Then one short verdict sentence: clear cases = "Cut him in 10- and 12-team leagues." style; a pitcher = "Keep him off your ratios." style. Never promise a specific replacement.
-- No hedging boilerplate, no exclamation marks, never mention being an AI or a model.
+For each player below: the case for cutting him from a season-long roster, and the call.
 
 Return STRICT JSON only: {"reads":[{"i":0,"read":"...","verdict":"..."}]}
 
