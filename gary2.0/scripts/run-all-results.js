@@ -983,12 +983,7 @@ async function processPropBets(date) {
       }
 
       if (actual !== null) {
-        // Anytime-goalscorer settles on a THRESHOLD, not a strict over-the-line: a
-        // plain anytime ("anytime_goal 1", no real line) wins on 1+, but a brace
-        // ("anytime_goal 2", line 2) needs 2+. Grading every anytime as >=1 counted
-        // a 1-goal brace as a win — the cloud grade-props uses this same threshold.
-        const anytimeThreshold = parseFloat(line) > 1 ? parseFloat(line) : 1;
-        const res = isAnytimeGoal ? (actual >= anytimeThreshold ? 'won' : 'lost') : gradeProp(actual, line, bet);
+        const res = gradeProp(actual, line, bet);
         let propInsertFailed = false;
         let propAlreadyExists = false;
         const { data: exist, error: dedupErr } = await supabase
