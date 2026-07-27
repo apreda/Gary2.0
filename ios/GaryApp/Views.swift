@@ -2474,33 +2474,15 @@ struct HomeView: View {
         // sweat is on) the sheet takes the top and stories follow it.
         let morningLeads = todayClockPhase == .morning && !sweatIsOn
 
-        // ── OVERNIGHT — the graded strip: numbers + one line of Gary.
-        if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
-            HomeOvernightStrip(record: gamesNightRecord,
-                               net: gamesNightNet,
-                               best: gamesNightBest,
-                               label: recapLabel,
-                               rollItems: gamesNightRoll) {
-                // The strip is the Winners funnel (founder, Jul 5): last
-                // night's card record + rolling cashes ARE the ad — the tap
-                // lands on the Winners room (members: their card; free:
-                // the locked board + plans).
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+        // ── THE HEADLINES lead the morning (founder, Jul 27: the record
+        // strip crowded the door — stories first, UP NEXT right under them).
+        if morningLeads, !stories.isEmpty {
+            HomeStoryRail(stories: stories) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
         }
-
-        // ── THE RECEIPTS LINE + YOUR NIGHT (Jul 26 additions) — proof of
-        // post, then the user's own open action with live state. Both
-        // self-hide without data.
-        HomeReceiptsLine()
-        HomeYourNight {
-            UserDefaults.standard.set("you", forKey: "billfoldScope")
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-        }
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.045), value: animateIn)
 
         // ── ALL-STAR WEEK — the break takeover (Jul 13-14 2026). Gary works
         // the exhibitions, so the dark days lead with them instead of a void.
@@ -2508,13 +2490,6 @@ struct HomeView: View {
         if !allStarSpecials.isEmpty {
             HomeAllStarTakeover(specials: allStarSpecials) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
-        }
-        if morningLeads, !stories.isEmpty {
-            HomeStoryRail(stories: stories) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
@@ -2532,6 +2507,30 @@ struct HomeView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
+
+        // ── OVERNIGHT, compacted (founder, Jul 27) — the graded record as
+        // one quiet line under the hero. Still the Winners funnel on tap.
+        if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
+            HomeOvernightLine(record: gamesNightRecord,
+                              net: gamesNightNet,
+                              label: recapLabel,
+                              roll: gamesNightRoll.first.map { (line: $0.line, odds: $0.odds) }) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
+        }
+
+        // ── THE RECEIPTS LINE + YOUR NIGHT (Jul 26 additions) — proof of
+        // post, then the user's own open action with live state. Both
+        // self-hide without data.
+        HomeReceiptsLine()
+        HomeYourNight {
+            UserDefaults.standard.set("you", forKey: "billfoldScope")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+        }
+        .opacity(animateIn ? 1 : 0)
+        .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
         // ── THE SHEET — today's slate in three zones.
         homeSheet
