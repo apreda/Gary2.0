@@ -805,7 +805,9 @@ async function storeTestPicks(picks, testName = null, testNotes = null) {
 async function storeDeskSnapshot({ game_date, matchup, pick, desk }) {
   try {
     if (!game_date || !matchup || !desk) return { success: false, error: 'missing fields' };
-    const { error } = await supabase
+    // pick_desks is RLS-locked with no anon policies (service writes only) —
+    // the anon client failed silently here for all of Jul 26.
+    const { error } = await (supabaseAdmin || supabase)
       .from('pick_desks')
       .upsert({ game_date, matchup, pick: pick || null, desk }, { onConflict: 'game_date,matchup' });
     if (error) throw error;
