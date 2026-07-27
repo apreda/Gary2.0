@@ -45,6 +45,87 @@ confidence_score (0.50–1.00): how strongly your read beats this price.`;
 const norm = (s) => String(s || '').toLowerCase().trim();
 const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 
+// ── Cleared counts (founder, Jul 27) ────────────────────────────────────────
+// Each board line carries how often the player actually went over that exact
+// line recently — a PAST-TENSE COUNT ("in 6 of his last 15"), never a rate or
+// percentage: tonight's matchup stays the frame, history stays history.
+
+/** IP string ("6.2" = 6⅔) → recorded outs. */
+const ipToOuts = (ip) => {
+  if (ip == null) return null;
+  const [whole, frac] = String(ip).split('.');
+  const w = parseInt(whole, 10);
+  if (!Number.isFinite(w)) return null;
+  return w * 3 + (parseInt(frac || '0', 10) || 0);
+};
+
+/** The box-score value a prop type settles on, from one chrono stat row. */
+export function statForProp(row, propType) {
+  const t = norm(propType);
+  const n = (v) => (v == null ? null : Number(v));
+  switch (t) {
+    case 'hits': return n(row.hits);
+    case 'total_bases': return n(row.total_bases);
+    case 'home_runs': case 'first_home_run': return n(row.hr);
+    case 'rbis': return n(row.rbi);
+    case 'runs_scored': return n(row.runs);
+    case 'walks': return n(row.bb);
+    case 'strikeouts': return n(row.k);
+    case 'doubles': return n(row.doubles);
+    case 'triples': return n(row.triples);
+    case 'stolen_bases': return n(row.stolen_bases);
+    case 'singles': {
+      const h = n(row.hits);
+      if (h == null) return null;
+      return h - (n(row.doubles) || 0) - (n(row.triples) || 0) - (n(row.hr) || 0);
+    }
+    case 'hits_runs_rbis': {
+      const h = n(row.hits), r = n(row.runs), rb = n(row.rbi);
+      if (h == null && r == null && rb == null) return null;
+      return (h || 0) + (r || 0) + (rb || 0);
+    }
+    case 'runs_rbis': {
+      const r = n(row.runs), rb = n(row.rbi);
+      if (r == null && rb == null) return null;
+      return (r || 0) + (rb || 0);
+    }
+    case 'extra_base_hits': {
+      const d = n(row.doubles), tr = n(row.triples), hr = n(row.hr);
+      if (d == null && tr == null && hr == null) return null;
+      return (d || 0) + (tr || 0) + (hr || 0);
+    }
+    case 'pitcher_strikeouts': return n(row.p_k);
+    case 'pitcher_outs': return ipToOuts(row.ip);
+    case 'pitcher_hits_allowed': return n(row.p_hits);
+    case 'pitcher_walks': return n(row.p_bb);
+    case 'pitcher_earned_runs': return n(row.er);
+    default: return null;
+  }
+}
+
+const HITTER_WINDOW = 15;
+const PITCHER_WINDOW = 8;
+const MIN_SAMPLES = 5;
+
+/**
+ * "in 6 of his last 15" (hitters) / "in 4 of his last 8 starts" (pitchers) —
+ * or null when the sample is too thin to say anything.
+ */
+export function clearedClause(chronoRows, propType, line) {
+  if (!Array.isArray(chronoRows) || !chronoRows.length || line == null) return null;
+  const isPitcherProp = norm(propType).startsWith('pitcher_');
+  const played = isPitcherProp
+    ? chronoRows.filter((r) => r?.ip != null && parseFloat(r.ip) > 0)
+    : chronoRows.filter((r) => r?.at_bats != null);
+  const window = played.slice(-(isPitcherProp ? PITCHER_WINDOW : HITTER_WINDOW));
+  const vals = window.map((r) => statForProp(r, propType)).filter((v) => v != null);
+  if (vals.length < MIN_SAMPLES) return null;
+  const cleared = vals.filter((v) => v > Number(line)).length;
+  return isPitcherProp
+    ? `over in ${cleared} of his last ${vals.length} starts`
+    : `over in ${cleared} of his last ${vals.length}`;
+}
+
 /**
  * THE PROP BOARD — tonight's real prop prices, grouped by player, prop keys
  * printed verbatim so picks reference exactly what the odds gate verifies.
@@ -52,7 +133,7 @@ const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
  * a scratched player's props never reach the board.
  * Returns { text, players } — players is the validated pool (normalized names).
  */
-export function buildPropBoard(playerProps, { lineupNames = null, hrOnly = false } = {}) {
+export function buildPropBoard(playerProps, { lineupNames = null, hrOnly = false, chronoByPlayer = null } = {}) {
   let rows = (playerProps || []).filter(p => p?.player && p?.prop_type);
   if (hrOnly) rows = rows.filter(p => norm(p.prop_type).includes('home_run'));
   let excluded = 0;
@@ -86,7 +167,8 @@ export function buildPropBoard(playerProps, { lineupNames = null, hrOnly = false
     if (!price) continue; // no priced side — nothing to bet, nothing to print
     const key = norm(p.player);
     if (!byPlayer.has(key)) byPlayer.set(key, { player: p.player, team: p.team, entries: [] });
-    byPlayer.get(key).entries.push(`${p.prop_type} ${p.line} (${price})`);
+    const cleared = chronoByPlayer ? clearedClause(chronoByPlayer.get(key), p.prop_type, p.line) : null;
+    byPlayer.get(key).entries.push(`${p.prop_type} ${p.line} (${price})${cleared ? ` — ${cleared}` : ''}`);
   }
   if (!byPlayer.size) return { text: '', players: new Set() };
 
@@ -136,7 +218,28 @@ async function fetchLineupNames(gameId) {
 export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   const gameId = game.bdl_game_id ?? game.id ?? null;
   const lineupNames = await fetchLineupNames(gameId);
-  const board = buildPropBoard(playerProps, { lineupNames, hrOnly: !!options.hrOnly });
+
+  // Cleared-count source: each board player's chrono game log (cached, one
+  // request per player). A failed fetch just drops that player's counts.
+  const chronoByPlayer = new Map();
+  {
+    const season = new Date().getFullYear();
+    const wanted = new Map(); // normName -> player_id
+    for (const p of playerProps || []) {
+      const key = norm(p?.player);
+      if (!key || p?.player_id == null) continue;
+      if (lineupNames && lineupNames.size && !lineupNames.has(key)) continue;
+      if (!wanted.has(key)) wanted.set(key, p.player_id);
+    }
+    await Promise.all([...wanted.entries()].map(async ([key, pid]) => {
+      try {
+        const rows = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, season);
+        if (Array.isArray(rows) && rows.length) chronoByPlayer.set(key, rows);
+      } catch { /* counts are optional */ }
+    }));
+  }
+
+  const board = buildPropBoard(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
   if (!board.players.size) {
     console.log('   [Props Brain] empty board after filters — pass');
     return { picks: [], validatedPlayers: board.players };

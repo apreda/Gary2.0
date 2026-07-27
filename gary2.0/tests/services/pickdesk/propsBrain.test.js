@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoard } from '../../../src/services/pickdesk/propsBrain.js';
+import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoard, statForProp, clearedClause } from '../../../src/services/pickdesk/propsBrain.js';
 
 // The props prompt surface is a product contract (spec 2026-07-26-props-desk).
 // These pins exist so no edit lands without failing a test first.
@@ -68,5 +68,39 @@ describe('buildPropBoard', () => {
     const board = buildPropBoard([], {});
     expect(board.text).toBe('');
     expect(board.players.size).toBe(0);
+  });
+});
+
+describe('cleared counts (founder: past-tense counts, never rates)', () => {
+  const g = (over) => ({ at_bats: 4, hits: over ? 2 : 0, doubles: over ? 1 : 0, triples: 0, hr: 0, runs: 0, rbi: 0, bb: 0, k: 1, total_bases: over ? 3 : 0, stolen_bases: 0 });
+
+  it('statForProp maps derived markets correctly', () => {
+    const row = { at_bats: 4, hits: 3, doubles: 1, triples: 0, hr: 1, runs: 2, rbi: 2, bb: 1, k: 0, total_bases: 7, stolen_bases: 0 };
+    expect(statForProp(row, 'singles')).toBe(1);            // 3 H − 1 2B − 1 HR
+    expect(statForProp(row, 'hits_runs_rbis')).toBe(7);     // 3+2+2
+    expect(statForProp(row, 'extra_base_hits')).toBe(2);    // 1 2B + 1 HR
+    expect(statForProp({ ip: '6.2', p_k: 7 }, 'pitcher_outs')).toBe(20);
+    expect(statForProp({ ip: '6.2', p_k: 7 }, 'pitcher_strikeouts')).toBe(7);
+  });
+
+  it('counts games over the exact line, count form, hitter window 15', () => {
+    const rows = [...Array(10).fill(g(true)), ...Array(5).fill(g(false))];
+    expect(clearedClause(rows, 'total_bases', 1.5)).toBe('over in 10 of his last 15');
+    expect(clearedClause(rows, 'hits', 0.5)).toBe('over in 10 of his last 15');
+  });
+
+  it('thin samples say nothing (no noisy 1-of-2 counts)', () => {
+    expect(clearedClause([g(true), g(true)], 'hits', 0.5)).toBeNull();
+    expect(clearedClause(null, 'hits', 0.5)).toBeNull();
+  });
+
+  it('board renders the clause as a trailing dash clause', () => {
+    const chrono = new Map([['aaron judge', Array(15).fill(g(true))]]);
+    const board = buildPropBoard(
+      [{ player: 'Aaron Judge', team: 'Yankees', prop_type: 'total_bases', line: 1.5, over_odds: 120, under_odds: -150 }],
+      { chronoByPlayer: chrono },
+    );
+    expect(board.text).toContain('total_bases 1.5 (Over +120 / Under -150) — over in 15 of his last 15');
+    expect(board.text).not.toMatch(/%|rate/i);
   });
 });
