@@ -2,14 +2,16 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { PickCard } from '@/components/PickCard';
+import { GameRow } from '@/components/board/GameRow';
+import { UnderlineTabs } from '@/components/UnderlineTabs';
 import { PageMasthead } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { JsonLd } from '@/components/JsonLd';
 import { fetchTodayGamePicks } from '@/lib/gary/picks';
+import { buildBoard, fetchDailySlate } from '@/lib/gary/board';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { normalizeLeague, SPORTS, sportBySlug } from '@/lib/gary/leagues';
-import { todayEST, daysAgoEST } from '@/lib/gary/dates';
+import { todayEST, daysAgoEST, nowMs } from '@/lib/gary/dates';
 
 export const revalidate = 600;
 // Unknown slugs 404 at the router — no SSR pass or data fetch for garbage paths.
@@ -45,14 +47,24 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
   const cfg = sportBySlug(sport);
   if (!cfg) notFound();
 
-  const [allPicks, results] = await Promise.all([
+  const date = todayEST();
+  const now = nowMs();
+  const [allPicks, slate, results] = await Promise.all([
     fetchTodayGamePicks().catch(() => null),
+    cfg.retired ? Promise.resolve([]) : fetchDailySlate(date).catch(() => []),
     fetchAllGameResults().catch(() => null),
   ]);
 
   const picks = allPicks
     ? allPicks.filter(p => normalizeLeague(p.league, p.sport) === cfg.code)
     : null;
+
+  // Same board as /picks, narrowed to this league: every game shows, posted or
+  // not, so a quiet morning reads as a schedule instead of an empty page.
+  const board = buildBoard(
+    slate.filter(r => (normalizeLeague(r.league) ?? '') === cfg.code),
+    picks ?? [],
+  );
 
   // Results data — null means we OMIT the record line entirely (never show 0-0)
   const allTime = results
@@ -66,7 +78,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
     : null;
 
   return (
-    <main className="mx-auto max-w-6xl px-5 py-16">
+    <main className="mx-auto max-w-5xl px-5 pb-20 pt-12">
       {picks && picks.length > 0 && (
         <JsonLd data={{
           '@context': 'https://schema.org', '@type': 'ItemList',
@@ -98,9 +110,21 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
         )}
       </PageMasthead>
 
-      {!cfg.retired && <div className="mt-7"><LiveScoreStrip date={todayEST()} leagues={[cfg.code]} /></div>}
+      <UnderlineTabs
+        className="mt-6"
+        items={[
+          { href: '/picks', label: 'All sports' },
+          ...SPORTS.filter(s => !s.retired || s.slug === sport).map(s => ({
+            href: `/picks/${s.slug}`,
+            label: s.name,
+            active: s.slug === sport,
+          })),
+        ]}
+      />
 
-      {(!picks || picks.length === 0) ? (
+      {!cfg.retired && <div className="mt-5"><LiveScoreStrip date={date} leagues={[cfg.code]} /></div>}
+
+      {board.length === 0 ? (
         <div className="mt-10 flex flex-col items-center justify-center rounded-card border border-line bg-card p-10 text-center">
           <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
           <p className="mt-3 text-[15px] text-mid">
@@ -117,8 +141,8 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           </p>
         </div>
       ) : (
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
-          {picks.map((p, i) => <PickCard key={p.pick_id ?? i} pick={p} expanded />)}
+        <div className="mt-8 space-y-4">
+          {board.map(g => <GameRow key={g.key} game={g} now={now} />)}
         </div>
       )}
     </main>

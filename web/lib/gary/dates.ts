@@ -27,6 +27,13 @@ export function daysAgoEST(days: number, now: Date = new Date()): string {
   return estDateStr(new Date(now.getTime() - days * 86400000));
 }
 
+/** The wall clock, read once per request. Lives here (not inline in a page)
+ *  for the same reason the date helpers do — React 19's purity rule bans a
+ *  raw `Date.now()` in render. */
+export function nowMs(): number {
+  return Date.now();
+}
+
 /** Port of iOS hubGradedDateEST: the day before todayEST (graded record day). */
 export function hubGradedDateEST(now: Date = new Date()): string {
   const today = todayEST(now);

@@ -1,6 +1,7 @@
 import { Eyebrow } from './Eyebrow';
 import { ClampFade } from './ClampFade';
 import { normalizeLeague } from '@/lib/gary/leagues';
+import { isOverCall, leadSection, oddsText, propCall } from '@/lib/gary/format';
 import type { PropPick } from '@/lib/gary/types';
 
 /**
@@ -10,10 +11,11 @@ import type { PropPick } from '@/lib/gary/types';
  */
 export function PropCard({ prop, expanded = false }: { prop: PropPick; expanded?: boolean }) {
   const league = normalizeLeague(prop.league, prop.sport) ?? '';
-  const isOver = (prop.bet ?? '').toLowerCase() === 'over' || (prop.bet ?? '').toLowerCase() === 'yes';
-  const callColor = isOver ? 'text-gold' : 'text-silver';
-  const odds = prop.odds;
-  const rationale = (prop.rationale ?? prop.analysis ?? '').trim();
+  const callColor = isOverCall(prop) ? 'text-gold' : 'text-silver';
+  const odds = oddsText(prop.odds);
+  // The reasoning block, not the whole labelled read — a teaser that opens on
+  // "MATCHUP: RHP …" mid-sentence is the wall of text in miniature.
+  const rationale = leadSection(prop.rationale ?? prop.analysis) ?? '';
 
   return (
     <article className="rounded-card border border-silver/40 bg-card p-5 shadow-card">
@@ -29,12 +31,8 @@ export function PropCard({ prop, expanded = false }: { prop: PropPick; expanded?
         )
       )}
       <div className="mt-4 flex items-center justify-between gap-3 rounded-chip border border-silver/55 bg-chip px-4 py-2.5">
-        <span className={`font-mono text-sm font-bold uppercase tracking-[0.04em] ${callColor}`}>
-          {prop.bet} {prop.line} {prop.prop?.replace(/\s[\d.]+$/, '')}
-        </span>
-        {odds != null && (
-          <span className="tnum font-mono text-sm font-bold text-silver-dim">{odds > 0 ? `+${odds}` : odds}</span>
-        )}
+        <span className={`font-mono text-sm font-bold tracking-[0.04em] ${callColor}`}>{propCall(prop)}</span>
+        {odds && <span className="tnum font-mono text-sm font-bold text-silver-dim">{odds}</span>}
       </div>
       {Array.isArray(prop.key_stats) && prop.key_stats.length > 0 && (
         <ul className="mt-3 space-y-1">

@@ -1,4 +1,4 @@
-import { restAll } from './supabase';
+import { rest, restAll } from './supabase';
 import type { GameResultRow, NflResultRow, PropResultRow } from './types';
 
 const ODDS_TAIL = /[+-]\d{3,}\s*$/;
@@ -170,6 +170,27 @@ export async function fetchAllGameResults(revalidate = 3600): Promise<GameResult
 export async function fetchAllPropResults(revalidate = 3600): Promise<PropResultRow[]> {
   return restAll<PropResultRow>(
     'prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet&order=game_date.desc', { revalidate });
+}
+
+/**
+ * One day's graded games — the receipt the board leads with ("Yesterday 7-6").
+ * Targeted rather than paging the whole history: the boards revalidate every
+ * ten minutes and must not drag 20k rows through each rebuild.
+ */
+export async function fetchGameResultsForDate(date: string, revalidate = 600): Promise<GameResultRow[]> {
+  return rest<GameResultRow[]>(
+    `game_results?select=game_date,league,matchup,pick_text,result,final_score,confidence&game_date=eq.${date}`,
+    { revalidate },
+  );
+}
+
+/** One day's graded props, filtered to the legitimately gradeable rows. */
+export async function fetchPropResultsForDate(date: string, revalidate = 600): Promise<PropResultRow[]> {
+  const rows = await rest<PropResultRow[]>(
+    `prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet&game_date=eq.${date}`,
+    { revalidate },
+  );
+  return rows.filter(isLegitPropResult);
 }
 
 /** Rows on/after an ISO date (yyyy-MM-dd). */

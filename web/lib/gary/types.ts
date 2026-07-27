@@ -15,6 +15,9 @@ export interface GaryPick {
   pick?: string; type?: string; odds?: number; confidence?: number;
   homeTeam?: string; awayTeam?: string; league?: string; sport?: string;
   rationale?: string; time?: string; venue?: string; commence_time?: string;
+  /** The plain-language read of the same call (written alongside the analysis). */
+  rationale_plain?: string;
+  gameSignificance?: string; pick_category?: string;
   pick_id?: string; statsData?: StatRow[]; sportsbook_odds?: SportsbookLine[];
   injuries?: string; is_top_pick?: boolean;
   moneylineHome?: number; moneylineAway?: number;

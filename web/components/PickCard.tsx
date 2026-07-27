@@ -18,7 +18,8 @@ export function PickCard({ pick, expanded = false }: { pick: GaryPick; expanded?
   const accent = sportByCode(league)?.accent;
   const rawOdds = pick.odds ?? effectiveOdds(pick.pick);
   const conf = confidencePct(pick.confidence);
-  const take = pick.rationale?.replace(/^Gary's Take\s*/i, '').trim();
+  // The plain read leads on a card this size; the analysis is the long form.
+  const take = (pick.rationale_plain ?? pick.rationale)?.replace(/^Gary's Take\s*/i, '').trim();
   const pickLabel = (pick.pick ?? '').replace(/[+-]\d{3,}\s*$/, '').trim();
 
   return (
