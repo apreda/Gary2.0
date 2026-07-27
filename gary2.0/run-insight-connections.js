@@ -642,9 +642,13 @@ async function run() {
           if (!s) continue;
           const needsVoice = !(s.meta && typeof s.meta === 'object' && s.meta.evidence) && r.meta?.evidence;
           const needsId = s.player_id == null && r.player_id != null;
-          if (!needsVoice && !needsId) continue;
+          // Fresh factual enrichment the stored row predates (NRFI price /
+          // starter first-inning splits, Jul 27) — same zero-churn contract.
+          const needsEnrich = (r.meta?.price != null || r.meta?.sp_first_inning != null)
+            && s.meta?.price == null && s.meta?.sp_first_inning == null;
+          if (!needsVoice && !needsId && !needsEnrich) continue;
           const patch = {};
-          if (needsVoice) {
+          if (needsVoice || needsEnrich) {
             patch.detail = r.detail;
             patch.meta = { ...(s.meta || {}), ...(r.meta || {}) };
           }

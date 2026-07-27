@@ -5086,6 +5086,38 @@ const ballDontLieService = {
   },
 
   /**
+   * Tonight's 1st-inning runs market (the NRFI/YRFI number) from the full
+   * markets catalog — key `runs_-_1st_inning`, line 0.5, DK first then FD.
+   * Returns { overOdds, underOdds, vendor } or null. Cached 20 min.
+   */
+  async getMlbFirstInningRunsMarket(gameId) {
+    if (!gameId) return null;
+    const cacheKey = `mlb_first_inning_market_${gameId}`;
+    return await getCachedOrFetch(cacheKey, async () => {
+      for (const vendor of ['draftkings', 'fanduel']) {
+        let cursor;
+        for (let page = 0; page < 10; page++) {
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/odds/markets${buildQuery({ game_id: gameId, vendors: [vendor], per_page: 100, ...(cursor != null ? { cursor } : {}) })}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          const market = (response.data?.data || []).find(m => m.key === 'runs_-_1st_inning');
+          if (market) {
+            const at = (side) => (market.outcomes || []).find(o =>
+              String(o.name).toLowerCase() === side && Number(o.line_value) === 0.5 && o.american_odds != null);
+            const over = at('over');
+            const under = at('under');
+            if (over || under) {
+              return { overOdds: over?.american_odds ?? null, underOdds: under?.american_odds ?? null, vendor };
+            }
+          }
+          cursor = response.data?.meta?.next_cursor;
+          if (cursor == null) break;
+        }
+      }
+      return null;
+    }, 20);
+  },
+
+  /**
    * Exact-name player lookup for names the active index misses (BDL flags
    * IL/transacted players active=false — Langeliers class, Jul 27 2026).
    * Single exact normalized match required; anything else returns null.

@@ -33,6 +33,81 @@ import {
   makeRow, TONES, pickVariant, nameKey, shiftDateStr, clampScore,
 } from '../shared.js';
 import mlbStatsApi from '../../mlbStatsApiService.js';
+import { ballDontLieService } from '../../ballDontLieService.js';
+
+// ── NRFI engine (founder GO, Jul 27 2026) ───────────────────────────────────
+// Two enrichments per surfaced game, both facts: tonight's live 1st-inning
+// number (BDL markets catalog) and each probable starter's own first-inning
+// season split (Stats API situational sitCode i01). Failures skip silently.
+
+const fmtAm = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
+
+/** Probables for the slate date, keyed by MLBAM team id. Memoized per run. */
+async function probablesByTeam(date) {
+  try {
+    const resp = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=probablePitcher`);
+    if (!resp.ok) return new Map();
+    const j = await resp.json();
+    const out = new Map();
+    for (const g of j?.dates?.[0]?.games || []) {
+      for (const side of ['home', 'away']) {
+        const t = g?.teams?.[side];
+        if (t?.team?.id != null && t?.probablePitcher?.id != null) {
+          out.set(t.team.id, { name: t.probablePitcher.fullName, id: t.probablePitcher.id });
+        }
+      }
+    }
+    return out;
+  } catch { return new Map(); }
+}
+
+/** One starter's first-inning season split — "8.47 ERA, .329 BA against (17 IP)". */
+async function firstInningSplit(pitcherId, season) {
+  try {
+    const resp = await fetch(`https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=statSplits&sitCodes=i01&group=pitching&season=${season}`);
+    if (!resp.ok) return null;
+    const j = await resp.json();
+    const s = j?.stats?.[0]?.splits?.[0]?.stat;
+    if (!s || !s.inningsPitched || parseFloat(s.inningsPitched) < 5) return null; // thin split says nothing
+    return { era: s.era, avg: s.avg, ip: s.inningsPitched, hr: s.homeRuns ?? 0 };
+  } catch { return null; }
+}
+
+/**
+ * Evidence + meta for one game: the live 0.5 number and both starters'
+ * first-inning splits. Everything optional — absent pieces just don't print.
+ */
+async function nrfiEnrichment({ game, date, season, probables }) {
+  const bits = [];
+  const meta = {};
+  try {
+    const market = await ballDontLieService.getMlbFirstInningRunsMarket(game?.id);
+    if (market && (market.overOdds != null || market.underOdds != null)) {
+      meta.price = { over: market.overOdds, under: market.underOdds, vendor: market.vendor };
+      const sides = [
+        market.overOdds != null ? `Over 0.5 ${fmtAm(market.overOdds)}` : null,
+        market.underOdds != null ? `Under 0.5 ${fmtAm(market.underOdds)}` : null,
+      ].filter(Boolean).join(' / ');
+      bits.push(`Tonight's 1st-inning number: ${sides}.`);
+    }
+  } catch { /* price optional */ }
+  try {
+    const spBits = [];
+    const sp = [];
+    for (const side of ['home_team', 'visitor_team']) {
+      const teamMlbamId = probables.mlbamIdByName?.get(nameKey(game?.[side]?.display_name || game?.[side]?.full_name || game?.[side]?.name));
+      const prob = teamMlbamId != null ? probables.byTeam.get(teamMlbamId) : null;
+      if (!prob) continue;
+      const split = await firstInningSplit(prob.id, season);
+      if (!split) continue;
+      sp.push({ side: side === 'home_team' ? 'home' : 'away', name: prob.name, ...split });
+      spBits.push(`${prob.name} ${split.era} ERA, ${split.avg} BA against in first innings (${split.ip} IP${split.hr ? `, ${split.hr} HR` : ''})`);
+    }
+    if (sp.length) meta.sp_first_inning = sp;
+    if (spBits.length) bits.push(`Starters' first innings this season — ${spBits.join('; ')}.`);
+  } catch { /* splits optional */ }
+  return { clause: bits.length ? ` ${bits.join(' ')}` : '', meta };
+}
 
 // Tunables.
 const LOOKBACK_DAYS = 16;   // ET calendar dates walked to gather recent finals
@@ -109,6 +184,11 @@ export async function computeFirstInning(ctx) {
   };
   const rate = (list, key) => list.filter((f) => f[key]).length;
 
+  // NRFI-engine context, once per run: tonight's probables (Stats API) —
+  // the per-game price/split fetches happen only for games that surface.
+  const season = parseInt(String(date).slice(0, 4), 10) || new Date().getFullYear();
+  const probables = { byTeam: await probablesByTeam(date), mlbamIdByName };
+
   // 3. One row max per live slate game.
   const rows = [];
   for (const game of games) {
@@ -129,16 +209,18 @@ export async function computeFirstInning(ctx) {
     const hN = homeSample.length;
     const aN = awaySample.length;
 
-    // Matchup NRFI / YRFI rows.
+    // Matchup NRFI / YRFI rows — enriched with tonight's live number and the
+    // starters' own first-inning season splits (facts; absent pieces skip).
     if (hAny <= NRFI_MAX && aAny <= NRFI_MAX) {
       const quiet = (hN - hAny) + (aN - aAny);
+      const enr = await nrfiEnrichment({ game, date, season, probables });
       rows.push(makeRow({
         category: 'firstInning',
         headline: `NRFI watch: quiet first innings on both sides of ${label}`,
         detail: pickVariant([
           `${home.abbreviation} games have seen a first-inning run in just ${hAny} of their last ${hN}; ${away.abbreviation} games in ${aAny} of ${aN}. That is ${quiet} clean opening frames between them.`,
           `Neither side has been scoring early — a 1st-inning run in only ${hAny} of ${hN} for ${home.abbreviation} and ${aAny} of ${aN} for ${away.abbreviation} games lately.`,
-        ], gameId),
+        ], gameId) + enr.clause,
         game: label,
         value: 'NRFI',
         tone: TONES.COLD,
@@ -150,18 +232,20 @@ export async function computeFirstInning(ctx) {
           home_seq: homeSample.map((f) => (f.any ? 1 : 0)),
           away_seq: awaySample.map((f) => (f.any ? 1 : 0)),
           home_any: hAny, home_n: hN, away_any: aAny, away_n: aN,
+          ...enr.meta,
         },
       }));
       continue;
     }
     if (hAny >= YRFI_MIN && aAny >= YRFI_MIN) {
+      const enr = await nrfiEnrichment({ game, date, season, probables });
       rows.push(makeRow({
         category: 'firstInning',
         headline: `YRFI watch: first innings have been live on both sides of ${label}`,
         detail: pickVariant([
           `${home.abbreviation} games have produced a first-inning run in ${hAny} of their last ${hN}; ${away.abbreviation} games in ${aAny} of ${aN}. Early runs have been the rule, not the exception.`,
           `Both sides keep scoring early — a 1st-inning run in ${hAny} of ${hN} for ${home.abbreviation} and ${aAny} of ${aN} for ${away.abbreviation} games lately.`,
-        ], gameId),
+        ], gameId) + enr.clause,
         game: label,
         value: 'YRFI',
         tone: TONES.HOT,
@@ -173,6 +257,7 @@ export async function computeFirstInning(ctx) {
           home_seq: homeSample.map((f) => (f.any ? 1 : 0)),
           away_seq: awaySample.map((f) => (f.any ? 1 : 0)),
           home_any: hAny, home_n: hN, away_any: aAny, away_n: aN,
+          ...enr.meta,
         },
       }));
       continue;
@@ -198,14 +283,15 @@ export async function computeFirstInning(ctx) {
     }
     if (best) {
       const name = best.team.full_name || best.team.display_name || best.team.abbreviation;
+      const enr = await nrfiEnrichment({ game, date, season, probables });
       rows.push(makeRow({
         category: 'firstInning',
         headline: best.hot
           ? `${best.team.abbreviation} strike first: 1st-inning runs in ${best.scored} of their last ${best.n}`
           : `${best.team.abbreviation} have gone quiet in the 1st: runs in ${best.scored} of their last ${best.n}`,
-        detail: best.hot
+        detail: (best.hot
           ? `${name} have put up a first-inning run in ${best.scored} of their last ${best.n} games — they jump on starters early and the YRFI side of their games has been doing the work.`
-          : `${name} have scored in the first inning just ${best.scored} time${best.scored === 1 ? '' : 's'} in their last ${best.n} games — slow-starting lineup, and the 1st has been a free pass for opposing starters.`,
+          : `${name} have scored in the first inning just ${best.scored} time${best.scored === 1 ? '' : 's'} in their last ${best.n} games — slow-starting lineup, and the 1st has been a free pass for opposing starters.`) + enr.clause,
         game: label,
         value: `${best.scored}/${best.n}`,
         tone: best.hot ? TONES.HOT : TONES.COLD,
@@ -217,6 +303,7 @@ export async function computeFirstInning(ctx) {
           team_abbr: best.team.abbreviation,
           team_seq: best.seq,
           team_scored: best.scored, team_n: best.n,
+          ...enr.meta,
         },
       }));
     }
