@@ -4674,23 +4674,24 @@ struct HomeMarqueeTracker: View {
     // Falls back to the single-line title when the market line can't split.
     @ViewBuilder private func heroView(_ e: Entry) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                BroadcastBar(height: 11)
-                Text("UP NEXT")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1.4)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                if e.pickLine == nil, let pending = e.pendingLine {
-                    // The pick-drop clock rides the header's right end.
+            // No "UP NEXT" label (founder, Jul 27) — the clock says it. The
+            // header row survives ONLY when it carries real news: the
+            // pick-drop time before Gary posts. Otherwise the card opens
+            // straight onto the wire.
+            if e.pickLine == nil, let pending = e.pendingLine {
+                HStack(spacing: 8) {
+                    BroadcastBar(height: 11)
                     Text(pending.uppercased())
                         .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
                         .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer()
                 }
+                .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 8)
             }
-            .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 8)
 
             let sides = wireSides(e)
+            let headed = e.pickLine == nil && e.pendingLine != nil
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     if let s = sides {
@@ -4739,6 +4740,8 @@ struct HomeMarqueeTracker: View {
                         .padding(.horizontal, 8)
                 }
             }
+            // The wire carries the card's own top air when no header ran.
+            .padding(.top, headed ? 0 : 13)
             .padding(.bottom, 14)
         }
         .contentShape(Rectangle())
@@ -4785,7 +4788,7 @@ struct HomeMarqueeTracker: View {
     /// tomorrow's marquee steps in as the hero.
     private func tomorrowHeroView(_ tease: (matchup: String, time: String)) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("UP NEXT · TOMORROW")
+            Text("TOMORROW")
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
                 .foregroundStyle(GaryColors.gold)
             Text(tease.matchup)
@@ -5177,8 +5180,13 @@ struct HomeCountdownText: View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let s = max(0, Int(target.timeIntervalSince(ctx.date)))
             // Gold and tabular (A pass, Jul 26): the clock is the card's
-            // pulse — and never jitters.
-            Text(s == 0 ? "ANY MINUTE" : String(format: "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60))
+            // pulse — and never jitters. No leading zero on the lead unit
+            // (founder, Jul 27) — it reads like a clock, not a stopwatch:
+            // "9:55:16", and "55:16" once the hour is gone.
+            let h = s / 3600, m = (s % 3600) / 60
+            Text(s == 0 ? "ANY MINUTE"
+                        : (h > 0 ? String(format: "%d:%02d:%02d", h, m, s % 60)
+                                 : String(format: "%d:%02d", m, s % 60)))
                 .font(GaryFonts.mono(size, bold: true))
                 .foregroundStyle(GaryColors.gold)
         }
