@@ -22,7 +22,6 @@ const { analyzeGame } = await import('../src/services/agentic/orchestrator/index
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { translateRationalePlain } = await import('../src/services/agentic/plainRationale.js');
 const { GAME_PICK_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');

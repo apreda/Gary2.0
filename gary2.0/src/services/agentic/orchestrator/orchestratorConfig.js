@@ -39,7 +39,7 @@ export const GEMINI_PROPS_MODEL = 'gemini-3.6-flash';
 export const ALLOWED_GEMINI_MODELS = [
   'gemini-3.5-flash',         // legacy brain (game picks are Sol now)
   'gemini-3-flash-preview',   // research, DFS
-  'gemini-3.6-flash',         // props lane
+  'gemini-3.6-flash',         // props lane (non-MLB only — MLB props are Sol desk)
   'gemini-3.1-pro-preview',   // fallback only
 ];
 
@@ -84,4 +84,4 @@ export const GEMINI_SAFETY_SETTINGS = [
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
 export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research finish naturally, never kill due to time
 
-console.log(`[Orchestrator] game brain ${GAME_PICK_MODEL} + ${GEMINI_FLASH_MODEL} research + props ${GEMINI_PROPS_MODEL}`);
+console.log(`[Orchestrator] MLB game + props: ${GAME_PICK_MODEL} desk lanes (Sol-only). Non-MLB legacy: ${GEMINI_FLASH_MODEL} research / ${GEMINI_PROPS_MODEL} props.`);
