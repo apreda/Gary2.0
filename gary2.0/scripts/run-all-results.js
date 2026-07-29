@@ -936,7 +936,7 @@ async function processPropBets(date) {
 
   console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats`);
 
-  const stats = { w: 0, l: 0 };
+  const stats = { w: 0, l: 0, hrW: 0, hrL: 0 };
   const handled = new Set();
   let skippedNotFinal = 0;
 
@@ -1026,7 +1026,13 @@ async function processPropBets(date) {
         if (propInsertFailed) {
           console.error(`  ⛔ Skipped prop stats counter for ${sport} "${name} ${type}" due to insert failure`);
         } else {
-          stats[res[0]]++;
+          // HR bets are the fun lane, not official picks (founder, Jul 29):
+          // they tally separately and never touch the official props record.
+          if (/home_run/i.test(String(type || ''))) {
+            stats[res === 'won' ? 'hrW' : 'hrL']++;
+          } else {
+            stats[res[0]]++;
+          }
           const tag = propAlreadyExists ? '⏩ ALREADY' : '🎯';
           console.log(`  ${tag} ${sport}: ${name} ${type} ${bet} ${line} -> ${res.toUpperCase()} (${actual}) [${source}]`);
         }
@@ -1082,6 +1088,7 @@ async function main(targetDate = getTargetDate()) {
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);
   console.log(`Weekly: ${weeklyNFL.w}W - ${weeklyNFL.l}L`);
   console.log(`Props:  ${props.w}W - ${props.l}L`);
+  if ((props.hrW || 0) + (props.hrL || 0) > 0) console.log(`HR Bets (fun lane, not official): ${props.hrW}W - ${props.hrL}L`);
   console.log(`TOTAL:  ${daily.w + weeklyNFL.w + props.w}W - ${daily.l + weeklyNFL.l + props.l}L`);
   console.log(`════════════════════════════════════════\n`);
 }
