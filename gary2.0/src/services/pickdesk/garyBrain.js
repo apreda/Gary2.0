@@ -46,7 +46,7 @@ After your card, output:
 { "final_pick": "[Team] [bet] [exact odds]", "rationale": "Gary's Take\\n\\n[the prose]", "confidence_score": 0.XX }
 \`\`\`
 
-confidence_score (0.50–1.00): how strongly your read beats this price.`;
+confidence_score (0.50–1.00): how confident you are this bet wins.`;
 
 const parseFinalJson = (t) => {
   try {

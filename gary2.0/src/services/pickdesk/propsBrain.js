@@ -47,7 +47,7 @@ Output:
 \`\`\`
 
 bet is "over" or "under" — "over" for one-priced lines.
-confidence_score (0.50–1.00): how strongly your read beats this price.`;
+confidence_score (0.50–1.00): how confident you are this bet wins.`;
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
