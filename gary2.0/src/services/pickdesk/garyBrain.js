@@ -1,17 +1,23 @@
 /**
- * THE BRAIN — one Sol xhigh call over the complete desk
+ * THE BRAIN — one xhigh call over the complete desk
  * (spec docs/superpowers/specs/2026-07-26-mlb-pick-rebuild-design.md).
  *
  * No tools, no passes, no research assistant: the desk is Gary's entire
  * evidence, his full reasoning budget goes to weighing it, and the pick is a
  * pure function of the desk (stored per pick for audits).
  *
+ * Brain cascade (founder, Jul 29 2026): Sol first; if a brain THROWS —
+ * dead balance/429 like the Jul 28 outage, or a provider hard-down — the
+ * same desk re-runs on the Gemini fallbacks at their top thinking level.
+ * Parse/rails failures do NOT cascade: those are contained no-pick errors,
+ * unchanged. Sessions route through the sessionManager provider seam.
+ *
  * Rails unchanged (prevent fabrication, never detect-and-ship): statAudit +
  * count-claim rail, ONE corrective retry, then null — no pick stored.
  */
 import { buildMlbDesk } from './mlbDesk.js';
-import { GAME_PICK_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
-import { createOpenAISession, sendToOpenAISession } from '../agentic/orchestrator/providerAdapters/openaiSession.js';
+import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -48,7 +54,7 @@ const parseFinalJson = (t) => {
   } catch { return null; }
 };
 
-/** Map Sol's final_pick text onto the chassis contract fields. */
+/** Map the brain's final_pick text onto the chassis contract fields. */
 export function mapFinalPick(parsed, meta) {
   // Normalize "(−126)" → "−126": every downstream parser (grading, ledgers,
   // F-5 text rules) expects bare trailing odds.
@@ -73,6 +79,57 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York',
 });
 
+// OpenAI's effort ladder tops at xhigh; Gemini's thinkingLevel tops at high.
+const topThinkingLevel = (modelName) => (modelName.startsWith('gpt-') ? 'xhigh' : 'high');
+
+/**
+ * One full brain pass on one model: send desk, parse, run rails with ONE
+ * corrective retry. Returns { parsed, usage, warnings } or a contained
+ * { error } (parse/rails). Provider/quota failures THROW — the cascade in
+ * analyzeGameDesk owns those.
+ */
+async function runBrainPass(modelName, systemPrompt, userMessage, auditAll) {
+  const session = await createGeminiSession({
+    modelName,
+    systemPrompt,
+    tools: [],
+    thinkingLevel: topThinkingLevel(modelName),
+  });
+
+  const usage = { in: 0, out: 0 };
+  const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
+  const logCost = () => {
+    const [inRate, outRate] = DESK_COST_PER_M[modelName] || [0, 0];
+    const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
+    console.log(`   [Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)}`);
+  };
+
+  let res = await sendToSessionWithRetry(session, userMessage, {});
+  bump(res);
+  let parsed = parseFinalJson(res.content);
+  if (!parsed) {
+    res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+    bump(res);
+    parsed = parseFinalJson(res.content);
+    if (!parsed) { logCost(); return { error: 'parse: no valid final JSON after re-ask' }; }
+  }
+
+  let { issues, warnings } = auditAll(parsed.rationale);
+  if (issues.length) {
+    console.warn(`   [Rail] ${issues.length} issue(s) — one corrective retry`);
+    res = await sendToSessionWithRetry(session, buildStatAuditRetryMessage(issues), {});
+    bump(res);
+    const rp = parseFinalJson(res.content);
+    const second = rp ? auditAll(rp.rationale) : { issues: [{ fatal: true }] };
+    if (!rp || second.issues.length) { logCost(); return { error: 'rails: rationale failed statAudit after retry' }; }
+    parsed = rp;
+    warnings = second.warnings;
+  }
+
+  logCost();
+  return { parsed, usage, warnings };
+}
+
 /**
  * The MLB game brain. Same result contract analyzeGame carried — the runner
  * chassis (tiers, gates, store, tape, plain layer) does not change.
@@ -82,26 +139,7 @@ export async function analyzeGameDesk(game, options = {}) {
   const { homeTeam, awayTeam } = desk.meta;
 
   const systemPrompt = buildGarySystemPrompt(todayLong());
-  const session = await createOpenAISession({
-    modelName: GAME_PICK_MODEL,
-    systemPrompt,
-    tools: [],
-    thinkingLevel: 'xhigh',
-  });
-
   const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n\n${THE_ASK}`;
-  const usage = { in: 0, out: 0 };
-  const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
-
-  let res = await sendToOpenAISession(session, userMessage, {});
-  bump(res);
-  let parsed = parseFinalJson(res.content);
-  if (!parsed) {
-    res = await sendToOpenAISession(session, 'Return your final JSON now.', {});
-    bump(res);
-    parsed = parseFinalJson(res.content);
-    if (!parsed) return { error: 'parse: no valid final JSON after re-ask' };
-  }
 
   const corpus = [{ content: desk.deskText }];
   const auditAll = (rationale) => {
@@ -110,20 +148,26 @@ export async function analyzeGameDesk(game, options = {}) {
     return { issues: [...a.retryable, ...c], warnings: a.warnOnly?.length ? a.warnOnly : null };
   };
 
-  let { issues, warnings } = auditAll(parsed.rationale);
-  if (issues.length) {
-    console.warn(`   [Rail] ${issues.length} issue(s) — one corrective retry`);
-    res = await sendToOpenAISession(session, buildStatAuditRetryMessage(issues), {});
-    bump(res);
-    const rp = parseFinalJson(res.content);
-    const second = rp ? auditAll(rp.rationale) : { issues: [{ fatal: true }] };
-    if (!rp || second.issues.length) return { error: 'rails: rationale failed statAudit after retry' };
-    parsed = rp;
-    warnings = second.warnings;
+  const cascade = [GAME_PICK_MODEL, ...DESK_FALLBACK_MODELS];
+  let pass = null;
+  for (let i = 0; i < cascade.length; i++) {
+    const modelName = cascade[i];
+    try {
+      pass = await runBrainPass(modelName, systemPrompt, userMessage, auditAll);
+      if (i > 0) console.warn(`   [Brain] FALLBACK brain produced this pass: ${modelName}`);
+      break;
+    } catch (err) {
+      const reason = err?.isQuotaError ? 'quota/429' : (err?.message || 'provider error');
+      if (i < cascade.length - 1) {
+        console.warn(`   [Brain] ${modelName} failed (${reason}) — cascading to ${cascade[i + 1]}`);
+        continue;
+      }
+      console.error(`   [Brain] ${modelName} failed (${reason}) — cascade exhausted`);
+      throw err; // runner's per-game catch owns the miss, unchanged
+    }
   }
-
-  const cost = (usage.in * 5 + usage.out * 30) / 1e6;
-  console.log(`   [Brain] one call, ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)}`);
+  if (pass.error) return { error: pass.error };
+  const { parsed, usage, warnings } = pass;
 
   return {
     ...mapFinalPick(parsed, desk.meta),

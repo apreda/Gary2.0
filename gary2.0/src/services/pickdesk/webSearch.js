@@ -7,8 +7,14 @@
  * are prompt text and provider-agnostic. Search runs through the Responses
  * API's built-in web_search tool; failures degrade to empty data (the desk
  * renders "No same-day breaking news." — never blocks a pick).
+ *
+ * Quota fallback (founder approved Jul 29, after the Jul 28 balance outage
+ * built news-less desks all evening): a 429/quota failure — and only that —
+ * re-runs the query through geminiGroundingSearch (same return contract,
+ * its own freshness protocol). OpenAI stays the preferred provider.
  */
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
+import { geminiGroundingSearch } from '../agentic/scoutReport/shared/grounding.js';
 
 const WEB_SEARCH_MODEL = 'gpt-5.6-sol';
 const TIMEOUT_MS = 90000;
@@ -114,7 +120,17 @@ export async function openaiWebSearch(query, options = {}) {
     console.log(`[Web Search] ${WEB_SEARCH_MODEL} returned ${text.length} chars`);
     return { success: text.length > 0, data: text, raw: data };
   } catch (e) {
-    console.warn(`[Web Search] failed: ${e.message}`);
-    return { success: false, data: '', raw: null, error: e.message };
+    const msg = String(e.message || '');
+    if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
+      console.warn(`[Web Search] OpenAI quota/429 — falling back to Gemini grounding`);
+      try {
+        return await geminiGroundingSearch(query, options);
+      } catch (g) {
+        console.warn(`[Web Search] Gemini grounding fallback also failed: ${g.message}`);
+        return { success: false, data: '', raw: null, error: g.message };
+      }
+    }
+    console.warn(`[Web Search] failed: ${msg}`);
+    return { success: false, data: '', raw: null, error: msg };
   }
 }

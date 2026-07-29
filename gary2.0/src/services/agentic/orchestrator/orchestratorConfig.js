@@ -33,14 +33,31 @@ export const GEMINI_PRO_FALLBACK = 'gemini-3.1-pro-preview';
 // Cheaper Flash for research and tool-calling investigation.
 export const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
 // Props lane (Jul 22 2026, founder call): 3.6 Flash released today —
-// verified live on our key before wiring.
+// verified live on our key before wiring. Jul 29 (founder): ALL props desks
+// (MLB main + HR) now run 3.6 Flash primary — Sol's $5/$30 stays reserved
+// for game picks.
 export const GEMINI_PROPS_MODEL = 'gemini-3.6-flash';
+
+// Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
+// OpenAI balance outage shipped 6 games with no pick): when a desk brain
+// throws — quota/429 first among the causes — the SAME desk re-runs on these
+// models in order at their top thinking level. 3.6 Flash first (newest Gemini,
+// Jul 21 GA; the Flash line WAS Gary's brain until the Jul 22 Sol cutover),
+// 3.1 Pro as the different-family second layer.
+export const DESK_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-3.1-pro-preview'];
+
+// $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
+export const DESK_COST_PER_M = {
+  'gpt-5.6-sol': [5, 30],
+  'gemini-3.6-flash': [1.5, 7.5],
+  'gemini-3.1-pro-preview': [2, 12],
+};
 
 export const ALLOWED_GEMINI_MODELS = [
   'gemini-3.5-flash',         // legacy brain (game picks are Sol now)
   'gemini-3-flash-preview',   // research, DFS
-  'gemini-3.6-flash',         // props lane (non-MLB only — MLB props are Sol desk)
-  'gemini-3.1-pro-preview',   // fallback only
+  'gemini-3.6-flash',         // ALL props desks (Jul 29) + game-pick quota fallback
+  'gemini-3.1-pro-preview',   // second-layer fallback
 ];
 
 export function validateGeminiModel(model) {
@@ -84,4 +101,4 @@ export const GEMINI_SAFETY_SETTINGS = [
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
 export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research finish naturally, never kill due to time
 
-console.log(`[Orchestrator] MLB game + props: ${GAME_PICK_MODEL} desk lanes (Sol-only). Non-MLB legacy: ${GEMINI_FLASH_MODEL} research / ${GEMINI_PROPS_MODEL} props.`);
+console.log(`[Orchestrator] MLB game desk: ${GAME_PICK_MODEL} (fallback chain: ${DESK_FALLBACK_MODELS.join(' → ')}). MLB props desk: ${GEMINI_PROPS_MODEL}. Non-MLB legacy: ${GEMINI_FLASH_MODEL} research.`);

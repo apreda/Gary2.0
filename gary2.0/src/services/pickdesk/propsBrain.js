@@ -1,6 +1,11 @@
 /**
- * THE PROPS BRAIN — one Sol xhigh call over the complete desk + THE PROP BOARD
+ * THE PROPS BRAIN — one call over the complete desk + THE PROP BOARD
  * (spec docs/superpowers/specs/2026-07-26-props-desk.md).
+ *
+ * Brain: gemini-3.6-flash at top thinking level (founder, Jul 29 2026 —
+ * props off Sol's $5/$30; Sol stays reserved for game picks), with 3.1 Pro
+ * as the quota/provider fallback. Sessions route through the sessionManager
+ * provider seam, so the model is config, not plumbing.
  *
  * MLB props read the SAME desk game picks read (buildMlbDesk) — lines, stakes,
  * world, matchup lab, WIRE, TAPE, lineups — plus tonight's real prop prices.
@@ -11,8 +16,8 @@
  * dropped individually. Odds/no-stats/cap gates live in the CLI chassis.
  */
 import { buildMlbDesk } from './mlbDesk.js';
-import { GAME_PICK_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
-import { createOpenAISession, sendToOpenAISession } from '../agentic/orchestrator/providerAdapters/openaiSession.js';
+import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 
@@ -248,26 +253,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   const desk = await buildMlbDesk(game, options);
   const { homeTeam, awayTeam } = desk.meta;
 
-  const session = await createOpenAISession({
-    modelName: GAME_PICK_MODEL,
-    systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
-    tools: [],
-    thinkingLevel: 'xhigh',
-  });
-
   const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n\n${board.text}\n\n${THE_PROPS_ASK}`;
-  const usage = { in: 0, out: 0 };
-  const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
-
-  let res = await sendToOpenAISession(session, userMessage, {});
-  bump(res);
-  let parsed = parsePicksJson(res.content);
-  if (!parsed) {
-    res = await sendToOpenAISession(session, 'Return your final JSON now.', {});
-    bump(res);
-    parsed = parsePicksJson(res.content);
-    if (!parsed) return { error: 'parse: no valid picks JSON after re-ask', picks: [], validatedPlayers: board.players };
-  }
 
   // Rail: audit every pick's rationale against the desk+board corpus; on any
   // issue, ONE corrective retry for the full set, then drop failing picks.
@@ -277,27 +263,74 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     const c = desk.recentScores ? auditCountClaims(rationale, desk.recentScores) : [];
     return { issues: [...a.retryable, ...c], warnings: a.warnOnly?.length ? a.warnOnly : null };
   };
-  let audits = parsed.picks.map(p => auditOne(p.rationale));
-  if (audits.some(a => a.issues.length)) {
-    const allIssues = audits.flatMap(a => a.issues);
-    console.warn(`   [Rail] ${allIssues.length} issue(s) across ${audits.filter(a => a.issues.length).length} pick(s) — one corrective retry`);
-    res = await sendToOpenAISession(session, buildStatAuditRetryMessage(allIssues), {});
-    bump(res);
-    const rp = parsePicksJson(res.content);
-    if (rp) {
-      parsed = rp;
-      audits = parsed.picks.map(p => auditOne(p.rationale));
-    }
-    const keep = parsed.picks.filter((_, i) => !audits[i].issues.length);
-    if (keep.length !== parsed.picks.length) {
-      console.warn(`   [Rail] dropped ${parsed.picks.length - keep.length} pick(s) that failed statAudit after retry`);
-    }
-    parsed = { ...parsed, picks: keep };
-    audits = audits.filter(a => !a.issues.length);
-  }
 
-  const cost = (usage.in * 5 + usage.out * 30) / 1e6;
-  console.log(`   [Props Brain] one call, ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
+  // One full props pass on one model. Contained parse failures return
+  // { error }; provider/quota failures THROW so the cascade below owns them.
+  const runPropsPass = async (modelName) => {
+    const session = await createGeminiSession({
+      modelName,
+      systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
+      tools: [],
+      thinkingLevel: modelName.startsWith('gpt-') ? 'xhigh' : 'high',
+    });
+
+    const usage = { in: 0, out: 0 };
+    const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
+
+    let res = await sendToSessionWithRetry(session, userMessage, {});
+    bump(res);
+    let parsed = parsePicksJson(res.content);
+    if (!parsed) {
+      res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+      bump(res);
+      parsed = parsePicksJson(res.content);
+      if (!parsed) return { error: 'parse: no valid picks JSON after re-ask' };
+    }
+
+    let audits = parsed.picks.map(p => auditOne(p.rationale));
+    if (audits.some(a => a.issues.length)) {
+      const allIssues = audits.flatMap(a => a.issues);
+      console.warn(`   [Rail] ${allIssues.length} issue(s) across ${audits.filter(a => a.issues.length).length} pick(s) — one corrective retry`);
+      res = await sendToSessionWithRetry(session, buildStatAuditRetryMessage(allIssues), {});
+      bump(res);
+      const rp = parsePicksJson(res.content);
+      if (rp) {
+        parsed = rp;
+        audits = parsed.picks.map(p => auditOne(p.rationale));
+      }
+      const keep = parsed.picks.filter((_, i) => !audits[i].issues.length);
+      if (keep.length !== parsed.picks.length) {
+        console.warn(`   [Rail] dropped ${parsed.picks.length - keep.length} pick(s) that failed statAudit after retry`);
+      }
+      parsed = { ...parsed, picks: keep };
+      audits = audits.filter(a => !a.issues.length);
+    }
+
+    const [inRate, outRate] = DESK_COST_PER_M[modelName] || [0, 0];
+    const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
+    console.log(`   [Props Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
+    return { parsed, audits, usage };
+  };
+
+  const cascade = [GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK];
+  let pass = null;
+  for (let i = 0; i < cascade.length; i++) {
+    try {
+      pass = await runPropsPass(cascade[i]);
+      if (i > 0) console.warn(`   [Props Brain] FALLBACK brain produced this pass: ${cascade[i]}`);
+      break;
+    } catch (err) {
+      const reason = err?.isQuotaError ? 'quota/429' : (err?.message || 'provider error');
+      if (i < cascade.length - 1) {
+        console.warn(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascading to ${cascade[i + 1]}`);
+        continue;
+      }
+      console.error(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascade exhausted`);
+      throw err; // props CLI's per-game catch owns the miss, unchanged
+    }
+  }
+  if (pass.error) return { error: pass.error, picks: [], validatedPlayers: board.players };
+  const { parsed, audits, usage } = pass;
 
   const picks = parsed.picks.map((p, i) => ({
     player: p.player,

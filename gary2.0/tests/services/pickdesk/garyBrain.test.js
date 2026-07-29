@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/pickdesk/mlbDesk.js', () => ({ buildMlbDesk: vi.fn() }));
-vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/openaiSession.js', () => ({
-  createOpenAISession: vi.fn(),
-  sendToOpenAISession: vi.fn(),
+vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
+  createGeminiSession: vi.fn(),
+  sendToSessionWithRetry: vi.fn(),
 }));
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
-import { createOpenAISession, sendToOpenAISession } from '../../../src/services/agentic/orchestrator/providerAdapters/openaiSession.js';
+import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
 import { analyzeGameDesk, mapFinalPick, THE_ASK } from '../../../src/services/pickdesk/garyBrain.js';
 
 const META = {
@@ -30,15 +30,15 @@ const GOOD_JSON = '```json\n{"final_pick": "Cardinals ML -104", "rationale": "Ga
 beforeEach(() => {
   vi.clearAllMocks();
   buildMlbDesk.mockResolvedValue(DESK);
-  createOpenAISession.mockResolvedValue({ id: 's1' });
-  sendToOpenAISession.mockResolvedValue({ content: GOOD_JSON, usage: { prompt_tokens: 100, completion_tokens: 50 } });
+  createGeminiSession.mockResolvedValue({ id: 's1' });
+  sendToSessionWithRetry.mockResolvedValue({ content: GOOD_JSON, usage: { prompt_tokens: 100, completion_tokens: 50 } });
 });
 
 describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
   it('creates ONE session: gpt-5.6-sol, xhigh, ZERO tools', async () => {
     await analyzeGameDesk({ homeTeam: 'Cardinals', awayTeam: 'Reds' });
-    expect(createOpenAISession).toHaveBeenCalledTimes(1);
-    const args = createOpenAISession.mock.calls[0][0];
+    expect(createGeminiSession).toHaveBeenCalledTimes(1);
+    const args = createGeminiSession.mock.calls[0][0];
     expect(args.modelName).toBe('gpt-5.6-sol');
     expect(args.thinkingLevel).toBe('xhigh');
     expect(args.tools).toEqual([]);
@@ -46,7 +46,7 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
 
   it('system prompt is minimal — identity, one staleness line, card contract; zero steering', async () => {
     await analyzeGameDesk({});
-    const { systemPrompt } = createOpenAISession.mock.calls[0][0];
+    const { systemPrompt } = createGeminiSession.mock.calls[0][0];
     // Founder, Jul 26: "the only real anti-hallucination we need is to say
     // don't use training data as it's old" — statAudit stays as the silent
     // rail; the prompt carries no threats, no bans, no enumerations.
@@ -66,8 +66,8 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
 
   it('one user message: the desk, then the bare ask — no coaching, no tutoring', async () => {
     await analyzeGameDesk({});
-    expect(sendToOpenAISession).toHaveBeenCalledTimes(1);
-    const msg = sendToOpenAISession.mock.calls[0][1];
+    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(1);
+    const msg = sendToSessionWithRetry.mock.calls[0][1];
     expect(msg.indexOf('═══ THE LINES')).toBeLessThan(msg.indexOf('Pick the bet you want to take'));
     expect(msg).toContain('Pick the bet you want to take.');
     expect(msg).toContain('confidence_score');
@@ -92,11 +92,38 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(r.rationale).toContain("Gary's Take");
   });
 
-  it('malformed JSON: one re-ask, then a contained error (never a throw)', async () => {
-    sendToOpenAISession.mockResolvedValue({ content: 'no json here', usage: {} });
+  it('malformed JSON: one re-ask, then a contained error — never a throw, never a cascade', async () => {
+    sendToSessionWithRetry.mockResolvedValue({ content: 'no json here', usage: {} });
     const r = await analyzeGameDesk({});
-    expect(sendToOpenAISession).toHaveBeenCalledTimes(2);
+    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(2);
+    expect(createGeminiSession).toHaveBeenCalledTimes(1); // parse failures stay on the primary brain
     expect(r.error).toMatch(/parse/);
+  });
+});
+
+describe('analyzeGameDesk — quota cascade (founder approved Jul 29)', () => {
+  it('Sol quota/429 → SAME desk re-runs on gemini-3.6-flash at high thinking', async () => {
+    const quotaErr = Object.assign(new Error('OpenAI 429: insufficient_quota'), { isQuotaError: true });
+    sendToSessionWithRetry
+      .mockRejectedValueOnce(quotaErr)
+      .mockResolvedValue({ content: GOOD_JSON, usage: { prompt_tokens: 100, completion_tokens: 50 } });
+    const r = await analyzeGameDesk({});
+    expect(createGeminiSession).toHaveBeenCalledTimes(2);
+    expect(createGeminiSession.mock.calls[0][0].modelName).toBe('gpt-5.6-sol');
+    expect(createGeminiSession.mock.calls[1][0].modelName).toBe('gemini-3.6-flash');
+    expect(createGeminiSession.mock.calls[1][0].thinkingLevel).toBe('high'); // Gemini's ceiling — never 'xhigh'
+    // The fallback receives the IDENTICAL contract: same system prompt, same desk message.
+    expect(createGeminiSession.mock.calls[1][0].systemPrompt).toBe(createGeminiSession.mock.calls[0][0].systemPrompt);
+    expect(sendToSessionWithRetry.mock.calls[1][1]).toBe(sendToSessionWithRetry.mock.calls[0][1]);
+    expect(r.pick).toBe('Cardinals ML -104');
+  });
+
+  it('cascade exhausted: quota on all three brains rethrows to the runner', async () => {
+    const quotaErr = Object.assign(new Error('OpenAI 429: insufficient_quota'), { isQuotaError: true });
+    sendToSessionWithRetry.mockRejectedValue(quotaErr);
+    await expect(analyzeGameDesk({})).rejects.toThrow();
+    expect(createGeminiSession).toHaveBeenCalledTimes(3);
+    expect(createGeminiSession.mock.calls[2][0].modelName).toBe('gemini-3.1-pro-preview');
   });
 });
 
