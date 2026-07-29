@@ -73,7 +73,9 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(sendToSessionWithRetry).toHaveBeenCalledTimes(1);
     const msg = sendToSessionWithRetry.mock.calls[0][1];
     expect(msg.indexOf('═══ THE LINES')).toBeLessThan(msg.indexOf('Pick the bet you want to take'));
-    expect(msg).toContain('Pick the bet you want to take.');
+    // Jul 29 (founder, replay-gated): the pick's object is a priced ticket.
+    expect(msg).toContain('Pick the bet you want to take — a bet is a side and its price.');
+    expect(msg).toContain('your conviction in this bet at its price');
     expect(msg).toContain('confidence_score');
     // The razor: no decision coaching, no mechanics tutoring, no old-system asks.
     expect(msg).not.toContain('BEST BET');

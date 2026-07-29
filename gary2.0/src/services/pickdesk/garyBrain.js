@@ -37,7 +37,7 @@ The line is the market's opinion of tonight, not a measurement of it.
 
 Your published card is "Gary's Take": three paragraphs, opening with a line or two setting the stage like a broadcast — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
 
-export const THE_ASK = `Pick the bet you want to take.
+export const THE_ASK = `Pick the bet you want to take — a bet is a side and its price.
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
 
@@ -47,7 +47,7 @@ After your card, output:
 { "final_pick": "[Team] [bet] [exact odds]", "rationale": "Gary's Take\\n\\n[the prose]", "confidence_score": 0.XX }
 \`\`\`
 
-confidence_score (0.50–1.00): how confident you are this bet wins.`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
 const parseFinalJson = (t) => {
   try {
