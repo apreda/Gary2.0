@@ -8,8 +8,8 @@
  * rephrase what the audited rationale already says. Non-blocking by
  * contract — on any failure or timeout the pick ships without the field.
  */
-import { createOpenAISession, sendToOpenAISession } from './orchestrator/providerAdapters/openaiSession.js';
-import { GAME_PICK_MODEL } from './orchestrator/orchestratorConfig.js';
+import { createGeminiSession, sendToSessionWithRetry } from './orchestrator/sessionManager.js';
+import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS } from './orchestrator/orchestratorConfig.js';
 
 const TIMEOUT_MS = 25000;
 
@@ -18,15 +18,23 @@ const SYSTEM = `You are Gary, a professional sports bettor, rewriting your own p
 export async function translateRationalePlain(rationale) {
   if (typeof rationale !== 'string' || rationale.trim().length < 40) return null;
   const work = (async () => {
-    const session = await createOpenAISession({
-      modelName: GAME_PICK_MODEL,
-      systemPrompt: SYSTEM,
-      tools: [],
-      thinkingLevel: 'low',
-    });
-    const res = await sendToOpenAISession(session, `Rewrite this in plain fan language:\n\n${rationale}`, {});
-    const text = (res?.content || '').trim();
-    return text.length >= 40 ? text : null;
+    // Provider seam + one fallback (Jul 29): when the primary brain's
+    // provider is down — the exact moment a fallback-brained pick most
+    // needs its plain layer — this re-register must not die with it.
+    for (const modelName of [GAME_PICK_MODEL, DESK_FALLBACK_MODELS[0]].filter(Boolean)) {
+      try {
+        const session = await createGeminiSession({
+          modelName,
+          systemPrompt: SYSTEM,
+          tools: [],
+          thinkingLevel: 'low',
+        });
+        const res = await sendToSessionWithRetry(session, `Rewrite this in plain fan language:\n\n${rationale}`, {});
+        const text = (res?.content || '').trim();
+        if (text.length >= 40) return text;
+      } catch { /* try the next model */ }
+    }
+    return null;
   })();
   const timeout = new Promise(resolve => setTimeout(() => resolve(null), TIMEOUT_MS));
   try {

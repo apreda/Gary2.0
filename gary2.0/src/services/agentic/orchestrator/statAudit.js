@@ -238,7 +238,7 @@ export function auditPropsPicks(picks, messages) {
  * instruction only: same decision, same side, same odds — just fix the prose.
  */
 export function buildStatAuditRetryMessage(unsupported) {
-  return `STAT AUDIT: The following figures in your rationale do NOT appear anywhere in the scout report, tool responses, or grounding results from this conversation — which means they came from your outdated training memory and may be wrong:
+  return `STAT AUDIT: The following figures in your rationale do NOT appear anywhere in the data provided in this conversation — which means they came from your outdated training memory and may be wrong:
 
 ${unsupported.map((u, i) => `${i + 1}. ${u}`).join('\n')}
 

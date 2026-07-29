@@ -51,6 +51,10 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     // don't use training data as it's old" — statAudit stays as the silent
     // rail; the prompt carries no threats, no bans, no enumerations.
     expect(systemPrompt).toContain('Your training data is old; the desk is current.');
+    // Founder-approved verbatim, Jul 29 ("i agree with" the exact sentence):
+    // states what the odds ARE — never when to fade or follow them.
+    expect(systemPrompt).toContain("The line is the market's opinion of tonight, not a measurement of it.");
+    expect(systemPrompt).not.toMatch(/fade|against the market|contrarian|public money/i);
     expect(systemPrompt).toContain('never as an AI');
     expect(systemPrompt).toContain('Gary\'s Take');
     expect(systemPrompt).toContain('three paragraphs'); // founder's knowing choice, Jul 26 12:52 PM ET era
@@ -61,7 +65,7 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(systemPrompt).not.toContain('FACT-CHECKING PROTOCOL');
     expect(systemPrompt).not.toContain('THINK LIKE A SHARP');
     expect(systemPrompt).not.toContain('<constitution>');
-    expect(systemPrompt.length).toBeLessThan(700);
+    expect(systemPrompt.length).toBeLessThan(780);
   });
 
   it('one user message: the desk, then the bare ask — no coaching, no tutoring', async () => {

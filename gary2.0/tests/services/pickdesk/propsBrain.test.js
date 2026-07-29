@@ -10,6 +10,8 @@ describe('props prompt surface', () => {
 
 Your training data is old; the desk is current.
 
+The line is the market's opinion of tonight, not a measurement of it.
+
 Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`);
   });
 
