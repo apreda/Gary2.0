@@ -20,7 +20,7 @@ import { extractSection, insertAfterHeader } from './sectionText.js';
 const TRADE_DEADLINE = '2026-07-31'; // MLB calendar fact; update each season
 // (Bet-mechanics legend deleted Jul 26 2026 — founder razor: never explain a
 // run line to a frontier model. The board rows carry the offered bets.)
-const INJURY_LEGEND = `Tags: [NEW] = listed/scratched within 3 days (may not be in the line yet). [KNOWN] = 4+ days (the line and recent stats already reflect it). [SP SCRATCH] = scheduled starter replaced.`;
+const INJURY_LEGEND = `Tags: [NEW] = the absence itself is days old — he played within the last 3 days (may not be in the line yet). [KNOWN] = this team has already been playing without him; the line and recent results reflect it. [SP SCRATCH] = scheduled starter replaced.`;
 const NEWS_HEADER = `═══ TODAY'S BREAKING NEWS ═══`;
 const INJURIES_HEADER = `═══ INJURIES (BDL Structured) ═══`;
 

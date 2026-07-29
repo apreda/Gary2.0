@@ -1,42 +1,31 @@
 /**
- * Sol text adapter for the insights pipeline (Jul 27 2026, Sol-only mandate):
- * the drop-in replacement for geminiService.generateResponse in the hub/fantasy
- * computers. One prompt in, prose/JSON text out, no tools, low reasoning —
- * these are content passes, not picks.
+ * Content-pass text adapter for the insights pipeline (Jul 27 2026, Sol-only
+ * mandate; provider seam Jul 29): the drop-in replacement for
+ * geminiService.generateResponse in the hub/fantasy computers. One prompt in,
+ * prose/JSON text out, no tools, low reasoning — these are content passes,
+ * not picks.
+ *
+ * Routing (Jul 29, subscription bridge + cost consolidation): the call rides
+ * the sessionManager provider seam, so the model is config, not plumbing.
+ * GARY_CONTENT_MODEL_OVERRIDE picks the content brain explicitly (the bridge
+ * plists set claude-sonnet-5 — its own weekly bucket, $0 marginal); the
+ * DEFAULT is gemini-3.6-flash at high thinking (founder, Jul 29: content
+ * write-ups get "3.6 Flash on high reasoning" — never Sol's $5/$30 again).
  */
-import { GAME_PICK_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
+import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 
-const TIMEOUT_MS = 120000;
+export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'gemini-3.6-flash';
 
-export async function generateSolText(prompt, { maxTokens = 4000, effort = 'low' } = {}) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY missing');
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: GAME_PICK_MODEL,
-        input: prompt,
-        reasoning: { effort },
-        max_output_tokens: maxTokens,
-      }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`OpenAI ${res.status}: ${errText.slice(0, 160)}`);
-    }
-    const data = await res.json();
-    return (Array.isArray(data.output) ? data.output : [])
-      .filter((o) => o.type === 'message')
-      .flatMap((o) => (o.content || []).map((c) => c.text).filter(Boolean))
-      .join('');
-  } finally {
-    clearTimeout(timer);
-  }
+export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high' } = {}) {
+  const session = await createGeminiSession({
+    modelName: contentModel(),
+    systemPrompt: '',
+    tools: [],
+    thinkingLevel: effort,
+    maxOutputTokens: maxTokens,
+  });
+  const res = await sendToSessionWithRetry(session, prompt, {});
+  return res?.content || '';
 }
 
 export default { generateSolText };

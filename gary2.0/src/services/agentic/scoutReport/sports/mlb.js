@@ -1108,12 +1108,43 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // ═══════════════════════════════════════════════════════════════════
   // INJURIES (BDL structured data with freshness labels)
+  //
+  // Jul 29 2026 (founder): the NEW/KNOWN clock is GAMES-BASED — days since
+  // the player last actually appeared in a box score — never the report
+  // date. BDL refreshes an injury record every time a beat writer posts a
+  // rehab update, so a weeks-old absence kept resurfacing as "[NEW] — 0d
+  // ago" ("may not be in the line yet") and steered picks off injuries the
+  // market priced long ago (Rutschman/Basallo on the Jul 29 Tigers desk).
+  // Same concept as the NBA duration labels (daysSinceOut): the market
+  // watches games, so freshness is measured in games the team has already
+  // played without him. Pitchers rest 4-5 days between starts by design, so
+  // their clock stays report-based UNLESS they haven't appeared in 10+ days
+  // (long-known absence). SP SCRATCH stays report-based — a scratch IS news.
   // ═══════════════════════════════════════════════════════════════════
   let injuriesSection = '';
   if (bdlInjuries && bdlInjuries.length > 0) {
     const now = new Date();
     const homeInjuries = [];
     const awayInjuries = [];
+
+    // One cached game-log fetch per injured player: when did he LAST PLAY?
+    // Map value: Date of last appearance, null = no appearance this season,
+    // absent from map = fetch failed (fall back to the report-date clock).
+    const seasonYear = now.getFullYear();
+    const lastPlayedById = new Map();
+    await Promise.all(
+      [...new Set(bdlInjuries.map((i) => i.player?.id).filter((x) => x != null))].map(async (pid) => {
+        try {
+          const rows = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, seasonYear);
+          const played = (Array.isArray(rows) ? rows : []).filter(
+            (r) => r?.at_bats != null || (r?.ip != null && parseFloat(r.ip) > 0),
+          );
+          const last = played.length ? played[played.length - 1] : null;
+          const d = last?._game?.date ? new Date(String(last._game.date).slice(0, 10)) : null;
+          lastPlayedById.set(pid, d && !Number.isNaN(d.getTime()) ? d : null);
+        } catch { /* per-player fallback to report-date clock */ }
+      }),
+    );
 
     for (const inj of bdlInjuries) {
       const playerName = inj.player?.full_name || `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
@@ -1123,31 +1154,40 @@ export async function buildMlbScoutReport(game, options = {}) {
       const status = inj.status || 'Unknown';
       const comment = inj.short_comment || inj.long_comment || '';
 
-      // Calculate days since injury for freshness label
-      const injuryDate = inj.date ? new Date(inj.date) : null;
-      const daysSince = injuryDate ? Math.floor((now - injuryDate) / (1000 * 60 * 60 * 24)) : null;
-
-      // Apply duration labels
-      // MLB simplified 3-tier injury labels (does not affect other sports)
-      let label = 'KNOWN';
-      if (daysSince !== null) {
-        if (daysSince <= 3) {
-          label = 'NEW';
-        } else {
-          label = 'KNOWN';
-        }
-      }
-      // SP SCRATCH detection — pitcher position + very recent + "scratched" or "out" status
+      const reportDate = inj.date ? new Date(inj.date) : null;
+      const daysSinceReport = reportDate ? Math.floor((now - reportDate) / (1000 * 60 * 60 * 24)) : null;
       const isPitcher = (position || '').toLowerCase().includes('pitcher') || (position || '').toLowerCase() === 'p';
+
+      const hasLog = lastPlayedById.has(inj.player?.id);
+      const lastPlayed = hasLog ? lastPlayedById.get(inj.player?.id) : undefined;
+      const daysOut = lastPlayed ? Math.floor((now - lastPlayed) / (1000 * 60 * 60 * 24)) : null;
+
+      // The games-based clock. Hitters: NEW only while the absence itself is
+      // days old. Pitchers: report clock unless the log shows a long absence.
+      let label = 'KNOWN';
+      if (hasLog && lastPlayed === null) {
+        label = 'KNOWN'; // no appearance all season — as priced-in as it gets
+      } else if (hasLog && !isPitcher) {
+        label = daysOut <= 3 ? 'NEW' : 'KNOWN';
+      } else if (hasLog && isPitcher) {
+        label = daysOut > 10 ? 'KNOWN' : (daysSinceReport !== null && daysSinceReport <= 3 ? 'NEW' : 'KNOWN');
+      } else if (daysSinceReport !== null) {
+        label = daysSinceReport <= 3 ? 'NEW' : 'KNOWN'; // no log available — old behavior
+      }
+
+      // SP SCRATCH detection — pitcher position + very recent + "scratched" or "out" status
       const isScratched = (status || '').toLowerCase().includes('scratch') ||
-                          ((status || '').toLowerCase().includes('out') && isPitcher && daysSince !== null && daysSince <= 1);
+                          ((status || '').toLowerCase().includes('out') && isPitcher && daysSinceReport !== null && daysSinceReport <= 1);
       if (isPitcher && isScratched) {
         label = 'SP SCRATCH';
       }
 
-      const dateStr = injuryDate ? injuryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-      const daysSinceStr = daysSince !== null ? ` — ${daysSince}d ago` : '';
-      const formatted = `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateStr ? ` (${dateStr}${daysSinceStr})` : ''}`;
+      const fmtD = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const dateBits = [];
+      if (lastPlayed) dateBits.push(`last played ${fmtD(lastPlayed)} — ${daysOut}d out`);
+      else if (hasLog && lastPlayed === null) dateBits.push('no appearances this season');
+      if (reportDate) dateBits.push(`update ${fmtD(reportDate)}`);
+      const formatted = `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateBits.length ? ` (${dateBits.join('; ')})` : ''}`;
 
       // Assign to home or away based on player team
       const playerTeamId = inj.player?.team?.id || inj.team?.id;

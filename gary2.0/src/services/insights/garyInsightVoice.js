@@ -7,9 +7,14 @@
  * The computed sentence is preserved in meta.evidence (the expanded card's
  * factual basis); `detail` becomes Gary's read. A failed pass changes nothing
  * — template details ship, the hub is never blocked.
+ *
+ * Jul 29: routed through the sessionManager provider seam. On the
+ * subscription bridge GARY_CONTENT_MODEL_OVERRIDE (claude-sonnet-5 in the
+ * insights plist) writes the reads at $0; with balances live it follows
+ * GAME_PICK_MODEL (Sol) exactly as before.
  */
-import { GAME_PICK_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
-import { createOpenAISession, sendToOpenAISession } from '../agentic/orchestrator/providerAdapters/openaiSession.js';
+import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { contentModel } from './solText.js';
 
 // Lanes whose detail is already Gary's prose (sourced from a pick rationale or
 // written by their own Sol pass) — rewriting them would launder better copy.
@@ -69,16 +74,16 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
       facts: r.meta?.key_stats || undefined,
     }));
 
-    const session = await createOpenAISession({
-      modelName: GAME_PICK_MODEL,
+    const session = await createGeminiSession({
+      modelName: contentModel(),
       systemPrompt: systemPrompt(todayLong()),
       tools: [],
-      thinkingLevel: 'medium',
+      thinkingLevel: 'high',
     });
-    let res = await sendToOpenAISession(session, theAsk(items), {});
+    let res = await sendToSessionWithRetry(session, theAsk(items), {});
     let reads = parseReads(res.content);
     if (!reads) {
-      res = await sendToOpenAISession(session, 'Return your final JSON now.', {});
+      res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
       reads = parseReads(res.content);
     }
     if (!reads) continue; // this chunk ships with template details
