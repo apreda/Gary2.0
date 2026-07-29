@@ -81,8 +81,9 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York',
 });
 
-// OpenAI's effort ladder tops at xhigh; Gemini's thinkingLevel tops at high.
-const topThinkingLevel = (modelName) => (modelName.startsWith('gpt-') ? 'xhigh' : 'high');
+// OpenAI's and the Claude CLI's effort ladders reach xhigh; Gemini's
+// thinkingLevel tops at high.
+const topThinkingLevel = (modelName) => (modelName.startsWith('gemini') ? 'high' : 'xhigh');
 
 /**
  * One full brain pass on one model: send desk, parse, run rails with ONE

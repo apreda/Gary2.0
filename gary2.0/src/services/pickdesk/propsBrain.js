@@ -273,7 +273,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
       modelName,
       systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
       tools: [],
-      thinkingLevel: modelName.startsWith('gpt-') ? 'xhigh' : 'high',
+      thinkingLevel: modelName.startsWith('gemini') ? 'high' : 'xhigh',
     });
 
     const usage = { in: 0, out: 0 };

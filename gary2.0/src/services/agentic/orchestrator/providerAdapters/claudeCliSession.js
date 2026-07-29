@@ -25,6 +25,18 @@ const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || 'claude';
 const CALL_TIMEOUT_MS = 15 * 60 * 1000; // Fable turns on a full desk can run minutes
 const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,TodoWrite,WebSearchTool';
 
+// Effort is PINNED per call — headless `claude -p` otherwise inherits the
+// founder's interactive default (settings effortLevel), which drifts with his
+// /effort usage (caught Jul 29: bridge picks silently ran at "medium").
+// Founder policy: Fable brains at xhigh (the Sol-era bar); Sonnet lanes at
+// max ("sonnet is the one — but then we need max reasoning") — its separate
+// weekly bucket makes the extra depth free.
+const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+const effortFor = (modelName, thinkingLevel) => {
+  if (String(modelName).includes('sonnet')) return 'max';
+  return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'xhigh';
+};
+
 export function isClaudeCliModel(modelName) {
   return typeof modelName === 'string' && modelName.startsWith('claude');
 }
@@ -92,7 +104,7 @@ export async function sendToClaudeCliSession(session, message, _options = {}) {
   const body = session._seedText ? `${session._seedText}\n\n${text}` : text;
   session._seedText = null;
 
-  const args = ['-p', '--model', session.modelName, '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
+  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel), '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);
   } else if (session._systemPrompt) {
@@ -145,7 +157,9 @@ export async function sendToClaudeCliSession(session, message, _options = {}) {
 export async function claudeCliWebSearch(prompt, options = {}) {
   const model = options.model || process.env.GARY_GROUNDING_CLAUDE_MODEL || 'claude-sonnet-5';
   try {
-    const args = ['-p', '--model', model, '--output-format', 'json', '--allowedTools', 'WebSearch'];
+    // Grounding runs at high, not max — retrieval quality is search-bound,
+    // and max-depth thinking on every news lookup just risks the timeout.
+    const args = ['-p', '--model', model, '--effort', 'high', '--output-format', 'json', '--allowedTools', 'WebSearch'];
     const { code, stdout, stderr } = await runClaude(args, prompt, options.timeoutMs || 5 * 60 * 1000);
     if (code !== 0) throw toError(code, stdout, stderr);
     const data = JSON.parse(stdout);
