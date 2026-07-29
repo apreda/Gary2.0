@@ -15,6 +15,7 @@
  */
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
 import { geminiGroundingSearch } from '../agentic/scoutReport/shared/grounding.js';
+import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
 
 const WEB_SEARCH_MODEL = 'gpt-5.6-sol';
 const TIMEOUT_MS = 90000;
@@ -67,6 +68,16 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your tra
  * text (empty string on any failure).
  */
 export async function openaiWebSearch(query, options = {}) {
+  // SUBSCRIPTION BRIDGE (founder, Jul 29): with GARY_GROUNDING_VIA_CLAUDE=1,
+  // grounding runs on the Claude subscription first (WebSearch tool only,
+  // Sonnet by default — its own weekly bucket), $0 marginal. The OpenAI →
+  // Gemini chain below stays as the fallback if the bridge search fails.
+  if (process.env.GARY_GROUNDING_VIA_CLAUDE === '1') {
+    const viaClaude = await claudeCliWebSearch(freshnessPrompt(query), options);
+    if (viaClaude.success) return viaClaude;
+    console.warn('[Web Search] claude-cli grounding empty/failed — trying API providers');
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return { success: false, data: '', raw: null, error: 'OPENAI_API_KEY missing' };
 

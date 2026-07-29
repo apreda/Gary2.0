@@ -25,7 +25,14 @@
 // Jul 22 2026 PM: "the only thing we should have changed is that we are using
 // Sol 5.6 now" — same pick process, new brain; routed via the OpenAI adapter
 // seam in sessionManager, same as the July 5.5 bake-off).
-export const GAME_PICK_MODEL = 'gpt-5.6-sol';
+//
+// SUBSCRIPTION BRIDGE (founder, Jul 29 2026): while API balances are paused,
+// GARY_MODEL_OVERRIDE=claude-fable-5 swaps the game brain onto the founder's
+// Claude subscription via the claudeCliSession adapter ($0 marginal). The
+// Gemini cascade stays behind it, firing only if the bridge brain itself
+// fails. Unset the env var and the system is exactly the Sol architecture —
+// the API stack returns with the next balance top-up, zero code changes.
+export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 // Legacy Gemini Tier 1 — research-era fallback references only.
 export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
 // Fallback when the primary errors / rate-limits.
@@ -36,7 +43,7 @@ export const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
 // verified live on our key before wiring. Jul 29 (founder): ALL props desks
 // (MLB main + HR) now run 3.6 Flash primary — Sol's $5/$30 stays reserved
 // for game picks.
-export const GEMINI_PROPS_MODEL = 'gemini-3.6-flash';
+export const GEMINI_PROPS_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'gemini-3.6-flash';
 
 // Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
 // OpenAI balance outage shipped 6 games with no pick): when a desk brain
@@ -47,10 +54,14 @@ export const GEMINI_PROPS_MODEL = 'gemini-3.6-flash';
 export const DESK_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-3.1-pro-preview'];
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
+// Claude entries are $0: the subscription bridge has no marginal token cost.
 export const DESK_COST_PER_M = {
   'gpt-5.6-sol': [5, 30],
   'gemini-3.6-flash': [1.5, 7.5],
   'gemini-3.1-pro-preview': [2, 12],
+  'claude-fable-5': [0, 0],
+  'claude-opus-5': [0, 0],
+  'claude-sonnet-5': [0, 0],
 };
 
 export const ALLOWED_GEMINI_MODELS = [

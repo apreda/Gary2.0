@@ -19,9 +19,10 @@ describe('model tiering: props on their own Gemini tier (game brain = Sol throug
     expect(agentLoopSrc).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GAME_PICK_MODEL');
   });
 
-  it('props run gemini-3.6-flash (founder call, Jul 22 2026 — verified live on our key)', () => {
+  it('props default to gemini-3.6-flash, overridable only via the subscription-bridge env seam (Jul 29 2026)', () => {
     const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
-    expect(configSrc).toMatch(/GEMINI_PROPS_MODEL = 'gemini-3\.6-flash'/);
+    expect(configSrc).toMatch(/GEMINI_PROPS_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'gemini-3\.6-flash'/);
+    expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'gpt-5\.6-sol'/);
   });
 
   it('the research briefing stays on the Tier 2 model', () => {

@@ -1,0 +1,162 @@
+/**
+ * Claude Code CLI adapter — the subscription bridge (founder GO, Jul 29 2026).
+ *
+ * Runs desk-brain calls through headless `claude -p` on the founder's own
+ * Claude subscription instead of a metered API — the stopgap while API
+ * balances are paused. Same normalized session contract the OpenAI and
+ * Gemini adapters speak ({ content, toolCalls, finishReason, usage }), so
+ * sessionManager routes `claude-*` model names here and nothing upstream
+ * changes.
+ *
+ * Mechanics: prompt rides STDIN (a ~100KB desk would blow past comfort on
+ * argv), `--output-format json` gives { result, session_id, usage }, and the
+ * rails' corrective retry continues the SAME conversation via `--resume`.
+ * All tools are disallowed for brain calls — the desk is the entire evidence,
+ * exactly like the API brains. claudeCliWebSearch() is the one exception:
+ * WebSearch-only, for the desk's WORLD grounding.
+ *
+ * Failure mapping: a usage-cap / rate-limit refusal from the CLI sets
+ * isQuotaError so the desk cascade escalates to the Gemini fallbacks —
+ * a capped subscription degrades to pennies, never to a dark slate.
+ */
+import { spawn } from 'child_process';
+
+const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || 'claude';
+const CALL_TIMEOUT_MS = 15 * 60 * 1000; // Fable turns on a full desk can run minutes
+const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,TodoWrite,WebSearchTool';
+
+export function isClaudeCliModel(modelName) {
+  return typeof modelName === 'string' && modelName.startsWith('claude');
+}
+
+function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      proc.kill('SIGTERM');
+      reject(new Error(`claude CLI timed out after ${Math.round(timeoutMs / 60000)}m`));
+    }, timeoutMs);
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', (e) => { clearTimeout(timer); reject(e); });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    });
+    proc.stdin.write(stdinText);
+    proc.stdin.end();
+  });
+}
+
+const CAP_PATTERNS = /usage limit|rate limit|out of.*(usage|credits)|limit reached|too many requests|overloaded/i;
+
+function toError(code, stdout, stderr) {
+  const detail = (stderr || stdout || '').slice(0, 300);
+  const error = new Error(`claude CLI exit ${code}: ${detail}`);
+  if (CAP_PATTERNS.test(detail)) error.isQuotaError = true;
+  return error;
+}
+
+export async function createClaudeCliSession(options = {}) {
+  const {
+    modelName = 'claude-fable-5',
+    systemPrompt = '',
+    thinkingLevel = 'high', // informational only — Fable's thinking is always on
+    _costTracker = null,
+  } = options;
+  console.log(`[Session] Created ${modelName} session via Claude Code CLI adapter (subscription bridge, tools: 0)`);
+  return {
+    provider: 'claude-cli',
+    modelName,
+    thinkingLevel,
+    _systemPrompt: systemPrompt,
+    claudeSessionId: null, // set after the first send; --resume continues it
+    _costTracker,
+  };
+}
+
+export function resetClaudeCliSessionChat(session, seedHistory = []) {
+  session.claudeSessionId = null; // fresh-context retry: next send starts a new conversation
+  const seedText = (seedHistory || [])
+    .flatMap((h) => (h?.parts || []).map((p) => p.text).filter(Boolean))
+    .join('\n\n');
+  session._seedText = seedText || null;
+  return session;
+}
+
+export async function sendToClaudeCliSession(session, message, _options = {}) {
+  const startTime = Date.now();
+  const text = typeof message === 'string' ? message : JSON.stringify(message);
+  const body = session._seedText ? `${session._seedText}\n\n${text}` : text;
+  session._seedText = null;
+
+  const args = ['-p', '--model', session.modelName, '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
+  if (session.claudeSessionId) {
+    args.push('--resume', session.claudeSessionId);
+  } else if (session._systemPrompt) {
+    args.push('--append-system-prompt', session._systemPrompt);
+  }
+
+  const { code, stdout, stderr } = await runClaude(args, body);
+  const duration = Date.now() - startTime;
+  if (code !== 0) {
+    const error = toError(code, stdout, stderr);
+    console.error(`[Session] Claude CLI error after ${duration}ms:`, error.message);
+    throw error;
+  }
+
+  let data;
+  try {
+    data = JSON.parse(stdout);
+  } catch {
+    // Some CLI failure modes print plain text on exit 0 — treat as provider error.
+    throw toError(code, stdout, stderr);
+  }
+  if (data.is_error) throw toError(code, data.result || stdout, stderr);
+
+  session.claudeSessionId = data.session_id || session.claudeSessionId;
+
+  const usage = {
+    prompt_tokens: data.usage?.input_tokens || 0,
+    completion_tokens: data.usage?.output_tokens || 0,
+    total_tokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+    cached_tokens: data.usage?.cache_read_input_tokens || 0,
+  };
+  if (session._costTracker) session._costTracker.addUsage(session.modelName, usage);
+  console.log(`[Session] Claude CLI response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, subscription — $0 marginal)`);
+
+  return {
+    content: typeof data.result === 'string' ? data.result : '',
+    toolCalls: null, // brain calls run tool-less by construction
+    finishReason: 'stop',
+    usage,
+    raw: data,
+  };
+}
+
+/**
+ * Grounded web search on the subscription — WebSearch tool only, nothing else.
+ * Same return contract as openaiWebSearch/geminiGroundingSearch:
+ * { success, data, raw }. Defaults to Sonnet (its own weekly bucket) so news
+ * lookups don't eat the all-models cap the Fable brains draw from.
+ */
+export async function claudeCliWebSearch(prompt, options = {}) {
+  const model = options.model || process.env.GARY_GROUNDING_CLAUDE_MODEL || 'claude-sonnet-5';
+  try {
+    const args = ['-p', '--model', model, '--output-format', 'json', '--allowedTools', 'WebSearch'];
+    const { code, stdout, stderr } = await runClaude(args, prompt, options.timeoutMs || 5 * 60 * 1000);
+    if (code !== 0) throw toError(code, stdout, stderr);
+    const data = JSON.parse(stdout);
+    if (data.is_error) throw toError(code, data.result || stdout, stderr);
+    const text = typeof data.result === 'string' ? data.result.trim() : '';
+    console.log(`[Web Search] claude-cli (${model}) returned ${text.length} chars (subscription)`);
+    return { success: text.length > 0, data: text, raw: data };
+  } catch (e) {
+    console.warn(`[Web Search] claude-cli failed: ${e.message}`);
+    return { success: false, data: '', raw: null, error: e.message };
+  }
+}
+
+export default { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat, claudeCliWebSearch };
