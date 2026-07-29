@@ -26,12 +26,12 @@ const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-// Verdict v3 (Jul 26 2026, founder): verdicts run on a NAKED OpenAI call — the same gpt-5.6-sol
+// Verdict v3.3 (Jul 29 2026, founder: "for the tweets we can use Gemini — whatever model gets the
+// job done for cheap"): verdicts run a NAKED Gemini call (VERDICT_MODEL secret, default 3.6 Flash).
+// v3-v3.2 ran gpt-5.6-sol; the register contract and box-score grounding are unchanged —
 // brain that makes the picks, zero system prompt, zero persona — grounded by the full game report
 // from grade-results ?evidence=1. See buildVerdictPrompt in verdicts.ts for the approved contract.
-const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const VERDICT_MODEL = "gpt-5.6-sol";
+const VERDICT_MODEL = Deno.env.get("VERDICT_MODEL") ?? "gemini-3.6-flash";
 // Voice work gets its own model knob: SOCIAL_GEMINI_MODEL upgrades the WRITER (captions, verdicts, recap)
 // without touching grade-results or anything else that shares the global GEMINI_MODEL secret.
 const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
@@ -327,7 +327,7 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
 // Verdict v3 (Jul 26 2026, founder; register iterated same day): "Hit." / "Miss." / "Push." + what
 // happened in the game in tweet register — well under 100 characters, structure free (deliberately NO
 // example line or template: his compression example was direction, not a shape to bake in). Written by
-// a naked gpt-5.6-sol call GROUNDED in the full box-score report from grade-results ?evidence=1 — never
+// a naked VERDICT_MODEL call GROUNDED in the full box-score report from grade-results ?evidence=1 — never
 // ungrounded (no evidence yet -> skip, retry next hourly run; LLM error -> plainVerdict fallback).
 // v2 history: the Jul 8-10 ungrounded naked experiment shipped capper slop ("Cashes easily as the
 // Giants roll 9-2") because the model only knew the score; the cure was real facts, not style rules.
@@ -352,18 +352,21 @@ async function fetchGameEvidence(c: { postDate: string; matchup: string }): Prom
 // Naked model call: no system prompt, no persona — the grounded evidence in the user prompt is
 // the entire contract. clean() (emoji/dash strip) + trimTweet stay as mechanical backstops.
 async function nakedLLM(user: string): Promise<string> {
-  const r = await fetch(OPENAI_RESPONSES_URL, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${VERDICT_MODEL}:generateContent`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${OPENAI_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ model: VERDICT_MODEL, input: [{ role: "user", content: user }] }),
+    headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: user }] }],
+      generationConfig: { maxOutputTokens: 2000 },
+    }),
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  const text = (j.output ?? [])
-    .filter((o: any) => o.type === "message")
-    .flatMap((o: any) => (o.content ?? []).map((c: any) => c.text ?? "").filter(Boolean))
+  if (!r.ok) throw new Error(`Gemini ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.candidates?.[0]?.content?.parts ?? [])
+    .filter((p: any) => p.text && !p.thought)
+    .map((p: any) => p.text)
     .join("");
-  if (!text.trim()) throw new Error("OpenAI returned empty output");
+  if (!text.trim()) throw new Error("Gemini returned empty output");
   return text.trim();
 }
 
