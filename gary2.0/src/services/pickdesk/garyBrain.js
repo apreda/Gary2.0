@@ -15,6 +15,7 @@
  * Rails unchanged (prevent fabrication, never detect-and-ship): statAudit +
  * count-claim rail, ONE corrective retry, then null — no pick stored.
  */
+import { createHash } from 'crypto';
 import { buildMlbDesk } from './mlbDesk.js';
 import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
@@ -80,6 +81,16 @@ export function mapFinalPick(parsed, meta) {
 const todayLong = () => new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York',
 });
+
+// Prompt-era fingerprint (founder GO, Jul 29): every stored pick carries the
+// hash of the contract TEMPLATE it was made under (date placeholder, so the
+// hash only moves when the words move). This is what makes before/after
+// readable when contract wording changes — eras join in SQL, never inferred
+// from timestamps again. Register new eras in the prompt_eras table.
+export const PROMPT_SHA = createHash('sha256')
+  .update(buildGarySystemPrompt('{date}') + THE_ASK)
+  .digest('hex')
+  .slice(0, 12);
 
 // OpenAI's and the Claude CLI's effort ladders reach xhigh; Gemini's
 // thinkingLevel tops at high.
@@ -187,5 +198,6 @@ export async function analyzeGameDesk(game, options = {}) {
     deskText: desk.deskText,
     _statAuditWarnings: warnings,
     _usage: usage,
+    _promptSha: PROMPT_SHA,
   };
 }

@@ -15,6 +15,7 @@
  * count-claim rail per pick, ONE corrective retry, then the failing picks are
  * dropped individually. Odds/no-stats/cap gates live in the CLI chassis.
  */
+import { createHash } from 'crypto';
 import { buildMlbDesk } from './mlbDesk.js';
 import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
@@ -51,6 +52,13 @@ confidence_score (0.50–1.00): how confident you are this bet wins.`;
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
+
+// Prompt-era fingerprint (Jul 29) — template hash, date placeholder; moves
+// only when the contract wording moves. Same scheme as garyBrain.PROMPT_SHA.
+export const PROPS_PROMPT_SHA = createHash('sha256')
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK)
+  .digest('hex')
+  .slice(0, 12);
 
 // ── Cleared counts (founder, Jul 27) ────────────────────────────────────────
 // Each board line carries how often the player actually went over that exact
@@ -343,6 +351,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
+    prompt_sha: PROPS_PROMPT_SHA,
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));
 

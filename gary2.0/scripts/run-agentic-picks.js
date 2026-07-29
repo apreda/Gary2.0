@@ -1557,6 +1557,9 @@ async function main() {
             // Which brain produced this pick — without it the DB can't distinguish
             // model eras (the Sol cutover review had to infer brains from timestamps).
             model: GAME_PICK_MODEL,
+            // Which CONTRACT wording produced it — prompt-era hash (Jul 29);
+            // joins against prompt_eras for pre-registered before/after reads.
+            prompt_sha: result._promptSha ?? null,
             league: config.name,
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
