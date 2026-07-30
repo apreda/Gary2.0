@@ -1959,6 +1959,26 @@ export const mlbFetchers = {
               lines.push(`  @ ${venue}: ${avg} AVG, ${ops} OPS${sample}`);
             }
           }
+
+          // Recent form (Jul 30, founder: no headline without its context —
+          // Gary saw season + L/R while blind to the last two weeks, the
+          // exact hot/cold context the Hub computes). Label comes from the
+          // split actually used, so a 7- or 30-day fallback names itself.
+          if (splits.byDayMonth && Array.isArray(splits.byDayMonth)) {
+            const norm = (x) => String(x || '').toLowerCase();
+            const recent = splits.byDayMonth.find((b) => norm(b.split_name).includes('last 15 days'))
+              || splits.byDayMonth.find((b) => norm(b.split_name).includes('last 7 days'))
+              || splits.byDayMonth.find((b) => norm(b.split_name).includes('last 30 days'));
+            if (recent) {
+              const avg = recent.avg != null ? Number(recent.avg).toFixed(3) : '—';
+              const ops = recent.ops != null ? Number(recent.ops).toFixed(3) : '—';
+              const sample = formatSampleSuffix(recent, [
+                { field: 'at_bats', label: 'AB' },
+                { field: 'plate_appearances', label: 'PA' },
+              ]);
+              lines.push(`  ${recent.split_name || 'Recent'}: ${avg} AVG, ${ops} OPS${sample}`);
+            }
+          }
         }
       } catch (e) {
         console.warn(`[MLB Fetchers] BDL splits failed for ${teamName}:`, e.message);

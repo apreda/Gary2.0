@@ -243,8 +243,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // endpoint ignores start_date/end_date and returns the franchise's earliest
   // rows (2001 games, found Jul 22 2026), which zeroed this whole section.
   // The index is the same source the stat routers use (cached 60 min).
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    .toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const seasonIndex = (homeTeamBdlId || awayTeamBdlId)
     ? await ballDontLieService.getMlbSeasonGameIndex(season).catch(() => new Map())
     : new Map();
@@ -888,7 +889,9 @@ export async function buildMlbScoutReport(game, options = {}) {
       // Most recent completed game
       const lastGame = recentGames[recentGames.length - 1];
       const lastGameDate = lastGame?.officialDate || lastGame?.gameDate?.split('T')[0] || null;
-      const today = new Date().toISOString().split('T')[0];
+      // ET date, never UTC (Jul 30): toISOString() rolls past midnight at
+      // 8 PM ET, shifting every evening window's rest math one day high.
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
       // Days rest
       if (lastGameDate) {

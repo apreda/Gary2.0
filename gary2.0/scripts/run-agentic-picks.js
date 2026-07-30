@@ -1538,7 +1538,10 @@ async function main() {
             pick: finalPickText,
             type: result.type,
             odds: result.type === 'spread' ? (finalSpreadOdds || result.odds) : result.odds,
-            confidence: result.confidence || 0.65, // Gary's conviction in the bet (0.50-1.00)
+            // Gary's conviction in the bet (0.50-1.00). NEVER defaulted: a
+            // missing score stores as null (Jul 30 — `|| 0.65` FABRICATED a
+            // conviction Gary never stated, and the ledger read it as real).
+            confidence: result.confidence ?? null,
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
             // UI display fields
