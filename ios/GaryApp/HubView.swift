@@ -807,13 +807,13 @@ struct HubView: View {
             return [
                 Beat(anchor: "hr", title: "Home Run Threats", kinds: [.hrThreat]),
                 Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon]),
-                Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .situational, .ballpark]),
+                Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
                 Beat(anchor: "matchups", title: "The Matchups", kinds: [.h2h, .injury, .firstInning, .runningGame, .parkWeather]),
             ]
         }
         return [
             Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .hrThreat]),
-            Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .situational, .ballpark]),
+            Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
             Beat(anchor: "matchups", title: "The Matchups", kinds: [.h2h, .injury, .firstInning, .runningGame, .parkWeather]),
         ]
     }
