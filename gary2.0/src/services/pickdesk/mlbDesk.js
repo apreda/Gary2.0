@@ -42,7 +42,7 @@ const ordinal = (n) => {
   return `${n}${['th', 'st', 'nd', 'rd'][Math.min(n % 10, 4)] || 'th'}`;
 };
 
-export function stakesLine(standings, teamName) {
+export function stakesLine(standings, teamName, oneRun = null) {
   const t = findRow(standings, teamName);
   if (!t) return `${teamName}: standings unavailable.`;
   const div = t.division_name || t.team?.division || null;
@@ -61,13 +61,27 @@ export function stakesLine(standings, teamName) {
   if (t.playoff_seed != null) bits.push(`playoff seed ${t.playoff_seed}`);
   if (t.streak != null && t.streak !== '') bits.push(`streak ${t.streak}`);
   if (t.last_ten_games) bits.push(`L10 ${t.last_ten_games}`);
-  // One-run record (Jul 30, founder: the desk carries the truth beneath —
-  // a 20-10 one-run team is a fact worth weighing in a coin-flip game).
-  const oneRun = [t.one_run, t.one_run_record, t.record_one_run, t.oneRun, t.last_one_run]
-    .map((v) => (typeof v === 'string' && /^\d+-\d+$/.test(v.trim()) ? v.trim() : null))
-    .find(Boolean);
   if (oneRun) bits.push(`one-run ${oneRun}`);
   return `${teamName}: ${bits.join(', ')}`;
+}
+
+/**
+ * One-run record computed from the season game index (Jul 30: BDL standings
+ * carry NO one-run field — a probe for one never fired; this is the real
+ * count from final scores). Null under 5 decided one-run games — small-
+ * sample honesty, the desk never prints a 2-1 as an identity.
+ */
+export function oneRunRecordFrom(index, teamId) {
+  if (!index || typeof index.values !== 'function' || teamId == null) return null;
+  let w = 0, l = 0;
+  for (const g of index.values()) {
+    if (g.status !== 'STATUS_FINAL' || g.seasonType === 'spring_training') continue;
+    const hr = Number(g.homeRuns), ar = Number(g.awayRuns);
+    if (!Number.isFinite(hr) || !Number.isFinite(ar) || Math.abs(hr - ar) !== 1) continue;
+    if (g.homeId === teamId) { hr > ar ? w++ : l++; }
+    else if (g.awayId === teamId) { ar > hr ? w++ : l++; }
+  }
+  return (w + l) >= 5 ? `${w}-${l}` : null;
 }
 
 export function deadlineLine(today = todayEST()) {
@@ -201,12 +215,13 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRowsRaw, standings, matchupLab] = await Promise.all([
+  const [oddsRowsRaw, standings, matchupLab, seasonIndex] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
     ballDontLieService.getMlbStandings(season).catch(() => []),
     buildMatchupLab(game, homeTeam, awayTeam, scout.gamePk).catch(() => ''),
+    ballDontLieService.getMlbSeasonGameIndex(season).catch(() => null),
   ]);
   const oddsRows = sanitizeBoardRows(oddsRowsRaw);
   if (oddsRows.length < (oddsRowsRaw || []).length) {
@@ -214,7 +229,16 @@ export async function buildMlbDesk(game, options = {}) {
   }
 
   const board = buildBoardSection(oddsRows, homeTeam, awayTeam);
-  const stakes = `═══ THE STAKES ═══\n${stakesLine(standings, homeTeam)}\n${stakesLine(standings, awayTeam)}\n${deadlineLine()}`;
+  const teamIdFor = (name) => {
+    const norm = (s) => String(s || '').toLowerCase();
+    const row = (standings || []).find((s) =>
+      norm(s.team?.display_name || s.team?.name || s.team_name).includes(norm(name).split(' ').pop()));
+    return row?.team?.id ?? null;
+  };
+  const stakes = `═══ THE STAKES ═══\n` +
+    `${stakesLine(standings, homeTeam, oneRunRecordFrom(seasonIndex, teamIdFor(homeTeam)))}\n` +
+    `${stakesLine(standings, awayTeam, oneRunRecordFrom(seasonIndex, teamIdFor(awayTeam)))}\n` +
+    `${deadlineLine()}`;
 
   const { section: news, rest: shelfBase } = extractSection(scoutText, NEWS_HEADER);
   const worldBody = news ? news.replace(NEWS_HEADER, '').trim() : 'No same-day news.';
