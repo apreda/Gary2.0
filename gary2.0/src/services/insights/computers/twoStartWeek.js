@@ -7,9 +7,11 @@
 // leads with this list.
 //
 // GROUNDED — zero rotation inference: a start counts ONLY when MLB has posted
-// the probable (schedule hydrate=probablePitcher). Early in the week the back
-// half of next week is sparsely posted; the lane fills in across the day's
-// runs as probables land (additive-freeze keeps what's posted).
+// the probable (schedule hydrate=probablePitcher). The window is the CURRENT
+// Mon-Sun scoring week (Jul 30 rewrite — the old strictly-next-week version
+// was structurally dead: probables post ~3-4 days out, so both starts of a
+// future week were never visible at once). Early-week the back half is
+// sparsely posted; rows fill in across the day's runs as probables land.
 //
 // Sources:
 //  • getMlbSchedule(date) [statsapi]: per-day games with
@@ -56,14 +58,19 @@ function shortDate(dateStr) {
   return `${m}/${d}`;
 }
 
-/** The next Mon-Sun ET scoring week strictly after today's ET date. */
-export function nextScoringWeek(todayEt) {
+/** The CURRENT Mon-Sun ET scoring week (the one containing today).
+ *  Jul 30 rewrite: the old "next week strictly after today" version was
+ *  structurally dead — MLB probables post only ~3-4 days out, so BOTH starts
+ *  of a future week are never posted at once (zero rows in 14 days). The
+ *  current week has real two-start evidence mid-week: a start already played
+ *  plus a posted probable are two genuine data points. */
+export function currentScoringWeek(todayEt) {
   const base = new Date(`${todayEt}T16:00:00Z`);
   const dowFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' });
-  // walk forward 1..7 days to the first Monday
+  // walk back 0..6 days to this week's Monday
   let monday = null;
-  for (let i = 1; i <= 7 && !monday; i++) {
-    const d = new Date(base.getTime() + i * 86400000);
+  for (let i = 0; i <= 6 && !monday; i++) {
+    const d = new Date(base.getTime() - i * 86400000);
     if (dowFmt.format(d) === 'Mon') monday = d;
   }
   const days = [];
@@ -87,7 +94,7 @@ function clubName(fullName) {
 
 export async function computeTwoStartWeek(ctx) {
   const { date, season, helpers } = ctx;
-  const week = nextScoringWeek(date);
+  const week = currentScoringWeek(date);
 
   // Per-day schedules; a failed day is skipped (a start can't be claimed
   // without its schedule row, so a partial week only UNDER-reports — never wrong).
@@ -118,7 +125,7 @@ export async function computeTwoStartWeek(ctx) {
 
   const twoStart = [...byPitcher.entries()].filter(([, v]) => v.starts.length >= 2);
   if (!twoStart.length) {
-    console.log('[twoStartWeek] no two-start arms posted yet for the coming week.');
+    console.log('[twoStartWeek] no two-start arms listed for this scoring week yet.');
     return [];
   }
 
@@ -144,8 +151,8 @@ export async function computeTwoStartWeek(ctx) {
     score = clampScore(score);
 
     const startBits = starts.map((st) =>
-      `${etWeekday(st.date)} ${shortDate(st.date)} ${st.home ? 'vs' : 'at'} ${st.opp}`);
-    const detail = `${starts.length === 2 ? 'Two starts' : `${starts.length} starts`} next week — ` +
+      `${etWeekday(st.date)} ${shortDate(st.date)} ${st.home ? 'vs' : 'at'} ${st.opp}${st.date < date ? ' (played)' : ''}`);
+    const detail = `${starts.length === 2 ? 'Two starts' : `${starts.length} starts`} this scoring week — ` +
       `${startBits.join(', ')}.` +
       (Number.isFinite(xera) ? ` ${round(xera, 2)} xERA this season.` : '');
 
@@ -181,7 +188,7 @@ async function writeReads(rows) {
   const facts = rows.map((r, i) => {
     const m = r.meta || {};
     const starts = (m.starts || []).map((s) => `${s.home ? 'vs' : 'at'} ${s.opp} (${etWeekday(s.date)} ${s.date})`).join(', ');
-    return `${i}. ${r.headline} (${m.team}) — ${(m.starts || []).length} posted starts next week: ${starts}.` +
+    return `${i}. ${r.headline} (${m.team}) — ${(m.starts || []).length} listed starts THIS scoring week (Mon-Sun, some may already be played — the dates say which): ${starts}.` +
       (m.xera != null ? ` Season xERA ${m.xera}.` : ' No xERA figure available.') +
       ` Tier: ${m.tier}.`;
   }).join('\n');

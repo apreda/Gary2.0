@@ -71,10 +71,15 @@ export async function computeRegressionWatch(ctx) {
   const xByName = indexXStatsByName(pitcherX);
 
   // --- Signal A: one-run-game regression (team level, slate teams only) ---
-  if (Array.isArray(standings) && standings.length) {
+  // Computed from the season game index (Jul 30) — the standings-field probe
+  // it replaced never fired once (no such field exists).
+  try {
+    const seasonIndex = await bdl.getMlbSeasonGameIndex(season);
     const slateTeamIds = collectSlateTeamIds(games);
-    const oneRunRows = oneRunRegression(standings, games, slateTeamIds);
+    const oneRunRows = oneRunRegression(seasonIndex, games, slateTeamIds);
     rows.push(...oneRunRows.slice(0, MAX_TEAM_ROWS));
+  } catch (err) {
+    console.error('[regressionWatch] one-run index error:', err?.message || err);
   }
 
   // Pitcher contact-quality profile (barrel% / hard-hit% allowed) — the "why"
@@ -151,21 +156,29 @@ function gameForTeamId(games, teamId) {
 }
 
 /**
- * Surface teams whose ONE-RUN record win% is extreme. We ONLY read a one-run
- * field if it actually exists on the standings row under a plausible key — the
- * documented shape does not guarantee it, so this is existence-checked and
- * skipped entirely when absent (no invented fields).
+ * Surface teams whose ONE-RUN record win% is extreme. Jul 30: BDL standings
+ * NEVER carried a one-run field under any name — the old existence-checked
+ * probe meant this signal was silently dead since Jun 19. The record is now
+ * COMPUTED from the season game index (final scores, margin exactly 1,
+ * regular season only) — real data, same surfacing gates.
  */
-function oneRunRegression(standings, games, slateTeamIds) {
+function oneRunRegression(seasonIndex, games, slateTeamIds) {
+  if (!seasonIndex || typeof seasonIndex.values !== 'function') return [];
+  const tallies = new Map(); // teamId -> { w, l }
+  for (const g of seasonIndex.values()) {
+    if (g.status !== 'STATUS_FINAL' || g.seasonType === 'spring_training') continue;
+    const hr = Number(g.homeRuns), ar = Number(g.awayRuns);
+    if (!Number.isFinite(hr) || !Number.isFinite(ar) || Math.abs(hr - ar) !== 1) continue;
+    for (const [tid, won] of [[g.homeId, hr > ar], [g.awayId, ar > hr]]) {
+      if (tid == null || !slateTeamIds.has(tid)) continue;
+      const t = tallies.get(tid) || { w: 0, l: 0 };
+      won ? t.w++ : t.l++;
+      tallies.set(tid, t);
+    }
+  }
+
   const out = [];
-  for (const row of standings) {
-    const teamId = row?.team?.id;
-    if (teamId == null || !slateTeamIds.has(teamId)) continue;
-
-    const oneRun = readOneRunRecord(row);
-    if (!oneRun) continue; // field not present -> skip (defensive)
-
-    const { w, l } = oneRun;
+  for (const [teamId, { w, l }] of tallies) {
     const gp = w + l;
     if (gp < MIN_ONE_RUN_GAMES) continue;
     const wp = w / gp;
@@ -175,7 +188,8 @@ function oneRunRegression(standings, games, slateTeamIds) {
     if (!game) continue;
 
     const lucky = wp > 0.5;
-    const teamName = row.team?.full_name || row.team?.name || row.team?.abbreviation || 'Team';
+    const side = game.home_team?.id === teamId ? game.home_team : game.visitor_team;
+    const teamName = side?.full_name || side?.display_name || side?.name || 'Team';
     out.push(
       makeRow({
         category: 'regressionWatch',
@@ -201,36 +215,9 @@ function oneRunRegression(standings, games, slateTeamIds) {
 }
 
 /**
- * Read a one-run record from a standings row IF a one-run field exists.
- * Accepts a "W-L" string field or {wins,losses} sub-object. Returns null when
- * no such field is present (we do not fabricate one from total record).
+ * (readOneRunRecord/parseWL removed Jul 30 — they probed standings fields
+ * that never existed; the one-run record is computed from the game index.)
  */
-function readOneRunRecord(row) {
-  const candidates = [
-    row?.one_run, row?.one_run_record, row?.record_one_run, row?.oneRun, row?.last_one_run,
-  ];
-  for (const c of candidates) {
-    const parsed = parseWL(c);
-    if (parsed) return parsed;
-  }
-  return null;
-}
-
-/** Parse "12-9" or { wins, losses } -> { w, l }. */
-function parseWL(v) {
-  if (!v) return null;
-  if (typeof v === 'string') {
-    const m = v.match(/^(\d+)\s*-\s*(\d+)$/);
-    if (!m) return null;
-    return { w: Number(m[1]), l: Number(m[2]) };
-  }
-  if (typeof v === 'object') {
-    const w = Number(v.wins ?? v.w);
-    const l = Number(v.losses ?? v.l);
-    if (Number.isFinite(w) && Number.isFinite(l)) return { w, l };
-  }
-  return null;
-}
 
 /* --------------------------- Signal B helpers --------------------------- */
 

@@ -22,10 +22,9 @@ import {
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
-import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
-// Bridge-aware search seam (Jul 30): desk-time grounding must route like the
-// WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0), then
-// the API chain — never a hardwired paid Gemini call per desk build.
+// Bridge-aware search seam (Jul 30): ALL grounding in this file routes like
+// the WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0),
+// then the API chain — never a hardwired paid Gemini call.
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1062,13 +1061,11 @@ export const mlbFetchers = {
           }
           const stats = result.stats;
           if (stats && stats.length > 0) {
-            // Top 3 hitters by OPS
+            // Top 3 hitters by OPS — real batting sample gate (Jul 30), not
+            // "has never pitched": the old clause erased two-way bats and a
+            // pitcher's fluke 1-for-2 could top an OPS sort.
             const hitters = stats
-              // Real batting sample, not "has never pitched" (Jul 30): the old
-          // `!s.pitching_era` clause erased a two-way player's BAT entirely
-          // (the Ohtani class), while a pitcher's fluke 1-for-2 could top an
-          // OPS sort. >= 20 AB keeps April regulars and kills both.
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
+              .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
               .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
               .slice(0, 3);
             // Top 2 pitchers by WAR (or ERA lowest)
@@ -1118,7 +1115,9 @@ export const mlbFetchers = {
   MLB_GAME_PREVIEW: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
-    const result = await geminiGroundingSearch(
+    // Via the seam (Jul 30): bridge-first ($0), API chain fallback — never a
+    // hardwired paid call, even on a currently-dormant token.
+    const result = await openaiWebSearch(
       `${awayTeam} vs ${homeTeam} MLB today — the storylines and team news a fan following both teams would know: ` +
       `recent momentum and series context, player storylines and milestone watches, clubhouse and manager news, ` +
       `and what national and local media are saying about each team right now. ` +

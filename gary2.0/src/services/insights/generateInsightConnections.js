@@ -131,7 +131,6 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   //    MLB: "getMlbGamesForDate(dateStr) — single positional arg (YYYY-MM-DD)."
   //    NBA: getNbaGamesForDate(dateStr) — same contract.
   let games = [];
-  let preview = false;
   try {
     if (leagueKey === 'nba') {
       games = (await ballDontLieService.getNbaGamesForDate(dateStr)) || [];
@@ -178,7 +177,6 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     league: leagueKey,
     games,
     slateGameIds,
-    preview,
     bdl: ballDontLieService,
     helpers: { gameLabel },
   };
