@@ -1696,6 +1696,8 @@ export const mlbFetchers = {
         // /game/{gamePk}/boxscore endpoint instead — same namespace,
         // and the boxscore already includes per-pitcher inningsPitched.
         usedApi = true;
+        const armTotals = new Map(); // name -> { outs, pitches, dates[] }
+        const gameDates = [];        // chronological (recentGames is oldest -> newest)
         for (const game of recentGames) {
           const date = (game.gameDate || '').split('T')[0];
           const box = await getGameBoxScore(game.gamePk).catch(() => null);
@@ -1710,22 +1712,31 @@ export const mlbFetchers = {
           const side = box.teams[sideKey];
           const players = side?.players || {};
           const pitcherIds = Array.isArray(side?.pitchers) ? side.pitchers : [];
+          gameDates.push(date);
 
           const relievers = [];
-          for (const pid of pitcherIds) {
+          // pitchers[] is appearance order: [0] is the STARTER, everyone after
+          // is relief. (The old `ip < 5` heuristic misfiled a shelled starter
+          // as a relief arm and dropped a 5-inning bulk reliever entirely.)
+          for (const pid of pitcherIds.slice(1)) {
             const p = players[`ID${pid}`];
             const ipStr = p?.stats?.pitching?.inningsPitched;
             if (ipStr == null) continue;
             // MLB IP is in "outs decimal" form (e.g. "1.2" = 1 inning + 2 outs).
-            // For reliever filtering we just need a coarse number; parseFloat is fine.
             const ip = parseFloat(ipStr);
-            if (!Number.isFinite(ip) || ip <= 0 || ip >= 5) continue;
+            if (!Number.isFinite(ip) || ip < 0) continue;
             const name = p?.person?.fullName || 'Unknown';
             // Pitch count is the real workload signal — IP alone overstates a
             // 15-pitch four-out save and understates a 30-pitch single inning.
             const pitches = p?.stats?.pitching?.numberOfPitches;
             const pitchStr = pitches != null ? `, ${pitches} pitches` : '';
             relievers.push(`${name} ${ip.toFixed(1)} IP${pitchStr}`);
+            const outs = Math.floor(ip) * 3 + Math.round((ip % 1) * 10);
+            const t = armTotals.get(name) || { outs: 0, pitches: 0, dates: [] };
+            t.outs += outs;
+            t.pitches += Number(pitches) || 0;
+            t.dates.push(date);
+            armTotals.set(name, t);
           }
 
           if (relievers.length > 0) {
@@ -1733,6 +1744,20 @@ export const mlbFetchers = {
           } else {
             lines.push(`${date}: No reliever appearances`);
           }
+        }
+        // Roll-up (founder, Jul 30): the aggregate facts beside the ledger —
+        // total relief IP, arms used, and who worked both of the last two game
+        // days. Facts only; what that means for tonight is the brain's call.
+        if (armTotals.size) {
+          const totalOuts = [...armTotals.values()].reduce((s, a) => s + a.outs, 0);
+          const lastTwo = gameDates.slice(-2);
+          const b2b = [...armTotals.entries()]
+            .filter(([, a]) => lastTwo.length === 2 && lastTwo.every((d) => a.dates.includes(d)))
+            .map(([n]) => n);
+          lines.push(
+            `Last ${gameDates.length} games total: ${Math.floor(totalOuts / 3)}.${totalOuts % 3} relief IP ` +
+            `across ${armTotals.size} arms; worked both of the last two game days: ${b2b.length ? b2b.join(', ') : 'none'}.`,
+          );
         }
       } catch (e) {
         console.warn(`[MLB Fetchers] ⚠️ Bullpen workload API failed for ${teamName}: ${e.message}`);

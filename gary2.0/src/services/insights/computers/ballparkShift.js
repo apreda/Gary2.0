@@ -42,8 +42,12 @@ import {
   makeRow, TONES, scoreFromEdge, round, pct3, venueFirstWord, pickVariant,
 } from '../shared.js';
 
-const MIN_VENUE_GAMES = 2;       // require a real venue sample (games_played)
-const MIN_VENUE_IP = 10;         // ...and a real innings sample at the venue
+// Founder, Jul 30: a 2-start park split reads as a mirage to anyone who
+// follows the team ("he's pitched there twice"). Three games and 15 innings
+// is the floor for a park NARRATIVE; small survivors also disclose their
+// sample in the headline itself and take a relevance damp.
+const MIN_VENUE_GAMES = 3;       // require a real venue sample (games_played)
+const MIN_VENUE_IP = 15;         // ...and a real innings sample at the venue
 const MIN_BASELINE_IP = 15;      // require a real "everywhere else" baseline
 const MIN_ERA_EDGE = 1.0;        // venue ERA must differ from baseline by a run
 const MAX_PER_GAME = 2;          // keep at most N starters per game
@@ -161,7 +165,15 @@ async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
   candidates.sort((a, b) => Math.abs(b.edge) - Math.abs(a.edge));
   return candidates.slice(0, MAX_PER_GAME).map((c) => {
     const direction = c.worseHere ? 'jumps to' : 'drops to';
-    const headlineVariants = [
+    // Small-sample honesty (founder, Jul 30): a modest venue sample must say
+    // so IN THE HEADLINE — the fan who knows he's only pitched there four
+    // times should read us saying it first, never catching us.
+    const small = c.venueGames <= 4;
+    const headlineVariants = small ? [
+      `${c.name}'s ERA ${direction} ${c.venueEra.toFixed(2)} at ${venueName} (${c.venueGames} games there)`,
+      `${c.name}: ${c.venueEra.toFixed(2)} ERA in ${c.venueGames} games at ${venueName} — ${c.baselineEra.toFixed(2)} everywhere else`,
+      `In ${c.venueGames} games at ${venueName}, ${c.name} pitches to a ${c.venueEra.toFixed(2)} ERA`,
+    ] : [
       `${c.name}'s ERA ${direction} ${c.venueEra.toFixed(2)} at ${venueName}`,
       `${c.name} owns a ${c.venueEra.toFixed(2)} ERA at ${venueName} — ${c.baselineEra.toFixed(2)} everywhere else`,
       `At ${venueName}, ${c.name} pitches to a ${c.venueEra.toFixed(2)} ERA`,
@@ -187,7 +199,9 @@ async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
       value: c.venueEra.toFixed(2),
       tone: c.worseHere ? TONES.CAUTION : TONES.EDGE,
       spark: [c.baselineEra, c.venueEra],
-      relevance_score: scoreFromEdge(c.edge, { scale: RELEVANCE_SCALE, base: 42, cap: 92 }),
+      // Small venue samples take a damp so a thin split rarely leads the page.
+      relevance_score: Math.max(0,
+        scoreFromEdge(c.edge, { scale: RELEVANCE_SCALE, base: 42, cap: 92 }) - (small ? 8 : 0)),
       player_id: c.playerId,
       team_id: c.teamId,
       game_id: gameId,

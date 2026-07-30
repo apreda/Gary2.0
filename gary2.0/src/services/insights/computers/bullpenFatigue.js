@@ -170,6 +170,7 @@ export async function computeBullpenFatigue(ctx) {
           multi_day_arms: multiArms,
           games: recent.length,
           arms,
+          arms_used: armInfo.size,
           opp: oppName,
         },
       }));
@@ -187,7 +188,9 @@ export async function computeBullpenFatigue(ctx) {
     const armLine = m.arms.map((a) =>
       `${a.name} ${a.ip} IP/${a.pitches} pitches in ${a.g} of the ${m.games}${a.b2b ? ' (worked BOTH of the last two days)' : ''}`,
     ).join('; ');
-    return `${r.headline}. Arms: ${armLine}. Multi-day arms: ${m.multi_day_arms}. Tonight: ${r.game}${m.opp ? ` vs ${m.opp}` : ''}.`;
+    // arms_used is the TRUE arm count — the list below is only the heaviest
+    // (a capped list once read back as "spread across six arms" when 8 threw).
+    return `${r.headline}. ${m.arms_used ?? m.arms.length} arms used in total; the heaviest: ${armLine}. Multi-day arms: ${m.multi_day_arms}. Tonight: ${r.game}${m.opp ? ` vs ${m.opp}` : ''}.`;
   }, {
     ask: 'what this bullpen workload actually means for tonight — who is likely unavailable, where the innings have to come from, and what that sets up in this matchup',
   });
