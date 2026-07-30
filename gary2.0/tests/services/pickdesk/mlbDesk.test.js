@@ -4,7 +4,13 @@ vi.mock('../../../src/services/agentic/scoutReport/scoutReportBuilder.js', () =>
   buildScoutReport: vi.fn(),
 }));
 vi.mock('../../../src/services/ballDontLieService.js', () => ({
-  ballDontLieService: { getOddsV2: vi.fn(), getMlbStandings: vi.fn() },
+  ballDontLieService: {
+    getOddsV2: vi.fn(),
+    getMlbStandings: vi.fn(),
+    // One-run records compute from the season game index (Jul 30); an empty
+    // index = no one-run bit on the stakes lines, never an error.
+    getMlbSeasonGameIndex: vi.fn().mockResolvedValue(new Map()),
+  },
 }));
 vi.mock('../../../src/services/agentic/tools/statRouters/index.js', () => ({ fetchStats: vi.fn() }));
 vi.mock('../../../src/services/agentic/orchestrator/orchestratorHelpers.js', () => ({ summarizeStatForContext: vi.fn() }));
