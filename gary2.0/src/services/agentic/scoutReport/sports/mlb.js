@@ -407,13 +407,22 @@ export async function buildMlbScoutReport(game, options = {}) {
           mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
           getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPlayerSeasonStats(mlbamId, season, 'pitching').catch(() => null) : Promise.resolve(null),
-          mlbamId ? getPitcherLastStarts(mlbamId, season, 3).catch(() => []) : Promise.resolve([]),
+          mlbamId ? getPitcherLastStarts(mlbamId, season, 6).catch(() => []) : Promise.resolve([]),
           mlbamId && oppMlbamId ? getPitcherVsTeam(mlbamId, oppMlbamId).catch(() => null) : Promise.resolve(null),
         ]);
 
         if (lastStarts.length) {
-          const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}`;
+          // Start-by-start ledger w/ the TEAM's result in each (Jul 30,
+          // founder: "team is 7-1 in his last 8" must arrive as the raw
+          // ledger — dates, opponents, his line, who won — so the brain can
+          // weigh WHY, not inherit a headline).
+          const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
           parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
+          const decided = lastStarts.filter((g) => g.win != null);
+          if (decided.length >= 3) {
+            const w = decided.filter((g) => g.win).length;
+            parts.push(`  Team in these ${decided.length} starts: ${w}-${decided.length - w}`);
+          }
           // Innings arc (Jul 26): stretching out vs managed down, as bare IP.
           if (lastStarts.length >= 2) {
             parts.push(`  IP by start (oldest→newest): ${lastStarts.slice().reverse().map(g => g.ip ?? '?').join(', ')}`);

@@ -61,6 +61,12 @@ export function stakesLine(standings, teamName) {
   if (t.playoff_seed != null) bits.push(`playoff seed ${t.playoff_seed}`);
   if (t.streak != null && t.streak !== '') bits.push(`streak ${t.streak}`);
   if (t.last_ten_games) bits.push(`L10 ${t.last_ten_games}`);
+  // One-run record (Jul 30, founder: the desk carries the truth beneath —
+  // a 20-10 one-run team is a fact worth weighing in a coin-flip game).
+  const oneRun = [t.one_run, t.one_run_record, t.record_one_run, t.oneRun, t.last_one_run]
+    .map((v) => (typeof v === 'string' && /^\d+-\d+$/.test(v.trim()) ? v.trim() : null))
+    .find(Boolean);
+  if (oneRun) bits.push(`one-run ${oneRun}`);
   return `${teamName}: ${bits.join(', ')}`;
 }
 

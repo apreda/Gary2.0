@@ -529,6 +529,9 @@ export async function getPitcherLastStarts(personId, season, limit = 3) {
       isHome: !!g.isHome,
       ip: g.stat?.inningsPitched, h: g.stat?.hits, er: g.stat?.earnedRuns,
       k: g.stat?.strikeOuts, bb: g.stat?.baseOnBalls, hr: g.stat?.homeRuns,
+      // Team result in his start (Jul 30, founder: "7-1 in his last 8" must
+      // arrive as the ledger, not a headline) — null when the feed omits it.
+      win: typeof g.isWin === 'boolean' ? g.isWin : null,
     }));
 }
 
