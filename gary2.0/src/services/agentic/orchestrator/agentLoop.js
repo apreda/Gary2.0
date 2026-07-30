@@ -1248,7 +1248,7 @@ INVESTIGATION COMPLETE`;
           console.log(`  → [TEAM_L${numGames}_STATS] for ${teamAbv}`);
           try {
             const tank01 = (await import('../../tank01DfsService.js')).default;
-            const dateStr = options?.gameDate || new Date().toISOString().split('T')[0];
+            const dateStr = options?.gameDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
             const result = await tank01.fetchTeamLStats(teamAbv, numGames, dateStr);
             const content = JSON.stringify(result);
             messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });

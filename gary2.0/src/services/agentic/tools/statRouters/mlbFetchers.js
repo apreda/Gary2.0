@@ -827,10 +827,13 @@ export const mlbFetchers = {
       }
     }
 
-    // Try by today's date if no gameId
+    // Try by today's date if no gameId. ET day + the next UTC day (Jul 30):
+    // BDL keys late ET games under the NEXT UTC date, and the old UTC-now
+    // derivation pointed at the wrong day entirely from 8 PM ET on.
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const odds = await ballDontLieService.getMlbGameOdds({ dates: [today] });
+      const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const nextUtc = (() => { const d = new Date(`${todayET}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+      const odds = await ballDontLieService.getMlbGameOdds({ dates: [todayET, nextUtc] });
       if (odds && odds.length > 0) {
         // Find odds matching this game
         const homeLower = homeTeam.toLowerCase();

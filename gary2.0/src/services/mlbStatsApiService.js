@@ -91,8 +91,18 @@ export async function getMlbUpcomingGames(teamId, daysAhead = 4) {
   const cached = getCached(key);
   if (cached) return cached;
 
-  const start = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const end = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // ET calendar math, never UTC-now (Jul 30): after 8 PM ET the old
+  // `Date.now()+24h → toISOString` landed on the ET day-AFTER-tomorrow, so
+  // every evening window's upcoming-games read skipped tomorrow entirely
+  // (broke the scout's SERIES STATE "Game N of M").
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const shift = (days) => {
+    const d = new Date(`${todayET}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+  const start = shift(1);
+  const end = shift(daysAhead);
   const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&startDate=${start}&endDate=${end}`);
   const games = [];
   for (const dateEntry of (data.dates || [])) {

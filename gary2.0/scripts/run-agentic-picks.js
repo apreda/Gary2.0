@@ -1541,6 +1541,7 @@ async function main() {
             // Gary's conviction in the bet (0.50-1.00). NEVER defaulted: a
             // missing score stores as null (Jul 30 — `|| 0.65` FABRICATED a
             // conviction Gary never stated, and the ledger read it as real).
+            // The loud warn below is the founder-ordered alert for that case.
             confidence: result.confidence ?? null,
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
@@ -1638,6 +1639,12 @@ async function main() {
             const plain = await translateRationalePlain(cleanPick.rationale);
             if (plain) cleanPick.rationale_plain = plain;
           } catch { /* pick ships without it */ }
+
+          // Founder-ordered alert (Jul 30): a missing confidence must be LOUD,
+          // never silently papered over — ⚠️ lines surface in scheduler logs.
+          if (cleanPick.confidence == null) {
+            console.warn(`⚠️ [Pick] ${cleanPick.pick} stored with NO confidence_score — the brain omitted it; check the contract/parse`);
+          }
 
           const picksForGame = [cleanPick];
 

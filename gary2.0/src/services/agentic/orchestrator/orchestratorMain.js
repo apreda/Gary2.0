@@ -27,7 +27,10 @@ function scoutCacheGameKey(game) {
 }
 
 function scoutCacheKey(homeTeam, awayTeam, sport, game) {
-  const date = new Date().toISOString().split('T')[0];
+  // ET slate day (Jul 30): the UTC key rolled at 8 PM ET, so an evening scout
+  // cached under TOMORROW's key — on series nights, tomorrow's desk could be
+  // served yesterday evening's scout (stale lines/lineups).
+  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const gameKey = scoutCacheGameKey(game);
   return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
 }

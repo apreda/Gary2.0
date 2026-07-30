@@ -506,8 +506,11 @@ async function runGeminiGroundingSearch(query, options = {}) {
       // Prevents "Concept Drift" where Gemini's training data clashes with 2026 reality
       // ═══════════════════════════════════════════════════════════════════════════
       const today = new Date();
-      const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      const todayISO = today.toISOString().slice(0, 10); // YYYY-MM-DD for filtering
+      // ET-forced (Jul 30): on a UTC container (Railway) the locale default
+      // stamped a UTC-flavored "System Date" into the freshness anchor, and
+      // the ISO rolled to tomorrow at 8 PM ET — both misdate the filter.
+      const todayStr = today.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const todayISO = today.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD for filtering
 
       // Season context is date-derived (Jul 8 2026 fix): the old line hardcoded
       // a January-flavored parenthetical — false from ~February on.
