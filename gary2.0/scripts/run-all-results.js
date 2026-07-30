@@ -374,9 +374,17 @@ function getStatValue(sport, data, name, type) {
     // Fuzzy: strip accents
     const fuzzy = full.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     if (fuzzy === targetFuzzy) return true;
-    // Last name + first initial match (handles "V. Guerrero Jr." vs "Vladimir Guerrero Jr.")
+    // Last name + first initial (handles "V. Guerrero Jr." vs "Vladimir
+    // Guerrero Jr."). Jul 30: the code matched on SURNAME ALONE — two
+    // same-surname players in one game's stat pull graded the prop on
+    // whichever appeared first (the attribution-swap class). The initial
+    // is now required whenever both sides carry one.
     const last = normalizeName(lastName);
-    if (last === targetLast && last.length > 3) return true;
+    if (last === targetLast && last.length > 3) {
+      const fi = normalizeName(firstName).charAt(0);
+      const ti = target.charAt(0);
+      return !fi || !ti || fi === ti;
+    }
     return false;
   }
 
@@ -471,15 +479,24 @@ function getStatValue(sport, data, name, type) {
       }
       if (t.includes('single')) return null; // Need doubles/triples which BDL may not have
       if (t.includes('double') && !t.includes('play')) return p.doubles ?? null;
-      // Strikeouts — check pitcher stats first (p_k), then batter (k)
+      // Strikeouts — keyed by the BOARD's own semantics (Jul 30, the Jun 4
+      // "attribution-swap" class): 'pitcher_strikeouts' = p_k, bare
+      // 'strikeouts' = the BATTER's Ks (row.k on the board). The old
+      // "pitcher first if p_k > 0" heuristic graded a batter-Ks prop on
+      // PITCHING Ks any night the player also pitched.
       if (t.includes('strikeout')) {
-        if (p.p_k != null && p.p_k > 0) return p.p_k; // pitcher strikeouts
-        return p.k ?? 0; // batter strikeouts
+        if (t.includes('pitcher')) return p.p_k ?? 0;
+        if (p.k != null) return p.k;
+        return p.p_k ?? 0; // legacy pitcher props stored as bare 'strikeouts'
       }
       // Pitcher props
       if (t.includes('pitcher_out') || t.includes('outs_recorded')) {
-        // BDL has ip (innings pitched) — convert to outs: ip * 3
-        if (p.ip != null) return Math.round(parseFloat(p.ip) * 3);
+        // MLB IP is THIRDS notation ("5.2" = 5⅔ = 17 outs) — the old
+        // `ip * 3` graded 16 on every fractional line (Jul 30).
+        if (p.ip != null) {
+          const raw = parseFloat(p.ip);
+          if (Number.isFinite(raw)) return Math.floor(raw) * 3 + Math.round((raw % 1) * 10);
+        }
         return null;
       }
       if (t.includes('pitcher_earned') || t.includes('earned_run')) return p.er ?? 0;
