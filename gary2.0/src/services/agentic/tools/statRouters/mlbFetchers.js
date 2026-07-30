@@ -23,6 +23,10 @@ import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballS
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
 import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
+// Bridge-aware search seam (Jul 30): desk-time grounding must route like the
+// WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0), then
+// the API chain — never a hardwired paid Gemini call per desk build.
+import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // STATIC PARK FACTOR DATA (no API needed)
@@ -270,13 +274,17 @@ export const mlbFetchers = {
       try {
         // Get closer/reliever season stats
         const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
+        // A reliever is someone who RELIEVES (Jul 30): zero starts. The old
+        // `ip < 50` heuristic misfiled low-IP starters as relief arms and
+        // dropped 50+ IP setup workhorses by late season. Rank saves, then
+        // holds, then innings so the real high-leverage arms surface, not
+        // just save-getters.
         const relievers = (result.stats || [])
-          .filter(s => s.pitching_ip > 0 && (
-            (s.pitching_sv != null && s.pitching_sv > 0) ||
-            (s.pitching_hld != null && s.pitching_hld > 0) ||
-            (s.pitching_ip < 50 && s.pitching_era != null)
-          ))
-          .sort((a, b) => (b.pitching_sv || 0) - (a.pitching_sv || 0))
+          .filter(s => s.pitching_ip > 0 && (s.pitching_gs || 0) === 0 && s.pitching_era != null)
+          .sort((a, b) =>
+            (b.pitching_sv || 0) - (a.pitching_sv || 0) ||
+            (b.pitching_hld || 0) - (a.pitching_hld || 0) ||
+            (b.pitching_ip || 0) - (a.pitching_ip || 0))
           .slice(0, 5);
 
         if (relievers.length > 0) {
@@ -305,13 +313,13 @@ export const mlbFetchers = {
       lines.push(`${teamName}: See MLB_CLOSER_RELIEVER_STATS and MLB_BULLPEN_WORKLOAD for detailed bullpen data`);
     }
 
-    // Minimal Grounding call for day-of bullpen news only.
-    // Jul 8 2026 fix: geminiGroundingSearch returns {success, data, raw} — the
-    // old check read .length on that object, so the note NEVER attached (the
-    // search was paid for, then discarded).
+    // Minimal grounding call for day-of bullpen news only — via the seam so
+    // the bridge makes it $0 (was a hardwired PAID Gemini call per desk
+    // build, found Jul 30). Jul 8 2026 fix preserved: the result is
+    // {success, data, raw} — read .data, not .length on the object.
     let newsNote = '';
     try {
-      const news = await geminiGroundingSearch(
+      const news = await openaiWebSearch(
         `${awayTeam} vs ${homeTeam} MLB bullpen news closer availability update today`
       );
       const newsText = news?.data || '';
@@ -350,7 +358,11 @@ export const mlbFetchers = {
           fallbackNote = result.isFallback ? ' (prior season data — current season not yet started)' : '';
           // Filter to hitters (batting_avg > 0 or batting_ops > 0) and sort by OPS descending
           const hitters = (result.stats || [])
-            .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+            // Real batting sample, not "has never pitched" (Jul 30): the old
+          // `!s.pitching_era` clause erased a two-way player's BAT entirely
+          // (the Ohtani class), while a pitcher's fluke 1-for-2 could top an
+          // OPS sort. >= 20 AB keeps April regulars and kills both.
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
             .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
             .slice(0, 6);
           if (hitters.length > 0) {
@@ -527,7 +539,11 @@ export const mlbFetchers = {
       try {
         const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
         const hitters = (result.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          // Real batting sample, not "has never pitched" (Jul 30): the old
+          // `!s.pitching_era` clause erased a two-way player's BAT entirely
+          // (the Ohtani class), while a pitcher's fluke 1-for-2 could top an
+          // OPS sort. >= 20 AB keeps April regulars and kills both.
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 5)
           .map(s => ({
@@ -593,7 +609,9 @@ export const mlbFetchers = {
     return {
       homeValue: formatSide(homeSide),
       awayValue: formatSide(awaySide),
-      comparison: `Top hitters' pitch-type performance (${currentYear} season, ranked by xwOBA per pitch)`,
+      // Label matches the code (Jul 30): rows sort by SAMPLE (PA faced), not
+      // xwOBA — the old label told the reader the opposite of the truth.
+      comparison: `Top hitters' pitch-type performance (${currentYear} season — most-faced pitch types first, PA counts shown)`,
       source: 'BDL API (pitch-type season stats)',
     };
   },
@@ -1032,7 +1050,11 @@ export const mlbFetchers = {
           if (stats && stats.length > 0) {
             // Top 3 hitters by OPS
             const hitters = stats
-              .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+              // Real batting sample, not "has never pitched" (Jul 30): the old
+          // `!s.pitching_era` clause erased a two-way player's BAT entirely
+          // (the Ohtani class), while a pitcher's fluke 1-for-2 could top an
+          // OPS sort. >= 20 AB keeps April regulars and kills both.
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
               .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
               .slice(0, 3);
             // Top 2 pitchers by WAR (or ERA lowest)
@@ -1856,7 +1878,11 @@ export const mlbFetchers = {
           splitsFallbackNote = ' (prior season data — current season not yet started)';
         }
         const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          // Real batting sample, not "has never pitched" (Jul 30): the old
+          // `!s.pitching_era` clause erased a two-way player's BAT entirely
+          // (the Ohtani class), while a pitcher's fluke 1-for-2 could top an
+          // OPS sort. >= 20 AB keeps April regulars and kills both.
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 4);
 
@@ -1964,7 +1990,11 @@ export const mlbFetchers = {
         // previously dropped slumping stars whose BvP the rationale then invented.
         const seasonResult = await fetchSeasonStatsWithFallback({ teamId: battingTeamId, season: currentYear });
         const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          // Real batting sample, not "has never pitched" (Jul 30): the old
+          // `!s.pitching_era` clause erased a two-way player's BAT entirely
+          // (the Ohtani class), while a pitcher's fluke 1-for-2 could top an
+          // OPS sort. >= 20 AB keeps April regulars and kills both.
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 8);
 
@@ -2062,14 +2092,15 @@ export const mlbFetchers = {
           closerSeasonLabel = ` (${result.season} season)`;
           closerFallbackNote = ' (prior season data — current season not yet started)';
         }
-        // Filter to relievers: pitchers with saves > 0 or holds > 0 or (IP > 0 and no starts/low IP suggesting reliever role)
+        // A reliever = zero starts (Jul 30; the old ip<50 heuristic misfiled
+        // low-IP starters and dropped late-season setup workhorses). Saves,
+        // then holds, then innings — high-leverage arms, not just save totals.
         const relievers = (result.stats || [])
-          .filter(s => s.pitching_ip > 0 && (
-            (s.pitching_sv != null && s.pitching_sv > 0) ||
-            (s.pitching_hld != null && s.pitching_hld > 0) ||
-            (s.pitching_ip < 50 && s.pitching_era != null) // Short IP = likely reliever
-          ))
-          .sort((a, b) => (b.pitching_sv || 0) - (a.pitching_sv || 0))
+          .filter(s => s.pitching_ip > 0 && (s.pitching_gs || 0) === 0 && s.pitching_era != null)
+          .sort((a, b) =>
+            (b.pitching_sv || 0) - (a.pitching_sv || 0) ||
+            (b.pitching_hld || 0) - (a.pitching_hld || 0) ||
+            (b.pitching_ip || 0) - (a.pitching_ip || 0))
           .slice(0, 4);
 
         if (relievers.length > 0) {
@@ -2193,7 +2224,11 @@ export const mlbFetchers = {
           rispFallbackNote = ' (prior season data — current season not yet started)';
         }
         const topHitters = (seasonResult.stats || [])
-          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          // Real batting sample, not "has never pitched" (Jul 30): the old
+          // `!s.pitching_era` clause erased a two-way player's BAT entirely
+          // (the Ohtani class), while a pitcher's fluke 1-for-2 could top an
+          // OPS sort. >= 20 AB keeps April regulars and kills both.
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && (s.batting_ab || 0) >= 20)
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
           .slice(0, 4);
 
