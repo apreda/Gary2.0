@@ -111,11 +111,24 @@ function mlbStat(token: string, p: any): number | null {
       ? num(p.hits) - num(p.doubles) - num(p.triples) - num(p.hr) : null;
   }
   // pitcher markets
-  if (t.includes("pitcher_out") || t.includes("outs_recorded")) return p.ip != null ? Math.round(parseFloat(p.ip) * 3) : null;
+  // MLB IP is THIRDS notation ("5.2" = 5⅔ = 17 outs) — `ip * 3` graded 16
+  // on every fractional line (Jul 30, mirrors the local grader fix).
+  if (t.includes("pitcher_out") || t.includes("outs_recorded")) {
+    if (p.ip == null) return null;
+    const raw = parseFloat(p.ip);
+    return Number.isFinite(raw) ? Math.floor(raw) * 3 + Math.round((raw % 1) * 10) : null;
+  }
   if (t.includes("earned_run") || t.includes("pitcher_earned")) return num(p.er);
   if (t.includes("hits_allowed") || t.includes("pitcher_hit")) return num(p.p_hits);
   if (t.includes("pitcher_walk")) return num(p.p_bb);
-  if (t.includes("strikeout")) return (p.p_k != null && p.p_k > 0) ? num(p.p_k) : num(p.k);
+  // Board semantics (Jul 30, attribution-swap class): 'pitcher_strikeouts'
+  // = p_k; bare 'strikeouts' = the BATTER's Ks. The old pitcher-first
+  // heuristic graded a batter-Ks prop on pitching Ks when he also pitched.
+  if (t.includes("strikeout")) {
+    if (t.includes("pitcher")) return num(p.p_k);
+    if (p.k != null) return num(p.k);
+    return num(p.p_k);
+  }
   return null;
 }
 
@@ -126,8 +139,15 @@ function playerMatchesMlb(pickName: string, pl: any): boolean {
   const full = normalizeName(pl.full_name || `${pl.first_name || ""} ${pl.last_name || ""}`);
   if (full === target) return true;
   if (strip(full) === strip(target)) return true;
+  // Surname alone is NOT identity (Jul 30, attribution-swap class): two
+  // same-surname players in one game graded the prop on whichever appeared
+  // first. Require the first initial whenever both sides carry one.
   const last = normalizeName(pl.last_name || full.split(" ").pop() || "");
-  if (last === targetLast && last.length > 3) return true;
+  if (last === targetLast && last.length > 3) {
+    const fi = normalizeName(pl.first_name || full.split(" ")[0] || "").charAt(0);
+    const ti = target.charAt(0);
+    return !fi || !ti || fi === ti;
+  }
   return false;
 }
 
