@@ -271,6 +271,9 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         pick_category: pick.pick_category ?? null,
         // Plain-language fan rendering of the audited rationale (was being dropped → null).
         rationale_plain: pick.rationale_plain || null,
+        // Contract-era hash (Jul 30: the whitelist here silently ate the Jul 29
+        // stamp — every era read joins on this; never drop it again).
+        prompt_sha: pick.prompt_sha || null,
         // Which brain produced this pick — fields absent from this object never reach the DB.
         model: pick.model || null
       };

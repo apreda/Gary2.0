@@ -31,6 +31,7 @@ import {
 } from '../shared.js';
 import { getPitcherXStats, getPitcherStatcastProfiles } from '../../baseballSavantService.js';
 import { getMlbSchedule } from '../../mlbStatsApiService.js';
+import { attachLaneReads } from '../laneReads.js';
 
 // (A) one-run record tunables.
 const MIN_ONE_RUN_GAMES = 12;     // need a real one-run sample
@@ -105,6 +106,27 @@ export async function computeRegressionWatch(ctx) {
   } catch (err) {
     console.error('[regressionWatch] tomorrow regression error:', err?.message || err);
   }
+
+  // The Gary layer (founder, Jul 30): "ERA vs xERA" alone is a number, not an
+  // insight — the drop-down explains WHY the gap exists (which peripherals say
+  // deserved vs luck) and what it means for this specific start.
+  await attachLaneReads('regressionWatch',
+    rows.filter((r) => r?.meta?.kind === 'regression_pitcher'),
+    (r) => {
+      const m = r.meta || {};
+      if (m.era == null || m.xera == null) return null;
+      const bits = [`ERA ${m.era} vs expected ERA ${m.xera} (gap ${m.gap})`, `direction: ${m.direction}`];
+      if (m.whip != null) bits.push(`WHIP ${m.whip}`);
+      if (m.k9 != null) bits.push(`${m.k9} K/9`);
+      if (m.hard_hit != null) bits.push(`${m.hard_hit}% hard-hit allowed`);
+      if (m.barrel != null) bits.push(`${m.barrel}% barrels allowed`);
+      if (m.opp_ba != null && m.opp_xba != null) bits.push(`opponents hitting ${m.opp_ba} vs expected ${m.opp_xba}`);
+      const when = m.day === 'tomorrow' ? 'Starts TOMORROW' : 'Starts TONIGHT';
+      return `PITCHER ${r.headline} — ${bits.join(', ')}. ${when}${m.opp ? ` vs ${m.opp}` : ''} (${r.game}).`;
+    },
+    {
+      ask: 'why this gap between his results and his expected numbers exists — whether the peripherals say it is deserved or luck — and what that means for this specific start',
+    });
 
   return rows;
 }

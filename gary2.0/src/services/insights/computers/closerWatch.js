@@ -14,11 +14,22 @@
 //  • bdl.getMlbPlayerSeasonStats({season, teamId}): pitching_sv, pitching_hld.
 // Defensive: a team with no saves yet, or a failed fetch, is skipped; returns [].
 
-import { makeRow, TONES, clampScore } from '../shared.js';
+import axios from 'axios';
+import { makeRow, TONES, clampScore, shiftDateStr } from '../shared.js';
 import { generateSolText } from '../solText.js';
 
+// Same env resolution as streaking.js — daily_slate odds are the "is tonight
+// a live save spot" context (founder, Jul 30: relevance to the real world,
+// never a cherry-picked season total).
+const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY || '';
+
 const COMMITTEE_GAP = 2;   // leader within this of runner-up = shared ninth
-const MAX_TEAMS = 8;
+const MAX_TEAMS = 4;       // founder, Jul 30: 3-4 actionable calls, not a league table
 
 export async function computeCloserWatch(ctx) {
   const { games, season, bdl, helpers } = ctx;
@@ -80,6 +91,7 @@ export async function computeCloserWatch(ctx) {
         meta: {
           kind: 'closer_watch', committee,
           team: t.abbr || t.name,
+          team_full: t.name,
           leader: { name: leader.name, sv: leader.sv, hld: leader.hld },
           ...(runner ? { runner: { name: runner.name, sv: runner.sv, hld: runner.hld } } : {}),
         },
@@ -89,11 +101,111 @@ export async function computeCloserWatch(ctx) {
     }
   }
 
+  // WHY-NOW rescore (founder, Jul 30): a save note is only actionable when
+  // tonight is a live save spot. Favored team + rested arm = the call; an arm
+  // that worked both of the last two days is likely down. All computed.
   rows.sort((a, b) => b.relevance_score - a.relevance_score);
-  const out = rows.slice(0, MAX_TEAMS);
+  const shortlist = rows.slice(0, 8);
+  const slateOdds = await fetchTonightMoneylines(ctx.date);
+  const finalsByTeamId = await recentFinalIdsByTeam(bdl, ctx.date);
+  for (const r of shortlist) {
+    const m = r.meta;
+    let score = 40;
+    const mlHit = moneylineFor(slateOdds, m.team_full);
+    if (mlHit && Number.isFinite(mlHit.ml)) {
+      m.tonight_ml = mlHit.ml;
+      m.opp = mlHit.opp;
+      if (mlHit.ml < 0) score += 18;               // favored — live save chance
+    }
+    const use = await leaderUsage(bdl, finalsByTeamId.get(r.team_id), r.player_id, ctx.date);
+    if (use) {
+      m.usage = use;
+      if (use.b2b) score -= 14;                    // worked both days — likely down
+      else if (!use.threwYesterday) score += 10;   // rested
+    }
+    if (m.committee) score += 8;
+    if ((m.leader?.sv || 0) >= 20) score += 4;
+    r.relevance_score = clampScore(score);
+  }
+  shortlist.sort((a, b) => b.relevance_score - a.relevance_score);
+  const out = shortlist.slice(0, MAX_TEAMS);
   console.log(`[closerWatch] teams=${out.length}/${teams.size} (${out.filter((r) => r.meta.committee).length} committees)`);
   await writeReads(out);
   return out;
+}
+
+/** Tonight's MLB moneylines from the daily_slate morning snapshot. */
+async function fetchTonightMoneylines(dateStr) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !dateStr) return [];
+  try {
+    const resp = await axios.get(`${SUPABASE_URL}/rest/v1/daily_slate`, {
+      params: { date: `eq.${dateStr}`, league: 'eq.MLB', select: 'home_team,away_team,ml_home,ml_away' },
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      timeout: 12000,
+    });
+    return Array.isArray(resp?.data) ? resp.data : [];
+  } catch (err) {
+    console.error('[closerWatch] slate odds read failed:', err?.message || err);
+    return [];
+  }
+}
+
+/** daily_slate stores club nicknames — match them as the tail of the full name. */
+function moneylineFor(slateRows, fullTeamName) {
+  const name = String(fullTeamName || '').toLowerCase();
+  if (!name) return null;
+  for (const g of slateRows) {
+    const home = String(g?.home_team || '').toLowerCase();
+    const away = String(g?.away_team || '').toLowerCase();
+    if (home && name.endsWith(home)) return { ml: Number(g.ml_home), opp: g.away_team };
+    if (away && name.endsWith(away)) return { ml: Number(g.ml_away), opp: g.home_team };
+  }
+  return null;
+}
+
+/** BDL final game ids per team over the last 5 ET dates, newest first. */
+async function recentFinalIdsByTeam(bdl, dateStr) {
+  const byTeam = new Map();
+  for (let back = 1; back <= 5; back++) {
+    const d = shiftDateStr(dateStr, -back);
+    if (!d) break;
+    let games = [];
+    try { games = (await bdl.getMlbGamesForETDate(d)) || []; } catch { continue; }
+    for (const g of games) {
+      if (!String(g?.status || '').toUpperCase().includes('FINAL')) continue;
+      for (const t of [g?.home_team, g?.visitor_team || g?.away_team]) {
+        if (t?.id == null) continue;
+        if (!byTeam.has(t.id)) byTeam.set(t.id, []);
+        byTeam.get(t.id).push({ id: g.id, date: d });
+      }
+    }
+  }
+  for (const list of byTeam.values()) list.sort((a, b) => b.date.localeCompare(a.date));
+  return byTeam;
+}
+
+/** The leader's outings across his team's last 3 finals — rested or rode hard. */
+async function leaderUsage(bdl, finals, leaderId, dateStr) {
+  const last3 = (finals || []).slice(0, 3);
+  if (!last3.length || leaderId == null) return null;
+  let boxRows = [];
+  try {
+    boxRows = (await bdl.getMlbGameStats({ gameIds: last3.map((g) => g.id) })) || [];
+  } catch { return null; }
+  const dateById = new Map(last3.map((g) => [g.id, g.date]));
+  const outings = boxRows
+    .filter((r) => (r?.player?.id === leaderId) && parseFloat(r?.ip) > 0)
+    .map((r) => dateById.get(r.game_id))
+    .filter(Boolean)
+    .sort((a, b) => b.localeCompare(a));
+  const y1 = shiftDateStr(dateStr, -1);
+  const y2 = shiftDateStr(dateStr, -2);
+  return {
+    outings: outings.length,
+    threwYesterday: outings.includes(y1),
+    b2b: outings.includes(y1) && outings.includes(y2),
+    last_out: outings[0] || null,
+  };
 }
 
 /** "Chicago White Sox" -> "White Sox"; general club display, mascot-safe. */
@@ -115,12 +227,18 @@ async function writeReads(rows) {
     const run = m.runner ? `; next: ${m.runner.name} ${m.runner.sv} saves` +
       (m.runner.hld ? `, ${m.runner.hld} holds` : '') : '';
     const committee = m.committee ? `YES (within ${COMMITTEE_GAP} saves)` : 'no';
-    return `${base}${run}. Committee: ${committee}. Plays tonight: ${r.game}.`;
+    const spot = Number.isFinite(m.tonight_ml)
+      ? ` Tonight: ${m.tonight_ml < 0 ? 'FAVORED' : 'underdog'} (${m.tonight_ml > 0 ? '+' : ''}${m.tonight_ml})${m.opp ? ` vs ${m.opp}` : ''}.`
+      : '';
+    const use = m.usage
+      ? ` Recent usage: ${m.usage.outings} outing(s) in the team's last 3 games${m.usage.b2b ? ', worked BOTH of the last two days (likely down tonight)' : m.usage.threwYesterday ? ', threw yesterday' : ', fully rested'}.`
+      : '';
+    return `${base}${run}. Committee: ${committee}.${spot}${use} Plays tonight: ${r.game}.`;
   }).join('\n');
 
   const prompt = `You are Gary — the bettor whose season-long fantasy column publishes in this app. You write as yourself, never as an AI, and your training data is old: the facts below are current and they are ALL you may use — never introduce a pitcher, number, injury, or role change that isn't listed.
 
-For each team below: the ninth-inning situation as you read it, and the call for a manager chasing saves.
+For each team below: the ninth-inning situation as you read it — whether tonight is a live save spot given the odds and the arm's recent workload — and the call for a season-long manager chasing saves this week.
 
 Return STRICT JSON only: {"reads":[{"i":0,"read":"...","verdict":"..."}]}
 

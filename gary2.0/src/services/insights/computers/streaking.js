@@ -19,10 +19,11 @@
 //     read once via the REST API). The live BDL odds endpoint is NEVER used for
 //     a PAST date — re-fetching it overwrites each game's row in place with a
 //     frozen LIVE in-game line (collapsed toward the runs already scored), which
-//     fabricated phantom UNDER streaks. A final with no stored pregame line (e.g.
-//     before daily_slate existed) is SKIPPED — its O/U streak shortens, never
-//     falls back to the live line. total runs > line = over, < = under; a push
-//     or a missing line BREAKS the streak (strict consecutive). >= STREAK_MIN
+//     fabricated phantom UNDER streaks. total runs > line = over, < = under; a
+//     push, a missing/implausible (<6) stored line, or a final whose BDL runs
+//     haven't landed yet ALL BREAK the streak (strict consecutive — Jul 30:
+//     silently skipping no-data finals spliced non-consecutive games into
+//     phantom streaks; breaking is the honest read). >= STREAK_MIN
 //     surfaces. Tonight's posted total (median, via getMlbGameOdds({ gameIds }))
 //     is stamped on line_val so the morning grader can settle the row — that's a
 //     LIVE pregame fetch for TONIGHT's game, which is correct.
@@ -270,6 +271,11 @@ async function fetchSlateLines(finals, startET, endET) {
       if (!r?.date || r.date > endET) continue; // upper bound (params allow one filter per key)
       const tv = Number(r?.total);
       if (r.away_team == null || r.home_team == null || !Number.isFinite(tv)) continue;
+      // Corrupted-line guard (Jul 30 autopsy): Jul 28's snapshot carried
+      // live-collapsed totals (4.5, 5.5) — numbers that don't exist pregame in
+      // MLB. A too-low stored line is treated as MISSING, which BREAKS the
+      // streak — shorter honest streaks beat fabricated ones.
+      if (tv < 6) continue;
       slateByKey.set(slateKey(r.date, r.away_team, r.home_team), tv);
     }
   } catch (err) {
@@ -311,7 +317,11 @@ function indexTotals(oddsRows, map) {
 function resultForTeam(game, teamId, lineByGameId) {
   const h = Number(game?.home_team_data?.runs);
   const a = Number(game?.away_team_data?.runs);
-  if (!Number.isFinite(h) || !Number.isFinite(a)) return null;
+  // A final with no runs yet (BDL box lag on last night's games — routine at
+  // the 7:15 run) must BREAK the walks, never vanish: filtering it out spliced
+  // non-consecutive games into "consecutive" streaks (Jul 30 NYY "U6" autopsy —
+  // the last 4 real games had gone OVER).
+  if (!Number.isFinite(h) || !Number.isFinite(a)) return { noData: true };
   const isHome = game?.home_team?.id === teamId;
   const teamRuns = isHome ? h : a;
   const oppRuns = isHome ? a : h;
@@ -325,11 +335,12 @@ function resultForTeam(game, teamId, lineByGameId) {
 
 /** Current W/L streak from newest-first results. */
 function wlStreak(results) {
-  if (!results.length) return null;
+  if (!results.length || results[0].noData) return null;
   const won = results[0].win;
   let len = 0;
   let runDiff = 0;
   for (const r of results) {
+    if (r.noData) break;
     if (r.win !== won) break;
     len++;
     runDiff += r.margin;
@@ -343,12 +354,13 @@ function wlStreak(results) {
  */
 function ouStreak(results) {
   const first = results.find(() => true);
-  if (!first || first.line == null || first.total === first.line) return null;
+  if (!first || first.noData || first.line == null || first.total === first.line) return null;
   const over = first.total > first.line;
   let len = 0;
   let runsSum = 0;
   let lineSum = 0;
   for (const r of results) {
+    if (r.noData) break;
     if (r.line == null || r.total === r.line) break;
     if ((r.total > r.line) !== over) break;
     len++;

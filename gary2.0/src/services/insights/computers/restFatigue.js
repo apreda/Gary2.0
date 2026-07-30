@@ -1,45 +1,35 @@
 // gary2.0/src/services/insights/computers/restFatigue.js
 //
 // LANE: restFatigue
-// "Schedule spot matters: games-in-a-row density, plus an overworked bullpen."
+// "Schedule spot matters: games-in-a-row density."
 //
-// Two signals, both derived ONLY from documented BDL methods (no invented
-// 'rest' field exists in the API):
+// ONE signal, derived ONLY from documented BDL methods (no invented 'rest'
+// field exists in the API). The lane's former second signal — bullpen
+// workload — was REMOVED Jul 30 2026 (founder): bullpenFatigue.js owns pen
+// workload outright; two lanes double-covering the same fact on different
+// scales double-crowded the page.
 //
-//   1. Schedule density — there is no BDL rest endpoint, so each team's recent
-//      game dates are assembled by walking the prior 10 calendar days
-//      (date-1 .. date-10) and calling getMlbGamesForDate(d) (5-min cache, so a
-//      10-day lookback is cheap and shared across lanes). For each prior date we
-//      keep the team if it has a game that PLAYED (status STATUS_FINAL or
-//      in-progress; STATUS_SCHEDULED / postponed are skipped). From those dates
-//      we compute consecutiveDays (games on each immediately-preceding calendar
-//      day) and gamesLast7. MLB plays near-daily, so we only surface a REAL
-//      asymmetry: one side on a long unbroken streak while the OTHER side had
-//      yesterday off, or a team grinding its 13th+ game in 13 days.
-//
-//   2. Bullpen workload (the stronger signal) — for each slate team we take its
-//      last 3 game ids (chronological) and call getMlbGameStats({ gameIds })
-//      (per-player box rows; 30-min cache, one call per team). Relief
-//      appearances are box rows with Number(ip) > 0 AND games_started !== 1
-//      (the starter's per-game games_started is 1). Reliever innings are summed
-//      per team across those 3 games. MLB "ip" decimals are THIRDS of an inning
-//      (5.2 = 5 2/3), so they are converted to true innings before summing:
-//      floor(ip) + (ip % 1) * 10 / 3. We surface a team whose pen threw >= 12
-//      innings over its last 3 games, and lean into the contrast when the
-//      OPPONENT's pen threw <= 6 innings (rested) in the same span.
+//   Schedule density — there is no BDL rest endpoint, so each team's recent
+//   game dates are assembled by walking the prior 10 calendar days
+//   (date-1 .. date-10) and calling getMlbGamesForDate(d) (5-min cache, so a
+//   10-day lookback is cheap and shared across lanes). For each prior date we
+//   keep the team if it has a game that PLAYED (status STATUS_FINAL or
+//   in-progress; STATUS_SCHEDULED / postponed are skipped). From those dates
+//   we compute consecutiveDays (games on each immediately-preceding calendar
+//   day) and gamesLast7. MLB plays near-daily, so we only surface a REAL
+//   asymmetry: one side on a long unbroken streak while the OTHER side had
+//   yesterday off, or a team grinding its 13th+ game in 13 days.
 //
 // VERIFIED live field names (probed against the real API):
 //   * getMlbGamesForDate(d) -> game objects { id, status, date,
 //     home_team:{id,abbreviation,display_name,...}, away_team/visitor_team:{...} }.
 //     Date-only filter; ids[] are ignored by this endpoint, so we filter teams
 //     out of each day's full slate ourselves.
-//   * getMlbGameStats({ gameIds }) -> per-player per-game box rows
-//     { player:{full_name,...}, game_id, team_name, ip, games_started, ... }.
 //
 // Rows: category 'restFatigue' (makeRow snake_cases -> rest_fatigue). tone
-// CAUTION for the gassed side. team_id + game_id set. MAX 1 bullpen row + 1
-// schedule row per game. Fully defensive: any missing piece -> skip silently;
-// an end-of-computer summary log makes a 0-row run diagnosable.
+// CAUTION for the gassed side. team_id + game_id set. MAX 1 schedule row per
+// game. Fully defensive: any missing piece -> skip silently; an end-of-computer
+// summary log makes a 0-row run diagnosable.
 
 import {
   makeRow, TONES, scoreFromEdge, nameKey, round, pickVariant,
@@ -52,13 +42,6 @@ const GAMES_IN_DAYS_FOR_ROW = 13;  // 13th+ game in 13 days = an absolute grind 
 const SCHEDULE_BASE_RELEVANCE = 55;
 const SCHEDULE_MAX_RELEVANCE = 65;
 
-// --- Bullpen workload tunables ---
-const PEN_LOOKBACK_GAMES = 3;      // sum reliever innings over the last N games
-const HEAVY_PEN_INNINGS = 12;      // >= this over the span = a heavy bullpen
-const RESTED_PEN_INNINGS = 6;      // opponent pen <= this in the same span = rested contrast
-const PEN_RELEVANCE_SCALE = 8;     // (penInnings - 9) edge -> relevance band
-const PEN_RELEVANCE_BASE = 48;
-const PEN_RELEVANCE_CAP = 88;
 
 export async function computeRestFatigue(ctx) {
   const { date, games, bdl, helpers } = ctx;
@@ -77,7 +60,7 @@ export async function computeRestFatigue(ctx) {
   for (const game of games) {
     examined += 1;
     try {
-      rows.push(...(await fatigueForGame(game, { date, bdl, teamHistory, gameLabel: helpers.gameLabel })));
+      rows.push(...(await fatigueForGame(game, { date, teamHistory, gameLabel: helpers.gameLabel })));
     } catch (err) {
       console.error('[restFatigue] game error:', err?.message || err);
     }
@@ -87,7 +70,7 @@ export async function computeRestFatigue(ctx) {
   return rows;
 }
 
-async function fatigueForGame(game, { date, bdl, teamHistory, gameLabel }) {
+async function fatigueForGame(game, { date, teamHistory, gameLabel }) {
   const gameId = game?.id;
   if (gameId == null) return [];
   const label = gameLabel(game);
@@ -98,156 +81,13 @@ async function fatigueForGame(game, { date, bdl, teamHistory, gameLabel }) {
 
   const out = [];
 
-  // --- Bullpen workload (preferred signal) ---
-  const bullpenRow = await bullpenRowForGame({ home, away, label, gameId, bdl, teamHistory });
-  if (bullpenRow) out.push(bullpenRow);
-
+  // Bullpen workload moved to bullpenFatigue.js outright (founder, Jul 30):
+  // two lanes were double-covering the same fact on different scales.
   // --- Schedule density (one row max, only on a real rest asymmetry) ---
   const scheduleRow = scheduleRowForGame({ home, away, label, gameId, date, teamHistory });
   if (scheduleRow) out.push(scheduleRow);
 
   return out;
-}
-
-// --------------------------------------------------------------------------
-// Bullpen workload
-// --------------------------------------------------------------------------
-
-async function bullpenRowForGame({ home, away, label, gameId, bdl, teamHistory }) {
-  const [homePen, awayPen] = await Promise.all([
-    penInningsForTeam(home, bdl, teamHistory),
-    penInningsForTeam(away, bdl, teamHistory),
-  ]);
-  if (!homePen && !awayPen) return null;
-
-  // The gassed side is whichever pen threw the most (and clears the heavy bar).
-  const heavy = pickHeaviest(homePen, awayPen);
-  if (!heavy) return null;
-  const { side, pen } = heavy;
-  if (pen.innings < HEAVY_PEN_INNINGS) return null;
-
-  const opp = side === 'home' ? awayPen : homePen;
-  const oppInnings = opp ? opp.innings : null;
-  const oppRested = oppInnings != null && oppInnings <= RESTED_PEN_INNINGS;
-  const team = side === 'home' ? home : away;
-  const oppTeam = side === 'home' ? away : home;
-
-  const innings = round(pen.innings, 1);
-  const arms = pen.topArms.slice(0, 2);
-  const armsText = arms.length
-    ? arms.map((a) => `${a.name} (${round(a.innings, 1)})`).join(' and ')
-    : null;
-
-  // Contrast clause: only when we actually have the opponent's number.
-  let contrast = '';
-  if (oppRested) {
-    contrast = ` ${oppTeam.label}'s pen has thrown only ${round(oppInnings, 1)} over the same span.`;
-  } else if (oppInnings != null) {
-    contrast = ` ${oppTeam.label}'s pen has thrown ${round(oppInnings, 1)} over the same span.`;
-  }
-
-  const headlineVariants = [
-    `${team.label}'s bullpen has covered ${innings} innings over the last ${pen.gameCount} games`,
-    `${team.label}'s pen has logged ${innings} innings across its last ${pen.gameCount} games`,
-    `${innings} bullpen innings in ${pen.gameCount} games for ${team.label}`,
-  ];
-  const detailVariants = [
-    (a) => `That is ${innings} relief innings in ${pen.gameCount} games` +
-      `${a ? `, led by ${a}` : ''}.${contrast}`,
-    (a) => `${pen.gameCount} games, ${innings} innings out of the pen` +
-      `${a ? ` — ${a} carried the load` : ''}.${contrast}`,
-    (a) => `Relievers have absorbed ${innings} innings over the last ${pen.gameCount} games` +
-      `${a ? ` (${a} the heaviest)` : ''}.${contrast}`,
-  ];
-
-  const key = team.id ?? team.label;
-  const headline = pickVariant(headlineVariants, key);
-  const detail = pickVariant(detailVariants, key)(armsText);
-
-  return makeRow({
-    category: 'restFatigue',
-    headline,
-    detail,
-    game: label,
-    value: innings,
-    tone: TONES.CAUTION,
-    spark: oppInnings != null ? [round(oppInnings, 1), innings] : undefined,
-    relevance_score: scoreFromEdge(pen.innings - 9, {
-      scale: PEN_RELEVANCE_SCALE,
-      base: PEN_RELEVANCE_BASE,
-      cap: PEN_RELEVANCE_CAP,
-    }),
-    team_id: team.id,
-    game_id: gameId,
-  });
-}
-
-/**
- * Sum reliever innings for a team across its last PEN_LOOKBACK_GAMES games.
- * Returns null when the team has no recent games or the box data is empty.
- */
-async function penInningsForTeam(side, bdl, teamHistory) {
-  const hist = teamHistory.get(side.id);
-  const gameIds = hist?.gameIds ? hist.gameIds.slice(-PEN_LOOKBACK_GAMES) : [];
-  if (!gameIds.length) return null;
-
-  const boxRows = (await bdl.getMlbGameStats({ gameIds })) || [];
-  if (!Array.isArray(boxRows) || !boxRows.length) return null;
-
-  // Per-arm reliever innings, keyed by player to roll multiple appearances up.
-  const armInnings = new Map(); // playerKey -> { name, innings }
-  let totalInnings = 0;
-
-  for (const r of boxRows) {
-    if (!rowBelongsToTeam(r, side)) continue;
-    const ip = parseIp(r.ip);
-    if (!(ip > 0)) continue;
-    // games_started is per-game: 1 for the game's starter, 0/absent for relievers.
-    if (Number(r.games_started) === 1) continue;
-
-    totalInnings += ip;
-    const name = r.player?.full_name
-      || [r.player?.first_name, r.player?.last_name].filter(Boolean).join(' ')
-      || 'Reliever';
-    const k = r.player?.id != null ? String(r.player.id) : nameKey(name);
-    const prev = armInnings.get(k);
-    if (prev) prev.innings += ip;
-    else armInnings.set(k, { name, innings: ip });
-  }
-
-  if (totalInnings <= 0) return null;
-
-  const topArms = [...armInnings.values()].sort((a, b) => b.innings - a.innings);
-  return { innings: totalInnings, gameCount: gameIds.length, topArms };
-}
-
-/** Of two (nullable) pen summaries, return the heavier with its side tag. */
-function pickHeaviest(homePen, awayPen) {
-  const h = homePen ? { side: 'home', pen: homePen } : null;
-  const a = awayPen ? { side: 'away', pen: awayPen } : null;
-  if (h && a) return h.pen.innings >= a.pen.innings ? h : a;
-  return h || a;
-}
-
-/**
- * Convert an MLB "ip" value (thirds decimal: .1 = 1/3, .2 = 2/3) into true
- * innings. Accepts a string ("5.2") or number. Returns 0 on garbage.
- */
-function parseIp(ip) {
-  const n = Number(ip);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  const whole = Math.floor(n);
-  const frac = n - whole; // 0, .1, or .2 in MLB convention
-  const thirds = Math.round(frac * 10); // 0, 1, 2
-  return whole + thirds / 3;
-}
-
-/** Does a box-stat row belong to `side`? Match on team_name (tolerant) or team id. */
-function rowBelongsToTeam(row, side) {
-  if (row?.team?.id != null && side.id != null) return String(row.team.id) === String(side.id);
-  const rowName = nameKey(row?.team_name);
-  if (!rowName) return false;
-  return side.names.some((n) => n && (n === rowName || n.includes(rowName) || rowName.includes(n)));
 }
 
 // --------------------------------------------------------------------------

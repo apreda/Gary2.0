@@ -28,6 +28,7 @@ import {
   makeRow, TONES, parseIpThirds, nameKey, shiftDateStr, round, clampScore,
 } from '../shared.js';
 import mlbStatsApi from '../../mlbStatsApiService.js';
+import { attachLaneReads } from '../laneReads.js';
 
 // Tunables.
 const LOOKBACK_DAYS = 6;     // ET dates walked to find each team's recent finals
@@ -99,8 +100,9 @@ export async function computeBullpenFatigue(ctx) {
       let reliefIp = 0;
       let reliefPitches = 0;
       const armGames = new Map(); // relieverId -> # of the last 3 he appeared in
+      const armInfo = new Map();  // relieverId -> { name, ip, pitches, dates } for the read
       let ok = true;
-      for (const { gamePk, side } of recent) {
+      for (const { gamePk, side, date: gd } of recent) {
         let box;
         try {
           box = await mlbStatsApi.getGameBoxScore(gamePk);
@@ -113,15 +115,37 @@ export async function computeBullpenFatigue(ctx) {
         for (const pid of pitchers.slice(1)) {     // [0] = starter; rest = relief
           const p = sd.players?.[`ID${pid}`];
           const ip = parseIpThirds(p?.stats?.pitching?.inningsPitched);
+          const pitches = Number(p?.stats?.pitching?.numberOfPitches) || 0;
           reliefIp += ip;
-          reliefPitches += Number(p?.stats?.pitching?.numberOfPitches) || 0;
+          reliefPitches += pitches;
           armGames.set(pid, (armGames.get(pid) || 0) + 1);
+          const info = armInfo.get(pid) || { name: p?.person?.fullName || '', ip: 0, pitches: 0, dates: [] };
+          info.ip += ip; info.pitches += pitches; info.dates.push(gd);
+          armInfo.set(pid, info);
         }
       }
       if (!ok) continue;
 
       const multiArms = [...armGames.values()].filter((c) => c >= 2).length;
       if (reliefIp < HEAVY_IP) continue;
+
+      // WHO carried the innings (founder, Jul 30): named arms with usage and a
+      // worked-both-of-the-last-two-days flag — the availability read the
+      // drop-down elaborates on.
+      const lastTwo = recent.slice(0, 2).map((r) => r.date);
+      const arms = [...armInfo.values()]
+        .filter((a) => a.name)
+        .sort((x, y) => y.ip - x.ip)
+        .slice(0, 6)
+        .map((a) => ({
+          name: a.name,
+          ip: round(a.ip, 1),
+          pitches: a.pitches,
+          g: a.dates.length,
+          b2b: lastTwo.length === 2 && lastTwo.every((d) => a.dates.includes(d)),
+        }));
+      const oppSide = bdlTeam === game.home_team ? (game.visitor_team || game.away_team) : game.home_team;
+      const oppName = oppSide?.display_name || oppSide?.full_name || oppSide?.name || '';
 
       const team = bdlTeam.display_name || bdlTeam.full_name || bdlTeam.name || bdlTeam.abbreviation;
       const ipDisp = round(reliefIp, 1);
@@ -145,6 +169,8 @@ export async function computeBullpenFatigue(ctx) {
           relief_pitches: reliefPitches,
           multi_day_arms: multiArms,
           games: recent.length,
+          arms,
+          opp: oppName,
         },
       }));
     }
@@ -152,6 +178,20 @@ export async function computeBullpenFatigue(ctx) {
 
   candidates.sort((a, b) => b.relevance_score - a.relevance_score);
   const rows = candidates.slice(0, MAX_ROWS);
+
+  // The Gary layer (founder, Jul 30): the drop-down explains the workload —
+  // who threw, who's likely down tonight, where the innings must come from.
+  await attachLaneReads('bullpenFatigue', rows, (r) => {
+    const m = r.meta || {};
+    if (!Array.isArray(m.arms) || !m.arms.length) return null;
+    const armLine = m.arms.map((a) =>
+      `${a.name} ${a.ip} IP/${a.pitches} pitches in ${a.g} of the ${m.games}${a.b2b ? ' (worked BOTH of the last two days)' : ''}`,
+    ).join('; ');
+    return `${r.headline}. Arms: ${armLine}. Multi-day arms: ${m.multi_day_arms}. Tonight: ${r.game}${m.opp ? ` vs ${m.opp}` : ''}.`;
+  }, {
+    ask: 'what this bullpen workload actually means for tonight — who is likely unavailable, where the innings have to come from, and what that sets up in this matchup',
+  });
+
   console.log(`[bullpenFatigue] examined ${examined}, emitted ${rows.length}`);
   return rows;
 }
