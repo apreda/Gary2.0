@@ -964,8 +964,12 @@ export const mlbFetchers = {
             // BDL MLB game objects carry runs in home/away_team_data.runs
             // (home_team_data is BOX data — hits/runs/errors — not a team
             // object, so it has no .id; the team id lives on home_team).
-            const hScore = g.home_team_data?.runs ?? g.home_team_score ?? g.home_score ?? 0;
-            const vScore = g.away_team_data?.runs ?? g.visitor_team_score ?? g.away_score ?? 0;
+            const hScore = Number(g.home_team_data?.runs ?? g.home_team_score ?? g.home_score);
+            const vScore = Number(g.away_team_data?.runs ?? g.visitor_team_score ?? g.away_score);
+            // A final whose runs haven't landed yet must be SKIPPED — the old
+            // `?? 0` fallbacks made it read 0-0, and the else-branch handed a
+            // phantom win to the away side (Jul 30; the streak-splice class).
+            if (!Number.isFinite(hScore) || !Number.isFinite(vScore) || hScore === vScore) continue;
             const isHomeTeamHome = g.home_team?.id === homeId;
             const ourRuns = isHomeTeamHome ? hScore : vScore;     // runs by tonight's home team
             const theirRuns = isHomeTeamHome ? vScore : hScore;   // runs by tonight's away team
@@ -976,13 +980,18 @@ export const mlbFetchers = {
             const date = (g.date || g.game_date || '').split('T')[0];
             results.push(`${date}: ${homeTeam.split(' ').pop()} ${ourRuns}-${theirRuns}`);
           }
-          const n = h2h.length;
-          return {
-            homeValue: `${homeTeam}: ${homeWins}W vs ${awayTeam} this season, ${homeRuns} runs scored (${(homeRuns / n).toFixed(1)}/gm)`,
-            awayValue: `${awayTeam}: ${awayWins}W vs ${homeTeam} this season, ${awayRuns} runs scored (${(awayRuns / n).toFixed(1)}/gm)`,
-            comparison: `Season series: ${n} games played — ${results.join(', ')}`,
-            source: 'BDL API (game history)',
-          };
+          // Count only the games actually tallied (skips above) — n drives
+          // both the label and the runs/gm averages. Zero tallied falls
+          // through to the honest no-data return below.
+          const n = homeWins + awayWins;
+          if (n > 0) {
+            return {
+              homeValue: `${homeTeam}: ${homeWins}W vs ${awayTeam} this season, ${homeRuns} runs scored (${(homeRuns / n).toFixed(1)}/gm)`,
+              awayValue: `${awayTeam}: ${awayWins}W vs ${homeTeam} this season, ${awayRuns} runs scored (${(awayRuns / n).toFixed(1)}/gm)`,
+              comparison: `Season series: ${n} games played — ${results.join(', ')}`,
+              source: 'BDL API (game history)',
+            };
+          }
         }
       }
     } catch (e) {
@@ -997,7 +1006,9 @@ export const mlbFetchers = {
   },
 
   MLB_REST_SITUATION: async (sport, home, away, season, options) => {
-    const today = new Date().toISOString().split('T')[0];
+    // ET date, never UTC (Jul 30): toISOString() rolls to tomorrow at 8 PM ET,
+    // which stamped every evening window's rest math one day high.
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
 
@@ -1398,7 +1409,11 @@ export const mlbFetchers = {
         if (stats) {
           lines.push(`${pitcherPlayer.fullName || pitcherName}: ${stats.wins || 0}-${stats.losses || 0}, ${stats.era || '—'} ERA, ${stats.whip || '—'} WHIP, ${stats.strikeOuts || 0} K, ${stats.baseOnBalls || 0} BB in ${stats.inningsPitched || 0} IP`);
           if (stats.strikeOuts && stats.inningsPitched) {
-            const ip = parseFloat(stats.inningsPitched) || 1;
+            // MLB IP is THIRDS notation ("10.2" = 10⅔) — parseFloat math
+            // under-counted innings and inflated K/9 by up to ~5% on short
+            // seasons (Jul 30). Convert to true innings via outs first.
+            const raw = parseFloat(stats.inningsPitched) || 0;
+            const ip = (Math.floor(raw) * 3 + Math.round((raw % 1) * 10)) / 3 || 1;
             const k9 = ((stats.strikeOuts / ip) * 9).toFixed(1);
             const bb9 = (((stats.baseOnBalls || 0) / ip) * 9).toFixed(1);
             lines.push(`  K/9: ${k9}, BB/9: ${bb9}, K/BB: ${stats.baseOnBalls ? (stats.strikeOuts / stats.baseOnBalls).toFixed(2) : '—'}`);
@@ -1776,9 +1791,17 @@ export const mlbFetchers = {
           const b2b = [...armTotals.entries()]
             .filter(([, a]) => lastTwo.length === 2 && lastTwo.every((d) => a.dates.includes(d)))
             .map(([n]) => n);
+          // Per-arm totals for the heaviest arms — so "who carried it" is a
+          // printed fact, not an exercise in summing the date lines above.
+          const heaviest = [...armTotals.entries()]
+            .sort((a, b) => b[1].pitches - a[1].pitches)
+            .slice(0, 3)
+            .map(([n, a]) => `${n} ${a.pitches} pitches/${a.dates.length} G`)
+            .join(', ');
           lines.push(
             `Last ${gameDates.length} games total: ${Math.floor(totalOuts / 3)}.${totalOuts % 3} relief IP ` +
-            `across ${armTotals.size} arms; worked both of the last two game days: ${b2b.length ? b2b.join(', ') : 'none'}.`,
+            `across ${armTotals.size} arms; heaviest: ${heaviest}; ` +
+            `worked both of the last two game days: ${b2b.length ? b2b.join(', ') : 'none'}.`,
           );
         }
       } catch (e) {
