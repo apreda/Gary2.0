@@ -439,6 +439,39 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (vbits.length) parts.push(`  Career vs ${oppName}: ${vbits.join(', ')}`);
         }
 
+        // TONIGHT'S-VENUE split (Jul 31 — the Lowder autopsy: the Hub
+        // headlined his 3.09-at-home while the desk priced the 5.61 season
+        // number; Gary must never be blind to a split we publish). Same
+        // byArena source + subtraction math as the Hub's ballpark lane,
+        // thirds-true, sample-gated (>=5 IP there, baseline >=10 IP).
+        try {
+          const bdlPid = bdlRow?.player?.id;
+          if (bdlPid && venue && venue !== 'Unknown Venue') {
+            const spSplits = await ballDontLieService.getMlbPlayerSplits({ playerId: bdlPid, season }).catch(() => null);
+            const arena = (spSplits?.byArena || []).filter((a) => a?.era != null || a?.innings_pitched != null);
+            const normV = (s) => String(s || '').toLowerCase();
+            const vWord = normV(venue).split(/\s+/)[0];
+            const venueRow = vWord ? arena.find((a) => normV(a.split_name).startsWith(vWord)) : null;
+            const totalRow = arena.find((a) => normV(a.split_name).includes('all splits'));
+            const outsOf = (ip) => {
+              const n = parseFloat(ip);
+              return Number.isFinite(n) ? Math.floor(n) * 3 + Math.round((n % 1) * 10) : null;
+            };
+            if (venueRow?.era != null && totalRow) {
+              const vOuts = outsOf(venueRow.innings_pitched) ?? 0;
+              const tOuts = outsOf(totalRow.innings_pitched) ?? 0;
+              const baseOuts = tOuts - vOuts;
+              const baseEr = (Number(totalRow.earned_runs) || 0) - (Number(venueRow.earned_runs) || 0);
+              const baseEra = baseOuts > 0 ? (baseEr * 27) / baseOuts : null;
+              if (vOuts >= 15) {
+                const gp = venueRow.games_played != null ? `${venueRow.games_played} G, ` : '';
+                parts.push(`  At ${venue}: ${Number(venueRow.era).toFixed(2)} ERA (${gp}${(vOuts / 3).toFixed(1)} IP)` +
+                  (baseEra != null && baseOuts >= 30 ? ` — ${baseEra.toFixed(2)} everywhere else (${(baseOuts / 3).toFixed(1)} IP)` : ''));
+              }
+            }
+          }
+        } catch { /* venue split is additive — never sinks the starter block */ }
+
         if (arsenal?.pitches?.length) {
           parts.push(`  Arsenal velocity (Savant): ${arsenal.pitches.map(p => `${p.name} ${p.mph} mph`).join(' | ')}`);
         } else {
