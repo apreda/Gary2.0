@@ -1198,6 +1198,27 @@ export async function buildMlbScoutReport(game, options = {}) {
       }),
     );
 
+    // The season game index powers the "team without him" ledger below.
+    // Null (fetch failed) simply omits the clause — never blocks injuries.
+    const absenceIndex = await ballDontLieService.getMlbSeasonGameIndex(seasonYear).catch(() => null);
+    /** Team's record + runs/game in the FINALS played since `sinceDate`. */
+    const withoutHim = (teamId, sinceDate) => {
+      if (!absenceIndex || typeof absenceIndex.values !== 'function' || teamId == null || !sinceDate) return null;
+      const since = sinceDate.toISOString().slice(0, 10);
+      let w = 0, l = 0, runsFor = 0, n = 0;
+      for (const g of absenceIndex.values()) {
+        if (g.status !== 'STATUS_FINAL' || g.seasonType === 'spring_training') continue;
+        const d = String(g.date || '').slice(0, 10);
+        if (!d || d <= since) continue;
+        const hr = Number(g.homeRuns), ar = Number(g.awayRuns);
+        if (!Number.isFinite(hr) || !Number.isFinite(ar)) continue;
+        if (g.homeId === teamId) { hr > ar ? w++ : l++; runsFor += hr; n++; }
+        else if (g.awayId === teamId) { ar > hr ? w++ : l++; runsFor += ar; n++; }
+      }
+      // Under 5 games is noise, not a read on the absence.
+      return n >= 5 ? `team ${w}-${l}, ${(runsFor / n).toFixed(1)} R/G in the ${n} games since` : null;
+    };
+
     for (const inj of bdlInjuries) {
       const playerName = inj.player?.full_name || `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
       const position = inj.player?.position || '—';
@@ -1239,10 +1260,18 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (lastPlayed) dateBits.push(`last played ${fmtD(lastPlayed)} — ${daysOut}d out`);
       else if (hasLog && lastPlayed === null) dateBits.push('no appearances this season');
       if (reportDate) dateBits.push(`update ${fmtD(reportDate)}`);
-      const formatted = `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateBits.length ? ` (${dateBits.join('; ')})` : ''}`;
 
       // Assign to home or away based on player team
       const playerTeamId = inj.player?.team?.id || inj.team?.id;
+
+      // What the club has actually DONE without him (founder GO, Jul 31 —
+      // "measure the absence, don't just announce it"). The same move the
+      // games-based clock made on the report date: a headline name becomes
+      // a number. This is the fact under a star-out narrative — whether the
+      // team has cratered or held up in his absence — so a big name in this
+      // list arrives with its measured impact instead of its reputation.
+      const absenceLedger = lastPlayed ? withoutHim(playerTeamId, lastPlayed) : null;
+      const formatted = `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateBits.length ? ` (${dateBits.join('; ')})` : ''}${absenceLedger ? ` — ${absenceLedger}` : ''}`;
       if (playerTeamId === homeTeamBdlId) {
         homeInjuries.push(formatted);
       } else if (playerTeamId === awayTeamBdlId) {
