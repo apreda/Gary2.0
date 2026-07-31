@@ -807,11 +807,18 @@ private enum BillfoldCompute {
         let filteredBySport: [PropResult]
         switch selectedSport {
         case .all:
-            filteredBySport = filteredByTime.filter { !$0.isTDResult }
+            // Fun lanes (TDs, HRs) never count in the official props record.
+            filteredBySport = filteredByTime.filter { !$0.isTDResult && !$0.isHRResult }
         case .nflTDs:
             filteredBySport = filteredByTime.filter { $0.isTDResult }
         case .nfl:
             filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDResult }
+        case .mlbHR:
+            // prop_type match, not the sport string — grader rows carry no
+            // sport column, so the old rawValue compare matched nothing.
+            filteredBySport = filteredByTime.filter { $0.isHRResult }
+        case .mlb:
+            filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "MLB" && !$0.isHRResult }
         default:
             filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
         }
@@ -827,6 +834,11 @@ private enum BillfoldCompute {
         var leagues = Set(propRows.compactMap { $0.effectiveLeague })
         if propRows.contains(where: { $0.isTDResult }) {
             leagues.insert("NFL TDs")
+        }
+        // HR rows infer effectiveLeague "MLB" (no sport column on grader
+        // rows) — surface the fun-lane chip off the prop_type instead.
+        if propRows.contains(where: { $0.isHRResult }) {
+            leagues.insert("MLB HR")
         }
         return leagues
     }
@@ -2710,7 +2722,10 @@ struct HomeView: View {
                 : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  ")
             let ls = sheetLive(full)
             var zone: HomeSheetRow.Zone = .upcoming
-            var title = "\(Self.shortTeam(away)) @ \(Self.shortTeam(home))"
+            // Abbreviations, not names (founder, Jul 27): "SEA @ TEX" reads
+            // cleaner on the queue and matches the live scorebug rows.
+            let lgUpper = (g.league ?? "").uppercased()
+            var title = "\(Self.teamAbbrev(away, league: lgUpper)) @ \(Self.teamAbbrev(home, league: lgUpper))"
             var statusText = TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true).uppercased()
             var statusColor = Color.white.opacity(0.62)
             var pendingLine: String? = nil
@@ -2754,14 +2769,9 @@ struct HomeView: View {
                     else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
                     else { statusText = "FINAL"; statusColor = Color.white.opacity(0.62) }
                 }
-            } else if callLine == nil {
-                // Upcoming, call not posted yet — say when it lands.
-                if let ct = g.commence_time, let d = parseISO8601(ct) {
-                    pendingLine = "PICK ~" + Self.etClock(d.addingTimeInterval(-5400))
-                } else {
-                    pendingLine = "PICK SOON"
-                }
             }
+            // (Per-row "PICK ~x:xx" labels removed Jul 27 — the Tonight header
+            // carries one "PICKS DROP 90 MIN BEFORE" note instead.)
             // The game has begun but the score feed hasn't caught it yet —
             // move it to LIVE honestly instead of listing a past start time.
             if zone == .upcoming, let ct = g.commence_time, let d = parseISO8601(ct),
@@ -2839,14 +2849,9 @@ struct HomeView: View {
             let pickLine: String? = calls.isEmpty ? nil : calls
                 .map { Self.homePickLabel($0.pick) }
                 .joined(separator: "  ·  ")
-            var pendingLine: String? = nil
-            if pickLine == nil {
-                if let ct = big.commence_time, let d = parseISO8601(ct) {
-                    pendingLine = "PICK ~" + Self.etClock(d.addingTimeInterval(-5400))
-                } else {
-                    pendingLine = "PICK SOON"
-                }
-            }
+            // No "PICK ~x:xx" line on the countdown hero (founder, Jul 27) —
+            // the container tightens by exactly that row until the pick lands.
+            let pendingLine: String? = nil
             let ls = sheetLive(matchup)
             let verdicts = calls.map { p in ls.map { HomeLiveVerdict.evaluate(pick: p, live: $0) } ?? .neutral }
             var result: (String, Color)? = nil
@@ -3000,7 +3005,7 @@ struct HomeView: View {
         }
         if !up.isEmpty {
             HomeActHead(title: "Tonight", count: up.count,
-                        sub: nil)
+                        sub: up.contains { $0.callLine == nil } ? "PICKS DROP 90 MIN BEFORE" : nil)
             let leagues = Array(Set(up.map(\.league))).sorted { a, b in
                 let ea = up.filter { $0.league == a }.map(\.commence).min() ?? ""
                 let eb = up.filter { $0.league == b }.map(\.commence).min() ?? ""
@@ -4674,24 +4679,11 @@ struct HomeMarqueeTracker: View {
     // Falls back to the single-line title when the market line can't split.
     @ViewBuilder private func heroView(_ e: Entry) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // No "UP NEXT" label (founder, Jul 27) — the clock says it. The
-            // header row survives ONLY when it carries real news: the
-            // pick-drop time before Gary posts. Otherwise the card opens
-            // straight onto the wire.
-            if e.pickLine == nil, let pending = e.pendingLine {
-                HStack(spacing: 8) {
-                    BroadcastBar(height: 11)
-                    Text(pending.uppercased())
-                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer()
-                }
-                .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 8)
-            }
-
+            // No header label at all (founder, Jul 27): the "PICK ~x:xx" row is
+            // gone — the card opens straight onto the wire and sits shorter
+            // until the pick lands.
             let sides = wireSides(e)
-            let headed = e.pickLine == nil && e.pendingLine != nil
+            let headed = false
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     if let s = sides {
@@ -5029,10 +5021,12 @@ struct HomeSheetRowView: View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
+                    // The header voice (founder, Jul 27): team abbreviations in
+                    // the same broadcast-accent face as TONIGHT / WINNERS.
                     Text(row.title)
-                        .font(GaryFonts.display(21))
+                        .font(GaryFonts.accent(16.5))
+                        .tracking(0.4)
                         .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
-                        .foregroundStyle(.white.opacity(0.96))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     if row.bigOne {
                         Text("THE BIG ONE")
@@ -11776,6 +11770,17 @@ struct BillfoldView: View {
 
     private var activeGameResults: [GameResult] { cachedFilteredGames }
     private var activePropResults: [PropResult] { cachedFilteredProps }
+    /// Mean American price across the selected fun lane's graded rows —
+    /// fun lanes are all plus-money, so this renders as "avg +585".
+    private var funLaneAvgOdds: Int? {
+        let odds = cachedFilteredProps
+            .filter { $0.result == "won" || $0.result == "lost" }
+            .compactMap { $0.odds?.value }
+            .compactMap(Double.init)
+            .filter { $0 > 0 }
+        guard odds.count >= 3 else { return nil }
+        return Int((odds.reduce(0, +) / Double(odds.count)).rounded())
+    }
     private var settledCount: Int { cachedRecord.wins + cachedRecord.losses + cachedRecord.pushes }
     private var record: (wins: Int, losses: Int, pushes: Int) { cachedRecord }
     private var winRate: Double {
@@ -11961,6 +11966,7 @@ struct BillfoldView: View {
                     .refreshable {
                         await loadData(forceRefresh: true)
                     }
+                }
                 }
             }
         }
@@ -12294,6 +12300,18 @@ struct BillfoldView: View {
                 Text(String(format: "%.0f%% win", winRate))
                     .font(.system(size: 12, weight: .medium, design: .default))
                     .foregroundStyle(brass)
+
+                // Fun lanes (HR bets, TDs) live on long odds — the average
+                // price belongs next to the record (founder, Jul 29:
+                // "4-30 on HR bets at an average of +585").
+                if selectedTab == 1, selectedSport == .mlbHR || selectedSport == .nflTDs,
+                   let avg = funLaneAvgOdds {
+                    Text("\u{00B7}")
+                        .foregroundStyle(brass.opacity(0.5))
+                    Text("avg +\(avg)")
+                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .foregroundStyle(brass)
+                }
 
                 Text("\u{00B7}")
                     .foregroundStyle(brass.opacity(0.5))
@@ -16455,10 +16473,37 @@ struct PickCardBack: View {
     let pick: GaryPick
     var gameResult: String? = nil
     @State private var shareItem: PickShareItem? = nil
+    // Two registers of the same audited case — plain fan read vs the analysis.
+    // Plain leads by default; picks without the stored plain layer never show tabs.
+    @State private var showPlain = true
+    @State private var copiedTake = false
+    /// Exactly the prose on screen right now — the register the reader is
+    /// looking at, heading stripped, paragraphs intact. Word for word.
+    private var takeCopyText: String {
+        if showPlain, let plain = pick.rationale_plain, !plain.isEmpty { return plain }
+        let parts = splitTake(pick.rationale)
+        return [parts.take, parts.rest]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+    }
     private var confidence: CGFloat { CGFloat(max(0.1, min(1.0, pick.confidence ?? 0.7))) }
     private var pickedHome: Bool {
         guard let h = pick.homeTeam, !h.isEmpty else { return false }
         return (pick.pick ?? "").localizedCaseInsensitiveContains(h)
+    }
+
+    @ViewBuilder private func registerTab(_ label: String, active: Bool, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            VStack(spacing: 3) {
+                Text(label)
+                    .font(GaryFonts.display(11)).tracking(1.4)
+                    .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
+                Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 1.5)
+            }
+            .fixedSize()
+        }
+        .buttonStyle(.plain)
     }
 
     var body: some View {
@@ -16471,6 +16516,26 @@ struct PickCardBack: View {
                 Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
                     .font(GaryFonts.mono(10, bold: false))
                     .foregroundStyle(.white.opacity(0.62)).lineLimit(1).minimumScaleFactor(0.7)
+                // Copy the take VERBATIM (founder, Jul 31) — whichever
+                // register is on screen, exactly as written, so it can be
+                // pasted word for word.
+                Button {
+                    UIPasteboard.general.string = takeCopyText
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeOut(duration: 0.15)) { copiedTake = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                        withAnimation(.easeIn(duration: 0.25)) { copiedTake = false }
+                    }
+                } label: {
+                    Image(systemName: copiedTake ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(copiedTake ? GaryColors.gold : .white.opacity(0.62))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copiedTake ? "Take copied" : "Copy Gary's take")
+
                 Button {
                     let images = renderPickShareImages(pick: pick, gameResult: gameResult)
                     if !images.isEmpty { shareItem = PickShareItem(images: images) }
@@ -19472,7 +19537,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
-                                   edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, refreshTick: store.refreshTick, onTapProp: { selectedProp = $0 })
+                                   edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .refreshable { await store.refresh() }
@@ -19935,20 +20000,13 @@ struct PicksTodayPage: View {
     /// "pick coming" teaser: TODAY with nothing posted for this sport yet shows the
     /// lock card, never an empty top — Yesterday with no result just shows nothing.
     let isToday: Bool
-    /// Bumped by the store on every pull-to-refresh — threaded into LEAGUE PULSE
-    /// so a manual refresh refetches it (it owns its own network state).
-    let refreshTick: Int
     let onTapProp: (PropPick) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             topSinglePick
-            // TODAY only — the Yesterday board is a time capsule of what users
-            // actually saw yesterday; a live today-keyed table doesn't belong
-            // there (founder, Jul 13).
-            if isToday {
-                LeaguePulseSection(league: scopeLeague, refreshTick: refreshTick)  // above TODAY'S EDGES
-            }
+            // LEAGUE PULSE moved to The Hub (founder, Jul 30) — the Picks page
+            // stays picks + edges.
             // World Cup gets a bespoke section (4 fan-legible lanes + a tap-through
             // team-news card) instead of the generic MLB-shaped EdgesSection. WC-only:
             // the shared EdgesSection / locked MLB design is never touched.
@@ -21240,149 +21298,7 @@ struct PlayerIntelSection: View {
 }
 
 
-// MARK: - League Pulse (league-wide tabbed tables — TODAY page only)
-//
-// A fully data-driven section: each league_pulse row owns its columns[] + rows[]
-// so ONE generic PulseTable renders every tab with no per-tab Swift code. The
-// tab bar is one pill per returned row's tab (in a fixed display order); a tab
-// with no row is simply absent. League-wide, so it sits ONLY on PicksTodayPage
-// and collapses to EmptyView on any non-MLB / non-WC scope (or when empty).
-struct LeaguePulseSection: View {
-    /// The Picks page's sport scope ("ALL"/"MLB"/"WC"/…).
-    let league: String
-    /// Bumped by the Picks store on each pull-to-refresh; a change re-keys the
-    /// `.task` below so a manual refresh refetches LEAGUE PULSE (it owns its
-    /// own network state and isn't part of the store's data load).
-    var refreshTick: Int = 0
-
-    @State private var rows: [LeaguePulseRow] = []
-    @State private var selectedTab: String? = nil
-    @State private var loaded = false
-    /// The (league|EST-day|refreshTick) key the current `rows` were fetched for.
-    /// Used to decide when a `.task` run is a refresh/rollover (force a refetch,
-    /// bypassing the 30-min cache) vs. a first paint.
-    @State private var loadedKey: String = ""
-
-    /// LEAGUE PULSE is league-wide — only MLB or WC scopes resolve to a feed.
-    /// "ALL" and every other scope fetch nothing (EmptyView, no gap).
-    private var pulseLeague: String? {
-        switch HubLeagueSel.from(league) {
-        case .mlb: return "MLB"
-        case .wc:  return "WC"
-        default:   return nil   // ALL / NBA / NHL / etc — no league-wide pulse
-        }
-    }
-
-    /// Fixed display order per league; any tab without a row drops out.
-    private static let tabOrder: [String: [String]] = [
-        "MLB": ["starting_pitchers", "hot_cold_bats", "bullpen", "injuries"],
-        "WC":  ["top_scorers", "form_xg", "injuries", "discipline"],
-    ]
-
-    /// Returned rows arranged in the league's fixed tab order (unknown tabs last).
-    private var orderedRows: [LeaguePulseRow] {
-        let order = Self.tabOrder[pulseLeague ?? ""] ?? []
-        return rows.sorted { a, b in
-            let ai = order.firstIndex(of: a.tab ?? "") ?? Int.max
-            let bi = order.firstIndex(of: b.tab ?? "") ?? Int.max
-            if ai != bi { return ai < bi }
-            return (a.tab ?? "") < (b.tab ?? "")
-        }
-    }
-
-    private var activeRow: LeaguePulseRow? {
-        if let t = selectedTab, let r = orderedRows.first(where: { $0.tab == t }) { return r }
-        return orderedRows.first
-    }
-
-    var body: some View {
-        Group {
-            if pulseLeague != nil && !orderedRows.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("LEAGUE PULSE")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.62))
-                        .padding(.horizontal, 16).padding(.top, 4)
-
-                    if orderedRows.count > 1 { tabBar }
-
-                    if let row = activeRow {
-                        VStack(alignment: .leading, spacing: 0) {
-                            // Title + subtitle/sort_note caption for the selected tab.
-                            VStack(alignment: .leading, spacing: 2) {
-                                if let title = row.title, !title.isEmpty {
-                                    Text(title)
-                                        .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white)
-                                }
-                                let caption = [row.subtitle, row.sortNote]
-                                    .compactMap { $0?.isEmpty == false ? $0 : nil }
-                                    .joined(separator: " · ")
-                                if !caption.isEmpty {
-                                    Text(caption)
-                                        .font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.62))
-                                        .lineLimit(2)
-                                }
-                            }
-                            .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 8)
-
-                            PulseTable(row: row)
-                                .padding(.bottom, 4)
-                        }
-                        .quantPanel()
-                        .padding(.horizontal, 16)
-                    }
-                }
-            } else {
-                // Zero-size anchor so the .task below always has a live view to
-                // ride: a Group whose lone child is behind the `if` renders
-                // NOTHING before the first fetch, an absent view never
-                // "appears", and the task never fired — the section
-                // deadlocked empty forever (found Jul 13).
-                Color.clear.frame(width: 0, height: 0)
-            }
-        }
-        // Key on the EST slate day AND the refresh tick (not just `league`) so the
-        // task re-runs across the 3am EST rollover and on pull-to-refresh — the
-        // old `.task(id: league)` never refetched once the day rolled or the user
-        // pulled to refresh.
-        .task(id: "\(league)|\(SupabaseAPI.todayEST())|\(refreshTick)") {
-            guard let lg = pulseLeague else { rows = []; loaded = true; loadedKey = ""; return }
-            let key = "\(lg)|\(SupabaseAPI.todayEST())|\(refreshTick)"
-            // A changed key that we've already loaded once = a rollover or manual
-            // refresh → bypass the 30-min cache so we actually pull fresh rows.
-            let force = loaded && key != loadedKey
-            let fetched = await SupabaseAPI.fetchLeaguePulse(date: SupabaseAPI.todayEST(), league: lg, forceRefresh: force)
-            await MainActor.run { rows = fetched; loaded = true; loadedKey = key }
-        }
-    }
-
-    /// One pill per present tab — gold underline marks the active tab, matching
-    /// the TODAY'S EDGES category tab bar.
-    private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 22) {
-                ForEach(orderedRows) { tabPill($0) }
-            }
-            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 2)
-        }
-    }
-
-    @ViewBuilder
-    private func tabPill(_ row: LeaguePulseRow) -> some View {
-        let active = (activeRow?.tab == row.tab)
-        let label = (row.title ?? row.tab ?? "").uppercased()
-        Button { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = row.tab } } label: {
-            Text(label)
-                .font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
-                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
-                .padding(.bottom, 8)
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 2)
-                }
-        }
-        .buttonStyle(.plain)
-    }
-}
+// MARK: - League Pulse table (the section itself lives on The Hub — Jul 30)
 
 /// Renders ONE league_pulse row as a small table: a header from columns[] and a
 /// row per rows[] entry, reading row[col.key]. Zero hardcoding — the schema is
