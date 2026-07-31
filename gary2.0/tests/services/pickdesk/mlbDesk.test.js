@@ -97,7 +97,10 @@ describe('buildMlbDesk', () => {
     const { deskText } = await buildMlbDesk(game);
     expect(deskText).toContain('Cardinals: 53-51, 2nd in the NL Central, 12 GB, playoff seed 7, streak -2, L10 3-7');
     expect(deskText).toContain('Reds: 48-55, 3rd in the NL Central, 16.5 GB, playoff seed 12');
-    expect(deskText).toContain('Trade deadline: July 31');
+    // Phase-agnostic (Jul 31: the old exact pin broke ON deadline day when
+    // the line correctly read "TODAY (July 31)"). The three phase forms are
+    // pinned explicitly in the deadlineLine() test below.
+    expect(deskText).toMatch(/Trade deadline: (July 31|TODAY \(July 31\)|passed \(July 31\))/);
   });
 
   it('moves the news into THE WORLD and out of the shelf tail', async () => {
