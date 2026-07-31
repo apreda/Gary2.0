@@ -182,7 +182,14 @@ export async function buildMlbScoutReport(game, options = {}) {
     // separate from same-day hard news. Facts and reported narratives only.
     openaiWebSearch(
       `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, post-game comments from managers or players after each team's last game, tonight's scheduled starting pitchers' situations (role changes such as a converted reliever or an opener/bullpen game, innings or pitch limits, rehab returns, rotation shuffles), and trade-deadline rumors involving either team's players as reported. ` +
-      `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
+      // Market sentiment as REPORTED FACT (founder GO, Jul 31 — the
+      // Mariners/Ohtani autopsy). A trap is the gap between the price and
+      // what the crowd believes; without the crowd's position that gap is
+      // unobservable. The old blanket "no picks/predictions" ban over-scoped
+      // and suppressed this — narrowed here to what it actually protects
+      // against: another handicapper's recommendation.
+      `Also report where the betting market stands, as reported: which side the public money or ticket count is on, any notable line move and the reason given for it, and whether the number has HELD despite one-sided news. ` +
+      `Attribute reported narratives to their source. These are facts about the market — do NOT include any handicapper's pick, prediction, or recommendation.`,
       { maxTokens: 2200 }
     ).then(r => r?.data || '').catch(() => ''),
     // LAST GAME, THE STORY (Jul 26 2026): our own nightly recap rows — the

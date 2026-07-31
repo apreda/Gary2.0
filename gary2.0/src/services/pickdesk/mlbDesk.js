@@ -11,11 +11,21 @@
  *
  * Facts only, no interpretive labels — the reasoning model does the reasoning.
  */
+import axios from 'axios';
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { fetchStats } from '../agentic/tools/statRouters/index.js';
 import { summarizeStatForContext } from '../agentic/orchestrator/orchestratorHelpers.js';
 import { extractSection, insertAfterHeader } from './sectionText.js';
+
+// daily_slate read for the morning-board line (same env resolution as the
+// other REST readers — anon can SELECT it).
+const SLATE_SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const SLATE_SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY || '';
 
 const TRADE_DEADLINE = '2026-07-31'; // MLB calendar fact; update each season
 // (Bet-mechanics legend deleted Jul 26 2026 — founder razor: never explain a
@@ -63,6 +73,67 @@ export function stakesLine(standings, teamName, oneRun = null) {
   if (t.last_ten_games) bits.push(`L10 ${t.last_ten_games}`);
   if (oneRun) bits.push(`one-run ${oneRun}`);
   return `${teamName}: ${bits.join(', ')}`;
+}
+
+/**
+ * The MORNING BOARD line (founder GO, Jul 31 — the Mariners/Ohtani trap
+ * autopsy): where this book's numbers sat on the ~5:30 AM snapshot, printed
+ * beside tonight's board so the brain can see which way the day's news moved
+ * the price — and by how much. FACTS ONLY: never "steam", never a lean, no
+ * interpretation. The snapshot is a PROXY for the open (lines move before
+ * 5:30 too) and stays inside the one-book law (this book's own history).
+ * Null row -> empty string; an UNCHANGED line still prints (no movement is
+ * itself a fact).
+ */
+export function morningBoardLine(row, homeTeam, awayTeam) {
+  if (!row) return '';
+  const bits = [];
+  if (row.ml_away != null && row.ml_home != null) {
+    bits.push(`${awayTeam} ML ${fmtOdds(row.ml_away)} | ${homeTeam} ML ${fmtOdds(row.ml_home)}`);
+  }
+  if (row.spread != null && Number.isFinite(Number(row.spread))) {
+    const sp = Number(row.spread);
+    bits.push(`${homeTeam} ${sp > 0 ? `+${sp}` : sp}`);
+  }
+  if (row.total != null) bits.push(`Total ${row.total}`);
+  if (!bits.length) return '';
+  let asOf = '';
+  if (row.created_at) {
+    const d = new Date(row.created_at);
+    if (!Number.isNaN(d.getTime())) {
+      asOf = ` (${d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })} ET)`;
+    }
+  }
+  return `This morning's board${asOf}: ${bits.join(' · ')}`;
+}
+
+/**
+ * Today's daily_slate snapshot row for this game — id-exact on bdl_game_id,
+ * nickname-tail fallback. Null on any miss; the line simply doesn't print.
+ */
+export async function fetchMorningBoardRow(dateEt, bdlGameId, homeTeam, awayTeam) {
+  if (!SLATE_SUPABASE_URL || !SLATE_SUPABASE_KEY || !dateEt) return null;
+  try {
+    const resp = await axios.get(`${SLATE_SUPABASE_URL}/rest/v1/daily_slate`, {
+      params: {
+        date: `eq.${dateEt}`, league: 'eq.MLB',
+        select: 'home_team,away_team,ml_home,ml_away,spread,total,bdl_game_id,created_at',
+      },
+      headers: { apikey: SLATE_SUPABASE_KEY, Authorization: `Bearer ${SLATE_SUPABASE_KEY}` },
+      timeout: 12000,
+    });
+    const rows = Array.isArray(resp?.data) ? resp.data : [];
+    if (!rows.length) return null;
+    if (bdlGameId != null) {
+      const byId = rows.find((r) => r.bdl_game_id === bdlGameId);
+      if (byId) return byId;
+    }
+    const tail = (s) => String(s || '').toLowerCase().trim().split(/\s+/).pop();
+    return rows.find((r) =>
+      tail(r.home_team) === tail(homeTeam) && tail(r.away_team) === tail(awayTeam)) || null;
+  } catch {
+    return null; // additive context — never sinks the desk build
+  }
 }
 
 /**
@@ -215,20 +286,25 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRowsRaw, standings, matchupLab, seasonIndex] = await Promise.all([
+  const [oddsRowsRaw, standings, matchupLab, seasonIndex, morningRow] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
     ballDontLieService.getMlbStandings(season).catch(() => []),
     buildMatchupLab(game, homeTeam, awayTeam, scout.gamePk).catch(() => ''),
     ballDontLieService.getMlbSeasonGameIndex(season).catch(() => null),
+    // The morning board (founder GO, Jul 31): where this book's numbers sat
+    // on the ~5:30 AM snapshot — the day's price history, printed as fact.
+    fetchMorningBoardRow(todayEST(), gameIds[0] ?? null, homeTeam, awayTeam),
   ]);
   const oddsRows = sanitizeBoardRows(oddsRowsRaw);
   if (oddsRows.length < (oddsRowsRaw || []).length) {
     console.warn(`   [Desk] dropped ${(oddsRowsRaw || []).length - oddsRows.length} outlier board row(s)`);
   }
 
-  const board = buildBoardSection(oddsRows, homeTeam, awayTeam);
+  const morningLine = morningBoardLine(morningRow, homeTeam, awayTeam);
+  const board = buildBoardSection(oddsRows, homeTeam, awayTeam)
+    + (morningLine ? `\n${morningLine}` : '');
   const teamIdFor = (name) => {
     const norm = (s) => String(s || '').toLowerCase();
     const row = (standings || []).find((s) =>
