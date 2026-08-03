@@ -201,61 +201,6 @@ struct HomeYourNight: View {
 }
 
 // ── FANTASY CORNER TEASER ───────────────────────────────────────────────────
-// One row: today's top add and top cut, straight off the desk. Routes to the
-// Hub's FANTASY page.
-struct HomeFantasyTeaser: View {
-    var onOpen: () -> Void
-    @State private var topAdd: String? = nil
-    @State private var topCut: String? = nil
-
-    var body: some View {
-        if topAdd != nil || topCut != nil {
-            Button(action: onOpen) {
-                HStack(spacing: 8) {
-                    Text("FANTASY CORNER")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(GaryColors.gold)
-                    if let a = topAdd {
-                        Text("Add \(a)")
-                            .font(GaryFonts.text(12.5, .semibold))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    if topAdd != nil && topCut != nil {
-                        Text("·").foregroundStyle(.white.opacity(0.3))
-                    }
-                    if let c = topCut {
-                        Text("Cut \(c)")
-                            .font(GaryFonts.text(12.5, .semibold))
-                            .foregroundStyle(Color(hex: "#EF4444").opacity(0.9))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-                .padding(.horizontal, 20).padding(.vertical, 10)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        } else {
-            Color.clear.frame(width: 0, height: 0)
-                .task { await load() }
-        }
-    }
-
-    @MainActor private func load() async {
-        let today = SupabaseAPI.todayEST()
-        guard let conns = try? await SupabaseAPI.fetchInsightConnections(date: today, league: "MLB"),
-              !conns.isEmpty else { return }
-        let adds = conns.filter { ($0.category ?? "") == "fantasy_pickups" }
-        let cuts = conns.filter { ($0.category ?? "") == "cut_list" }
-        topAdd = adds.max { ($0.relevance_score ?? 0) < ($1.relevance_score ?? 0) }?.headline
-        topCut = cuts.max { ($0.relevance_score ?? 0) < ($1.relevance_score ?? 0) }?.headline
-    }
-}
-
 // ── THE WIRE MINI ───────────────────────────────────────────────────────────
 // Three wire headlines (already written 3x daily) — the betting-news pulse
 // on the front page, routing into the Hub.

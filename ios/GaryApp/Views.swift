@@ -2456,6 +2456,20 @@ struct HomeView: View {
     /// time → live verdict → CASHED/LOST → the sealed Winners stub → THE
     /// RECORD sign-off. Gary is the voice ON the sheet, not the subject of
     /// the page — free users read the day, paying users ride the calls.
+    /// THE RECORD as a traveler (founder, Aug 3): yesterday's final numbers
+    /// above the board until first pitch, the LIVE building record under it
+    /// after. Shows at LIVE 0–0 — the reset IS the state. GAME picks only
+    /// (founder, Jul 6). Scorecard tap → Billfold, as ever.
+    @ViewBuilder private var recordBlock: some View {
+        if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
+            || recapLabel == "LIVE" || recapLabel == "TODAY" {
+            VStack(alignment: .leading, spacing: 12) {
+                HomeActHead(title: "The Record")
+                scorecard
+            }
+        }
+    }
+
     @ViewBuilder private var todaySections: some View {
         // Compute once per body eval (live ticks re-run this often).
         let stories = headlineStories
@@ -2514,10 +2528,26 @@ struct HomeView: View {
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
+        // ── THE RECORD travels with the day (founder, Aug 3 round 4):
+        // yesterday's final numbers sit ABOVE the board until first pitch...
+        if !cycleLive {
+            recordBlock
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
+        }
+
         // ── THE BOARD — every game, one list, all day.
         homeSheet
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
+
+        // ...then the LIVE record rides directly under the board, above
+        // everything else, building as games grade.
+        if cycleLive {
+            recordBlock
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
+        }
 
         // Headlines under the board once the day is rolling — tonight's
         // stories build here as games finish.
@@ -2529,12 +2559,21 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         }
 
-        // ── DISCOVERY (Jul 26 additions) — the fantasy desk's daily add/cut,
-        // the wire pulse, and the standings podium. Each self-hides empty.
-        HomeFantasyTeaser {
-            UserDefaults.standard.set("fantasy", forKey: "hubScope")
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+        // ── THE FUN STUFF — funnels only, never advice (founder, Aug 3:
+        // "Cut Shane Bieber" doesn't belong on a clean front page; the doors
+        // to the fun rooms do).
+        HStack(spacing: 10) {
+            homeDoor("Free Pick", "TODAY") { selectedTab = 3 }
+            homeDoor("HR Threats", "THE HUB") {
+                UserDefaults.standard.set("hub", forKey: "hubScope")
+                selectedTab = 2
+            }
+            homeDoor("Fantasy", "WAIVERS") {
+                UserDefaults.standard.set("fantasy", forKey: "hubScope")
+                selectedTab = 2
+            }
         }
+        .padding(.horizontal, 16)
         HomeWireMini {
             UserDefaults.standard.set("hub", forKey: "hubScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
@@ -2557,31 +2596,8 @@ struct HomeView: View {
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
 
-        // (Stories always lead the page now — the lower LAST NIGHT rail is
-        // gone; the top rail is the one home for headlines, Aug 3.)
-
-        // ── THE RECORD — the honest sign-off, doors folded in (Aug 3: the
-        // record, the door row, and the social footer read as three separate
-        // endings; now the record + doors are ONE closing block). GAME picks
-        // only (founder, Jul 6: the combined number dragged in longshot
-        // props — 21–39 read like a disaster when the game card went 8–11).
-        VStack(alignment: .leading, spacing: 12) {
-            // Shows through the live cycle even at 0–0 (founder, Aug 3): once
-            // the day's first pitch lands, "LIVE · 0–0" IS the state.
-            if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
-                || recapLabel == "LIVE" || recapLabel == "TODAY" {
-                HomeActHead(title: "The Record")
-                scorecard
-            }
-            HStack(spacing: 10) {
-                homeDoor("Free Pick", "TODAY") { selectedTab = 3 }
-                homeDoor("The Hub", "EDGES") { selectedTab = 2 }
-                homeDoor("Billfold", "LEDGER") { selectedTab = 4 }
-            }
-            .padding(.horizontal, 16)
-        }
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+        // (The Record now travels with the day cycle — see recordBlock above.
+        // The page ends on the discovery shelf + the quiet social footer.)
         // (Parked, unrendered: worldCupModule, the Wire, prop box, Hits &
         // Heartbreakers, The Receipts — receiptLanes/cashRows still computed
         // for other surfaces.)
@@ -2706,7 +2722,20 @@ struct HomeView: View {
             var title = "\(Self.teamAbbrev(away, league: lgUpper)) @ \(Self.teamAbbrev(home, league: lgUpper))"
             var statusText = TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true).uppercased()
             var statusColor = Color.white.opacity(0.62)
+            // Before Gary's call lands, the pick slot holds the MARKET (founder,
+            // Aug 3): the game's lines sit where the pick will go, so the gold
+            // call visibly REPLACES the market when it posts.
             var pendingLine: String? = nil
+            if calls.isEmpty {
+                var bits: [String] = []
+                if let mlA = g.ml_away, let mlH = g.ml_home {
+                    let fa = mlA > 0 ? "+\(Int(mlA))" : "\(Int(mlA))"
+                    let fh = mlH > 0 ? "+\(Int(mlH))" : "\(Int(mlH))"
+                    bits.append("\(Self.teamAbbrev(away, league: lgUpper)) \(fa) · \(Self.teamAbbrev(home, league: lgUpper)) \(fh)")
+                }
+                if let t = g.total { bits.append("O/U \(t.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(t)) : String(t))") }
+                if !bits.isEmpty { pendingLine = bits.joined(separator: " · ") }
+            }
             var hitLines: [String] = []
             if let ls, ls.isFinal || ls.isLive {
                 title = ls.scoreLine ?? title
@@ -2758,6 +2787,9 @@ struct HomeView: View {
                 statusText = "▶ STARTED"
                 statusColor = GaryColors.gold
             }
+            // The market line is a PRE-GAME slot only — a live/final row must
+            // never show the stale morning number where the score now speaks.
+            if zone != .upcoming { pendingLine = nil }
             out.append(HomeSheetRow(
                 id: "sheet-\(i)-\(full)",
                 zone: zone,
@@ -4862,10 +4894,11 @@ func slateDayShort(_ iso: String) -> String {
     return "\(m)/\(d)"
 }
 
-/// THE HEADLINES — the night's stories as ONE dashboard container (founder,
-/// Aug 3: "dashboard like containers make more sense") wearing the board's
-/// exact chrome. The lead story prints bigger; every story shows in FEED
-/// order, wins and losses alike — the truth, stacked. Tap → the ledger.
+/// THE HEADLINES — the horizontal swipe is back (founder, Aug 3 round 4:
+/// "back to how it was ... but enhanced design and info wise"; the vertical
+/// container is dead). Enhanced: board-chrome cards, the lead card wider
+/// with a bigger headline, snap paging on iOS 17. Feed order, wins AND
+/// losses where the night put them. Tap → the ledger.
 struct HomeHeadlinesBoard: View {
     let stories: [HomeMarqueeHero.Story]
     let onOpen: () -> Void
@@ -4873,28 +4906,22 @@ struct HomeHeadlinesBoard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HomeActHead(title: "The Headlines", count: stories.count)
-            VStack(spacing: 0) {
-                ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { i, s in
-                    Button(action: onOpen) { storyRow(s, lead: i == 0) }
-                        .buttonStyle(.plain)
-                    if i < min(stories.count, 6) - 1 {
-                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { i, s in
+                        Button(action: onOpen) { card(s, lead: i == 0) }
+                            .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 16)
+                .snapTargets()
             }
-            .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(GaryColors.warmWhite.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
-            )
-            .padding(.horizontal, 16)
+            .snapAligned()
         }
     }
 
-    @ViewBuilder private func storyRow(_ s: HomeMarqueeHero.Story, lead: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+    @ViewBuilder private func card(_ s: HomeMarqueeHero.Story, lead: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(s.league.uppercased())
                     .font(GaryFonts.mono(10)).tracking(1)
@@ -4902,27 +4929,46 @@ struct HomeHeadlinesBoard: View {
                 Spacer(minLength: 8)
             }
             Text(s.headline)
-                .font(.system(size: lead ? 16.5 : 14, weight: lead ? .bold : .semibold))
-                .foregroundStyle(.white.opacity(0.94))
+                .font(.system(size: lead ? 16 : 14, weight: lead ? .bold : .semibold))
+                .foregroundStyle(.white.opacity(0.95))
+                .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 2)
             // Related info sits together (founder, Jul 12): the pick and the
             // verdict that judged it, one line.
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if !s.receiptPick.isEmpty {
                     Text(s.receiptPick)
-                        .font(.system(size: 13, weight: .bold).monospacedDigit())
+                        .font(.system(size: 13.5, weight: .bold).monospacedDigit())
                         .foregroundStyle(GaryColors.gold)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 8)
                 Text(s.verdict)
-                    .font(.system(size: 13, weight: .bold).monospacedDigit()).tracking(0.8)
+                    .font(.system(size: 13.5, weight: .bold).monospacedDigit()).tracking(0.8)
                     .foregroundStyle(s.cashed ? GaryColors.win : s.verdict == "PUSH" ? GaryColors.gold : GaryColors.loss)
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .padding(13)
+        .frame(width: lead ? 292 : 248, height: 132, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
+        )
         .contentShape(Rectangle())
+    }
+}
+
+extension View {
+    /// Snap-paging pair for horizontal rails (iOS 17; quiet no-op on 16).
+    @ViewBuilder func snapTargets() -> some View {
+        if #available(iOS 17.0, *) { self.scrollTargetLayout() } else { self }
+    }
+    @ViewBuilder func snapAligned() -> some View {
+        if #available(iOS 17.0, *) { self.scrollTargetBehavior(.viewAligned) } else { self }
     }
 }
 
