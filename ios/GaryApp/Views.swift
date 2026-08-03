@@ -21923,6 +21923,13 @@ struct PropSlipBack: View {
                     .foregroundStyle(GaryColors.silver.opacity(0.8))
             }
 
+            // YOUR CALL (Aug 3) — the prop back's action block, game-back
+            // parity: the slip is where the read lands, so the call lives here.
+            if AppFlags.userBookEnabled {
+                PropTailFadeRow(prop: prop)
+                    .id(prop.id)   // slip toggles swap the prop — reload the row's bet state
+            }
+
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
                     if let stats = prop.key_stats, !stats.isEmpty {

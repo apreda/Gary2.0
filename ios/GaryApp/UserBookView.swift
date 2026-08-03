@@ -396,7 +396,25 @@ struct TailFadeRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            // The action block's own masthead (Aug 3 — founder: tail/fade is a
+            // BIGGER part of the card back): kicker + live social proof. Hidden
+            // once the game locks with no bet — never advertise an action the
+            // user can no longer take.
+            if mine != nil || !locked {
+                HStack(spacing: 8) {
+                    BroadcastBar(height: 10)
+                    Text("YOUR CALL")
+                        .font(GaryFonts.accent(11)).tracking(0.8)
+                        .foregroundStyle(GaryColors.gold)
+                    Spacer()
+                    if let r = ridersLine {
+                        Text(r.uppercased())
+                            .font(GaryFonts.mono(9.5)).tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                }
+            }
             if let bet = mine {
                 placedChip(bet)
             } else if locked {
@@ -430,23 +448,33 @@ struct TailFadeRow: View {
     }
 
     private var armButtons: some View {
-        HStack(spacing: 8) {
-            tailFadeButton("TAIL", tint: GaryColors.gold) { arm("tail") }
-            tailFadeButton("FADE", tint: Color(hex: "#8B93A7")) { arm("fade") }
-            Spacer()
-            Text(ridersLine ?? "On the record at lock")
-                .font(GaryFonts.mono(9))
-                .foregroundStyle(.white.opacity(0.38))
+        VStack(alignment: .leading, spacing: 6) {
+            // Full-width split — the card back's ACTION, not a footnote.
+            HStack(spacing: 8) {
+                tailFadeButton("TAIL GARY", tint: GaryColors.gold, solid: true) { arm("tail") }
+                tailFadeButton("FADE", tint: Color(hex: "#8B93A7"), solid: false) { arm("fade") }
+            }
+            if ridersLine == nil {
+                Text("Your call goes on the record at lock")
+                    .font(GaryFonts.mono(9))
+                    .foregroundStyle(.white.opacity(0.38))
+            }
         }
     }
 
-    private func tailFadeButton(_ label: String, tint: Color, action: @escaping () -> Void) -> some View {
+    private func tailFadeButton(_ label: String, tint: Color, solid: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
-                .foregroundStyle(tint)
-                .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 6).stroke(tint.opacity(0.55), lineWidth: 1))
+                .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
+                .foregroundStyle(solid ? GaryColors.ink : tint)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(solid ? GaryColors.gold : Color.clear)
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(tint.opacity(solid ? 0 : 0.55), lineWidth: 1))
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -499,10 +527,10 @@ struct TailFadeRow: View {
             let label = bet.kind == "tail" ? "YOU TAILED" : "YOU FADED"
             let tint: Color = bet.kind == "tail" ? GaryColors.gold : Color(hex: "#8B93A7")
             Text("\(label) · \(BookMoney.stake(bet.stake_units))")
-                .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                .font(GaryFonts.mono(11, bold: true)).tracking(1)
                 .foregroundStyle(tint)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 6).fill(tint.opacity(0.12)))
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.12)))
             if bet.streak_pick == true {
                 Text("STREAK")
                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
@@ -1163,6 +1191,189 @@ struct UserBookShareSheet: UIViewControllerRepresentable {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
+// ── Prop slip tail/fade (Aug 3 2026) ────────────────────────────────────────
+// The prop back never had the action block — place_user_prop_bet shipped
+// Jul 26 with no UI on the card. Same grammar as TailFadeRow with the prop
+// RPC underneath; no streak claim (game picks own the streak) and no riders
+// counts yet (the counts RPC is game-pick keyed).
+struct PropTailFadeRow: View {
+    let prop: PropPick
+    @State private var mine: UserBet? = nil
+    @State private var arming: String? = nil
+    @State private var stake: Double = 1.0
+    @State private var busy = false
+    @State private var errorText: String? = nil
+    @State private var showAuth = false
+    @State private var loaded = false
+
+    /// The board's prop token ("total_bases 1.5" → "total_bases") — the same
+    /// key the grader settles user prop bets on.
+    private var propToken: String {
+        String((prop.prop ?? "").split(separator: " ").first ?? "").lowercased()
+    }
+    private var locked: Bool {
+        guard let ct = prop.commence_time, let d = ISO8601DateFormatter().date(from: ct) else { return false }
+        return Date() >= d
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if mine != nil || !locked {
+                HStack(spacing: 8) {
+                    BroadcastBar(tint: GaryColors.silver, height: 10)
+                    Text("YOUR CALL")
+                        .font(GaryFonts.accent(11)).tracking(0.8)
+                        .foregroundStyle(GaryColors.silver)
+                    Spacer()
+                }
+            }
+            if let bet = mine {
+                placedChip(bet)
+            } else if locked {
+                EmptyView()
+            } else if let side = arming {
+                stakePicker(side)
+            } else {
+                HStack(spacing: 8) {
+                    bigButton("TAIL GARY", tint: GaryColors.silverLight, solid: true) { arm("tail") }
+                    bigButton("FADE", tint: Color(hex: "#8B93A7"), solid: false) { arm("fade") }
+                }
+            }
+            if let e = errorText {
+                Text(e)
+                    .font(GaryFonts.mono(9.5))
+                    .foregroundStyle(Color(hex: "#EF4444").opacity(0.9))
+                    .lineLimit(2)
+            }
+        }
+        .task(id: prop.id) {
+            guard !loaded, AuthManager.shared.bearerToken != nil else { return }
+            let all = await UserBookAPI.fetchMyBets()
+            if !all.isEmpty {
+                mine = all.first {
+                    $0.pick_type == "prop"
+                        && ($0.player_name ?? "").lowercased() == (prop.player ?? "").lowercased()
+                        && ($0.prop_type ?? "").lowercased() == propToken
+                }
+            }
+            loaded = true
+        }
+        .sheet(isPresented: $showAuth) { AuthView() }
+    }
+
+    private func bigButton(_ label: String, tint: Color, solid: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
+                .foregroundStyle(solid ? GaryColors.ink : tint)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(solid ? GaryColors.silverLight : Color.clear)
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(tint.opacity(solid ? 0 : 0.55), lineWidth: 1))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+
+    private func stakePicker(_ side: String) -> some View {
+        HStack(spacing: 10) {
+            Text(side.uppercased())
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                .foregroundStyle(side == "tail" ? GaryColors.silverLight : Color(hex: "#8B93A7"))
+            Stepper(value: $stake, in: 0.5...5, step: 0.5) {
+                Text(BookMoney.stake(stake))
+                    .font(GaryFonts.mono(12, bold: true))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .fixedSize()
+            Button { place(side) } label: {
+                Text("Lock it in")
+                    .font(GaryFonts.mono(11, bold: true))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.silverLight))
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+            Button { arming = nil } label: {
+                Text("Back")
+                    .font(GaryFonts.mono(10))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func placedChip(_ bet: UserBet) -> some View {
+        HStack(spacing: 8) {
+            let label = bet.kind == "tail" ? "YOU TAILED" : "YOU FADED"
+            let tint: Color = bet.kind == "tail" ? GaryColors.silverLight : Color(hex: "#8B93A7")
+            Text("\(label) · \(BookMoney.stake(bet.stake_units))")
+                .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                .foregroundStyle(tint)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.12)))
+            if bet.status != "pending" {
+                let won = bet.status == "won"
+                let wash = bet.status == "push" || bet.status == "void"
+                Text(wash ? bet.status.uppercased() : BookMoney.net(bet.units_net ?? 0))
+                    .font(GaryFonts.mono(10, bold: true))
+                    .foregroundStyle(wash ? .white.opacity(0.5) : (won ? Color(hex: "#22C55E") : Color(hex: "#EF4444")))
+            } else if !locked {
+                Button { remove(bet) } label: {
+                    Text("Undo")
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+    }
+
+    private func arm(_ side: String) {
+        errorText = nil
+        guard AuthManager.shared.bearerToken != nil else { showAuth = true; return }
+        arming = side
+    }
+
+    private func place(_ side: String) {
+        guard let player = prop.player, !player.isEmpty, !propToken.isEmpty else { return }
+        let dateStr: String = {
+            guard let ct = prop.commence_time, let d = ISO8601DateFormatter().date(from: ct) else {
+                return SupabaseAPI.todayEST()
+            }
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            f.timeZone = TimeZone(identifier: "America/New_York")
+            return f.string(from: d)
+        }()
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                mine = try await UserBookAPI.placePropBet(
+                    gameDate: dateStr, player: player, propType: propToken, kind: side, stake: stake)
+                arming = nil
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
+    }
+
+    private func remove(_ bet: UserBet) {
+        busy = true
+        Task {
+            defer { busy = false }
+            if await UserBookAPI.deleteBet(id: bet.id) { mine = nil }
+        }
+    }
 }
 
 private struct UserBetSlipRow: View {
