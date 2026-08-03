@@ -2106,8 +2106,20 @@ struct HomeView: View {
                     lastNightGraded = night.graded
                     bestCashOdds = night.bestOdds
 
+                    // DAY-CYCLE CLOCK (founder, Aug 3): the record cluster is
+                    // LIVE results for the day from its FIRST PITCH — starting
+                    // at 0–0 and building as games grade — and holds the prior
+                    // night's final numbers only until that first pitch.
+                    let slateRowsResolved = await slateF
+                    let cycleStarted = slateRowsResolved.contains {
+                        parseISO8601($0.commence_time ?? "").map { $0 <= Date() } ?? false
+                    }
+                    let cycleDayRows = recentGameResults.filter { $0.game_date == SupabaseAPI.todayEST() }
+
                     // Fresh-day recap pop-up — GAME picks only, once per day.
-                    let gamesNight = Self.buildLastNight(games: recentGameResults, props: [], includeToday: false)
+                    let gamesNight = cycleStarted
+                        ? Self.buildLastNight(games: cycleDayRows, props: [], includeToday: true)
+                        : Self.buildLastNight(games: recentGameResults, props: [], includeToday: false)
                     gamesNightRecord = gamesNight.record
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
@@ -2128,7 +2140,9 @@ struct HomeView: View {
                             return .init(line: line.uppercased(), odds: row.odds)
                         }
                     let todayKey = SupabaseAPI.todayEST()
-                    if gamesNight.graded > 0, dailyRecapShownDate != todayKey {
+                    // The recap pop-up is a MORNING ritual — never fires off the
+                    // live cycle's partial numbers (cycleStarted gates it).
+                    if !cycleStarted, gamesNight.graded > 0, dailyRecapShownDate != todayKey {
                         // Mark shown for today the MOMENT it appears — so it's truly once/day even
                         // if the user tabs away without dismissing. Re-open later via the chip.
                         dailyRecapShownDate = todayKey
@@ -2175,14 +2189,12 @@ struct HomeView: View {
                     gamesLiveNow = liveRows.filter { $0.isLive }.count
                     initialLive = liveRows
 
-                    // Record box rolls on the EST slate day (todayEST() = 3am-ET anchor,
-                    // same as the Regression Board/recap). Grading only runs ~3x/day, so a
-                    // bare live/final trigger would flip the box to "TODAY 0-0" the instant
-                    // a game went live and leave "0-0" reading as a real result for hours.
-                    // Instead: only switch to TODAY/LIVE once at least one of today's picks
-                    // has actually GRADED — until then keep showing YESTERDAY's record.
-                    // Updates as today's picks grade; once the day rolls over the box's date
-                    // moves and it reads "YESTERDAY" again.
+                    // Record box rolls on the EST slate day (todayEST() = 3am-ET anchor).
+                    // DAY-CYCLE RESET (founder, Aug 3 — supersedes the Jun "wait for the
+                    // first grade" guard): the box flips to LIVE at the day's FIRST PITCH,
+                    // 0–0 and all — that 0–0 now reads as "the day is rolling", not as a
+                    // result — and builds as picks grade. Before first pitch it holds
+                    // YESTERDAY's final record.
                     let slateDay = SupabaseAPI.todayEST()
                     var w = 0, l = 0, p = 0
                     for r in recentGameResults where r.game_date == slateDay {
@@ -2193,10 +2205,10 @@ struct HomeView: View {
                         default: break
                         }
                     }
-                    let todayGradedCount = w + l + p
-                    if todayGradedCount > 0 {
+                    if cycleStarted {
                         yesterdayRecord = (w, l, p)
                         recordBoxLabel = liveRows.contains { $0.isLive } ? "LIVE" : "TODAY"
+                        recapLabel = recordBoxLabel   // scorecard + overnight strip speak the cycle
                     } else {
                         // Today hasn't graded yet — show the most recent SETTLED day's
                         // record, computed from the SAME recentGameResults the board uses
@@ -2271,7 +2283,7 @@ struct HomeView: View {
                     let recapsToday = await recapsTodayF
                     nightRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
-                    slateGames = await slateF
+                    slateGames = slateRowsResolved   // slateF resolved above for the cycle clock
                     tomorrowBoard = await tomorrowBoardF
                     todayBoard = await todayBoardF
                     homeStreaks = await streaksF
@@ -2494,14 +2506,13 @@ struct HomeView: View {
     @ViewBuilder private var todaySections: some View {
         // Compute once per body eval (live ticks re-run this often).
         let stories = headlineStories
-        let sweatIsOn = liveScoresNow.contains { $0.isLive && pickFor($0) != nil }
-        // Stories ride up top in the morning; once the day is rolling (or a
-        // sweat is on) the sheet takes the top and stories follow it.
-        let morningLeads = todayClockPhase == .morning && !sweatIsOn
 
-        // ── THE HEADLINES lead the morning (founder, Jul 27: the record
-        // strip crowded the door — stories first, UP NEXT right under them).
-        if morningLeads, !stories.isEmpty {
+        // ── THE HEADLINES lead the page ALL DAY (founder, Aug 3 — supersedes
+        // the sheet-takes-the-top rule): last night's stories hold the door
+        // until today's first final, then the rail rebuilds one headline at a
+        // time as tonight's games grade (nightRecaps already rolls to today's
+        // recaps the moment the first one lands).
+        if !stories.isEmpty {
             HomeStoryRail(stories: stories) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
@@ -2590,16 +2601,8 @@ struct HomeView: View {
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
 
-        // ── LAST NIGHT — the stories, when they didn't already lead.
-        if !morningLeads, !stories.isEmpty {
-            HomeActHead(title: recapLabel == "TODAY" ? "Graded Today" : "Last Night",
-                        count: stories.count)
-            HomeStoryRail(stories: stories) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.09), value: animateIn)
-        }
+        // (Stories always lead the page now — the lower LAST NIGHT rail is
+        // gone; the top rail is the one home for headlines, Aug 3.)
 
         // ── THE RECORD — the honest sign-off, doors folded in (Aug 3: the
         // record, the door row, and the social footer read as three separate
@@ -2607,7 +2610,10 @@ struct HomeView: View {
         // only (founder, Jul 6: the combined number dragged in longshot
         // props — 21–39 read like a disaster when the game card went 8–11).
         VStack(alignment: .leading, spacing: 12) {
-            if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
+            // Shows through the live cycle even at 0–0 (founder, Aug 3): once
+            // the day's first pitch lands, "LIVE · 0–0" IS the state.
+            if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
+                || recapLabel == "LIVE" || recapLabel == "TODAY" {
                 HomeActHead(title: "The Record")
                 scorecard
             }
