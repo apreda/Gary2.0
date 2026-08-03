@@ -1915,6 +1915,19 @@ struct HomeView: View {
                 homeNonce &+= 1
                 try? await Task.sleep(nanoseconds: 800_000_000)   // let the pull spinner show while the keyed .task reloads
             }
+
+            // Status-bar scrim — content scrolls under the clock unshielded
+            // (Aug 3: "TB @ COL" collided with 9:41). A quiet page-tone fade,
+            // never a hard edge.
+            VStack(spacing: 0) {
+                LinearGradient(colors: [Color(hex: "#08080A").opacity(0.94),
+                                        Color(hex: "#08080A").opacity(0)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 64)
+                Spacer(minLength: 0)
+            }
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
         }
         .overlay {
             if showDailyRecap {
@@ -2588,23 +2601,25 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.09), value: animateIn)
         }
 
-        // ── THE RECORD — the honest sign-off + the doors. GAME picks only
-        // (founder, Jul 6: the combined number dragged in longshot props —
-        // 21–39 read like a disaster when the game card went 8–11).
-        if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
-            HomeActHead(title: "The Record")
-            scorecard
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+        // ── THE RECORD — the honest sign-off, doors folded in (Aug 3: the
+        // record, the door row, and the social footer read as three separate
+        // endings; now the record + doors are ONE closing block). GAME picks
+        // only (founder, Jul 6: the combined number dragged in longshot
+        // props — 21–39 read like a disaster when the game card went 8–11).
+        VStack(alignment: .leading, spacing: 12) {
+            if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
+                HomeActHead(title: "The Record")
+                scorecard
+            }
+            HStack(spacing: 10) {
+                homeDoor("Free Pick", "TODAY") { selectedTab = 3 }
+                homeDoor("The Hub", "EDGES") { selectedTab = 2 }
+                homeDoor("Billfold", "LEDGER") { selectedTab = 4 }
+            }
+            .padding(.horizontal, 16)
         }
-        HStack(spacing: 10) {
-            homeDoor("Free Pick", "TODAY") { selectedTab = 3 }
-            homeDoor("The Hub", "EDGES") { selectedTab = 2 }
-            homeDoor("Billfold", "LEDGER") { selectedTab = 4 }
-        }
-        .padding(.horizontal, 16)
         .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.11), value: animateIn)
+        .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
         // (Parked, unrendered: worldCupModule, the Wire, prop box, Hits &
         // Heartbreakers, The Receipts — receiptLanes/cashRows still computed
         // for other surfaces.)
@@ -2696,7 +2711,8 @@ struct HomeView: View {
     private var firstCallClock: String? {
         let unposted = sheetRows.filter { $0.zone == .upcoming && $0.callLine == nil }
         guard let first = unposted.compactMap({ parseISO8601($0.commence) }).min() else { return nil }
-        return "~" + Self.etClock(first.addingTimeInterval(-5400))
+        // Bare clock — the Winners stub's copy owns the "~" ("seals ~~5:10" bug, Aug 3).
+        return Self.etClock(first.addingTimeInterval(-5400))
     }
 
     /// The whole day, one row per slate game, joined with Gary's calls and
@@ -5118,7 +5134,7 @@ struct HomeWinnersStub: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("The \(weekday) Card")
-                            .font(GaryFonts.display(22))
+                            .font(GaryFonts.display(25))
                             .foregroundStyle(GaryColors.warmWhite)
                         Text(valueLine ?? "Gary's best of the board · games + props")
                             .font(GaryFonts.text(12, .semibold))
@@ -5143,13 +5159,41 @@ struct HomeWinnersStub: View {
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color(hex: "#100F0D"))
+                    .overlay(SealSheen().clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous)))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
+                        .stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16)
+    }
+}
+
+/// The SEALED motif — one diagonal hairline with a faint brighter wash to its
+/// right, shared by every "sealed" surface (the Winners wrapper card wears the
+/// same geometry) so the app speaks ONE seal language.
+struct SealSheen: View {
+    var tint: Color = GaryColors.gold
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack {
+                Path { p in
+                    p.move(to: CGPoint(x: w * 0.68, y: 0))
+                    p.addLine(to: CGPoint(x: w * 0.56, y: h))
+                }
+                .stroke(tint.opacity(0.3), lineWidth: 1)
+                Path { p in
+                    p.move(to: CGPoint(x: w * 0.68, y: 0))
+                    p.addLine(to: CGPoint(x: w * 0.56, y: h))
+                    p.addLine(to: CGPoint(x: w, y: h))
+                    p.addLine(to: CGPoint(x: w, y: 0))
+                }
+                .fill(Color.white.opacity(0.025))
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -6133,25 +6177,213 @@ enum WinnersSlot: Int {
 /// faint bleed into the face. Same geometry on every card — color is the slot's
 /// entire voice. Ink authority for the anchor, money green for the dog,
 /// spotlight white for the marquee, night indigo for the nightcap.
-struct WinnersSlotRail: View {
-    let slot: WinnersSlot
-    private var tone: Color {
-        switch slot {
+extension WinnersSlot {
+    /// The slot's entire voice — one color, no words (founder, Jul 23).
+    var tone: Color {
+        switch self {
         case .anchor:   return GoldBar.inkStrong
         case .dog:      return Color(hex: "#1F7A4A")
         case .marquee:  return .white
         case .nightcap: return Color(hex: "#2A3A66")
         }
     }
+}
+
+struct WinnersSlotRail: View {
+    let slot: WinnersSlot
     var body: some View {
         HStack(spacing: 0) {
-            Rectangle().fill(tone.opacity(0.9)).frame(width: 4)
-            LinearGradient(colors: [tone.opacity(0.13), .clear],
+            Rectangle().fill(slot.tone.opacity(0.9)).frame(width: 4)
+            LinearGradient(colors: [slot.tone.opacity(0.13), .clear],
                            startPoint: .leading, endPoint: .trailing)
                 .frame(width: 16)
             Spacer(minLength: 0)
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// Team abbreviation for the day-card seal timeline ("PHI 5:10") — the league
+/// keyword maps first, mascot prefix as the fallback.
+func winnersTeamAbbr(_ team: String?) -> String {
+    guard let t = team?.lowercased(), !t.isEmpty else { return "—" }
+    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords] {
+        for (abbr, kws) in map where kws.contains(where: { t.contains($0) }) { return abbr }
+    }
+    let last = t.split(separator: " ").last.map(String.init) ?? t
+    return String(last.prefix(3)).uppercased()
+}
+
+/// THE DAY CARD — the Winners page's identity object (Aug 3 2026): the day's
+/// card as ONE artifact that lives through the day. Morning: the manifest +
+/// a live countdown to the first seal. Evening: the slot strip fills as
+/// positions post and go live. Browsed days: the graded record. The slot
+/// strip stays wordless — color is the slot's voice, state is a glyph.
+struct WinnersDayCard: View {
+    enum SlotState { case sealed, posted, live }
+    enum Phase {
+        case coming(firstSeal: Date?)
+        case rolling(liveCount: Int)
+        case graded(w: Int, l: Int, p: Int, net: Int?)   // net = $ at $100/pick
+    }
+    let weekday: String            // "Monday"
+    let dateLabel: String          // "Monday, August 3"
+    let phase: Phase
+    var slots: [(slot: WinnersSlot, state: SlotState)] = []
+    var manifest: String? = nil    // "8 games tonight · seals ~90 min before each first pitch"
+    var sealTimeline: String? = nil // "PHI 5:10 · NYY 5:35 · …"
+
+    private var isComing: Bool { if case .coming = phase { return true }; return false }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("The \(weekday) Card")
+                    .font(GaryFonts.display(28))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 8)
+                phaseBadge
+            }
+            .padding(.horizontal, 14).padding(.top, 12)
+
+            Text(subLine)
+                .font(GaryFonts.text(12, .semibold))
+                .foregroundStyle(GaryColors.sectionSub)
+                .padding(.horizontal, 14).padding(.top, 2)
+
+            if !slots.isEmpty {
+                HStack(spacing: 14) {
+                    ForEach(Array(slots.enumerated()), id: \.offset) { _, s in
+                        VStack(spacing: 5) {
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(s.slot.tone.opacity(s.state == .sealed ? 0.35 : 0.95))
+                                .frame(width: 4, height: 24)
+                            slotGlyph(s.state)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16).padding(.top, 12)
+            }
+
+            if let sealTimeline, isComing {
+                Rectangle().fill(GaryColors.gold.opacity(0.18)).frame(height: 1)
+                    .padding(.horizontal, 14).padding(.top, 12)
+                Text(sealTimeline)
+                    .font(GaryFonts.mono(10))
+                    .foregroundStyle(GaryColors.meta)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14).padding(.top, 10)
+            }
+        }
+        .padding(.bottom, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(hex: "#100F0D"))
+                .overlay(isComing ? AnyView(SealSheen().clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))) : AnyView(EmptyView()))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(GaryColors.gold.opacity(0.5), lineWidth: 1))
+        )
+        .padding(.horizontal, 16)
+    }
+
+    private var subLine: String {
+        if let manifest { return manifest }
+        switch phase {
+        case .graded: return dateLabel
+        default: return dateLabel
+        }
+    }
+
+    @ViewBuilder private func slotGlyph(_ s: SlotState) -> some View {
+        switch s {
+        case .sealed:
+            Image(systemName: "lock.fill")
+                .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.3))
+        case .posted:
+            Circle().fill(GaryColors.gold).frame(width: 5, height: 5)
+        case .live:
+            Circle().fill(GaryColors.win).frame(width: 5, height: 5)
+        }
+    }
+
+    @ViewBuilder private var phaseBadge: some View {
+        switch phase {
+        case .coming(let firstSeal):
+            if let firstSeal {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    let left = firstSeal.timeIntervalSince(ctx.date)
+                    Text(left > 0 ? "SEALS IN \(Self.hms(left))" : "SEALING NOW")
+                        .font(GaryFonts.accent(11)).tracking(0.6)
+                        .foregroundStyle(GaryColors.gold)
+                }
+            } else {
+                Text("COMING")
+                    .font(GaryFonts.accent(11)).tracking(1)
+                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+            }
+        case .rolling(let liveCount):
+            Text(liveCount > 0 ? "LIVE · \(liveCount) ON THE BOARD" : "SEALED")
+                .font(GaryFonts.accent(11)).tracking(0.6)
+                .foregroundStyle(liveCount > 0 ? GaryColors.win : GaryColors.gold)
+        case .graded(let w, let l, let p, let net):
+            HStack(spacing: 8) {
+                Text("\(w)–\(l)\(p > 0 ? "–\(p)" : "")")
+                    .font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.95))
+                if let net {
+                    Text(net >= 0 ? "+$\(net)" : "−$\(abs(net))")
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.lostTint)
+                }
+            }
+        }
+    }
+
+    private static func hms(_ t: TimeInterval) -> String {
+        let s = Int(t)
+        return String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+    }
+}
+
+/// The trust band — Gary's last-10 graded record per league, always on the
+/// board (Aug 3 2026: the core product page sold conviction without ever
+/// showing the record; wins AND losses sell it honestly). Taps to Billfold.
+struct WinnersRecordBand: View {
+    let records: [(league: String, w: Int, l: Int)]
+    let onLedger: () -> Void
+    var body: some View {
+        if !records.isEmpty {
+            HStack(spacing: 12) {
+                Text("LAST 10")
+                    .font(GaryFonts.accent(10)).tracking(1)
+                    .foregroundStyle(GaryColors.gold)
+                ForEach(records, id: \.league) { r in
+                    HStack(spacing: 5) {
+                        Text(r.league)
+                            .font(GaryFonts.mono(10)).foregroundStyle(GaryColors.meta)
+                        Text("\(r.w)–\(r.l)")
+                            .font(GaryFonts.mono(11, bold: true))
+                            .foregroundStyle(r.w > r.l ? GaryColors.win : .white.opacity(0.85))
+                    }
+                }
+                Spacer(minLength: 8)
+                Button(action: onLedger) {
+                    HStack(spacing: 4) {
+                        Text("FULL LEDGER")
+                            .font(GaryFonts.mono(10, bold: true))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 7, weight: .bold))
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 18)
+        }
     }
 }
 
@@ -6176,6 +6408,9 @@ struct PremiumPicksView: View {
     // per league) instead of a generic fixed count (founder, Jul 6: match
     // the populated board's layout, just with coming-soon wrapper words).
     @State private var todaySlateCounts: [String: Int] = [:]
+    /// Today's full slate rows (teams + start times) — the day card's manifest
+    /// and seal timeline. Counts alone can't say WHEN the card seals.
+    @State private var todaySlateRows: [DailySlateRow] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
     @State private var gameScoresMap: [String: String] = [:]    // same key -> "away-home" final score
     @State private var matchupScoresMap: [String: String] = [:] // matchup-only key -> final (props share the game's score)
@@ -6535,6 +6770,13 @@ struct PremiumPicksView: View {
     /// understating the day.
     private var comingSoonState: some View {
         VStack(spacing: 22) {
+            // The day card leads even before the board posts (Aug 3: the core
+            // product page spent every daytime hour nearly empty) — the
+            // manifest, the live first-seal countdown, and the seal timeline
+            // give the room a pulse all day. The record band sells the
+            // product honestly while the card is still sealed.
+            winnersDayCard
+            winnersRecordBand
             comingSoonIntro
                 .padding(.horizontal, 16)
             ForEach(gameShelves) { shelf in
@@ -6682,11 +6924,125 @@ struct PremiumPicksView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - THE DAY CARD (Aug 3 2026) — the page's identity object
+
+    /// Today's posted (non-settled) game picks — the live board.
+    private var postedTodayPicks: [GaryPick] {
+        gameShelves.filter { !$0.settled }.flatMap(\.picks)
+    }
+
+    /// Profit on $100 from a pick's American odds ("+128" → 128, "-138" → 72).
+    private func pickPayout100(_ pick: GaryPick) -> Int {
+        let raw = pick.formattedPickParts.odds
+            .replacingOccurrences(of: "+", with: "")
+            .replacingOccurrences(of: "−", with: "-")
+            .trimmingCharacters(in: .whitespaces)
+        guard let v = Int(raw), v != 0 else { return 0 }
+        return v > 0 ? v : Int((10000.0 / Double(abs(v))).rounded())
+    }
+
+    private var dayCardPhase: WinnersDayCard.Phase {
+        if selectedDate != nil {
+            var w = 0, l = 0, p = 0, net = 0
+            for pick in gameShelves.filter(\.settled).flatMap(\.picks) {
+                switch gamePickResult(pick) {
+                case "won":  w += 1; net += pickPayout100(pick)
+                case "lost": l += 1; net -= 100
+                case "push": p += 1
+                default: break
+                }
+            }
+            return .graded(w: w, l: l, p: p, net: (w + l) > 0 ? net : nil)
+        }
+        let posted = postedTodayPicks
+        if posted.isEmpty { return .coming(firstSeal: firstSealDate) }
+        let liveCount = posted.filter {
+            LiveScoreCache.shared.status(forMatchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")")?.isLive == true
+        }.count
+        return .rolling(liveCount: liveCount)
+    }
+
+    /// First seal = earliest slate game still without a posted pick, minus 90m.
+    private var firstSealDate: Date? {
+        let postedMatchups = Set(postedTodayPicks.map { "\(gpTeamKey($0.awayTeam))@\(gpTeamKey($0.homeTeam))" })
+        return todaySlateRows
+            .filter { !postedMatchups.contains("\(gpTeamKey($0.away_team))@\(gpTeamKey($0.home_team))") }
+            .compactMap { parseISO8601($0.commence_time ?? "") }
+            .min()?
+            .addingTimeInterval(-5400)
+    }
+
+    /// Wordless slot strip — today only (historical days may predate the slot system).
+    private var dayCardSlots: [(slot: WinnersSlot, state: WinnersDayCard.SlotState)] {
+        guard selectedDate == nil else { return [] }
+        let posted = postedTodayPicks
+        return [WinnersSlot.anchor, .dog, .marquee, .nightcap].map { slot in
+            guard let pick = posted.first(where: { winnersSlotMap[$0.id] == slot }) else {
+                return (slot, .sealed)
+            }
+            let live = LiveScoreCache.shared.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")?.isLive == true
+            return (slot, live ? .live : .posted)
+        }
+    }
+
+    private var dayCardManifest: String? {
+        guard selectedDate == nil, !todaySlateRows.isEmpty else { return nil }
+        let leagues = Set(todaySlateRows.compactMap { $0.league?.uppercased() }).sorted().joined(separator: " + ")
+        return "\(todaySlateRows.count) game\(todaySlateRows.count == 1 ? "" : "s") tonight · \(leagues) · seals ~90 min before each first pitch"
+    }
+
+    private var dayCardTimeline: String? {
+        guard selectedDate == nil, !todaySlateRows.isEmpty else { return nil }
+        let f = DateFormatter()
+        f.dateFormat = "h:mm"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        let entries = todaySlateRows
+            .compactMap { row -> (Date, String)? in
+                guard let d = parseISO8601(row.commence_time ?? "") else { return nil }
+                let seal = d.addingTimeInterval(-5400)
+                return (seal, "\(winnersTeamAbbr(row.home_team)) \(f.string(from: seal))")
+            }
+            .sorted { $0.0 < $1.0 }
+            .map(\.1)
+        return entries.isEmpty ? nil : "SEALS  ·  " + entries.joined(separator: " · ")
+    }
+
+    private var dayCardWeekday: String {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "EEEE"
+        if let sel = selectedDate {
+            let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"; inF.timeZone = f.timeZone
+            if let d = inF.date(from: sel) { return f.string(from: d) }
+        }
+        return f.string(from: Date())
+    }
+
+    private var winnersDayCard: some View {
+        WinnersDayCard(weekday: dayCardWeekday,
+                       dateLabel: headerDateLabel,
+                       phase: dayCardPhase,
+                       slots: dayCardSlots,
+                       manifest: dayCardManifest,
+                       sealTimeline: dayCardTimeline)
+    }
+
+    private var winnersRecordBand: some View {
+        WinnersRecordBand(
+            records: canonicalSports.compactMap { lg in
+                guard let r = sportRecords[lg], r.w + r.l > 0 else { return nil }
+                return (league: lg, w: r.w, l: r.l)
+            },
+            onLedger: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 } })
+    }
+
     @ViewBuilder private var modeContent: some View {
         // Tighter inter-shelf rhythm (was 22) — the shelf headers already give
         // each rail vertical breathing room, so 22 over-spaced the board.
         VStack(alignment: .leading, spacing: 16) {
             if mode == .games {
+                winnersDayCard
+                winnersRecordBand
                 // (Tonight's Top Plays carousel removed from Winners per founder.)
                 // Paid boards lead with full cards. Locked boards with content
                 // follow as blurred previews — the user sees the real board
@@ -7731,6 +8087,7 @@ struct PremiumPicksView: View {
             propShelves = pShelves
             winnersSlotMap = slotMap
             todaySlateCounts = slateCounts
+            todaySlateRows = slateRows
             sportRecords = sRec
             entitledSports = entitlements
             loading = false
