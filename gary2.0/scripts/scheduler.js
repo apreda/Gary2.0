@@ -407,6 +407,12 @@ async function executeSchedule(schedule) {
   }
   const uniqueGameIds = new Set(schedule.map(e => e.gameId));
   const missedGames = [];
+  // Props-miss tracking (Aug 3): a CRASHED props run is a miss; a run that
+  // stores nothing is Gary passing the game (legitimate, by contract). A
+  // later tier's success clears the flag, so only games that END their tiers
+  // with props in a failed state alert.
+  const propsFailedByGame = new Map(); // gameId -> last error message
+  const missedProps = [];
   let gameAlreadyHasPick = null;
   try { ({ gameAlreadyHasPick } = await import('../src/services/picksService.js')); }
   catch (e) { log(`⚠️ Coverage check disabled — picksService load failed: ${e.message}`); }
@@ -478,8 +484,10 @@ async function executeSchedule(schedule) {
         try {
           log(`  🎯 Props: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
           await runScript(`scripts/${sport.propsScript}`, ['--game-id', String(entry.gameId)]);
+          propsFailedByGame.delete(entry.gameId);
         } catch (e) {
           log(`  ❌ Props failed: ${entry.matchup}${tierTag}: ${e.message}`);
+          propsFailedByGame.set(entry.gameId, e.message);
         }
       }
     }
@@ -501,6 +509,12 @@ async function executeSchedule(schedule) {
         } catch (e) {
           log(`⚠️ Coverage check failed for ${entry.sport.label} ${entry.matchup}: ${e.message}`);
         }
+        // Props miss: the game just fired its FINAL tier and its last props
+        // run crashed (successes clear the flag above).
+        if (entry.sport.propsScript && propsFailedByGame.has(entry.gameId)) {
+          missedProps.push(entry);
+          log(`⚠️ MISSED PROPS: ${entry.sport.label} ${entry.matchup} — last props run crashed after all retry tiers (id ${entry.gameId}): ${propsFailedByGame.get(entry.gameId)}`);
+        }
       }
     }
   }
@@ -514,6 +528,11 @@ async function executeSchedule(schedule) {
     log(`📊 Daily pick coverage: ${covered}/${uniqueGameIds.size} games covered — no misses ✅`);
   } else {
     log(`📊 Daily pick coverage: ${covered}/${uniqueGameIds.size} covered — ${missedGames.length} MISSED: ${missedGames.map(g => `${g.sport.label} ${g.matchup}`).join(' | ')}`);
+  }
+  if (missedProps.length === 0) {
+    log(`📊 Daily props coverage: no crashed props runs ✅ (empty slates = Gary passing, by design)`);
+  } else {
+    log(`📊 Daily props coverage: ${missedProps.length} game(s) ended with a CRASHED props run: ${missedProps.map(g => `${g.sport.label} ${g.matchup}`).join(' | ')}`);
   }
 }
 
