@@ -98,11 +98,13 @@ export async function computeTwoStartWeek(ctx) {
 
   // Per-day schedules; a failed day is skipped (a start can't be claimed
   // without its schedule row, so a partial week only UNDER-reports — never wrong).
-  const byPitcher = new Map(); // id -> { name, teamName, starts: [{date, opp, home}] }
+  const byPitcher = new Map(); // id -> { name, teamName, teamId, starts: [{date, opp, home, projected?}] }
+  const gamesByDay = new Map(); // day -> schedule rows (kept for rotation projection)
   for (const day of week) {
     let games = [];
     try { games = (await getMlbSchedule(day)) || []; }
     catch (err) { console.error(`[twoStartWeek] schedule ${day} error:`, err?.message || err); continue; }
+    gamesByDay.set(day, games);
     for (const g of games) {
       const dateStr = g?.officialDate || day;
       const sides = [
@@ -113,7 +115,7 @@ export async function computeTwoStartWeek(ctx) {
         const p = s.me?.probablePitcher;
         if (!p?.id || !p?.fullName) continue;
         const entry = byPitcher.get(p.id) || {
-          name: p.fullName, teamName: s.me?.team?.name || '', starts: [],
+          name: p.fullName, teamName: s.me?.team?.name || '', teamId: s.me?.team?.id, starts: [],
         };
         if (!entry.starts.some((st) => st.date === dateStr)) {
           entry.starts.push({ date: dateStr, opp: clubName(s.opp?.team?.name), home: s.home });
@@ -121,6 +123,29 @@ export async function computeTwoStartWeek(ctx) {
         byPitcher.set(p.id, entry);
       }
     }
+  }
+
+  // ROTATION PROJECTION (Aug 3): probables post only ~3-4 days out, so on
+  // Monday/Tuesday no arm has BOTH starts listed yet and the lane ran empty
+  // exactly when managers set their week. An arm whose one LISTED start
+  // falls Mon-Wed projects its second turn at +5 days — but only when the
+  // schedule says his team actually plays that day. Projected starts are
+  // labeled "(proj)" and never outrank fully-listed arms.
+  const midWeek = week[2];
+  for (const [, v] of byPitcher) {
+    if (v.starts.length !== 1 || v.teamId == null) continue;
+    const st = v.starts[0];
+    if (st.date > midWeek) continue;
+    const idx = week.indexOf(st.date);
+    if (idx < 0 || idx + 5 > 6) continue;
+    const projDay = week[idx + 5];
+    const dayGames = gamesByDay.get(projDay) || [];
+    const g = dayGames.find((gm) =>
+      gm?.teams?.home?.team?.id === v.teamId || gm?.teams?.away?.team?.id === v.teamId);
+    if (!g) continue;
+    const home = g.teams?.home?.team?.id === v.teamId;
+    const oppTeam = home ? g.teams?.away?.team?.name : g.teams?.home?.team?.name;
+    v.starts.push({ date: g?.officialDate || projDay, opp: clubName(oppTeam), home, projected: true });
   }
 
   const twoStart = [...byPitcher.entries()].filter(([, v]) => v.starts.length >= 2);
@@ -150,9 +175,13 @@ export async function computeTwoStartWeek(ctx) {
     if (Number.isFinite(xera)) score += (4.2 - xera) * 8;
     score = clampScore(score);
 
+    const hasProjected = starts.some((st) => st.projected);
+    if (hasProjected) score = clampScore(score - 6);   // listed-both arms outrank projections
     const startBits = starts.map((st) =>
-      `${etWeekday(st.date)} ${shortDate(st.date)} ${st.home ? 'vs' : 'at'} ${st.opp}${st.date < date ? ' (played)' : ''}`);
-    const detail = `${starts.length === 2 ? 'Two starts' : `${starts.length} starts`} this scoring week — ` +
+      `${etWeekday(st.date)} ${shortDate(st.date)} ${st.home ? 'vs' : 'at'} ${st.opp}` +
+      `${st.projected ? ' (proj)' : (st.date < date ? ' (played)' : '')}`);
+    const detail = `${starts.length === 2 ? 'Two starts' : `${starts.length} starts`} this scoring week` +
+      `${hasProjected ? ' (second projected on rotation)' : ''} — ` +
       `${startBits.join(', ')}.` +
       (Number.isFinite(xera) ? ` ${round(xera, 2)} xERA this season.` : '');
 
