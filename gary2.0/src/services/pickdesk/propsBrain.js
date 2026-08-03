@@ -241,6 +241,7 @@ export function selectPrimaryMarkets(marketRows) {
 
   const rows = [];
   let droppedOneSidedPairs = 0;
+  let droppedNoTakeableSide = 0;
   for (const candidates of pairs.values()) {
     if (isHrType(candidates[0].prop_type)) {
       // Fun-lane exception: every HR rung with a takeable yes-price stays.
@@ -251,15 +252,24 @@ export function selectPrimaryMarkets(marketRows) {
     }
     const twoSided = candidates.filter(c => c.over_odds != null && c.under_odds != null);
     if (!twoSided.length) { droppedOneSidedPairs++; continue; }
+    // Tier 0 = both sides inside the bet window, tier 1 = one side, tier 2 =
+    // neither. A tier-2 market has nothing Gary is allowed to bet (found on
+    // real boards: stolen_bases "Over +1120 / Under -2300") — printing it only
+    // invites picks the gate must kill, so it's off the board entirely.
+    const tier = (c) => {
+      const o = propOddsService.isOddsTakeable(c.over_odds, c.prop_type);
+      const u = propOddsService.isOddsTakeable(c.under_odds, c.prop_type);
+      return o && u ? 0 : (o || u) ? 1 : 2;
+    };
     const ranked = twoSided.slice().sort((a, b) => {
-      const aTake = propOddsService.isOddsTakeable(a.over_odds, a.prop_type) && propOddsService.isOddsTakeable(a.under_odds, a.prop_type) ? 0 : 1;
-      const bTake = propOddsService.isOddsTakeable(b.over_odds, b.prop_type) && propOddsService.isOddsTakeable(b.under_odds, b.prop_type) ? 0 : 1;
-      if (aTake !== bTake) return aTake - bTake;
+      const at = tier(a), bt = tier(b);
+      if (at !== bt) return at - bt;
       const aBal = Math.abs((impliedProb(a.over_odds) ?? 1) - (impliedProb(a.under_odds) ?? 1));
       const bBal = Math.abs((impliedProb(b.over_odds) ?? 1) - (impliedProb(b.under_odds) ?? 1));
       if (aBal !== bBal) return aBal - bBal;
       return Number(a.line) - Number(b.line);
     });
+    if (tier(ranked[0]) === 2) { droppedNoTakeableSide++; continue; }
     rows.push(ranked[0]);
   }
 
@@ -271,6 +281,7 @@ export function selectPrimaryMarkets(marketRows) {
     over_only: rows.filter(r => r.over_odds != null && r.under_odds == null).length,
     under_only: rows.filter(r => r.over_odds == null && r.under_odds != null).length,
     dropped_one_sided_pairs: droppedOneSidedPairs,
+    dropped_no_takeable_side: droppedNoTakeableSide,
     two_sided_pct: rows.length ? Math.round((twoSidedCount / rows.length) * 100) : 0,
   };
   return { rows, stats };

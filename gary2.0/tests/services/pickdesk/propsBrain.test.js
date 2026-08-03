@@ -152,6 +152,21 @@ describe('selectPrimaryMarkets', () => {
     expect(rows[0].line).toBe(0.5);
   });
 
+  it('drops a market where NEITHER side is inside the bet window, and counts it', () => {
+    const { rows, stats } = selectPrimaryMarkets([
+      { player: 'D', prop_type: 'stolen_bases', line: 0.5, over_odds: 1120, under_odds: -2300 },
+    ]);
+    expect(rows).toHaveLength(0);
+    expect(stats.dropped_no_takeable_side).toBe(1);
+  });
+
+  it('keeps a one-takeable-side market (the gate guards the dead side)', () => {
+    const { rows } = selectPrimaryMarkets([
+      { player: 'E', prop_type: 'walks', line: 0.5, over_odds: 354, under_odds: -537 },
+    ]);
+    expect(rows).toHaveLength(1);
+  });
+
   it('drops a core player-prop with no two-sided line anywhere, and counts it', () => {
     const { rows, stats } = selectPrimaryMarkets([
       { player: 'B', prop_type: 'rbis', line: 1.5, over_odds: 300, under_odds: null },
