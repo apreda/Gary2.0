@@ -1768,7 +1768,6 @@ struct HomeView: View {
     /// GAME picks only — the fresh-day recap pop-up's ledger (props keep
     /// their own strip in the box scores; user call, Jun 11).
     @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
-    @State private var gamesNightRoll: [HomeOvernightStrip.RollItem] = []
     @State private var gamesNightNet: Double? = nil
     @State private var gamesNightBest: Double? = nil
     @State private var showDailyRecap = false
@@ -2121,22 +2120,6 @@ struct HomeView: View {
                     gamesNightRecord = gamesNight.record
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
-                    // The strip's rolling slot — biggest cashes first, in TICKER
-                    // grammar (founder, Jul 13): the team goes to its abbreviation
-                    // ("PHI ML +114") so the cell reads at FULL strip size with
-                    // nothing scaled down and nothing truncated. Ever.
-                    gamesNightRoll = gamesNight.rollCashes
-                        .map { row in
-                            let words = row.sub.split(separator: " ").map(String.init)
-                            let cut = words.firstIndex { w in
-                                ["ML", "MONEYLINE", "OVER", "UNDER"].contains(w.uppercased())
-                                    || w.hasPrefix("+") || w.hasPrefix("-") || Double(w) != nil
-                            } ?? words.count
-                            let team = words[..<cut].joined(separator: " ")
-                            let line = team.isEmpty ? row.sub
-                                : ([Self.teamAbbrev(team, league: row.league)] + words[cut...]).joined(separator: " ")
-                            return .init(line: line.uppercased(), odds: row.odds)
-                        }
                     let todayKey = SupabaseAPI.todayEST()
                     // The recap pop-up is a MORNING ritual — never fires off the
                     // live cycle's partial numbers (cycleStarted gates it).
@@ -2542,18 +2525,9 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
 
-        // ── OVERNIGHT, compacted (founder, Jul 27) — the graded record as
-        // one quiet line under the hero. Still the Winners funnel on tap.
-        if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0 {
-            HomeOvernightLine(record: gamesNightRecord,
-                              net: gamesNightNet,
-                              label: recapLabel,
-                              roll: gamesNightRoll.first.map { (line: $0.line, odds: $0.odds) }) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
-        }
+        // (Overnight strip removed Aug 3 — with the record box now holding
+        // yesterday until first pitch and going live after, the strip said
+        // the same numbers twice on one page. THE RECORD is the one home.)
 
         // ── THE RECEIPTS LINE + YOUR NIGHT (Jul 26 additions) — proof of
         // post, then the user's own open action with live state. Both
@@ -4899,132 +4873,9 @@ func slateDayShort(_ iso: String) -> String {
     return "\(m)/\(d)"
 }
 
-/// THE OVERNIGHT STRIP — one line: last night's number and the door to the
-/// tape. No voice, no filler (founder, Jul 5) — the daily recap pop-up owns
-/// the morning moment; this is just the standing fact.
-struct HomeOvernightStrip: View {
-    /// One cashed pick for the rolling slot — "✓ PIRATES ML +120".
-    struct RollItem {
-        let line: String   // "PIRATES ML"
-        let odds: String   // "+120"
-    }
-    let record: (w: Int, l: Int, p: Int)
-    let net: Double?
-    let best: Double?
-    let label: String          // "LAST NIGHT" / "TODAY"
-    var rollItems: [RollItem] = []
-    let onTape: () -> Void
-
-    // The static "BEST +126" earned its keep by rolling: the slot cycles
-    // through the night's cashes on a slow cadence (founder, Jul 5 — "it feels
-    // kind of pointless in its current form"; slowed from 3s to 8s Jul 15 —
-    // "far too fast").
-    @State private var rollIndex = 0
-    private let rollTimer = Timer.publish(every: 8, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        // Jul 22 REAL redesign (founder bounced the first pass — labels on the
-        // same cramped line wasn't a redesign): the strip becomes a proper
-        // band in the app's broadcast grammar. Gold slab + kicker names the
-        // night, the RECORD is the hero in display type, the net sits beside
-        // it in its own tint, and the rolling cashes get the right edge.
-        // Still flat on the page (founder, Jul 12) — one hairline, no box.
-        Button(action: onTape) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 8) {
-                    BroadcastBar(height: 11)
-                    Text(label)
-                        .font(GaryFonts.accent(12)).tracking(0.6)
-                        .foregroundStyle(GaryColors.gold)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(GaryColors.gold)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text("\(record.w)–\(record.l)")
-                        .font(GaryFonts.display(26))
-                        .foregroundStyle(.white)
-                        .fixedSize()
-                    if let net {
-                        // `net` is in UNITS (1u = $100 stake) — flatStakeDollars
-                        // converts it; the old inline formatter treated it as
-                        // already-dollars and rounded -1.14u down to "-$1".
-                        Text(Formatters.flatStakeDollars(net))
-                            .font(GaryFonts.mono(15, bold: true))
-                            .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
-                            .fixedSize()
-                    }
-                    Spacer(minLength: 12)
-                    if !rollItems.isEmpty {
-                        rollSlot
-                    } else if let best, best > 0 {
-                        Text("BEST +\(Int(best))")
-                            .font(GaryFonts.mono(15, bold: true))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                }
-            }
-            .padding(.leading, 14).padding(.trailing, 14).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // Flat on the page (founder, Jul 12: the strip + cards + hero read
-            // as stacked containers) — one hairline closes it instead of a box.
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 16)
-    }
-
-    private var rollSlot: some View {
-        let item = rollItems[rollIndex % rollItems.count]
-        // One step under the ramp: this cell shares a row with the record and
-        // net, and the raised sizes squeezed it into truncation ("UN… +120").
-        // ONE concatenated Text so the whole "✓ PICK +ODDS" scales as a
-        // single unit — three separate Texts in this narrow slot kept taking
-        // turns being truncated or squeezed out (✓ vs "UNDER 2.5" vs odds).
-        return (Text("✓ ").foregroundColor(GaryColors.win)
-            + Text(item.line + " ").foregroundColor(.white.opacity(0.88))
-            + Text(item.odds).foregroundColor(GaryColors.gold))
-            // Full strip size, NO scale-down (founder: same size, period) —
-            // ticker abbreviation guarantees the fit, so the shrink allowance
-            // that made this cell render a point smaller is gone.
-            .font(GaryFonts.mono(15, bold: true))
-            .lineLimit(1)
-            // A tiny defensive floor, never the everyday case (ticker
-            // abbreviation already guarantees the fit) — the box below is
-            // what actually keeps things stable, this just stops a freak
-            // long item from clipping instead of shrinking a hair.
-            .minimumScaleFactor(0.85)
-        .id(rollIndex)
-        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
-                                removal: .move(edge: .top).combined(with: .opacity)))
-        // Jul 15 2026 fix: was .fixedSize() with no width — the box grew and
-        // shrank to match whichever item was on screen, so every 3s rotation
-        // visibly popped the whole strip open and shut. maxWidth: .infinity
-        // makes the box itself claim all left-over row width permanently —
-        // constant regardless of which item is showing or mid-transition;
-        // only the text inside it changes. (.trailing since the Jul 22 band
-        // redesign — the roller lives on the strip's right edge now.)
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .frame(height: 23)
-        .clipped()
-        // The rolling cash wins the width fight — the record and THE CARD
-        // door are short and fixed; the pick line is the story.
-        .layoutPriority(2)
-        .onReceive(rollTimer) { _ in
-            guard rollItems.count > 1 else { return }
-            withAnimation(.easeInOut(duration: 0.35)) {
-                rollIndex = (rollIndex + 1) % rollItems.count
-            }
-        }
-    }
-}
-
-/// THE STORY RAIL — last night's recaps as swipeable panel cards (the
-/// marquee carousel's successor in the sheet language). Tap → the ledger.
+/// THE STORY RAIL — the night's headlines as swipeable cards (the front
+/// page's lead). Leads the page all day (founder, Aug 3); each card carries
+/// the pick + verdict receipt. Tap → the ledger.
 struct HomeStoryRail: View {
     let stories: [HomeMarqueeHero.Story]
     let onOpen: () -> Void
