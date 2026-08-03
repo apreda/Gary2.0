@@ -178,13 +178,18 @@ Deno.serve(async (req) => {
 
   // ?dry=1 → compute but don't write, return a sample (verify the math safely).
   // ?force=1 → ignore the already-graded skip (re-grade settled props for testing).
+  // ?date=YYYY-MM-DD → grade exactly that ET game date (backfill/re-grade lane;
+  //   default stays today+yesterday for the pg_cron runs).
   const url = new URL(req.url);
   const dry = url.searchParams.get("dry") === "1";
   const force = url.searchParams.get("force") === "1";
+  const dateParam = url.searchParams.get("date");
   const sample: any[] = [];
 
-  const dates = [estDate(0), estDate(-1)];
-  const stats = { insert: 0, update: 0, noop: 0, fail: 0, skippedGraded: 0, skippedNotFinal: 0, skippedOther: 0, skippedNoStat: 0 };
+  const dates = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+    ? [dateParam]
+    : [estDate(0), estDate(-1)];
+  const stats = { insert: 0, update: 0, noop: 0, fail: 0, skippedGraded: 0, skippedNotFinal: 0, skippedOther: 0, skippedNoStat: 0, dnpPush: 0 };
 
   // 1. read all prop picks for the window, flatten with parent row id + date
   const pickRows = await sbGet("prop_picks", `date=in.(${dates.join(",")})&select=id,date,picks`);
@@ -240,9 +245,22 @@ Deno.serve(async (req) => {
       let statRows: any[] = [];
       try { statRows = await bdlGet("/mlb/v1/stats", { game_ids: [gid], per_page: "100" }); }
       catch { stats.skippedNotFinal += byGame[gid].length; continue; }
+      // Empty box on a FINAL game = provider data hole, not a slate of DNPs —
+      // skip the game rather than voiding every prop in it.
+      if (!statRows.length) { stats.skippedNotFinal += byGame[gid].length; continue; }
       for (const f of byGame[gid]) {
         const row = statRows.find((s) => playerMatchesMlb(String(f.p.player), s.player));
-        const actual = row ? mlbStat(f.propType, row) : null;
+        // DNP VOID (Aug 3 2026): the game is FINAL and its box has no line for
+        // this player — he didn't appear, so the book voids the bet and the
+        // ledger records a push (it used to sit "pending" forever). Pick names
+        // and box names share one source (BDL player records), so absent-from-
+        // box means absence, not a name miss.
+        if (!row) {
+          stats.dnpPush++;
+          writes.push(buildRow(f, null, "push", parseFloat(f.p.line)));
+          continue;
+        }
+        const actual = mlbStat(f.propType, row);
         if (actual == null) { stats.skippedNoStat++; continue; }
         const line = parseFloat(f.p.line);
         const result = gradeProp(actual, line, String(f.p.bet ?? "over"));
@@ -306,7 +324,7 @@ Deno.serve(async (req) => {
     null, dry ? 2 : 0), { headers: { "Content-Type": "application/json" } });
 });
 
-function buildRow(f: any, actual: number, result: string, line: number) {
+function buildRow(f: any, actual: number | null, result: string, line: number) {
   const p = f.p;
   return {
     prop_pick_id: f.parentId, game_date: f.date, player_name: String(p.player ?? p.player_name ?? ""),

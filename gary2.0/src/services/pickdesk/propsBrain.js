@@ -21,6 +21,7 @@ import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_COST_PER_M } from '../age
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
+import { propOddsService } from '../propOddsService.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE ZERO-BASED PROMPT SURFACE — same entry rule as garyBrain (Jul 26 2026):
@@ -198,6 +199,130 @@ export function buildPropBoard(playerProps, { lineupNames = null, hrOnly = false
   };
 }
 
+// ═══ PROP BOARD V2 — the board presents MARKETS, not filtered scrape rows ═══
+// (Aug 3 2026.) Measured that day: the legacy per-side odds window built a
+// menu that was 58.6% over-only rows — 97% of one-sided rows were overs — so
+// the documented over-bias was largely the MENU, not the brain. V2 rules:
+//   - one row per player+prop_type: the two-sided market closest to even
+//     money (preferring lines where both sides sit inside the bet window),
+//     BOTH prices printed, sides always labeled — never a bare number;
+//   - ladder rungs collapse into that primary market; a core player-prop
+//     with no two-sided line anywhere is off the board (a market without an
+//     opposing price cannot be price-checked);
+//   - home runs are the sanctioned one-sided exception (the feed offers no
+//     "no HR" side) — rungs print with an explicit "Over" label;
+//   - the -200..+400 window moves layers: it was never wrong as a BET rule,
+//     it was wrong as a BOARD rule. Bet permission = the CLI odds gate via
+//     propOddsService.isOddsTakeable.
+
+/** American odds → implied probability (vig included). */
+const impliedProb = (odds) => {
+  const o = Number(odds);
+  if (!Number.isFinite(o) || o === 0) return null;
+  return o > 0 ? 100 / (o + 100) : -o / (-o + 100);
+};
+
+const isHrType = (propType) => norm(propType).includes('home_run');
+
+/**
+ * Collapse market rows (player+prop_type+line, both sides priced when the
+ * book offers both) to one primary market per player+prop_type.
+ * Returns { rows, stats } — stats is the board-composition record stamped
+ * onto stored picks so the ledger can segment board eras.
+ */
+export function selectPrimaryMarkets(marketRows) {
+  const pairs = new Map();
+  for (const p of marketRows || []) {
+    if (!p?.player || !p?.prop_type) continue;
+    const key = `${norm(p.player)}|${norm(p.prop_type)}`;
+    if (!pairs.has(key)) pairs.set(key, []);
+    pairs.get(key).push(p);
+  }
+
+  const rows = [];
+  let droppedOneSidedPairs = 0;
+  for (const candidates of pairs.values()) {
+    if (isHrType(candidates[0].prop_type)) {
+      // Fun-lane exception: every HR rung with a takeable yes-price stays.
+      for (const c of candidates) {
+        if (propOddsService.isOddsTakeable(c.over_odds, c.prop_type)) rows.push(c);
+      }
+      continue;
+    }
+    const twoSided = candidates.filter(c => c.over_odds != null && c.under_odds != null);
+    if (!twoSided.length) { droppedOneSidedPairs++; continue; }
+    const ranked = twoSided.slice().sort((a, b) => {
+      const aTake = propOddsService.isOddsTakeable(a.over_odds, a.prop_type) && propOddsService.isOddsTakeable(a.under_odds, a.prop_type) ? 0 : 1;
+      const bTake = propOddsService.isOddsTakeable(b.over_odds, b.prop_type) && propOddsService.isOddsTakeable(b.under_odds, b.prop_type) ? 0 : 1;
+      if (aTake !== bTake) return aTake - bTake;
+      const aBal = Math.abs((impliedProb(a.over_odds) ?? 1) - (impliedProb(a.under_odds) ?? 1));
+      const bBal = Math.abs((impliedProb(b.over_odds) ?? 1) - (impliedProb(b.under_odds) ?? 1));
+      if (aBal !== bBal) return aBal - bBal;
+      return Number(a.line) - Number(b.line);
+    });
+    rows.push(ranked[0]);
+  }
+
+  const twoSidedCount = rows.filter(r => r.over_odds != null && r.under_odds != null).length;
+  const stats = {
+    board_version: 2,
+    markets: rows.length,
+    two_sided: twoSidedCount,
+    over_only: rows.filter(r => r.over_odds != null && r.under_odds == null).length,
+    under_only: rows.filter(r => r.over_odds == null && r.under_odds != null).length,
+    dropped_one_sided_pairs: droppedOneSidedPairs,
+    two_sided_pct: rows.length ? Math.round((twoSidedCount / rows.length) * 100) : 0,
+  };
+  return { rows, stats };
+}
+
+/**
+ * THE PROP BOARD V2 — same contract as buildPropBoard ({ text, players },
+ * plus stats), fed by MARKET rows (propOddsService.getMlbPlayerPropMarkets).
+ * Sides are always labeled; a one-priced HR rung prints "Over +240", never a
+ * bare "+240" that reads as the default bet.
+ */
+export function buildPropBoardV2(marketRows, { lineupNames = null, hrOnly = false, chronoByPlayer = null } = {}) {
+  let rows = (marketRows || []).filter(p => p?.player && p?.prop_type);
+  if (hrOnly) rows = rows.filter(p => isHrType(p.prop_type));
+  let excluded = 0;
+  if (lineupNames && lineupNames.size) {
+    const before = rows.length;
+    rows = rows.filter(p => lineupNames.has(norm(p.player)));
+    excluded = before - rows.length;
+  }
+  if (!rows.length) return { text: '', players: new Set(), stats: null };
+
+  const { rows: primaries, stats } = selectPrimaryMarkets(rows);
+
+  const byPlayer = new Map();
+  for (const p of primaries) {
+    const over = fmtOdds(p.over_odds);
+    const under = fmtOdds(p.under_odds);
+    const price = over != null && under != null ? `Over ${over} / Under ${under}`
+      : over != null ? `Over ${over}`
+      : under != null ? `Under ${under}`
+      : null;
+    if (!price) continue;
+    const key = norm(p.player);
+    if (!byPlayer.has(key)) byPlayer.set(key, { player: p.player, team: p.team, entries: [] });
+    const cleared = chronoByPlayer ? clearedClause(chronoByPlayer.get(key), p.prop_type, p.line) : null;
+    byPlayer.get(key).entries.push(`${p.prop_type} ${p.line} (${price})${cleared ? ` — ${cleared}` : ''}`);
+  }
+  if (!byPlayer.size) return { text: '', players: new Set(), stats };
+
+  const lines = [...byPlayer.values()]
+    .sort((a, b) => a.player.localeCompare(b.player))
+    .map(g => `  ${g.player}${g.team ? ` (${g.team})` : ''}: ${g.entries.join(' · ')}`);
+
+  const note = excluded > 0 ? `\n(Players not in tonight's lineups are off the board.)` : '';
+  return {
+    text: `═══ THE PROP BOARD (tonight's live prop prices) ═══\n${lines.join('\n')}${note}`,
+    players: new Set(byPlayer.keys()),
+    stats,
+  };
+}
+
 const parsePicksJson = (t) => {
   try {
     const m = String(t || '').match(/```json\s*([\s\S]*?)```/i) || String(t || '').match(/(\{[\s\S]*\})/);
@@ -254,7 +379,10 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     }));
   }
 
-  const board = buildPropBoard(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
+  // Board builder seam: production defaults to the legacy board until the V2
+  // cutover; the paired bench passes buildBoard: buildPropBoardV2 with market
+  // rows so both arms run the REAL brain path.
+  const board = (options.buildBoard ?? buildPropBoard)(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
   if (!board.players.size) {
     console.log('   [Props Brain] empty board after filters — pass');
     return { picks: [], validatedPlayers: board.players };
@@ -352,6 +480,10 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
     prompt_sha: PROPS_PROMPT_SHA,
+    // Board-composition stamp (V2 boards only) — lets the ledger segment
+    // board eras without a prompt change. Public names: stripInternalFields
+    // drops _-prefixed keys at the storage boundary.
+    ...(board.stats ? { board_version: board.stats.board_version, board_two_sided_pct: board.stats.two_sided_pct } : {}),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));
 

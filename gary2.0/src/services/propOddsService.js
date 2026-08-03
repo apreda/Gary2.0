@@ -44,7 +44,101 @@ const isOddsAcceptable = (odds, propType) => {
   return odds >= MIN_ACCEPTABLE_ODDS && odds <= maxForType;
 };
 
+// MLB core prop types + sane line caps (board V2 module-scope copy; the
+// legacy getPlayerPropOdds MLB branch carries its own local until cutover).
+const MLB_CORE_PROP_TYPES = new Set([
+  'hits', 'home_runs', 'total_bases', 'rbis', 'runs_scored',
+  'walks', 'stolen_bases', 'singles', 'doubles',
+  'pitcher_strikeouts', 'pitcher_outs', 'pitcher_earned_runs',
+  'pitcher_hits_allowed', 'pitcher_walks', 'hits_runs_rbis'
+]);
+const isCoreMlbMarket = (propType, line) => {
+  const pt = (propType || '').toLowerCase();
+  if (!MLB_CORE_PROP_TYPES.has(pt)) return false;
+  const ln = parseFloat(line) || 0;
+  if (pt === 'stolen_bases' && ln > 0.5) return false;
+  if (pt === 'home_runs' && ln > 1.5) return false;
+  if (pt === 'doubles' && ln > 0.5) return false;
+  if (pt === 'singles' && ln > 1.5) return false;
+  return true;
+};
+
 export const propOddsService = {
+  /**
+   * Bet-permission check — the odds window as a PICK rule, not a board rule
+   * (props board V2, Aug 3 2026). The V2 board shows the real market both
+   * sides priced; this gates which SIDES are takeable at pick time. Same
+   * constants as the legacy board filter below.
+   */
+  isOddsTakeable: (odds, propType) => isOddsAcceptable(odds, propType),
+
+  /**
+   * MLB player prop MARKETS — one row per player+prop_type+line carrying BOTH
+   * sides' best prices (vendor best-odds merge), core-type/line filtered,
+   * with NO odds-window filtering and NO side-splitting. This is the props
+   * board V2 source shape: the board prints the market the way a book
+   * presents it; the -200..+400 window applies at pick time via
+   * isOddsTakeable, never at board construction.
+   *
+   * Measured Aug 3 2026 (8-game slate): the legacy per-side window left a
+   * board that was 58.6% over-only rows (97% of one-sided rows were overs)
+   * and stripped the under from 26% of genuinely two-sided markets — the
+   * menu itself manufactured the documented over-bias.
+   *
+   * Requires the exact BDL game id (production callers always have it; the
+   * hardened name-match fallback stays in getPlayerPropOdds for manual runs).
+   */
+  getMlbPlayerPropMarkets: async (gameId) => {
+    if (gameId == null) throw new Error('getMlbPlayerPropMarkets requires a BDL game id');
+
+    const bdlProps = await ballDontLieService.getMlbPlayerProps(gameId);
+    if (!bdlProps || bdlProps.length === 0) return [];
+
+    const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
+    const playerMap = await ballDontLieService.getMlbPlayersByIds(playerIds);
+
+    const transformed = bdlProps.map(prop => {
+      const isOverUnder = prop.market?.type === 'over_under';
+      const isMilestone = prop.market?.type === 'milestone';
+      const playerInfo = playerMap[prop.player_id] || {};
+      return {
+        player: playerInfo.name || `Player ${prop.player_id}`,
+        player_id: prop.player_id,
+        team: playerInfo.team || 'MLB',
+        teamAbbr: playerInfo.teamAbbr || '',
+        position: playerInfo.position || '',
+        batsThrows: playerInfo.batsThrows || '',
+        prop_type: prop.prop_type,
+        line: parseFloat(prop.line_value) || 0.5,
+        over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
+        under_odds: isOverUnder ? prop.market?.under_odds : null,
+        market_type: prop.market?.type || 'over_under',
+        vendor: prop.vendor
+      };
+    });
+
+    // Vendor best-odds merge per player+type+line (same semantics as the
+    // legacy branch: each side independently takes the best price offered).
+    const grouped = {};
+    for (const prop of transformed) {
+      const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+      if (!grouped[key]) {
+        grouped[key] = { ...prop };
+      } else {
+        if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
+          grouped[key].over_odds = prop.over_odds;
+        }
+        if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
+          grouped[key].under_odds = prop.under_odds;
+        }
+      }
+    }
+
+    const markets = Object.values(grouped).filter(p => isCoreMlbMarket(p.prop_type, p.line));
+    console.log(`[PropOdds] MLB markets for game ${gameId}: ${bdlProps.length} raw rows → ${markets.length} core markets (both-side shape, no odds-window filter)`);
+    return markets;
+  },
+
   /**
    * Filter out player props with odds outside acceptable range
    * Range: -200 to +400 (inclusive)
