@@ -390,10 +390,12 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     }));
   }
 
-  // Board builder seam: production defaults to the legacy board until the V2
-  // cutover; the paired bench passes buildBoard: buildPropBoardV2 with market
-  // rows so both arms run the REAL brain path.
-  const board = (options.buildBoard ?? buildPropBoard)(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
+  // BOARD V2 IS PRODUCTION (cutover Aug 3 2026, founder's "right now"):
+  // playerProps arrive as MARKET rows (propOddsService.getMlbPlayerPropMarkets)
+  // and the default board is the market-first V2. The seam remains so the
+  // paired bench can run the legacy arm (buildBoard: buildPropBoard) for
+  // same-night audits.
+  const board = (options.buildBoard ?? buildPropBoardV2)(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
   if (!board.players.size) {
     console.log('   [Props Brain] empty board after filters — pass');
     return { picks: [], validatedPlayers: board.players };

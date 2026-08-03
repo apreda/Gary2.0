@@ -44,8 +44,8 @@ const isOddsAcceptable = (odds, propType) => {
   return odds >= MIN_ACCEPTABLE_ODDS && odds <= maxForType;
 };
 
-// MLB core prop types + sane line caps (board V2 module-scope copy; the
-// legacy getPlayerPropOdds MLB branch carries its own local until cutover).
+// MLB core prop types + sane line caps — single source since the V2 cutover
+// (the legacy getPlayerPropOdds MLB branch now delegates here).
 const MLB_CORE_PROP_TYPES = new Set([
   'hits', 'home_runs', 'total_bases', 'rbis', 'runs_scored',
   'walks', 'stolen_bases', 'singles', 'doubles',
@@ -554,79 +554,14 @@ export const propOddsService = {
         } else {
           console.log(`✅ Found BDL MLB game ID: ${matchingGame.id}${gameId != null ? ' (caller-provided)' : ' (name match)'}`);
 
-          const bdlProps = await ballDontLieService.getMlbPlayerProps(matchingGame.id);
-
-          if (bdlProps && bdlProps.length > 0) {
-            const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
-            const playerMap = await ballDontLieService.getMlbPlayersByIds(playerIds);
-
-            const transformedProps = bdlProps.map(prop => {
-              const isOverUnder = prop.market?.type === 'over_under';
-              const isMilestone = prop.market?.type === 'milestone';
-              const playerInfo = playerMap[prop.player_id] || {};
-
-              return {
-                player: playerInfo.name || `Player ${prop.player_id}`,
-                player_id: prop.player_id,
-                team: playerInfo.team || 'MLB',
-                teamAbbr: playerInfo.teamAbbr || '',
-                position: playerInfo.position || '',
-                batsThrows: playerInfo.batsThrows || '',
-                prop_type: prop.prop_type,
-                line: parseFloat(prop.line_value) || 0.5,
-                over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
-                under_odds: isOverUnder ? prop.market?.under_odds : null,
-                market_type: prop.market?.type || 'over_under',
-                vendor: prop.vendor
-              };
-            });
-
-            // Group by player and prop type to consolidate odds from different vendors
-            const grouped = {};
-            for (const prop of transformedProps) {
-              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
-              if (!grouped[key]) {
-                grouped[key] = { ...prop };
-              } else {
-                if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
-                  grouped[key].over_odds = prop.over_odds;
-                }
-                if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
-                  grouped[key].under_odds = prop.under_odds;
-                }
-              }
-            }
-
-            const result = Object.values(grouped);
-
-            // MLB-specific prop type filtering — keep only the core analyzable props
-            const MLB_CORE_PROPS = new Set([
-              'hits', 'home_runs', 'total_bases', 'rbis', 'runs_scored',
-              'walks', 'stolen_bases', 'singles', 'doubles',
-              'pitcher_strikeouts', 'pitcher_outs', 'pitcher_earned_runs',
-              'pitcher_hits_allowed', 'pitcher_walks', 'hits_runs_rbis'
-            ]);
-            // Filter out non-core props and extreme lines
-            const coreFiltered = result.filter(p => {
-              const pt = (p.prop_type || '').toLowerCase();
-              // Must be a core prop type
-              if (!MLB_CORE_PROPS.has(pt)) return false;
-              // Filter out extreme lines (e.g., 2+ steals, 3+ HR)
-              const line = parseFloat(p.line) || 0;
-              if (pt === 'stolen_bases' && line > 0.5) return false;  // Only 1+ steals
-              if (pt === 'home_runs' && line > 1.5) return false;     // Only 1+ or 1.5 HR
-              if (pt === 'doubles' && line > 0.5) return false;       // Only 1+ doubles
-              if (pt === 'singles' && line > 1.5) return false;       // Only 1+ or 1.5 singles
-              return true;
-            });
-
-            const propTypes = {};
-            coreFiltered.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
-            console.log(`[PropOdds] BDL MLB props: ${result.length} raw → ${coreFiltered.length} core filtered`);
-            console.log(`[PropOdds] MLB prop types:`, propTypes);
-
-            const filtered = propOddsService.filterPropsByOddsValue(coreFiltered);
-            return filtered;
+          // Since the board V2 cutover (Aug 3 2026) this legacy entry point
+          // only serves manual runs / legacy callers: it delegates to the
+          // market-shaped fetch and re-applies the window-split shape they
+          // expect. The MLB props CLI consumes getMlbPlayerPropMarkets
+          // directly and enforces the window at pick time instead.
+          const markets = await propOddsService.getMlbPlayerPropMarkets(matchingGame.id);
+          if (markets.length > 0) {
+            return propOddsService.filterPropsByOddsValue(markets);
           }
         }
       }

@@ -246,7 +246,17 @@ export async function runAgenticPropsCli({
       console.log(`\n📡 Fetching player props...`);
       let playerProps = [];
       try {
-        playerProps = await propOddsService.getPlayerPropOdds(sportKey, game.home_team, game.away_team, game.commence_time, game.bdl_game_id ?? game.id ?? null);
+        if (sportKey === 'baseball_mlb') {
+          // BOARD V2 (cutover Aug 3 2026): MLB fetches MARKET rows — one row
+          // per player+type+line carrying BOTH sides' best prices, with NO
+          // odds-window filtering. The -200..+400 window is enforced at the
+          // odds gate below as a BET rule, never at board construction (the
+          // per-side filter built a 58.6%-over-only menu and its split rows
+          // made the reconciliation below kill under picks as "unverified").
+          playerProps = await propOddsService.getMlbPlayerPropMarkets(game.bdl_game_id ?? game.id ?? null);
+        } else {
+          playerProps = await propOddsService.getPlayerPropOdds(sportKey, game.home_team, game.away_team, game.commence_time, game.bdl_game_id ?? game.id ?? null);
+        }
         console.log(`✅ Found ${playerProps.length} prop lines`);
       } catch (propsError) {
         console.warn(`⚠️ Could not fetch props: ${propsError.message}`);
@@ -433,6 +443,19 @@ export async function runAgenticPropsCli({
             result.picks = result.picks.filter(p => {
               if (p.odds == null) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} — no price at all (model + BDL both missing)`); return false; }
               if (p._oddsUnverified) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} @ ${p.odds} — no BDL line matched the pick (model-quoted price)`); return false; }
+              // BET-WINDOW PERMISSION (board V2): the -200..+400 window (HR
+              // +900) now lives HERE, on the side actually picked — the V2
+              // board shows the whole market, so an off-window side is
+              // visible but not takeable. No-op for legacy lanes whose rows
+              // were pre-filtered by the same window.
+              if (sportKey === 'baseball_mlb') {
+                const _tok = (p.prop || '').split(' ')[0].toLowerCase();
+                const _num = Number(p.odds);
+                if (!propOddsService.isOddsTakeable(Number.isFinite(_num) ? _num : null, _tok)) {
+                  console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.bet} ${p.prop} @ ${p.odds} — price outside the bet window`);
+                  return false;
+                }
+              }
               return true;
             });
             const droppedOdds = beforeOdds - result.picks.length;

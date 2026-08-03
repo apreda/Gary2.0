@@ -29,7 +29,7 @@ import '../src/loadEnv.js';
 import fs from 'fs';
 import { oddsService } from '../src/services/oddsService.js';
 import { propOddsService } from '../src/services/propOddsService.js';
-import { analyzeMlbPropsDesk, buildPropBoardV2 } from '../src/services/pickdesk/propsBrain.js';
+import { analyzeMlbPropsDesk, buildPropBoard, buildPropBoardV2 } from '../src/services/pickdesk/propsBrain.js';
 const { applyPropsPerGameConstraint } = await import('../src/services/agentic/propsSharedUtils.js');
 
 const OUT_JSON = '/private/tmp/claude-501/-Users-adam-preda/d0a95eae-a1d8-4613-b2e3-4ab7608b4dcd/scratchpad/prop-bench-results.json';
@@ -113,12 +113,13 @@ for (const game of games) {
     const legacyRows = propOddsService.filterPropsByOddsValue(markets);
     const marketByKey = new Map(markets.map(m => [`${(m.player || '').toLowerCase()}|${(m.prop_type || '').toLowerCase()}|${m.line}`, m]));
 
-    // Arm A — production path exactly (legacy split rows, V1 board inside).
-    const resA = await analyzeMlbPropsDesk(game, legacyRows, {});
+    // Arm A — the LEGACY system (split rows + V1 board, passed explicitly:
+    // since the Aug 3 cutover the production default is V2).
+    const resA = await analyzeMlbPropsDesk(game, legacyRows, { buildBoard: buildPropBoard });
     if (resA.error) parseFailures++;
     const chA = chassis(resA.picks || [], legacyRows, { enforceWindow: false });
 
-    // Arm B — market rows + V2 board through the same brain.
+    // Arm B — market rows + V2 board through the same brain (= production).
     const resB = await analyzeMlbPropsDesk(game, markets, { buildBoard: buildPropBoardV2 });
     if (resB.error) parseFailures++;
     const chB = chassis(resB.picks || [], markets, { enforceWindow: true });
