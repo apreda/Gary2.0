@@ -287,7 +287,9 @@ async function fetchMLBStats(gameIds) {
   let allStats = [];
   for (const gameId of gameIds) {
     const data = await bdlFetch('mlb/v1/stats', `game_ids[]=${gameId}&per_page=100`);
-    if (data?.data) allStats.push(...data.data);
+    // Tag each row with its source game so prop grading can scope the player
+    // search to the pick's OWN game (local-only field, never stored).
+    if (data?.data) allStats.push(...data.data.map(s => ({ ...s, _game_id: String(gameId) })));
   }
   console.log(`  📊 MLB stats: ${allStats.length} player entries for ${gameIds.length} games`);
   cache.stats.set(key, allStats);
@@ -988,7 +990,18 @@ async function processPropBets(date) {
       let source = 'none';
       if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
       else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
-      else if (dataSport === 'MLB') actual = getStatValue('MLB', mlbStats, name, type);
+      else if (dataSport === 'MLB') {
+        // Scope the search to the pick's OWN game (Aug 3): the date-wide pool
+        // let a same-surname player in ANOTHER game match first, and the
+        // unconditional UPDATE below then overwrote the cloud grader's correct
+        // per-game grade every night (Torres/Pederson/Perez HR credits came
+        // from other games' boxes). Legacy picks without game_id keep the
+        // date-wide fallback.
+        const pool = p.game_id != null
+          ? mlbStats.filter(s => s._game_id === String(p.game_id))
+          : mlbStats;
+        actual = getStatValue('MLB', pool, name, type);
+      }
       else if (dataSport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
 
       if (actual !== null) {
