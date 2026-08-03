@@ -141,6 +141,26 @@ enum SupabaseAPI {
         // Use the new function that finds the most recent day with results
         return try await fetchMostRecentGameRecord()
     }
+
+    /// Rolling 7-day GAME-pick record across every sport — the Picks masthead's
+    /// "LAST 7 DAYS" line (the Hub's twin shows the insight-lane record; Picks
+    /// shows the record of the actual picks). Pushes sit out of the headline
+    /// count, matching the Hub's two-number read.
+    static func fetchSevenDayPickRecord() async -> (w: Int, l: Int)? {
+        guard let tz = TimeZone(identifier: "America/New_York") else { return nil }
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+        let since = formatDateEST(cal.date(byAdding: .day, value: -7, to: Date()) ?? Date())
+        guard let results = try? await fetchAllGameResults(since: since) else { return nil }
+        var w = 0, l = 0
+        for r in results where !AppFlags.hidesWorldCupRow(r.league) {
+            switch r.result?.lowercased() {
+            case "won", "win", "w":   w += 1
+            case "lost", "loss", "l": l += 1
+            default: break
+            }
+        }
+        return (w + l) > 0 ? (w, l) : nil
+    }
     
     /// Fetch game record from the most recent day that has results
     /// Falls back up to 7 days to find actual performance data
@@ -643,7 +663,7 @@ enum SupabaseAPI {
     /// written at the 5am plan step). The board exists before picks do.
     static func fetchDailySlate(date: String) async -> [DailySlateRow] {
         let url = buildURL(table: "daily_slate", query: [
-            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,venue,spread,ml_home,ml_away,total"),
+            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,bdl_game_id,venue,spread,ml_home,ml_away,total"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "commence_time.asc")
         ])
@@ -766,7 +786,11 @@ enum SupabaseAPI {
         let url = buildURL(table: "game_recaps", query: [
             URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,headline,recap,bullets"),
             URLQueryItem(name: "game_date", value: "in.(\(date),\(next))"),
-            URLQueryItem(name: "order", value: "result.desc")
+            // Chronological, never result-sorted (founder, Aug 3): the old
+            // result.desc put every CASHED recap first — a page of wins that
+            // "would look fake and would be fake." Written-at order = the
+            // night as it actually unfolded, losses where they landed.
+            URLQueryItem(name: "order", value: "created_at.asc")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),

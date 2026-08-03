@@ -1863,7 +1863,7 @@ struct HomeView: View {
             LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 18) {
 
                     // ── ① Masthead — the serif front-door wordmark (the emerging
                     // app language the Hub established Jul 4). No record up top:
@@ -1913,18 +1913,7 @@ struct HomeView: View {
                 try? await Task.sleep(nanoseconds: 800_000_000)   // let the pull spinner show while the keyed .task reloads
             }
 
-            // Status-bar scrim — content scrolls under the clock unshielded
-            // (Aug 3: "TB @ COL" collided with 9:41). A quiet page-tone fade,
-            // never a hard edge.
-            VStack(spacing: 0) {
-                LinearGradient(colors: [Color(hex: "#08080A").opacity(0.94),
-                                        Color(hex: "#08080A").opacity(0)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 64)
-                Spacer(minLength: 0)
-            }
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
+            StatusBarScrim()
         }
         .overlay {
             if showDailyRecap {
@@ -2434,46 +2423,29 @@ struct HomeView: View {
     }
 
     private var headlineStories: [HomeMarqueeHero.Story] {
-        // Paint last session's cards instantly on cold open; live wins the instant marquee lands.
-        if marquee == nil, let cached = cachedHeadlines { return cached }
-        var out: [HomeMarqueeHero.Story] = []
-        if var m = marquee {
-            // The marquee leads, wearing the clean game_recaps headline + recap body +
-            // bullets when a matching recap exists — unify (user call, Jun 16): the lead
-            // card now uses the SAME headline source as the slides, so D2's professional
-            // voice covers it too (no more the Swift "X over the Y, 0-0" template up top).
-            if let r = nightRecaps.first(where: { recapMatches($0.matchup, headline: m.headline) }) {
-                if let h = r.headline, !h.isEmpty { m.headline = h }
-                m.recap = r.recap
-                m.bullets = r.bullets ?? []
-                out.append(m)
-            } else if nightRecaps.isEmpty {
-                // No recap slides to lead with — keep the headline+receipt hero.
-                out.append(m)
+        // Paint last session's cards instantly on cold open.
+        if nightRecaps.isEmpty, let cached = cachedHeadlines { return cached }
+        // THE TRUTH, IN ORDER (founder, Aug 3): headlines run priority league
+        // first, then FEED ORDER — never wins-first, never a biggest-cash
+        // lead. A rail that leads with cashes reads like Gary always wins,
+        // "which of course would look fake and would be fake." Losses print
+        // exactly where the night put them.
+        let orderedRecaps = nightRecaps.enumerated()
+            .sorted { a, b in
+                let ra = LeaguePriority.rank(a.element.league), rb = LeaguePriority.rank(b.element.league)
+                return ra != rb ? ra < rb : a.offset < b.offset
             }
-            // else: the biggest-cash lead is from a different (older) night than the
-            // graded recaps, so no body matches — skip it rather than show an empty
-            // card; the recap slides below lead with full stories.
-        }
-        // The rest of the night, one slide per settled game — priority
-        // league first, wins before losses within it (explicit sort keys;
-        // Swift's sort isn't stable).
-        func key(_ r: GameRecapRow) -> (Int, Int) {
-            (LeaguePriority.rank(r.league), r.result == "won" ? 0 : (r.result == "push" ? 1 : 2))
-        }
-        let orderedRecaps = nightRecaps.sorted { key($0) < key($1) }
-        for r in orderedRecaps.prefix(7) {
-            if let first = out.first, recapMatches(r.matchup, headline: first.headline) { continue }
+            .map(\.element)
+        return orderedRecaps.prefix(6).map { r in
             let cashed = r.result == "won"
             let pickLine = Formatters.splitPickAndOdds(r.pick_text ?? "").0
-            out.append(HomeMarqueeHero.Story(
+            return HomeMarqueeHero.Story(
                 league: r.league ?? "", headline: r.headline ?? "", sub: "",
                 receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
                 receiptPick: Formatters.arrowizeOverUnder(pickLine).uppercased(),
                 verdict: cashed ? "CASHED" : (r.result == "push" ? "PUSH" : "LOST"),
-                cashed: cashed, recap: r.recap, bullets: r.bullets ?? []))
+                cashed: cashed, recap: r.recap, bullets: r.bullets ?? [])
         }
-        return out
     }
 
     /// TODAY — THE SHEET (Jul 5 rebuild; founder: "less Gary ride-along,
@@ -2487,14 +2459,16 @@ struct HomeView: View {
     @ViewBuilder private var todaySections: some View {
         // Compute once per body eval (live ticks re-run this often).
         let stories = headlineStories
+        // The day-cycle clock, view-side: has today's first pitch happened?
+        let cycleLive = slateGames.contains { parseISO8601($0.commence_time ?? "").map { $0 <= Date() } ?? false }
 
-        // ── THE HEADLINES lead the page ALL DAY (founder, Aug 3 — supersedes
-        // the sheet-takes-the-top rule): last night's stories hold the door
-        // until today's first final, then the rail rebuilds one headline at a
-        // time as tonight's games grade (nightRecaps already rolls to today's
-        // recaps the moment the first one lands).
-        if !stories.isEmpty {
-            HomeStoryRail(stories: stories) {
+        // ── THE HEADLINES as a dashboard container (founder, Aug 3).
+        // Placement rides the cycle: the stories lead the page until the
+        // day's first pitch; once games are on, the live board takes the
+        // door and the headlines sit right under it, rebuilding one story
+        // at a time as tonight's games grade.
+        if !cycleLive, !stories.isEmpty {
+            HomeHeadlinesBoard(stories: stories) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
             .opacity(animateIn ? 1 : 0)
@@ -2540,10 +2514,20 @@ struct HomeView: View {
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
-        // ── THE SHEET — today's slate in three zones.
+        // ── THE BOARD — every game, one list, all day.
         homeSheet
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
+
+        // Headlines under the board once the day is rolling — tonight's
+        // stories build here as games finish.
+        if cycleLive, !stories.isEmpty {
+            HomeHeadlinesBoard(stories: stories) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+            }
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
+        }
 
         // ── DISCOVERY (Jul 26 additions) — the fantasy desk's daily add/cut,
         // the wire pulse, and the standings podium. Each self-hides empty.
@@ -4612,8 +4596,13 @@ struct HomeMarqueeTracker: View {
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(GaryColors.warmWhite.opacity(0.03))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(hero?.isLive == true ? GaryColors.win.opacity(0.35) : GaryColors.gold.opacity(0.3), lineWidth: 1))
+        )
+        // The ribbon band is a square-cornered surface — clip it to the card
+        // shape so it never pokes past the rounded border (Aug 3 polish).
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(hero?.isLive == true ? GaryColors.win.opacity(0.35) : GaryColors.gold.opacity(0.3), lineWidth: 1)
         )
         .padding(.horizontal, 16)
     }
@@ -4873,62 +4862,66 @@ func slateDayShort(_ iso: String) -> String {
     return "\(m)/\(d)"
 }
 
-/// THE STORY RAIL — the night's headlines as swipeable cards (the front
-/// page's lead). Leads the page all day (founder, Aug 3); each card carries
-/// the pick + verdict receipt. Tap → the ledger.
-struct HomeStoryRail: View {
+/// THE HEADLINES — the night's stories as ONE dashboard container (founder,
+/// Aug 3: "dashboard like containers make more sense") wearing the board's
+/// exact chrome. The lead story prints bigger; every story shows in FEED
+/// order, wins and losses alike — the truth, stacked. Tap → the ledger.
+struct HomeHeadlinesBoard: View {
     let stories: [HomeMarqueeHero.Story]
     let onOpen: () -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Array(stories.prefix(8).enumerated()), id: \.offset) { _, story in
-                    Button(action: onOpen) { card(story) }.buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 10) {
+            HomeActHead(title: "The Headlines", count: stories.count)
+            VStack(spacing: 0) {
+                ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { i, s in
+                    Button(action: onOpen) { storyRow(s, lead: i == 0) }
+                        .buttonStyle(.plain)
+                    if i < min(stories.count, 6) - 1 {
+                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
+                    }
                 }
             }
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(GaryColors.warmWhite.opacity(0.03))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
+            )
             .padding(.horizontal, 16)
         }
     }
 
-    @ViewBuilder private func card(_ s: HomeMarqueeHero.Story) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // League tag = branding, top-left. The verdict moved DOWN next to
-            // the pick it judges (founder, Jul 12: related info sits together).
-            Text(s.league.uppercased())
-                .font(.system(size: 12, weight: .semibold).monospacedDigit()).tracking(1)
-                .foregroundStyle(.white.opacity(0.7))
+    @ViewBuilder private func storyRow(_ s: HomeMarqueeHero.Story, lead: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text(s.league.uppercased())
+                    .font(GaryFonts.mono(10)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.62))
+                Spacer(minLength: 8)
+            }
             Text(s.headline)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white.opacity(0.96))
-                .lineLimit(3)
+                .font(.system(size: lead ? 16.5 : 14, weight: lead ? .bold : .semibold))
+                .foregroundStyle(.white.opacity(0.94))
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 2)
-            HStack(alignment: .firstTextBaseline) {
+            // Related info sits together (founder, Jul 12): the pick and the
+            // verdict that judged it, one line.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if !s.receiptPick.isEmpty {
-                    // Same size as the headline above and the verdict beside it
-                    // (founder, Jul 22) — 18pt made it the loudest thing on the
-                    // card; constant size (never shrinks to neighbors) stays.
                     Text(s.receiptPick)
-                        .font(.system(size: 14, weight: .bold).monospacedDigit())
+                        .font(.system(size: 13, weight: .bold).monospacedDigit())
                         .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 8)
                 Text(s.verdict)
-                    .font(.system(size: 14, weight: .bold).monospacedDigit()).tracking(0.8)
+                    .font(.system(size: 13, weight: .bold).monospacedDigit()).tracking(0.8)
                     .foregroundStyle(s.cashed ? GaryColors.win : s.verdict == "PUSH" ? GaryColors.gold : GaryColors.loss)
             }
         }
-        .padding(12)
-        .frame(width: 240, height: 122, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(GaryColors.warmWhite.opacity(0.03))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
-        )
+        .padding(.horizontal, 14).padding(.vertical, 11)
         .contentShape(Rectangle())
     }
 }
@@ -5072,6 +5065,22 @@ struct HomeWinnersStub: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16)
+    }
+}
+
+/// Status-bar scrim — every scrolling page fades its content under the clock
+/// (Aug 3: bare rows collided with "9:41"). One component, one identity.
+struct StatusBarScrim: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [Color(hex: "#08080A").opacity(0.94),
+                                    Color(hex: "#08080A").opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(height: 64)
+            Spacer(minLength: 0)
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
     }
 }
 
@@ -6515,6 +6524,7 @@ struct PremiumPicksView: View {
                 .onChange(of: picksFocus.focusSport) { _ in jumpToFocusSport(proxy) }
                 .onChange(of: loading) { _ in jumpToFocusSport(proxy) }
             }
+            StatusBarScrim()
         }
         .task { await reload() }
         .onGaryTour { verb, arg in
@@ -17245,24 +17255,19 @@ struct SocialButton: View {
                 UIApplication.shared.open(primary)
             }
         } label: {
-            HStack(spacing: 8) {
+            // The page's last whisper (Aug 3): borderless text links — the
+            // boxed buttons outweighed THE RECORD above them.
+            HStack(spacing: 7) {
                 Image(systemName: systemIcon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.8))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(GaryColors.gold.opacity(0.7))
                 Text(label.uppercased())
-                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.9)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.9)
+                    .foregroundStyle(.white.opacity(0.62))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(hex: "#131110"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                    )
-            )
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

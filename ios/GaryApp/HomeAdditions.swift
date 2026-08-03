@@ -265,33 +265,51 @@ struct HomeWireMini: View {
 
     var body: some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("THE WIRE")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
-                    .foregroundStyle(GaryColors.gold)
-                ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { _, item in
-                    Button(action: onOpen) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            // Raw tokens never reach the page ("LINE_MOVE"
-                            // wrapped as "LINE_MO VE" — Aug 3).
-                            Text((item.kind ?? "wire").replacingOccurrences(of: "_", with: " ").uppercased())
-                                .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
-                                .foregroundStyle(.white.opacity(0.4))
-                                .frame(width: 62, alignment: .leading)
-                            Text(item.headline ?? "")
-                                .font(GaryFonts.text(12.5))
-                                .foregroundStyle(.white.opacity(0.85))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 0)
+            // Dashboard container (Aug 3): the Wire wears the board's chrome
+            // and the shared act-head grammar — no more naked list.
+            VStack(alignment: .leading, spacing: 10) {
+                HomeActHead(title: "The Wire", count: items.count)
+                VStack(spacing: 0) {
+                    ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { i, item in
+                        Button(action: onOpen) {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                // Raw tokens never reach the page ("LINE_MOVE"
+                                // wrapped as "LINE_MO VE" — Aug 3). One line,
+                                // always: the mono helper floors at 12pt, so
+                                // the column is sized for its real render.
+                                Text((item.kind ?? "wire").replacingOccurrences(of: "_", with: " ").uppercased())
+                                    .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
+                                    .foregroundStyle(.white.opacity(0.45))
+                                    .lineLimit(1).minimumScaleFactor(0.85)
+                                    .frame(width: 76, alignment: .leading)
+                                // NO lineLimit — the headline wraps to whatever
+                                // it needs (the 2-line cap printed "…", the
+                                // hard-law violation, Aug 3 loop 2).
+                                Text(item.headline ?? "")
+                                    .font(GaryFonts.text(12.5))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        if i < min(items.count, 3) - 1 {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(GaryColors.warmWhite.opacity(0.03))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
+                )
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 20)
         } else {
             Color.clear.frame(width: 0, height: 0)
                 .task {
