@@ -774,8 +774,20 @@ struct HubView: View {
         }
         return out
     }
-    private var lead: Signal? { ranked.first }
-    private var bestOfBoard: [Signal] { Array(ranked.dropFirst()) }
+    /// THE LEAD must be an INSIGHT — a connection between facts — never a raw
+    /// counting stat (founder, Aug 3: "the headline we have now isn't really
+    /// a true insight, it's just a stat math thing"). Counting lanes (heat
+    /// checks, streaks, records) still make the Best of the Board; they just
+    /// can't headline the page. Falls back to the top row only when no
+    /// connection lane produced anything today.
+    private static let leadInsightKinds: Set<SignalKind> = [
+        .regression, .ballpark, .platoon, .h2h, .bullpenFatigue,
+        .firstInning, .closerWatch, .runningGame, .parkWeather,
+    ]
+    private var lead: Signal? {
+        ranked.first(where: { Self.leadInsightKinds.contains($0.kind) }) ?? ranked.first
+    }
+    private var bestOfBoard: [Signal] { ranked.filter { $0.id != lead?.id } }
 
     /// Tonight's slate for the selected league, from the 5am board snapshot.
     private var slateRows: [TomorrowBoardRow] {
@@ -946,7 +958,9 @@ struct HubView: View {
                         }
                         if !items(.regression).isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
-                                HubHead(title: "The Regression Board", sub: "ERA vs expected")
+                                // Sub lives on the tab strip now — a static
+                                // "ERA vs expected" lied over the Teams tab.
+                                HubHead(title: "The Regression Board")
                                 HubRegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
                                     openSignal(s)
                                 }
@@ -964,12 +978,9 @@ struct HubView: View {
                         }
                     }
 
-                    // League-wide daily tables — the agate page between the
-                    // boards and the streaks (moved off Picks, founder Jul 30).
-                    if sel == .mlb, !pulseRows.isEmpty {
-                        HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab)
-                            .id("pulse")
-                    }
+                    // (League Pulse moved to the reference shelf at the bottom
+                    // — founder, Aug 3: the agate tables broke the page's flow
+                    // mid-editorial. It lives with Last Night + Receipts now.)
 
                     if !selStreakRows.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
@@ -1044,8 +1055,17 @@ struct HubView: View {
                         }
                     }
 
-                    // Folded by default (founder, Jul 30): the graded boards
-                    // are reference tables — the page leads with tonight.
+                    // THE REFERENCE SHELF — folded by default (founder,
+                    // Jul 30/Aug 3): league tables and graded boards are
+                    // look-ups, not the page's story. One tap opens each.
+                    if sel == .mlb, !pulseRows.isEmpty {
+                        HubCollapsible(anchor: "pulse", open: $openBeats,
+                                       title: "League Pulse", sub: "league-wide tables") {
+                            HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab)
+                        }
+                        .id("pulse")
+                    }
+
                     if !selNightRows.isEmpty {
                         HubCollapsible(anchor: "lastNight", open: $openBeats,
                                        title: nightLabel, count: selNightRows.count) {
@@ -1815,8 +1835,19 @@ fileprivate struct HubRegressionBoard: View {
     private func label(_ t: Tab) -> String {
         switch t {
         case .pitchers: return "Tonight"
-        case .hitters:  return "Hitters"
+        // These rows are the TEAM one-run records, not hitters (Aug 3: the
+        // "Hitters" name put team rows under an ERA header — wrong twice).
+        case .hitters:  return "Teams"
         case .tomorrow: return "Tomorrow"
+        }
+    }
+
+    /// What the active tab actually measures — rides the strip so the section
+    /// header never lies about a tab it can't see.
+    private func subline(_ t: Tab) -> String {
+        switch t {
+        case .pitchers, .tomorrow: return "ERA vs expected"
+        case .hitters:             return "one-run records"
         }
     }
 
@@ -1830,12 +1861,17 @@ fileprivate struct HubRegressionBoard: View {
                         Text("\(rowsFor(t).count)").font(HubFont.data(10, .medium))
                     }
                     .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.45))
+                    .fixedSize()                      // labels never wrap — the sub yields instead
                     .frame(minHeight: 30)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            Text(subline(activeTab).uppercased())
+                .font(HubFont.kicker(9)).tracking(1)
+                .foregroundStyle(.white.opacity(0.45))
+                .lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 2)
@@ -1845,40 +1881,53 @@ fileprivate struct HubRegressionBoard: View {
         let expandable = s.reg != nil
         let expanded = expandedID == s.id
         VStack(spacing: 0) {
-            Button {
-                guard expandable else { onTap(s); return }
-                if expanded {
-                    if s.playerId != nil { onTap(s) }
-                    else { withAnimation(.easeInOut(duration: 0.18)) { expandedID = nil } }
-                } else {
-                    withAnimation(.easeInOut(duration: 0.18)) { expandedID = s.id }
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    Text("\(i + 1)")
-                        .font(HubFont.data(12, .medium))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .frame(width: 18, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(HubFmt.subject(s.headline))
-                            .font(HubFont.body(15, .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                            .lineLimit(1).minimumScaleFactor(0.65)
-                        Text(s.game.uppercased())
-                            .font(HubFont.data(9, .medium))
+            HStack(spacing: 12) {
+                // THE LAW (founder, Aug 3): a name tap opens the player card,
+                // a team row opens the team card — period. The whole row is
+                // that tap; the chevron alone owns expand/collapse.
+                Button { onTap(s) } label: {
+                    HStack(spacing: 12) {
+                        Text("\(i + 1)")
+                            .font(HubFont.data(12, .medium))
                             .foregroundStyle(.white.opacity(0.62))
+                            .frame(width: 18, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(HubFmt.subject(s.headline))
+                                .font(HubFont.body(15, .semibold))
+                                .foregroundStyle(.white.opacity(0.95))
+                                .lineLimit(1).minimumScaleFactor(0.65)
+                            Text(s.game.uppercased())
+                                .font(HubFont.data(9, .medium))
+                                .foregroundStyle(.white.opacity(0.62))
+                        }
+                        Spacer(minLength: 6)
+                        if s.spark.count >= 2 { gapBar(s.spark[0], s.spark[1]) }
+                        Text(s.value)
+                            .font(HubFont.data(15))
+                            .foregroundStyle(hubValueTint(s))
+                            .frame(width: 48, alignment: .trailing)
                     }
-                    Spacer(minLength: 6)
-                    if s.spark.count >= 2 { gapBar(s.spark[0], s.spark[1]) }
-                    Text(s.value)
-                        .font(HubFont.data(15))
-                        .foregroundStyle(hubValueTint(s))
-                        .frame(width: 48, alignment: .trailing)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 18).padding(.vertical, 10)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                if expandable {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            expandedID = expanded ? nil : s.id
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(expanded ? GaryColors.gold : .white.opacity(0.45))
+                            .rotationEffect(.degrees(expanded ? 180 : 0))
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(expanded ? "Collapse details" : "Expand details")
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 18).padding(.vertical, 10)
             if expanded, let r = s.reg { detail(s, r) }
         }
     }
@@ -1914,16 +1963,8 @@ fileprivate struct HubRegressionBoard: View {
                     if let oba = r.opp_ba, let oxba = r.opp_xba { stat("Opp BA→xBA", "\(oba)→\(oxba)") }
                 }
             }
-            if s.playerId != nil {
-                HStack(spacing: 5) {
-                    Text("TAP AGAIN FOR THE FULL PROFILE")
-                        .font(HubFont.kicker(9.5)).tracking(1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
-                }
-            }
+            // (The "TAP AGAIN" hint died Aug 3 — the row tap always opens the
+            // profile now; the chevron owns this drawer.)
         }
         .padding(.leading, 48).padding(.trailing, 18).padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -6171,7 +6171,7 @@ struct WinnersDayCard: View {
                     ForEach(Array(slots.enumerated()), id: \.offset) { _, s in
                         VStack(spacing: 5) {
                             RoundedRectangle(cornerRadius: 1.5)
-                                .fill(s.slot.tone.opacity(s.state == .sealed ? 0.35 : 0.95))
+                                .fill(darkSurfaceTone(s.slot).opacity(s.state == .sealed ? 0.4 : 0.95))
                                 .frame(width: 4, height: 24)
                             slotGlyph(s.state)
                         }
@@ -6210,6 +6210,13 @@ struct WinnersDayCard: View {
         case .graded: return dateLabel
         default: return dateLabel
         }
+    }
+
+    /// Slot tones were tuned for the GOLD bar — the anchor's ink tone is
+    /// invisible on this dark card (founder's screenshot, Aug 3: slot 1
+    /// looked missing). Dark-surface remap; the other three carry fine.
+    private func darkSurfaceTone(_ slot: WinnersSlot) -> Color {
+        slot == .anchor ? GaryColors.gold : slot.tone
     }
 
     @ViewBuilder private func slotGlyph(_ s: SlotState) -> some View {
