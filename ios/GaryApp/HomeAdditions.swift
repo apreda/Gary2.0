@@ -272,7 +272,9 @@ struct HomeWireMini: View {
                 ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { _, item in
                     Button(action: onOpen) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text((item.kind ?? "wire").uppercased())
+                            // Raw tokens never reach the page ("LINE_MOVE"
+                            // wrapped as "LINE_MO VE" — Aug 3).
+                            Text((item.kind ?? "wire").replacingOccurrences(of: "_", with: " ").uppercased())
                                 .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
                                 .foregroundStyle(.white.opacity(0.4))
                                 .frame(width: 62, alignment: .leading)

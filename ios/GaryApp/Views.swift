@@ -1807,8 +1807,6 @@ struct HomeView: View {
     /// score per render; the live tape/takeover/board call it many times a tick.
     @State private var picksByGameId: [String: GaryPick] = [:]
     @State private var initialLive: [LiveScore] = []
-    /// THE SHEET: whether the settled "Earlier Today" zone is fully expanded.
-    @State private var sheetEarlierOpen = false
     @ObservedObject private var liveCache = LiveScoreCache.shared
 
     /// Time-aware front page: results lead in the morning, the slate leads
@@ -2992,45 +2990,21 @@ struct HomeView: View {
     /// The sheet body — EARLIER (collapsed past), LIVE (glowing middle),
     /// TONIGHT (the queue, grouped by league, countdown on the header line).
     @ViewBuilder private var homeSheet: some View {
-        let rows = sheetRows
-        let settled = rows.filter { $0.zone == .settled }
-        let live = rows.filter { $0.zone == .live }
-        let up = rows.filter { $0.zone == .upcoming }
+        // ONE BOARD (founder, Aug 3: live games were splitting out of the
+        // board into their own section — "it should all stay in the board
+        // view"): every game holds its slate slot all day; the row itself
+        // rolls scheduled time → live verdict → the stamp in place.
+        let rows = sheetRows.sorted { $0.commence < $1.commence }
+        let anyLive = rows.contains { $0.zone == .live }
 
-        if !settled.isEmpty {
-            let cashed = settled.filter { $0.statusText.contains("CASHED") }.count
-            let lost = settled.filter { $0.statusText.contains("LOST") }.count
-            HomeActHead(title: "Earlier Today", count: settled.count,
-                        sub: (cashed + lost) > 0 ? "\(cashed)–\(lost) so far" : nil)
-            homeSheetPanel(sheetEarlierOpen ? settled : Array(settled.prefix(3)))
-            if settled.count > 3 {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { sheetEarlierOpen.toggle() }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(sheetEarlierOpen ? "SHOW LESS" : "SEE ALL \(settled.count)")
-                            .font(.system(size: 12.5, weight: .semibold).monospacedDigit()).tracking(1.2)
-                            .foregroundStyle(GaryColors.gold)
-                        Image(systemName: sheetEarlierOpen ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                    .padding(.horizontal, 16)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        if !live.isEmpty {
-            HomeActHead(title: "Live Now", count: live.count, tint: GaryColors.win)
-            homeSheetPanel(live, liveGlow: true)
-        }
-        if !up.isEmpty {
-            HomeActHead(title: "Tonight", count: up.count,
-                        sub: up.contains { $0.callLine == nil } ? "PICKS DROP 90 MIN BEFORE" : nil)
-            let leagues = Array(Set(up.map(\.league))).sorted { a, b in
-                let ea = up.filter { $0.league == a }.map(\.commence).min() ?? ""
-                let eb = up.filter { $0.league == b }.map(\.commence).min() ?? ""
+        if !rows.isEmpty {
+            HomeActHead(title: "The Board", count: rows.count,
+                        sub: rows.contains { $0.zone == .upcoming && $0.callLine == nil }
+                            ? "PICKS DROP 90 MIN BEFORE" : nil,
+                        tint: anyLive ? GaryColors.win : GaryColors.gold)
+            let leagues = Array(Set(rows.map(\.league))).sorted { a, b in
+                let ea = rows.filter { $0.league == a }.map(\.commence).min() ?? ""
+                let eb = rows.filter { $0.league == b }.map(\.commence).min() ?? ""
                 return ea < eb
             }
             ForEach(leagues, id: \.self) { lg in
@@ -3040,8 +3014,47 @@ struct HomeView: View {
                         .foregroundStyle(lg == "MLB" ? GaryColors.mlbGrass : lg == "WC" ? Color(hex: "#3FB6A8") : GaryColors.gold)
                         .padding(.horizontal, 16)
                 }
-                homeSheetPanel(up.filter { $0.league == lg })
+                homeSheetPanel(rows.filter { $0.league == lg }, liveGlow: anyLive)
             }
+            boardTally(rows)
+        }
+    }
+
+    /// The board's day tally (founder, Aug 3): covering/behind while games
+    /// run, finals building as they end — the live record living UNDER the
+    /// board. Hidden until the day's first pitch: before that, yesterday
+    /// belongs to the overnight strip up top and THE RECORD sign-off, so the
+    /// board never has to wear a stale record.
+    @ViewBuilder private func boardTally(_ rows: [HomeSheetRow]) -> some View {
+        let live = rows.filter { $0.zone == .live }
+        let settled = rows.filter { $0.zone == .settled }
+        let covering = live.filter { $0.statusText.contains("COVERING") }.count
+        let behind = live.filter { $0.statusText.contains("IN THE RED") }.count
+        let cashed = settled.filter { $0.statusText.contains("✓ CASHED") }.count
+        let lost = settled.filter { $0.statusText.contains("✗ LOST") }.count
+        let splits = settled.filter { $0.statusText.contains("SPLIT") }.count
+
+        if !live.isEmpty || !settled.isEmpty {
+            HStack(spacing: 10) {
+                BroadcastBar(tint: live.isEmpty ? GaryColors.gold : GaryColors.win, height: 10)
+                if covering > 0 {
+                    Text("\(covering) COVERING")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
+                        .foregroundStyle(GaryColors.win)
+                }
+                if behind > 0 {
+                    Text("\(behind) BEHIND")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
+                        .foregroundStyle(GaryColors.loss)
+                }
+                if cashed + lost + splits > 0 {
+                    Text("FINALS \(cashed)–\(lost)\(splits > 0 ? " · \(splits) SPLIT" : "")")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 18)
         }
     }
 
@@ -3879,41 +3892,84 @@ struct HomeView: View {
 /// the founder's "too much motion, too much green" note was about THE BOARD
 /// section, not this one. Restored Jul 14 (founder: Live/Earlier Today was
 /// never supposed to lose the roll) — same current type/color, cycling back.
-struct LiveHitsRoller: View {
-    let items: [String]
-    @State private var idx = 0
-    private let timer: Publishers.Autoconnect<Timer.TimerPublisher>
+/// LiveHitsDisclosure — replaces the auto-cycling LiveHitsRoller (founder,
+/// Aug 3: nothing on the board auto-changes; the fan opens the ledger).
+/// Winner of the five-lens design fan-out ("THE LEDGER") with two grafts:
+/// a single hit self-discloses with no ceremony, and a stray tap on the
+/// open list CLOSES it — it can never yank the fan to the Picks tab.
+/// Static at rest; wraps instead of truncating (ellipsis impossible).
+struct LiveHitsDisclosure: View {
+    let items: [String]                 // 0..~8 settled hit strings, feed order
+    @State private var open = false
 
-    /// staggerIndex (a hash of the row's own id — see HomeSheetRowView)
-    /// spreads this instance's period across a few slightly different values
-    /// so a page full of rollers drifts out of sync instead of flipping in
-    /// one synchronized burst every 3s (founder, Jul 15). Different periods
-    /// (no shared small multiple) means they don't resync later either —
-    /// this isn't just a one-time delayed start. A real init (not a computed
-    /// property) so `timer` is built ONCE per instance, not on every
-    /// re-render — a computed var here would spin up a fresh Timer on every
-    /// body evaluation instead of ticking steadily.
-    init(items: [String], staggerIndex: Int = 0) {
-        self.items = items
-        let period = 8.0 + Double(staggerIndex % 5) * 0.6
-        self.timer = Timer.publish(every: period, on: .main, in: .common).autoconnect()
-    }
+    private let spring = Animation.spring(response: 0.32, dampingFraction: 0.86)
 
     var body: some View {
-        if !items.isEmpty {
-            (Text("✓ ").foregroundColor(GaryColors.win)
-                + Text(items[idx % items.count]).foregroundColor(.white.opacity(0.72)))
-                .font(GaryFonts.mono(13, bold: true))
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(height: 19)
-                .id(idx)
-                .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
-                                        removal: .move(edge: .top).combined(with: .opacity)))
-                .clipped()
-                .onReceive(timer) { _ in
-                    guard items.count > 1 else { return }
-                    withAnimation(.easeInOut(duration: 0.35)) { idx += 1 }
+        if items.count == 1 {
+            // One fact is already fully disclosed — state it, no ceremony.
+            ledgerLine(items[0])
+        } else if items.count > 1 {
+            VStack(alignment: .trailing, spacing: 8) {
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(spring) { open.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("\(items.count) HITS")
+                            .font(GaryFonts.mono(12, bold: true))
+                            .tracking(0.6)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .rotationEffect(.degrees(open ? 180 : 0))
+                    }
+                    .foregroundStyle(GaryColors.win)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(GaryColors.win.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(GaryColors.win.opacity(0.25), lineWidth: 1)
+                            )
+                    )
+                    .padding(.vertical, 6)
+                    .padding(.leading, 12)          // invisible tap-zone inflation
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)                // inner button beats the row gesture
+                .accessibilityLabel("\(items.count) hits cashed")
+                .accessibilityHint(open ? "Collapses the list" : "Expands the list")
+
+                if open {
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(Array(items.enumerated()), id: \.offset) { _, hit in
+                            ledgerLine(hit)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {                 // stray tap closes — never navigates
+                        withAnimation(spring) { open = false }
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+        // items.isEmpty renders nothing at all — no affordance, no reserved height.
+    }
+
+    private func ledgerLine(_ raw: String) -> some View {
+        let fact = raw.hasPrefix("✓ ") ? String(raw.dropFirst(2)) : raw
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("✓")
+                .font(GaryFonts.mono(12, bold: true))
+                .foregroundStyle(GaryColors.win)
+                .frame(width: 12, alignment: .leading)      // fixed glyph column
+            Text(fact)
+                .font(GaryFonts.mono(12, bold: true))
+                .foregroundStyle(GaryColors.warmWhite.opacity(0.85))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)   // wraps; ellipsis impossible
         }
     }
 }
@@ -5030,24 +5086,16 @@ struct HomeStoryRail: View {
 /// rolling status on the right. The whole row taps through to the game.
 struct HomeSheetRowView: View {
     let row: HomeView.HomeSheetRow
-    /// Derived from the row's own id, not a passed-in position — homeSheet
-    /// calls homeSheetPanel three separate times (settled/live/upcoming),
-    /// each restarting its own ForEach index at 0, so a positional index
-    /// still collided across zones (founder, Jul 15: "still... synchronized"
-    /// after the first attempt). The id is stable and globally unique across
-    /// every zone/call site, so hashing it spreads rollers apart regardless
-    /// of how many places end up calling this view.
-    private var staggerIndex: Int { abs(row.id.hashValue) }
-
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
-                    // The header voice (founder, Jul 27): team abbreviations in
-                    // the same broadcast-accent face as TONIGHT / WINNERS.
+                    // Team names in the HERO face (founder, Aug 3: the italic
+                    // accent read wrong here) — Bebas caps, the same voice the
+                    // marquee's PIRATES/BREWERS speak, upright and confident.
                     Text(row.title)
-                        .font(GaryFonts.accent(16.5))
-                        .tracking(0.4)
+                        .font(GaryFonts.display(19))
+                        .tracking(0.5)
                         .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     if row.bigOne {
@@ -5079,7 +5127,7 @@ struct HomeSheetRowView: View {
                     .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                     .foregroundStyle(row.statusColor)
                     .lineLimit(1)
-                LiveHitsRoller(items: row.hitLines, staggerIndex: staggerIndex)
+                LiveHitsDisclosure(items: row.hitLines)
             }
             .padding(.top, 2)
             Image(systemName: "chevron.right")
