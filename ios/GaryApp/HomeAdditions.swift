@@ -9,72 +9,8 @@ import SwiftUI
 // is absent — Home never shows an empty frame.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── THE RECEIPTS LINE ───────────────────────────────────────────────────────
-// One quiet line of proof under the morning strip: when today's card was
-// first stored vs when the day opens. Data-backed or absent — never claimed.
-struct HomeReceiptsLine: View {
-    @State private var posted: String? = nil
-    @State private var firstPitch: String? = nil
-
-    var body: some View {
-        if let posted {
-            HStack(spacing: 6) {
-                Text("CARD POSTED \(posted)")
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(GaryColors.gold.opacity(0.85))
-                if let firstPitch {
-                    Text("· FIRST PITCH \(firstPitch)")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-                Text("· NOTHING DELETED")
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.4))
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-        } else {
-            Color.clear.frame(width: 0, height: 0)
-                .task { await load() }
-        }
-    }
-
-    private func load() async {
-        let today = SupabaseAPI.todayEST()
-        guard var comps = URLComponents(url: Secrets.supabaseURL.appendingPathComponent("/rest/v1/daily_picks"),
-                                        resolvingAgainstBaseURL: false) else { return }
-        comps.queryItems = [URLQueryItem(name: "select", value: "created_at,picks"),
-                            URLQueryItem(name: "date", value: "eq.\(today)")]
-        guard let url = comps.url else { return }
-        var req = URLRequest(url: url)
-        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        struct Row: Decodable {
-            struct P: Decodable { let commence_time: String? }
-            let created_at: String?
-            let picks: [P]?
-        }
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let row = (try? JSONDecoder().decode([Row].self, from: data))?.first,
-              let created = row.created_at else { return }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        guard let createdDate = iso.date(from: created) ?? ISO8601DateFormatter().date(from: created) else { return }
-        let starts = (row.picks ?? []).compactMap { p -> Date? in
-            guard let c = p.commence_time else { return nil }
-            return iso.date(from: c) ?? ISO8601DateFormatter().date(from: c)
-        }
-        // The claim only renders when the data actually supports it.
-        if let first = starts.min(), createdDate < first {
-            posted = f.string(from: createdDate)
-            firstPitch = f.string(from: first)
-        }
-    }
-}
+// (THE RECEIPTS LINE removed Aug 4 2026 — founder: "needs to be removed".
+// The proof-of-post claim lives on in the Winners day card's manifest.)
 
 // ── YOUR NIGHT ──────────────────────────────────────────────────────────────
 // The user's open slips with live game state + the streak's day. The single
@@ -133,7 +69,7 @@ struct HomeYourNight: View {
             }
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: "#E5844B").opacity(0.06)))
-            .padding(.horizontal, 16)
+            .pageGutter()
         } else if !loaded {
             Color.clear.frame(width: 0, height: 0)
                 .task { await load() }
@@ -144,7 +80,7 @@ struct HomeYourNight: View {
         if let live = liveScore(for: bet) {
             if live.isLive {
                 HStack(spacing: 4) {
-                    Circle().fill(Color(hex: "#EF4444")).frame(width: 5, height: 5)
+                    Circle().fill(GaryColors.loss).frame(width: 5, height: 5)
                     Text("\(live.away_score ?? 0)-\(live.home_score ?? 0)\(live.detail.map { " · \($0)" } ?? "")")
                         .font(GaryFonts.mono(10, bold: true))
                         .foregroundStyle(.white.opacity(0.8))
@@ -213,7 +149,9 @@ struct HomeWireMini: View {
             // Dashboard container (Aug 3): the Wire wears the board's chrome
             // and the shared act-head grammar — no more naked list.
             VStack(alignment: .leading, spacing: 10) {
-                HomeActHead(title: "The Wire", count: items.count)
+                // Nameless rule — the rows' own LINE MOVE / INJURY / RESULT
+                // chips already say what this is.
+                HomeSectionRule()
                 VStack(spacing: 0) {
                     ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { i, item in
                         Button(action: onOpen) {
@@ -247,13 +185,8 @@ struct HomeWireMini: View {
                     }
                 }
                 .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(GaryColors.warmWhite.opacity(0.03))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
-                )
-                .padding(.horizontal, 16)
+                .garyPanel(radius: 12)
+                .pageGutter()
             }
         } else {
             Color.clear.frame(width: 0, height: 0)
@@ -303,11 +236,11 @@ struct HomeLeaderboardPodium: View {
                             .foregroundStyle(.white.opacity(0.55))
                         Text(String(format: "%+.1fu", r.units))
                             .font(GaryFonts.mono(10.5, bold: true))
-                            .foregroundStyle(r.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                            .foregroundStyle(r.units >= 0 ? GaryColors.win : GaryColors.loss)
                     }
                 }
             }
-            .padding(.horizontal, 20)
+            .pageGutter()
         } else {
             Color.clear.frame(width: 0, height: 0)
                 .task {

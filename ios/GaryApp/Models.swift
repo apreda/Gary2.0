@@ -81,6 +81,9 @@ struct Connection: Decodable {
 /// Structured player-swap payload on beneficiary rows (kind == "swap"):
 /// the OUT player, why, and tonight's replacement with his slot + line.
 struct SwapMeta: Decodable {
+    /// The computed facts behind Gary's read (Jul 27 voice pass moved the
+    /// template sentence here) — the expanded card's "numbers behind it" line.
+    let evidence: String?
     let kind: String?
     let team: String?
     let position: String?
@@ -446,6 +449,9 @@ struct GaryPick: Identifiable, Codable {
     var game_id: Int? = nil   // per-game id — disambiguates doubleheaders (same matchup, two games)
     let pick: String?
     let rationale: String?
+    // Fan re-register of the same audited rationale (stored since Jul 24 2026);
+    // nil on older picks — the card back hides the register toggle when absent.
+    var rationale_plain: String? = nil
     let league: String?
     let confidence: Double?
     let time: String?
@@ -586,6 +592,7 @@ struct GaryPick: Identifiable, Codable {
             game_id: (dict["game_id"] as? NSNumber)?.intValue,
             pick: dict["pick"] as? String,
             rationale: dict["rationale"] as? String,
+            rationale_plain: dict["rationale_plain"] as? String,
             league: dict["league"] as? String,
             confidence: (dict["confidence"] as? NSNumber)?.doubleValue,
             time: dict["time"] as? String,
@@ -1352,10 +1359,14 @@ struct PropPick: Identifiable, Codable {
     let tdCategory: String?  // "standard" or "underdog" for TD scorer picks
     let matchup: String?     // Game matchup for TD picks
     let key_stats: [String]?  // 3-4 bullet points with key stats supporting the pick
+    /// Backend lane stamp: "HR" (Home Run Threats, the fun lane) | "CORE"
+    /// (the real props product). Older rows lack it — isHRLane carries the
+    /// fallback rule, and every surface reads THAT, never this field raw.
+    var lane: String? = nil
 
     // CodingKeys to map snake_case from JSON
     enum CodingKeys: String, CodingKey {
-        case player, game_id, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats
+        case player, game_id, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats, lane
         case commence_time = "commence_time"
         case tdCategory = "td_category"
     }
@@ -1367,6 +1378,17 @@ struct PropPick: Identifiable, Codable {
     /// Whether this is a TD scorer pick
     var isTDPick: Bool {
         tdCategory != nil
+    }
+
+    /// HR fun-lane membership — the ONE source of truth for every surface
+    /// (founder, Jul 29: HR Threats never touch Gary's props record; they live
+    /// in the Hub's HR Threats lane + the Billfold's longshot tracker only).
+    /// The backend's lane stamp wins; older picks without it fall back to the
+    /// prop text — "home_runs 0.5" / "home runs" reads as an HR bet.
+    var isHRLane: Bool {
+        if let lane, !lane.isEmpty { return lane.uppercased() == "HR" }
+        let t = (prop ?? "").lowercased()
+        return t.contains("home_run") || t.contains("home run")
     }
     
     /// Get the sport/league (checks both fields)
@@ -1421,7 +1443,8 @@ struct PropPick: Identifiable, Codable {
             position: dict["position"] as? String,
             tdCategory: dict["td_category"] as? String,
             matchup: dict["matchup"] as? String,
-            key_stats: keyStats
+            key_stats: keyStats,
+            lane: dict["lane"] as? String
         )
     }
 }
@@ -1534,10 +1557,13 @@ struct PropResult: Decodable {
     let confidence: Double?
     let league: String?
     let sport: String?
-    
+    /// Grader lane stamp ("HR" | "CORE") — newer rows only; isHRResult holds
+    /// the fallback rule for the history that predates it.
+    let lane: String?
+
     enum CodingKeys: String, CodingKey {
         case game_date, matchup, player_name, pick_text, prop_type, bet
-        case line_value, result, odds, actual_value, confidence, league, sport
+        case line_value, result, odds, actual_value, confidence, league, sport, lane
     }
     
     /// Get the effective league (normalized to match Sport enum values)
@@ -1601,6 +1627,15 @@ struct PropResult: Decodable {
                pickLower.contains("anytime") && pickLower.contains("td") ||
                propLower == "anytime_td" ||
                propLower == "td_scorer"
+    }
+
+    /// Whether this is a home-run bet (the fun lane — founder, Jul 29: tracked
+    /// on its own Billfold chip + longshot tracker, never part of the official
+    /// props record). The grader's lane stamp wins; prop_type is the fallback
+    /// because older rows lack the stamp (and grader rows can lack a sport column).
+    var isHRResult: Bool {
+        if let lane, !lane.isEmpty { return lane.uppercased() == "HR" }
+        return (prop_type ?? "").lowercased().contains("home_run")
     }
 }
 
@@ -1677,6 +1712,10 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     /// tonight's AWAY side's perspective, the leader's venue split, and the
     /// last three meetings. nil until the clubs have met this season.
     let series: TomorrowSeries?
+    /// THE ARMS IN GARY'S VOICE (Aug 4) — two sentences on the game's two
+    /// starters, generated at board-publish time. nil = the stat ladder
+    /// renders instead (fail-soft is backend law).
+    let arms_take: String?
 }
 
 // SEASON SERIES — this season's finished meetings between tonight's clubs.

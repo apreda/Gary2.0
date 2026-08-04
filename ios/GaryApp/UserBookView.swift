@@ -403,7 +403,6 @@ struct TailFadeRow: View {
             // user can no longer take.
             if mine != nil || !locked {
                 HStack(spacing: 8) {
-                    BroadcastBar(height: 10)
                     Text("YOUR CALL")
                         .font(GaryFonts.accent(11)).tracking(0.8)
                         .foregroundStyle(GaryColors.gold)
@@ -427,7 +426,7 @@ struct TailFadeRow: View {
             if let e = errorText {
                 Text(e)
                     .font(GaryFonts.mono(9.5))
-                    .foregroundStyle(Color(hex: "#EF4444").opacity(0.9))
+                    .foregroundStyle(GaryColors.loss.opacity(0.9))
                     .lineLimit(2)
             }
         }
@@ -448,32 +447,30 @@ struct TailFadeRow: View {
     }
 
     private var armButtons: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Full-width split — the card back's ACTION, not a footnote.
-            HStack(spacing: 8) {
-                tailFadeButton("TAIL GARY", tint: GaryColors.gold, solid: true) { arm("tail") }
-                tailFadeButton("FADE", tint: Color(hex: "#8B93A7"), solid: false) { arm("fade") }
-            }
-            if ridersLine == nil {
-                Text("Your call goes on the record at lock")
-                    .font(GaryFonts.mono(9))
-                    .foregroundStyle(.white.opacity(0.38))
-            }
+        // Full-width split — the card back's ACTION, not a footnote.
+        // NEUTRAL TWINS (founder, Aug 4): the solid-gold TAIL read as
+        // already-pressed next to the outlined FADE, and the gold was harsh.
+        // Both wear the same quiet outline; color arrives only after a call
+        // is made (stake picker tint + the placed chip). The "goes on the
+        // record at lock" caption came off with it.
+        HStack(spacing: 8) {
+            tailFadeButton("TAIL GARY") { arm("tail") }
+            tailFadeButton("FADE") { arm("fade") }
         }
     }
 
-    private func tailFadeButton(_ label: String, tint: Color, solid: Bool, action: @escaping () -> Void) -> some View {
+    private func tailFadeButton(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
-                .foregroundStyle(solid ? GaryColors.ink : tint)
+                .foregroundStyle(.white.opacity(0.85))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(solid ? GaryColors.gold : Color.clear)
+                        .fill(Color.clear)
                         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(tint.opacity(solid ? 0 : 0.55), lineWidth: 1))
+                            .stroke(Color.white.opacity(0.22), lineWidth: 1))
                 )
                 .contentShape(Rectangle())
         }
@@ -558,7 +555,7 @@ struct TailFadeRow: View {
         let est = (bet.odds_estimated ?? false) && won ? " est" : ""
         return Text(text + est)
             .font(GaryFonts.mono(10, bold: true))
-            .foregroundStyle(wash ? .white.opacity(0.5) : (won ? Color(hex: "#22C55E") : Color(hex: "#EF4444")))
+            .foregroundStyle(wash ? .white.opacity(0.5) : (won ? GaryColors.win : GaryColors.loss))
     }
 
     private func arm(_ side: String) {
@@ -819,7 +816,7 @@ struct UserBookSection: View {
                     .foregroundStyle(.white.opacity(0.92))
                 Text(BookMoney.netTotal(g.units))
                     .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(g.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                    .foregroundStyle(g.units >= 0 ? GaryColors.win : GaryColors.loss)
                 Spacer()
             }
             if !yourPlays.isEmpty {
@@ -832,7 +829,7 @@ struct UserBookSection: View {
                         .foregroundStyle(.white.opacity(0.65))
                     Text(BookMoney.netTotal(m.units))
                         .font(GaryFonts.mono(11, bold: true))
-                        .foregroundStyle(m.units >= 0 ? Color(hex: "#22C55E").opacity(0.8) : Color(hex: "#EF4444").opacity(0.8))
+                        .foregroundStyle(m.units >= 0 ? GaryColors.win.opacity(0.8) : GaryColors.loss.opacity(0.8))
                     Text("self-tracked")
                         .font(GaryFonts.mono(8.5)).tracking(0.5)
                         .foregroundStyle(.white.opacity(0.35))
@@ -941,7 +938,7 @@ struct UserBookSection: View {
         return HStack(spacing: 8) {
             statTile("WIN%", winPct.map { String(format: "%.0f%%", $0) } ?? "--")
             statTile("ROI", roi.map { String(format: "%+.0f%%", $0) } ?? "--",
-                     tint: (roi ?? 0) >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                     tint: (roi ?? 0) >= 0 ? GaryColors.win : GaryColors.loss)
             statTile("AVG ODDS", avgOdds.map { "\($0 > 0 ? "+" : "")\($0)" } ?? "--")
             statTile("BEST DAY", bestDay.map { BookMoney.netTotal($0) } ?? "--",
                      tint: GaryColors.gold)
@@ -991,7 +988,7 @@ struct UserBookSection: View {
                 Spacer()
                 Text(BookMoney.netTotal(final))
                     .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(final >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                    .foregroundStyle(final >= 0 ? GaryColors.win : GaryColors.loss)
             }
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
@@ -1095,7 +1092,7 @@ struct UserBookSection: View {
         if let live = liveScore(for: bet) {
             if live.isLive {
                 HStack(spacing: 5) {
-                    Circle().fill(Color(hex: "#EF4444")).frame(width: 5, height: 5)
+                    Circle().fill(GaryColors.loss).frame(width: 5, height: 5)
                     Text("\(live.away_score ?? 0)-\(live.home_score ?? 0)\(live.detail.map { " · \($0)" } ?? "")")
                         .font(GaryFonts.mono(10, bold: true))
                         .foregroundStyle(.white.opacity(0.8))
@@ -1158,8 +1155,8 @@ struct UserBookSection: View {
                         Spacer()
                         Text(BookMoney.netTotal(group.net))
                             .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(group.net > 0 ? Color(hex: "#22C55E")
-                                             : group.net < 0 ? Color(hex: "#EF4444") : .white.opacity(0.45))
+                            .foregroundStyle(group.net > 0 ? GaryColors.win
+                                             : group.net < 0 ? GaryColors.loss : .white.opacity(0.45))
                     }
                     .padding(.top, 10).padding(.bottom, 2)
                     ForEach(group.rows) { bet in
@@ -1244,7 +1241,7 @@ struct PropTailFadeRow: View {
             if let e = errorText {
                 Text(e)
                     .font(GaryFonts.mono(9.5))
-                    .foregroundStyle(Color(hex: "#EF4444").opacity(0.9))
+                    .foregroundStyle(GaryColors.loss.opacity(0.9))
                     .lineLimit(2)
             }
         }
@@ -1325,7 +1322,7 @@ struct PropTailFadeRow: View {
                 let wash = bet.status == "push" || bet.status == "void"
                 Text(wash ? bet.status.uppercased() : BookMoney.net(bet.units_net ?? 0))
                     .font(GaryFonts.mono(10, bold: true))
-                    .foregroundStyle(wash ? .white.opacity(0.5) : (won ? Color(hex: "#22C55E") : Color(hex: "#EF4444")))
+                    .foregroundStyle(wash ? .white.opacity(0.5) : (won ? GaryColors.win : GaryColors.loss))
             } else if !locked {
                 Button { remove(bet) } label: {
                     Text("Undo")
@@ -1416,8 +1413,8 @@ private struct UserBetSlipRow: View {
     @ViewBuilder private var trailing: some View {
         if bet.isPending && bet.kind == "manual" {
             HStack(spacing: 6) {
-                gradeChip("W", "won", Color(hex: "#22C55E"))
-                gradeChip("L", "lost", Color(hex: "#EF4444"))
+                gradeChip("W", "won", GaryColors.win)
+                gradeChip("L", "lost", GaryColors.loss)
                 gradeChip("P", "push", .white.opacity(0.5))
             }
         } else if bet.isPending {
@@ -1429,7 +1426,7 @@ private struct UserBetSlipRow: View {
             let wash = bet.status == "push" || bet.status == "void"
             Text(wash ? bet.status.uppercased() : BookMoney.net(bet.units_net ?? 0))
                 .font(GaryFonts.mono(11, bold: true))
-                .foregroundStyle(wash ? .white.opacity(0.45) : (won ? Color(hex: "#22C55E") : Color(hex: "#EF4444")))
+                .foregroundStyle(wash ? .white.opacity(0.45) : (won ? GaryColors.win : GaryColors.loss))
         }
     }
 
@@ -1533,7 +1530,7 @@ struct RideShareCardView: View {
                     .foregroundStyle(.white)
                 Text(BookMoney.netTotal(record.units))
                     .font(GaryFonts.mono(24, bold: true))
-                    .foregroundStyle(record.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                    .foregroundStyle(record.units >= 0 ? GaryColors.win : GaryColors.loss)
             }
             if let s = streakText {
                 Text(s)
@@ -1628,7 +1625,7 @@ struct UserBookLeaderboard: View {
                                 .foregroundStyle(.white.opacity(0.6))
                             Text(String(format: "%+.1fu", r.units))
                                 .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(r.units >= 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
+                                .foregroundStyle(r.units >= 0 ? GaryColors.win : GaryColors.loss)
                                 .frame(width: 52, alignment: .trailing)
                         }
                         .padding(.vertical, 6)
@@ -1701,7 +1698,7 @@ struct HandleClaimSheet: View {
                 if let e = errorText {
                     Text(e)
                         .font(GaryFonts.mono(10))
-                        .foregroundStyle(Color(hex: "#EF4444").opacity(0.9))
+                        .foregroundStyle(GaryColors.loss.opacity(0.9))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Button {

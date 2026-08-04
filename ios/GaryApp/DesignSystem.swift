@@ -14,12 +14,27 @@ enum GaryColors {
     static let warmGold = Color(hex: "#F4E4BA")
     static let cream = Color(hex: "#FAF8F5")
     
-    // Deep backgrounds
-    static let darkBg = Color(hex: "#08080A")
-    static let cardBg = Color(hex: "#121214")
+    // ── Deep backgrounds — the WARM-BLACK LADDER ────────────────────────────
+    //
+    // LAW (Aug 4 2026): every surface in this app keeps R >= B. The page
+    // background was corrected to warm ink long ago ("the old #090C11/#10161D
+    // charcoals had blue channels leading, and the whole app sat on them: that
+    // was the grey-blue cast" — LiquidGlassBackground), but four blue-leading
+    // blacks survived and kept leaking that cast back in: darkBg #08080A,
+    // cardBg #121214, the TAB BAR #17161A, and the marquee ribbon #0F0E10.
+    // All four are now warm twins at matched luminance — same perceived
+    // elevation, right hue family. Add a new surface? Check R >= B first.
+    static let darkBg = Color(hex: "#090808")        // was #08080A (B led)
+    static let cardBg = Color(hex: "#131211")        // was #121214 (B led)
     /// Near-black text/ink that sits on the gold CTA / active pills / chips.
     static let ink = Color(hex: "#0C0B0B")
     static let elevatedBg = Color(hex: "#1E1A1A")
+    /// The tab bar / chrome surface. Warm twin of the mock's #17161A at the
+    /// same lightness — mock-01's geometry and elevation are untouched, only
+    /// the hue is corrected (founder, Aug 4: "the nav bar is a different color").
+    static let barSurface = Color(hex: "#1A1613")
+    /// Darker inset band inside a card (the marquee's ticker crawl).
+    static let insetBand = Color(hex: "#100E0C")     // was #0F0E10 (B led)
     
     // Glass tints
     static let glassTint = Color.white.opacity(0.08)
@@ -88,6 +103,38 @@ enum GaryColors {
     // readable single field-green that reads well on small text.
     static let mlbGrass = Color(hex: "#63D17E")
     static let mlbFieldText = Color(hex: "#63D17E")
+
+    // ── Panel chrome (one recipe) ───────────────────────────────────────────
+    // Two near-identical panel surfaces used to coexist — quantPanel() at 0.022
+    // fill and six hand-rolled panels at 0.03 — so a retune only ever hit half
+    // the app. One fill, one stroke, both warm-white (pure white at low alpha
+    // over warm black reads as a cool blue-grey cast).
+    static let panelFill = warmWhite.opacity(0.03)
+    static let panelStroke = warmWhite.opacity(0.07)
+}
+
+// MARK: - Layout (single source of truth)
+//
+// Before Aug 4 2026 the app used 20 distinct horizontal paddings; `16` was only
+// 38% of them. Home ragged its own left edge twice (two blocks at 20) and the
+// content edge JUMPED when you switched tabs (Home/Winners 16, Hub/Picks 18,
+// Billfold 12–20). One gutter fixes all of it.
+enum GaryLayout {
+    /// The page gutter (founder call, Aug 4: 18). Every full-width block,
+    /// section rule, masthead, and hairline aligns to this — no exceptions,
+    /// so the app has ONE left edge on every page.
+    static let gutter: CGFloat = 18
+
+    /// Corner radii — three steps, not twenty. (Pick/prop card faces keep their
+    /// own locked geometry and are deliberately NOT on this scale.)
+    enum Radius {
+        /// List panels, doors, the wire, the board.
+        static let panel: CGFloat = 12
+        /// Hero cards — marquee, Winners stub, takeover.
+        static let card: CGFloat = 14
+        /// Modals and sheets.
+        static let sheet: CGFloat = 20
+    }
 }
 
 // MARK: - Pricing (single source of truth)
@@ -164,6 +211,15 @@ enum TeamColors {
 // separate file) so it compiles without a project.pbxproj change.
 //   display – hero titles   mono – "Quant Terminal" labels   text – body/UI (Inter)
 // Retune the brand voice by changing the single `displayFace` value.
+// ONE RAMP (Aug 4 2026). Before this, the app ran two parallel type systems
+// (GaryFonts + HubFont) with three different scale factors, two floors, and
+// 236 bare `.system(size:)` calls bypassing both — so writing `12` produced
+// four different rendered sizes depending on which helper you reached for.
+// That is why nothing lined up optically and why tuning by number was guesswork.
+//
+// Every size transform in the app now happens HERE and nowhere else. HubFont
+// is a thin alias (HubView.swift). Rendered sizes are UNCHANGED from Aug 3 —
+// this was a consolidation, not a retune, so the pick/prop cards did not move.
 enum GaryFonts {
     /// Bundled options: "BebasNeue-Regular" (default — founder-picked Jul 5 off
     /// the W17 seal mock), "SairaCondensed-Bold", "Anton-Regular", "Rajdhani-Bold",
@@ -171,21 +227,38 @@ enum GaryFonts {
     /// NOTE: Bebas has no lowercase — everything through display() renders CAPS.
     static let displayFace = "BebasNeue-Regular"
 
-    // TYPE RAMP raised Jul 12 2026 (founder: "everything ~20% closer"):
-    // labels/data +18% with a 12pt floor, body +15% with a 13pt floor,
-    // display +8%. Kickers (accent) hold — founder-approved as shipped.
-    static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size * 1.08) }
+    // The ramp's constants, Jul 12 2026 (founder: "everything ~20% closer").
+    // Kept to the pt — retuning the app means changing these five numbers.
+    private static let displayScale: CGFloat = 1.08
+    private static let dataScale:    CGFloat = 1.18
+    private static let dataFloor:    CGFloat = 12
+    private static let textScale:    CGFloat = 1.15
+    private static let textFloor:    CGFloat = 13
 
-    /// Data/label workhorse. Was JetBrains Mono (the "Quant Terminal" era) —
-    /// retired Jul 12 2026 (founder: hard to read at label sizes, zeros read
-    /// as eights). Now the system face with TABULAR NUMERALS: digit columns
-    /// stay aligned, words breathe, 0/8 unambiguous. Callers unchanged.
-    /// Label/meta layer — the Broadcast mock's meta voice: SF at REAL weight
-    /// (bold/semibold, never regular — regular read "like the default font on
-    /// Microsoft Word", founder Jul 12) with tabular digits. Callers pair it
-    /// with uppercase + tracking for the scorebug read.
-    static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
-        .system(size: max(12, size * 1.18), weight: bold ? .bold : .semibold).monospacedDigit()
+    // ── SCALED ROLES (respond to the constants above) ───────────────────────
+
+    /// Hero titles + wordmarks — bundled Bebas. Renders CAPS (no lowercase).
+    static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size * displayScale) }
+
+    /// Numbers, labels, meta — SF at REAL weight with TABULAR digits, so digit
+    /// columns stay aligned and 0/8 read apart. (Was JetBrains Mono in the
+    /// "Quant Terminal" era; retired Jul 12 2026 — hard to read at label sizes.
+    /// Never `.regular`: that read "like the default font on Microsoft Word".)
+    static func data(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
+        .system(size: max(dataFloor, size * dataScale), weight: weight).monospacedDigit()
+    }
+
+    /// Body copy + UI prose — SF Pro per the June 2026 type decision (native
+    /// rendering + the Dynamic Type path). Inter stays bundled but unused.
+    static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: max(textFloor, size * textScale), weight: weight)
+    }
+
+    // ── RAW ROLES (exact size, no scaling — already tuned at the call site) ──
+
+    /// Tight uppercase labels. Pair with `.tracking()` at the call site.
+    static func kicker(_ size: CGFloat = 10.5, _ weight: Font.Weight = .semibold) -> Font {
+        .system(size: size, weight: weight).monospacedDigit()
     }
 
     /// BROADCAST accent — the scorebug voice (founder-picked Jul 12 off the
@@ -193,6 +266,44 @@ enum GaryFonts {
     /// state moments. Bebas keeps the hero titles; this is the energy layer.
     static func accent(_ size: CGFloat) -> Font {
         .system(size: size, weight: .black).italic()
+    }
+
+    /// System-native UI text at an exact size — the escape hatch that replaces
+    /// bare `.system(size:)`, so every size in the app still reads as a role.
+    static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight)
+    }
+
+    /// Deprecated alias — `data`'s name from the "Quant Terminal" era. 400+
+    /// call sites still speak it and the output is identical; new code uses `data`.
+    static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
+        data(size, bold ? .bold : .semibold)
+    }
+}
+
+extension View {
+    /// Horizontal card rails must never shear their cards' drop shadows into
+    /// hard edges (Jul 22: the Winners seal read flat on the page). iOS 17's
+    /// scrollClipDisabled is the real fix; iOS 16 keeps the clipped look —
+    /// a quiet degradation, never a crash.
+    @ViewBuilder func unclippedRail() -> some View {
+        if #available(iOS 17.0, *) { self.scrollClipDisabled() } else { self }
+    }
+
+    /// THE page gutter. Full-width blocks, mastheads, section rules, and
+    /// hairlines use this instead of a literal `.padding(.horizontal, N)` —
+    /// the app's left edge is defined once, in GaryLayout.gutter.
+    func pageGutter() -> some View { padding(.horizontal, GaryLayout.gutter) }
+
+    /// The one panel surface (fill + hairline stroke). Replaces quantPanel()
+    /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
+    func garyPanel(radius: CGFloat = GaryLayout.Radius.panel) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(GaryColors.panelFill)
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(GaryColors.panelStroke, lineWidth: 1))
+        )
     }
 }
 
@@ -209,25 +320,7 @@ struct BroadcastBar: View {
     }
 }
 
-extension GaryFonts {
-
-    enum TextWeight {
-        case regular, medium, semibold, bold, heavy
-        var sfWeight: Font.Weight {
-            switch self {
-            case .regular:  return .regular
-            case .medium:   return .medium
-            case .semibold: return .semibold
-            case .bold:     return .bold
-            case .heavy:    return .heavy
-            }
-        }
-    }
-
-    /// Body/text face = SF Pro (system) per the June 2026 type decision —
-    /// native rendering + the Dynamic Type path for the accessibility track.
-    /// (Inter stays bundled but unused; remap here if that ever changes.)
-    static func text(_ size: CGFloat, _ weight: TextWeight = .regular) -> Font {
-        .system(size: max(13, size * 1.15), weight: weight.sfWeight)
-    }
-}
+// (GaryFonts.TextWeight retired Aug 4 2026 — it mirrored Font.Weight case for
+// case, so the two systems needed a bridge to talk. Font.Weight is now the one
+// weight type; every existing `.semibold` / `.bold` / `.heavy` call site
+// resolved unchanged.)
