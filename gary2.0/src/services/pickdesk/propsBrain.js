@@ -435,6 +435,11 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
     prompt_sha: PROPS_PROMPT_SHA,
+    // HR SPLIT (founder GO, Aug 4): HR picks are the fun lane — they live in
+    // HR Threats and the Billfold fun tracker, and NEVER count in Gary's
+    // prop record, balance, or metrics. Same definition as prop_lane_ledger's
+    // lane case, stamped at generation so every surface reads one field.
+    lane: /home_run/i.test(String(p.prop_type || '')) ? 'HR' : 'CORE',
     // Board-composition stamp (V2 boards only) — lets the ledger segment
     // board eras without a prompt change. Public names: stripInternalFields
     // drops _-prefixed keys at the storage boundary.
