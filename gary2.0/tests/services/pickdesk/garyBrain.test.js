@@ -8,7 +8,7 @@ vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
-import { analyzeGameDesk, mapFinalPick, THE_ASK } from '../../../src/services/pickdesk/garyBrain.js';
+import { analyzeGameDesk, mapFinalPick, THE_ASK, buildCardAsk } from '../../../src/services/pickdesk/garyBrain.js';
 
 const META = {
   homeTeam: 'Cardinals', awayTeam: 'Reds',
@@ -25,13 +25,23 @@ const DESK = {
   meta: META,
 };
 
-const GOOD_JSON = '```json\n{"final_pick": "Cardinals ML -104", "rationale": "Gary\'s Take\\n\\nA clean read.", "confidence_score": 0.61}\n```';
+// Seal-the-pick era (Aug 4 2026): turn 1 = ticket only, turn 2 = card prose.
+const TICKET_JSON = '```json\n{"final_pick": "Cardinals ML -104", "confidence_score": 0.61}\n```';
+const CARD_TEXT = "Gary's Take\n\n" + 'A clean read on a quiet Tuesday. '.repeat(12);
+
+const ticketThenCard = () => {
+  let n = 0;
+  sendToSessionWithRetry.mockImplementation(async () => ({
+    content: (n++ % 2 === 0) ? TICKET_JSON : CARD_TEXT,
+    usage: { prompt_tokens: 100, completion_tokens: 50 },
+  }));
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   buildMlbDesk.mockResolvedValue(DESK);
   createGeminiSession.mockResolvedValue({ id: 's1' });
-  sendToSessionWithRetry.mockResolvedValue({ content: GOOD_JSON, usage: { prompt_tokens: 100, completion_tokens: 50 } });
+  ticketThenCard();
 });
 
 describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
@@ -68,15 +78,18 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(systemPrompt.length).toBeLessThan(780);
   });
 
-  it('one user message: the desk, then the bare ask — no coaching, no tutoring', async () => {
+  it('turn 1 is desk + ticket ask; the card is never requested before the seal', async () => {
     await analyzeGameDesk({});
-    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(1);
+    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(2);
     const msg = sendToSessionWithRetry.mock.calls[0][1];
     expect(msg.indexOf('═══ THE LINES')).toBeLessThan(msg.indexOf('Pick the bet you want to take'));
     // Jul 29 (founder, replay-gated): the pick's object is a priced ticket.
     expect(msg).toContain('Pick the bet you want to take — a bet is a side and its price.');
     expect(msg).toContain('your conviction in this bet at its price');
     expect(msg).toContain('confidence_score');
+    // Aug 4 seal: the decision turn asks for the ticket alone — no prose field.
+    expect(msg).toContain('Your ticket seals before any card is written.');
+    expect(msg).not.toContain('"rationale"');
     // The razor: no decision coaching, no mechanics tutoring, no old-system asks.
     expect(msg).not.toContain('BEST BET');
     expect(msg).not.toContain('MONEYLINE pays');
@@ -84,6 +97,29 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(msg).not.toContain('MLB SEASON AWARENESS');
     expect(msg).not.toContain('with your tools');
     expect(msg).not.toContain('[3 paragraphs');
+  });
+
+  it('turn 2 carries the sealed ticket and asks for the card — nothing else', async () => {
+    await analyzeGameDesk({});
+    const msg = sendToSessionWithRetry.mock.calls[1][1];
+    expect(msg).toBe(buildCardAsk('Cardinals ML -104'));
+    expect(msg).toContain('Your ticket is sealed: Cardinals ML -104.');
+    expect(msg).toContain('Write your card.');
+  });
+
+  it('THE SEAL: a different final_pick in the card turn cannot move the stored pick', async () => {
+    let n = 0;
+    sendToSessionWithRetry.mockImplementation(async () => ({
+      content: n++ === 0
+        ? TICKET_JSON
+        // Card turn answers in the old JSON shape with a DIFFERENT pick — the
+        // prose is accepted, the pick change is ignored by construction.
+        : '```json\n{"final_pick": "Reds ML -112", "rationale": ' + JSON.stringify(CARD_TEXT) + '}\n```',
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    }));
+    const r = await analyzeGameDesk({});
+    expect(r.pick).toBe('Cardinals ML -104');
+    expect(r.rationale).toContain("Gary's Take");
   });
 
   it('returns the chassis contract with tape, meta odds, and desk text', async () => {
@@ -98,21 +134,34 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(r.rationale).toContain("Gary's Take");
   });
 
-  it('malformed JSON: one re-ask, then a contained error — never a throw, never a cascade', async () => {
+  it('malformed ticket: one re-ask, then a contained error — never a throw, never a cascade', async () => {
     sendToSessionWithRetry.mockResolvedValue({ content: 'no json here', usage: {} });
     const r = await analyzeGameDesk({});
     expect(sendToSessionWithRetry).toHaveBeenCalledTimes(2);
     expect(createGeminiSession).toHaveBeenCalledTimes(1); // parse failures stay on the primary brain
     expect(r.error).toMatch(/parse/);
   });
+
+  it('missing card: one re-ask, then a contained error', async () => {
+    let n = 0;
+    sendToSessionWithRetry.mockImplementation(async () => ({
+      content: n++ === 0 ? TICKET_JSON : 'Sure.',
+      usage: {},
+    }));
+    const r = await analyzeGameDesk({});
+    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(3); // ticket, card, card re-ask
+    expect(r.error).toMatch(/no card/);
+  });
 });
 
 describe('analyzeGameDesk — quota cascade (founder approved Jul 29)', () => {
   it('Sol quota/429 → SAME desk re-runs on gemini-3.6-flash at high thinking', async () => {
     const quotaErr = Object.assign(new Error('OpenAI 429: insufficient_quota'), { isQuotaError: true });
-    sendToSessionWithRetry
-      .mockRejectedValueOnce(quotaErr)
-      .mockResolvedValue({ content: GOOD_JSON, usage: { prompt_tokens: 100, completion_tokens: 50 } });
+    let n = 0;
+    sendToSessionWithRetry.mockImplementation(async () => {
+      if (n === 0) { n++; throw quotaErr; }
+      return { content: (n++ % 2 === 1) ? TICKET_JSON : CARD_TEXT, usage: { prompt_tokens: 100, completion_tokens: 50 } };
+    });
     const r = await analyzeGameDesk({});
     expect(createGeminiSession).toHaveBeenCalledTimes(2);
     expect(createGeminiSession.mock.calls[0][0].modelName).toBe('gpt-5.6-sol');
@@ -157,10 +206,30 @@ describe('mapFinalPick', () => {
 });
 
 describe('THE_ASK text', () => {
-  it('is task, injury law, and output contract — nothing else', () => {
+  it('is task, injury law, and ticket contract — nothing else', () => {
     expect(THE_ASK).toContain('Pick the bet you want to take');
     expect(THE_ASK).toContain('already games old is already in the price');
     expect(THE_ASK).toContain('final_pick');
+    // Aug 4 seal: the decision output carries no prose field.
+    expect(THE_ASK).not.toContain('rationale');
     expect(THE_ASK.length).toBeLessThan(700);
+  });
+
+  it('buildCardAsk is the sealed ticket and the ask — no coaching, no format re-litigating', () => {
+    const ask = buildCardAsk('Cubs ML +109');
+    expect(ask).toBe('Your ticket is sealed: Cubs ML +109.\n\nWrite your card.');
+  });
+
+  it('a model-invented header is normalized to the Gary\'s Take masthead (live smoke catch)', async () => {
+    let n = 0;
+    const prose = 'The bet is on the sixth inning, not the first. '.repeat(8);
+    sendToSessionWithRetry.mockImplementation(async () => ({
+      content: n++ === 0 ? TICKET_JSON : `THE CARD — Cardinals ML -104\n\n${prose}`,
+      usage: {},
+    }));
+    const r = await analyzeGameDesk({});
+    expect(r.rationale.startsWith("Gary's Take\n\n")).toBe(true);
+    expect(r.rationale).not.toContain('THE CARD');
+    expect(r.rationale).toContain('sixth inning');
   });
 });
