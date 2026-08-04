@@ -97,6 +97,9 @@ const extractCard = (t) => {
  *  -150"), then ensure the masthead. */
 const normalizeCardHead = (card, finalPick) => {
   let s = String(card).trim();
+  // A markdown-dressed masthead ("## Gary's Take", "**Gary's Take**" — live
+  // catch, Aug 4 regen) normalizes to the plain one; cards are plain text.
+  s = s.replace(/^[#*\s]*gary'?s take[*\s]*$/im, "Gary's Take").trim();
   if (/^gary'?s take\b/i.test(s)) return s;
   const nl = s.indexOf('\n');
   const first = (nl === -1 ? s : s.slice(0, nl)).trim();
