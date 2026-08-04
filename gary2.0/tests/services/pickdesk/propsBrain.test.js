@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoard, buildPropBoardV2, selectPrimaryMarkets, statForProp, clearedClause } from '../../../src/services/pickdesk/propsBrain.js';
+import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoardV2, selectPrimaryMarkets, statForProp, clearedClause } from '../../../src/services/pickdesk/propsBrain.js';
 import { propOddsService } from '../../../src/services/propOddsService.js';
 
 // The props prompt surface is a product contract (spec 2026-07-26-props-desk).
@@ -26,54 +26,6 @@ Each prop you take publishes as its own card with its own "Gary's Take" — the 
   });
 });
 
-describe('buildPropBoard', () => {
-  const props = [
-    { player: 'Aaron Judge', team: 'Yankees', prop_type: 'hits', line: 1.5, over_odds: 160, under_odds: -210 },
-    { player: 'Aaron Judge', team: 'Yankees', prop_type: 'home_runs', line: 0.5, over_odds: 410, under_odds: null },
-    { player: 'Kyle Schwarber', team: 'Phillies', prop_type: 'total_bases', line: 1.5, over_odds: -125, under_odds: -105 },
-  ];
-
-  it('groups by player, prints prop keys verbatim, formats both market shapes', () => {
-    const board = buildPropBoard(props);
-    expect(board.text).toContain('═══ THE PROP BOARD (tonight\'s live prop prices) ═══');
-    expect(board.text).toContain('Aaron Judge (Yankees): hits 1.5 (Over +160 / Under -210) · home_runs 0.5 (+410)');
-    expect(board.text).toContain('Kyle Schwarber (Phillies): total_bases 1.5 (Over -125 / Under -105)');
-    expect(board.players).toEqual(new Set(['aaron judge', 'kyle schwarber']));
-  });
-
-  it('drops players outside posted lineups and says so', () => {
-    const board = buildPropBoard(props, { lineupNames: new Set(['aaron judge']) });
-    expect(board.text).toContain('Aaron Judge');
-    expect(board.text).not.toContain('Schwarber');
-    expect(board.text).toContain('(Players not in tonight\'s lineups are off the board.)');
-    expect(board.players).toEqual(new Set(['aaron judge']));
-  });
-
-  it('hrOnly keeps only home-run props', () => {
-    const board = buildPropBoard(props, { hrOnly: true });
-    expect(board.text).toContain('home_runs 0.5');
-    expect(board.text).not.toContain('hits 1.5');
-    expect(board.text).not.toContain('total_bases');
-  });
-
-  it('merges split over/under rows into one two-sided line — never prints null', () => {
-    const board = buildPropBoard([
-      { player: 'Dominic Canzone', team: 'Mariners', prop_type: 'total_bases', line: 1.5, over_odds: 142, under_odds: null },
-      { player: 'Dominic Canzone', team: 'Mariners', prop_type: 'total_bases', line: 1.5, over_odds: null, under_odds: -165 },
-      { player: 'Dominic Canzone', team: 'Mariners', prop_type: 'hits', line: 0.5, over_odds: null, under_odds: 155 },
-    ]);
-    expect(board.text).toContain('total_bases 1.5 (Over +142 / Under -165)');
-    expect(board.text).toContain('hits 0.5 (Under +155)');
-    expect(board.text).not.toContain('null');
-  });
-
-  it('empty input → empty board, no throw', () => {
-    const board = buildPropBoard([], {});
-    expect(board.text).toBe('');
-    expect(board.players.size).toBe(0);
-  });
-});
-
 describe('cleared counts (founder: past-tense counts, never rates)', () => {
   const g = (over) => ({ at_bats: 4, hits: over ? 2 : 0, doubles: over ? 1 : 0, triples: 0, hr: 0, runs: 0, rbi: 0, bb: 0, k: 1, total_bases: over ? 3 : 0, stolen_bases: 0 });
 
@@ -97,15 +49,6 @@ describe('cleared counts (founder: past-tense counts, never rates)', () => {
     expect(clearedClause(null, 'hits', 0.5)).toBeNull();
   });
 
-  it('board renders the clause as a trailing dash clause', () => {
-    const chrono = new Map([['aaron judge', Array(15).fill(g(true))]]);
-    const board = buildPropBoard(
-      [{ player: 'Aaron Judge', team: 'Yankees', prop_type: 'total_bases', line: 1.5, over_odds: 120, under_odds: -150 }],
-      { chronoByPlayer: chrono },
-    );
-    expect(board.text).toContain('total_bases 1.5 (Over +120 / Under -150) — over in 15 of his last 15');
-    expect(board.text).not.toMatch(/%|rate/i);
-  });
 });
 
 // ═══ Board V2 (Aug 3 2026): markets, not filtered scrape rows ═══════════════

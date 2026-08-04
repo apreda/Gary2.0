@@ -44,8 +44,9 @@ const isOddsAcceptable = (odds, propType) => {
   return odds >= MIN_ACCEPTABLE_ODDS && odds <= maxForType;
 };
 
-// MLB core prop types + sane line caps — single source since the V2 cutover
-// (the legacy getPlayerPropOdds MLB branch now delegates here).
+// MLB core prop types + sane line caps — the ONE source (the legacy MLB
+// branch of getPlayerPropOdds was deleted Aug 3; getPlayerPropOdds now
+// serves only the dormant NHL/NBA/NFL lanes until their pre-fall sweep).
 const MLB_CORE_PROP_TYPES = new Set([
   'hits', 'home_runs', 'total_bases', 'rbis', 'runs_scored',
   'walks', 'stolen_bases', 'singles', 'doubles',
@@ -85,8 +86,7 @@ export const propOddsService = {
    * and stripped the under from 26% of genuinely two-sided markets — the
    * menu itself manufactured the documented over-bias.
    *
-   * Requires the exact BDL game id (production callers always have it; the
-   * hardened name-match fallback stays in getPlayerPropOdds for manual runs).
+   * Requires the exact BDL game id (production callers always have it).
    */
   getMlbPlayerPropMarkets: async (gameId) => {
     if (gameId == null) throw new Error('getMlbPlayerPropMarkets requires a BDL game id');
@@ -504,67 +504,6 @@ export const propOddsService = {
         }
       }
 
-      // ============ MLB: Use Ball Don't Lie Player Props API (GOAT tier) ============
-      if (sport === 'baseball_mlb') {
-        console.log(`[PropOdds] Using Ball Don't Lie for MLB player props`);
-
-        const dateStr = getGameDateEST();
-        // Dual-date fetch: evening EST games are stored under next UTC date in BDL
-        const nextDate = new Date(new Date(dateStr).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        console.log(`[PropOdds] MLB: Searching for games on ${dateStr} + ${nextDate}`);
-
-        const [gamesToday, gamesTomorrow] = await Promise.all([
-          ballDontLieService.getMlbGamesForDate(dateStr),
-          ballDontLieService.getMlbGamesForDate(nextDate)
-        ]);
-        // Deduplicate by ID
-        const seenIds = new Set();
-        const mlbGames = [...gamesToday, ...gamesTomorrow].filter(g => {
-          if (!g?.id || seenIds.has(g.id)) return false;
-          seenIds.add(g.id);
-          return true;
-        });
-
-        // Exact id from the caller wins. The name-match fallback below is for
-        // manual runs only and is hardened: BDL's UTC date window contains the
-        // previous ET-evening game of the same series (on 2026-06-10 it matched
-        // yesterday's FINAL game and pulled 124 stale lines), and a doubleheader
-        // twin shares the same names — so exclude finals and take the candidate
-        // closest to this game's start time, never just the first name match.
-        let matchingGame;
-        if (gameId != null) {
-          matchingGame = mlbGames.find(g => String(g.id) === String(gameId)) ?? { id: gameId };
-        } else {
-          const targetMs = commenceTime ? new Date(commenceTime).getTime() : Date.now();
-          matchingGame = mlbGames
-            .filter(g => {
-              const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team_name || '') === normalizedHomeTeam ||
-                               normalizeTeamName(g.home_team?.full_name || g.home_team_name || '').includes(normalizedHomeTeam) ||
-                               normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team_name || ''));
-              const awayMatch = normalizeTeamName(g.away_team?.full_name || g.away_team_name || '') === normalizedAwayTeam ||
-                               normalizeTeamName(g.away_team?.full_name || g.away_team_name || '').includes(normalizedAwayTeam) ||
-                               normalizedAwayTeam.includes(normalizeTeamName(g.away_team?.full_name || g.away_team_name || ''));
-              return homeMatch && awayMatch && String(g.status || '').toUpperCase() !== 'STATUS_FINAL';
-            })
-            .sort((a, b) => Math.abs(new Date(a.date) - targetMs) - Math.abs(new Date(b.date) - targetMs))[0];
-        }
-
-        if (!matchingGame) {
-          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
-        } else {
-          console.log(`✅ Found BDL MLB game ID: ${matchingGame.id}${gameId != null ? ' (caller-provided)' : ' (name match)'}`);
-
-          // Since the board V2 cutover (Aug 3 2026) this legacy entry point
-          // only serves manual runs / legacy callers: it delegates to the
-          // market-shaped fetch and re-applies the window-split shape they
-          // expect. The MLB props CLI consumes getMlbPlayerPropMarkets
-          // directly and enforces the window at pick time instead.
-          const markets = await propOddsService.getMlbPlayerPropMarkets(matchingGame.id);
-          if (markets.length > 0) {
-            return propOddsService.filterPropsByOddsValue(markets);
-          }
-        }
-      }
 
       // ============ Unsupported sport ============
       console.warn(`[PropOdds] Sport '${sport}' player props not supported.`);

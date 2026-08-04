@@ -142,63 +142,6 @@ export function clearedClause(chronoRows, propType, line) {
     : `over in ${cleared} of his last ${vals.length}`;
 }
 
-/**
- * THE PROP BOARD — tonight's real prop prices, grouped by player, prop keys
- * printed verbatim so picks reference exactly what the odds gate verifies.
- * When lineups are posted, only players in them render (starters + probables):
- * a scratched player's props never reach the board.
- * Returns { text, players } — players is the validated pool (normalized names).
- */
-export function buildPropBoard(playerProps, { lineupNames = null, hrOnly = false, chronoByPlayer = null } = {}) {
-  let rows = (playerProps || []).filter(p => p?.player && p?.prop_type);
-  if (hrOnly) rows = rows.filter(p => norm(p.prop_type).includes('home_run'));
-  let excluded = 0;
-  if (lineupNames && lineupNames.size) {
-    const before = rows.length;
-    rows = rows.filter(p => lineupNames.has(norm(p.player)));
-    excluded = before - rows.length;
-  }
-  if (!rows.length) return { text: '', players: new Set() };
-
-  // The feed can deliver a market's over and under as SEPARATE rows (the
-  // second row carries over_odds: null) — merge by player+type+line first so
-  // the board prints one clean two-sided line, never a "null" price.
-  const merged = new Map();
-  for (const p of rows) {
-    const mk = `${norm(p.player)}|${norm(p.prop_type)}|${p.line}`;
-    const cur = merged.get(mk) || { ...p };
-    if (cur.over_odds == null && p.over_odds != null) cur.over_odds = p.over_odds;
-    if (cur.under_odds == null && p.under_odds != null) cur.under_odds = p.under_odds;
-    merged.set(mk, cur);
-  }
-
-  const byPlayer = new Map();
-  for (const p of merged.values()) {
-    const over = fmtOdds(p.over_odds);
-    const under = fmtOdds(p.under_odds);
-    const price = over != null && under != null ? `Over ${over} / Under ${under}`
-      : over != null ? `${over}`
-      : under != null ? `Under ${under}`
-      : null;
-    if (!price) continue; // no priced side — nothing to bet, nothing to print
-    const key = norm(p.player);
-    if (!byPlayer.has(key)) byPlayer.set(key, { player: p.player, team: p.team, entries: [] });
-    const cleared = chronoByPlayer ? clearedClause(chronoByPlayer.get(key), p.prop_type, p.line) : null;
-    byPlayer.get(key).entries.push(`${p.prop_type} ${p.line} (${price})${cleared ? ` — ${cleared}` : ''}`);
-  }
-  if (!byPlayer.size) return { text: '', players: new Set() };
-
-  const lines = [...byPlayer.values()]
-    .sort((a, b) => a.player.localeCompare(b.player))
-    .map(g => `  ${g.player}${g.team ? ` (${g.team})` : ''}: ${g.entries.join(' · ')}`);
-
-  const note = excluded > 0 ? `\n(Players not in tonight's lineups are off the board.)` : '';
-  return {
-    text: `═══ THE PROP BOARD (tonight's live prop prices) ═══\n${lines.join('\n')}${note}`,
-    players: new Set(byPlayer.keys()),
-  };
-}
-
 // ═══ PROP BOARD V2 — the board presents MARKETS, not filtered scrape rows ═══
 // (Aug 3 2026.) Measured that day: the legacy per-side odds window built a
 // menu that was 58.6% over-only rows — 97% of one-sided rows were overs — so
@@ -288,8 +231,8 @@ export function selectPrimaryMarkets(marketRows) {
 }
 
 /**
- * THE PROP BOARD V2 — same contract as buildPropBoard ({ text, players },
- * plus stats), fed by MARKET rows (propOddsService.getMlbPlayerPropMarkets).
+ * THE PROP BOARD — returns { text, players, stats }, fed by MARKET rows
+ * (propOddsService.getMlbPlayerPropMarkets). The one and only board.
  * Sides are always labeled; a one-priced HR rung prints "Over +240", never a
  * bare "+240" that reads as the default bet.
  */
@@ -391,11 +334,10 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   }
 
   // BOARD V2 IS PRODUCTION (cutover Aug 3 2026, founder's "right now"):
-  // playerProps arrive as MARKET rows (propOddsService.getMlbPlayerPropMarkets)
-  // and the default board is the market-first V2. The seam remains so the
-  // paired bench can run the legacy arm (buildBoard: buildPropBoard) for
-  // same-night audits.
-  const board = (options.buildBoard ?? buildPropBoardV2)(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
+  // playerProps arrive as MARKET rows (propOddsService.getMlbPlayerPropMarkets).
+  // One board, one system (founder, Aug 3: the legacy board and its A/B
+  // harness are deleted — no side-by-side, no old parts).
+  const board = buildPropBoardV2(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
   if (!board.players.size) {
     console.log('   [Props Brain] empty board after filters — pass');
     return { picks: [], validatedPlayers: board.players };
