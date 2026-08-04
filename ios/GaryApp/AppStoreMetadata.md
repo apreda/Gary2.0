@@ -92,6 +92,23 @@ https://www.betwithgary.ai
 
 ---
 
+## What's New (Version 2.23)
+
+```
+Props, rebuilt from the board up.
+
+• Gary now sees both sides of every prop line at a real price, so unders and quieter markets reach the card instead of being filtered out before he reads them
+• Prop results settle game by game, and a player who never appears voids to a push instead of sitting open
+• Home is one board all day — games roll from start time to live to final in place, with the market line in each slot until Gary's call lands in gold
+• The record rides above the board before first pitch, then goes live beneath it once games start
+• Headlines are a swipeable rail pinned to the top, building through the night as games finish
+• Winners opens with the day's card: tonight's slate, when each pick unlocks, and a countdown to the first one
+• Tail or fade Gary on the back of any card, game picks and props both
+• In the Hub, tap a player for their card and a team for theirs
+```
+
+---
+
 ## What's New (Version 1.2)
 
 ```

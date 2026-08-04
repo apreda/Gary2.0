@@ -53,6 +53,33 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.23",
+        date: "August 2026",
+        type: .update,
+        title: "Gary 2.23 — Props rebuilt, a cleaner Home",
+        changes: [
+            "Props are rebuilt from the board up. Gary now sees both sides of every prop line at a real price, so unders and quieter markets reach the card instead of being filtered out before he ever reads them",
+            "Prop results are settled game by game, and a player who never appears now voids to a push instead of sitting open. July's prop record was re-graded and corrected",
+            "Home is one board all day. Games move from start time to live to final in place, the market line sits in each slot until Gary's call lands in gold, and the record rides above the board before first pitch, then goes live beneath it once games start",
+            "Headlines are back to a swipeable rail pinned to the top, building through the night in the order games actually finished",
+            "Winners opens with the day's card: tonight's slate, when each pick unlocks, a countdown to the first one, and your last ten by league",
+            "Tail or fade Gary right on the back of any card, game picks and props both",
+            "In the Hub, tap a player for their card and a team for theirs, with an arrow to open the read. Tomorrow's projected starters now include arms lined up for a second start",
+            "A refreshed navigation bar",
+        ]
+    ),
+    ChangelogEntry(
+        version: "2.22",
+        date: "July 2026",
+        type: .update,
+        title: "Gary 2.22 — World Cup wrapped up",
+        changes: [
+            "The Picks page opens like the Hub now — the masthead, the rolling 7-day record, and the day's slate as the game bar, each game with its time and total",
+            "World Cup coverage is complete now that the tournament is over — picks, the Hub lane, and the World Cup pass are put away until the next one",
+            "Fixed a label that was rendering behind the Hub tab's icon",
+        ]
+    ),
+    ChangelogEntry(
         version: "2.17",
         date: "June 2026",
         type: .update,
