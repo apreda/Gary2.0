@@ -70,6 +70,8 @@ import {
 import { getMlbSchedule, getMlbStandings, getMlbTeams } from './mlbStatsApiService.js';
 import { getPitcherXStats } from './baseballSavantService.js';
 import { ballDontLieService as bdl } from './ballDontLieService.js';
+import { GEMINI_PROPS_MODEL } from './agentic/orchestrator/orchestratorConfig.js';
+import { createGeminiSession, sendToSessionWithRetry } from './agentic/orchestrator/sessionManager.js';
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -1124,6 +1126,97 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
 
 /* ───────────────────────────── main assembler ───────────────────────────── */
 
+// ═══════════════════════════════════════════════════════════════════════════
+// THE ARMS, IN GARY'S VOICE (founder GO, Aug 4 2026): the scouting card opens
+// straight with the arms, and the arms SPEAK — two sentences from Gary on the
+// game's two starters, replacing the stat ladder. ONE batched call for the
+// whole slate on the props-lane model (bridge, $0 marginal). Fail-soft at
+// every seam: a game without a take renders the existing iOS ladder instead.
+// The facts below are the take's ONLY world — same prevent-fabrication
+// posture as the desks (data in, nothing invented).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** One starter's facts as a compact line. Omits what the data lacks. */
+function armsFactLine(st) {
+  if (!st) return null;
+  const name = st.full_name || st.name;
+  if (!name) return null;
+  const bits = [];
+  if (st.era != null) bits.push(`${st.era} ERA${st.xera != null ? ` (xERA ${st.xera})` : ''}`);
+  if (st.last_outing) {
+    const lo = st.last_outing;
+    bits.push(`last outing${lo.date ? ` ${lo.date}` : ''}${lo.opp ? ` ${lo.at || 'vs'} ${lo.opp}` : ''}: ${lo.ip} IP ${lo.er} ER ${lo.k} K`);
+  }
+  if (st.l3) bits.push(`last ${st.l3.gs}: ${st.l3.ip} IP ${st.l3.er} ER ${st.l3.k} K`);
+  if (st.qs_form?.window >= 2) bits.push(`${st.qs_form.qs} QS in last ${st.qs_form.window}${st.qs_form.streak >= 2 ? ` (${st.qs_form.streak} straight)` : ''}`);
+  if (st.vs_opp?.gs) bits.push(`vs tonight's opponent this season: ${st.vs_opp.gs} GS, ${st.vs_opp.ip} IP, ${st.vs_opp.er} ER`);
+  if (st.rest?.days != null) bits.push(`${st.rest.days} days' rest`);
+  return `${name} (${st.team}): ${bits.join('; ') || 'no season data'}`;
+}
+
+const ARMS_VOICE_CONTRACT = `You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system.
+
+Your training data is old; the pitcher data provided is current — say nothing it can't back.
+
+For each game: TWO sentences on the game's two starting pitchers — whatever you'd actually say about these arms tonight. No emojis.`;
+
+/**
+ * Attach `arms_take` to MLB board rows — one batched voice call, JSON out.
+ * Any failure (session, parse, per-game miss) leaves rows untouched.
+ */
+async function attachArmsTakes(board, starters) {
+  const byAbbr = new Map();
+  for (const st of starters) {
+    if (st.league === 'MLB' && st.team) byAbbr.set(String(st.team).toUpperCase(), st);
+  }
+  const jobs = [];
+  for (const r of board) {
+    if (r.league !== 'MLB') continue;
+    const a = armsFactLine(byAbbr.get(String(r.away_abbr || '').toUpperCase()));
+    const h = armsFactLine(byAbbr.get(String(r.home_abbr || '').toUpperCase()));
+    if (!a && !h) continue; // nothing to speak about — ladder fallback owns it
+    const matchup = `${r.away_abbr || r.away_team} @ ${r.home_abbr || r.home_team}`;
+    jobs.push({ row: r, matchup, facts: [a, h].filter(Boolean).join('\n') });
+  }
+  if (!jobs.length) return;
+
+  const userMessage = `${jobs.map((j) => `## ${j.matchup}\n${j.facts}`).join('\n\n')}
+
+Output JSON only:
+
+\`\`\`json
+[{ "matchup": "AWY @ HOM", "take": "[the two sentences]" }]
+\`\`\`
+
+One entry per game listed above.`;
+
+  const session = await createGeminiSession({
+    modelName: GEMINI_PROPS_MODEL,
+    systemPrompt: ARMS_VOICE_CONTRACT,
+    tools: [],
+    thinkingLevel: 'low',
+  });
+  const res = await sendToSessionWithRetry(session, userMessage, {});
+  const m = String(res.content || '').match(/```json\s*([\s\S]*?)```/i) || String(res.content || '').match(/(\[[\s\S]*\])/);
+  if (!m) throw new Error('arms takes: no JSON in response');
+  const entries = JSON.parse(m[1]);
+  const takeByMatchup = new Map();
+  for (const e of entries) {
+    if (e?.matchup && typeof e.take === 'string') takeByMatchup.set(e.matchup.trim(), e.take.trim());
+  }
+  let attached = 0;
+  for (const j of jobs) {
+    const take = takeByMatchup.get(j.matchup);
+    // Guards are LAWS, not style: no ellipsis ever; no emojis; length sane.
+    if (!take || take.length < 40 || take.length > 420) continue;
+    if (take.includes('…') || take.includes('...')) continue;
+    if (/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take)) continue;
+    j.row.arms_take = take;
+    attached += 1;
+  }
+  console.log(`[TomorrowBoard] arms takes attached: ${attached}/${jobs.length}`);
+}
+
 /**
  * Assemble + persist tomorrow's board snapshot. Idempotent upsert on (date) —
  * re-runs (e.g. the evening line refresh) overwrite in place so overnight-posted
@@ -1226,6 +1319,13 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     await attachSeriesToBoard(board);
   } catch (e) {
     console.warn(`[TomorrowBoard] season series failed (honest-empty): ${e.message}`);
+  }
+  // THE ARMS IN GARY'S VOICE (Aug 4) — two sentences per game on the two
+  // starters, from the enriched facts above. Fail-soft: no take, ladder shows.
+  try {
+    await attachArmsTakes(board, starters);
+  } catch (e) {
+    console.warn(`[TomorrowBoard] arms takes failed (ladder fallback): ${e.message}`);
   }
   const any_lines = board.some(
     (r) => r.spread != null || r.ml_home != null || r.ml_away != null || r.total != null,
