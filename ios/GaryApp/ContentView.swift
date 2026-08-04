@@ -401,12 +401,14 @@ struct GaryCenteredTabBar: View {
     // Tunable hump geometry.
     private let humpRise: CGFloat = 28
     private let humpHalfWidth: CGFloat = 52
-    // Jul 15 2026: +14 over the original 58 — the logo (72pt, padded 7pt from
-    // the top) only left 7pt of clearance below it, so the new "Hub" caption
-    // was rendering fully underneath the logo's opaque circle instead of
-    // below it. This gives it real room without touching the logo/hump size.
+    // 72 (was 58 through Jul 15) — the taller flat lets the seated bear clear
+    // the side tabs' labels without crowding them.
     private let flatHeight: CGFloat = 72
-    private let logoSize: CGFloat = 72
+    // Mock 01 geometry (founder's pick, matched Aug 3): the bear SEATS inside
+    // the bar at ~83% of its height with the hump arcing empty above it — the
+    // seat reads as a seat. (The old 72pt bear at top-7 filled and overflowed
+    // the dome, which is what didn't match.)
+    private let logoSize: CGFloat = 60
 
     private var barShape: HumpBarShape {
         HumpBarShape(humpRise: humpRise, humpHalfWidth: humpHalfWidth, cornerRadius: 27)
@@ -427,27 +429,23 @@ struct GaryCenteredTabBar: View {
             .frame(height: humpRise + flatHeight)
             .shadow(color: .black.opacity(0.28), radius: 14, y: 6)
 
-            // Tabs live in the flat portion, pinned to the bottom. The center
-            // slot carries just a caption (Jul 15 2026, founder: the logo had
-            // no text cue at all — "Hub" wasn't obvious as a destination) —
-            // the raised logo above is still the tap target/icon, this only
-            // adds the label every other tab already gets.
+            // Tabs live in the flat portion, pinned to the bottom.
             HStack(spacing: 0) {
                 ForEach(leftTabs, id: \.index) { sideTab($0) }
-                Text("Hub")
-                    .font(GaryFonts.text(10, .semibold))
-                    .foregroundStyle(selectedTab == garyIndex ? GaryColors.gold : .white.opacity(0.45))
-                    .frame(width: humpHalfWidth * 2)
+                // The bear IS the label (founder, Aug 3: "the logo in the
+                // middle doesn't need the word Hub under it") — the center
+                // slot only reserves the hump's width.
+                Color.clear.frame(width: humpHalfWidth * 2, height: 26)
                 ForEach(rightTabs, id: \.index) { sideTab($0) }
             }
             .padding(.horizontal, 14)
             .frame(height: flatHeight)
             .frame(maxHeight: .infinity, alignment: .bottom)
 
-            // Logo nestled into the hump — sits low, roughly inline with the tab
-            // icons but lifted a touch; its size does the rest of the "raised" work.
+            // Logo seated in the bar, chin roughly at the label baseline — the
+            // hump's arc stays visible above it (mock 01).
             garyLogo
-                .padding(.top, 7)
+                .padding(.top, 32)
         }
         .frame(height: humpRise + flatHeight)
         .padding(.horizontal, 26)
@@ -462,16 +460,15 @@ struct GaryCenteredTabBar: View {
             tabAction(index: tab.index)
         } label: {
             VStack(spacing: 5) {
+                // Color-only active state (mock 01, and what this file's own
+                // header always claimed) — the gold capsule behind the icon
+                // was drift.
                 Image(systemName: tab.icon)
                     .font(.system(size: 18, weight: .semibold))
                     .frame(width: 46, height: 26)
-                    .background {
-                        if active {
-                            Capsule(style: .continuous).fill(GaryColors.gold.opacity(0.15))
-                        }
-                    }
+                // Bigger words (founder, Aug 3: mock 01 "make the words bigger").
                 Text(tab.label)
-                    .font(GaryFonts.text(10, .semibold))
+                    .font(GaryFonts.text(11.5, .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }

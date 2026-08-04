@@ -3006,47 +3006,6 @@ struct HomeView: View {
                 }
                 homeSheetPanel(rows.filter { $0.league == lg }, liveGlow: anyLive)
             }
-            boardTally(rows)
-        }
-    }
-
-    /// The board's day tally (founder, Aug 3): covering/behind while games
-    /// run, finals building as they end — the live record living UNDER the
-    /// board. Hidden until the day's first pitch: before that, yesterday
-    /// belongs to the overnight strip up top and THE RECORD sign-off, so the
-    /// board never has to wear a stale record.
-    @ViewBuilder private func boardTally(_ rows: [HomeSheetRow]) -> some View {
-        let live = rows.filter { $0.zone == .live }
-        let settled = rows.filter { $0.zone == .settled }
-        let covering = live.filter { $0.statusText.contains("COVERING") }.count
-        let behind = live.filter { $0.statusText.contains("IN THE RED") }.count
-        let cashed = settled.filter { $0.statusText.contains("✓ CASHED") }.count
-        let lost = settled.filter { $0.statusText.contains("✗ LOST") }.count
-        let splits = settled.filter { $0.statusText.contains("SPLIT") }.count
-
-        // Only speaks when it has something to say (Aug 3: live games with no
-        // graded calls left a lone green bar hanging under the board).
-        if covering + behind > 0 || cashed + lost + splits > 0 {
-            HStack(spacing: 10) {
-                BroadcastBar(tint: live.isEmpty ? GaryColors.gold : GaryColors.win, height: 10)
-                if covering > 0 {
-                    Text("\(covering) COVERING")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
-                        .foregroundStyle(GaryColors.win)
-                }
-                if behind > 0 {
-                    Text("\(behind) BEHIND")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
-                        .foregroundStyle(GaryColors.loss)
-                }
-                if cashed + lost + splits > 0 {
-                    Text("FINALS \(cashed)–\(lost)\(splits > 0 ? " · \(splits) SPLIT" : "")")
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 18)
         }
     }
 
