@@ -343,42 +343,53 @@ struct SettingsSheetView: View {
 
 // MARK: - Gary-Centered Tab Bar (Gary as raised center primary action)
 
-/// Tab bar with 4 normal tabs (Home, Picks, Props, Billfold) and Gary as a
-/// bigger, raised center tab (index 2). Gary is THE main thing — the orb
-/// is the product, and the tab bar reflects that.
-// Bar silhouette with a smooth raised "hump" in the top-center for the logo.
-// The hump adds height only in the middle; the flat ends stay the tab height.
-struct HumpBarShape: Shape {
-    var humpRise: CGFloat        // how far the hump crests above the flat top
-    var humpHalfWidth: CGFloat   // half-width of the hump's base
-    var cornerRadius: CGFloat    // rounding of the bar's ends
+/// Tab bar with 4 normal tabs (Home, Winners | Picks, Billfold) and Gary as
+/// the floating center tab (index 2). Gary is THE main thing — the bear
+/// floats between the bar's two halves, and the bar reflects that.
+// PSEUDO-SEPARATION (founder, Aug 4: "the logo in the middle of the nav bar
+// kind of floating in between the two parts... not like a full separation").
+// One continuous silhouette: two full-height slabs joined by a slim center
+// bridge — a waist, not a cut. The bear floats over the bridge and bursts
+// above the slabs' top edge. Drawn as ONE path so the fill and the hairline
+// stroke read as a single object.
+struct SplitWaistBarShape: Shape {
+    var cornerRadius: CGFloat   // rounding of the bar's outer ends
+    var gapHalf: CGFloat        // half-width of the center gap between slabs
+    var bridgeHeight: CGFloat   // the slim band that keeps the halves one bar
+    var neckRadius: CGFloat     // rounding where the slabs turn into the gap
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
         let w = rect.width, h = rect.height
         let cx = rect.midX
-        let topY = humpRise
-        let xL = cx - humpHalfWidth
-        let xR = cx + humpHalfWidth
-        // Crisp half-ellipse dome (mock 01): the dome rises straight off the
-        // top edge as two quarter-ellipse arcs — no S-wave blend into the
-        // flat. c = the cubic circle constant.
-        let c: CGFloat = 0.5523
-        let r = min(cornerRadius, (h - topY) / 2)
+        let xL = cx - gapHalf          // left slab's inner wall
+        let xR = cx + gapHalf          // right slab's inner wall
+        let notch = (h - bridgeHeight) / 2   // depth of the waist from each edge
+        let r = cornerRadius
+        let n = min(neckRadius, notch / 2)
 
-        p.move(to: CGPoint(x: 0, y: topY + r))
-        p.addQuadCurve(to: CGPoint(x: r, y: topY), control: CGPoint(x: 0, y: topY))   // top-left corner
-        p.addLine(to: CGPoint(x: xL, y: topY))
-        p.addCurve(to: CGPoint(x: cx, y: 0),                                          // quarter-ellipse up
-                   control1: CGPoint(x: xL, y: topY - c * humpRise),
-                   control2: CGPoint(x: cx - c * humpHalfWidth, y: 0))
-        p.addCurve(to: CGPoint(x: xR, y: topY),                                       // quarter-ellipse down
-                   control1: CGPoint(x: cx + c * humpHalfWidth, y: 0),
-                   control2: CGPoint(x: xR, y: topY - c * humpRise))
-        p.addLine(to: CGPoint(x: w - r, y: topY))
-        p.addQuadCurve(to: CGPoint(x: w, y: topY + r), control: CGPoint(x: w, y: topY)) // top-right corner
+        p.move(to: CGPoint(x: 0, y: r))
+        p.addQuadCurve(to: CGPoint(x: r, y: 0), control: .zero)                          // top-left corner
+        p.addLine(to: CGPoint(x: xL - n, y: 0))
+        p.addQuadCurve(to: CGPoint(x: xL, y: n), control: CGPoint(x: xL, y: 0))          // into the gap (convex)
+        p.addLine(to: CGPoint(x: xL, y: notch - n))
+        p.addQuadCurve(to: CGPoint(x: xL + n, y: notch), control: CGPoint(x: xL, y: notch)) // fillet onto bridge
+        p.addLine(to: CGPoint(x: xR - n, y: notch))                                      // bridge top
+        p.addQuadCurve(to: CGPoint(x: xR, y: notch - n), control: CGPoint(x: xR, y: notch))
+        p.addLine(to: CGPoint(x: xR, y: n))
+        p.addQuadCurve(to: CGPoint(x: xR + n, y: 0), control: CGPoint(x: xR, y: 0))      // out of the gap
+        p.addLine(to: CGPoint(x: w - r, y: 0))
+        p.addQuadCurve(to: CGPoint(x: w, y: r), control: CGPoint(x: w, y: 0))            // top-right corner
         p.addLine(to: CGPoint(x: w, y: h - r))
         p.addQuadCurve(to: CGPoint(x: w - r, y: h), control: CGPoint(x: w, y: h))        // bottom-right
+        p.addLine(to: CGPoint(x: xR + n, y: h))
+        p.addQuadCurve(to: CGPoint(x: xR, y: h - n), control: CGPoint(x: xR, y: h))      // bottom neck, mirrored
+        p.addLine(to: CGPoint(x: xR, y: h - notch + n))
+        p.addQuadCurve(to: CGPoint(x: xR - n, y: h - notch), control: CGPoint(x: xR, y: h - notch))
+        p.addLine(to: CGPoint(x: xL + n, y: h - notch))                                  // bridge bottom
+        p.addQuadCurve(to: CGPoint(x: xL, y: h - notch + n), control: CGPoint(x: xL, y: h - notch))
+        p.addLine(to: CGPoint(x: xL, y: h - n))
+        p.addQuadCurve(to: CGPoint(x: xL - n, y: h), control: CGPoint(x: xL, y: h))
         p.addLine(to: CGPoint(x: r, y: h))
         p.addQuadCurve(to: CGPoint(x: 0, y: h - r), control: CGPoint(x: 0, y: h))        // bottom-left
         p.closeSubpath()
@@ -401,50 +412,54 @@ struct GaryCenteredTabBar: View {
     ]
     private let garyIndex: Int = 2
 
-    // Mock-01 geometry, transcribed from the mock's own CSS (founder, Aug 3:
-    // "100% the same"): dome 104×26 half-ellipse, bar 72 tall, radius 27,
-    // 72pt bear whose crown pokes 6pt into the dome.
-    private let humpRise: CGFloat = 26
-    private let humpHalfWidth: CGFloat = 52
-    // 72 (was 58 through Jul 15) — the taller flat lets the seated bear clear
-    // the side tabs' labels without crowding them.
-    private let flatHeight: CGFloat = 72
-    private let logoSize: CGFloat = 72
+    // PSEUDO-SEPARATION geometry (founder, Aug 4: dome gone; the bear floats
+    // between the bar's two halves): bar 72 tall, radius 27, 92pt gap between
+    // the slabs, 20pt bridge keeping them one bar, 78pt bear biased high —
+    // crown bursts 9pt above the slabs, chin stays 3pt inside the floor.
+    private let barHeight: CGFloat = 72
+    private let gapHalf: CGFloat = 46
+    private let bridgeHeight: CGFloat = 20
+    private let logoSize: CGFloat = 78
+    private let logoLift: CGFloat = 6
 
-    private var barShape: HumpBarShape {
-        HumpBarShape(humpRise: humpRise, humpHalfWidth: humpHalfWidth, cornerRadius: 27)
+    private var barShape: SplitWaistBarShape {
+        SplitWaistBarShape(cornerRadius: 27, gapHalf: gapHalf, bridgeHeight: bridgeHeight, neckRadius: 13)
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // Humped bar — the mock's exact surface (founder, Aug 3: "100%
-            // the same"): solid ink fill, flat 10%-white hairline, no glass,
-            // no drop shadow.
+        ZStack {
+            // Split-waist bar: solid ink fill, flat 10%-white hairline, no
+            // glass, no drop shadow.
+            //
+            // HUE FIX (founder, Aug 4: "the nav bar is a different color").
+            // #17161A is blue-leading (R23 G22 B26) — the exact grey-blue
+            // cast the page background was corrected away from. barSurface is
+            // its warm twin at MATCHED luminance (22.6 vs 22.5), so the
+            // elevation reads the same — only the hue family changes.
             ZStack {
-                barShape.fill(Color(hex: "#17161A"))
+                barShape.fill(GaryColors.barSurface)
                 barShape.stroke(Color.white.opacity(0.10), lineWidth: 1)
             }
-            .frame(height: humpRise + flatHeight)
+            .frame(height: barHeight)
 
-            // Tabs live in the flat portion, pinned to the bottom.
+            // Tabs live in the slabs.
             HStack(spacing: 0) {
                 ForEach(leftTabs, id: \.index) { sideTab($0) }
                 // The bear IS the label (founder, Aug 3: "the logo in the
                 // middle doesn't need the word Hub under it") — the center
-                // slot only reserves the hump's width.
-                Color.clear.frame(width: humpHalfWidth * 2, height: 26)
+                // slot reserves the gap between the slabs.
+                Color.clear.frame(width: gapHalf * 2, height: 26)
                 ForEach(rightTabs, id: \.index) { sideTab($0) }
             }
             .padding(.horizontal, 18)
-            .frame(height: flatHeight)
-            .frame(maxHeight: .infinity, alignment: .bottom)
+            .frame(height: barHeight)
 
-            // Bear crown 6pt into the dome, chin 6pt off the bar's floor —
-            // the mock's exact seat.
+            // The bear floats in the gap, over the bridge — biased high so
+            // the crown bursts above the bar while the chin clears the floor.
             garyLogo
-                .padding(.top, humpRise - 6)
+                .offset(y: -logoLift)
         }
-        .frame(height: humpRise + flatHeight)
+        .frame(height: barHeight)
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
     }
