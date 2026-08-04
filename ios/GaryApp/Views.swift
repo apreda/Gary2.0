@@ -3024,7 +3024,9 @@ struct HomeView: View {
         let lost = settled.filter { $0.statusText.contains("✗ LOST") }.count
         let splits = settled.filter { $0.statusText.contains("SPLIT") }.count
 
-        if !live.isEmpty || !settled.isEmpty {
+        // Only speaks when it has something to say (Aug 3: live games with no
+        // graded calls left a lone green bar hanging under the board).
+        if covering + behind > 0 || cashed + lost + splits > 0 {
             HStack(spacing: 10) {
                 BroadcastBar(tint: live.isEmpty ? GaryColors.gold : GaryColors.win, height: 10)
                 if covering > 0 {
@@ -3882,88 +3884,6 @@ struct HomeView: View {
 /// the founder's "too much motion, too much green" note was about THE BOARD
 /// section, not this one. Restored Jul 14 (founder: Live/Earlier Today was
 /// never supposed to lose the roll) — same current type/color, cycling back.
-/// LiveHitsDisclosure — replaces the auto-cycling LiveHitsRoller (founder,
-/// Aug 3: nothing on the board auto-changes; the fan opens the ledger).
-/// Winner of the five-lens design fan-out ("THE LEDGER") with two grafts:
-/// a single hit self-discloses with no ceremony, and a stray tap on the
-/// open list CLOSES it — it can never yank the fan to the Picks tab.
-/// Static at rest; wraps instead of truncating (ellipsis impossible).
-struct LiveHitsDisclosure: View {
-    let items: [String]                 // 0..~8 settled hit strings, feed order
-    @State private var open = false
-
-    private let spring = Animation.spring(response: 0.32, dampingFraction: 0.86)
-
-    var body: some View {
-        if items.count == 1 {
-            // One fact is already fully disclosed — state it, no ceremony.
-            ledgerLine(items[0])
-        } else if items.count > 1 {
-            VStack(alignment: .trailing, spacing: 8) {
-                Button {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                    withAnimation(spring) { open.toggle() }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text("\(items.count) HITS")
-                            .font(GaryFonts.mono(12, bold: true))
-                            .tracking(0.6)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .rotationEffect(.degrees(open ? 180 : 0))
-                    }
-                    .foregroundStyle(GaryColors.win)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(GaryColors.win.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(GaryColors.win.opacity(0.25), lineWidth: 1)
-                            )
-                    )
-                    .padding(.vertical, 6)
-                    .padding(.leading, 12)          // invisible tap-zone inflation
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)                // inner button beats the row gesture
-                .accessibilityLabel("\(items.count) hits cashed")
-                .accessibilityHint(open ? "Collapses the list" : "Expands the list")
-
-                if open {
-                    VStack(alignment: .leading, spacing: 7) {
-                        ForEach(Array(items.enumerated()), id: \.offset) { _, hit in
-                            ledgerLine(hit)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {                 // stray tap closes — never navigates
-                        withAnimation(spring) { open = false }
-                    }
-                    .transition(.opacity)
-                }
-            }
-        }
-        // items.isEmpty renders nothing at all — no affordance, no reserved height.
-    }
-
-    private func ledgerLine(_ raw: String) -> some View {
-        let fact = raw.hasPrefix("✓ ") ? String(raw.dropFirst(2)) : raw
-        return HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("✓")
-                .font(GaryFonts.mono(12, bold: true))
-                .foregroundStyle(GaryColors.win)
-                .frame(width: 12, alignment: .leading)      // fixed glyph column
-            Text(fact)
-                .font(GaryFonts.mono(12, bold: true))
-                .foregroundStyle(GaryColors.warmWhite.opacity(0.85))
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)   // wraps; ellipsis impossible
-        }
-    }
-}
-
 struct HomeMasthead: View {
     private var dateLine: String {
         let f = DateFormatter()
@@ -5012,14 +4932,15 @@ struct HomeSheetRowView: View {
             Spacer(minLength: 8)
             // Status up top, the cashed-props feed BIG with real air under it
             // (founder, Jul 7: larger, and further from the red part).
-            VStack(alignment: .trailing, spacing: 12) {
-                Text(row.statusText)
-                    .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(row.statusColor)
-                    .lineLimit(1)
-                LiveHitsDisclosure(items: row.hitLines)
-            }
-            .padding(.top, 2)
+            // (The hits ledger left the board rows Aug 3 — founder: live rows
+            // keep the same size and shape as pre-game ones; the cashed-props
+            // feed wants a home that doesn't warp the queue. hitLines data
+            // still rides the rows for that future home.)
+            Text(row.statusText)
+                .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
+                .foregroundStyle(row.statusColor)
+                .lineLimit(1)
+                .padding(.top, 2)
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))

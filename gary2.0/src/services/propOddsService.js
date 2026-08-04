@@ -44,9 +44,10 @@ const isOddsAcceptable = (odds, propType) => {
   return odds >= MIN_ACCEPTABLE_ODDS && odds <= maxForType;
 };
 
-// MLB core prop types + sane line caps — the ONE source (the legacy MLB
-// branch of getPlayerPropOdds was deleted Aug 3; getPlayerPropOdds now
-// serves only the dormant NHL/NBA/NFL lanes until their pre-fall sweep).
+// MLB core prop types + sane line caps — the ONE source. getPlayerPropOdds
+// serves the off-season NHL/NBA/NFL lanes, which now return the SAME
+// market shape as MLB (founder, Aug 3: props were broken for every sport —
+// one universal fix, no old-style side-splitting anywhere).
 const MLB_CORE_PROP_TYPES = new Set([
   'hits', 'home_runs', 'total_bases', 'rbis', 'runs_scored',
   'walks', 'stolen_bases', 'singles', 'doubles',
@@ -69,7 +70,7 @@ export const propOddsService = {
    * Bet-permission check — the odds window as a PICK rule, not a board rule
    * (props board V2, Aug 3 2026). The V2 board shows the real market both
    * sides priced; this gates which SIDES are takeable at pick time. Same
-   * constants as the legacy board filter below.
+   * one window, applied where a bet is made.
    */
   isOddsTakeable: (odds, propType) => isOddsAcceptable(odds, propType),
 
@@ -139,70 +140,6 @@ export const propOddsService = {
     return markets;
   },
 
-  /**
-   * Filter out player props with odds outside acceptable range
-   * Range: -200 to +400 (inclusive)
-   * - Filters out heavy juice (-201 and worse)
-   * - Filters out lottery tickets (+401 and higher)
-   * @private
-   * @param {Array} props - Array of player prop data
-   * @returns {Array} - Filtered props with odds in acceptable range, split into separate over/under entries
-   */
-  filterPropsByOddsValue: (props) => {
-    if (!props || !Array.isArray(props)) {
-      return [];
-    }
-    
-    const originalCount = props.length;
-    let splitProps = [];
-    
-    // Process each prop to split into separate over/under entries and filter by odds
-    for (const prop of props) {
-      // Only include the OVER side if odds are in acceptable range (-200 to +400)
-      if (prop.over_odds !== null && isOddsAcceptable(prop.over_odds, prop.prop_type)) {
-        splitProps.push({
-          player: prop.player,
-          player_id: prop.player_id,  // FIXED: Preserve player_id for context building
-          team: prop.team,
-          prop_type: prop.prop_type,
-          line: prop.line,
-          side: 'OVER',  // Add explicit side for clarity
-          odds: prop.over_odds,
-          over_odds: prop.over_odds,
-          under_odds: null  // Not relevant for this entry
-        });
-      } else if (prop.over_odds !== null) {
-        const reason = prop.over_odds < MIN_ACCEPTABLE_ODDS 
-          ? `heavy juice (${prop.over_odds} worse than ${MIN_ACCEPTABLE_ODDS})`
-          : `lottery ticket (${prop.over_odds} exceeds +${MAX_ACCEPTABLE_ODDS})`;
-        console.log(`Filtering out OVER side for ${prop.player} ${prop.prop_type} ${prop.line}: ${reason}`);
-      }
-      
-      // Only include the UNDER side if odds are in acceptable range (-200 to +400)
-      if (prop.under_odds !== null && isOddsAcceptable(prop.under_odds, prop.prop_type)) {
-        splitProps.push({
-          player: prop.player,
-          player_id: prop.player_id,  // FIXED: Preserve player_id for context building
-          team: prop.team,
-          prop_type: prop.prop_type,
-          line: prop.line,
-          side: 'UNDER',  // Add explicit side for clarity
-          odds: prop.under_odds,
-          over_odds: null,  // Not relevant for this entry
-          under_odds: prop.under_odds
-        });
-      } else if (prop.under_odds !== null) {
-        const reason = prop.under_odds < MIN_ACCEPTABLE_ODDS 
-          ? `heavy juice (${prop.under_odds} worse than ${MIN_ACCEPTABLE_ODDS})`
-          : `lottery ticket (${prop.under_odds} exceeds +${MAX_ACCEPTABLE_ODDS})`;
-        console.log(`Filtering out UNDER side for ${prop.player} ${prop.prop_type} ${prop.line}: ${reason}`);
-      }
-    }
-    
-    console.log(`Filtered props by odds value: ${originalCount} original props → ${splitProps.length} valid sides (range: ${MIN_ACCEPTABLE_ODDS} to +${MAX_ACCEPTABLE_ODDS})`);
-    
-    return splitProps;
-  },
   /**
    * Get player prop odds for a specific game
    * @param {string} sport - Sport key (e.g., 'basketball_nba')
@@ -313,9 +250,10 @@ export const propOddsService = {
             console.log(`[PropOdds] BDL NHL props breakdown:`, propTypes);
             console.log(`[PropOdds] BDL returned ${result.length} unique NHL player props`);
             
-            // Filter by odds value
-            const filtered = propOddsService.filterPropsByOddsValue(result);
-            return filtered;
+            // MARKET rows, both sides — same shape as MLB (founder, Aug 3:
+            // props were broken for EVERY sport; the fix is universal). The
+            // odds window applies at the CLI's pick gate, never here.
+            return result;
           }
         }
       }
@@ -405,9 +343,10 @@ export const propOddsService = {
             console.log(`[PropOdds] BDL NFL props breakdown (full game only):`, propTypes);
             console.log(`[PropOdds] BDL returned ${fullGameProps.length} unique NFL player props (filtered ${result.length - fullGameProps.length} quarter/half props)`);
 
-            // Filter by odds value
-            const filtered = propOddsService.filterPropsByOddsValue(fullGameProps);
-            return filtered;
+            // MARKET rows, both sides — same shape as MLB (founder, Aug 3:
+            // props were broken for EVERY sport; the fix is universal). The
+            // odds window applies at the CLI's pick gate, never here.
+            return fullGameProps;
           }
         }
       }
@@ -497,9 +436,10 @@ export const propOddsService = {
             console.log(`[PropOdds] BDL NBA props breakdown (full game only):`, propTypes);
             console.log(`[PropOdds] BDL returned ${fullGameProps.length} unique NBA player props (filtered ${result.length - fullGameProps.length} quarter/half props)`);
 
-            // Filter by odds value
-            const filtered = propOddsService.filterPropsByOddsValue(fullGameProps);
-            return filtered;
+            // MARKET rows, both sides — same shape as MLB (founder, Aug 3:
+            // props were broken for EVERY sport; the fix is universal). The
+            // odds window applies at the CLI's pick gate, never here.
+            return fullGameProps;
           }
         }
       }

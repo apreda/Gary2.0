@@ -443,12 +443,12 @@ export async function runAgenticPropsCli({
             result.picks = result.picks.filter(p => {
               if (p.odds == null) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} — no price at all (model + BDL both missing)`); return false; }
               if (p._oddsUnverified) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} @ ${p.odds} — no BDL line matched the pick (model-quoted price)`); return false; }
-              // BET-WINDOW PERMISSION (board V2): the -200..+400 window (HR
-              // +900) now lives HERE, on the side actually picked — the V2
-              // board shows the whole market, so an off-window side is
-              // visible but not takeable. No-op for legacy lanes whose rows
-              // were pre-filtered by the same window.
-              if (sportKey === 'baseball_mlb') {
+              // BET-WINDOW PERMISSION — every sport (founder, Aug 3: props
+              // were broken everywhere; ONE system). The -200..+400 window
+              // (HR +900) lives HERE, on the side actually picked: the board
+              // shows whole markets, an off-window side is visible but never
+              // takeable.
+              {
                 const _tok = (p.prop || '').split(' ')[0].toLowerCase();
                 const _num = Number(p.odds);
                 if (!propOddsService.isOddsTakeable(Number.isFinite(_num) ? _num : null, _tok)) {
