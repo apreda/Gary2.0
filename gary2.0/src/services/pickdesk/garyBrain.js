@@ -36,9 +36,7 @@ export const buildGarySystemPrompt = (dateLong) => `Today is ${dateLong}. You ar
 
 Your training data is old; the desk is current.
 
-The line is the market's opinion of tonight, not a measurement of it.
-
-Your published card is "Gary's Take": three paragraphs, opening with a line or two setting the stage like a broadcast — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
+The line is the market's opinion of tonight, not a measurement of it.`;
 
 // THE SEAL (founder GO, Aug 4 2026): the ticket is decided and output BEFORE
 // any card prose exists. The old contract wrote the card first and the pick
@@ -58,9 +56,15 @@ Your ticket seals before any card is written. Output only:
 
 confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
+// The card contract travels WITH the card ask (Aug 4 evening fix — the first
+// sealed-era card opened with an internal process note: "Pitcher assignment
+// settled off internal evidence, not the contradictory web layer". These are
+// the SAME founder-approved sentences that lived in the system prompt since
+// Jul 26, relocated to the moment of composition; the only forced composition
+// rule remains the founder's law: the open sets the stage.)
 export const buildCardAsk = (finalPick) => `Your ticket is sealed: ${finalPick}.
 
-Write your card.`;
+Write "Gary's Take" — your published card: three paragraphs, opening with a line or two setting the stage like a broadcast — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
 
 const parseFinalJson = (t) => {
   try {

@@ -66,8 +66,9 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(systemPrompt).toContain("The line is the market's opinion of tonight, not a measurement of it.");
     expect(systemPrompt).not.toMatch(/fade|against the market|contrarian|public money/i);
     expect(systemPrompt).toContain('never as an AI');
-    expect(systemPrompt).toContain('Gary\'s Take');
-    expect(systemPrompt).toContain('three paragraphs'); // founder's knowing choice, Jul 26 12:52 PM ET era
+    // Aug 4 evening: the card contract moved to buildCardAsk (the moment of
+    // composition) — the system prompt is identity + staleness + the line.
+    expect(systemPrompt).not.toContain('three paragraphs');
     expect(systemPrompt).not.toContain('rejected');
     expect(systemPrompt).not.toContain('must come from the desk');
     expect(systemPrompt).not.toContain('your only information');
@@ -99,12 +100,15 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     expect(msg).not.toContain('[3 paragraphs');
   });
 
-  it('turn 2 carries the sealed ticket and asks for the card — nothing else', async () => {
+  it('turn 2 carries the sealed ticket and the card contract — the broadcast open is the law', async () => {
     await analyzeGameDesk({});
     const msg = sendToSessionWithRetry.mock.calls[1][1];
     expect(msg).toBe(buildCardAsk('Cardinals ML -104'));
     expect(msg).toContain('Your ticket is sealed: Cardinals ML -104.');
-    expect(msg).toContain('Write your card.');
+    // The founder-approved card sentences, verbatim, at the moment of
+    // composition (Aug 4 evening fix — the memo-register leak).
+    expect(msg).toContain('three paragraphs, opening with a line or two setting the stage like a broadcast');
+    expect(msg).toContain('Never mention data feeds, tools, or missing data.');
   });
 
   it('THE SEAL: a different final_pick in the card turn cannot move the stored pick', async () => {
@@ -215,9 +219,11 @@ describe('THE_ASK text', () => {
     expect(THE_ASK.length).toBeLessThan(700);
   });
 
-  it('buildCardAsk is the sealed ticket and the ask — no coaching, no format re-litigating', () => {
+  it('buildCardAsk is the sealed ticket and the approved card contract — nothing else', () => {
     const ask = buildCardAsk('Cubs ML +109');
-    expect(ask).toBe('Your ticket is sealed: Cubs ML +109.\n\nWrite your card.');
+    expect(ask.startsWith('Your ticket is sealed: Cubs ML +109.')).toBe(true);
+    expect(ask).toContain('Write "Gary\'s Take"');
+    expect(ask).not.toMatch(/risk|counter|worry|honest/i); // no composition beats forced beyond the open
   });
 
   it('a model-invented header is normalized to the Gary\'s Take masthead (live smoke catch)', async () => {
