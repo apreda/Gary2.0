@@ -360,18 +360,21 @@ struct HumpBarShape: Shape {
         let topY = humpRise
         let xL = cx - humpHalfWidth
         let xR = cx + humpHalfWidth
-        let k = humpHalfWidth * 0.62          // bézier smoothing toward the peak
+        // Crisp half-ellipse dome (mock 01): the dome rises straight off the
+        // top edge as two quarter-ellipse arcs — no S-wave blend into the
+        // flat. c = the cubic circle constant.
+        let c: CGFloat = 0.5523
         let r = min(cornerRadius, (h - topY) / 2)
 
         p.move(to: CGPoint(x: 0, y: topY + r))
         p.addQuadCurve(to: CGPoint(x: r, y: topY), control: CGPoint(x: 0, y: topY))   // top-left corner
         p.addLine(to: CGPoint(x: xL, y: topY))
-        p.addCurve(to: CGPoint(x: cx, y: 0),                                          // ease up into the hump
-                   control1: CGPoint(x: xL + k, y: topY),
-                   control2: CGPoint(x: cx - k, y: 0))
-        p.addCurve(to: CGPoint(x: xR, y: topY),                                       // ease back down
-                   control1: CGPoint(x: cx + k, y: 0),
-                   control2: CGPoint(x: xR - k, y: topY))
+        p.addCurve(to: CGPoint(x: cx, y: 0),                                          // quarter-ellipse up
+                   control1: CGPoint(x: xL, y: topY - c * humpRise),
+                   control2: CGPoint(x: cx - c * humpHalfWidth, y: 0))
+        p.addCurve(to: CGPoint(x: xR, y: topY),                                       // quarter-ellipse down
+                   control1: CGPoint(x: cx + c * humpHalfWidth, y: 0),
+                   control2: CGPoint(x: xR, y: topY - c * humpRise))
         p.addLine(to: CGPoint(x: w - r, y: topY))
         p.addQuadCurve(to: CGPoint(x: w, y: topY + r), control: CGPoint(x: w, y: topY)) // top-right corner
         p.addLine(to: CGPoint(x: w, y: h - r))
@@ -398,17 +401,15 @@ struct GaryCenteredTabBar: View {
     ]
     private let garyIndex: Int = 2
 
-    // Tunable hump geometry.
-    private let humpRise: CGFloat = 28
+    // Mock-01 geometry, transcribed from the mock's own CSS (founder, Aug 3:
+    // "100% the same"): dome 104×26 half-ellipse, bar 72 tall, radius 27,
+    // 72pt bear whose crown pokes 6pt into the dome.
+    private let humpRise: CGFloat = 26
     private let humpHalfWidth: CGFloat = 52
     // 72 (was 58 through Jul 15) — the taller flat lets the seated bear clear
     // the side tabs' labels without crowding them.
     private let flatHeight: CGFloat = 72
-    // Mock 01 geometry (founder's pick, matched Aug 3): the bear SEATS inside
-    // the bar at ~83% of its height with the hump arcing empty above it — the
-    // seat reads as a seat. (The old 72pt bear at top-7 filled and overflowed
-    // the dome, which is what didn't match.)
-    private let logoSize: CGFloat = 60
+    private let logoSize: CGFloat = 72
 
     private var barShape: HumpBarShape {
         HumpBarShape(humpRise: humpRise, humpHalfWidth: humpHalfWidth, cornerRadius: 27)
@@ -416,18 +417,14 @@ struct GaryCenteredTabBar: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Humped bar background (fill + glass + border all follow the hump).
+            // Humped bar — the mock's exact surface (founder, Aug 3: "100%
+            // the same"): solid ink fill, flat 10%-white hairline, no glass,
+            // no drop shadow.
             ZStack {
-                if PerformanceMode.current.useExpensiveEffects {
-                    barShape.fill(.ultraThinMaterial)
-                    barShape.fill(GaryColors.darkBg.opacity(0.5))
-                } else {
-                    barShape.fill(Color(hex: "#181616"))
-                }
-                barShape.stroke(borderGradient, lineWidth: 0.8)
+                barShape.fill(Color(hex: "#17161A"))
+                barShape.stroke(Color.white.opacity(0.10), lineWidth: 1)
             }
             .frame(height: humpRise + flatHeight)
-            .shadow(color: .black.opacity(0.28), radius: 14, y: 6)
 
             // Tabs live in the flat portion, pinned to the bottom.
             HStack(spacing: 0) {
@@ -438,17 +435,17 @@ struct GaryCenteredTabBar: View {
                 Color.clear.frame(width: humpHalfWidth * 2, height: 26)
                 ForEach(rightTabs, id: \.index) { sideTab($0) }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 18)
             .frame(height: flatHeight)
             .frame(maxHeight: .infinity, alignment: .bottom)
 
-            // Logo seated in the bar, chin roughly at the label baseline — the
-            // hump's arc stays visible above it (mock 01).
+            // Bear crown 6pt into the dome, chin 6pt off the bar's floor —
+            // the mock's exact seat.
             garyLogo
-                .padding(.top, 32)
+                .padding(.top, humpRise - 6)
         }
         .frame(height: humpRise + flatHeight)
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 12)
         .padding(.bottom, 6)
     }
 
@@ -494,8 +491,8 @@ struct GaryCenteredTabBar: View {
                 .scaledToFit()
                 .frame(width: logoSize, height: logoSize)
                 .opacity(active ? 1.0 : 0.95)
-                .shadow(color: GaryColors.gold.opacity(active ? 0.45 : 0.0), radius: 10)
-                .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                // Mock 01: one small black drop shadow, no gold halo.
+                .shadow(color: .black.opacity(0.4), radius: 2, y: 2)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -505,17 +502,6 @@ struct GaryCenteredTabBar: View {
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.16),
-                GaryColors.gold.opacity(0.18),
-                Color.white.opacity(0.05),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
 
     // MARK: - Tap action
 
