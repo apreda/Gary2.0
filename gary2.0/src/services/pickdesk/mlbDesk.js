@@ -271,6 +271,124 @@ async function buildMatchupLab(game, homeTeam, awayTeam, gamePk) {
   return parts.filter(Boolean).join('\n\n');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// YOUR BOOK (founder GO, Aug 4 evening — the Nationals-streak autopsy: Gary
+// took the same club's side 8 straight nights, 4-5, and could not know it).
+// His OWN recent graded picks touching tonight's clubs, as a raw ledger +
+// computed tally — a bettor knows his own bets. Facts only, no interpretation;
+// fail-soft to '' (the desk simply carries no book on a quiet matchup).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Pure formatter: one club's recent-pick rows → ledger lines. Exported for pins. */
+export function yourBookSection(clubs) {
+  const blocks = [];
+  for (const { club, rows } of clubs) {
+    if (!rows.length) continue;
+    const sided = rows.filter((r) => r.side === club);
+    const graded = rows.filter((r) => r.result === 'won' || r.result === 'lost');
+    const w = graded.filter((r) => r.result === 'won').length;
+    const lines = rows.slice(0, 8).map((r) =>
+      `  ${r.date}: ${r.pick} — ${r.result}${r.score ? ` (${r.score})` : ''}`);
+    blocks.push(
+      `${club}: ${rows.length} recent pick(s) touching them — you took the ${club} side in ${sided.length}; graded ${w}-${graded.length - w}.\n${lines.join('\n')}`
+    );
+  }
+  if (!blocks.length) return '';
+  return `═══ YOUR BOOK — your recent picks touching tonight's clubs ═══\n${blocks.join('\n')}`;
+}
+
+/** Last-14-days graded picks touching either club, newest first. */
+async function fetchYourBook(homeTeam, awayTeam) {
+  if (!SLATE_SUPABASE_URL || !SLATE_SUPABASE_KEY) return '';
+  try {
+    const since = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+    const nick = (t) => String(t || '').split(' ').pop();
+    const resp = await axios.get(`${SLATE_SUPABASE_URL}/rest/v1/game_results`, {
+      params: {
+        game_date: `gte.${since}`, league: 'eq.MLB',
+        select: 'game_date,pick_text,result,final_score,matchup',
+        order: 'game_date.desc', limit: '200',
+      },
+      headers: { apikey: SLATE_SUPABASE_KEY, Authorization: `Bearer ${SLATE_SUPABASE_KEY}` },
+      timeout: 8000,
+    });
+    const rows = Array.isArray(resp.data) ? resp.data : [];
+    const clubs = [awayTeam, homeTeam].map((team) => {
+      const n = nick(team);
+      const mine = rows.filter((r) => String(r.matchup || '').includes(n));
+      return {
+        club: team,
+        rows: mine.map((r) => ({
+          date: r.game_date,
+          pick: r.pick_text,
+          result: r.result || 'pending',
+          score: r.final_score || null,
+          side: String(r.pick_text || '').includes(n) ? team : 'opponent',
+        })),
+      };
+    });
+    return yourBookSection(clubs);
+  } catch { return ''; }
+}
+
+// TEAM SAMPLE flag (founder GO, Aug 4 — post-deadline twin of the pitcher
+// sample flags): season/L10 team aggregates include games played by players
+// since traded away. Provenance facts about what the sample contains.
+
+/** Pure formatter: departures per club → the sample note lines. Exported for pins. */
+export function teamSampleNote(departuresByClub) {
+  const lines = [];
+  for (const [club, deps] of Object.entries(departuresByClub)) {
+    if (!deps.length) continue;
+    lines.push(`${club}: season/L10 numbers include games with since-departed players — ${deps.map((d) => `${d.player} (${d.date})`).join(', ')}.`);
+  }
+  return lines.length ? `Sample note:\n${lines.join('\n')}` : '';
+}
+
+/** Trades OUT of each club, last 10 days, via MLB Stats API transactions. */
+async function fetchDepartures(homeTeam, awayTeam) {
+  try {
+    const { findMlbTeam, getMlbTransactions } = await import('../mlbStatsApiService.js');
+    const end = todayEST();
+    const start = new Date(Date.now() - 10 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const out = {};
+    for (const team of [awayTeam, homeTeam]) {
+      out[team] = [];
+      const t = await findMlbTeam(team).catch(() => null);
+      if (!t?.id) continue;
+      const tx = await getMlbTransactions(t.id, start, end).catch(() => []);
+      const seen = new Set(); // the feed repeats entries — dedupe by player
+      for (const row of tx) {
+        const d = String(row.description || '');
+        // "Washington Nationals traded 2B Luis García Jr. to New York Yankees."
+        const m = d.match(new RegExp(`^${t.name}.{0,10}traded\\s+(?:[A-Z0-9]{1,3}\\s+)?(.+?)\\s+to\\s`, 'i'));
+        if (m && !seen.has(m[1])) { seen.add(m[1]); out[team].push({ player: m[1], date: row.date }); }
+      }
+    }
+    return teamSampleNote(out);
+  } catch { return ''; }
+}
+
+/**
+ * Tonight's stored game pick for one game (the props desk reads it so the
+ * two brains stop telling opposite stories about the same night — founder GO
+ * Aug 4, the Seymour/Luzardo autopsies). Null when no pick is stored yet.
+ */
+export async function fetchTonightsGameCall(dateEt, gameId) {
+  if (!SLATE_SUPABASE_URL || !SLATE_SUPABASE_KEY || gameId == null) return null;
+  try {
+    const resp = await axios.get(`${SLATE_SUPABASE_URL}/rest/v1/daily_picks`, {
+      params: { date: `eq.${dateEt}`, select: 'picks' },
+      headers: { apikey: SLATE_SUPABASE_KEY, Authorization: `Bearer ${SLATE_SUPABASE_KEY}` },
+      timeout: 8000,
+    });
+    const picks = resp.data?.[0]?.picks || [];
+    const p = picks.find((x) => String(x.game_id) === String(gameId));
+    if (!p) return null;
+    return { pick: p.pick, rationale: p.rationale || '' };
+  } catch { return null; }
+}
+
 /**
  * Build the complete desk for one MLB game.
  * Returns { deskText, tapeRows, verifiedTaleOfTape, recentScores, scout, meta }.
@@ -286,7 +404,7 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRowsRaw, standings, matchupLab, seasonIndex, morningRow] = await Promise.all([
+  const [oddsRowsRaw, standings, matchupLab, seasonIndex, morningRow, yourBook, sampleNote] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
@@ -296,6 +414,10 @@ export async function buildMlbDesk(game, options = {}) {
     // The morning board (founder GO, Jul 31): where this book's numbers sat
     // on the ~5:30 AM snapshot — the day's price history, printed as fact.
     fetchMorningBoardRow(todayEST(), gameIds[0] ?? null, homeTeam, awayTeam),
+    // YOUR BOOK (Aug 4) — his own recent picks touching tonight's clubs.
+    fetchYourBook(homeTeam, awayTeam).catch(() => ''),
+    // TEAM SAMPLE flag (Aug 4) — trades out of either club, last 10 days.
+    fetchDepartures(homeTeam, awayTeam).catch(() => ''),
   ]);
   const oddsRows = sanitizeBoardRows(oddsRowsRaw);
   if (oddsRows.length < (oddsRowsRaw || []).length) {
@@ -314,7 +436,8 @@ export async function buildMlbDesk(game, options = {}) {
   const stakes = `═══ THE STAKES ═══\n` +
     `${stakesLine(standings, homeTeam, oneRunRecordFrom(seasonIndex, teamIdFor(homeTeam)))}\n` +
     `${stakesLine(standings, awayTeam, oneRunRecordFrom(seasonIndex, teamIdFor(awayTeam)))}\n` +
-    `${deadlineLine()}`;
+    `${deadlineLine()}` +
+    (sampleNote ? `\n${sampleNote}` : '');
 
   const { section: news, rest: shelfBase } = extractSection(scoutText, NEWS_HEADER);
   const worldBody = news ? news.replace(NEWS_HEADER, '').trim() : 'No same-day news.';
@@ -330,7 +453,7 @@ export async function buildMlbDesk(game, options = {}) {
       : `${shelf}\n\n${matchupLab}`;
   }
 
-  const deskText = `${board}\n\n${stakes}\n\n${world}\n\n${shelf}`;
+  const deskText = `${board}\n\n${stakes}\n\n${yourBook ? `${yourBook}\n\n` : ''}${world}\n\n${shelf}`;
   return {
     deskText,
     tapeRows: scout.verifiedTaleOfTape?.rows || [],

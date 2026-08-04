@@ -16,7 +16,7 @@
  * dropped individually. Odds/no-stats/cap gates live in the CLI chassis.
  */
 import { createHash } from 'crypto';
-import { buildMlbDesk } from './mlbDesk.js';
+import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
 import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
@@ -346,11 +346,25 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   const desk = await buildMlbDesk(game, options);
   const { homeTeam, awayTeam } = desk.meta;
 
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n\n${board.text}\n\n${THE_PROPS_ASK}`;
+  // GARY'S GAME CALL (founder GO, Aug 4 — the Seymour/Luzardo autopsies: the
+  // two desks kept telling opposite stories about the same night). The game
+  // pick publishes before props run (scheduler: picks → props per game), so
+  // the published call rides the props desk as DATA. Absent when no pick
+  // stored — fail-soft, section simply doesn't print.
+  let gameCall = '';
+  try {
+    const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const call = await fetchTonightsGameCall(todayEt, game.bdl_game_id ?? game.id);
+    if (call?.pick) {
+      gameCall = `\n\n═══ GARY'S GAME CALL — this game, already published ═══\n${call.pick}\n\n${call.rationale}`;
+    }
+  } catch { /* the desk simply carries no call */ }
+
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${board.text}\n\n${THE_PROPS_ASK}`;
 
   // Rail: audit every pick's rationale against the desk+board corpus; on any
   // issue, ONE corrective retry for the full set, then drop failing picks.
-  const corpus = [{ content: `${desk.deskText}\n${board.text}` }];
+  const corpus = [{ content: `${desk.deskText}${gameCall}\n${board.text}` }];
   const auditOne = (rationale) => {
     const a = auditPickRationale({ rationale }, corpus);
     const c = desk.recentScores ? auditCountClaims(rationale, desk.recentScores) : [];
