@@ -665,7 +665,10 @@ struct MLBGameIntelView: View {
 // pack (fetched per player by id), with a lean header fallback before it posts.
 // No flip animation — it just shows the info.
 
-private enum PCV4 {
+// Internal (not private) since Aug 4 2026: the Hub's TEAM CARD is the player
+// card's twin ("same quality, same finish" — founder), so both read this one
+// palette. Retune here and every breakdown card moves together.
+enum PCV4 {
     static let bg   = Color(hex: "#121214")   // matte black — matches the game pick cards (GaryColors.cardBg)
     static let ink  = Color(hex: "#F7F2E8")   // primary — bright cream
     static let mut  = Color(hex: "#CFC6B2")   // secondary — readable warm cream (no cold grey)

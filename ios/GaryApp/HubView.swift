@@ -23,27 +23,27 @@ import SwiftUI
 
 // MARK: - Type + chrome system
 
-/// Internal (not fileprivate): the Picks masthead re-uses this exact ramp —
-/// founder, Jul 22: the Hub's upper part is the model for the Picks page.
+/// DEPRECATED NAMESPACE (Aug 4 2026). HubFont was a second, parallel type ramp
+/// — same intent as GaryFonts, subtly different math, so the Hub and Picks
+/// pages rendered a "12" differently from Home's "12" and no size could be
+/// reasoned about across pages. Every role now forwards to the one ramp in
+/// DesignSystem.swift, byte-identical output. New code calls GaryFonts directly;
+/// these aliases stay only so the ~140 existing call sites keep working.
 enum HubFont {
-    /// Display voice — heavy SF, the dynamic sports-tech face. (The serif
-    /// newspaper voice was retired Jul 4: founder — "reads blog, not betting
-    /// app"; the mock language is heavy sans + mono.)
+    /// → GaryFonts.display. The weight arg was already ignored (Bebas has one).
     static func display(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font {
-        // Saira Condensed — the app's bundled athletic display face (Jul 5).
         _ = weight
         return GaryFonts.display(size)
     }
-    /// Mono kickers/labels — always uppercase at the call site.
-    static func kicker(_ size: CGFloat = 10.5) -> Font {
-        .system(size: size, weight: .semibold).monospacedDigit()
-    }
-    /// Data numerals — system face with tabular digits (mono retired Jul 12).
+    /// → GaryFonts.kicker. Uppercase at the call site.
+    static func kicker(_ size: CGFloat = 10.5) -> Font { GaryFonts.kicker(size) }
+    /// → GaryFonts.data. Tabular digits, 12pt floor, 1.18 scale.
     static func data(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: max(12, size * 1.18), weight: weight).monospacedDigit()
+        GaryFonts.data(size, weight)
     }
+    /// → GaryFonts.ui. Exact size, no scaling.
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        GaryFonts.ui(size, weight)
     }
 }
 
@@ -436,6 +436,18 @@ struct HubView: View {
             detail: r.detail ?? "", game: r.next_game?.uppercased() ?? "",
             value: "", tone: .neutral)
     }
+
+    /// ANY team string — full name, nickname, or a bare abbr out of an agate
+    /// table cell — opens the team card (the law, Aug 4: a tapped team name
+    /// opens the team card, everywhere, no exceptions). The sheet resolves
+    /// the string against the day board for its full identity.
+    private func openTeamCard(named name: String) {
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty else { return }
+        teamCardSignal = Signal(
+            league: sel, kind: .teamRecord, headline: clean,
+            detail: "", game: "", value: "", tone: .neutral)
+    }
     @State private var wcIntel: Signal? = nil
     /// Slate-strip tap → the in-place game sheet (everything the Hub knows
     /// about that matchup). Picks is a CTA inside it, not a forced jump.
@@ -465,6 +477,10 @@ struct HubView: View {
     @State private var intelCards: [PlayerInsightCardRow] = []
     @State private var namedCard: PlayerInsightCardRow? = nil
     @State private var todayBoard: TomorrowBoard? = nil
+    /// Tonight's HR-lane prop calls — the priced fun-lane tickets. Retired from
+    /// the props boards and the props record (founder, Jul 29/Aug 3); the Home
+    /// Run Threats beat below is their only home, the Billfold keeps the tally.
+    @State private var hrCalls: [PropPick] = []
     /// LEAGUE PULSE (moved from the Picks page — founder, Jul 30): league-wide
     /// daily tables, fetched with the page load so pull-to-refresh and the
     /// staleness refetch cover it like everything else on the page.
@@ -520,9 +536,23 @@ struct HubView: View {
         func key(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
         let k = key(name)
         guard k.count >= 5 else { return nil }   // tiny keys collide across players
-        return intelCards.first {
+        if let hit = intelCards.first(where: {
             let n = key($0.player_name ?? $0.payload?.name ?? "")
             return !n.isEmpty && (n == k || n.contains(k) || k.contains(n))
+        }) { return hit }
+        // Short-form fallback (Aug 4): the agate tables send "J. Caminero" —
+        // an initialed first token + surname. Match surname exactly and the
+        // initial against the card's first name; full-name queries never take
+        // this path (the containment scan above owns those).
+        let tokens = name.split(separator: " ").map(String.init)
+        guard tokens.count >= 2,
+              let sur = tokens.last.map(key), sur.count >= 3 else { return nil }
+        let first = tokens[0].filter { $0.isLetter }
+        guard first.count == 1 else { return nil }
+        return intelCards.first {
+            let cn = ($0.player_name ?? $0.payload?.name ?? "").split(separator: " ").map(String.init)
+            guard cn.count >= 2, let cSur = cn.last.map(key) else { return false }
+            return cSur == sur && cn[0].lowercased().hasPrefix(first.lowercased())
         }
     }
 
@@ -566,6 +596,9 @@ struct HubView: View {
         async let intelF = SupabaseAPI.fetchPlayerIntelRows(date: date)
         // Force past the 30-min pulse cache on refresh/rollover, not first paint.
         async let pulseF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
+        // Tonight's HR-lane calls ride the same parallel wave (fun-lane tickets
+        // for the Home Run Threats beat — see the hrCalls doc above).
+        async let hrPropsF = SupabaseAPI.fetchPropPicks(date: date)
 
         var collected: [Signal] = []
         var anyError = false
@@ -626,9 +659,12 @@ struct HubView: View {
         }
         yday = Self.dedupe(yday)
         let intel = await intelF
+        let hrProps = (try? await hrPropsF) ?? []
 
         await MainActor.run {
             intelCards = intel
+            hrCalls = hrProps.filter { $0.isHRLane }
+                .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
             didLoad = true
             loadedAt = Date()
             loadedDate = date
@@ -877,13 +913,224 @@ struct HubView: View {
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
 
-    // ---- body ----
+    // ---- the beats, one block each (extracted from body — the inline
+    // if/else chain plus its closures blew the type-checker's budget) ----
 
-    var body: some View {
-        GeometryReader { geo in
-        ScrollViewReader { proxy in
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 26) {
+    /// Matchups masthead tap → the slate game sheet for that game string.
+    private func openGameSheet(for game: String) {
+        if let hit = slateIndexFor(game), slateRows.indices.contains(hit.index) {
+            gameSheet = HubGameSel(row: slateRows[hit.index])
+        }
+    }
+
+    @ViewBuilder private func beatView(_ beat: Beat) -> some View {
+        let rows = beatRows(beat)
+        // Home Run Threats carries Gary's priced HR calls too —
+        // the fun-lane tickets live here now (retired from the
+        // props boards and the props record; the Billfold's
+        // longshot tracker keeps their tally).
+        let beatHRCalls = beat.anchor == "hr" && sel == .mlb ? hrCalls : []
+        if !rows.isEmpty || !beatHRCalls.isEmpty {
+            // The Matchups reads as a slate storyboard —
+            // one block per game (founder, Jul 30) — while
+            // every other beat keeps the flat feed.
+            if beat.anchor == "matchups" {
+                HubMatchupsSection(
+                    rows: rows,
+                    slateIndexFor: { slateIndexFor($0) },
+                    openBeats: $openBeats,
+                    kickerFor: kickerText,
+                    onRow: { s in openSignal(s) },
+                    onProfile: { breakdownSignal = $0 },
+                    onGame: { openGameSheet(for: $0) }
+                )
+                .id(beat.anchor)
+            } else if !beatHRCalls.isEmpty {
+                VStack(alignment: .leading, spacing: 14) {
+                    if rows.isEmpty {
+                        // Reads posted nothing yet — the calls
+                        // still need the section masthead.
+                        HubHead(title: beat.title)
+                    } else {
+                        HubBeatSection(
+                            anchor: beat.anchor,
+                            title: beat.title,
+                            rows: rows,
+                            openBeats: $openBeats,
+                            kickerFor: kickerText,
+                            onRow: { s in openSignal(s) },
+                            onProfile: { breakdownSignal = $0 }
+                        )
+                    }
+                    HubHRCallsBlock(calls: beatHRCalls,
+                                    cardFor: { intelCard(for: $0) },
+                                    onPlayer: { namedCard = $0 })
+                }
+                .id(beat.anchor)
+            } else {
+                HubBeatSection(
+                    anchor: beat.anchor,
+                    title: beat.title,
+                    rows: rows,
+                    openBeats: $openBeats,
+                    kickerFor: kickerText,
+                    onRow: { s in openSignal(s) },
+                    onProfile: { breakdownSignal = $0 }
+                )
+                .id(beat.anchor)
+            }
+        }
+    }
+
+    // ---- extracted body chunks (the inline runs plus their closures blew
+    // the type-checker's budget) ----
+
+    @ViewBuilder private var searchResultsView: some View {
+        HubSearchResults(
+            query: searchText,
+            edges: fetched,
+            receipts: ydaySignals,
+            streaks: streakRows,
+            night: nightRows,
+            nightLabel: nightLabel,
+            onEdge: { s in openSignal(s) },
+            cardFor: { intelCard(for: $0) },
+            onPlayer: { namedCard = $0 },
+            onTeamRow: { openTeamCard(for: $0) },
+            onTeamName: { openTeamCard(named: $0) }
+        )
+    }
+
+    @ViewBuilder private var streakWatchSection: some View {
+        if !selStreakRows.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HubHead(title: "Streak Watch", count: selStreakRows.count)
+                HubStreakWatch(rows: selStreakRows, onTeam: { openTeamCard(for: $0) },
+                               cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 })
+            }
+            .id("streaks")
+        }
+    }
+
+    // The beats + WC intel + the overflow net, one extracted run.
+    @ViewBuilder private var beatsAndOverflow: some View {
+        ForEach(beats) { beat in
+            beatView(beat)
+        }
+
+        if sel == .wc, !wcIntelSignals.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HubHead(title: "Game Intel", count: wcIntelSignals.count)
+                VStack(spacing: 0) {
+                    ForEach(wcIntelSignals) { s in
+                        HubStoryRow(s: s, kicker: kickerText(s), expandable: false,
+                                    showsChevron: true,
+                                    onTap: { wcIntel = s }, onProfile: nil)
+                        HubRule(inset: 18)
+                    }
+                }
+            }
+            .id("wcIntel")
+        }
+
+        // Fantasy lives on its OWN page behind the header toggle
+        // (founder, Jul 26) — never as a section in this feed.
+
+        if !overflow.isEmpty {
+            HubBeatSection(
+                anchor: "more",
+                title: "More Edges",
+                rows: overflow,
+                openBeats: $openBeats,
+                kickerFor: kickerText,
+                onRow: { s in openSignal(s) },
+                onProfile: { breakdownSignal = $0 }
+            )
+            .id("more")
+        }
+    }
+
+    // ---- the front page's editorial boards (extracted from body — the
+    // inline run plus its closures blew the type-checker's budget) ----
+
+    @ViewBuilder private var frontPageBoards: some View {
+        if let lead {
+            HubLeadStory(s: lead) { s in
+                openSignal(s)
+            }
+            .id("lead")
+        }
+        if !bestOfBoard.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HubHead(title: "The Best of the Board")
+                HubBestOf(signals: bestOfBoard) { s in
+                    openSignal(s)
+                }
+            }
+            .id("bestof")
+        }
+        if !items(.regression).isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                // Sub lives on the tab strip now — a static
+                // "ERA vs expected" lied over the Teams tab.
+                HubHead(title: "The Regression Board")
+                HubRegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
+                    openSignal(s)
+                }
+            }
+            .id("regression")
+        }
+        if sel == .wc, !items(.xgRegression).isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HubHead(title: "The xG Board", sub: "goals vs expected")
+                HubBeatList(rows: items(.xgRegression), open: true, kickerFor: kickerText,
+                            onRow: { s in openSignal(s) },
+                            onProfile: { breakdownSignal = $0 })
+            }
+            .id("xgboard")
+        }
+    }
+
+    // THE REFERENCE SHELF — folded by default (founder, Jul 30/Aug 3): league
+    // tables and graded boards are look-ups, not the page's story. One tap
+    // opens each. Every name in them routes by the law (Aug 4): player names
+    // → player card when the day has one, team names → the team card.
+    @ViewBuilder private var referenceShelf: some View {
+        if sel == .mlb, !pulseRows.isEmpty {
+            HubCollapsible(anchor: "pulse", open: $openBeats,
+                           title: "League Pulse", sub: "league-wide tables") {
+                HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab,
+                               cardFor: { intelCard(for: $0) },
+                               onPlayer: { namedCard = $0 },
+                               onTeam: { openTeamCard(named: $0) })
+            }
+            .id("pulse")
+        }
+
+        if !selNightRows.isEmpty {
+            HubCollapsible(anchor: "lastNight", open: $openBeats,
+                           title: nightLabel, count: selNightRows.count) {
+                HubNightBoard(rows: selNightRows,
+                              cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 },
+                              onTeam: { openTeamCard(named: $0) })
+            }
+            .id("lastNight")
+        }
+
+        if !selYdaySignals.isEmpty {
+            HubCollapsible(anchor: "receipts", open: $openBeats,
+                           title: "The Receipts", sub: receiptsTally) {
+                HubReceipts(signals: selYdaySignals) { selectedSignal = $0 }
+            }
+            .id("receipts")
+        }
+    }
+
+    // The page stack, extracted from body (Aug 4) — the inline stack plus
+    // its modifier chain blew the type-checker's budget once the width pin
+    // joined the frame call (same lesson beatView learned earlier).
+    @ViewBuilder private var hubPageStack: some View {
+        VStack(alignment: .leading, spacing: 26) {
                 HubMasthead(
                     sel: $sel,
                     leagues: availableLeagues,
@@ -919,15 +1166,7 @@ struct HubView: View {
                 if !didLoad {
                     hubLoading
                 } else if searchOpen && !searchText.isEmpty {
-                    HubSearchResults(
-                        query: searchText,
-                        edges: fetched,
-                        receipts: ydaySignals,
-                        streaks: streakRows,
-                        night: nightRows,
-                        nightLabel: nightLabel,
-                        onEdge: { s in openSignal(s) }
-                    )
+                    searchResultsView
                 } else if fetchErrored && leagueSignals.isEmpty && ydaySignals.isEmpty
                             && nightRows.isEmpty && streakRows.isEmpty {
                     hubError
@@ -941,152 +1180,43 @@ struct HubView: View {
                     if leagueSignals.isEmpty {
                         hubMorningNotice
                     } else {
-                        if let lead {
-                            HubLeadStory(s: lead) { s in
-                                openSignal(s)
-                            }
-                            .id("lead")
-                        }
-                        if !bestOfBoard.isEmpty {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HubHead(title: "The Best of the Board")
-                                HubBestOf(signals: bestOfBoard) { s in
-                                    openSignal(s)
-                                }
-                            }
-                            .id("bestof")
-                        }
-                        if !items(.regression).isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                // Sub lives on the tab strip now — a static
-                                // "ERA vs expected" lied over the Teams tab.
-                                HubHead(title: "The Regression Board")
-                                HubRegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
-                                    openSignal(s)
-                                }
-                            }
-                            .id("regression")
-                        }
-                        if sel == .wc, !items(.xgRegression).isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HubHead(title: "The xG Board", sub: "goals vs expected")
-                                HubBeatList(rows: items(.xgRegression), open: true, kickerFor: kickerText,
-                                            onRow: { s in openSignal(s) },
-                                            onProfile: { breakdownSignal = $0 })
-                            }
-                            .id("xgboard")
-                        }
+                        frontPageBoards
                     }
 
                     // (League Pulse moved to the reference shelf at the bottom
                     // — founder, Aug 3: the agate tables broke the page's flow
                     // mid-editorial. It lives with Last Night + Receipts now.)
 
-                    if !selStreakRows.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HubHead(title: "Streak Watch", count: selStreakRows.count)
-                            HubStreakWatch(rows: selStreakRows, onTeam: { openTeamCard(for: $0) },
-                                           cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 })
-                        }
-                        .id("streaks")
-                    }
+                    streakWatchSection
 
                     if !leagueSignals.isEmpty {
-                        ForEach(beats) { beat in
-                            let rows = beatRows(beat)
-                            if !rows.isEmpty {
-                                // The Matchups reads as a slate storyboard —
-                                // one block per game (founder, Jul 30) — while
-                                // every other beat keeps the flat feed.
-                                if beat.anchor == "matchups" {
-                                    HubMatchupsSection(
-                                        rows: rows,
-                                        slateIndexFor: { slateIndexFor($0) },
-                                        openBeats: $openBeats,
-                                        kickerFor: kickerText,
-                                        onRow: { s in openSignal(s) },
-                                        onProfile: { breakdownSignal = $0 }
-                                    )
-                                    .id(beat.anchor)
-                                } else {
-                                    HubBeatSection(
-                                        anchor: beat.anchor,
-                                        title: beat.title,
-                                        rows: rows,
-                                        openBeats: $openBeats,
-                                        kickerFor: kickerText,
-                                        onRow: { s in openSignal(s) },
-                                        onProfile: { breakdownSignal = $0 }
-                                    )
-                                    .id(beat.anchor)
-                                }
-                            }
-                        }
-
-                        if sel == .wc, !wcIntelSignals.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HubHead(title: "Game Intel", count: wcIntelSignals.count)
-                                VStack(spacing: 0) {
-                                    ForEach(wcIntelSignals) { s in
-                                        HubStoryRow(s: s, kicker: kickerText(s), expandable: false,
-                                                    showsChevron: true,
-                                                    onTap: { wcIntel = s }, onProfile: nil)
-                                        HubRule(inset: 18)
-                                    }
-                                }
-                            }
-                            .id("wcIntel")
-                        }
-
-                        // Fantasy lives on its OWN page behind the header toggle
-                        // (founder, Jul 26) — never as a section in this feed.
-
-                        if !overflow.isEmpty {
-                            HubBeatSection(
-                                anchor: "more",
-                                title: "More Edges",
-                                rows: overflow,
-                                openBeats: $openBeats,
-                                kickerFor: kickerText,
-                                onRow: { s in openSignal(s) },
-                                onProfile: { breakdownSignal = $0 }
-                            )
-                            .id("more")
-                        }
+                        beatsAndOverflow
                     }
 
-                    // THE REFERENCE SHELF — folded by default (founder,
-                    // Jul 30/Aug 3): league tables and graded boards are
-                    // look-ups, not the page's story. One tap opens each.
-                    if sel == .mlb, !pulseRows.isEmpty {
-                        HubCollapsible(anchor: "pulse", open: $openBeats,
-                                       title: "League Pulse", sub: "league-wide tables") {
-                            HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab)
-                        }
-                        .id("pulse")
-                    }
-
-                    if !selNightRows.isEmpty {
-                        HubCollapsible(anchor: "lastNight", open: $openBeats,
-                                       title: nightLabel, count: selNightRows.count) {
-                            HubNightBoard(rows: selNightRows,
-                                          cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 })
-                        }
-                        .id("lastNight")
-                    }
-
-                    if !selYdaySignals.isEmpty {
-                        HubCollapsible(anchor: "receipts", open: $openBeats,
-                                       title: "The Receipts", sub: receiptsTally) {
-                            HubReceipts(signals: selYdaySignals) { selectedSignal = $0 }
-                        }
-                        .id("receipts")
-                    }
+                    referenceShelf
                 }
                 }
-            }
+        }
+    }
+
+    // ---- body ----
+
+    var body: some View {
+        GeometryReader { geo in
+        ScrollViewReader { proxy in
+        ScrollView(showsIndicators: false) {
+            hubPageStack
             .padding(.top, 8)
             .padding(.bottom, 120)
+            // WIDTH PINNED to the viewport (founder bug, Aug 4: you could grab
+            // the whole Hub and drag it sideways, then it rubber-banded back).
+            // A vertical ScrollView pans horizontally the moment ANY child's
+            // minimum width exceeds the screen — one non-compressible row
+            // (fixedSize label, agate table cell) silently widens the page.
+            // Pinning the content stack to geo width closes that door for
+            // every current and future section; an over-wide child now yields
+            // internally instead of dragging the page with it.
+            .frame(width: geo.size.width, alignment: .topLeading)
             .frame(minHeight: geo.size.height, alignment: .top)
             .task { if !didLoad { await load() } }
         }
@@ -1178,6 +1308,16 @@ struct HubView: View {
                 signal: s,
                 related: relatedTeamSignals(for: s),
                 tonight: slateRowForTeamName(Self.teamCardName(for: s)),
+                board: todayBoard,
+                streaks: selStreakRows,
+                intel: intelCards,
+                cardFor: { intelCard(for: $0) },
+                onPlayer: { row in
+                    // Card-to-card handoff: close the team card, then the
+                    // player card (two sheets can't stack from one anchor).
+                    teamCardSignal = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { namedCard = row }
+                },
                 onSignal: { next in
                     teamCardSignal = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openSignal(next) }
@@ -1202,7 +1342,9 @@ struct HubView: View {
                                  onTeam: { r in
                                      withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil }
                                      openTeamCard(for: r)
-                                 })
+                                 },
+                                 onTeamName: { openTeamCard(named: $0) },
+                                 cardFor: { intelCard(for: $0) })
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1))
@@ -1424,63 +1566,39 @@ fileprivate struct HubMasthead: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 10) {
-                Image(GaryBrand.mark)
-                    .resizable().scaledToFit()
-                    .frame(width: 30, height: 30)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                (Text("THE ").foregroundColor(GaryColors.warmWhite)
-                    + Text("HUB").foregroundColor(GaryColors.gold))
-                    .font(HubFont.display(30))
-                    .tracking(0.5)
-                Spacer()
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        searchOpen.toggle()
-                        if !searchOpen { searchText = ""; searchFocused.wrappedValue = false }
-                        else { searchFocused.wrappedValue = true }
+            // The ONE header (Aug 4) — the Hub's logo/wordmark/rule now come
+            // from GaryPageHeader; the search toggle + 7-day record ride the
+            // trailing slot. The double-rule "newspaper seam" retired with the
+            // five-masthead era. League tabs + the search field remain this
+            // page's own control rows, stacked under the template.
+            GaryPageHeader(title: "The", goldPart: "Hub", trailing: {
+                HStack(spacing: 8) {
+                    if let r = record7 {
+                        let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
+                        HStack(spacing: 5) {
+                            HubKicker(text: "L7", size: 9.5, color: .white.opacity(0.62))
+                            Text("\(r.hit)–\(r.miss) · \(pct)%")
+                                .font(HubFont.data(11))
+                                .foregroundStyle(GaryColors.gold)
+                        }
                     }
-                } label: {
-                    Image(systemName: searchOpen ? "xmark" : "magnifyingglass")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white.opacity(searchOpen ? 0.8 : 0.55))
-                        .frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(searchOpen ? "Close search" : "Search")
-                Button {
-                    NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .frame(width: 28, height: 30)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
-            }
-
-            HStack(spacing: 8) {
-                Spacer()
-                if let r = record7 {
-                    let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
-                    HStack(spacing: 5) {
-                        HubKicker(text: "Last 7 Days", size: 9.5, color: .white.opacity(0.62))
-                        Text("\(r.hit)–\(r.miss) · \(pct)%")
-                            .font(HubFont.data(11))
-                            .foregroundStyle(GaryColors.gold)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            searchOpen.toggle()
+                            if !searchOpen { searchText = ""; searchFocused.wrappedValue = false }
+                            else { searchFocused.wrappedValue = true }
+                        }
+                    } label: {
+                        Image(systemName: searchOpen ? "xmark" : "magnifyingglass")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white.opacity(searchOpen ? 0.8 : 0.55))
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(searchOpen ? "Close search" : "Search")
                 }
-            }
-            .padding(.top, 5)
-
-            // Double rule — the newspaper masthead seam.
-            VStack(spacing: 2.5) {
-                Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 2)
-                Rectangle().fill(GaryColors.gold.opacity(0.3)).frame(height: 1)
-            }
-            .padding(.top, 11)
+            })
 
             if leagues.count > 1 {
                 HStack(spacing: 22) {
@@ -1503,6 +1621,7 @@ fileprivate struct HubMasthead: View {
                     Spacer()
                 }
                 .padding(.top, 10)
+                .pageGutter()
             }
 
             if searchOpen {
@@ -1533,10 +1652,11 @@ fileprivate struct HubMasthead: View {
                             .stroke(GaryColors.warmWhite.opacity(0.08), lineWidth: 1))
                 )
                 .padding(.top, 12)
+                .pageGutter()
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 10)
+        // (No outer gutter — GaryPageHeader gutters itself; the control rows
+        // above carry .pageGutter() individually.)
     }
 }
 
@@ -2006,6 +2126,12 @@ fileprivate struct HubRegressionBoard: View {
 fileprivate struct HubLeaguePulse: View {
     let rows: [LeaguePulseRow]
     @Binding var selectedTab: String?
+    /// Routing law (founder, Aug 4 — the standing order): names in the agate
+    /// tables route like names everywhere else. Player cells open the player
+    /// card when the day has his card; team cells always open the team card.
+    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
+    var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
+    var onTeam: ((String) -> Void)? = nil
 
     /// Fixed display order; any tab without a row drops out.
     private static let tabOrder = ["starting_pitchers", "hot_cold_bats", "bullpen", "injuries"]
@@ -2038,7 +2164,7 @@ fileprivate struct HubLeaguePulse: View {
                             .foregroundStyle(.white.opacity(0.62))
                             .padding(.horizontal, 18)
                     }
-                    PulseTable(row: row)
+                    PulseTable(row: row, cardFor: cardFor, onPlayer: onPlayer, onTeam: onTeam)
                         .padding(.horizontal, 4)
                 }
             }
@@ -2208,6 +2334,84 @@ fileprivate struct HubStreakWatch: View {
 /// A beat: section head + top rows + "See all n". Rows keep the feed's
 /// relevance order; each carries its own lane kicker and special shape
 /// (swap / tug-of-war / first-inning dots) when its meta calls for one.
+/// Gary's priced HR calls for tonight — the fun-lane tickets, living INSIDE
+/// the Home Run Threats beat (their only surface: the props boards and the
+/// props record retired the lane; the Billfold's longshot tracker keeps the
+/// tally). Flat hub grammar — kicker, rows, hairlines — collapsed to six with
+/// the house SEE ALL toggle on the big-slate nights.
+fileprivate struct HubHRCallsBlock: View {
+    let calls: [PropPick]
+    /// Tap-a-name → player card (routing law; names with no card stay plain).
+    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
+    var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
+    @State private var open = false
+    private let topCount = 6
+
+    private var visible: [PropPick] { open ? calls : Array(calls.prefix(topCount)) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 7) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(GaryColors.gold)
+                HubKicker(text: "Gary's HR calls tonight")
+                Text("\(calls.count)")
+                    .font(HubFont.data(11))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer(minLength: 6)
+                HubKicker(text: "Longshot lane", size: 9.5, color: .white.opacity(0.5))
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 2)
+
+            ForEach(Array(visible.enumerated()), id: \.element.id) { i, p in
+                if i > 0 { HubRule(inset: 18) }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    // The name routes to the player card when the day has one
+                    // (routing law); same ink either way — taps don't shout.
+                    let nameLabel = Text((p.player ?? p.team ?? "HR call").uppercased())
+                        .font(HubFont.body(14, .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if let card = cardFor(p.player) {
+                        Button { onPlayer(card) } label: { nameLabel.contentShape(Rectangle()) }
+                            .buttonStyle(.plain)
+                    } else {
+                        nameLabel
+                    }
+                    Text("HR")
+                        .font(HubFont.kicker(9.5)).tracking(1.1)
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                    Spacer(minLength: 6)
+                    if let o = p.odds, !o.isEmpty {
+                        Text(o.hasPrefix("+") || o.hasPrefix("-") ? o : "+\(o)")
+                            .font(HubFont.data(14))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+            }
+
+            if calls.count > topCount {
+                HubSeeAllButton(isOpen: open, total: calls.count) {
+                    withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
+                }
+                .padding(.top, 4)
+            }
+
+            Text("Lottery swings, tracked for the fun of it in the Billfold — never part of Gary's props record.")
+                .font(HubFont.body(11.5))
+                .foregroundStyle(.white.opacity(0.5))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+        }
+    }
+}
+
 fileprivate struct HubBeatSection: View {
     let anchor: String
     let title: String
@@ -2499,7 +2703,7 @@ fileprivate struct HubDotsRow: View {
     /// Off inside the Matchups storyboard — the game is the block's masthead.
     var showsGame: Bool = true
     let onTap: () -> Void
-    private let green = Color(hex: "#3FB950")
+    private let green = GaryColors.win
     private let red = Color(hex: "#E5614D")
 
     var body: some View {
@@ -2600,6 +2804,9 @@ fileprivate struct HubMatchupsSection: View {
     let kickerFor: (Signal) -> String
     let onRow: (Signal) -> Void
     let onProfile: (Signal) -> Void
+    /// Masthead tap → the game sheet (Aug 4: the block's title had been dead
+    /// text; from the sheet, each team name is a door to its team card).
+    var onGame: (String) -> Void = { _ in }
 
     private let anchor = "matchups"
     private let topCount = 3
@@ -2663,8 +2870,11 @@ fileprivate struct HubMatchupsSection: View {
     }
 
     @ViewBuilder private func gameBlock(_ block: GameBlock) -> some View {
+        // Off-board games (no slate row) keep a plain masthead — a chevron
+        // that opens nothing would be a lying affordance (no dead taps).
+        let onBoard = slateIndexFor(block.game) != nil
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
+            let masthead = HStack(alignment: .lastTextBaseline, spacing: 8) {
                 Text(block.game.uppercased())
                     .font(HubFont.display(20))
                     .foregroundStyle(GaryColors.warmWhite)
@@ -2675,9 +2885,24 @@ fileprivate struct HubMatchupsSection: View {
                         .font(HubFont.data(9.5, .semibold))
                         .foregroundStyle(.white.opacity(0.55))
                 }
+                if onBoard {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
+            if onBoard {
+                Button { onGame(block.game) } label: {
+                    masthead.contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+            } else {
+                masthead
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+            }
             VStack(spacing: 0) {
                 ForEach(Array(block.rows.enumerated()), id: \.element.id) { i, s in
                     factRow(s)
@@ -2945,145 +3170,603 @@ fileprivate struct FantasyCornerPage: View {
     }
 }
 
-/// The TEAM CARD (founder, Jul 26): tapping a team name anywhere in the Hub
-/// lands here — the tapped signal rides the top the same way a player signal
-/// rides the player card, then everything else the board knows about this
-/// team today, each row routing onward by the same law.
+/// The TEAM CARD — the player breakdown's team twin (founder, Aug 4, the
+/// standing law restated: a tapped team name opens THIS, everywhere, at the
+/// SAME finish as the player card). One design language: PCV4's matte black,
+/// the gold edge, cream ink, the same section grammar and the same MORE
+/// STATS expander. Every figure is a stored fact the app already fetched —
+/// board form / run profile / season series / probable arms, streak rows,
+/// the day's player intel. A stat with no source simply isn't a row; a card
+/// with nothing filed says so honestly. Names on it keep routing by the law:
+/// player names → player card, edges → the router.
 fileprivate struct HubTeamCardSheet: View {
     let signal: Signal
     let related: [Signal]
     /// Tonight's board row for this team — matchup, first pitch, the lines.
     var tonight: TomorrowBoardRow? = nil
+    /// The day board — form, run profile, weather, probable starters.
+    var board: TomorrowBoard? = nil
+    /// League streak rows (the card filters to this team's).
+    var streaks: [StreakRow] = []
+    /// The day's player cards (the card filters to this team's bats + arms).
+    var intel: [PlayerInsightCardRow] = []
+    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
+    var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
     let onSignal: (Signal) -> Void
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var live = LiveScoreCache.shared
+    @State private var shapeExpanded = false   // MORE STATS expander (player-card parity)
 
-    private var teamName: String { HubView.teamCardName(for: signal) }
+    // ── identity: the tapped string (name OR abbr) → full name + abbr ──
 
-    /// "NYY -142 · CHW +120 · O/U 8.5" — whatever the board actually has.
-    private func linesLine(_ t: TomorrowBoardRow) -> String {
-        func ml(_ v: Double) -> String { v > 0 ? "+\(Int(v))" : "\(Int(v))" }
-        var bits: [String] = []
-        if let a = t.ml_away { bits.append("\(t.away_abbr ?? "AWY") \(ml(a))") }
-        if let h = t.ml_home { bits.append("\(t.home_abbr ?? "HOM") \(ml(h))") }
-        if let tot = t.total { bits.append("O/U \(String(format: "%.1f", tot))") }
-        return bits.joined(separator: " · ")
+    /// Loose team match: abbreviation equality, name containment either way,
+    /// or nickname hit — the taps arrive as anything from "NYY" to
+    /// "New York Yankees" depending on the surface.
+    private static func matches(_ raw: String, team: String?, abbr: String?) -> Bool {
+        let n = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !n.isEmpty else { return false }
+        if let a = abbr?.lowercased(), !a.isEmpty, a == n { return true }
+        if let t = team?.lowercased(), !t.isEmpty {
+            if t == n || t.contains(n) || n.contains(t) { return true }
+            if let nick = t.split(separator: " ").last.map(String.init), nick.count > 2, n.contains(nick) { return true }
+        }
+        return false
     }
 
+    private var rawName: String { HubView.teamCardName(for: signal) }
+
+    /// Which side of tonight's row this card is about (nil = not on the slate).
+    private var isAway: Bool? {
+        guard let t = tonight else { return nil }
+        if Self.matches(rawName, team: t.away_team, abbr: t.away_abbr) { return true }
+        if Self.matches(rawName, team: t.home_team, abbr: t.home_abbr) { return false }
+        return nil
+    }
+
+    /// The best identity the board can vouch for. Never fabricated — when no
+    /// source knows this team, the tapped string renders as-is.
+    private var resolved: (name: String, abbr: String?) {
+        if let away = isAway, let t = tonight {
+            return away ? (t.away_team ?? rawName, t.away_abbr)
+                        : (t.home_team ?? rawName, t.home_abbr)
+        }
+        if let f = (board?.form ?? []).first(where: { Self.matches(rawName, team: $0.team, abbr: $0.abbr) }) {
+            return (f.team ?? rawName, f.abbr)
+        }
+        if let rp = (board?.run_profile ?? []).first(where: { Self.matches(rawName, team: $0.team, abbr: $0.abbr) }) {
+            return (rp.team ?? rawName, rp.abbr)
+        }
+        return (rawName, nil)
+    }
+
+    // ── the stored facts, each nil when its source has nothing ──
+
+    private var formStat: TomorrowForm? {
+        (board?.form ?? []).first { Self.matches(resolved.name, team: $0.team, abbr: $0.abbr) }
+    }
+    private var runProfile: TomorrowRunProfile? {
+        (board?.run_profile ?? []).first { Self.matches(resolved.name, team: $0.team, abbr: $0.abbr) }
+    }
+    /// Tonight's probable arm for THIS team, from the board's starters lane.
+    private var starter: TomorrowPerson? {
+        (board?.starters ?? []).first { p in
+            Self.matches(resolved.name, team: p.team, abbr: p.abbr)
+        }
+    }
+    /// First-pitch weather for tonight's park (outdoor games only).
+    private var weather: TomorrowWeather? {
+        guard let t = tonight else { return nil }
+        return (board?.weather ?? []).first { w in
+            (w.away_abbr != nil && w.away_abbr == t.away_abbr && w.home_abbr == t.home_abbr)
+        }
+    }
+    /// The board's divisional-standing sentence, when this team made Big Games.
+    private var standingLine: String? {
+        let nick = resolved.name.split(separator: " ").last.map(String.init) ?? resolved.name
+        guard nick.count > 2 else { return nil }
+        return (board?.big_games ?? [])
+            .compactMap { $0.standing }
+            .first { $0.localizedCaseInsensitiveContains(nick) }
+    }
+    /// This club's live runs (team-typed streak rows only).
+    private var teamStreaks: [StreakRow] {
+        streaks.filter { $0.subject_type == "team" && Self.matches(resolved.name, team: $0.subject ?? $0.team, abbr: nil) }
+    }
+    /// The day's player cards wearing this team's abbreviation — the bats and
+    /// arms with a full breakdown behind them. Tap one, get the player card.
+    private var teamIntel: [PlayerInsightCardRow] {
+        guard let a = resolved.abbr?.uppercased(), !a.isEmpty else { return [] }
+        return intel.filter { ($0.team_abbr ?? "").uppercased() == a }
+    }
+    private var ls: LiveScore? {
+        guard let t = tonight else { return nil }
+        return live.status(forMatchup: "\(t.away_team ?? "") @ \(t.home_team ?? "")")
+    }
+    /// True when not a single source produced a row — the honest-quiet state.
+    private var deskIsQuiet: Bool {
+        tonight == nil && formStat == nil && runProfile == nil && starter == nil
+            && teamStreaks.isEmpty && teamIntel.isEmpty && related.isEmpty
+            && edgeContent == nil
+    }
+
+    // ── body: the v4 card, exactly the player card's chrome ──
+
     var body: some View {
-        ZStack {
-            Color(hex: "#151312").ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HubKicker(text: "TEAM", size: 10, color: GaryColors.gold)
-                            Text(teamName.uppercased())
-                                .font(HubFont.display(28)).tracking(0.5)
-                                .foregroundStyle(GaryColors.warmWhite)
-                            if !signal.game.isEmpty {
-                                Text(signal.game)
-                                    .font(HubFont.data(11, .semibold))
-                                    .foregroundStyle(.white.opacity(0.55))
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                if let e = edgeContent { edgeHero(e) }
+                if let t = tonight { tonightSection(t) }
+                if formStat != nil || runProfile != nil { shapeSection }
+                if let s = tonight?.series { seriesSection(s) }
+                if let arm = starter { armSection(arm) }
+                if !teamStreaks.isEmpty { streaksSection }
+                if !teamIntel.isEmpty { clubhouseSection }
+                if !related.isEmpty { relatedSection }
+                if deskIsQuiet { quietSection }
+                footerMark
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(PCV4.bg)
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(PCV4.gold.opacity(0.5), lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.55), radius: 24, y: 10)
+        )
+        .padding(16)
+        .background(GaryColors.darkBg.ignoresSafeArea())
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill").font(.system(size: 26)).foregroundStyle(.white.opacity(0.62))
+            }.buttonStyle(.plain).padding(.top, 14).padding(.trailing, 16)
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // ── header (player-card grammar: context line, display name, chip, identity) ──
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let t = tonight {
+                Text("\(hubSideLabel(t.away_abbr, t.away_team)) @ \(hubSideLabel(t.home_abbr, t.home_team))".uppercased())
+                    .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+            } else if !signal.game.isEmpty {
+                Text(signal.game.uppercased())
+                    .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+            }
+            HStack(alignment: .top) {
+                Text(resolved.name)
+                    .font(GaryFonts.display(38)).foregroundStyle(PCV4.ink).lineLimit(2).minimumScaleFactor(0.7)
+                Spacer()
+                if let st = formStat?.streak, st.count >= 2 {
+                    if st.hasPrefix("W") { chip("▲ \(st)") }
+                    else if st.hasPrefix("L") { chip("▼ \(st)") }
+                }
+            }
+            if let id = identityLine {
+                Text(id).font(GaryFonts.text(13, .medium)).foregroundStyle(PCV4.mut)
+            }
+        }
+        .padding(.horizontal, 26).padding(.top, 24).padding(.bottom, 18)
+    }
+    private func chip(_ t: String) -> some View {
+        Text(t).font(GaryFonts.mono(10.5, bold: true))
+            .foregroundStyle(Color(hex: "#1B1407"))
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(PCV4.gold))
+    }
+    /// "MLB · NYY · Home tonight" — only the parts a source vouches for.
+    private var identityLine: String? {
+        var bits: [String] = [signal.league.label]
+        if let a = resolved.abbr, !a.isEmpty, a.lowercased() != resolved.name.lowercased() { bits.append(a) }
+        if let away = isAway { bits.append(away ? "Road tonight" : "Home tonight") }
+        return bits.isEmpty ? nil : bits.joined(separator: "  ·  ")
+    }
+
+    // ── the edge that brought you here (player-card edgeHero, verbatim style) ──
+
+    private var edgeContent: PlayerCardV4Edge? {
+        // Synthesized taps (a bare name from a table cell) carry no story —
+        // the hero renders only when there IS an edge to show.
+        let bareName = signal.headline.trimmingCharacters(in: .whitespaces).lowercased() == rawName.trimmingCharacters(in: .whitespaces).lowercased()
+        let body = [signal.detail, signal.fantasy?.evidence]
+            .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .removingDuplicates()
+            .joined(separator: "\n")
+        if bareName {
+            guard !body.isEmpty else { return nil }
+            // The header already says the name — the read alone is the hero.
+            return PlayerCardV4Edge(eyebrow: signal.kind.chip, title: body, body: "")
+        }
+        return PlayerCardV4Edge(eyebrow: signal.kind.chip, title: signal.headline, body: body)
+    }
+
+    @ViewBuilder private func edgeHero(_ e: PlayerCardV4Edge) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(e.eyebrow.uppercased()).font(GaryFonts.mono(9.5, bold: true)).tracking(1.4).foregroundStyle(PCV4.gold)
+            Text(e.title).font(GaryFonts.display(18)).foregroundStyle(PCV4.ink).fixedSize(horizontal: false, vertical: true)
+            if !e.body.isEmpty {
+                Text(e.body).font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(PCV4.gold.opacity(0.07))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(PCV4.line, lineWidth: 1)))
+        .padding(.horizontal, 18).padding(.bottom, 4)
+    }
+
+    // ── the player card's section frame, shared by every block below ──
+
+    private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Text(cap.uppercased()).font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+                .foregroundStyle(PCV4.gold).opacity(0.92)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 26).padding(.vertical, 20)
+        .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
+    }
+
+    // ── TONIGHT: state line, then the lines as a 3-up grid ──
+
+    private func fmtML(_ v: Double) -> String { v > 0 ? "+\(Int(v))" : "\(Int(v))" }
+
+    @ViewBuilder private func tonightSection(_ t: TomorrowBoardRow) -> some View {
+        section(ls?.isLive == true ? "Live" : ls?.isFinal == true ? "Final" : "Tonight") {
+            VStack(alignment: .leading, spacing: 12) {
+                if let ls, ls.isLive || ls.isFinal {
+                    HStack(spacing: 10) {
+                        Text(ls.scoreLine ?? "")
+                            .font(GaryFonts.display(22)).foregroundStyle(PCV4.ink)
+                        if ls.isLive, let det = ls.detail, !det.isEmpty {
+                            Text(det.uppercased())
+                                .font(GaryFonts.mono(11, bold: true)).foregroundStyle(GaryColors.win)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Text(TomorrowView.etTime(t.commence_time, withZone: true, meridiem: true))
+                            .font(GaryFonts.display(18)).foregroundStyle(PCV4.ink)
+                        if let v = t.venue, !v.isEmpty {
+                            Text(v).font(GaryFonts.text(12)).foregroundStyle(PCV4.mut2)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                    }
+                }
+                // The lines — abbr-labeled tiles, only the numbers the board has.
+                let tiles: [(String, String)] = {
+                    var out: [(String, String)] = []
+                    if let a = t.ml_away { out.append((hubSideLabel(t.away_abbr, t.away_team), fmtML(a))) }
+                    if let h = t.ml_home { out.append((hubSideLabel(t.home_abbr, t.home_team), fmtML(h))) }
+                    if let tot = t.total { out.append(("O/U", HubFmt.stat(tot))) }
+                    return out
+                }()
+                if !tiles.isEmpty {
+                    HStack(spacing: 12) {
+                        ForEach(tiles.indices, id: \.self) { i in
+                            VStack(spacing: 6) {
+                                Text(tiles[i].0.uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
+                                Text(tiles[i].1).font(GaryFonts.display(18)).foregroundStyle(PCV4.ink)
+                                    .lineLimit(1).minimumScaleFactor(0.6)
+                            }.frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+                if let w = weather, let note = w.note, !note.isEmpty {
+                    splitLikeRow("FIRST-PITCH WEATHER", note)
+                }
+                if let st = standingLine {
+                    Text(st).font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.mut)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// A splitRow-shaped line: mono label left, value right (player-card idiom).
+    private func splitLikeRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2).lineLimit(1)
+            Spacer(minLength: 12)
+            Text(value).font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.mut)
+                .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.trailing)
+        }
+    }
+
+    // ── THE SHAPE: 3-up grid + the MORE STATS expander (player-card parity) ──
+
+    private func signedInt(_ v: Int) -> String { v > 0 ? "+\(v)" : "\(v)" }
+
+    private var shapeSection: some View {
+        // The grid: L10 / STREAK / RUN DIFF — whichever of the three exist.
+        let cells: [(String, String)] = {
+            var out: [(String, String)] = []
+            if let l10 = formStat?.l10, !l10.isEmpty { out.append(("LAST 10", l10)) }
+            if let st = formStat?.streak, !st.isEmpty { out.append(("STREAK", st)) }
+            if let d = runProfile?.run_diff { out.append(("RUN DIFF", signedInt(d))) }
+            return out
+        }()
+        // The expander: the run profile's full shape, rows only where data is.
+        let extra: [(String, String)] = {
+            var out: [(String, String)] = []
+            if let v = runProfile?.rs_per_game { out.append(("RUNS SCORED / GAME", String(format: "%.1f", v))) }
+            if let v = runProfile?.ra_per_game { out.append(("RUNS ALLOWED / GAME", String(format: "%.1f", v))) }
+            if let v = runProfile?.runs_scored { out.append(("RUNS SCORED, SEASON", "\(v)")) }
+            if let v = runProfile?.runs_allowed { out.append(("RUNS ALLOWED, SEASON", "\(v)")) }
+            return out
+        }()
+        return section("The shape") {
+            VStack(alignment: .leading, spacing: 0) {
+                if !cells.isEmpty {
+                    HStack(spacing: 12) {
+                        ForEach(cells.indices, id: \.self) { i in
+                            VStack(spacing: 6) {
+                                Text(cells[i].0).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
+                                Text(cells[i].1).font(GaryFonts.display(18)).foregroundStyle(PCV4.ink)
+                                    .lineLimit(1).minimumScaleFactor(0.6)
+                            }.frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+                if !extra.isEmpty {
+                    if shapeExpanded {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(extra.indices, id: \.self) { i in
+                                splitLikeRow(extra[i].0, extra[i].1)
                             }
                         }
-                        Spacer()
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.6))
-                                .frame(width: 30, height: 30)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        .padding(.top, 14)
+                        .transition(.opacity)
                     }
-
-                    // Tonight at a glance (founder, Jul 30): the card mirrors
-                    // the player card's shape — identity, tonight, the edge.
-                    if let t = tonight {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HubKicker(text: "Tonight", size: 10, color: GaryColors.gold)
-                            HStack(alignment: .lastTextBaseline, spacing: 10) {
-                                Text("\(t.away_abbr ?? t.away_team ?? "") @ \(t.home_abbr ?? t.home_team ?? "")")
-                                    .font(HubFont.display(22))
-                                    .foregroundStyle(GaryColors.warmWhite)
-                                Spacer(minLength: 6)
-                                Text(TomorrowView.etTime(t.commence_time, withZone: true, meridiem: true))
-                                    .font(HubFont.data(10, .semibold))
-                                    .foregroundStyle(.white.opacity(0.55))
-                            }
-                            let lines = linesLine(t)
-                            if !lines.isEmpty {
-                                Text(lines)
-                                    .font(HubFont.data(11, .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { shapeExpanded.toggle() } } label: {
+                        HStack(spacing: 5) {
+                            Text(shapeExpanded ? "LESS" : "MORE STATS").font(GaryFonts.mono(10, bold: true)).tracking(1.4)
+                            Image(systemName: shapeExpanded ? "chevron.up" : "chevron.down").font(.system(size: 8, weight: .bold))
                         }
+                        .foregroundStyle(PCV4.gold)
                     }
+                    .buttonStyle(.plain)
+                    .padding(.top, 12)
+                }
+            }
+        }
+    }
 
-                    // The tapped signal — same treatment as the player card's
-                    // signal banner: the edge that brought you here, in full.
-                    VStack(alignment: .leading, spacing: 6) {
-                        HubKicker(text: signal.kind.chip, size: 10, color: GaryColors.gold)
-                        Text(signal.headline)
-                            .font(HubFont.body(15, .bold)).foregroundStyle(.white.opacity(0.95))
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if !signal.detail.isEmpty {
-                            Text(signal.detail)
-                                .font(HubFont.body(13)).foregroundStyle(.white.opacity(0.88))
-                                .lineSpacing(2.5)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        // The numbers behind the read (meta.evidence — the
-                        // computer's own stored facts, Jul 27).
-                        if let ev = signal.fantasy?.evidence, !ev.isEmpty, ev != signal.detail {
-                            Text(ev)
-                                .font(HubFont.data(10.5, .medium)).foregroundStyle(.white.opacity(0.6))
-                                .lineSpacing(2)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+    // ── SEASON SERIES: the scorebug + this season's meetings ──
+
+    @ViewBuilder private func seriesSection(_ s: TomorrowSeries) -> some View {
+        section("Season series") {
+            VStack(alignment: .leading, spacing: 12) {
+                if let aw = s.away_w, let hw = s.home_w, let t = tonight {
+                    // Scorebug weights (HubTugRow's grammar in the card's inks):
+                    // the leader reads big and gold, the trailer smaller and dim.
+                    let awayLeads = aw >= hw
+                    HStack(alignment: .lastTextBaseline, spacing: 10) {
+                        Text(hubSideLabel(t.away_abbr, t.away_team))
+                            .font(GaryFonts.accent(13)).foregroundStyle(awayLeads ? PCV4.ink : PCV4.mut2)
+                        Text("\(aw)")
+                            .font(GaryFonts.display(awayLeads ? 30 : 22))
+                            .foregroundStyle(awayLeads ? PCV4.gold : PCV4.mut2)
+                        Text("–").font(GaryFonts.display(18)).foregroundStyle(PCV4.mut2)
+                        Text("\(hw)")
+                            .font(GaryFonts.display(awayLeads ? 22 : 30))
+                            .foregroundStyle(awayLeads ? PCV4.mut2 : PCV4.gold)
+                        Text(hubSideLabel(t.home_abbr, t.home_team))
+                            .font(GaryFonts.accent(13)).foregroundStyle(awayLeads ? PCV4.mut2 : PCV4.ink)
                     }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.04)))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(GaryColors.gold.opacity(0.35), lineWidth: 1))
-
-                    if !related.isEmpty {
-                        VStack(alignment: .leading, spacing: 0) {
-                            HubKicker(text: "MORE ON THIS TEAM TODAY", size: 10, color: .white.opacity(0.62))
-                                .padding(.bottom, 4)
-                            ForEach(Array(related.enumerated()), id: \.element.id) { i, r in
-                                Button { onSignal(r) } label: {
-                                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            HubKicker(text: r.kind.chip, size: 8.5, color: .white.opacity(0.45))
-                                            Text(r.headline)
-                                                .font(HubFont.body(13, .semibold))
-                                                .foregroundStyle(.white.opacity(0.9))
-                                                .multilineTextAlignment(.leading)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                        Spacer(minLength: 8)
-                                        Text(r.value)
-                                            .font(HubFont.data(12)).foregroundStyle(.white.opacity(0.6))
-                                            .lineLimit(1).minimumScaleFactor(0.7)
-                                    }
-                                    .padding(.vertical, 9)
-                                    .contentShape(Rectangle())
+                }
+                if let split = s.split_line, !split.isEmpty {
+                    Text(split).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut2)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                if let meetings = s.meetings, !meetings.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(meetings.indices, id: \.self) { i in
+                            let m = meetings[i]
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(m.d ?? "").font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2)
+                                    .frame(width: 52, alignment: .leading)
+                                Text(m.line ?? "").font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.mut)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                                Spacer(minLength: 8)
+                                if let v = m.venue, !v.isEmpty {
+                                    Text(v).font(GaryFonts.mono(9.5)).foregroundStyle(PCV4.mut2)
+                                        .lineLimit(1).minimumScaleFactor(0.7)
                                 }
-                                .buttonStyle(.plain)
-                                if i < related.count - 1 { HubRule() }
                             }
                         }
                     }
                 }
-                .padding(18)
-                .padding(.bottom, 30)
             }
         }
-        .presentationDragIndicator(.visible)
+    }
+
+    // ── TONIGHT'S ARM: the board's probable, with his stored form lines ──
+
+    @ViewBuilder private func armSection(_ p: TomorrowPerson) -> some View {
+        let armName = p.full_name ?? p.name ?? ""
+        section("Tonight's arm") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    if let card = cardFor(armName) {
+                        Button { onPlayer(card) } label: {
+                            HStack(spacing: 6) {
+                                Text(armName).font(GaryFonts.display(18)).foregroundStyle(PCV4.ink)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .semibold)).foregroundStyle(PCV4.mut2)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text(armName).font(GaryFonts.display(18)).foregroundStyle(PCV4.ink)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    Spacer(minLength: 8)
+                    if let era = p.era {
+                        Text("\(HubFmt.stat(era)) ERA").font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut)
+                    }
+                }
+                if let x = p.xera { splitLikeRow("EXPECTED ERA", HubFmt.stat(x)) }
+                if let lo = p.last_outing, let ip = lo.ip, let er = lo.er {
+                    let opp = lo.opp.map { " \(lo.at ?? "vs") \($0)" } ?? ""
+                    let ks = lo.k.map { " · \($0) K" } ?? ""
+                    splitLikeRow("LAST START", "\(ip) IP · \(er) ER\(ks)\(opp)")
+                }
+                if let l3 = p.l3, let ip = l3.ip, let er = l3.er, let gs = l3.gs {
+                    splitLikeRow("LAST \(gs) STARTS", "\(ip) IP · \(er) ER" + (l3.k.map { " · \($0) K" } ?? ""))
+                }
+                if let q = p.qs_form, let qs = q.qs, let w = q.window {
+                    splitLikeRow("QUALITY STARTS", (q.streak ?? 0) >= 2 ? "\(q.streak!) straight" : "\(qs) of last \(w)")
+                }
+                if let vs = p.vs_opp, let gs = vs.gs, let era = vs.era {
+                    splitLikeRow("VS TONIGHT'S OPPONENT", "\(HubFmt.stat(era)) ERA in \(gs) start\(gs == 1 ? "" : "s")")
+                }
+                if let r = p.rest?.days { splitLikeRow("REST", "\(r) days") }
+            }
+        }
+    }
+
+    // ── ON THE LINE: this club's live runs ──
+
+    private var streaksSection: some View {
+        section("On the line") {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(teamStreaks.prefix(4).enumerated()), id: \.offset) { _, r in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(streakBadge(r)).font(GaryFonts.display(16)).foregroundStyle(PCV4.gold)
+                            .frame(width: 52, alignment: .leading)
+                        Text(r.detail ?? r.kind?.capitalized ?? "")
+                            .font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.mut)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+    }
+    private func streakBadge(_ r: StreakRow) -> String {
+        let n = r.length ?? 0
+        switch r.kind {
+        case "win": return "W\(n)"
+        case "loss": return "L\(n)"
+        case "over": return "O ×\(n)"
+        case "under": return "U ×\(n)"
+        default: return "\(n)"
+        }
+    }
+
+    // ── THE CLUBHOUSE: the day's carded bats + arms, each tap → player card ──
+
+    private var clubhouseSection: some View {
+        section("The clubhouse") {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(teamIntel.prefix(6).enumerated()), id: \.element.id) { i, row in
+                    Button { onPlayer(row) } label: {
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 7) {
+                                    Text(row.player_name ?? row.payload?.name ?? "")
+                                        .font(GaryFonts.text(13, .semibold)).foregroundStyle(PCV4.ink)
+                                        .lineLimit(1).minimumScaleFactor(0.7)
+                                    if let pos = row.payload?.position, !pos.isEmpty {
+                                        Text(pos).font(GaryFonts.mono(9.5)).foregroundStyle(PCV4.mut2)
+                                    }
+                                }
+                                if let line = row.payload?.strengths?.first ?? row.payload?.weaknesses?.first {
+                                    Text(line).font(GaryFonts.text(11.5)).foregroundStyle(PCV4.mut)
+                                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                        .multilineTextAlignment(.leading)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold)).foregroundStyle(PCV4.mut2)
+                        }
+                        .padding(.vertical, 9)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if i < min(teamIntel.count, 6) - 1 {
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    }
+                }
+            }
+        }
+    }
+
+    // ── MORE ON THIS TEAM TODAY: the other edges, routing by the law ──
+
+    private var relatedSection: some View {
+        section("More on this team today") {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(related.enumerated()), id: \.element.id) { i, r in
+                    Button { onSignal(r) } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.kind.chip.uppercased())
+                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(1.1).foregroundStyle(PCV4.mut2)
+                                Text(r.headline)
+                                    .font(GaryFonts.text(12.5, .semibold)).foregroundStyle(PCV4.ink)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold)).foregroundStyle(PCV4.mut2)
+                        }
+                        .padding(.vertical, 9)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if i < related.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    }
+                }
+            }
+        }
+    }
+
+    // ── the honest-quiet state (player card's "building" twin) ──
+
+    private var quietSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("THE DESK IS QUIET")
+                .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4).foregroundStyle(PCV4.gold).opacity(0.92)
+            Text("Nothing filed on the \(resolved.name) yet — reads land as today's board firms up.")
+                .font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 26).padding(.vertical, 24)
+        .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
+    }
+
+    // ── Gary's mark, closing the card ──
+
+    private var footerMark: some View {
+        HStack {
+            Spacer()
+            Image(GaryBrand.mark)
+                .resizable().scaledToFit()
+                .frame(width: 20, height: 20)
+                .opacity(0.45)
+            Spacer()
+        }
+        .padding(.vertical, 16)
+        .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
+    }
+}
+
+fileprivate extension Array where Element == String {
+    /// Order-preserving dedupe for the edge hero's read lines.
+    func removingDuplicates() -> [String] {
+        var seen = Set<String>()
+        return filter { seen.insert($0).inserted }
     }
 }
 
@@ -3094,6 +3777,8 @@ fileprivate struct HubNightBoard: View {
     /// Tap-a-name → player card (only names with a resolved card).
     var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
     var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
+    /// Team tag → team card (the law, Aug 4 — this cell had been a dead tap).
+    var onTeam: ((String) -> Void)? = nil
     @State private var tab = 0
     @State private var showAll = false
 
@@ -3173,11 +3858,22 @@ fileprivate struct HubNightBoard: View {
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: 108, alignment: .leading)
             }
-            Text(HomeView.shortTeam(r.team).uppercased())
+            // The team tag routes to the team card (law, Aug 4); ink unchanged.
+            let teamLabel = Text(HomeView.shortTeam(r.team).uppercased())
                 .font(HubFont.data(10, .semibold))
                 .foregroundStyle(TeamColors.color(for: r.team) ?? .white.opacity(0.5))
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(width: 62, alignment: .leading)
+            if let onTeam, let team = r.team, !team.isEmpty {
+                Button { onTeam(team) } label: {
+                    teamLabel
+                        .frame(width: 62, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                teamLabel
+                    .frame(width: 62, alignment: .leading)
+            }
             Text(r.detail ?? "")
                 .font(HubFont.data(11, .semibold))
                 .foregroundStyle(.white.opacity(0.92))
@@ -3267,9 +3963,15 @@ fileprivate struct HubGameSheet: View {
     let onViewGame: (String) -> Void
     /// Team tap on an On-the-Line row → close, then the team card (routing law).
     var onTeam: (StreakRow) -> Void = { _ in }
+    /// Header team names → close, then the team card (the law, Aug 4: a team
+    /// name is a door to the team card everywhere it appears).
+    var onTeamName: (String) -> Void = { _ in }
+    /// Tap-a-name → player card (On-the-Line player rows).
+    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
     @ObservedObject private var live = LiveScoreCache.shared
     @State private var detailSignal: Signal? = nil
     @State private var breakdownSignal: Signal? = nil
+    @State private var namedCard: PlayerInsightCardRow? = nil
 
     private var abbrMatchup: String {
         "\(hubSideLabel(row.away_abbr, row.away_team)) @ \(hubSideLabel(row.home_abbr, row.home_team))"
@@ -3298,7 +4000,8 @@ fileprivate struct HubGameSheet: View {
                 if !streaks.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         HubHead(title: "On the Line", count: streaks.count)
-                        HubStreakWatch(rows: streaks, onTeam: { onTeam($0) })
+                        HubStreakWatch(rows: streaks, onTeam: { onTeam($0) },
+                                       cardFor: cardFor, onPlayer: { namedCard = $0 })
                     }
                 }
                 cta
@@ -3320,6 +4023,7 @@ fileprivate struct HubGameSheet: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: detailSignal?.id)
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+        .sheet(item: $namedCard) { PlayerInsightSheet(signal: nil, prefetched: $0) }
     }
 
     private func fmtML(_ v: Double) -> String { v > 0 ? "+\(Int(v))" : "\(Int(v))" }
@@ -3333,10 +4037,12 @@ fileprivate struct HubGameSheet: View {
             } else {
                 HubKicker(text: "Tonight", size: 12.5, color: GaryColors.gold)
             }
-            Text("\(row.away_team ?? hubSideLabel(row.away_abbr, nil)) @ \(row.home_team ?? hubSideLabel(row.home_abbr, nil))")
-                .font(HubFont.display(30))
-                .foregroundStyle(GaryColors.warmWhite)
-                .fixedSize(horizontal: false, vertical: true)
+            // Each side is a door to its team card (the law, Aug 4). Two lines
+            // instead of one so long names never fight the tap targets.
+            VStack(alignment: .leading, spacing: 0) {
+                teamNameLine(row.away_team ?? hubSideLabel(row.away_abbr, nil), lead: nil)
+                teamNameLine(row.home_team ?? hubSideLabel(row.home_abbr, nil), lead: "@")
+            }
             if let ls, ls.isLive || ls.isFinal {
                 HStack(spacing: 10) {
                     Text(ls.scoreLine ?? "")
@@ -3377,6 +4083,25 @@ fileprivate struct HubGameSheet: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label.uppercased()).font(HubFont.kicker(10.5)).tracking(0.6).foregroundStyle(.white.opacity(0.62))
             Text(value).font(HubFont.data(15)).foregroundStyle(.white.opacity(0.92))
+        }
+    }
+
+    /// One masthead side, tappable → its team card. The "@" stays plain ink.
+    private func teamNameLine(_ name: String, lead: String?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let lead {
+                Text(lead)
+                    .font(HubFont.display(22))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            Button { onClose(); onTeamName(name) } label: {
+                Text(name)
+                    .font(HubFont.display(30))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -3498,6 +4223,13 @@ fileprivate struct HubSearchResults: View {
     let night: [NightHighlightRow]
     let nightLabel: String
     let onEdge: (Signal) -> Void
+    /// Routing law (Aug 4 — these rows had been dead): a team streak row →
+    /// team card, a player row → his card when the day has one, night-board
+    /// hits route the same way. Unresolvable player names stay plain.
+    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
+    var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
+    var onTeamRow: (StreakRow) -> Void = { _ in }
+    var onTeamName: (String) -> Void = { _ in }
 
     var body: some View {
         let q = query.lowercased()
@@ -3556,7 +4288,18 @@ fileprivate struct HubSearchResults: View {
                             HubHead(title: "Streaks", count: streakMatches.count)
                             VStack(spacing: 0) {
                                 ForEach(Array(streakMatches.enumerated()), id: \.offset) { i, r in
-                                    auxRow(title: r.subject ?? "", sub: r.detail ?? "", trail: r.next_game ?? "")
+                                    // Routing law: team rows → team card; player
+                                    // rows → player card when the day has one.
+                                    let row = auxRow(title: r.subject ?? "", sub: r.detail ?? "", trail: r.next_game ?? "")
+                                    if r.subject_type == "team" {
+                                        Button { onTeamRow(r) } label: { row.contentShape(Rectangle()) }
+                                            .buttonStyle(.plain)
+                                    } else if let card = cardFor(r.subject) {
+                                        Button { onPlayer(card) } label: { row.contentShape(Rectangle()) }
+                                            .buttonStyle(.plain)
+                                    } else {
+                                        row
+                                    }
                                     if i < streakMatches.count - 1 { HubRule(inset: 18) }
                                 }
                             }
@@ -3567,7 +4310,18 @@ fileprivate struct HubSearchResults: View {
                             HubHead(title: nightLabel, count: nightMatches.count)
                             VStack(spacing: 0) {
                                 ForEach(Array(nightMatches.enumerated()), id: \.offset) { i, r in
-                                    auxRow(title: r.player_name ?? "", sub: r.detail ?? "", trail: r.team ?? "")
+                                    // Player name → his card; no card but a team
+                                    // → the team card carries the tap instead.
+                                    let row = auxRow(title: r.player_name ?? "", sub: r.detail ?? "", trail: r.team ?? "")
+                                    if let card = cardFor(r.player_name) {
+                                        Button { onPlayer(card) } label: { row.contentShape(Rectangle()) }
+                                            .buttonStyle(.plain)
+                                    } else if let team = r.team, !team.isEmpty {
+                                        Button { onTeamName(team) } label: { row.contentShape(Rectangle()) }
+                                            .buttonStyle(.plain)
+                                    } else {
+                                        row
+                                    }
                                     if i < nightMatches.count - 1 { HubRule(inset: 18) }
                                 }
                             }
