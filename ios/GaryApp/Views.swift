@@ -4897,7 +4897,7 @@ extension View {
 struct HomeSheetRowView: View {
     let row: HomeView.HomeSheetRow
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     // Team names in the HERO face (founder, Aug 3: the italic
@@ -4930,21 +4930,20 @@ struct HomeSheetRowView: View {
                 }
             }
             Spacer(minLength: 8)
-            // Status up top, the cashed-props feed BIG with real air under it
-            // (founder, Jul 7: larger, and further from the red part).
-            // (The hits ledger left the board rows Aug 3 — founder: live rows
-            // keep the same size and shape as pre-game ones; the cashed-props
-            // feed wants a home that doesn't warp the queue. hitLines data
-            // still rides the rows for that future home.)
+            // The status CENTERS on the row (founder, Aug 3): with the hits
+            // ledger gone it's a single element against a two-line stack, so
+            // top-hugging left a dead corner under it. Centered, it sits
+            // between the score and the gold call and binds them — and every
+            // row wears the same geometry, live or scheduled.
+            // (hitLines data still rides the rows for a future home that
+            // doesn't warp the queue.)
             Text(row.statusText)
                 .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                 .foregroundStyle(row.statusColor)
                 .lineLimit(1)
-                .padding(.top, 2)
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))
-                .padding(.top, 3)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .contentShape(Rectangle())
