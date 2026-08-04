@@ -535,6 +535,79 @@ export async function getPitcherLastStarts(personId, season, limit = 3) {
     }));
 }
 
+/** A pitcher's season decomposed by month (byMonth splits). Rows sorted by
+ *  month: [{ month, era, ip, gs, k, bb }]. Empty array when absent. */
+export async function getPitcherMonthSplits(personId, season) {
+  const year = season || new Date().getFullYear();
+  const key = `mlb_sp_bymonth_${personId}_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/people/${personId}/stats?stats=byMonth&season=${year}&group=pitching`);
+  const rows = (data.stats?.[0]?.splits || [])
+    .filter(s => s.month != null)
+    .map(s => ({
+      month: s.month,
+      era: s.stat?.era ?? null,
+      ip: s.stat?.inningsPitched ?? null,
+      gs: s.stat?.gamesStarted ?? null,
+      k: s.stat?.strikeOuts ?? null,
+      bb: s.stat?.baseOnBalls ?? null,
+    }))
+    .sort((a, b) => a.month - b.month);
+  setCache(key, rows);
+  return rows;
+}
+
+/** A pitcher's career pitching profile: career totals + season-by-season IP/GS
+ *  ledger (yearByYear; traded seasons collapse to one row per season).
+ *  Returns { career: { era, ip, gs, w, l, k }, seasons: [{ season, ip, gs, era }] }
+ *  or null when the API has nothing. */
+export async function getPitcherCareerProfile(personId) {
+  const key = `mlb_sp_career_${personId}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/people/${personId}/stats?stats=career,yearByYear&group=pitching`);
+  let career = null;
+  const bySeason = new Map();
+  for (const block of (data.stats || [])) {
+    const type = block.type?.displayName;
+    for (const s of (block.splits || [])) {
+      const st = s.stat || {};
+      if (type === 'career') {
+        career = {
+          era: st.era ?? null, ip: st.inningsPitched ?? null,
+          gs: st.gamesStarted ?? null, w: st.wins ?? null, l: st.losses ?? null,
+          k: st.strikeOuts ?? null,
+        };
+      } else if (type === 'yearByYear' && s.season) {
+        // A traded season arrives as several splits — sum outs/starts, keep
+        // ERA only when the season came as a single row (summing ERA is wrong).
+        const prev = bySeason.get(s.season);
+        const outs = (ip) => {
+          const n = parseFloat(ip);
+          return Number.isFinite(n) ? Math.floor(n) * 3 + Math.round((n % 1) * 10) : 0;
+        };
+        if (prev) {
+          prev._outs += outs(st.inningsPitched);
+          prev.gs += st.gamesStarted || 0;
+          prev.era = null;
+        } else {
+          bySeason.set(s.season, {
+            season: s.season, _outs: outs(st.inningsPitched),
+            gs: st.gamesStarted || 0, era: st.era ?? null,
+          });
+        }
+      }
+    }
+  }
+  const seasons = [...bySeason.values()]
+    .map(({ _outs, ...row }) => ({ ...row, ip: `${Math.floor(_outs / 3)}.${_outs % 3}` }))
+    .sort((a, b) => Number(a.season) - Number(b.season));
+  const out = (career || seasons.length) ? { career, seasons } : null;
+  setCache(key, out);
+  return out;
+}
+
 /** A pitcher's career line vs one opponent (vsTeamTotal). Null when absent. */
 export async function getPitcherVsTeam(personId, opposingTeamId) {
   const key = `mlb_sp_vsteam_${personId}_${opposingTeamId}`;
@@ -569,5 +642,7 @@ export default {
   getProbablePitchers,
   getMlbTransactions,
   getPitcherLastStarts,
+  getPitcherMonthSplits,
+  getPitcherCareerProfile,
   getPitcherVsTeam,
 };

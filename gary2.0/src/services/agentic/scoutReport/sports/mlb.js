@@ -28,7 +28,10 @@ import {
   getPitcherLastStarts,
   getPitcherVsTeam,
   getPlayerSeasonStats,
+  getPitcherMonthSplits,
+  getPitcherCareerProfile,
 } from '../../../mlbStatsApiService.js';
+import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag } from './pitcherArc.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, computeMlbSituationalRecords, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 
@@ -369,6 +372,7 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   let probablePitchersSection = 'Probable pitchers not yet announced.';
   const pitcherStats = {};
+  const pitcherArcData = {}; // per-side career/season provenance for the SAMPLE CONTEXT flags
 
   if (probablePitchersData) {
     const parts = [];
@@ -402,14 +406,33 @@ export async function buildMlbScoutReport(game, options = {}) {
       try {
         const mlbamId = pitcher.id;
         const oppMlbamId = side === 'home' ? awayTeamId : homeTeamId;
-        const [arsenal, platoon, contact, seasonPitching, lastStarts, vsOpp] = await Promise.all([
+        const [arsenal, platoon, contact, seasonPitching, lastStarts, vsOpp, monthSplits, careerProfile] = await Promise.all([
           getPitcherArsenal(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
           getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPlayerSeasonStats(mlbamId, season, 'pitching').catch(() => null) : Promise.resolve(null),
           mlbamId ? getPitcherLastStarts(mlbamId, season, 6).catch(() => []) : Promise.resolve([]),
           mlbamId && oppMlbamId ? getPitcherVsTeam(mlbamId, oppMlbamId).catch(() => null) : Promise.resolve(null),
+          mlbamId ? getPitcherMonthSplits(mlbamId, season).catch(() => []) : Promise.resolve([]),
+          mlbamId ? getPitcherCareerProfile(mlbamId).catch(() => null) : Promise.resolve(null),
         ]);
+
+        // THE ARC (Aug 4 2026, founder GO — the Bieber/Chandler autopsy):
+        // the season aggregate arrived pre-chewed while the trajectory sat as
+        // raw rows, so rationales quoted the aggregate. These lines print the
+        // career baseline and the season's own decomposition as equally
+        // quotable facts. Facts only — no trend words, no weighting.
+        {
+          const cl = careerLine(careerProfile?.career, careerProfile?.seasons);
+          if (cl) parts.push(`  ${cl}`);
+          const ml = monthArcLine(monthSplits);
+          if (ml) parts.push(`  ${ml}`);
+          // Stash for the SAMPLE CONTEXT flags below. The full-season game
+          // log is already cached by the lastStarts fetch, so the first-start
+          // date costs no extra network.
+          const allStarts = mlbamId ? await getPitcherLastStarts(mlbamId, season, 99).catch(() => []) : [];
+          pitcherArcData[side] = { careerProfile, firstStartDate: allStarts[0]?.date ?? null };
+        }
 
         if (lastStarts.length) {
           // Start-by-start ledger w/ the TEAM's result in each (Jul 30,
@@ -418,6 +441,10 @@ export async function buildMlbScoutReport(game, options = {}) {
           // weigh WHY, not inherit a headline).
           const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
           parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
+          // The ledger's own arithmetic (Aug 4) — the recent window as a
+          // number, as citable as the season figure above it.
+          const rw = recentWindowLine(lastStarts, 3);
+          if (rw) parts.push(`  ${rw}`);
           const decided = lastStarts.filter((g) => g.win != null);
           if (decided.length >= 3) {
             const w = decided.filter((g) => g.win).length;
@@ -523,6 +550,28 @@ export async function buildMlbScoutReport(game, options = {}) {
   await Promise.all([['home', homeTeam, homeTeamBdlId], ['away', awayTeam, awayTeamBdlId]].map(async ([side, label, currentTeamBdlId]) => {
     const pitcher = probablePitchersData?.[side];
     const stats = pitcherStats?.[side];
+    // ARC SAMPLE FLAGS (Aug 4 2026, the Bieber/Chandler autopsy): layoff
+    // returns and first-real-season arms — the two cases where a season
+    // aggregate quietly spans a different pitcher. Career profile comes from
+    // the starter block's stash (MLBAM), so no BDL id is required and these
+    // run before the BDL-dependent flags below. Provenance facts only.
+    try {
+      const arc = pitcherArcData[side];
+      if (pitcher?.fullName && arc?.careerProfile) {
+        const seasons = arc.careerProfile.seasons || [];
+        const seasonRow = seasons.find(s => Number(s.season) === season);
+        const early = earlyCareerFlag({
+          name: pitcher.fullName, label,
+          careerGs: arc.careerProfile.career?.gs, seasonGs: seasonRow?.gs,
+        });
+        if (early) smallSampleFlags.push(early);
+        const layoff = longLayoffFlag({
+          name: pitcher.fullName, label, seasons, season,
+          firstStartDate: arc.firstStartDate,
+        });
+        if (layoff) smallSampleFlags.push(layoff);
+      }
+    } catch { /* arc flags are additive — never sink the section */ }
     const pitcherId = stats?.player?.id;
     if (!pitcher?.fullName || !pitcherId) return;
 
