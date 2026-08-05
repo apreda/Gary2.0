@@ -218,9 +218,11 @@ async function buildMatchupLab(game, homeTeam, awayTeam, gamePk) {
 // ═══════════════════════════════════════════════════════════════════════════
 // YOUR BOOK (founder GO, Aug 4 evening — the Nationals-streak autopsy: Gary
 // took the same club's side 8 straight nights, 4-5, and could not know it).
-// His OWN recent graded picks touching tonight's clubs, as a raw ledger +
-// computed tally — a bettor knows his own bets. Facts only, no interpretation;
-// fail-soft to '' (the desk simply carries no book on a quiet matchup).
+// His OWN recent picks touching tonight's clubs — the raw rows and NOTHING
+// else. Founder, Aug 4 night: a computed tally ("you took the opponent in N
+// straight") is steering wearing a ledger's clothes — it hands Gary a reason
+// to switch sides. If there's a pattern, he reads it; we never announce it.
+// Fail-soft to '' (the desk simply carries no book on a quiet matchup).
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Pure formatter: one club's recent-pick rows → ledger lines. Exported for pins. */
@@ -228,14 +230,9 @@ export function yourBookSection(clubs) {
   const blocks = [];
   for (const { club, rows } of clubs) {
     if (!rows.length) continue;
-    const sided = rows.filter((r) => r.side === club);
-    const graded = rows.filter((r) => r.result === 'won' || r.result === 'lost');
-    const w = graded.filter((r) => r.result === 'won').length;
-    const lines = rows.slice(0, 8).map((r) =>
+    const lines = rows.slice(0, 5).map((r) =>
       `  ${r.date}: ${r.pick} — ${r.result}${r.score ? ` (${r.score})` : ''}`);
-    blocks.push(
-      `${club}: ${rows.length} recent pick(s) touching them — you took the ${club} side in ${sided.length}; graded ${w}-${graded.length - w}.\n${lines.join('\n')}`
-    );
+    blocks.push(`${club} — your last ${lines.length} pick(s) on their games:\n${lines.join('\n')}`);
   }
   if (!blocks.length) return '';
   return `═══ YOUR BOOK — your recent picks touching tonight's clubs ═══\n${blocks.join('\n')}`;
@@ -267,7 +264,6 @@ async function fetchYourBook(homeTeam, awayTeam) {
           pick: r.pick_text,
           result: r.result || 'pending',
           score: r.final_score || null,
-          side: String(r.pick_text || '').includes(n) ? team : 'opponent',
         })),
       };
     });
