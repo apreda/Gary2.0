@@ -318,43 +318,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // research may or may not call; the report itself showed yesterday alone.
   // Compute it here from the same MLB Stats API boxscores so who-threw-when
   // (with pitch counts — the real workload signal) is ALWAYS on the desk.
-  const bullpenUsageFor = async (teamName, mlbTeamId, recentGames) => {
-    try {
-      const last3 = (recentGames || []).slice(-3).reverse(); // most recent first
-      const dayLines = [];
-      for (const g of last3) {
-        if (!g?.gamePk) continue;
-        const box = await getGameBoxScore(g.gamePk).catch(() => null);
-        if (!box?.teams) continue;
-        const sideKey = box.teams.home?.team?.id === mlbTeamId ? 'home' : 'away';
-        const side = box.teams[sideKey];
-        const players = side?.players || {};
-        const apps = [];
-        // pitchers[] is in appearance order — index 0 is the starter. The old
-        // ip<5 "reliever" heuristic counted every SHORT START as a relief
-        // appearance (a 4.2 IP starter showed as 99 pitches of bullpen usage,
-        // found Jul 22 2026) and dropped real long-relief outings.
-        const pitcherIds = Array.isArray(side?.pitchers) ? side.pitchers.slice(1) : [];
-        for (const pid of pitcherIds) {
-          const p = players[`ID${pid}`];
-          const ip = parseFloat(p?.stats?.pitching?.inningsPitched);
-          if (!Number.isFinite(ip) || ip <= 0) continue;
-          const pitches = p?.stats?.pitching?.numberOfPitches;
-          apps.push(`${p?.person?.fullName || '?'} ${ip.toFixed(1)} IP${pitches != null ? ` (${pitches} pitches)` : ''}`);
-        }
-        // officialDate is the ET calendar day; gameDate is a UTC instant that
-        // rolls night games a day forward (yesterday's usage would read as
-        // TODAY's — found Jul 22 on the WSH bullpen block).
-        const date = (g.officialDate || g.gameDate || '').split('T')[0];
-        dayLines.push(`${date}: ${apps.length ? apps.join(', ') : 'no reliever appearances'}`);
-      }
-      return dayLines.length ? `${teamName}:\n  ${dayLines.join('\n  ')}` : null;
-    } catch { return null; }
-  };
-  const [homeBullpenUsage, awayBullpenUsage] = await Promise.all([
-    bullpenUsageFor(homeTeam, homeTeamId, homeRecentGames),
-    bullpenUsageFor(awayTeam, awayTeamId, awayRecentGames),
-  ]);
+  // (Inner BULLPEN USAGE block REMOVED — Aug 5 hunt: it duplicated the lab's
+  // BULLPEN WORKLOAD section, which now carries ER + decision notes per
+  // appearance. One pen-recency surface, the richer one.)
 
   // ═══════════════════════════════════════════════════════════════════
   // PROBABLE PITCHERS — current-season (BDL) only, no career fallback
@@ -1549,16 +1515,17 @@ export async function buildMlbScoutReport(game, options = {}) {
     historicH2h = computeMlbH2hBySeason(priorRows, homeTeamBdlId, awayTeamBdlId, homeTeam);
   } catch { /* omit on failure */ }
 
-  // Roster moves, last 7 days (MLB Stats API; minor-league signings filtered,
-  // trade-deadline season makes this lane load-bearing through Jul 31).
+  // Roster moves, last 14 days (founder, Aug 5 PM: a fan knows who got
+  // traded — deadline arrivals must stay visible past the one-week mark, so
+  // "he was traded to the Dodgers on Jul 31" is on the desk through mid-Aug).
   const todayEtStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const weekAgoStr = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const weekAgoStr = new Date(Date.now() - 14 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const txFor = async (mlbamTeamId, teamName) => {
     if (!mlbamTeamId) return null;
     try {
       const rows = await getMlbTransactions(mlbamTeamId, weekAgoStr, todayEtStr);
-      if (!rows.length) return `${teamName}: no moves in the last 7 days.`;
-      return `${teamName}:\n${rows.slice(-6).map(r => `  ${r.date}: ${r.description}`).join('\n')}`;
+      if (!rows.length) return `${teamName}: no moves in the last 14 days.`;
+      return `${teamName}:\n${rows.slice(-10).map(r => `  ${r.date}: ${r.description}`).join('\n')}`;
     } catch { return null; }
   };
   const [homeTx, awayTx] = await Promise.all([txFor(homeTeamId, homeTeam), txFor(awayTeamId, awayTeam)]);
@@ -1752,8 +1719,6 @@ ${injuriesSection || 'No structured injury data available.'}
 Rolling splits (L1/L3/L5/L10):
 ${recentPerformanceSection || 'No recent performance data.'}
 
-BULLPEN USAGE — LAST 3 GAMES (per-appearance IP and pitch counts from box scores):
-${[homeBullpenUsage, awayBullpenUsage].filter(Boolean).join('\n') || 'No bullpen usage data available.'}
 
 ═══ SERIES STATE ═══
 ${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}
@@ -1769,7 +1734,7 @@ ${wireSection}
 
 ${withoutPlayersSection ? `\n═══ WITHOUT KEY PLAYERS (this season) ═══\n${withoutPlayersSection}\n` : ''}
 
-═══ ROSTER MOVES — LAST 7 DAYS ═══
+═══ ROSTER MOVES — LAST 14 DAYS ═══
 ${rosterMovesSection}
 
 ═══ SCHEDULE SHAPE ═══

@@ -1814,9 +1814,10 @@ export const mlbFetchers = {
             const note = p?.stats?.pitching?.note;
             relievers.push(`${name} ${ip.toFixed(1)} IP${er != null ? `, ${er} ER` : ''}${pitchStr}${note ? ` ${note}` : ''}`);
             const outs = Math.floor(ip) * 3 + Math.round((ip % 1) * 10);
-            const t = armTotals.get(name) || { outs: 0, pitches: 0, dates: [] };
+            const t = armTotals.get(name) || { outs: 0, pitches: 0, er: 0, dates: [] };
             t.outs += outs;
             t.pitches += Number(pitches) || 0;
+            t.er += Number(er) || 0;
             t.dates.push(date);
             armTotals.set(name, t);
           }
@@ -1843,8 +1844,9 @@ export const mlbFetchers = {
             .slice(0, 3)
             .map(([n, a]) => `${n} ${a.pitches} pitches/${a.dates.length} G`)
             .join(', ');
+          const totalEr = [...armTotals.values()].reduce((acc, a) => acc + (a.er || 0), 0);
           lines.push(
-            `Last ${gameDates.length} games total: ${Math.floor(totalOuts / 3)}.${totalOuts % 3} relief IP ` +
+            `Last ${gameDates.length} games total: ${Math.floor(totalOuts / 3)}.${totalOuts % 3} relief IP, ${totalEr} ER ` +
             `across ${armTotals.size} arms; heaviest: ${heaviest}; ` +
             `worked both of the last two game days: ${b2b.length ? b2b.join(', ') : 'none'}.`,
           );

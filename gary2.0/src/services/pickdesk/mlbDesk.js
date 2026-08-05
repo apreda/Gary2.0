@@ -3,11 +3,12 @@
  * (spec docs/superpowers/specs/2026-07-26-mlb-pick-rebuild-design.md).
  *
  * One desk, one read: the brain gets no tools, so this desk is Gary's entire
- * evidence for the night. Section order IS the design:
- *   1. THE BOARD  — every book's prices; the bet is the question.
- *   2. THE STAKES — records, division position, GB, seed, streak, deadline.
- *   3. THE WORLD  — the grounded same-day news, moved up from the report tail.
- *   4. THE SHELF  — the full stats scout report, unchanged, as reference.
+ * evidence for the night. Section order IS the design (three shelves,
+ * founder GO Aug 5 2026):
+ *   TONIGHT   — the decision inputs: arms, lineups, pens, park, rest.
+ *   THE CLUBS — identity and shape: stakes, season/x stats, form, series.
+ *   THE WEEK  — the world's news + the week as written (official stories).
+ *   THE BOARD (prices) exists only in the ticket turn — the read is blind.
  *
  * Facts only, no interpretive labels — the reasoning model does the reasoning.
  */
@@ -338,7 +339,59 @@ export async function buildMlbDesk(game, options = {}) {
   // no prices on it — deskTextBlind. THE LINES arrive only with the ticket ask
   // (boardText). deskText stays the full surface, board first, for the stored
   // snapshot: the audit record is everything Gary saw across both turns.
-  const deskTextBlind = `${stakes}\n\n${world}\n\n${shelf}`;
+  // ── THE THREE SHELVES (founder GO, Aug 5 eve) ──────────────────────────
+  // Same facts, filed the way a bettor's head files them: TONIGHT (the
+  // decision inputs — arms, lineups, pens, park), THE CLUBS (who these teams
+  // are and what shape they're in), THE WEEK (the world and the week as
+  // written). Player-vs-team separation lives INSIDE each shelf; an entity
+  // split would scatter tonight's starters. Fail-open by construction: a
+  // section whose header ever drifts stays in the preamble block — content
+  // is rearranged, never dropped.
+  const takeSection = (header) => {
+    const { section, rest } = extractSection(shelfRest, header);
+    shelfRest = rest;
+    return section;
+  };
+  let shelfRest = shelf;
+  const TONIGHT_SECTIONS = [
+    '═══ PROBABLE PITCHERS ═══',
+    '═══ PITCHER SAMPLE CONTEXT ═══',
+    '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
+    `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`,
+    '═══ CONFIRMED LINEUPS ═══',
+    '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
+    '═══ INJURIES (BDL Structured) ═══',
+    '═══ THE PEN — high-leverage arms ═══',
+    '═══ BULLPEN WORKLOAD (recent appearances) ═══',
+    '═══ CATCHERS — the running game ═══',
+    '═══ THE PARK ═══',
+    '═══ REST & SCHEDULE SITUATION ═══',
+  ];
+  const CLUBS_SECTIONS = [
+    '═══ TEAM SEASON STATS (BDL) ═══',
+    '═══ BASEBALL SAVANT xSTATS',
+    '═══ TEAM DEFENSE ═══',
+    '═══ RECENT FORM ═══',
+    '═══ SERIES STATE ═══',
+    '═══ WITHOUT KEY PLAYERS (this season) ═══',
+    '═══ ROSTER MOVES — LAST 14 DAYS ═══',
+    '═══ SCHEDULE SHAPE ═══',
+  ];
+  const tonightBlock = TONIGHT_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
+  const clubsBlock = CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
+  const wireBlock = takeSection('═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══');
+  const shelfBanner = (t) => `━━━━━━━━━━━━━━━ ${t} ━━━━━━━━━━━━━━━`;
+  const deskTextBlind = [
+    shelfRest.trim(),
+    shelfBanner('TONIGHT'),
+    tonightBlock,
+    shelfBanner('THE CLUBS'),
+    stakes,
+    clubsBlock,
+    shelfBanner('THE WEEK'),
+    world,
+    wireBlock || '',
+  ].filter(Boolean).join('\n\n');
   const deskText = `${board}\n\n${deskTextBlind}`;
   return {
     deskText,
