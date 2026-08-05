@@ -261,18 +261,19 @@ export function buildBoxLine({ mlbStats, awayTeam, homeTeam, awayScore, homeScor
   const awayKey = key(awayTeam), homeKey = key(homeTeam);
   if (!awayKey || !homeKey || awayKey === homeKey) return null;
 
-  let awayHits = null, homeHits = null;
+  let awayHits = null, homeHits = null, awayHr = 0, homeHr = 0;
   for (const s of mlbStats) {
     if (s?.at_bats == null) continue;              // batters only
     const k = key(s.team_name);
     const h = Number(s.hits) || 0;
-    if (k === awayKey) awayHits = (awayHits ?? 0) + h;
-    else if (k === homeKey) homeHits = (homeHits ?? 0) + h;
+    const hr = Number(s.hr) || 0;
+    if (k === awayKey) { awayHits = (awayHits ?? 0) + h; awayHr += hr; }
+    else if (k === homeKey) { homeHits = (homeHits ?? 0) + h; homeHr += hr; }
   }
   if (awayHits == null || homeHits == null) return null;
 
   return {
-    away: { runs: Number.isFinite(awayScore) ? awayScore : null, hits: awayHits },
-    home: { runs: Number.isFinite(homeScore) ? homeScore : null, hits: homeHits },
+    away: { runs: Number.isFinite(awayScore) ? awayScore : null, hits: awayHits, hr: awayHr },
+    home: { runs: Number.isFinite(homeScore) ? homeScore : null, hits: homeHits, hr: homeHr },
   };
 }

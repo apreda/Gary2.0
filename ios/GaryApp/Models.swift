@@ -386,6 +386,8 @@ struct BoxLine: Decodable {
     struct Side: Decodable {
         let runs: Int?
         let hits: Int?
+        /// Home runs. Null on rows written before HR joined the box.
+        let hr: Int?
     }
     let away: Side?
     let home: Side?

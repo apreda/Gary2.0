@@ -2518,7 +2518,9 @@ struct HomeView: View {
                 score: scoreByMatchup[mu.lowercased()],
                 date: Self.shortSlateDay(r.game_date),
                 awayHits: r.box?.away?.hits,
-                homeHits: r.box?.home?.hits)
+                homeHits: r.box?.home?.hits,
+                awayHR: r.box?.away?.hr,
+                homeHR: r.box?.home?.hr)
         }
     }
 
@@ -5040,18 +5042,21 @@ struct HeadlineFlipCard: View {
                     if story.awayHits != nil || story.homeHits != nil {
                         HStack(spacing: 0) {
                             Spacer(minLength: 0)
-                            Text("R").frame(width: 22, alignment: .trailing)
-                            Text("H").frame(width: 24, alignment: .trailing)
+                            Text("R").frame(width: 20, alignment: .trailing)
+                            Text("H").frame(width: 20, alignment: .trailing)
+                            if story.awayHR != nil || story.homeHR != nil {
+                                Text("HR").frame(width: 24, alignment: .trailing)
+                            }
                         }
                         .font(GaryFonts.kicker(8)).tracking(1)
                         .foregroundStyle(.white.opacity(0.28))
                         .padding(.bottom, 3)
                     }
                     scoreRow(s.away.name, s.away.runs, hits: story.awayHits,
-                             winner: s.away.runs > s.home.runs)
+                             hr: story.awayHR, winner: s.away.runs > s.home.runs)
                     boxRule
                     scoreRow(s.home.name, s.home.runs, hits: story.homeHits,
-                             winner: s.home.runs > s.away.runs)
+                             hr: story.homeHR, winner: s.home.runs > s.away.runs)
                 }
                 Spacer(minLength: 6)
                 // Money and price on ONE line (founder, Aug 5), the figure
@@ -5092,21 +5097,30 @@ struct HeadlineFlipCard: View {
     /// in gold. Hits are the quiet column — they lose games as often as they
     /// win them, so they never take the gold even on the winning line.
     @ViewBuilder private func scoreRow(_ name: String, _ runs: Int, hits: Int?,
-                                       winner: Bool) -> some View {
+                                       hr: Int?, winner: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text(name)
-                .font(GaryFonts.text(11.5, winner ? .bold : .semibold))
+            // Abbreviated, like a real box (and three number columns leave no
+            // room for "Diamondbacks") — the headline beside it already names
+            // both clubs in full.
+            Text(teamAbbrevFromName(name, league: story.league))
+                .font(GaryFonts.mono(12.5, bold: true)).tracking(0.6)
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.55))
-                .lineLimit(1).minimumScaleFactor(0.55)
+                .lineLimit(1).minimumScaleFactor(0.6)
             Spacer(minLength: 4)
             Text("\(runs)")
                 .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.62))
-                .frame(width: 22, alignment: .trailing)
+                .frame(width: 20, alignment: .trailing)
             if let hits {
                 Text("\(hits)")
                     .font(GaryFonts.mono(12, bold: true))
                     .foregroundStyle(.white.opacity(0.42))
+                    .frame(width: 20, alignment: .trailing)
+            }
+            if let hr {
+                Text("\(hr)")
+                    .font(GaryFonts.mono(12, bold: true))
+                    .foregroundStyle(hr > 0 ? GaryColors.warmGold.opacity(0.75) : .white.opacity(0.28))
                     .frame(width: 24, alignment: .trailing)
             }
         }
@@ -5629,9 +5643,11 @@ struct HomeMarqueeHero: View {
         var score: String? = nil
         /// "AUG 4" — the slate day, for the card's kicker.
         var date: String = ""
-        /// Hits per side when the recap captured them; nil = runs only.
+        /// Hits and home runs per side when the recap captured them.
         var awayHits: Int? = nil
         var homeHits: Int? = nil
+        var awayHR: Int? = nil
+        var homeHR: Int? = nil
         /// Profit on a flat $100 at `odds` — positive when the ticket cashed,
         /// −100 when it didn't, 0 on a push. nil when the price won't parse.
         var netOnFlat: Double? {

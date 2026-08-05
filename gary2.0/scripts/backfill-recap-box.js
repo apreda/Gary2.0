@@ -56,7 +56,8 @@ for (const date of dates) {
   let written = 0, skipped = 0;
 
   for (const row of recaps || []) {
-    if (row.box) { skipped++; continue; }
+    // Refresh rows written before HR joined the box, too.
+    if (row.box?.away?.hr != null) { skipped++; continue; }
     const gameId = gameIdByMatchup.get(row.matchup);
     const [away, home] = String(row.matchup || '').split(' @ ');
     const [awayScore, homeScore] = String(scoreByMatchup.get(row.matchup) || '')
