@@ -394,7 +394,10 @@ export async function buildMlbScoutReport(game, options = {}) {
         const k = bdlRow.pitching_k ?? 0;
         const ip = bdlRow.pitching_ip != null ? bdlRow.pitching_ip.toFixed(1) : '—';
         const gs = bdlRow.pitching_gs;
-        parts.push(`${label}: ${pitcher.fullName} — ${w}-${l}, ${era} ERA, ${whip} WHIP, ${k} K, ${ip} IP (${gs} ${season} starts)`);
+        // BB on the season line (founder, Aug 5 PM: "certain pitchers
+        // naturally walk a lot of guys" — a team-grain fact, naked).
+        const bbSeason = bdlRow.pitching_bb ?? null;
+        parts.push(`${label}: ${pitcher.fullName} — ${w}-${l}, ${era} ERA, ${whip} WHIP, ${k} K${bbSeason != null ? `, ${bbSeason} BB` : ''}, ${ip} IP (${gs} ${season} starts)`);
         pitcherStats[side] = { name: pitcher.fullName, ...bdlRow };
       } else if (bdlRow) {
         // Lookup SUCCEEDED, zero starts — a true rookie/reliever fact.

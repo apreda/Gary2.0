@@ -189,10 +189,16 @@ function boardMeta(rows, homeTeam, awayTeam) {
 // (Second wave, same day: RISP, defenses, catcher, closer/pen detail, park.)
 const MATCHUP_SECTIONS = [
   ['MLB_PITCH_TYPES_SP', '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══'],
-  ['MLB_PITCH_TYPES_HITTERS', '═══ HITTERS vs PITCH TYPES ═══'],
-  ['MLB_BATTER_VS_PITCHER', `═══ BATTER vs PITCHER — career vs tonight's starters ═══`],
-  ['MLB_PLAYER_SPLITS', '═══ HITTER L/R SPLITS ═══'],
-  ['MLB_RISP_SITUATIONAL', '═══ SITUATIONAL HITTING (RISP) ═══'],
+  // AT-BAT-GRAIN SECTIONS OFF THE GAME DESK (founder GO, Aug 5 2026 PM):
+  // hitters-vs-pitch-types, per-hitter platoon rows, per-hitter RISP, and
+  // individual batter-vs-pitcher careers reason at the at-bat level — "an
+  // at-bat doesn't produce a run"; they are props-lane material (those desks
+  // keep their own surfaces). The game desk reasons at team grain: the
+  // lineup's COMBINED history vs tonight's SP replaces the per-bat rows,
+  // the PITCHER's platoon split stays in his SP block, and lineup recency
+  // stays in LINEUP RECENT BATTING. No team-vs-hand source exists in BDL —
+  // stated per the founder's rule rather than faked with a proxy.
+  ['MLB_LINEUP_VS_SP', `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`],
   ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
   ['MLB_CATCHER_DEFENSE', '═══ CATCHERS (framing / arm / SB game) ═══'],
   ['MLB_CLOSER_RELIEVER_STATS', '═══ CLOSERS & HIGH-LEVERAGE ARMS ═══'],
