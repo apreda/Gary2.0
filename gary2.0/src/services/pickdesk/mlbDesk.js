@@ -46,32 +46,15 @@ function findRow(standings, teamName) {
   }) || null;
 }
 
-const ordinal = (n) => {
-  const rem = n % 100;
-  if (rem >= 11 && rem <= 13) return `${n}th`;
-  return `${n}${['th', 'st', 'nd', 'rd'][Math.min(n % 10, 4)] || 'th'}`;
-};
-
-export function stakesLine(standings, teamName, oneRun = null) {
+export function stakesLine(standings, teamName) {
   const t = findRow(standings, teamName);
   if (!t) return `${teamName}: standings unavailable.`;
-  const div = t.division_name || t.team?.division || null;
-  let pos = null;
-  if (div) {
-    const rows = (standings || [])
-      .filter(s => (s.division_name || s.team?.division) === div)
-      .sort((a, b) => (b.wins || 0) - (a.wins || 0));
-    const i = rows.indexOf(t);
-    if (i >= 0) pos = i + 1;
-  }
+  // Division position / GB / seed / one-run record REMOVED (founder rulings,
+  // Aug 5 PM): season-position trajectory and record-species numbers are not
+  // tonight's question. The stakes are the club, its record, and its shape.
   const bits = [`${t.wins || 0}-${t.losses || 0}`];
-  if (pos && div) bits.push(`${ordinal(pos)} in the ${div}`);
-  const gb = t.division_games_behind ?? t.games_behind;
-  if (gb != null) bits.push(`${gb} GB`);
-  if (t.playoff_seed != null) bits.push(`playoff seed ${t.playoff_seed}`);
   if (t.streak != null && t.streak !== '') bits.push(`streak ${t.streak}`);
   if (t.last_ten_games) bits.push(`L10 ${t.last_ten_games}`);
-  if (oneRun) bits.push(`one-run ${oneRun}`);
   return `${teamName}: ${bits.join(', ')}`;
 }
 
@@ -79,25 +62,6 @@ export function stakesLine(standings, teamName, oneRun = null) {
 // open-vs-now feed taught a nightly "unjustified move" fade template.
 // The daily_slate 5:30 AM snapshot itself still publishes; nothing here
 // reads it anymore.)
-
-/**
- * One-run record computed from the season game index (Jul 30: BDL standings
- * carry NO one-run field — a probe for one never fired; this is the real
- * count from final scores). Null under 5 decided one-run games — small-
- * sample honesty, the desk never prints a 2-1 as an identity.
- */
-export function oneRunRecordFrom(index, teamId) {
-  if (!index || typeof index.values !== 'function' || teamId == null) return null;
-  let w = 0, l = 0;
-  for (const g of index.values()) {
-    if (g.status !== 'STATUS_FINAL' || g.seasonType === 'spring_training') continue;
-    const hr = Number(g.homeRuns), ar = Number(g.awayRuns);
-    if (!Number.isFinite(hr) || !Number.isFinite(ar) || Math.abs(hr - ar) !== 1) continue;
-    if (g.homeId === teamId) { hr > ar ? w++ : l++; }
-    else if (g.awayId === teamId) { ar > hr ? w++ : l++; }
-  }
-  return (w + l) >= 5 ? `${w}-${l}` : null;
-}
 
 export function deadlineLine(today = todayEST()) {
   const days = Math.round(
@@ -200,9 +164,12 @@ const MATCHUP_SECTIONS = [
   // stated per the founder's rule rather than faked with a proxy.
   ['MLB_LINEUP_VS_SP', `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`],
   ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
-  ['MLB_CATCHER_DEFENSE', '═══ CATCHERS (framing / arm / SB game) ═══'],
-  ['MLB_CLOSER_RELIEVER_STATS', '═══ CLOSERS & HIGH-LEVERAGE ARMS ═══'],
-  ['MLB_BULLPEN', '═══ BULLPEN (season numbers) ═══'],
+  ['MLB_CATCHER_DEFENSE', '═══ CATCHERS — the running game ═══'],
+  // (MLB_BULLPEN season section REMOVED — founder, Aug 5 PM: "I don't need
+  // duplicates... a bunch of bullpen info that is just season stats." The
+  // CLOSERS section carries the pen's arms — SV/HLD/ERA/WHIP/IP + roster
+  // truth — and BULLPEN WORKLOAD carries the recency.)
+  ['MLB_CLOSER_RELIEVER_STATS', '═══ THE PEN — high-leverage arms ═══'],
   ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (recent appearances) ═══'],
   ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
 ];
@@ -350,13 +317,12 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRowsRaw, standings, matchupLab, seasonIndex, yourBook, sampleNote] = await Promise.all([
+  const [oddsRowsRaw, standings, matchupLab, yourBook, sampleNote] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
     ballDontLieService.getMlbStandings(season).catch(() => []),
     buildMatchupLab(game, homeTeam, awayTeam, scout.gamePk).catch(() => ''),
-    ballDontLieService.getMlbSeasonGameIndex(season).catch(() => null),
     // YOUR BOOK (Aug 4) — his own recent picks touching tonight's clubs.
     fetchYourBook(homeTeam, awayTeam).catch(() => ''),
     // TEAM SAMPLE flag (Aug 4) — trades out of either club, last 10 days.
@@ -385,8 +351,8 @@ export async function buildMlbDesk(game, options = {}) {
   // recency at the right grain. The PITCHER month arc stays — its job is
   // decomposing the season aggregate beside it, not calendar prediction.)
   const stakes = `═══ THE STAKES ═══\n` +
-    `${stakesLine(standings, homeTeam, oneRunRecordFrom(seasonIndex, teamIdFor(homeTeam)))}\n` +
-    `${stakesLine(standings, awayTeam, oneRunRecordFrom(seasonIndex, teamIdFor(awayTeam)))}\n` +
+    `${stakesLine(standings, homeTeam)}\n` +
+    `${stakesLine(standings, awayTeam)}\n` +
     `${deadlineLine()}` +
     (sampleNote ? `\n${sampleNote}` : '');
 

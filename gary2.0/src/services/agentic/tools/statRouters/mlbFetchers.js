@@ -2308,20 +2308,15 @@ export const mlbFetchers = {
 
         if (catchers.length > 0) {
           usedBdl = true;
+          // RUNNING GAME ONLY (founder, Aug 5 PM: "we definitely do not need
+          // catcher framing and all that. Stolen base is fine"). Batting lines
+          // duplicated the lineup surfaces; framing/PB/WAR were micro. What
+          // survives is the fact a fan holds: can you run on this catcher.
           for (const c of catchers) {
             const name = c.player?.full_name || c.player?.last_name || 'Unknown';
-            // Batting stats
-            const avg = c.batting_avg != null ? c.batting_avg.toFixed(3) : '—';
-            const ops = c.batting_ops != null ? c.batting_ops.toFixed(3) : '—';
-            const hr = c.batting_hr ?? '—';
-            // Defensive stats (BDL may include fielding fields)
             const cs = c.fielding_cs ?? c.catching_cs ?? '—';
             const sba = c.fielding_sba ?? c.catching_sba ?? '—';
-            const pb = c.fielding_pb ?? c.catching_pb ?? '—';
-            const war = c.batting_war != null ? c.batting_war.toFixed(1) : (c.fielding_war != null ? c.fielding_war.toFixed(1) : '—');
-            const sb = c.batting_sb ?? '—';
-
-            lines.push(`${name}: ${avg} AVG, ${ops} OPS, ${hr} HR | CS: ${cs}, SBA: ${sba}, PB: ${pb} | WAR: ${war}`);
+            lines.push(`${name}: ${cs} caught of ${sba} steal attempts`);
           }
           continue;
         }
