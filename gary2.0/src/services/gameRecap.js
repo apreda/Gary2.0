@@ -244,3 +244,35 @@ export async function generateRecap({ pick, result, evidence }) {
 
   return { headline, recap, bullets };
 }
+
+/**
+ * THE BOX LINE (founder, Aug 5 2026). The per-game stats above already carry
+ * every batter's hit total — buildGameEvidence sums them into a TEAM HITS line
+ * for the prompt and then drops them. This keeps runs + hits per side so the
+ * headline card's box column can be a real box instead of two scores.
+ *
+ * Sides are matched on the club's last word ("Los Angeles Angels" → "angels"),
+ * the same join the desk uses. Returns null unless BOTH sides resolve — a
+ * half-built box is worse than none, and the card treats null as "runs only".
+ */
+export function buildBoxLine({ mlbStats, awayTeam, homeTeam, awayScore, homeScore }) {
+  if (!Array.isArray(mlbStats) || !mlbStats.length) return null;
+  const key = (s) => String(s || '').toLowerCase().trim().split(' ').pop();
+  const awayKey = key(awayTeam), homeKey = key(homeTeam);
+  if (!awayKey || !homeKey || awayKey === homeKey) return null;
+
+  let awayHits = null, homeHits = null;
+  for (const s of mlbStats) {
+    if (s?.at_bats == null) continue;              // batters only
+    const k = key(s.team_name);
+    const h = Number(s.hits) || 0;
+    if (k === awayKey) awayHits = (awayHits ?? 0) + h;
+    else if (k === homeKey) homeHits = (homeHits ?? 0) + h;
+  }
+  if (awayHits == null || homeHits == null) return null;
+
+  return {
+    away: { runs: Number.isFinite(awayScore) ? awayScore : null, hits: awayHits },
+    home: { runs: Number.isFinite(homeScore) ? homeScore : null, hits: homeHits },
+  };
+}
