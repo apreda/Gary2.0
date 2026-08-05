@@ -1802,6 +1802,9 @@ struct HomeView: View {
     @State private var recapLabel: String = "LAST NIGHT"
     /// GAME picks only — the fresh-day recap pop-up's ledger (props keep
     /// their own strip in the box scores; user call, Jun 11).
+    /// matchup (lowercased) → "3-1". The recap rows don't carry a score, so
+    /// the headline card borrows it from the same results the board reads.
+    @State private var scoreByMatchup: [String: String] = [:]
     @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     @State private var gamesNightNet: Double? = nil
     @State private var gamesNightBest: Double? = nil
@@ -2291,6 +2294,14 @@ struct HomeView: View {
                     // (These six fetches were declared here until Jul 22 — they now
                     // ride the load's single parallel wave at the top; these awaits
                     // just collect results that have been in flight the whole time.)
+                    // Scores first — headlineStories reads this map as it builds.
+                    scoreByMatchup = Dictionary(
+                        recentGameResults.compactMap { r -> (String, String)? in
+                            guard let m = r.matchup?.lowercased(), let s = r.final_score,
+                                  !m.isEmpty, !s.isEmpty else { return nil }
+                            return (m, s)
+                        },
+                        uniquingKeysWith: { first, _ in first })
                     let recapsToday = await recapsTodayF
                     nightRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
@@ -2482,13 +2493,18 @@ struct HomeView: View {
             .map(\.element)
         return orderedRecaps.prefix(6).map { r in
             let cashed = r.result == "won"
-            let pickLine = Formatters.splitPickAndOdds(r.pick_text ?? "").0
+            let split = Formatters.splitPickAndOdds(r.pick_text ?? "")
+            let mu = r.matchup ?? ""
             return HomeMarqueeHero.Story(
                 league: r.league ?? "", headline: r.headline ?? "", sub: "",
                 receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
-                receiptPick: Formatters.arrowizeOverUnder(pickLine).uppercased(),
+                receiptPick: Formatters.arrowizeOverUnder(split.0).uppercased(),
                 verdict: cashed ? "CASHED" : (r.result == "push" ? "PUSH" : "LOST"),
-                cashed: cashed, recap: r.recap, bullets: r.bullets ?? [])
+                cashed: cashed, recap: r.recap, bullets: r.bullets ?? [],
+                matchup: mu,
+                odds: split.1,
+                // The recap row carries no score; the board's own results do.
+                score: scoreByMatchup[mu.lowercased()])
         }
     }
 
@@ -3431,20 +3447,34 @@ struct HomeView: View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         } label: {
+            // ALL THREE CELLS, ALL DAY (founder, Aug 5: "I want this look to
+            // be for when the games actually go live"). The band used to
+            // collapse to a lone record while the day was live, because net
+            // and best cash only mounted once they had values — so the live
+            // state was a different, thinner object than the settled one.
+            // Now the shape is fixed from 0–0 and the numbers fill in
+            // underneath it as games land.
             HStack(spacing: 0) {
-                // Window named once, leftmost — every cell in this row is
-                // last night's slate (feedback: unlabeled windows next to the
-                // form lane's L10 numbers read contradictory).
+                // Window named once, leftmost — every cell in this row is the
+                // same slate (feedback: unlabeled windows next to the form
+                // lane's L10 numbers read contradictory).
                 scoreCell(Self.recordLine(gamesNightRecord.w, gamesNightRecord.l, gamesNightRecord.p),
                           recapLabel, .white.opacity(0.92))
-                if let net = gamesNightNet {
-                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                    scoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
-                              net >= 0 ? GaryColors.win : GaryColors.loss)
-                }
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                // Nothing graded yet reads as a flat $0, not a blank: the day
+                // starts even and the number moves from there.
+                let net = gamesNightNet ?? 0
+                scoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
+                          gamesNightNet == nil ? .white.opacity(0.92)
+                                               : (net >= 0 ? GaryColors.win : GaryColors.loss))
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                // Best cash has no honest zero — before a winner lands there
+                // simply isn't a biggest one yet, so the slot holds its place
+                // with a dash rather than claiming +0.
                 if let best = gamesNightBest, best > 0 {
-                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
                     scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
+                } else {
+                    scoreCell("—", "BEST CASH", .white.opacity(0.35))
                 }
             }
             .pageGutter()
@@ -4869,52 +4899,219 @@ struct HomeHeadlinesBoard: View {
             HomeSectionRule()
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { i, s in
-                        Button(action: onOpen) { card(s, lead: i == 0) }
-                            .buttonStyle(.plain)
+                    ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { _, s in
+                        HeadlineFlipCard(story: s, onOpen: onOpen)
                     }
                 }
                 .pageGutter()
                 .snapTargets()
             }
             .snapAligned()
+            // The house helper, not the raw modifier — it degrades quietly on
+            // iOS 16 instead of failing the build (DesignSystem, Jul 22).
+            .unclippedRail()
+        }
+    }
+}
+
+/// THE HEADLINE CARD (founder pick, Aug 5 — mock 14 off the twenty-one round,
+/// with the flip he specified). FRONT: the ticket where colour is the verdict —
+/// the pick, the game, and the money on a flat $100. No stamp, no label, no
+/// word for the result: the sign and the colour say it. BACK: what ELSE hit in
+/// that game — the stat lines the recap writer already produces, prices carried
+/// only where they're real — against what happened.
+///
+/// The bullets lane is the whole data story here: gameRecap.js asks for
+/// "betting events that hit — the markets that would have cashed", with the
+/// standing rule that a price rides along ONLY when that exact price is in the
+/// evidence. So a prop Gary never took shows its stat line without a price
+/// rather than an invented one.
+struct HeadlineFlipCard: View {
+    let story: HomeMarqueeHero.Story
+    let onOpen: () -> Void
+    @State private var flipped = false
+
+    private static let W: CGFloat = 296
+    private static let H: CGFloat = 184
+
+    private var resultColor: Color {
+        story.verdict == "PUSH" ? GaryColors.gold : (story.cashed ? GaryColors.win : GaryColors.loss)
+    }
+
+    var body: some View {
+        ZStack {
+            front.opacity(flipped ? 0 : 1)
+            back
+                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                .opacity(flipped ? 1 : 0)
+        }
+        .frame(width: Self.W, height: Self.H)
+        .garyPanel(radius: 14)
+        .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Tap turns the card; the long press keeps the old jump to the
+            // Billfold, so the flip never steals the existing gesture.
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { flipped.toggle() }
+        }
+        .onLongPressGesture(minimumDuration: 0.35) { onOpen() }
+        // QA can't tap a sim (GaryTour, iOS 2.18): `flip` turns every headline
+        // card so a screenshot can prove the back renders. DEBUG-only by the
+        // harness's own construction.
+        .onGaryTour { verb, _ in
+            guard verb == "flip" else { return }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { flipped.toggle() }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(flipped ? "Turn back to the ticket" : "Turn for what else hit")
+    }
+
+    // MARK: front — mock 14
+
+    private var front: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(story.receiptPick.isEmpty ? story.league.uppercased() : story.receiptPick)
+                .font(GaryFonts.display(26))
+                .foregroundStyle(GaryColors.cream)
+                .lineLimit(1).minimumScaleFactor(0.62)
+            Text(gameLine)
+                .font(GaryFonts.text(11.5, .semibold))
+                .foregroundStyle(.white.opacity(0.4))
+                .lineLimit(1).minimumScaleFactor(0.75)
+                .padding(.top, 6)
+            Spacer(minLength: 6)
+            Text(moneyText)
+                .font(GaryFonts.display(40))
+                .foregroundStyle(resultColor)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(footMeta)
+                .font(GaryFonts.kicker(9)).tracking(1.7)
+                .foregroundStyle(.white.opacity(0.3))
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.top, 5)
+            if !story.bullets.isEmpty {
+                Text("TAP FOR WHAT ELSE HIT")
+                    .font(GaryFonts.kicker(8.5)).tracking(1.5)
+                    .foregroundStyle(.white.opacity(0.22))
+                    .padding(.top, 9)
+            }
+        }
+        .padding(.horizontal, 15).padding(.vertical, 15)
+        .frame(width: Self.W, height: Self.H, alignment: .topLeading)
+    }
+
+    /// "Angels @ Orioles · 3-1 · −150" — every piece that exists, no blanks.
+    private var gameLine: String {
+        [story.matchup, story.score, story.odds]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    /// The money, or the verdict word when the price wouldn't parse — the card
+    /// never shows a dollar figure it couldn't compute.
+    private var moneyText: String {
+        guard let net = story.netOnFlat else { return story.verdict }
+        if net == 0 { return "$0.00" }
+        let sign = net > 0 ? "+" : "−"
+        return String(format: "%@$%.2f", sign, abs(net))
+    }
+
+    private var footMeta: String {
+        story.netOnFlat == nil ? story.league.uppercased()
+                               : "ON $100 · \(story.league.uppercased())"
+    }
+
+    // MARK: back — what else hit
+
+    private var back: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(story.bullets.isEmpty ? "THE STORY" : "WHAT ELSE HIT IN THIS GAME")
+                .font(GaryFonts.kicker(8.5)).tracking(1.6)
+                .foregroundStyle(GaryColors.gold)
+                .padding(.bottom, 9)
+
+            ForEach(Array(story.bullets.prefix(3).enumerated()), id: \.offset) { i, b in
+                if i > 0 {
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        .padding(.vertical, 5)
+                }
+                bulletLine(b)
+            }
+
+            Spacer(minLength: 8)
+
+            // The HEADLINE, not the recap body (Aug 5): a 2-4 sentence recap
+            // can't fit here without truncating, and "..." is never acceptable
+            // in a cell — the headline is already the story in one line, and
+            // the front carries no prose at all, so this is where it belongs.
+            // Scales before it wraps out; it never truncates.
+            if !story.headline.isEmpty {
+                Text(story.headline)
+                    .font(GaryFonts.text(11, .medium))
+                    .foregroundStyle(.white.opacity(0.66))
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.62)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 8)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(story.matchup.uppercased())
+                    .font(GaryFonts.kicker(8.5)).tracking(1.3)
+                    .foregroundStyle(.white.opacity(0.3))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 6)
+                Text(story.verdict)
+                    .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
+                    .foregroundStyle(resultColor)
+            }
+        }
+        .padding(.horizontal, 15).padding(.vertical, 14)
+        .frame(width: Self.W, height: Self.H, alignment: .topLeading)
+    }
+
+    /// One stat line, no bullet glyph (founder, Aug 5). A trailing parenthetical
+    /// is where the recap writer puts a real price — it takes the gold so the
+    /// payout reads apart from the stat without parsing the sentence.
+    @ViewBuilder private func bulletLine(_ raw: String) -> some View {
+        let parts = Self.splitPrice(raw)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(parts.stat)
+                .font(GaryFonts.text(11.5, .semibold))
+                .foregroundStyle(.white.opacity(0.82))
+                // Scales hard rather than clipping — no ellipsis, ever.
+                .lineLimit(1).minimumScaleFactor(0.5)
+            Spacer(minLength: 4)
+            if let price = parts.price {
+                Text(price)
+                    .font(GaryFonts.mono(10.5, bold: true))
+                    .foregroundStyle(GaryColors.warmGold)
+                    .lineLimit(1)
+            }
         }
     }
 
-    @ViewBuilder private func card(_ s: HomeMarqueeHero.Story, lead: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text(s.league.uppercased())
-                    .font(GaryFonts.mono(10)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.62))
-                Spacer(minLength: 8)
-            }
-            Text(s.headline)
-                .font(.system(size: lead ? 16 : 14, weight: lead ? .bold : .semibold))
-                .foregroundStyle(.white.opacity(0.95))
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 2)
-            // Related info sits together (founder, Jul 12): the pick and the
-            // verdict that judged it, one line.
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if !s.receiptPick.isEmpty {
-                    Text(s.receiptPick)
-                        .font(.system(size: 13.5, weight: .bold).monospacedDigit())
-                        .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                }
-                Spacer(minLength: 8)
-                Text(s.verdict)
-                    .font(.system(size: 13.5, weight: .bold).monospacedDigit()).tracking(0.8)
-                    .foregroundStyle(s.cashed ? GaryColors.win : s.verdict == "PUSH" ? GaryColors.gold : GaryColors.loss)
-            }
+    /// "Pete Alonso 2 RBI (+110 TB lost)" → stat + "+110 TB lost". Only splits
+    /// on a trailing parenthetical that actually contains a price; anything
+    /// else stays part of the stat line untouched.
+    static func splitPrice(_ raw: String) -> (stat: String, price: String?) {
+        guard raw.hasSuffix(")"), let open = raw.lastIndex(of: "(") else { return (raw, nil) }
+        let inner = String(raw[raw.index(after: open)..<raw.index(before: raw.endIndex)])
+        guard inner.range(of: #"[-+−]\d{2,}"#, options: .regularExpression) != nil else {
+            return (raw, nil)
         }
-        .padding(13)
-        .frame(width: lead ? 292 : 248, height: 132, alignment: .topLeading)
-        .garyPanel(radius: 12)
-        .contentShape(Rectangle())
+        let stat = raw[raw.startIndex..<open].trimmingCharacters(in: .whitespaces)
+        // A price that DIDN'T cash has no business in gold under a header that
+        // says "what else hit" — the recap writer sometimes annotates Gary's
+        // own losing prop there ("Pete Alonso 2 RBI (+110 TB lost)"). The stat
+        // is true and stays; the misleading payout comes off.
+        if inner.range(of: #"\b(lost|loses|losing|missed|miss|no cash)\b"#,
+                       options: [.regularExpression, .caseInsensitive]) != nil {
+            return (stat, nil)
+        }
+        return (stat, inner)
     }
 }
 
@@ -5327,6 +5524,22 @@ struct HomeMarqueeHero: View {
         /// The night's stat lines, real prop prices attached (game_recaps
         /// bullets). Rendered mono under the recap.
         var bullets: [String] = []
+        /// "Angels @ Orioles" — the game, for the card's own line.
+        var matchup: String = ""
+        /// The price Gary took, split off pick_text ("−150").
+        var odds: String = ""
+        /// "3-1" once the game settles; nil until then.
+        var score: String? = nil
+        /// Profit on a flat $100 at `odds` — positive when the ticket cashed,
+        /// −100 when it didn't, 0 on a push. nil when the price won't parse.
+        var netOnFlat: Double? {
+            let raw = odds.replacingOccurrences(of: "−", with: "-")
+                .trimmingCharacters(in: CharacterSet(charactersIn: "+ "))
+            guard let n = Double(raw), n != 0 else { return nil }
+            if verdict == "PUSH" { return 0 }
+            guard cashed else { return -100 }
+            return n > 0 ? n : 10000 / abs(n)
+        }
     }
     let story: Story
     /// Carousel cards disable the flip (fixed-height pages); tap falls
