@@ -4,6 +4,7 @@
 // Gary is the author of these threads, so the account-level outbound block does not apply (unlike Sub-B outbound).
 // ?dry_run=1 = scan + draft but do not write the queue. Sub-B (outbound List) is deferred until the account is unblocked.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { barePick, isPublishableReply } from "../social-auto-post/barepick.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -49,16 +50,15 @@ function parseJson(t: string): any { try { return JSON.parse(t); } catch (_) {} 
 function clean(s: string): string {
   return String(s ?? "").replace(/\s*[—–]\s*/g, ". ").replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "").replace(/[ \t]{2,}/g, " ").trim();
 }
-// Deterministic voice validator — last line of defense before a draft can be approved.
-function validate(s: string): { ok: boolean; reason: string } {
-  if (!s) return { ok: false, reason: "empty" };
-  if (/https?:\/\/|\bwww\./i.test(s)) return { ok: false, reason: "contains link" };
-  if (/#\w/.test(s)) return { ok: false, reason: "contains hashtag" };
-  if (/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u.test(s)) return { ok: false, reason: "contains emoji" };
-  if (/[—–]/.test(s)) return { ok: false, reason: "contains dash" };
-  if (/\b(tail me|who'?s riding|lock it in|free money|link in bio|download)\b/i.test(s)) return { ok: false, reason: "salesy/capper phrase" };
-  if (/\bI (put|bet|wagered|dropped)\b.*\b(unit|units|\$|grand|on (this|it))\b/i.test(s)) return { ok: false, reason: "false cash-wager claim" };
-  if (s.length > 270) return { ok: false, reason: "too long" };
+// Deterministic validator — last line of defense before a draft can be approved.
+// Aug 5 2026: this used to police PROSE (no links, no hashtags, no capper phrases, under 270 chars), because
+// the model wrote the reply. It no longer does. A valid draft is now exactly one thing: the bare pick derived
+// from the post being replied to. Anything else — a sentence, a link, a different pick, an empty string — is
+// refused. Checking equality against barePick(pick_text) means no future edit to this file can reintroduce a
+// generated sentence without the validator rejecting it.
+function validate(draft: string, pickText: string): { ok: boolean; reason: string } {
+  if (!draft) return { ok: false, reason: "no bare pick available for this post" };
+  if (!isPublishableReply(draft, [pickText])) return { ok: false, reason: "not exactly the bare pick for this post" };
   return { ok: true, reason: "ok" };
 }
 
@@ -110,18 +110,26 @@ Deno.serve(async (req: Request) => {
       }
       if (!pickText) { out.push({ id: t.id, status: "skipped", reason: "not a reply to a known Gary post" }); continue; }
 
-      // Gate + draft in one call.
+      // GATE ONLY — the model decides WHETHER to reply, never WHAT to say (founder, Aug 5 2026):
+      //   "I can't trust A.I. to say any sentences or such without sounding cringe and totally like A.I.
+      //    ... I'm okay if the replies are just like 'Yankees ML' — aka just the pick, no odds, just the pick."
+      // The prose-writing half of this prompt is deleted. A reply is now barePick(pick_text): the pick Gary
+      // already made, with the price stripped. Deciding whether a mention deserves an answer is a classifier
+      // and stays; composing the answer is not, and is gone. This function was dormant (empty queue,
+      // auto_mode off) but it was a loaded gun — flipping auto_mode on would have queued generated sentences.
       const postDesc = /^DAILY RECAP|^PERSONALITY|^REPLY /.test(pickText) ? "one of Gary's posts (a recap or character post, not a single pick)" : `Gary's pick: ${pickText}`;
-      const prompt = `Someone replied to ${postDesc}. They said: "${t.text}".\n\nFirst decide if Gary should reply back. SKIP (reply_worthy=false) if their reply is hostile, abusive, trolling, spam, a tout pitching their own picks/service, off-topic, or just an emoji or one empty word. Only reply to genuine takes, questions, agreement, or good-faith disagreement.\nIf reply_worthy, write Gary's reply-back: 1 to 2 sentences, under 200 characters, first person, casual, in voice. Engage what they actually said. Hold your reasoning or concede gracefully if they have a real point. At most ONE concrete stat or reason.\nDo NOT invent specifics you were not given (odds, where a line was set, stats, sources). You only know the pick text above and what they said. If you lack the exact number they are disputing, concede their point or keep it general. Never fabricate a justification.\nHARD RULES: no emojis, no em or en dashes, no hashtags, no links or URLs, no "download"/"in the app"/"link in bio", no corny capper lines ("tail me", "who's riding", "lock it in"), no inflated adjectives, and NEVER claim a personal cash wager. Return ONLY JSON: {"reply_worthy": true|false, "reason": "...", "reply": "..."}.`;
+      const prompt = `Someone replied to ${postDesc}. They said: "${t.text}".\n\nDecide ONLY whether Gary should reply back. You are not writing anything.\nSKIP (reply_worthy=false) if their reply is hostile, abusive, trolling, spam, a tout pitching their own picks/service, off-topic, or just an emoji or one empty word. Only reply to genuine takes, questions, agreement, or good-faith disagreement.\nReturn ONLY JSON: {"reply_worthy": true|false, "reason": "..."}.`;
       let gate: any;
-      try { gate = parseJson(await callLLM(SCAN_VOICE, prompt)); } catch (e) { out.push({ id: t.id, status: "error", reason: "draft failed: " + String(e).slice(0, 80) }); continue; }
+      try { gate = parseJson(await callLLM(SCAN_VOICE, prompt)); } catch (e) { out.push({ id: t.id, status: "error", reason: "gate failed: " + String(e).slice(0, 80) }); continue; }
 
       if (!gate.reply_worthy) { out.push({ id: t.id, status: "skipped", reason: gate.reason || "gated", their_text: t.text });
         if (!dryRun) await sb.from("reply_queue").insert({ sub_engine: "A", target_tweet_id: t.id, target_author: users[t.author_id] ?? null, target_text: t.text, conversation_id: convId, pick_text: pickText, draft: null, validator_ok: false, gate_reason: gate.reason || "gated", status: "skipped" });
         continue;
       }
-      const draft = clean(gate.reply);
-      const v = validate(draft);
+      // A recap/character post has no single pick behind it, so there is no bare pick to answer with. Skip
+      // rather than reach for something to say — that reaching is exactly what the rule removes.
+      const draft = /^DAILY RECAP|^PERSONALITY|^REPLY /.test(pickText) ? "" : barePick(pickText);
+      const v = validate(draft, pickText);
       const row = { sub_engine: "A", target_tweet_id: t.id, target_author: users[t.author_id] ?? null, target_text: t.text, conversation_id: convId, pick_text: pickText, draft, validator_ok: v.ok, gate_reason: v.ok ? null : v.reason, status: v.ok ? "pending" : "skipped" };
       if (!dryRun) await sb.from("reply_queue").insert(row);
       out.push({ id: t.id, author: users[t.author_id], their_text: t.text, pick: pickText, draft, valid: v.ok, status: row.status });
