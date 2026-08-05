@@ -28,6 +28,32 @@ import { formatSampleSuffix } from './statRouterCommon.js';
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 
+// CURRENT-ROSTER TRUTH (founder GO, Aug 5 2026): BDL season stats accumulate
+// for the club a man pitched FOR — so deadline-departed arms kept rendering as
+// tonight's high-leverage pen (Aug 4: Zeferjahn and Yates listed for the
+// Angels after both were dealt). Fold-join every pen name against the club's
+// current MLB Stats API roster; a missing man keeps his innings (real season
+// context) and gains the only fact that matters tonight. A failed roster
+// fetch tags nothing — never assert absence from missing data.
+const rosterFoldCache = new Map();
+async function currentRosterFolds(teamName) {
+  if (!rosterFoldCache.has(teamName)) {
+    rosterFoldCache.set(teamName, (async () => {
+      try {
+        const { findMlbTeam, getTeamRoster } = await import('../../../mlbStatsApiService.js');
+        const t = await findMlbTeam(teamName);
+        if (!t?.id) return null;
+        const roster = await getTeamRoster(t.id);
+        const folds = new Set((roster || []).map(r => foldName(r.name)).filter(Boolean));
+        return folds.size ? folds : null;
+      } catch { return null; }
+    })());
+  }
+  return rosterFoldCache.get(teamName);
+}
+const goneTag = (rosterFolds, name) =>
+  rosterFolds && !rosterFolds.has(foldName(name)) ? ' — not on current roster' : '';
+
 // ═══════════════════════════════════════════════════════════════════
 // STATIC PARK FACTOR DATA (no API needed)
 // ═══════════════════════════════════════════════════════════════════
@@ -289,10 +315,11 @@ export const mlbFetchers = {
 
         if (relievers.length > 0) {
           usedApi = true;
+          const rosterFolds = await currentRosterFolds(teamName);
           lines.push(`${teamName} Key Relievers:`);
           for (const r of relievers) {
             const name = r.player?.full_name || r.player?.last_name || 'Unknown';
-            lines.push(`  ${name}: ${r.pitching_sv ?? 0} SV, ${r.pitching_hld ?? 0} HLD, ${r.pitching_era?.toFixed(2) ?? '—'} ERA, ${r.pitching_ip?.toFixed(1) ?? '—'} IP`);
+            lines.push(`  ${name}: ${r.pitching_sv ?? 0} SV, ${r.pitching_hld ?? 0} HLD, ${r.pitching_era?.toFixed(2) ?? '—'} ERA, ${r.pitching_ip?.toFixed(1) ?? '—'} IP${goneTag(rosterFolds, name)}`);
           }
         }
 
@@ -2151,6 +2178,7 @@ export const mlbFetchers = {
 
         if (relievers.length > 0) {
           usedBdl = true;
+          const rosterFolds = await currentRosterFolds(teamName);
           for (const r of relievers) {
             const name = r.player?.full_name || r.player?.last_name || 'Unknown';
             const sv = r.pitching_sv ?? 0;
@@ -2160,7 +2188,7 @@ export const mlbFetchers = {
             const k = r.pitching_k ?? '—';
             const whip = r.pitching_whip != null ? r.pitching_whip.toFixed(2) : '—';
             const bb = r.pitching_bb ?? '—';
-            lines.push(`${name}: ${sv} SV, ${hld} HLD, ${era} ERA, ${whip} WHIP, ${k} K, ${bb} BB in ${ip} IP`);
+            lines.push(`${name}: ${sv} SV, ${hld} HLD, ${era} ERA, ${whip} WHIP, ${k} K, ${bb} BB in ${ip} IP${goneTag(rosterFolds, name)}`);
           }
           continue;
         }

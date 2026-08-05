@@ -185,7 +185,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     // STORYLINES (Jul 26 2026, situational layer): the narrative a fan holds —
     // separate from same-day hard news. Facts and reported narratives only.
     openaiWebSearch(
-      `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, post-game comments from managers or players after each team's last game, tonight's scheduled starting pitchers' situations (role changes such as a converted reliever or an opener/bullpen game, innings or pitch limits, rehab returns, rotation shuffles), and trade-deadline rumors involving either team's players as reported. ` +
+      `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, post-game comments from managers or players after each team's last game, tonight's scheduled starting pitchers' situations (role changes such as a converted reliever or an opener/bullpen game, innings or pitch limits, rehab returns, rotation shuffles), and trade-deadline rumors involving either team's players as reported, and how each team's last week has actually gone as reported — the shape of any current streak or skid and what has driven it. ` +
       `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
       { maxTokens: 2200 }
     ).then(r => r?.data || '').catch(() => ''),
@@ -631,58 +631,11 @@ export async function buildMlbScoutReport(game, options = {}) {
     ? smallSampleFlags.join('\n')
     : 'No mid-season team changes or home debuts for tonight\'s starting pitchers.';
 
-  // ═══════════════════════════════════════════════════════════════════
-  // STANDINGS / DIVISION RECORD (BDL GOAT-tier structured data)
-  // ═══════════════════════════════════════════════════════════════════
-  let standingsSection = 'Division standings unavailable.';
-  if (bdlStandings && bdlStandings.length > 0) {
-    // Find which divisions the two teams belong to, show only those
-    const homeLastWord = homeTeam.toLowerCase().split(' ').pop();
-    const awayLastWord = awayTeam.toLowerCase().split(' ').pop();
-    const relevantDivisions = new Set();
-    for (const entry of bdlStandings) {
-      const teamName = (entry.team?.display_name || entry.team?.full_name || '').toLowerCase();
-      const abbr = (entry.team?.abbreviation || '').toLowerCase();
-      if (teamName.includes(homeLastWord) || teamName.includes(awayLastWord) ||
-          abbr === homeLastWord || abbr === awayLastWord) {
-        relevantDivisions.add(entry.division_name || entry.team?.division || 'Division');
-      }
-    }
-    // Group by division — ALL of them (Jul 26 2026, founder: the desk must
-    // carry the current state of the whole league, not just tonight's two
-    // divisions, so stale training-data fame self-corrects against 2026
-    // reality). Tonight's divisions render first.
-    const divisionMap = {};
-    for (const entry of bdlStandings) {
-      const divName = entry.division_name || entry.team?.division || 'Division';
-      if (!divisionMap[divName]) divisionMap[divName] = [];
-      divisionMap[divName].push(entry);
-    }
-    const lines = [];
-    const orderedDivisions = Object.entries(divisionMap).sort(([a], [b]) => {
-      const ra = relevantDivisions.has(a) ? 0 : 1;
-      const rb = relevantDivisions.has(b) ? 0 : 1;
-      return ra - rb || a.localeCompare(b);
-    });
-    for (const [divName, teams] of orderedDivisions) {
-      // Sort by wins descending (or win_percent)
-      teams.sort((a, b) => (b.wins || 0) - (a.wins || 0));
-      const teamLines = teams.map(t => {
-        const w = t.wins || 0;
-        const l = t.losses || 0;
-        const name = t.team?.display_name || t.team?.abbreviation || 'Unknown';
-        const home = t.home || '—';
-        const road = t.road || '—';
-        const l10 = t.last_ten_games || '—';
-        const streak = t.streak || '—';
-        const gb = t.division_games_behind ?? t.games_behind ?? '—';
-        const seed = t.playoff_seed != null ? ` | Playoff seed: ${t.playoff_seed}` : '';
-        return `  ${name}: ${w}-${l} (Home: ${home} | Away: ${road} | L10: ${l10} | Streak: ${streak} | GB: ${gb}${seed})`;
-      }).join('\n');
-      if (teamLines) lines.push(`${divName}\n${teamLines}`);
-    }
-    if (lines.length > 0) standingsSection = lines.join('\n\n');
-  }
+  // (DIVISION STANDINGS section REMOVED — founder, Aug 5 2026: "do we need
+  // league standings at all? doesn't seem relevant to picking each game
+  // night by night." THE STAKES lines + the tape's season-record row are
+  // the surviving standings surface; the bdlStandings fetch stays for them
+  // and the schedule lookahead.)
 
   // ═══════════════════════════════════════════════════════════════════
   // L1-L4: INDIVIDUAL GAME RECAPS (what actually happened — narrative box scores)
@@ -703,14 +656,79 @@ export async function buildMlbScoutReport(game, options = {}) {
       return { headline: rec.headline || '', body: clean.slice(0, 4000) };
     }, 7 * 24 * 60).catch(() => null);
   };
-  const lastFinal = (games) => {
-    const arr = (games || []).filter(g => g?.gamePk || g?.id);
-    return arr.length ? arr[arr.length - 1] : null;
+  // THE WEEK AS WRITTEN (founder GO, Aug 5 2026): the last THREE finals per
+  // team — most recent story in full, the two before as ledes — plus any
+  // earlier games of the current head-to-head series. A five-game skid stops
+  // being five bare "L"s: the arc arrives in writer prose. A game the two
+  // teams shared prints once, labeled "These two".
+  const sentenceTrim = (body, cap) => {
+    const str = String(body || '');
+    if (str.length <= cap) return str;
+    const cut = str.slice(0, cap);
+    const end = cut.lastIndexOf('. ');
+    return end > cap * 0.5 ? cut.slice(0, end + 1) : cut;
   };
-  const [homeWire, awayWire] = await Promise.all([
-    (async () => { const g = lastFinal(homeRecentGames); return g ? await fetchGameStory(g.gamePk ?? g.id) : null; })(),
-    (async () => { const g = lastFinal(awayRecentGames); return g ? await fetchGameStory(g.gamePk ?? g.id) : null; })(),
-  ]);
+  const wireGamesFor = (games, oppNick) => {
+    const finals = (games || []).filter(g => g?.gamePk);
+    const picked = new Map();
+    for (const g of finals.slice(-3)) picked.set(g.gamePk, g);
+    // Trailing consecutive finals vs tonight's opponent = this series so far.
+    const oppWord = (oppNick || '').toLowerCase().split(' ').pop();
+    for (let i = finals.length - 1; i >= 0; i--) {
+      const g = finals[i];
+      const names = [g.teams?.home?.team?.name, g.teams?.away?.team?.name].map(n => (n || '').toLowerCase());
+      if (!names.some(n => n.endsWith(oppWord))) break;
+      picked.set(g.gamePk, g);
+    }
+    return [...picked.values()].sort((a, b) => new Date(a.gameDate || a.officialDate || 0) - new Date(b.gameDate || b.officialDate || 0));
+  };
+  const wireLabel = (g, teamNick) => {
+    const word = (teamNick || '').toLowerCase().split(' ').pop();
+    const homeSide = (g.teams?.home?.team?.name || '').toLowerCase().endsWith(word);
+    const us = homeSide ? g.teams?.home : g.teams?.away;
+    const them = homeSide ? g.teams?.away : g.teams?.home;
+    const date = String(g.officialDate || g.gameDate || '').slice(0, 10);
+    const wl = us?.score != null && them?.score != null ? ` (${us.score > them.score ? 'W' : 'L'} ${us.score}-${them.score})` : '';
+    return `${teamNick}, ${date} ${homeSide ? 'vs' : '@'} ${them?.team?.name || '?'}${wl}`;
+  };
+  const homeWireGames = wireGamesFor(homeRecentGames, awayTeam);
+  const awayWireGames = wireGamesFor(awayRecentGames, homeTeam);
+  const wireStoryByPk = new Map();
+  await Promise.all([...new Set([...homeWireGames, ...awayWireGames].map(g => g.gamePk))]
+    .map(async (pk) => { const st = await fetchGameStory(pk); if (st) wireStoryByPk.set(pk, st); }));
+  const wireSection = (() => {
+    const inHome = (pk) => homeWireGames.some(g => g.gamePk === pk);
+    const inAway = (pk) => awayWireGames.some(g => g.gamePk === pk);
+    const union = [...new Map([...homeWireGames, ...awayWireGames].map(g => [g.gamePk, g])).values()]
+      .sort((a, b) => new Date(a.gameDate || a.officialDate || 0) - new Date(b.gameDate || b.officialDate || 0));
+    const lastPkOf = (arr) => (arr.length ? arr[arr.length - 1].gamePk : null);
+    const fullPks = new Set([lastPkOf(homeWireGames), lastPkOf(awayWireGames)].filter(Boolean));
+    const entries = [];
+    for (const g of union) {
+      const story = wireStoryByPk.get(g.gamePk);
+      if (!story) continue;
+      const label = inHome(g.gamePk) && inAway(g.gamePk)
+        ? `These two, ${String(g.officialDate || g.gameDate || '').slice(0, 10)}`
+        : wireLabel(g, inHome(g.gamePk) ? homeTeam : awayTeam);
+      const body = sentenceTrim(story.body, fullPks.has(g.gamePk) ? 2000 : 650);
+      entries.push(`${label} — ${story.headline}\n${body}`);
+    }
+    if (entries.length) return entries.join('\n\n');
+    // Fallback: our own recap rows, Gary-sentences stripped (pre-Aug 5 behavior).
+    const cleanBody = (row) => String(row.recap || '')
+      .split(/(?<=[.!?])\s+/)
+      .filter(sent => sent && !/gary/i.test(sent))
+      .slice(0, 3).join(' ');
+    const findRow = (nick) => {
+      const lw = nick.toLowerCase().split(' ').pop();
+      return (lastGameRecaps || []).find(r => (r.matchup || '').toLowerCase().includes(lw)) || null;
+    };
+    const h = findRow(homeTeam);
+    const a = findRow(awayTeam);
+    if (h && a && h === a) return `These two, last night — ${h.headline || ''}\n  ${cleanBody(h)}`;
+    const line = (nick, row) => (row ? `${nick} — ${row.headline || ''}\n  ${cleanBody(row)}` : null);
+    return [line(homeTeam, h), line(awayTeam, a)].filter(Boolean).join('\n') || 'No game stories available.';
+  })();
 
   // THE TAPE prefetch: scoring flows for the recent games shown below —
   // one cached single-game fetch each (curated scoring_summary field).
@@ -1651,8 +1669,6 @@ ${lineupRecentBattingSection}
 ═══ BETTING CONTEXT ═══
 ${oddsSection}
 
-═══ DIVISION STANDINGS (BDL) ═══
-${standingsSection}
 
 ═══ TEAM SEASON STATS (BDL) ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
@@ -1679,33 +1695,8 @@ ${recentResults}
 Last game (inning detail):
 ${lastGameSection}
 
-═══ LAST GAME, THE STORY (official game stories) ═══
-${(() => {
-  // Primary: the official MLB.com story per team's last game (THE WIRE).
-  // Same-game dedupe when the teams just played each other. Fallback: our
-  // own recap rows, Gary-sentences stripped.
-  const wires = [];
-  if (homeWire && awayWire && homeWire.headline === awayWire.headline) {
-    wires.push(`These two, last game — ${homeWire.headline}\n${homeWire.body}`);
-  } else {
-    if (homeWire) wires.push(`${homeTeam}, last game — ${homeWire.headline}\n${homeWire.body}`);
-    if (awayWire) wires.push(`${awayTeam}, last game — ${awayWire.headline}\n${awayWire.body}`);
-  }
-  if (wires.length) return wires.join('\n\n');
-  const cleanBody = (row) => String(row.recap || '')
-    .split(/(?<=[.!?])\s+/)
-    .filter(sent => sent && !/gary/i.test(sent))
-    .slice(0, 3).join(' ');
-  const findRow = (nick) => {
-    const lw = nick.toLowerCase().split(' ').pop();
-    return (lastGameRecaps || []).find(r => (r.matchup || '').toLowerCase().includes(lw)) || null;
-  };
-  const h = findRow(homeTeam);
-  const a = findRow(awayTeam);
-  if (h && a && h === a) return `These two, last night — ${h.headline || ''}\n  ${cleanBody(h)}`;
-  const line = (nick, row) => row ? `${nick} — ${row.headline || ''}\n  ${cleanBody(row)}` : null;
-  return [line(homeTeam, h), line(awayTeam, a)].filter(Boolean).join('\n') || 'No game stories available.';
-})()}
+═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══
+${wireSection}
 
 ═══ SITUATIONAL RECORDS ═══
 ${situationalSection || 'Insufficient season data.'}
