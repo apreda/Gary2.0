@@ -2477,6 +2477,17 @@ struct HomeView: View {
         }
     }
 
+    /// "2026-08-04" → "AUG 4". Parsed off the ISO date, never a locale format,
+    /// so the kicker reads the same on every device.
+    private static func shortSlateDay(_ iso: String?) -> String {
+        let parts = (iso ?? "").split(separator: "-")
+        guard parts.count == 3, let m = Int(parts[1]), let d = Int(parts[2]), m >= 1, m <= 12
+        else { return "" }
+        let months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+        return "\(months[m - 1]) \(d)"
+    }
+
     private var headlineStories: [HomeMarqueeHero.Story] {
         // Paint last session's cards instantly on cold open.
         if nightRecaps.isEmpty, let cached = cachedHeadlines { return cached }
@@ -2504,7 +2515,8 @@ struct HomeView: View {
                 matchup: mu,
                 odds: split.1,
                 // The recap row carries no score; the board's own results do.
-                score: scoreByMatchup[mu.lowercased()])
+                score: scoreByMatchup[mu.lowercased()],
+                date: Self.shortSlateDay(r.game_date))
         }
     }
 
@@ -4932,7 +4944,7 @@ struct HeadlineFlipCard: View {
     @State private var flipped = false
 
     private static let W: CGFloat = 296
-    private static let H: CGFloat = 150
+    private static let H: CGFloat = 138
 
     private var resultColor: Color {
         story.verdict == "PUSH" ? GaryColors.gold : (story.cashed ? GaryColors.win : GaryColors.loss)
@@ -4970,45 +4982,92 @@ struct HeadlineFlipCard: View {
     // MARK: front — mock 14
 
     private var front: some View {
-        // Top-down flow, exactly as the mock draws it — the money sits a fixed
-        // gap under the game line, not pushed to the floor by a spacer.
-        VStack(alignment: .leading, spacing: 0) {
-            Text(story.receiptPick.isEmpty ? story.league.uppercased() : story.receiptPick)
-                .font(GaryFonts.display(26))
-                .foregroundStyle(GaryColors.cream)
-                .lineLimit(1).minimumScaleFactor(0.62)
-            Text(gameLine)
-                .font(GaryFonts.text(11.5, .semibold))
-                .foregroundStyle(.white.opacity(0.4))
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .padding(.top, 6)
-            // The "ON $100 · MLB" line is GONE (founder, Aug 5): with the price
-            // on the line above and a signed dollar figure below it, the stake
-            // is already stated. The turn is a glyph now, not a sentence.
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Text(moneyText)
-                    .font(GaryFonts.display(40))
-                    .foregroundStyle(resultColor)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+        // MOCK 05 — the story on the left, the box docked right. The card stops
+        // being either a table or a story and becomes both, in columns. The
+        // money lives in the box's own spare room under the score (founder,
+        // Aug 5), so the result reads in the same column that produced it.
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text([story.league.uppercased(), story.date]
+                        .filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(GaryFonts.kicker(9)).tracking(1.6)
+                    .foregroundStyle(.white.opacity(0.34))
+                Text(story.headline)
+                    .font(GaryFonts.text(12, .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(4).minimumScaleFactor(0.6)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 7)
                 Spacer(minLength: 6)
-                if !story.bullets.isEmpty {
-                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.26))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(story.receiptPick)
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.1)
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Spacer(minLength: 4)
+                    if !story.bullets.isEmpty {
+                        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.26))
+                    }
                 }
             }
-            .padding(.top, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
+
+            VStack(alignment: .leading, spacing: 0) {
+                if let s = Self.sides(story) {
+                    scoreRow(s.away.name, s.away.runs, winner: s.away.runs > s.home.runs)
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        .padding(.vertical, 4)
+                    scoreRow(s.home.name, s.home.runs, winner: s.home.runs > s.away.runs)
+                }
+                Spacer(minLength: 8)
+                // The money in the box's spare room. No "$100" caption — the
+                // price is on the ticket and the figure is signed.
+                Text(moneyText)
+                    .font(GaryFonts.display(24))
+                    .foregroundStyle(resultColor)
+                    .lineLimit(1).minimumScaleFactor(0.5)
+                Text(story.odds.isEmpty ? story.verdict : story.odds)
+                    .font(GaryFonts.kicker(9)).tracking(1.4)
+                    .foregroundStyle(.white.opacity(0.3))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .padding(.top, 3)
+            }
+            .frame(width: 104, alignment: .leading)
         }
-        .padding(.horizontal, 15).padding(.vertical, 15)
+        .padding(.horizontal, 15).padding(.vertical, 14)
         .frame(width: Self.W, height: Self.H, alignment: .topLeading)
     }
 
-    /// "Angels @ Orioles · 3-1 · −150" — every piece that exists, no blanks.
-    private var gameLine: String {
-        [story.matchup, story.score, story.odds]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+    /// One box row: club left, runs right, the winner in gold.
+    @ViewBuilder private func scoreRow(_ name: String, _ runs: Int, winner: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(name)
+                .font(GaryFonts.text(11.5, winner ? .bold : .semibold))
+                .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.55))
+                .lineLimit(1).minimumScaleFactor(0.55)
+            Spacer(minLength: 4)
+            Text("\(runs)")
+                .font(GaryFonts.mono(15, bold: true))
+                .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.62))
+        }
+    }
+
+    /// "Angels @ Orioles" + "1-3" → the two box rows. nil when either half is
+    /// missing, and the column simply doesn't draw — never a half-built box.
+    static func sides(_ s: HomeMarqueeHero.Story)
+        -> (away: (name: String, runs: Int), home: (name: String, runs: Int))? {
+        let clubs = s.matchup.components(separatedBy: " @ ")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard clubs.count == 2, !clubs[0].isEmpty, !clubs[1].isEmpty else { return nil }
+        let runs = (s.score ?? "").components(separatedBy: CharacterSet(charactersIn: "-–—"))
+            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        guard runs.count == 2 else { return nil }
+        return (away: (clubs[0], runs[0]), home: (clubs[1], runs[1]))
     }
 
     /// The money, or the verdict word when the price wouldn't parse — the card
@@ -5033,6 +5092,10 @@ struct HeadlineFlipCard: View {
                 .font(GaryFonts.kicker(8.5)).tracking(1.6)
                 .foregroundStyle(GaryColors.gold)
                 .padding(.bottom, 7)
+            // Two or three bullets leave slack on a card sized for the front's
+            // four-line headline; the group sits centred rather than stranded
+            // at the top with a hole under it.
+            Spacer(minLength: 0)
 
             ForEach(Array(story.bullets.prefix(3).enumerated()), id: \.offset) { i, b in
                 if i > 0 {
@@ -5042,33 +5105,10 @@ struct HeadlineFlipCard: View {
                 bulletLine(b)
             }
 
-            Spacer(minLength: 6)
-
-            // The HEADLINE, not the recap body (Aug 5): a 2-4 sentence recap
-            // can't fit here without truncating, and "..." is never acceptable
-            // in a cell — the headline is already the story in one line, and
-            // the front carries no prose at all, so this is where it belongs.
-            // Scales before it wraps out; it never truncates.
-            if !story.headline.isEmpty {
-                Text(story.headline)
-                    .font(GaryFonts.text(10.5, .medium))
-                    .foregroundStyle(.white.opacity(0.66))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.55)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 6)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(story.matchup.uppercased())
-                    .font(GaryFonts.kicker(8.5)).tracking(1.3)
-                    .foregroundStyle(.white.opacity(0.3))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 6)
-                Text(story.verdict)
-                    .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4)
-                    .foregroundStyle(resultColor)
-            }
+            Spacer(minLength: 0)
+            // Bullets ONLY (founder, Aug 5). The headline moved to the front's
+            // left column and the verdict rides the money there, so repeating
+            // either here would just be the same card twice.
         }
         .padding(.horizontal, 15).padding(.vertical, 12)
         .frame(width: Self.W, height: Self.H, alignment: .topLeading)
@@ -5530,8 +5570,10 @@ struct HomeMarqueeHero: View {
         var matchup: String = ""
         /// The price Gary took, split off pick_text ("−150").
         var odds: String = ""
-        /// "3-1" once the game settles; nil until then.
+        /// "3-1" once the game settles; nil until then. Away runs first.
         var score: String? = nil
+        /// "AUG 4" — the slate day, for the card's kicker.
+        var date: String = ""
         /// Profit on a flat $100 at `odds` — positive when the ticket cashed,
         /// −100 when it didn't, 0 on a push. nil when the price won't parse.
         var netOnFlat: Double? {
