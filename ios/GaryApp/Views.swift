@@ -4974,6 +4974,10 @@ struct HeadlineFlipCard: View {
             guard verb == "flip" else { return }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { flipped.toggle() }
         }
+        // A card always opens on the ticket. Home re-pulls recaps on every
+        // foreground, and a card left turned over would otherwise come back
+        // showing its back for a story the reader hasn't seen the front of.
+        .onChange(of: story.headline) { _ in flipped = false }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(flipped ? "Turn back to the ticket" : "Turn for what else hit")
@@ -6517,147 +6521,6 @@ func winnersTeamAbbr(_ team: String?) -> String {
     return String(last.prefix(3)).uppercased()
 }
 
-/// THE DAY CARD — the Winners page's identity object (Aug 3 2026): the day's
-/// card as ONE artifact that lives through the day. Morning: the manifest +
-/// a live countdown to the first seal. Evening: the slot strip fills as
-/// positions post and go live. Browsed days: the graded record. The slot
-/// strip stays wordless — color is the slot's voice, state is a glyph.
-struct WinnersDayCard: View {
-    enum SlotState { case sealed, posted, live }
-    enum Phase {
-        case coming(firstSeal: Date?)
-        case rolling(liveCount: Int)
-        case graded(w: Int, l: Int, p: Int, net: Int?)   // net = $ at $100/pick
-    }
-    let weekday: String            // "Monday"
-    let dateLabel: String          // "Monday, August 3"
-    let phase: Phase
-    var slots: [(slot: WinnersSlot, state: SlotState)] = []
-    var manifest: String? = nil    // "8 games tonight · seals ~90 min before each first pitch"
-    var sealTimeline: String? = nil // "PHI 5:10 · NYY 5:35 · …"
-
-    private var isComing: Bool { if case .coming = phase { return true }; return false }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("The \(weekday) Card")
-                    .font(GaryFonts.display(28))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 8)
-                phaseBadge
-            }
-            .padding(.horizontal, 14).padding(.top, 12)
-
-            Text(subLine)
-                .font(GaryFonts.text(12, .semibold))
-                .foregroundStyle(GaryColors.sectionSub)
-                .padding(.horizontal, 14).padding(.top, 2)
-
-            if !slots.isEmpty {
-                HStack(spacing: 14) {
-                    ForEach(Array(slots.enumerated()), id: \.offset) { _, s in
-                        VStack(spacing: 5) {
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(darkSurfaceTone(s.slot).opacity(s.state == .sealed ? 0.4 : 0.95))
-                                .frame(width: 4, height: 24)
-                            slotGlyph(s.state)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
-                .pageGutter().padding(.top, 12)
-            }
-
-            if let sealTimeline, isComing {
-                Rectangle().fill(GaryColors.gold.opacity(0.18)).frame(height: 1)
-                    .padding(.horizontal, 14).padding(.top, 12)
-                Text(sealTimeline)
-                    .font(GaryFonts.mono(10))
-                    .foregroundStyle(GaryColors.meta)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14).padding(.top, 10)
-            }
-        }
-        .padding(.bottom, 13)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(hex: "#100F0D"))
-                .overlay(isComing ? AnyView(SealSheen().clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))) : AnyView(EmptyView()))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(GaryColors.gold.opacity(0.5), lineWidth: 1))
-        )
-        .pageGutter()
-    }
-
-    private var subLine: String {
-        if let manifest { return manifest }
-        switch phase {
-        case .graded: return dateLabel
-        default: return dateLabel
-        }
-    }
-
-    /// Slot tones were tuned for the GOLD bar — the anchor's ink tone is
-    /// invisible on this dark card (founder's screenshot, Aug 3: slot 1
-    /// looked missing). Dark-surface remap; the other three carry fine.
-    private func darkSurfaceTone(_ slot: WinnersSlot) -> Color {
-        slot == .anchor ? GaryColors.gold : slot.tone
-    }
-
-    @ViewBuilder private func slotGlyph(_ s: SlotState) -> some View {
-        switch s {
-        case .sealed:
-            Image(systemName: "lock.fill")
-                .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.3))
-        case .posted:
-            Circle().fill(GaryColors.gold).frame(width: 5, height: 5)
-        case .live:
-            Circle().fill(GaryColors.win).frame(width: 5, height: 5)
-        }
-    }
-
-    @ViewBuilder private var phaseBadge: some View {
-        switch phase {
-        case .coming(let firstSeal):
-            if let firstSeal {
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    let left = firstSeal.timeIntervalSince(ctx.date)
-                    Text(left > 0 ? "SEALS IN \(Self.hms(left))" : "SEALING NOW")
-                        .font(GaryFonts.accent(11)).tracking(0.6)
-                        .foregroundStyle(GaryColors.gold)
-                }
-            } else {
-                Text("COMING")
-                    .font(GaryFonts.accent(11)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(0.85))
-            }
-        case .rolling(let liveCount):
-            Text(liveCount > 0 ? "LIVE · \(liveCount) ON THE BOARD" : "SEALED")
-                .font(GaryFonts.accent(11)).tracking(0.6)
-                .foregroundStyle(liveCount > 0 ? GaryColors.win : GaryColors.gold)
-        case .graded(let w, let l, let p, let net):
-            HStack(spacing: 8) {
-                Text("\(w)–\(l)\(p > 0 ? "–\(p)" : "")")
-                    .font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.95))
-                if let net {
-                    Text(net >= 0 ? "+$\(net)" : "−$\(abs(net))")
-                        .font(GaryFonts.mono(13, bold: true))
-                        .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.lostTint)
-                }
-            }
-        }
-    }
-
-    private static func hms(_ t: TimeInterval) -> String {
-        let s = Int(t)
-        return String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
-    }
-}
-
 /// The trust band — Gary's last-10 graded record per league, always on the
 /// board (Aug 3 2026: the core product page sold conviction without ever
 /// showing the record; wins AND losses sell it honestly). Taps to Billfold.
@@ -7080,19 +6943,18 @@ struct PremiumPicksView: View {
     /// sized from today's real slate count so it's never overstating or
     /// understating the day.
     private var comingSoonState: some View {
+        // THE DAY CARD IS GONE (founder, Aug 5) — the manifest, the seal
+        // countdown and the timeline strip all said what the shelves below
+        // already show. The record band still opens the page honestly, and
+        // the how-it-works block now sits UNDER the not-ready cards, where
+        // it answers the question those cards raise instead of pre-empting it.
         VStack(spacing: 22) {
-            // The day card leads even before the board posts (Aug 3: the core
-            // product page spent every daytime hour nearly empty) — the
-            // manifest, the live first-seal countdown, and the seal timeline
-            // give the room a pulse all day. The record band sells the
-            // product honestly while the card is still sealed.
-            winnersDayCard
             winnersRecordBand
-            comingSoonIntro
-                .pageGutter()
             ForEach(gameShelves) { shelf in
                 comingSoonShelf(shelf.league)
             }
+            comingSoonIntro
+                .pageGutter()
         }
         .padding(.top, 14)
         .padding(.bottom, 120)
@@ -7252,92 +7114,6 @@ struct PremiumPicksView: View {
         return v > 0 ? v : Int((10000.0 / Double(abs(v))).rounded())
     }
 
-    private var dayCardPhase: WinnersDayCard.Phase {
-        if selectedDate != nil {
-            var w = 0, l = 0, p = 0, net = 0
-            for pick in gameShelves.filter(\.settled).flatMap(\.picks) {
-                switch gamePickResult(pick) {
-                case "won":  w += 1; net += pickPayout100(pick)
-                case "lost": l += 1; net -= 100
-                case "push": p += 1
-                default: break
-                }
-            }
-            return .graded(w: w, l: l, p: p, net: (w + l) > 0 ? net : nil)
-        }
-        let posted = postedTodayPicks
-        if posted.isEmpty { return .coming(firstSeal: firstSealDate) }
-        let liveCount = posted.filter {
-            LiveScoreCache.shared.status(forMatchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")")?.isLive == true
-        }.count
-        return .rolling(liveCount: liveCount)
-    }
-
-    /// First seal = earliest slate game still without a posted pick, minus 90m.
-    private var firstSealDate: Date? {
-        let postedMatchups = Set(postedTodayPicks.map { "\(gpTeamKey($0.awayTeam))@\(gpTeamKey($0.homeTeam))" })
-        return todaySlateRows
-            .filter { !postedMatchups.contains("\(gpTeamKey($0.away_team))@\(gpTeamKey($0.home_team))") }
-            .compactMap { parseISO8601($0.commence_time ?? "") }
-            .min()?
-            .addingTimeInterval(-5400)
-    }
-
-    /// Wordless slot strip — today only (historical days may predate the slot system).
-    private var dayCardSlots: [(slot: WinnersSlot, state: WinnersDayCard.SlotState)] {
-        guard selectedDate == nil else { return [] }
-        let posted = postedTodayPicks
-        return [WinnersSlot.anchor, .dog, .marquee, .nightcap].map { slot in
-            guard let pick = posted.first(where: { winnersSlotMap[$0.id] == slot }) else {
-                return (slot, .sealed)
-            }
-            let live = LiveScoreCache.shared.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")?.isLive == true
-            return (slot, live ? .live : .posted)
-        }
-    }
-
-    private var dayCardManifest: String? {
-        guard selectedDate == nil, !todaySlateRows.isEmpty else { return nil }
-        let leagues = Set(todaySlateRows.compactMap { $0.league?.uppercased() }).sorted().joined(separator: " + ")
-        return "\(todaySlateRows.count) game\(todaySlateRows.count == 1 ? "" : "s") tonight · \(leagues) · seals ~90 min before each first pitch"
-    }
-
-    private var dayCardTimeline: String? {
-        guard selectedDate == nil, !todaySlateRows.isEmpty else { return nil }
-        let f = DateFormatter()
-        f.dateFormat = "h:mm"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        let entries = todaySlateRows
-            .compactMap { row -> (Date, String)? in
-                guard let d = parseISO8601(row.commence_time ?? "") else { return nil }
-                let seal = d.addingTimeInterval(-5400)
-                return (seal, "\(winnersTeamAbbr(row.home_team)) \(f.string(from: seal))")
-            }
-            .sorted { $0.0 < $1.0 }
-            .map(\.1)
-        return entries.isEmpty ? nil : "SEALS  ·  " + entries.joined(separator: " · ")
-    }
-
-    private var dayCardWeekday: String {
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEEE"
-        if let sel = selectedDate {
-            let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"; inF.timeZone = f.timeZone
-            if let d = inF.date(from: sel) { return f.string(from: d) }
-        }
-        return f.string(from: Date())
-    }
-
-    private var winnersDayCard: some View {
-        WinnersDayCard(weekday: dayCardWeekday,
-                       dateLabel: headerDateLabel,
-                       phase: dayCardPhase,
-                       slots: dayCardSlots,
-                       manifest: dayCardManifest,
-                       sealTimeline: dayCardTimeline)
-    }
-
     private var winnersRecordBand: some View {
         WinnersRecordBand(
             records: canonicalSports.compactMap { lg in
@@ -7352,7 +7128,9 @@ struct PremiumPicksView: View {
         // each rail vertical breathing room, so 22 over-spaced the board.
         VStack(alignment: .leading, spacing: 16) {
             if mode == .games {
-                winnersDayCard
+                // Day card removed here too (founder, Aug 5) — it was the same
+                // component, so leaving it on the posted board would have put it
+                // back on screen the moment the first pick landed.
                 winnersRecordBand
                 // (Tonight's Top Plays carousel removed from Winners per founder.)
                 // Paid boards lead with full cards. Locked boards with content
