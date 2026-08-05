@@ -392,9 +392,16 @@ export async function buildMlbDesk(game, options = {}) {
       : `${shelf}\n\n${matchupLab}`;
   }
 
-  const deskText = `${board}\n\n${stakes}\n\n${yourBook ? `${yourBook}\n\n` : ''}${world}\n\n${shelf}`;
+  // THE BLIND SPLIT (founder GO, Aug 5 2026): the read turn gets the desk with
+  // no prices on it — deskTextBlind. THE LINES arrive only with the ticket ask
+  // (boardText). deskText stays the full surface, board first, for the stored
+  // snapshot: the audit record is everything Gary saw across both turns.
+  const deskTextBlind = `${stakes}\n\n${yourBook ? `${yourBook}\n\n` : ''}${world}\n\n${shelf}`;
+  const deskText = `${board}\n\n${deskTextBlind}`;
   return {
     deskText,
+    deskTextBlind,
+    boardText: board,
     tapeRows: scout.verifiedTaleOfTape?.rows || [],
     verifiedTaleOfTape: scout.verifiedTaleOfTape || null,
     recentScores: scout.recentScores || null,

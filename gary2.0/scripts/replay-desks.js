@@ -17,8 +17,14 @@
 import '../src/loadEnv.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
-import { buildGarySystemPrompt, THE_ASK } from '../src/services/pickdesk/garyBrain.js';
+import { buildGarySystemPrompt } from '../src/services/pickdesk/garyBrain.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../src/services/agentic/orchestrator/sessionManager.js';
+
+// STALE since the blind split (Aug 5 2026): the live contract is three turns
+// (blind read → lines+ticket → card) and THE_ASK no longer exists. A faithful
+// replay must split stored desks at the board section and replay two turns —
+// rebuild this bench before running it again.
+throw new Error('replay-desks predates the blind-split contract (Aug 5 2026) — rebuild before use');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const m = a.match(/^--([^=]+)=(.*)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ''), '1'];

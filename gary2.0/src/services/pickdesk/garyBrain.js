@@ -1,13 +1,16 @@
 /**
- * THE BRAIN — one xhigh session over the complete desk, two turns
+ * THE BRAIN — one xhigh session over the complete desk, three turns
  * (spec docs/superpowers/specs/2026-07-26-mlb-pick-rebuild-design.md;
- * seal-the-pick split: founder GO, Aug 4 2026).
+ * seal-the-pick split: founder GO, Aug 4 2026; blind split: founder GO,
+ * Aug 5 2026).
  *
  * No tools, no passes, no research assistant: the desk is Gary's entire
  * evidence, his full reasoning budget goes to weighing it, and the pick is a
- * pure function of the desk (stored per pick for audits). Turn 1 outputs the
- * ticket only — the pick seals before any card prose exists. Turn 2 writes
- * Gary's Take on the same session with the ticket already committed.
+ * pure function of the desk (stored per pick for audits). Turn 1 reads the
+ * desk with NO LINES on it and seals the winner — the read exists before any
+ * price does. Turn 2 shows THE LINES and outputs the ticket — price thinking
+ * lives only here. Turn 3 writes Gary's Take on the same session with the
+ * ticket already committed.
  *
  * Brain cascade (founder, Jul 29 2026): Sol first; if a brain THROWS —
  * dead balance/429 like the Jul 28 outage, or a provider hard-down — the
@@ -47,17 +50,38 @@ export const buildGarySystemPrompt = (dateLong) => `Today is ${dateLong}. You ar
 
 Your training data is old; the desk is current.`;
 
-// THE SEAL (founder GO, Aug 4 2026): the ticket is decided and output BEFORE
-// any card prose exists. The old contract wrote the card first and the pick
-// arrived as the essay's conclusion — composition pressure sat upstream of
-// the decision. Now turn 1 outputs only the ticket; turn 2 writes the card
-// on the same session with the pick already sealed. Whatever any later turn
-// emits, the stored pick is turn 1's — mechanically.
-export const THE_ASK = `Pick the bet you want to take — a bet is a side and its price.
+// THE BLIND SPLIT (founder GO, Aug 5 2026): the read seals BEFORE the lines
+// exist. Under the priced surface (board-first desk, "a bet is a side and its
+// price" leading the ask), value-hunting was obedience — the same fade ran
+// six Nationals-side tickets in seven days (1-5), and the Aug 3-4 slates went
+// 6-18. Founder: "what we're asking Gary is who he thinks is gonna win the
+// game tonight" — so turn 1 asks exactly that, with THE LINES held off the
+// desk entirely. No margin/scoreline field: the founder rejected asking a
+// model to predict margins outright (same class as the banned predict-the-
+// spread), so the read is the winner and the why. The ticket may still land
+// either side of the lines in turn 2 — nothing locks the jersey; the ledger
+// reads the crossings.
+export const THE_READ_ASK = `Who wins tonight? Your answer seals before you see any lines.
 
-Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
+Injuries: an absence already games old is already in the team's recent results; fresh news — today's scratch — is the exception.
 
-Your ticket seals before any card is written. Output only:
+Output only:
+
+\`\`\`json
+{ "winner": "[Team]", "read": "why — a few sentences" }
+\`\`\``;
+
+// THE SEAL (founder GO, Aug 4 2026), now the second seal of the session: the
+// ticket is decided and output BEFORE any card prose exists. The read is
+// already committed; the lines arrive here and only here, so the price can
+// buy the instrument (ML vs run line, and what it costs) but never author
+// the read. Whatever any later turn emits, the stored pick is this turn's —
+// mechanically.
+export const buildTicketAsk = (winner, boardText) => `Your winner is sealed: ${winner}.
+
+${boardText}
+
+Take your bet. Output only:
 
 \`\`\`json
 { "final_pick": "[Team] [bet] [exact odds]", "confidence_score": 0.XX }
@@ -75,13 +99,14 @@ export const buildCardAsk = (finalPick) => `Your ticket is sealed: ${finalPick}.
 
 Write "Gary's Take" — your published card: three paragraphs, opening with a line or two setting the stage like a broadcast — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
 
-const parseFinalJson = (t) => {
+const parseJsonBlock = (t) => {
   try {
     const m = String(t || '').match(/```json\s*([\s\S]*?)```/i) || String(t || '').match(/(\{[\s\S]*\})/);
-    const o = JSON.parse(m[1]);
-    return o.final_pick ? o : null;
+    return JSON.parse(m[1]);
   } catch { return null; }
 };
+const parseFinalJson = (t) => { const o = parseJsonBlock(t); return o?.final_pick ? o : null; };
+const parseReadJson = (t) => { const o = parseJsonBlock(t); return o?.winner ? o : null; };
 
 /** The card arrives as prose. A rails retry may answer in the old JSON shape
  *  — accept its rationale field; never accept a bare JSON blob as a card.
@@ -148,7 +173,7 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
 // readable when contract wording changes — eras join in SQL, never inferred
 // from timestamps again. Register new eras in the prompt_eras table.
 export const PROMPT_SHA = createHash('sha256')
-  .update(buildGarySystemPrompt('{date}') + THE_ASK + buildCardAsk('{pick}'))
+  .update(buildGarySystemPrompt('{date}') + THE_READ_ASK + buildTicketAsk('{winner}', '{board}') + buildCardAsk('{pick}'))
   .digest('hex')
   .slice(0, 12);
 
@@ -157,13 +182,13 @@ export const PROMPT_SHA = createHash('sha256')
 const topThinkingLevel = (modelName) => (modelName.startsWith('gemini') ? 'high' : 'xhigh');
 
 /**
- * One full brain pass on one model, two turns on one session: desk → ticket
- * (the seal), then card ask → prose, rails on the card with ONE corrective
- * retry. Returns { parsed, usage, warnings } or a contained { error }
- * (parse/rails). Provider/quota failures THROW — the cascade in
- * analyzeGameDesk owns those.
+ * One full brain pass on one model, three turns on one session: blind desk →
+ * read (first seal), lines → ticket (second seal), then card ask → prose,
+ * rails on the card with ONE corrective retry. Returns { parsed, usage,
+ * warnings } or a contained { error } (parse/rails). Provider/quota failures
+ * THROW — the cascade in analyzeGameDesk owns those.
  */
-async function runBrainPass(modelName, systemPrompt, userMessage, auditAll) {
+async function runBrainPass(modelName, systemPrompt, blindMessage, boardText, auditAll) {
   const session = await createGeminiSession({
     modelName,
     systemPrompt,
@@ -179,8 +204,20 @@ async function runBrainPass(modelName, systemPrompt, userMessage, auditAll) {
     console.log(`   [Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)}`);
   };
 
-  // TURN 1 — THE DECISION. The desk in, the ticket out. No prose exists yet.
-  let res = await sendToSessionWithRetry(session, userMessage, {});
+  // TURN 1 — THE READ. The blind desk in (no lines anywhere), the winner out.
+  // No price exists yet, so no price can author this.
+  let res = await sendToSessionWithRetry(session, blindMessage, {});
+  bump(res);
+  let read = parseReadJson(res.content);
+  if (!read) {
+    res = await sendToSessionWithRetry(session, 'Return your read JSON now.', {});
+    bump(res);
+    read = parseReadJson(res.content);
+    if (!read) { logCost(); return { error: 'parse: no read JSON after re-ask' }; }
+  }
+
+  // TURN 2 — THE TICKET. The lines arrive with the read already sealed.
+  res = await sendToSessionWithRetry(session, buildTicketAsk(read.winner, boardText), {});
   bump(res);
   let ticket = parseFinalJson(res.content);
   if (!ticket) {
@@ -190,7 +227,7 @@ async function runBrainPass(modelName, systemPrompt, userMessage, auditAll) {
     if (!ticket) { logCost(); return { error: 'parse: no ticket JSON after re-ask' }; }
   }
 
-  // THE SEAL: from here on, ticket.final_pick is the pick. Turn 2 and any
+  // THE SEAL: from here on, ticket.final_pick is the pick. Turn 3 and any
   // rails retry write prose only — a different final_pick in a later reply
   // is ignored by construction.
   res = await sendToSessionWithRetry(session, buildCardAsk(ticket.final_pick), {});
@@ -216,7 +253,16 @@ async function runBrainPass(modelName, systemPrompt, userMessage, auditAll) {
   }
 
   logCost();
-  return { parsed: { ...ticket, rationale: normalizeCardHead(card, ticket.final_pick) }, usage, warnings };
+  return {
+    parsed: {
+      ...ticket,
+      read_winner: read.winner,
+      game_read: read.read ?? null,
+      rationale: normalizeCardHead(card, ticket.final_pick),
+    },
+    usage,
+    warnings,
+  };
 }
 
 /**
@@ -228,7 +274,9 @@ export async function analyzeGameDesk(game, options = {}) {
   const { homeTeam, awayTeam } = desk.meta;
 
   const systemPrompt = buildGarySystemPrompt(todayLong());
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}\n\n${THE_ASK}`;
+  // The read turn sees the blind desk — THE LINES reach the session only in
+  // turn 2's ticket ask. The stored snapshot (deskText) keeps the full surface.
+  const blindMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${THE_READ_ASK}`;
 
   const corpus = [{ content: desk.deskText }];
   const auditAll = (rationale) => {
@@ -242,7 +290,7 @@ export async function analyzeGameDesk(game, options = {}) {
   for (let i = 0; i < cascade.length; i++) {
     const modelName = cascade[i];
     try {
-      pass = await runBrainPass(modelName, systemPrompt, userMessage, auditAll);
+      pass = await runBrainPass(modelName, systemPrompt, blindMessage, desk.boardText, auditAll);
       if (i > 0) console.warn(`   [Brain] FALLBACK brain produced this pass: ${modelName}`);
       break;
     } catch (err) {
@@ -261,6 +309,11 @@ export async function analyzeGameDesk(game, options = {}) {
   return {
     ...mapFinalPick(parsed, desk.meta),
     confidence: parsed.confidence_score ?? null,
+    // THE BLIND SPLIT: the pre-lines seal — who Gary said wins before any
+    // price existed, and his why. Stored per pick; the ledger reads whether
+    // the ticket crossed the read's side once the lines appeared.
+    read_winner: parsed.read_winner ?? null,
+    game_read: parsed.game_read ?? null,
     rationale: parsed.rationale,
     homeTeam,
     awayTeam,

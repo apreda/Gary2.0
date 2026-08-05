@@ -24,9 +24,13 @@
 import '../src/loadEnv.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
-import { buildGarySystemPrompt, THE_ASK } from '../src/services/pickdesk/garyBrain.js';
-import { morningBoardLine } from '../src/services/pickdesk/mlbDesk.js';
+import { buildGarySystemPrompt } from '../src/services/pickdesk/garyBrain.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../src/services/agentic/orchestrator/sessionManager.js';
+
+// STALE twice over: morningBoardLine was deleted from the desk (Aug 4 2026)
+// and the blind split (Aug 5 2026) replaced THE_ASK with a three-turn
+// contract. Rebuild this bench before running it again.
+throw new Error('replay-desk-lines predates the morning-board removal and the blind-split contract — rebuild before use');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const m = a.match(/^--([^=]+)=(.*)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ''), '1'];

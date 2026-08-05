@@ -1543,6 +1543,11 @@ async function main() {
             // conviction Gary never stated, and the ledger read it as real).
             // The loud warn below is the founder-ordered alert for that case.
             confidence: result.confidence ?? null,
+            // THE BLIND SPLIT (Aug 5): the sealed pre-lines read — the winner
+            // Gary named before any price reached the session, and his why.
+            // Null on non-desk lanes; the ledger reads ticket-vs-read crossings.
+            read_winner: result.read_winner ?? null,
+            game_read: result.game_read ?? null,
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
             // UI display fields
