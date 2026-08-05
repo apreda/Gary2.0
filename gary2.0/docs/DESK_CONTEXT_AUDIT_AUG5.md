@@ -70,22 +70,46 @@ explicitly long-horizon standing (the founder's own example of not-tonight data)
 but it exists by a Jul 26 founder call (league-wide state so stale training-data fame
 self-corrects). Flagged, his to re-decide, not touched.
 
-## Proposed fixes — each needs founder GO, none applied
+## Fix status (founder GO received Aug 5 PM; shipped in commit 9a0e337f)
 
-- **F1 (urgent, small): diacritic-fold every name-match site.** One shared
-  normalize (`NFD` + strip combining marks + existing punctuation strip) used by all
-  three sites. And re-phrase the false negative: "no 2026 starts yet" may only print
-  when the lookup SUCCEEDED with `gs=0`; a failed join must say
-  "season stats unavailable (name mismatch vs source)" — never assert a negative
-  the data didn't establish.
-- **F2: sample-size honesty in the lab.** Every BvP/split/RISP row already has N —
-  add gating: drop or de-emphasize rows under a floor (e.g. BvP under ~10 AB prints
-  under a "small sample" subline or not at all). Data-side presentation, no steering.
-  Founder picks the floor philosophy.
-- **F3: IL-gap line in PITCHER SAMPLE CONTEXT.** From the season game log (already
-  fetched): detect a ≥21-day gap between starts and render
-  "X starts since [date] return; season aggregate includes pre-injury work." Facts
-  only, no trend words — same rules as THE ARC.
-- **F4 (founder decision, not a bug): DIVISION STANDINGS size.** 43 lines of
-  standings vs THE STAKES' 5. Keep (Jul 26 rationale) or trim now that stakes carry
-  the point. No recommendation strong enough to push — flagging the duplication.
+- **F1 SHIPPED: `foldName` on every cross-source player join.** Shared helper
+  (`src/utils/nameUtils.js`): NFD accent fold + punctuation/case strip, both sides
+  of every join. The sweep found **8 sites**, not 3 — seven in `mlbFetchers.js`
+  (probables stats ×2, pitch-types resolve, recent-starts resolve ×2, season
+  summary, BvP `matchesSp`) plus the scout's `findBdlPitcherByName`. Proven against
+  live BDL: accented "Jesús Luzardo" — old normalize MISS, foldName finds
+  23 GS / 3.36 ERA / 136.2 IP. False negatives split: "no starts yet" now prints
+  only on a SUCCESSFUL join with `gs=0`; a failed join renders "season stats
+  unavailable in source."
+- **F2 CLOSED — no change needed.** Verified across stored desks: BvP rows carry AB,
+  L/R splits carry AB, RISP carries AB, closers carry IP, catchers carry counts.
+  N-disclosure is already universal; adding "small sample" tags would be
+  interpretation on top of honest data. (One open verification rode out of this:
+  see the splits-window question below.)
+- **F3 SHIPPED: `midSeasonGapFlag`.** ≥21-day gap between consecutive starts renders
+  as a provenance fact — "58-day gap between starts Apr 17 → Jun 14; 8 starts since
+  Jun 14. Season-long numbers span both sides of the gap." All-Star-break gaps stay
+  silent. Unit-verified both ways.
+- **F4 OPEN (founder decision, not a bug): DIVISION STANDINGS size.** 43 lines vs
+  THE STAKES' 5. Jul 26 rationale (whole-league state corrects stale training-data
+  fame) stands until re-decided.
+
+## Found by the sweep (Aug 5 PM)
+
+- **FIXED — IP-arc label inversion:** "IP by start (oldest→newest)" printed
+  newest-first (a `.reverse()` on rows that were already oldest→newest), so an
+  innings arc read as stretching-out when the pitcher was being managed down, and
+  vice versa. Reverse removed; the sibling "Last N starts" ledger keeps its
+  newest-first display with dates visible.
+- **OPEN — CLOSERS/BULLPEN season lists show departed arms unmarked.** Aug 4 Angels
+  desk listed Zeferjahn (traded), Yates (traded), Bachman (arm fatigue) as tonight's
+  high-leverage arms with season lines. THE STAKES' departures note saved the read
+  that night, but the section itself contradicts the roster. Fix needs the
+  departures feed plumbed into the closer/bullpen fetchers — proposal on request.
+- **OPEN — L/R splits window verification.** Some full-season split rows show
+  16–22 AB for apparent regulars (e.g. Encarnacion-Strand "Away: 22 AB"). Either
+  the player's role explains it or the BDL splits window isn't season-wide — needs
+  verification against a known-volume regular before anything is changed.
+- **Verified clean:** lineup recent batting joins by `playerId` (immune); team-name
+  matching carries no diacritics in MLB; `LINEUP RECENT BATTING`, injuries, and
+  standings are id/team-keyed.
