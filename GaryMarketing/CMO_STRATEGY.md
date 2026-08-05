@@ -79,12 +79,32 @@ and dropped the three that indicate intent. Code now persists all of them; the D
 
 ### Unlock 2 — Distribution (the actual growth lever)
 Zero retweets means the only free out-of-network path is **being present in conversations that already have an
-audience**: timely, genuinely useful replies under big accounts during games, from a real point of view. This is
-Engine 1/3 in the existing plan, currently parked — the mention-reply bot has been off since Jul 7.
+audience**: replies under big accounts during games.
 
-The line between this and spam is quality and restraint: a reply is worth posting only if it says something
-specific and falsifiable about that game. No "great post!", no link drops, no volume targets. Better to send five
-real replies a night than fifty generic ones.
+**REPLY FORMAT — the pick, and nothing else** (founder, Aug 5 2026):
+
+> *"I would want that to only be the pick, because I can't trust A.I. to say any sentences or such without
+> sounding cringe and totally like A.I. ... I'm okay if the replies are just like 'Yankees ML' — aka just the
+> pick, no odds, just the pick."*
+
+Enforced in `barepick.ts`, not left to discipline: **there is no model in the reply path at all.** A reply is a
+deterministic string derived from a pick Gary already made, and `isPublishableReply` rejects anything that is not
+exactly that — no prose, links, hashtags, mentions, emoji or sentence punctuation, and never a pick we did not
+make. A reply that cannot contain a generated sentence cannot contain a cringe one.
+
+Why this is stronger than prose, not weaker: a bare call is a timestamped public receipt. It cannot be accused of
+hype, it cannot be argued with on style, and when the verdict loop later quote-tweets that same pick with the
+result, the record builds inside other people's conversations. It is slow and it compounds.
+
+The rules that keep it from reading as bot spam: low volume, precise placement (only the game actually being
+discussed), and **the same first-pitch deadline as the main timeline** — a bare pick replied after the game
+started is the same retroactive call, in someone else's thread.
+
+**Blocker to verify before this is a plan:** as of Jun 18 the account carried an X-level outbound reply
+restriction (Gary could only reply where he had been mentioned), and `reply_queue` has never held a single row.
+The approval machinery exists and is correct — `reply-engine-scan` drafts to `pending`, `reply-engine-send` posts
+only what a human `approved`, with daily/per-account caps and spacing — but it has never run. Whether the
+restriction has lifted in the seven weeks since is unknown and needs one real test.
 
 ### Unlock 3 — Proof as the primary asset
 The record is the marketing. Priorities: the pinned tape stays current; the morning recap now leads with an
