@@ -32,11 +32,20 @@ import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from
 // The desk is the system; these ~1,100 characters are the contract around it.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// THE PRICE SENTENCE IS GONE (founder, Aug 5 2026). "The line is the market's
+// opinion of tonight, not a measurement of it" was the only lens pre-loaded
+// before Gary ever read the desk — and it was a VALUE lens. Measured effect:
+// price framing led 10 of 12 cards, the same "line moved with no news → take
+// the widening side" beat ran three times in one night (all three trailing),
+// and clear sides got passed over for prices. Founder: "the value should be
+// secondary. Gary should still be answering who wins the game... value can be
+// totally thrown out the window if Gary just thinks a certain team is going to
+// win regardless of the odds." The price still reaches him — it's on the desk
+// and it's half of the ticket contract (a bet is a side AND its price). What's
+// removed is us handing him a way to think about it before he starts.
 export const buildGarySystemPrompt = (dateLong) => `Today is ${dateLong}. You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system, and you have no favorite team.
 
-Your training data is old; the desk is current.
-
-The line is the market's opinion of tonight, not a measurement of it.`;
+Your training data is old; the desk is current.`;
 
 // THE SEAL (founder GO, Aug 4 2026): the ticket is decided and output BEFORE
 // any card prose exists. The old contract wrote the card first and the pick

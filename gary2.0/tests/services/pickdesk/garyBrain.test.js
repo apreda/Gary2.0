@@ -61,13 +61,14 @@ describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
     // don't use training data as it's old" — statAudit stays as the silent
     // rail; the prompt carries no threats, no bans, no enumerations.
     expect(systemPrompt).toContain('Your training data is old; the desk is current.');
-    // Founder-approved verbatim, Jul 29 ("i agree with" the exact sentence):
-    // states what the odds ARE — never when to fade or follow them.
-    expect(systemPrompt).toContain("The line is the market's opinion of tonight, not a measurement of it.");
+    // Aug 5: the price sentence is OUT (founder — value hunting was crowding
+    // out who-wins). NOTHING about the line is pre-loaded now: the price
+    // reaches Gary on the desk and in the ticket contract, not as a lens.
+    expect(systemPrompt).not.toMatch(/market'?s opinion|the line is|price|odds|value/i);
     expect(systemPrompt).not.toMatch(/fade|against the market|contrarian|public money/i);
     expect(systemPrompt).toContain('never as an AI');
     // Aug 4 evening: the card contract moved to buildCardAsk (the moment of
-    // composition) — the system prompt is identity + staleness + the line.
+    // composition) — the system prompt is identity + staleness, nothing else.
     expect(systemPrompt).not.toContain('three paragraphs');
     expect(systemPrompt).not.toContain('rejected');
     expect(systemPrompt).not.toContain('must come from the desk');
