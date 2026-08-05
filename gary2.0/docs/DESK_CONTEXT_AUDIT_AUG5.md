@@ -106,10 +106,10 @@ self-corrects). Flagged, his to re-decide, not touched.
   high-leverage arms with season lines. THE STAKES' departures note saved the read
   that night, but the section itself contradicts the roster. Fix needs the
   departures feed plumbed into the closer/bullpen fetchers — proposal on request.
-- **OPEN — L/R splits window verification.** Some full-season split rows show
-  16–22 AB for apparent regulars (e.g. Encarnacion-Strand "Away: 22 AB"). Either
-  the player's role explains it or the BDL splits window isn't season-wide — needs
-  verification against a known-volume regular before anything is changed.
+- **RESOLVED-BY-REMOVAL — the 16-22 AB "splits" mystery.** Those rows were
+  Away/Day/Home/Night trivia the byBreakdown array carried under the L/R header.
+  The lab diet (d36c6cb9) prints platoon rows only and removed per-hitter venue
+  rows, so the class is gone from the desk.
 - **Verified clean:** lineup recent batting joins by `playerId` (immune); team-name
   matching carries no diacritics in MLB; `LINEUP RECENT BATTING`, injuries, and
   standings are id/team-keyed.
