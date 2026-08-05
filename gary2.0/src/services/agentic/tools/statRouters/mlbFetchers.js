@@ -530,7 +530,12 @@ export const mlbFetchers = {
       const list = (byPlayer.get(bdlId) || []).slice();
       if (list.length === 0) return `${teamName}: ${name} — no pitch-type data yet\n${velocityLine}`;
       list.sort((a, b) => (Number(b.pitch_usage_percent) || 0) - (Number(a.pitch_usage_percent) || 0));
-      const top = list.slice(0, 5).map(r => {
+      // LAB DIET (founder GO, Aug 5 2026): top THREE pitches, not five — the
+      // 10-read bench showed pitch-level precision writing ~70% of the
+      // argument off ~40% of the desk. The arsenal identity survives; the
+      // fourth pitch's xwOBA was surface without evidence. Velocity line
+      // below keeps the full arsenal so speeds are never fabricated.
+      const top = list.slice(0, 3).map(r => {
         const label = r.pitch_name || r.pitch_type || 'Unknown';
         // Show pitch_count so the reader can weight whiff%/xwOBA by sample.
         const n = r.pitch_count != null ? `${r.pitch_count} pitches` : '? pitches';
@@ -610,6 +615,7 @@ export const mlbFetchers = {
     const formatHitter = (h) => {
       const list = (byPlayer.get(h.id) || []).slice();
       if (list.length === 0) return `${h.name}: no pitch-type data yet`;
+      if (list.filter(r => (Number(r.pa_count) || 0) >= 10).length === 0) return `${h.name}: no pitch-type sample of 10+ PA yet`;
       // Sort by SAMPLE SIZE (PA against the pitch type) descending — NOT by
       // xwOBA. Sorting by xwOBA surfaced tiny-sample outliers first (e.g. a
       // 1.2 xwOBA on 6 PA against splitters), which reads as a fake "this guy
@@ -619,7 +625,10 @@ export const mlbFetchers = {
       // can weight it; the Flash prompt instructs that splits under ~30 pitches
       // / ~10 PA are noise, not signal.
       list.sort((a, b) => (Number(b.pa_count) || 0) - (Number(a.pa_count) || 0));
-      const top = list.slice(0, 4).map(r => {
+      // LAB DIET (Aug 5): rows under 10 PA are noise dressed as signal — the
+      // prompt used to caveat them; now they simply don't print. Top 3.
+      const gated = list.filter(r => (Number(r.pa_count) || 0) >= 10);
+      const top = gated.slice(0, 3).map(r => {
         const label = r.pitch_name || r.pitch_type || 'Unknown';
         const pa = r.pa_count != null ? `${r.pa_count} PA` : '? PA';
         return `${label} (${pa}): ${fmtAvg(r.ba)} BA, ${fmtAvg(r.xwoba)} xwOBA, ${fmtAvg(r.slg)} SLG`;
@@ -1962,9 +1971,16 @@ export const mlbFetchers = {
           usedBdl = true;
           lines.push(`--- ${name} ---`);
 
-          // L/R breakdown — BDL splits use flat field names (avg, ops, home_runs, at_bats)
+          // L/R breakdown — BDL splits use flat field names (avg, ops, home_runs, at_bats).
+          // LAB DIET (founder GO, Aug 5 2026): platoon rows ONLY. The full
+          // byBreakdown array carried Away/Day/Home/Night rows under an "L/R
+          // SPLITS" header — tiny-sample venue/time trivia (the CES "Away:
+          // 22 AB" class) that fed the bench's stat-tilt. vs-LHP/vs-RHP is
+          // what the section's name promises; recent form stays below.
           if (splits.byBreakdown && Array.isArray(splits.byBreakdown)) {
-            for (const b of splits.byBreakdown) {
+            const platoon = splits.byBreakdown.filter((b) =>
+              /\b(lhp|rhp|left|right)\b/i.test(String(b.split_name || b.split_abbreviation || '')));
+            for (const b of platoon) {
               const label = b.split_name || b.split_abbreviation || 'Unknown';
               const avg = b.avg != null ? Number(b.avg).toFixed(3) : '—';
               const ops = b.ops != null ? Number(b.ops).toFixed(3) : '—';
@@ -1974,21 +1990,9 @@ export const mlbFetchers = {
             }
           }
 
-          // Home/Away venue splits
-          if (splits.byArena && Array.isArray(splits.byArena)) {
-            const topVenues = splits.byArena.slice(0, 3);
-            for (const v of topVenues) {
-              const venue = v.split_name || v.split_abbreviation || 'Unknown';
-              const avg = v.avg != null ? Number(v.avg).toFixed(3) : '—';
-              const ops = v.ops != null ? Number(v.ops).toFixed(3) : '—';
-              const sample = formatSampleSuffix(v, [
-                { field: 'at_bats', label: 'AB' },
-                { field: 'plate_appearances', label: 'PA' },
-                { field: 'games', label: 'G' },
-              ]);
-              lines.push(`  @ ${venue}: ${avg} AVG, ${ops} OPS${sample}`);
-            }
-          }
+          // (Per-hitter venue rows REMOVED — LAB DIET Aug 5: three ballpark
+          // lines per bat at 10-30 AB each was the exact noise class the
+          // founder called out; the SP venue split elsewhere stays, IP-gated.)
 
           // Recent form (Jul 30, founder: no headline without its context —
           // Gary saw season + L/R while blind to the last two weeks, the
@@ -2109,14 +2113,18 @@ export const mlbFetchers = {
           // Today's opposing starter first — that's the matchup that matters tonight.
           if (opposingSpName) {
             const spRow = matchups.find(matchesSp);
-            if (spRow) {
+            if (spRow && (spRow.at_bats || 0) >= 10) {
               lines.push(`  vs ${opposingSpName} (TODAY'S SP): ${fmtRow(spRow)}`);
+            } else if (spRow) {
+              // LAB DIET (Aug 5): under 10 AB the rate stats mislead (the
+              // Nats-mash-Luzardo-in-6-AB class) — the counts are the fact.
+              lines.push(`  vs ${opposingSpName} (TODAY'S SP): ${spRow.at_bats ?? 0} career AB, ${spRow.hits ?? 0} H`);
             } else {
               lines.push(`  vs ${opposingSpName} (TODAY'S SP): no career history in source`);
             }
           }
           const others = matchups
-            .filter(m => !matchesSp(m))
+            .filter(m => !matchesSp(m) && (m.at_bats || 0) >= 10)
             .sort((a, b) => (b.at_bats || 0) - (a.at_bats || 0))
             .slice(0, 5);
           for (const m of others) {
