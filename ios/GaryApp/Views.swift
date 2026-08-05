@@ -4996,40 +4996,40 @@ struct HeadlineFlipCard: View {
         // Aug 5), so the result reads in the same column that produced it.
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
-                Text([story.league.uppercased(), story.date]
-                        .filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(GaryFonts.kicker(9)).tracking(1.6)
-                    .foregroundStyle(.white.opacity(0.34))
-                Text(story.headline)
-                    // 11.5 with room for five lines, and a scale floor that
-                    // can only shave 10% (founder, Aug 5: a long headline was
-                    // visibly smaller than a short one on the next card). The
-                    // floor still exists because the alternative to scaling is
-                    // an ellipsis, which is never acceptable.
-                    .font(GaryFonts.text(11.5, .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(5).minimumScaleFactor(0.9)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 7)
-                Spacer(minLength: 6)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(story.receiptPick)
-                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.1)
-                        .foregroundStyle(GaryColors.gold)
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                // The turn glyph rides the kicker row, not the pick row: down
+                // there it stole the width "CARDINALS +1.5" needed, and the
+                // pick answered by truncating to "CARDINALS…". An ellipsis is
+                // never acceptable — the glyph moved instead.
+                HStack(spacing: 6) {
+                    Text([story.league.uppercased(), story.date]
+                            .filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(GaryFonts.kicker(9)).tracking(1.6)
+                        .foregroundStyle(.white.opacity(0.34))
                     Spacer(minLength: 4)
                     if !story.bullets.isEmpty {
-                        // A circular arrow reads as REFRESH, not as a card with
-                        // another side (founder, Aug 5). Two opposed arrows say
-                        // "swap to the other face" instead — and it's an iOS 13
-                        // symbol, so it can't come through blank on an older
-                        // deployment target the way the rotate glyph could.
                         Image(systemName: "arrow.left.arrow.right")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white.opacity(0.3))
                     }
                 }
+                Text(story.headline)
+                    // The words are the ONLY thing allowed to give (founder,
+                    // Aug 5). The headline claims every point between the
+                    // kicker and the pick, so the block is identical on every
+                    // card and a long story just uses more of it.
+                    .font(GaryFonts.text(11.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(5).minimumScaleFactor(0.75)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.top, 7)
+                // The pick owns the full column width now, so it reads at one
+                // size card to card. The floor is a last resort for a very
+                // long pick, never the everyday case.
+                Text(story.receiptPick)
+                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.7)
+                    .foregroundStyle(GaryColors.gold)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
