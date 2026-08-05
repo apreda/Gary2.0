@@ -29,7 +29,12 @@ wins and losses.
 
 He doesn't start cold: Gary picked every MLB game all summer, graded in public —
 3,200+ picks on the record, every one still visible in the app.
+
+And you're not just reading: ride or fade any pick with one tap, and the app keeps
+your book — your record against Gary's, settled with the real results.
 ```
+*(Tail/Fade block added Jul 26 — the feature shipped that day; it answers "why download
+instead of reading the picks on X" and is the one launch-story addition since the GTM.)*
 
 **Keywords field (100 chars, no spaces after commas):**
 `nfl,football,picks,predictions,bets,betting,props,spreads,parlay,gambling,handicapper,daily`
@@ -39,6 +44,7 @@ He doesn't start cold: Gary picked every MLB game all summer, graded in public �
 ```
 Football season prep:
 - The NFL board: a pick for every game, every week, from Kickoff (Sep 9)
+- Tail or fade any pick — Your Book tracks your record against Gary's
 - Weekly record tape for the season
 - [real build items]
 Every pick with the reasoning. Every result on the record.
@@ -54,9 +60,10 @@ look. Traffic: ASA NFL campaigns + `/nfl` page + X pin from Sep.
 2. One NFL pick card, reasoning visible. Caption: `The full reasoning, every pick`
 3. The tape / results view with wins AND losses on screen. Caption: `Every result public`
 4. Billfold season ledger. Caption: `The record, never edited`
-5. Live score on a pick card. Caption: `Sweat it live`
-6. Winners board (locked state fine). Caption: `Winners: his conviction board`
-7. Home briefing on an NFL Sunday. Caption: `Sunday, in one scroll`
+5. Tail/Fade on a pick card + Your Book view. Caption: `Ride him or fade him — your book keeps score`
+6. Live score on a pick card. Caption: `Sweat it live`
+7. Winners board (locked state fine). Caption: `Winners: his conviction board`
+8. Home briefing on an NFL Sunday. Caption: `Sunday, in one scroll`
 Captions are covenant lines — same words as the site and the launch thread.
 
 **CPP promo text:** `Football season at Gary: a pick for every NFL game, every week, free in the
