@@ -296,6 +296,22 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
   const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
   const angle = clean(out.angle);
   const edge = clean(out.edge);
+  // BROKEN-TWEET GUARD (Aug 4 2026, founder: "our tweets seem to be broken").
+  // Root cause: Gemini's JSON contract is satisfied (valid JSON, so callLLM/
+  // parseJsonBlock never throw) but occasionally returns {"angle":"","edge":""}
+  // or omits the keys — an empty-but-well-formed response. Nothing downstream
+  // checked for that, so the hook silently built as "\n\nPICK LINE\n\n" and
+  // posted live with no analytical text (confirmed in social_post_log: ~1 in
+  // 5 recent standard posts, e.g. "Minnesota Twins ML -140" on 2026-08-04).
+  // Real angle/edge content is always a full sentence or more; anything this
+  // short is the empty-response failure mode, not a legitimately terse write.
+  // Throwing here (before postTweet) is the fix: it surfaces to the top-level
+  // catch as a clean 500, and — since social_post_log only gets its insert
+  // AFTER a successful postTweet below — the pick stays unposted and the next
+  // hourly cron run retries it instead of a broken tweet going out live.
+  if (angle.length < 15 || edge.length < 15) {
+    throw new Error(`Empty hook content from LLM for "${chosen.pick}" — angle="${angle}" edge="${edge}", refusing to post`);
+  }
   const hook = `${angle}\n\n${pickLine}\n\n${edge}`;
   // Handoff reply on the DAY'S FIRST thread only (Jul 5 2026): a "link in bio" reply on every thread reads
   // generic-capper (the big personality accounts never do it) and /get clicks showed it converts ~0. One
