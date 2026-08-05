@@ -26,6 +26,7 @@ import { formatSampleSuffix } from './statRouterCommon.js';
 // the WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0),
 // then the API chain — never a hardwired paid Gemini call.
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
+import { foldName } from '../../../../utils/nameUtils.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // STATIC PARK FACTOR DATA (no API needed)
@@ -216,9 +217,9 @@ export const mlbFetchers = {
             if (bdlTeamId) {
               try {
                 const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-                const pitcherLower = name.toLowerCase();
+                const pitcherLower = foldName(name);
                 const match = (result.stats || []).find(s => {
-                  const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+                  const n = foldName(s.player?.full_name || s.player?.last_name);
                   return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
                 });
                 if (match) {
@@ -447,9 +448,9 @@ export const mlbFetchers = {
       if (bdlTeamId && name) {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-          const target = name.toLowerCase();
+          const target = foldName(name);
           const match = (result.stats || []).find(s => {
-            const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+            const n = foldName(s.player?.full_name || s.player?.last_name);
             return (n.includes(target) || target.includes(n)) && (s.pitching_ip || 0) > 0;
           });
           bdlId = match?.player?.id || null;
@@ -1169,9 +1170,9 @@ export const mlbFetchers = {
       try {
         // Get season stats
         const seasonResult = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-        const pitcherLower = pitcherName.toLowerCase();
+        const pitcherLower = foldName(pitcherName);
         const match = (seasonResult.stats || []).find(s => {
-          const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+          const n = foldName(s.player?.full_name || s.player?.last_name);
           return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
         });
 
@@ -1375,9 +1376,9 @@ export const mlbFetchers = {
           }
           // Find pitchers (have pitching_era or pitching_ip) and match name
           const pitchers = (result.stats || []).filter(s => s.pitching_era != null || s.pitching_ip > 0);
-          const pitcherLower = pitcherName.toLowerCase();
+          const pitcherLower = foldName(pitcherName);
           const match = pitchers.find(p => {
-            const n = (p.player?.full_name || p.player?.last_name || '').toLowerCase();
+            const n = foldName(p.player?.full_name || p.player?.last_name);
             return n.includes(pitcherLower) || pitcherLower.includes(n);
           });
           if (match) {
@@ -1471,9 +1472,9 @@ export const mlbFetchers = {
       if (bdlTeamId) {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-          const pitcherLower = pitcherName.toLowerCase();
+          const pitcherLower = foldName(pitcherName);
           const match = (result.stats || []).find(s => {
-            const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+            const n = foldName(s.player?.full_name || s.player?.last_name);
             return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
           });
           if (match?.player?.id) pitcherId = match.player.id;
@@ -1532,9 +1533,9 @@ export const mlbFetchers = {
       if (bdlTeamId) {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-          const pitcherLower = pitcherName.toLowerCase();
+          const pitcherLower = foldName(pitcherName);
           const match = (result.stats || []).find(s => {
-            const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+            const n = foldName(s.player?.full_name || s.player?.last_name);
             return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
           });
           if (match) {
@@ -2060,8 +2061,8 @@ export const mlbFetchers = {
         };
         const matchesSp = (m) => {
           if (!opposingSpName) return false;
-          const p = (m.opponent_player?.full_name || '').toLowerCase();
-          return p && p === opposingSpName.toLowerCase();
+          const p = foldName(m.opponent_player?.full_name);
+          return p && p === foldName(opposingSpName);
         };
 
         for (const hitter of topHitters) {

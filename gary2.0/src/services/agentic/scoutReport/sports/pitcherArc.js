@@ -129,6 +129,35 @@ export function longLayoffFlag({ name, label, seasons, season, firstStartDate })
 }
 
 /**
+ * SAMPLE CONTEXT: a mid-season gap between starts (IL stint, demotion, role
+ * change — the flag states the gap, never guesses the reason). Fires on a
+ * ≥21-day gap between consecutive starts this season; the All-Star break
+ * never reaches that. The season aggregate then spans work from both sides
+ * of the gap (Aug 5, the Bieber case: a 5.74 season ERA carrying pre-IL
+ * work plus one 0.2 IP disaster, with the return visible only if the news
+ * happened to say it).
+ */
+export function midSeasonGapFlag({ name, label, startDates, season }) {
+  const dates = (Array.isArray(startDates) ? startDates : []).filter(Boolean).sort();
+  if (dates.length < 2) return null;
+  let gapDays = 0, gapFrom = null, gapTo = null;
+  for (let i = 1; i < dates.length; i++) {
+    const days = Math.round((new Date(`${dates[i]}T12:00:00Z`) - new Date(`${dates[i - 1]}T12:00:00Z`)) / 86400000);
+    if (days > gapDays) { gapDays = days; gapFrom = dates[i - 1]; gapTo = dates[i]; }
+  }
+  if (gapDays < 21) return null;
+  const fmt = (iso) => {
+    const d = new Date(`${iso}T12:00:00Z`);
+    return Number.isNaN(d.getTime()) ? iso
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  };
+  const since = dates.filter(d => d >= gapTo).length;
+  return `${name} (${label}): ${gapDays}-day gap between starts ${fmt(gapFrom)} → ${fmt(gapTo)}; ` +
+    `${since} start${since === 1 ? '' : 's'} since ${fmt(gapTo)}. ` +
+    `${season} season-long numbers span both sides of the gap.`;
+}
+
+/**
  * SAMPLE CONTEXT: essentially all career starts are this season. Fires for
  * rookies and converted arms (≤ 4 starts before this season) — the season
  * splits then accumulate from his first MLB starts onward.

@@ -31,7 +31,8 @@ import {
   getPitcherMonthSplits,
   getPitcherCareerProfile,
 } from '../../../mlbStatsApiService.js';
-import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag } from './pitcherArc.js';
+import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag } from './pitcherArc.js';
+import { foldName } from '../../../../utils/nameUtils.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, computeMlbSituationalRecords, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 
@@ -362,10 +363,11 @@ export async function buildMlbScoutReport(game, options = {}) {
   // BDL uses its own player IDs, but full names are stable across both sources.
   const findBdlPitcherByName = (statsArray, fullName) => {
     if (!fullName) return null;
-    const normalize = (s) => (s || '').toLowerCase().replace(/[.\-']/g, '').trim();
-    const target = normalize(fullName);
+    // foldName (Aug 5, the Luzardo outage): accents/punctuation/case folded on
+    // BOTH sides — "Jesús" from the probables feed must match BDL's "Jesus".
+    const target = foldName(fullName);
     return statsArray.find(s => {
-      const candidate = normalize(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`);
+      const candidate = foldName(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`);
       return candidate === target;
     }) || null;
   };
@@ -394,8 +396,15 @@ export async function buildMlbScoutReport(game, options = {}) {
         const gs = bdlRow.pitching_gs;
         parts.push(`${label}: ${pitcher.fullName} — ${w}-${l}, ${era} ERA, ${whip} WHIP, ${k} K, ${ip} IP (${gs} ${season} starts)`);
         pitcherStats[side] = { name: pitcher.fullName, ...bdlRow };
-      } else {
+      } else if (bdlRow) {
+        // Lookup SUCCEEDED, zero starts — a true rookie/reliever fact.
         parts.push(`${label}: ${pitcher.fullName} — no ${season} starts yet`);
+        pitcherStats[side] = { name: pitcher.fullName };
+      } else {
+        // Lookup FAILED — never assert a negative the data didn't establish
+        // (Jul 29 + Aug 4: "Luzardo — no 2026 starts yet" printed off a name
+        // mismatch while THE WORLD called him elite two sections up).
+        parts.push(`${label}: ${pitcher.fullName} — season stats unavailable in source`);
         pitcherStats[side] = { name: pitcher.fullName };
       }
 
@@ -431,7 +440,7 @@ export async function buildMlbScoutReport(game, options = {}) {
           // log is already cached by the lastStarts fetch, so the first-start
           // date costs no extra network.
           const allStarts = mlbamId ? await getPitcherLastStarts(mlbamId, season, 99).catch(() => []) : [];
-          pitcherArcData[side] = { careerProfile, firstStartDate: allStarts[0]?.date ?? null };
+          pitcherArcData[side] = { careerProfile, firstStartDate: allStarts[0]?.date ?? null, startDates: allStarts.map(g => g.date) };
         }
 
         if (lastStarts.length) {
@@ -452,7 +461,7 @@ export async function buildMlbScoutReport(game, options = {}) {
           }
           // Innings arc (Jul 26): stretching out vs managed down, as bare IP.
           if (lastStarts.length >= 2) {
-            parts.push(`  IP by start (oldest→newest): ${lastStarts.slice().reverse().map(g => g.ip ?? '?').join(', ')}`);
+            parts.push(`  IP by start (oldest→newest): ${lastStarts.map(g => g.ip ?? '?').join(', ')}`);
           }
         }
         if (vsOpp && (vsOpp.games || vsOpp.ip)) {
@@ -570,6 +579,11 @@ export async function buildMlbScoutReport(game, options = {}) {
           firstStartDate: arc.firstStartDate,
         });
         if (layoff) smallSampleFlags.push(layoff);
+        const gap = midSeasonGapFlag({
+          name: pitcher.fullName, label, season,
+          startDates: arc.startDates,
+        });
+        if (gap) smallSampleFlags.push(gap);
       }
     } catch { /* arc flags are additive — never sink the section */ }
     const pitcherId = stats?.player?.id;
