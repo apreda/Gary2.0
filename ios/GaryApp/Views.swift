@@ -4932,7 +4932,7 @@ struct HeadlineFlipCard: View {
     @State private var flipped = false
 
     private static let W: CGFloat = 296
-    private static let H: CGFloat = 184
+    private static let H: CGFloat = 150
 
     private var resultColor: Color {
         story.verdict == "PUSH" ? GaryColors.gold : (story.cashed ? GaryColors.win : GaryColors.loss)
@@ -4970,6 +4970,8 @@ struct HeadlineFlipCard: View {
     // MARK: front — mock 14
 
     private var front: some View {
+        // Top-down flow, exactly as the mock draws it — the money sits a fixed
+        // gap under the game line, not pushed to the floor by a spacer.
         VStack(alignment: .leading, spacing: 0) {
             Text(story.receiptPick.isEmpty ? story.league.uppercased() : story.receiptPick)
                 .font(GaryFonts.display(26))
@@ -4978,24 +4980,24 @@ struct HeadlineFlipCard: View {
             Text(gameLine)
                 .font(GaryFonts.text(11.5, .semibold))
                 .foregroundStyle(.white.opacity(0.4))
-                .lineLimit(1).minimumScaleFactor(0.75)
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .padding(.top, 6)
-            Spacer(minLength: 6)
-            Text(moneyText)
-                .font(GaryFonts.display(40))
-                .foregroundStyle(resultColor)
-                .lineLimit(1).minimumScaleFactor(0.6)
-            Text(footMeta)
-                .font(GaryFonts.kicker(9)).tracking(1.7)
-                .foregroundStyle(.white.opacity(0.3))
-                .lineLimit(1).minimumScaleFactor(0.8)
-                .padding(.top, 5)
-            if !story.bullets.isEmpty {
-                Text("TAP FOR WHAT ELSE HIT")
-                    .font(GaryFonts.kicker(8.5)).tracking(1.5)
-                    .foregroundStyle(.white.opacity(0.22))
-                    .padding(.top, 9)
+            // The "ON $100 · MLB" line is GONE (founder, Aug 5): with the price
+            // on the line above and a signed dollar figure below it, the stake
+            // is already stated. The turn is a glyph now, not a sentence.
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(moneyText)
+                    .font(GaryFonts.display(40))
+                    .foregroundStyle(resultColor)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Spacer(minLength: 6)
+                if !story.bullets.isEmpty {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.26))
+                }
             }
+            .padding(.top, 14)
         }
         .padding(.horizontal, 15).padding(.vertical, 15)
         .frame(width: Self.W, height: Self.H, alignment: .topLeading)
@@ -5027,20 +5029,20 @@ struct HeadlineFlipCard: View {
 
     private var back: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(story.bullets.isEmpty ? "THE STORY" : "WHAT ELSE HIT IN THIS GAME")
+            Text(story.bullets.isEmpty ? "THE STORY" : "WHAT ELSE HIT")
                 .font(GaryFonts.kicker(8.5)).tracking(1.6)
                 .foregroundStyle(GaryColors.gold)
-                .padding(.bottom, 9)
+                .padding(.bottom, 7)
 
             ForEach(Array(story.bullets.prefix(3).enumerated()), id: \.offset) { i, b in
                 if i > 0 {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 3.5)
                 }
                 bulletLine(b)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
 
             // The HEADLINE, not the recap body (Aug 5): a 2-4 sentence recap
             // can't fit here without truncating, and "..." is never acceptable
@@ -5049,13 +5051,13 @@ struct HeadlineFlipCard: View {
             // Scales before it wraps out; it never truncates.
             if !story.headline.isEmpty {
                 Text(story.headline)
-                    .font(GaryFonts.text(11, .medium))
+                    .font(GaryFonts.text(10.5, .medium))
                     .foregroundStyle(.white.opacity(0.66))
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.62)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.55)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 6)
             }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(story.matchup.uppercased())
@@ -5068,7 +5070,7 @@ struct HeadlineFlipCard: View {
                     .foregroundStyle(resultColor)
             }
         }
-        .padding(.horizontal, 15).padding(.vertical, 14)
+        .padding(.horizontal, 15).padding(.vertical, 12)
         .frame(width: Self.W, height: Self.H, alignment: .topLeading)
     }
 
