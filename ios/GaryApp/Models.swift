@@ -375,6 +375,20 @@ struct GameRecapRow: Decodable {
     /// 2-4 stat lines from the night, real prop prices attached when Gary
     /// had one graded ("Matt Olson 2 HR (+340 to homer)").
     let bullets: [String]?
+    /// Runs + hits per side, written at recap time from the game's batting
+    /// lines. Null on any row written before the box lane, or when the feed
+    /// had no batting stats — the card falls back to runs only.
+    let box: BoxLine?
+}
+
+/// The headline card's box: one side's runs and hits.
+struct BoxLine: Decodable {
+    struct Side: Decodable {
+        let runs: Int?
+        let hits: Int?
+    }
+    let away: Side?
+    let home: Side?
 }
 
 // MARK: - Streaks (live runs around the league — teams + bats, $0 pipeline)

@@ -2516,7 +2516,9 @@ struct HomeView: View {
                 odds: split.1,
                 // The recap row carries no score; the board's own results do.
                 score: scoreByMatchup[mu.lowercased()],
-                date: Self.shortSlateDay(r.game_date))
+                date: Self.shortSlateDay(r.game_date),
+                awayHits: r.box?.away?.hits,
+                homeHits: r.box?.home?.hits)
         }
     }
 
@@ -5032,9 +5034,24 @@ struct HeadlineFlipCard: View {
                 // Real box lines — hits, errors, the winning pitcher — need a
                 // pipeline field first: game_results stores only the score.
                 if let s = Self.sides(story) {
-                    scoreRow(s.away.name, s.away.runs, winner: s.away.runs > s.home.runs)
+                    // R and H columns when the recap captured hits, runs alone
+                    // when it didn't — the header only draws if there's a
+                    // second column to label.
+                    if story.awayHits != nil || story.homeHits != nil {
+                        HStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            Text("R").frame(width: 22, alignment: .trailing)
+                            Text("H").frame(width: 24, alignment: .trailing)
+                        }
+                        .font(GaryFonts.kicker(8)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.28))
+                        .padding(.bottom, 3)
+                    }
+                    scoreRow(s.away.name, s.away.runs, hits: story.awayHits,
+                             winner: s.away.runs > s.home.runs)
                     boxRule
-                    scoreRow(s.home.name, s.home.runs, winner: s.home.runs > s.away.runs)
+                    scoreRow(s.home.name, s.home.runs, hits: story.homeHits,
+                             winner: s.home.runs > s.away.runs)
                 }
                 Spacer(minLength: 6)
                 // Money and price on ONE line (founder, Aug 5), the figure
@@ -5071,9 +5088,12 @@ struct HeadlineFlipCard: View {
             .padding(.vertical, 2.5)
     }
 
-    /// One box row: club left, runs right, the winner in gold.
-    @ViewBuilder private func scoreRow(_ name: String, _ runs: Int, winner: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+    /// One box row: club left, runs and (when captured) hits right, the winner
+    /// in gold. Hits are the quiet column — they lose games as often as they
+    /// win them, so they never take the gold even on the winning line.
+    @ViewBuilder private func scoreRow(_ name: String, _ runs: Int, hits: Int?,
+                                       winner: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(name)
                 .font(GaryFonts.text(11.5, winner ? .bold : .semibold))
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.55))
@@ -5082,6 +5102,13 @@ struct HeadlineFlipCard: View {
             Text("\(runs)")
                 .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.62))
+                .frame(width: 22, alignment: .trailing)
+            if let hits {
+                Text("\(hits)")
+                    .font(GaryFonts.mono(12, bold: true))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .frame(width: 24, alignment: .trailing)
+            }
         }
     }
 
@@ -5602,6 +5629,9 @@ struct HomeMarqueeHero: View {
         var score: String? = nil
         /// "AUG 4" — the slate day, for the card's kicker.
         var date: String = ""
+        /// Hits per side when the recap captured them; nil = runs only.
+        var awayHits: Int? = nil
+        var homeHits: Int? = nil
         /// Profit on a flat $100 at `odds` — positive when the ticket cashed,
         /// −100 when it didn't, 0 on a push. nil when the price won't parse.
         var netOnFlat: Double? {

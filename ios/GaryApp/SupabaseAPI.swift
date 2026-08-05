@@ -783,18 +783,28 @@ enum SupabaseAPI {
         // Morning headline carousel (the bug where the USA card showed a
         // headline but no bullets).
         let next = dayAfter(date)
-        let url = buildURL(table: "game_recaps", query: [
-            URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,headline,recap,bullets"),
-            URLQueryItem(name: "game_date", value: "in.(\(date),\(next))"),
-            // Chronological, never result-sorted (founder, Aug 3): the old
-            // result.desc put every CASHED recap first — a page of wins that
-            // "would look fake and would be fake." Written-at order = the
-            // night as it actually unfolded, losses where they landed.
-            URLQueryItem(name: "order", value: "created_at.asc")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([GameRecapRow].self, from: data) else { return [] }
+        // `box` ships ahead of its migration: PostgREST 400s the WHOLE query on
+        // an unknown column, which would empty the headline carousel. Ask for
+        // it, and fall back to the columns that have always been there.
+        func fetch(withBox: Bool) async -> [GameRecapRow]? {
+            let cols = "game_date,league,matchup,pick_text,result,headline,recap,bullets"
+            let url = buildURL(table: "game_recaps", query: [
+                URLQueryItem(name: "select", value: withBox ? cols + ",box" : cols),
+                URLQueryItem(name: "game_date", value: "in.(\(date),\(next))"),
+                // Chronological, never result-sorted (founder, Aug 3): the old
+                // result.desc put every CASHED recap first — a page of wins that
+                // "would look fake and would be fake." Written-at order = the
+                // night as it actually unfolded, losses where they landed.
+                URLQueryItem(name: "order", value: "created_at.asc")
+            ])
+            guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+                  let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+                  let rows = try? JSONDecoder().decode([GameRecapRow].self, from: data) else { return nil }
+            return rows
+        }
+        var fetched = await fetch(withBox: true)
+        if fetched == nil { fetched = await fetch(withBox: false) }
+        guard let rows = fetched else { return [] }
         // Defense in depth: keep World Cup recaps out of the Home headline
         // carousel (the marquee + slides) when the WC feature is off.
         return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
