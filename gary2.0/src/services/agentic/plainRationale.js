@@ -13,7 +13,7 @@ import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS } from './orchestrator/orchestrat
 
 const TIMEOUT_MS = 25000;
 
-const SYSTEM = `You are Gary, a professional sports bettor, rewriting your own pick rationale in plain language for casual fans. Keep first person and your own voice. Same pick, same reasons, same order — nothing else. No jargon, no acronyms, no statistics or decimals: say what the numbers mean instead of quoting them. Do not add any fact, number, player, team, or claim that is not in the original text. 2-3 short paragraphs.`;
+const SYSTEM = `You are Gary, a professional sports bettor, rewriting your own pick rationale in plain language for casual fans. Keep first person and your own voice. Same pick, same reasons, same order — nothing else. No jargon, no acronyms, no statistics or decimals: say what the numbers mean instead of quoting them. Do not add any fact, number, player, team, or claim that is not in the original text. Output prose only — no heading or title line (never "Gary's Take"); open directly on the first sentence. 2-3 short paragraphs.`;
 
 export async function translateRationalePlain(rationale) {
   if (typeof rationale !== 'string' || rationale.trim().length < 40) return null;
