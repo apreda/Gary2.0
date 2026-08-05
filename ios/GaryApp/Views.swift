@@ -5036,27 +5036,25 @@ struct HeadlineFlipCard: View {
                 // Real box lines — hits, errors, the winning pitcher — need a
                 // pipeline field first: game_results stores only the score.
                 if let s = Self.sides(story) {
-                    // R and H columns when the recap captured hits, runs alone
-                    // when it didn't — the header only draws if there's a
-                    // second column to label.
-                    if story.awayHits != nil || story.homeHits != nil {
-                        HStack(spacing: 0) {
-                            Spacer(minLength: 0)
-                            Text("R").frame(width: 20, alignment: .trailing)
-                            Text("H").frame(width: 20, alignment: .trailing)
-                            if story.awayHR != nil || story.homeHR != nil {
-                                Text("HR").frame(width: 24, alignment: .trailing)
-                            }
-                        }
-                        .font(GaryFonts.kicker(8)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.28))
-                        .padding(.bottom, 3)
-                    }
-                    scoreRow(s.away.name, s.away.runs, hits: story.awayHits,
-                             hr: story.awayHR, winner: s.away.runs > s.home.runs)
+                    scoreRow(s.away.name, s.away.runs, winner: s.away.runs > s.home.runs)
                     boxRule
-                    scoreRow(s.home.name, s.home.runs, hits: story.homeHits,
-                             hr: story.homeHR, winner: s.home.runs > s.away.runs)
+                    scoreRow(s.home.name, s.home.runs, winner: s.home.runs > s.away.runs)
+                    // HR sits UNDER the score, not beside it (founder, Aug 5) —
+                    // its own line, away-home in the same order as the rows
+                    // above. Hits came back off the card entirely.
+                    if let a = story.awayHR, let h = story.homeHR {
+                        boxRule
+                        HStack(alignment: .firstTextBaseline, spacing: 0) {
+                            Text("HR")
+                                .font(GaryFonts.kicker(8.5)).tracking(1.3)
+                                .foregroundStyle(.white.opacity(0.3))
+                            Spacer(minLength: 4)
+                            Text("\(a) — \(h)")
+                                .font(GaryFonts.mono(12, bold: true))
+                                .foregroundStyle(a + h > 0 ? GaryColors.warmGold.opacity(0.8)
+                                                           : .white.opacity(0.3))
+                        }
+                    }
                 }
                 Spacer(minLength: 6)
                 // Money and price on ONE line (founder, Aug 5), the figure
@@ -5096,12 +5094,10 @@ struct HeadlineFlipCard: View {
     /// One box row: club left, runs and (when captured) hits right, the winner
     /// in gold. Hits are the quiet column — they lose games as often as they
     /// win them, so they never take the gold even on the winning line.
-    @ViewBuilder private func scoreRow(_ name: String, _ runs: Int, hits: Int?,
-                                       hr: Int?, winner: Bool) -> some View {
+    @ViewBuilder private func scoreRow(_ name: String, _ runs: Int, winner: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            // Abbreviated, like a real box (and three number columns leave no
-            // room for "Diamondbacks") — the headline beside it already names
-            // both clubs in full.
+            // Abbreviated, like a real box — the headline beside it already
+            // names both clubs in full.
             Text(teamAbbrevFromName(name, league: story.league))
                 .font(GaryFonts.mono(12.5, bold: true)).tracking(0.6)
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.55))
@@ -5110,19 +5106,6 @@ struct HeadlineFlipCard: View {
             Text("\(runs)")
                 .font(GaryFonts.mono(15, bold: true))
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.62))
-                .frame(width: 20, alignment: .trailing)
-            if let hits {
-                Text("\(hits)")
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(.white.opacity(0.42))
-                    .frame(width: 20, alignment: .trailing)
-            }
-            if let hr {
-                Text("\(hr)")
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(hr > 0 ? GaryColors.warmGold.opacity(0.75) : .white.opacity(0.28))
-                    .frame(width: 24, alignment: .trailing)
-            }
         }
     }
 
