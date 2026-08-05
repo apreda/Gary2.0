@@ -90,16 +90,41 @@ real replies a night than fifty generic ones.
 The record is the marketing. Priorities: the pinned tape stays current; the morning recap now leads with an
 honest human line instead of a date stamp (shipped Aug 5); losing days get posted with the same energy as winners.
 
-### Channels, ranked by fit
-1. **X** — home base. Fixed and instrumented; distribution work next.
-2. **Gambling communities (Reddit and Discord)** — highest audience fit. Entry is the founder's own credibility as
-   a bettor, not a pitch. Rules-first: most betting subs ban self-promo outright, so this is participation with
-   disclosure, not campaigns.
-3. **AI/builder communities** — genuinely strong fit because the *build* is the story: an AI that is given no
-   rules and no steering. Show HN / Indie Hackers / builder Discords. This audience cares about the architecture,
-   not the picks, and it is the one place the "zero steering" story lands hardest.
-4. **Instagram** — real upside, but gated on a visual system. Image posts were tried and pulled because quality
-   was not there. IG without strong visuals is worse than absent. Needs a design pass before any posting.
+### Channel rule (founder, Aug 5 2026)
+
+> *"Maybe we don't do Instagram or community posting yet either. Maybe only [surfaces] where it can be Gary,
+> and that is allowed also."*
+
+**Two tests, both required, before any channel is used:**
+1. **Gary can speak as Gary.** The account is @BetwithGary, publicly and obviously. No founder-voice
+   participation standing in for the brand, no unattributed accounts, nothing that reads as a person who
+   happens to like the product.
+2. **The platform permits it.** Branded/promotional participation is allowed by that surface's actual rules,
+   not merely un-policed. If a community bans promo, we are not there — we do not "participate carefully"
+   around a rule.
+
+This is a stricter filter than audience fit, and it is the right one: every channel it rejects was a channel
+where we would have been a guest hoping not to get thrown out. What survives, we own outright.
+
+### Channels that pass
+
+1. **X — the whole program for now.** Gary's own timeline plus **replies as Gary** under big sports accounts
+   during games. This is the growth lever and it passes both tests cleanly: Gary's account, Gary's voice, a
+   reply is what the surface is for. Quality-gated hard — a reply ships only if it says something specific and
+   falsifiable about that game. Five real reads a night beats fifty generic ones. No link drops.
+2. **Bluesky / Threads — free mirrors, near-zero cost.** Gary posts as Gary; brand accounts are unambiguously
+   welcome on both; sports conversation is active. Same content pipeline, no new writing. Worth doing purely
+   because the marginal cost is a deploy.
+
+### Channels held (not rejected — parked with a reason)
+
+- **Instagram** — parked. Gated on a visual system; image posts were tried and pulled because the quality was
+  not there, and IG without strong visuals is worse than absent. Revisit after Kickoff.
+- **Reddit / Discord gambling communities** — parked. Fails test 1 as originally scoped (it needed the founder's
+  personal voice) and mostly fails test 2 (most betting subs ban self-promo outright).
+- **AI/builder communities (Show HN, Indie Hackers)** — parked. The "zero steering" build story is genuinely the
+  strongest thing we have for that audience, but it is *company* voice, not Gary voice, so it fails test 1 as
+  written. Worth revisiting deliberately later as a founder-voice exception rather than smuggling it in now.
 
 ---
 
@@ -131,10 +156,10 @@ committing to an install number today would be invented precision.
 
 ## 6. Needs the founder
 
-1. **Run the SQL** in §7 — three columns plus the cron reschedule. Unblocks all measurement.
-2. **Instagram**: confirm whether to invest in a visual system, or stay off IG until after Kickoff.
-3. **Community posting**: confirm I may post as/for the founder in gambling and builder communities, with
-   disclosure. I will not post outward on your behalf without an explicit yes.
+1. **Run the SQL** in §7 — three columns plus the cron reschedule. Unblocks all measurement. *(Only open item.)*
+
+Resolved Aug 5: Instagram and community posting are parked (see the channel rule in §4). Nothing is posted
+outward in the founder's own name, anywhere, without an explicit yes on that specific thing.
 
 ## 7. The SQL
 
