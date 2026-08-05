@@ -108,6 +108,34 @@ async function fetchMlbStatsForGame(gameId) {
 }
 
 
+
+/**
+ * THE MENU, BACK OUT (founder, Aug 5: "very few have odds"). propsBrain
+ * snapshots every priced market at seal time; this hands those prices to the
+ * recap writer so a bullet about a prop Gary never took can still say what it
+ * would have paid. The writer's own rule does the rest — a price rides along
+ * ONLY where that exact price appears in the evidence, so nothing is invented
+ * for a game with no snapshot.
+ */
+async function propMenuEvidence(gameDate, matchup) {
+  try {
+    const { data } = await supabase
+      .from('prop_menu').select('markets')
+      .eq('game_date', gameDate).eq('matchup', matchup).maybeSingle();
+    const rows = data?.markets;
+    if (!Array.isArray(rows) || !rows.length) return '';
+    const fmt = (o) => (o == null ? null : (o > 0 ? `+${o}` : `${o}`));
+    const lines = rows.slice(0, 60).map((m) => {
+      const over = fmt(m.over), under = fmt(m.under);
+      const price = over && under ? `Over ${over} / Under ${under}`
+        : over ? `Over ${over}` : under ? `Under ${under}` : null;
+      return price ? `- ${m.player} ${m.prop_type} ${m.line}: ${price}` : null;
+    }).filter(Boolean);
+    if (!lines.length) return '';
+    return `\n\nPROP PRICES OFFERED BEFORE THIS GAME (pregame board):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(targetDate) {
@@ -201,7 +229,7 @@ async function main(targetDate) {
       awayScore,
       mlbStats,
       gradedProps,
-    });
+    }) + (league === 'MLB' ? await propMenuEvidence(gameDate, matchup) : '');
 
     try {
       const recap = await generateRecap({ pick, result: graded.result, evidence });

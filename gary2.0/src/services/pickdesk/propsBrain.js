@@ -274,7 +274,54 @@ export function buildPropBoardV2(marketRows, { lineupNames = null, hrOnly = fals
     text: `═══ THE PROP BOARD (tonight's live prop prices) ═══\n${lines.join('\n')}${note}`,
     players: new Set(byPlayer.keys()),
     stats,
+    // The priced markets themselves, for the menu snapshot. Tonight's prices
+    // are the ONLY chance to record them — a book won't serve a settled
+    // game's prop prices back, so anything not captured here is gone.
+    markets: primaries,
   };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE MENU SNAPSHOT (founder, Aug 5 2026: "very few have odds"). The recap's
+// bullets may carry a price ONLY where that price is in the evidence, and the
+// only prices we stored were Gary's own picks — so a bullet about a prop he
+// passed on ("Austin Riley HR, 2 RBI") could never show what it paid. The
+// board already holds every market's live price and then drops it. This keeps
+// the menu, once per game, at seal time. Fail-soft by contract: a snapshot
+// that doesn't write must never cost a props run.
+// ═══════════════════════════════════════════════════════════════════════════
+const MENU_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const MENU_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
+  if (!MENU_URL || !MENU_KEY || !Array.isArray(markets) || !markets.length) return;
+  try {
+    const rows = markets.map((m) => ({
+      player: m.player, team: m.team ?? null, prop_type: m.prop_type,
+      line: m.line, over: m.over_odds ?? null, under: m.under_odds ?? null,
+    }));
+    const res = await fetch(`${MENU_URL}/rest/v1/prop_menu`, {
+      method: 'POST',
+      headers: {
+        apikey: MENU_KEY, Authorization: `Bearer ${MENU_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify([{
+        game_date: gameDate, league: 'MLB', matchup,
+        bdl_game_id: gameId ?? null, markets: rows,
+      }]),
+    });
+    if (!res.ok) {
+      console.warn(`   [Props Brain] menu snapshot skipped (${res.status})`);
+      return;
+    }
+    console.log(`   [Props Brain] menu snapshot: ${rows.length} priced markets`);
+  } catch (e) {
+    console.warn(`   [Props Brain] menu snapshot failed: ${e?.message || e}`);
+  }
 }
 
 const parsePicksJson = (t) => {
@@ -345,6 +392,13 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
 
   const desk = await buildMlbDesk(game, options);
   const { homeTeam, awayTeam } = desk.meta;
+
+  await snapshotPropMenu({
+    markets: board.markets,
+    matchup: `${awayTeam} @ ${homeTeam}`,
+    gameId: game.bdl_game_id ?? game.id,
+    gameDate: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+  });
 
   // GARY'S GAME CALL (founder GO, Aug 4 — the Seymour/Luzardo autopsies: the
   // two desks kept telling opposite stories about the same night). The game
