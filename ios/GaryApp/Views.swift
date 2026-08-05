@@ -5001,9 +5001,14 @@ struct HeadlineFlipCard: View {
                     .font(GaryFonts.kicker(9)).tracking(1.6)
                     .foregroundStyle(.white.opacity(0.34))
                 Text(story.headline)
-                    .font(GaryFonts.text(12, .semibold))
+                    // 11.5 with room for five lines, and a scale floor that
+                    // can only shave 10% (founder, Aug 5: a long headline was
+                    // visibly smaller than a short one on the next card). The
+                    // floor still exists because the alternative to scaling is
+                    // an ellipsis, which is never acceptable.
+                    .font(GaryFonts.text(11.5, .semibold))
                     .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(4).minimumScaleFactor(0.6)
+                    .lineLimit(5).minimumScaleFactor(0.9)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 7)
@@ -5048,11 +5053,12 @@ struct HeadlineFlipCard: View {
                         // rows above it (founder, Aug 5) — it IS a box line,
                         // so it shouldn't look like a caption stapled under one.
                         HStack(alignment: .firstTextBaseline, spacing: 0) {
-                            Text("HR")
+                            Text("HOMERS")
                                 .font(GaryFonts.mono(12.5, bold: true)).tracking(0.6)
                                 .foregroundStyle(.white.opacity(0.55))
                             Spacer(minLength: 4)
-                            Text("\(a) — \(h)")
+                            // The game's total, not a split (founder, Aug 5).
+                            Text("\(a + h)")
                                 .font(GaryFonts.mono(15, bold: true))
                                 .foregroundStyle(.white.opacity(0.62))
                         }
