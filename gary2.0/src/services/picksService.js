@@ -274,6 +274,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         // Contract-era hash (Jul 30: the whitelist here silently ate the Jul 29
         // stamp — every era read joins on this; never drop it again).
         prompt_sha: pick.prompt_sha || null,
+        // THE BLIND SPLIT read (Aug 5): the whitelist ate these on day one —
+        // same trap as the Jul 29 sha above. The sealed pre-lines winner and
+        // why; the era's whole audit trail rides on them.
+        read_winner: pick.read_winner ?? null,
+        game_read: pick.game_read ?? null,
         // Which brain produced this pick — fields absent from this object never reach the DB.
         model: pick.model || null
       };
@@ -350,6 +355,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       // through (cleanPick has no rawGeminiOutput); the Jul 30 morning fix
       // only reached the other branch, so stamps kept dropping here.
       prompt_sha: pick.prompt_sha || null,
+      // THE BLIND SPLIT read (Aug 5): this branch is the one agentic picks
+      // take — the whitelist ate both fields on day one (Cubs/Astros 12:45 PM
+      // picks stored readless). Same trap as the sha above, third occurrence.
+      read_winner: pick.read_winner ?? null,
+      game_read: pick.game_read ?? null,
       // Which brain produced this pick — fields absent from this object never reach the DB.
       model: pick.model || null
     };
