@@ -5035,10 +5035,13 @@ struct HeadlineFlipCard: View {
                 // Money and price on ONE line (founder, Aug 5), the figure
                 // smaller and the price in gold beside it.
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    // Same size as the price beside it (founder, Aug 5) — the
+                    // pair reads as one line of two facts, told apart by
+                    // colour rather than by scale.
                     Text(moneyText)
-                        .font(GaryFonts.display(23))
+                        .font(GaryFonts.mono(10.5, bold: true))
                         .foregroundStyle(resultColor)
-                        .lineLimit(1).minimumScaleFactor(0.5)
+                        .lineLimit(1).minimumScaleFactor(0.6)
                     Spacer(minLength: 3)
                     if !story.odds.isEmpty {
                         Text(story.odds)
