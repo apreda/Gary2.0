@@ -5044,15 +5044,17 @@ struct HeadlineFlipCard: View {
                     // above. Hits came back off the card entirely.
                     if let a = story.awayHR, let h = story.homeHR {
                         boxRule
+                        // Same weights, same sizes, same colours as the club
+                        // rows above it (founder, Aug 5) — it IS a box line,
+                        // so it shouldn't look like a caption stapled under one.
                         HStack(alignment: .firstTextBaseline, spacing: 0) {
                             Text("HR")
-                                .font(GaryFonts.kicker(8.5)).tracking(1.3)
-                                .foregroundStyle(.white.opacity(0.3))
+                                .font(GaryFonts.mono(12.5, bold: true)).tracking(0.6)
+                                .foregroundStyle(.white.opacity(0.55))
                             Spacer(minLength: 4)
                             Text("\(a) — \(h)")
-                                .font(GaryFonts.mono(12, bold: true))
-                                .foregroundStyle(a + h > 0 ? GaryColors.warmGold.opacity(0.8)
-                                                           : .white.opacity(0.3))
+                                .font(GaryFonts.mono(15, bold: true))
+                                .foregroundStyle(.white.opacity(0.62))
                         }
                     }
                 }
