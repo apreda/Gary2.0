@@ -4723,12 +4723,21 @@ struct HomeMarqueeTracker: View {
                 if let ct = e.commence, let d = parseISO8601(ct) {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
                         .padding(.vertical, 2)
-                    // The simple timer — time to first pitch, nothing else.
-                    // Inset from the card edge so the digits never kiss it.
-                    HomeCountdownText(target: d, size: 17)
-                        .lineLimit(1).minimumScaleFactor(0.65)
-                        .frame(width: 88)
-                        .padding(.horizontal, 8)
+                    // The timer, and under it the hour it's counting to
+                    // (founder, Aug 5) — the clock alone says how long, not
+                    // when. Same dim register as the market row, so the gold
+                    // digits keep the emphasis. Inset so nothing kisses the
+                    // card edge.
+                    VStack(spacing: 3) {
+                        HomeCountdownText(target: d, size: 17)
+                            .lineLimit(1).minimumScaleFactor(0.65)
+                        Text(Self.etClock(d).uppercased())
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
+                            .foregroundStyle(.white.opacity(0.38))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .frame(width: 88)
+                    .padding(.horizontal, 8)
                 }
             }
             // The wire carries the card's own top air when no header ran.
@@ -4736,6 +4745,15 @@ struct HomeMarqueeTracker: View {
             .padding(.bottom, 14)
         }
         .contentShape(Rectangle())
+    }
+
+    /// First pitch in ET — the marquee's own copy (Home's is private to its
+    /// own view). Game clocks are ET everywhere in this app, never local.
+    private static func etClock(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "h:mm a"
+        return f.string(from: d)
     }
 
     /// "ROCKIES @ BREWERS" + "COL +270 · MIL -335 · O/U 8 · RL MIL -1.5" →
