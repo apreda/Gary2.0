@@ -1757,11 +1757,17 @@ export const mlbFetchers = {
       }
 
       try {
-        const recentGames = await getMlbRecentGames(mlbTeam.id, 3);
-        if (!recentGames || recentGames.length === 0) {
+        // PEN FORM WINDOW (founder GO, Aug 5 eve — closing the hunt's last
+        // gap): fetch the last SEVEN games. The per-appearance ledger below
+        // still prints only the last three (workload recency); the extra
+        // four exist for one number — the pen's rolling ERA, the "how has
+        // the bullpen actually been throwing" fact a bettor holds.
+        const allRecentGames = await getMlbRecentGames(mlbTeam.id, 7);
+        if (!allRecentGames || allRecentGames.length === 0) {
           lines.push(`${teamName}: No recent games found`);
           continue;
         }
+        const recentGames = allRecentGames.slice(-3);
 
         // recentGames comes from MLB Stats API (each item has a `gamePk`).
         // The prior implementation passed those gamePks to BDL's
@@ -1771,7 +1777,26 @@ export const mlbFetchers = {
         // /game/{gamePk}/boxscore endpoint instead — same namespace,
         // and the boxscore already includes per-pitcher inningsPitched.
         usedApi = true;
-        const armTotals = new Map(); // name -> { outs, pitches, dates[] }
+        // Pen form across the full window — same boxscore walk, totals only.
+        const penForm = { outs: 0, er: 0, games: 0 };
+        for (const g of allRecentGames.slice(0, -3)) {
+          const b = await getGameBoxScore(g.gamePk).catch(() => null);
+          if (!b?.teams) continue;
+          const sk = b.teams.home?.team?.id === mlbTeam.id ? 'home' : 'away';
+          const sd = b.teams[sk];
+          const pids = Array.isArray(sd?.pitchers) ? sd.pitchers.slice(1) : [];
+          let counted = false;
+          for (const pid of pids) {
+            const st = sd?.players?.[`ID${pid}`]?.stats?.pitching;
+            const ipn = parseFloat(st?.inningsPitched);
+            if (!Number.isFinite(ipn)) continue;
+            penForm.outs += Math.floor(ipn) * 3 + Math.round((ipn % 1) * 10);
+            penForm.er += Number(st?.earnedRuns) || 0;
+            counted = true;
+          }
+          if (counted) penForm.games += 1;
+        }
+        const armTotals = new Map(); // name -> { outs, pitches, er, dates[] }
         const gameDates = [];        // chronological (recentGames is oldest -> newest)
         for (const game of recentGames) {
           const date = (game.gameDate || '').split('T')[0];
@@ -1845,11 +1870,18 @@ export const mlbFetchers = {
             .map(([n, a]) => `${n} ${a.pitches} pitches/${a.dates.length} G`)
             .join(', ');
           const totalEr = [...armTotals.values()].reduce((acc, a) => acc + (a.er || 0), 0);
+          penForm.outs += totalOuts;
+          penForm.er += totalEr;
+          penForm.games += gameDates.length;
           lines.push(
             `Last ${gameDates.length} games total: ${Math.floor(totalOuts / 3)}.${totalOuts % 3} relief IP, ${totalEr} ER ` +
             `across ${armTotals.size} arms; heaviest: ${heaviest}; ` +
             `worked both of the last two game days: ${b2b.length ? b2b.join(', ') : 'none'}.`,
           );
+          if (penForm.games >= 4 && penForm.outs > 0) {
+            const penEra = ((penForm.er * 27) / penForm.outs).toFixed(2);
+            lines.push(`Pen last ${penForm.games} games: ${Math.floor(penForm.outs / 3)}.${penForm.outs % 3} IP, ${penForm.er} ER (${penEra} ERA)`);
+          }
         }
       } catch (e) {
         console.warn(`[MLB Fetchers] ⚠️ Bullpen workload API failed for ${teamName}: ${e.message}`);
