@@ -1612,7 +1612,6 @@ struct PickInfoSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                BroadcastBar(height: 13)
                 Text("HOW THE PICKS WORK")
                     .font(GaryFonts.accent(14))
                     .tracking(1.0)
@@ -2564,10 +2563,9 @@ struct HomeView: View {
         // yesterday until first pitch and going live after, the strip said
         // the same numbers twice on one page. THE RECORD is the one home.)
 
-        // ── THE RECEIPTS LINE + YOUR NIGHT (Jul 26 additions) — proof of
-        // post, then the user's own open action with live state. Both
-        // self-hide without data.
-        HomeReceiptsLine()
+        // ── YOUR NIGHT (Jul 26) — the user's own open action with live
+        // state; self-hides without data. (The receipts line above it was
+        // REMOVED Aug 4 on the founder's call — struct deleted with it.)
         HomeYourNight {
             UserDefaults.standard.set("you", forKey: "billfoldScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
@@ -2963,7 +2961,46 @@ struct HomeView: View {
                 result: result
             )
         }
-        return bigEntries + [specialMarqueeEntry].compactMap { $0 }
+        // HERO FILLERS (founder, Aug 4: the countdown counts to the NEXT game
+        // to start TODAY — tomorrow's tease only once today is truly done).
+        // Every slate game not already a big game becomes hero-eligible at
+        // rank 99 (soonest wins the hero; rank only breaks ties) but never a
+        // ribbon chip (railWorthy=false keeps the rail big-games-only).
+        let bigKeys = Set(bigs.compactMap { $0.matchup })
+        let fillers: [HomeMarqueeTracker.Entry] = (todayBoard?.board ?? []).compactMap { br -> HomeMarqueeTracker.Entry? in
+            guard let a = br.away_team, let h = br.home_team else { return nil }
+            let matchup = "\(a) @ \(h)"
+            guard !bigKeys.contains(matchup) else { return nil }
+            let calls = todayPicks.filter { p in
+                (p.awayTeam ?? "").caseInsensitiveCompare(a) == .orderedSame
+                    && (p.homeTeam ?? "").caseInsensitiveCompare(h) == .orderedSame
+            }
+            var oddsBits: [String] = []
+            if let ml = br.ml_away, let mh = br.ml_home, let aAb = br.away_abbr, let hAb = br.home_abbr {
+                let f: (Double) -> String = { $0 > 0 ? "+\(Int($0))" : "\(Int($0))" }
+                oddsBits.append("\(aAb) \(f(ml)) · \(hAb) \(f(mh))")
+            }
+            if let t = br.total {
+                oddsBits.append("O/U \(t == t.rounded() ? String(Int(t)) : String(t))")
+            }
+            return HomeMarqueeTracker.Entry(
+                id: "mq-fill-\(matchup)",
+                rank: 99,
+                league: br.league,
+                matchupFull: matchup,
+                title: "\(Self.shortTeam(a)) @ \(Self.shortTeam(h))",
+                context: nil,
+                commence: br.commence_time,
+                pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
+                pendingLine: nil,
+                oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
+                live: sheetLive(matchup),
+                verdict: nil,
+                result: nil,
+                railWorthy: false
+            )
+        }
+        return bigEntries + fillers + [specialMarqueeEntry].compactMap { $0 }
     }
 
     /// A same-day All-Star special — a real MARQUEE candidate, not just a
@@ -3010,13 +3047,19 @@ struct HomeView: View {
     }
 
     /// Tomorrow's #1 big game — the look-ahead row once today's marquee is done.
-    private var marqueeTomorrowTease: (matchup: String, time: String)? {
+    /// NAMES, NOT CODES (founder, Aug 4): the card has the room, so it reads
+    /// "White Sox @ Red Sox" instead of "CHW @ BOS" — abbreviations are the
+    /// queue's grammar, not the hero's. Carries the real start Date so the
+    /// hero can tick down to first pitch instead of printing a static clock.
+    private var marqueeTomorrowTease: (matchup: String, time: String, start: Date?)? {
         guard let big = tomorrowBoard?.big_games.first, let m = big.matchup else { return nil }
         let sides = m.components(separatedBy: " @ ")
         let title = sides.count == 2
-            ? "\(teamAbbrevFromName(sides[0], league: big.league)) @ \(teamAbbrevFromName(sides[1], league: big.league))"
+            ? "\(Formatters.shortTeamName(sides[0], league: big.league)) @ \(Formatters.shortTeamName(sides[1], league: big.league))"
             : m
-        return (title, TomorrowView.etTime(big.commence_time, withZone: false, meridiem: true).uppercased())
+        return (title,
+                TomorrowView.etTime(big.commence_time, withZone: false, meridiem: true).uppercased(),
+                big.commence_time.flatMap(parseISO8601))
     }
 
     /// The sheet body — EARLIER (collapsed past), LIVE (glowing middle),
@@ -3030,15 +3073,11 @@ struct HomeView: View {
         let anyLive = rows.contains { $0.zone == .live }
 
         if !rows.isEmpty {
-            // "13 GAMES · PICKS DROP 90 MIN BEFORE" — denser than the old
-            // "THE BOARD 13" head AND keeps the drop promise, which lives
-            // nowhere else on Home.
-            HomeSectionRule(state: {
-                let games = "\(rows.count) GAME\(rows.count == 1 ? "" : "S")"
-                return rows.contains { $0.zone == .upcoming && $0.callLine == nil }
-                    ? "\(games) · PICKS DROP 90 MIN BEFORE" : games
-            }(),
-            tint: anyLive ? GaryColors.win : GaryColors.gold)
+            // Bare rule — count + drop-time state came off (founder, Aug 4
+            // round 2; the drop promise still lives in the intro sheet, the
+            // Winners stub countdown, and the Picks empty state). Live games
+            // still turn the hairline win-green.
+            HomeSectionRule(tint: anyLive ? GaryColors.win : GaryColors.gold)
             let leagues = Array(Set(rows.map(\.league))).sorted { a, b in
                 let ea = rows.filter { $0.league == a }.map(\.commence).min() ?? ""
                 let eb = rows.filter { $0.league == b }.map(\.commence).min() ?? ""
@@ -4389,34 +4428,17 @@ struct DerbyTakeOverlay: View {
     }
 }
 
-/// NAMELESS section rule (founder, Aug 4: the section names came off Home —
-/// "no real reason to have them when it's obvious what the user is seeing").
-/// Keeps the two load-bearing jobs the old HomeActHead did besides naming:
-/// the hairline that separates blocks on a flat page, and the right-aligned
-/// state line ("13 GAMES · PICKS DROP 90 MIN BEFORE"). The BroadcastBar tick
-/// stays as left punctuation whenever a state line rides the rule.
+/// BARE section rule (founder, Aug 4, round 2: the state lines and the gold
+/// slash went the way of the section names — "clean up the other stuff").
+/// One hairline is all the punctuation a block boundary gets; the content
+/// says everything else. Tint stays so the board's rule can go win-green
+/// while games are live.
 struct HomeSectionRule: View {
-    /// The whole right-aligned line — callers compose it ("6 STORIES",
-    /// "13 GAMES · PICKS DROP 90 MIN BEFORE"). nil = a bare hairline.
-    var state: String? = nil
     var tint: Color = GaryColors.gold
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Rectangle().fill(tint.opacity(0.25)).frame(height: 1)
-            if let state, !state.isEmpty {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    BroadcastBar(tint: tint, height: 11)
-                    Spacer(minLength: 0)
-                    Text(state.uppercased())
-                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                        .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                }
-            }
-        }
-        .pageGutter()
-        .padding(.top, 6)
+        Rectangle().fill(tint.opacity(0.25)).frame(height: 1)
+            .pageGutter()
+            .padding(.top, 6)
     }
 }
 
@@ -4441,6 +4463,9 @@ struct HomeMarqueeTracker: View {
         let live: LiveScore?
         let verdict: HomeLiveVerdict?
         let result: (String, Color)?   // settled stamp, nil until final
+        /// Hero-eligible but not a ribbon chip (Aug 4: every slate game can
+        /// hold the countdown; the rail stays big-games-only).
+        var railWorthy: Bool = true
         var isLive: Bool { live?.isLive == true }
         var isFinal: Bool { result != nil }
         /// Begun by the clock, score feed not caught up yet.
@@ -4451,7 +4476,8 @@ struct HomeMarqueeTracker: View {
     }
 
     let entries: [Entry]
-    var tomorrowTease: (matchup: String, time: String)? = nil
+    /// (matchup, clock, start) — `start` drives the hero's live countdown.
+    var tomorrowTease: (matchup: String, time: String, start: Date?)? = nil
     let onOpenGame: (String) -> Void
 
     /// A ribbon tap pins its game as the hero (founder, Jul 5) — cleared
@@ -4466,17 +4492,21 @@ struct HomeMarqueeTracker: View {
            let pinned = entries.first(where: { $0.id == promotedId && upNext($0) }) {
             return pinned
         }
-        // BIGGEST first, not soonest (founder, Jul 7): a WC round-of-16 at 4
-        // outranks a 2:15 MLB game — the pipeline's rank decides, clock breaks ties.
+        // SOONEST first (founder, Aug 4: "count down to the first game, then
+        // the next based on time; tie breaker goes to the biggest game") —
+        // supersedes the Jul 7 biggest-first rule from the WC era. The rank
+        // only breaks a shared start time.
         return entries.filter(upNext).min {
-            $0.rank != $1.rank ? $0.rank < $1.rank : ($0.commence ?? "") < ($1.commence ?? "")
+            ($0.commence ?? "~") != ($1.commence ?? "~")
+                ? ($0.commence ?? "~") < ($1.commence ?? "~")
+                : $0.rank < $1.rank
         }
     }
     private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
     /// The rail: every other big game, docked beside the hero (founder:
     /// no drop-down — the space was already there).
     private var rail: [Entry] {
-        entries.filter { $0.id != hero?.id }.sorted { a, b in
+        entries.filter { $0.id != hero?.id && $0.railWorthy }.sorted { a, b in
             func weight(_ e: Entry) -> Int {
                 if e.isLive { return 0 }
                 if e.started { return 1 }
@@ -4747,7 +4777,7 @@ struct HomeMarqueeTracker: View {
 
     /// The all-live / all-done state still keeps an UP NEXT on the wall —
     /// tomorrow's marquee steps in as the hero.
-    private func tomorrowHeroView(_ tease: (matchup: String, time: String)) -> some View {
+    private func tomorrowHeroView(_ tease: (matchup: String, time: String, start: Date?)) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("TOMORROW")
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
@@ -4756,9 +4786,24 @@ struct HomeMarqueeTracker: View {
                 .font(GaryFonts.display(36))
                 .foregroundStyle(GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.7)
-            Text(tease.time.uppercased())
-                .font(GaryFonts.mono(11.5, bold: true))
-                .foregroundStyle(.white.opacity(0.72))
+            // THE CLOCK TICKS (founder, Aug 4: "this should be counting down
+            // to the start of the next game"). The static "7:10 PM" told you
+            // nothing you couldn't get from the board; the countdown is the
+            // reason to look. Start time rides beside it so the clock has a
+            // referent. Falls back to the plain time if the board's row
+            // carried no parseable commence_time.
+            if let start = tease.start, start > Date() {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    HomeCountdownText(target: start, size: 15)
+                    Text("· FIRST PITCH \(tease.time.uppercased())")
+                        .font(GaryFonts.mono(11.5, bold: true))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            } else {
+                Text(tease.time.uppercased())
+                    .font(GaryFonts.mono(11.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
         }
         .padding(.horizontal, 14).padding(.vertical, 13)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -4801,9 +4846,9 @@ struct HomeHeadlinesBoard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Nameless — the cards themselves (headline + pick + verdict)
-            // say "headlines" louder than a label did.
-            HomeSectionRule(state: "\(stories.count) STORIES")
+            // Bare rule — the cards themselves (headline + pick + verdict)
+            // say "headlines" louder than any label or count did.
+            HomeSectionRule()
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { i, s in
@@ -4958,7 +5003,6 @@ struct HomeWinnersStub: View {
         Button(action: onOpen) {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    BroadcastBar(height: 11)
                     Text("WINNERS")
                         .font(GaryFonts.accent(12)).tracking(0.8)
                         .foregroundStyle(GaryColors.gold)
@@ -5024,6 +5068,133 @@ struct StatusBarScrim: View {
         }
         .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - League Words (founder pick, Aug 4 — mock 64 "Big Words", verbatim)
+//
+// The league switcher: the page dims to near-black and the leagues stack HUGE
+// in the display face — the words are the interface. No panel, no chrome, no
+// push; "it was perfect the way you had it." Replaces the underline league
+// tabs the Hub and Picks mastheads used to wear. Presented app-wide (over the
+// dock too) from ContentView; pages call `present` with their own options.
+
+final class LeagueOverlayState: ObservableObject {
+    static let shared = LeagueOverlayState()
+    struct Option: Identifiable {
+        let id = UUID()
+        /// The big word ("MLB", "MLB HR", "NFL").
+        let code: String
+        /// Superscript beside it — real info only ("13 GAMES", "SEP 9"), nil = bare word.
+        let sup: String?
+        /// Green superscript (live games on the board right now).
+        let live: Bool
+        let selected: Bool
+        /// False for an off-season league with no board yet — tapping it
+        /// dismisses the overlay but never hands a league with no data to
+        /// the page (mock 64's dimmed words with return dates, founder,
+        /// Aug 4: "we should still have the other sports and their start
+        /// date just like the mock showed").
+        var selectable: Bool = true
+    }
+    @Published var options: [Option] = []
+    @Published var isOpen = false
+    private(set) var onPick: (String) -> Void = { _ in }
+
+    func present(_ opts: [Option], onPick: @escaping (String) -> Void) {
+        options = opts
+        self.onPick = onPick
+        withAnimation(.easeOut(duration: 0.18)) { isOpen = true }
+    }
+    func dismiss() {
+        withAnimation(.easeIn(duration: 0.15)) { isOpen = false }
+    }
+
+    /// Off-season leagues with their return date, appended after every
+    /// selectable league so the overlay always shows the whole calendar
+    /// (mock 64) — never just the leagues currently live. `already` is the
+    /// set of codes the caller already built real options for (skip those).
+    /// PLACEHOLDER DATES (founder-approved off the mock, not yet backed by a
+    /// schedule field) — swap for a real `season_windows` lookup if/when one
+    /// exists; until then these are display copy only, never used for gating.
+    static func offSeasonOptions(excluding already: Set<String>) -> [Option] {
+        let calendar: [(code: String, date: String)] = [
+            ("NFL", "SEP 9"), ("NCAAF", "AUG 30"), ("NBA", "OCT 21"), ("NHL", "OCT 7"),
+        ]
+        return calendar
+            .filter { !already.contains($0.code) }
+            .map { .init(code: $0.code, sup: $0.date, live: false, selected: false, selectable: false) }
+    }
+}
+
+struct LeagueWordsOverlay: View {
+    @ObservedObject private var state = LeagueOverlayState.shared
+
+    var body: some View {
+        if state.isOpen {
+            ZStack(alignment: .leading) {
+                // Mock 64's ground: rgba(8,7,6,.91) — the page ghosts through.
+                Color(hex: "#080706").opacity(0.91)
+                    .ignoresSafeArea()
+                    .onTapGesture { state.dismiss() }
+
+                VStack(alignment: .leading, spacing: 11) {
+                    ForEach(state.options) { o in
+                        Button {
+                            // Off-season leagues (selectable == false) just
+                            // close the overlay — there's no board to hand
+                            // them to yet.
+                            if o.selectable { state.onPick(o.code) }
+                            state.dismiss()
+                        } label: {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(o.code)
+                                    .font(GaryFonts.display(48))
+                                    .foregroundStyle(o.selected ? GaryColors.gold
+                                                                : GaryColors.warmWhite.opacity(0.28))
+                                    .lineLimit(1).minimumScaleFactor(0.6)
+                                if let sup = o.sup, !sup.isEmpty {
+                                    Text(sup.uppercased())
+                                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.5)
+                                        .foregroundStyle(o.live ? GaryColors.win : .white.opacity(0.35))
+                                        .padding(.top, 7)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(o.selectable ? "\(o.code) league" : "\(o.code) — not yet in season, \(o.sup ?? "")")
+                        .accessibilityAddTraits(o.selected ? [.isSelected, .isButton] : .isButton)
+                    }
+                }
+                .padding(.horizontal, 34)
+            }
+            .transition(.opacity)
+            .zIndex(50)
+        }
+    }
+}
+
+/// The masthead trigger that opens the words — the current league in the
+/// display face with a small gold chevron. This row replaces the underline
+/// league tab strips on the Hub and Picks pages.
+struct LeagueWordsTrigger: View {
+    let current: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(current)
+                    .font(GaryFonts.display(19))
+                    .foregroundStyle(GaryColors.gold)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(GaryColors.gold.opacity(0.8))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Switch league — \(current) selected")
     }
 }
 
@@ -7325,47 +7496,35 @@ struct PremiumPicksView: View {
             } else if shelf.props.isEmpty {
                 propPlaceholderRow(for: shelf.league)
             } else {
-                // Horizontal rail of game-groups: same-game props share ONE
-                // slip; a lone game's prop rides as its own card.
+                // GAMES-TAB PARITY (founder, Aug 4): one prop = one card = one
+                // rail slot, sealed individually — exactly the game shelf's
+                // grammar. The same-game GROUPING is gone: a multi-prop game
+                // used to reveal into a VStack of stacked cards inside a single
+                // wrapper (short seal → double-tall stack), which is the
+                // "stacked" look he called out. Grouping helpers
+                // (sortedPropGroups/propTease) stay for the Picks tab.
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 10) {   // lazy: off-screen prop cards aren't built up front
-                        ForEach(Array(sortedPropGroups(shelf).enumerated()), id: \.offset) { _, group in
+                        ForEach(sortedPropGroups(shelf).flatMap { $0 }, id: \.id) { prop in
                             // Matchup sub-header removed — the prop card already
                             // prints the matchup (redundant "TEAM @ TEAM" line cut).
                             ZStack {
                                 if sportUnlocked(shelf.league) {
                                     // Props seal in the same members wrapper as game picks —
-                                    // one reveal per game-group (the group shares a slot).
-                                    MembersWrap(revealId: group.first?.id ?? "prop-group",
-                                                commence: parseISO8601(group.first?.commence_time ?? ""),
-                                                tease: propTease(group),
+                                    // one reveal per CARD now, like the game shelf.
+                                    MembersWrap(revealId: prop.id,
+                                                commence: parseISO8601(prop.commence_time ?? ""),
+                                                tease: propTease([prop]),
                                                 league: shelf.league.uppercased(),
-                                                sealKicker: group.count > 1 ? "GARY'S PROP PICKS ARE IN"
-                                                                            : "GARY'S PROP PICK IS IN",
-                                                sealedHeight: group.count > 1 ? UIScreen.main.bounds.height * 0.45 : nil) {
-                                        if group.count == 1, let only = group.first {
-                                            FlippablePropCard(prop: only,
-                                                              gameResult: propResult(for: only, on: propShelfDay(shelf)),
-                                                              finalScore: shelf.settled ? propScore(for: only) : nil,
-                                                              showSportBadge: false,
-                                                              alwaysShowStartTime: true,
-                                                              backHeight: UIScreen.main.bounds.height * 0.68,
-                                                              premiumFinish: true)
-                                        } else {
-                                            // Headline cards stacked — the slip
-                                            // retired with the June 11 redesign.
-                                            VStack(spacing: 10) {
-                                                ForEach(group) { p in
-                                                    FlippablePropCard(prop: p,
-                                                                      gameResult: propResult(for: p, on: propShelfDay(shelf)),
-                                                                      finalScore: shelf.settled ? propScore(for: p) : nil,
-                                                                      showSportBadge: false,
-                                                                      alwaysShowStartTime: true,
-                                                                      backHeight: UIScreen.main.bounds.height * 0.68,
-                                                                      premiumFinish: true)
-                                                }
-                                            }
-                                        }
+                                                sealKicker: "GARY'S PROP PICK IS IN",
+                                                silverSeal: true) {
+                                        FlippablePropCard(prop: prop,
+                                                          gameResult: propResult(for: prop, on: propShelfDay(shelf)),
+                                                          finalScore: shelf.settled ? propScore(for: prop) : nil,
+                                                          showSportBadge: false,
+                                                          alwaysShowStartTime: true,
+                                                          backHeight: UIScreen.main.bounds.height * 0.68,
+                                                          premiumFinish: true)
                                     }
                                 } else {
                                     // Locked: ZERO prop data in the view. Tap opens Plans.
@@ -14207,6 +14366,11 @@ struct MembersOnlyCardFace: View {
     var leagueTag: String? = nil
     /// Kicker override — the prop shelf says PROP PICK instead of PICK.
     var kicker: String? = nil
+    /// SILVER seal (founder, Aug 4: "no gold outline around the props").
+    /// Props are the silver twin of the gold game card everywhere else
+    /// (SilverBar, Jul 3) — the seal was the one place they still wore gold.
+    var silverSeal: Bool = false
+    private var sealTint: Color { silverSeal ? GaryColors.silver : GaryColors.gold }
     var footnote: String? = nil
     /// True inside MembersWrap — the face stretches to cover whatever it seals
     /// (a stacked prop group runs taller than one card).
@@ -14266,7 +14430,7 @@ struct MembersOnlyCardFace: View {
             HStack {
                 Text("MEMBERS ONLY")
                     .font(GaryFonts.accent(12)).tracking(1.0)
-                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+                    .foregroundStyle(sealTint.opacity(0.85))
                 Spacer()
                 if let leagueTag {
                     Text(leagueTag)
@@ -14285,7 +14449,7 @@ struct MembersOnlyCardFace: View {
                         .lineLimit(1).minimumScaleFactor(0.55)
                     Text(stack.bottom)
                         .font(GaryFonts.display(38))
-                        .foregroundStyle(GaryColors.gold)
+                        .foregroundStyle(sealTint)
                         .lineLimit(1).minimumScaleFactor(0.55)
                     if let kickerLine {
                         Text(kickerLine)
@@ -14349,14 +14513,14 @@ struct MembersOnlyCardFace: View {
                 .overlay(SealDiagonalShape(topX: seamX.top, bottomX: seamX.bottom).fill(Color(hex: "#2B2620")))
                 .overlay(
                     SealSeamShape(topX: seamX.top, bottomX: seamX.bottom).stroke(
-                        LinearGradient(colors: [GaryColors.gold.opacity(0), GaryColors.gold, GaryColors.gold.opacity(0)],
+                        LinearGradient(colors: [sealTint.opacity(0), sealTint, sealTint.opacity(0)],
                                        startPoint: .top, endPoint: .bottom),
                         lineWidth: 1.5)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1)
+                        .stroke(sealTint.opacity(silverSeal ? 0.30 : 0.45), lineWidth: 1)
                 )
                 .overlay(alignment: .top) {
                     // Lit-from-above highlight — the lift cue.
@@ -14419,6 +14583,8 @@ struct MembersWrap<Content: View>: View {
     /// height instead of the whole stack (the double-tall seal read wrong,
     /// founder Jul 5), then grows to the real stack on reveal.
     var sealedHeight: CGFloat? = nil
+    /// Props seal in SILVER (founder, Aug 4) — see MembersOnlyCardFace.
+    var silverSeal: Bool = false
 
     /// "12:30 PM" (ET) — the seal names first pitch instead of ticking at it.
     static func pitchClock(_ d: Date) -> String {
@@ -14432,6 +14598,7 @@ struct MembersWrap<Content: View>: View {
 
     init(revealId: String, commence: Date? = nil, tease: String? = nil,
          league: String? = nil, sealKicker: String? = nil, sealedHeight: CGFloat? = nil,
+         silverSeal: Bool = false,
          @ViewBuilder content: @escaping () -> Content) {
         self.revealId = revealId
         self.commence = commence
@@ -14439,6 +14606,7 @@ struct MembersWrap<Content: View>: View {
         self.league = league
         self.sealKicker = sealKicker
         self.sealedHeight = sealedHeight
+        self.silverSeal = silverSeal
         self.content = content
         let started = commence.map { $0 <= Date() } ?? true
         _revealed = State(initialValue: RevealedPicks.isRevealed(revealId) || started)
@@ -14452,6 +14620,7 @@ struct MembersWrap<Content: View>: View {
         ZStack {
             MembersOnlyCardFace(state: .pickIn(firstPitch: commence.map { Self.pitchClock($0) }),
                                 tease: tease, leagueTag: league, kicker: sealKicker,
+                                silverSeal: silverSeal,
                                 fillsContainer: true)
                 .opacity(revealed ? 0 : 1)
             content()
@@ -15110,7 +15279,18 @@ struct CompactPickRow: View {
         if (pick.type ?? "").lowercased() == "total" {
             return "\(words.joined(separator: " ").uppercased())\nTOTAL \(totalNoun)"
         }
-        guard homeIsPicked || awayIsPicked else { return words.joined(separator: " ").uppercased() }
+        guard homeIsPicked || awayIsPicked else {
+            // Team-word matching missed — the pick text names the CITY
+            // ("Colorado Moneyline") while the roster field stores the
+            // MASCOT ("Rockies"), so no word is shared and sideIsPicked
+            // can't confirm either side. Split first word / rest anyway so
+            // the hero still gets its two-line shape (founder, Aug 4: "how
+            // come the word Moneyline didn't drop down" — it silently fell
+            // back to one line here instead of matching Tigers/Diamondbacks'
+            // behavior). Only a true single-word pick stays on one line.
+            guard words.count >= 2 else { return words.joined(separator: " ").uppercased() }
+            return "\(words[0].uppercased())\n\(words[1...].joined(separator: " ").uppercased())"
+        }
         let pickedShort = homeIsPicked ? homeName : awayName
         let pickedFull = homeIsPicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
         var teamWords = Set(pickedFull.lowercased().split(separator: " ").map(String.init))
@@ -16820,30 +17000,56 @@ struct PickCardBack: View {
     let pick: GaryPick
     var gameResult: String? = nil
     @State private var shareItem: PickShareItem? = nil
-    // Two registers of the same audited case — plain fan read vs the analysis.
-    // Plain leads by default; picks without the stored plain layer never show tabs.
-    @State private var showPlain = true
     @State private var copiedTake = false
-    /// Exactly the prose on screen right now — the register the reader is
-    /// looking at, heading stripped, paragraphs intact. Word for word.
-    private var takeCopyText: String {
-        if showPlain, let plain = pick.rationale_plain, !plain.isEmpty { return plain }
+
+    // The back's content panes (founder, Aug 4): the take reads first; the
+    // sportsbook lines and the Tale of the Tape moved from below-the-scroll
+    // to TABS up top. (The old PLAIN/ANALYSIS register toggle is GONE — the
+    // analysis register came off the card entirely; the technical rationale
+    // lives on backend-only as the audit trail the graders run against.)
+    private enum BackTab: String { case take = "THE TAKE", lines = "LINES", tape = "THE TAPE" }
+    @State private var tab: BackTab = .take
+    private var availableTabs: [BackTab] {
+        var t: [BackTab] = [.take]
+        if let odds = pick.sportsbook_odds, !odds.isEmpty { t.append(.lines) }
+        if let stats = pick.statsData, !stats.isEmpty { t.append(.tape) }
+        return t
+    }
+
+    /// The take as shown: the plain fan register, opened directly on its
+    /// first sentence — a stored "Gary's Take" heading line is stripped
+    /// (founder, Aug 4: "straight into the rationale"; the header eyebrow
+    /// already says it). Falls back to the audited rationale only when the
+    /// plain layer never arrived (its translator is non-blocking by contract).
+    private var takeText: String? {
+        if var t = pick.rationale_plain?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
+            for h in ["gary's take", "garys take", "gary's take:"] where t.lowercased().hasPrefix(h) {
+                t = String(t.dropFirst(h.count))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ":").union(.whitespacesAndNewlines))
+                break
+            }
+            if !t.isEmpty { return t }
+        }
         let parts = splitTake(pick.rationale)
-        return [parts.take, parts.rest]
+        let joined = [parts.take, parts.rest]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
+        return joined.isEmpty ? nil : joined
     }
+    /// Copy = exactly the prose on screen, word for word (founder, Jul 31).
+    private var takeCopyText: String { takeText ?? "" }
     private var confidence: CGFloat { CGFloat(max(0.1, min(1.0, pick.confidence ?? 0.7))) }
     private var pickedHome: Bool {
         guard let h = pick.homeTeam, !h.isEmpty else { return false }
         return (pick.pick ?? "").localizedCaseInsensitiveContains(h)
     }
 
-    @ViewBuilder private func registerTab(_ label: String, active: Bool, tap: @escaping () -> Void) -> some View {
-        Button(action: tap) {
+    @ViewBuilder private func paneTab(_ t: BackTab) -> some View {
+        let active = tab == t
+        Button { withAnimation(.easeInOut(duration: 0.15)) { tab = t } } label: {
             VStack(spacing: 3) {
-                Text(label)
+                Text(t.rawValue)
                     .font(GaryFonts.display(11)).tracking(1.4)
                     .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
                 Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 1.5)
@@ -16856,13 +17062,16 @@ struct PickCardBack: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("GARY'S CASE")
+                Text("GARY'S TAKE")
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
-                Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
-                    .font(GaryFonts.mono(10, bold: false))
-                    .foregroundStyle(.white.opacity(0.62)).lineLimit(1).minimumScaleFactor(0.7)
+                // THE PICK rides the header slot (founder, Aug 4: "people
+                // know from the front what the game is" — the matchup line
+                // came off, the pick took its place and size).
+                Text(pick.pick ?? "")
+                    .font(GaryFonts.mono(10, bold: true))
+                    .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.6)
                 // Copy the take VERBATIM (founder, Jul 31) — whichever
                 // register is on screen, exactly as written, so it can be
                 // pasted word for word.
@@ -16897,21 +17106,8 @@ struct PickCardBack: View {
                 .accessibilityLabel("Share this pick")
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                // Two lines before any shrink — the long specials lines
-                // ("Schwarber to reach semifinal") ellipsized at one line
-                // (no-ellipsis law, founder Jul 13).
-                Text(pick.pick ?? "")
-                    .font(GaryFonts.text(19, .heavy))
-                    .foregroundStyle(GaryColors.gold).lineLimit(2).minimumScaleFactor(0.7)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                if pick.confidence != nil {
-                    Text(convictionTier(Double(confidence)))
-                        .font(GaryFonts.mono(12, bold: true))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-            }
+            // (The big gold pick line came off Aug 4 with the header swap —
+            // the pick lives in the header slot now, the take gets the room.)
 
             // World Cup tournament context (e.g. "Group A · Group Stage"); nil for other sports
             if let wcContext = pick.soccerContext {
@@ -16948,57 +17144,43 @@ struct PickCardBack: View {
                 TailFadeRow(pick: pick)
             }
 
+            // Pane tabs up top (founder, Aug 4) — the lines and the tape are a
+            // tap away, not a scroll-below-the-take discovery. The strip only
+            // renders when there's more than the take to switch to.
+            if availableTabs.count > 1 {
+                HStack(spacing: 16) {
+                    ForEach(availableTabs, id: \.rawValue) { paneTab($0) }
+                    Spacer()
+                }
+            }
+
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let plain = pick.rationale_plain, !plain.isEmpty {
-                        HStack(spacing: 16) {
-                            registerTab("PLAIN", active: showPlain) { showPlain = true }
-                            registerTab("ANALYSIS", active: !showPlain) { showPlain = false }
-                            Spacer()
-                        }
-                    }
-                    if showPlain, let plain = pick.rationale_plain, !plain.isEmpty {
-                        Text(plain)
-                            .font(GaryFonts.text(14.5))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .lineSpacing(3.5)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        // The rationale's first paragraph leads at quote weight;
-                        // the rest of the case follows as the receipts.
-                        let parts = splitTake(pick.rationale)
-                        if let take = parts.take {
+                    switch tab {
+                    case .take:
+                        // Straight into the rationale — no inner heading, no
+                        // registers (founder, Aug 4).
+                        if let take = takeText {
                             Text(take)
-                                // No bolded rationale anywhere (founder, Jul 13) —
-                                // the lead paragraph reads at body weight like the rest.
                                 .font(GaryFonts.text(14.5))
                                 .foregroundStyle(.white.opacity(0.88))
                                 .lineSpacing(3.5)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        if let rest = parts.rest {
-                            Text(rest)
-                                .font(GaryFonts.text(14.5))
-                                .foregroundStyle(.white.opacity(0.72))
-                                .lineSpacing(3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    case .lines:
+                        if let odds = pick.sportsbook_odds, !odds.isEmpty {
+                            SportsbookLinesDropdown(odds: odds)
                         }
-                    }
-
-                    if let odds = pick.sportsbook_odds, !odds.isEmpty {
-                        Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
-                        SportsbookLinesDropdown(odds: odds)
-                    }
-
-                    if let stats = pick.statsData, !stats.isEmpty {
-                        Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
-                        TaleOfTapeSection(
-                            homeTeam: pick.homeTeam ?? "",
-                            awayTeam: pick.awayTeam ?? "",
-                            statsData: stats,
-                            injuries: pick.injuries,
-                            garyPickedHome: pickedHome
-                        )
+                    case .tape:
+                        if let stats = pick.statsData, !stats.isEmpty {
+                            TaleOfTapeSection(
+                                homeTeam: pick.homeTeam ?? "",
+                                awayTeam: pick.awayTeam ?? "",
+                                statsData: stats,
+                                injuries: pick.injuries,
+                                garyPickedHome: pickedHome
+                            )
+                        }
                     }
                     // Tail room: the last sentence must clear the bottom fade
                     // fully when scrolled to the end (founder: the rationale
@@ -19937,29 +20119,49 @@ struct PicksCarouselView: View {
                 }
             })
 
-            if sports.count > 1 {
-                HStack(spacing: 22) {
-                    ForEach(sports, id: \.self) { s in
-                        let on = (s == sport)
-                        Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
-                            VStack(spacing: 5) {
-                                Text(s)
-                                    .font(GaryFonts.kicker(12))
-                                    .tracking(1.6)
-                                    .foregroundStyle(on ? GaryColors.warmWhite : .white.opacity(0.5))
-                                Capsule().fill(GaryColors.gold)
-                                    .frame(width: 22, height: 2)
-                                    .opacity(on ? 1 : 0)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
+            // LEAGUE WORDS (founder pick, mock 64): the underline sport tabs
+            // became a single trigger — tap the current league and the full-
+            // screen typographic switcher takes the room. Unlike the old
+            // underline tabs (which only existed to switch BETWEEN leagues,
+            // so hid at count<=1), this trigger always shows whenever there's
+            // a real league to label — it's the page's "you're looking at
+            // MLB" readout as much as a switcher, and today it's the only way
+            // to see the feature at all before football/basketball are live.
+            if !sports.isEmpty {
+                HStack {
+                    LeagueWordsTrigger(current: sport) { presentLeagueWords() }
                     Spacer()
                 }
                 .padding(.top, 10)
                 .pageGutter()
             }
+        }
+    }
+
+    /// Tonight's slate count for a sport tab — the overlay's superscript.
+    /// Real info only: lanes without a slate row (MLB HR) show a bare word.
+    private func slateGameCount(_ s: String) -> Int {
+        store.slate.filter { ($0.league ?? "").uppercased() == s.uppercased() }.count
+    }
+
+    private func presentLeagueWords() {
+        let opts = sports.map { s -> LeagueOverlayState.Option in
+            let n = slateGameCount(s)
+            let live = LiveScoreCache.shared.scores.contains {
+                $0.isLive && ($0.league ?? "").uppercased() == s.uppercased()
+            }
+            let liveCount = LiveScoreCache.shared.scores.filter {
+                $0.isLive && ($0.league ?? "").uppercased() == s.uppercased()
+            }.count
+            let sup: String? = n > 0
+                ? (live ? "\(n) · \(liveCount) LIVE" : "\(n) GAME\(n == 1 ? "" : "S")")
+                : nil
+            return .init(code: s, sup: sup, live: live, selected: s == sport)
+        }
+        // The whole calendar, not just what's live (founder, Aug 4).
+        let full = opts + LeagueOverlayState.offSeasonOptions(excluding: Set(sports))
+        LeagueOverlayState.shared.present(full) { picked in
+            withAnimation(.easeInOut(duration: 0.2)) { sport = picked }
         }
     }
 
@@ -20707,10 +20909,8 @@ struct GameScoutSection: View {
     var body: some View {
         if row != nil || wc != nil, hasContent {
             VStack(alignment: .leading, spacing: 0) {
-                Text("SCOUTING REPORT")
-                    .font(GaryFonts.accent(11.5)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.65))
-                    .padding(.bottom, 12)
+                // "SCOUTING REPORT" label removed (founder, Aug 4) — the card
+                // opens straight with the matchup, then the arms.
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(headerNames.away + (headOdds.a.map { " \($0)" } ?? ""))
                         .font(GaryFonts.display(24))
@@ -20737,6 +20937,16 @@ struct GameScoutSection: View {
                         .padding(.bottom, 10)
                 }
                 if let series = wc == nil ? row?.series : nil { seriesBlock(series) }
+                // Gary's two sentences on the game's two starters (founder,
+                // Aug 4) — the take leads, the stat plates follow as data.
+                if wc == nil, let take = row?.arms_take {
+                    Text(take)
+                        .font(GaryFonts.text(14, .medium))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 10)
+                }
                 if wc == nil { mlbArms } else { wcRows }
                 wireLines
                 if let footer {
@@ -21021,6 +21231,9 @@ fileprivate struct ScoutTrioData {
     let seriesLine: String?         // split_line
     let lastMeeting: (d: String, line: String)?
     let wireLines: [String]
+    /// THE ARMS IN GARY'S VOICE (Aug 4) — the board's two sentences on the
+    /// game's two starters. nil = the assembled template prose renders.
+    let armsTake: String?
 
     init(matchup: String, row: TomorrowBoardRow?, board: TomorrowBoard?, wire: [SupabaseAPI.WireItem],
          commence: Date? = nil, isDoubleheader: Bool = false) {
@@ -21071,6 +21284,7 @@ fileprivate struct ScoutTrioData {
         tempF = w?.temp_f; windMph = w?.wind_mph; weatherNote = w?.note
         total = row?.total
         seriesLine = row?.series?.split_line
+        armsTake = row?.arms_take
         if let m = row?.series?.meetings?.last, let d = m.d, let line = m.line {
             lastMeeting = (d, line)
         } else { lastMeeting = nil }
@@ -21200,7 +21414,16 @@ fileprivate struct ScoutArmsSection: View {
                 Text("THE ARMS")
                     .font(GaryFonts.display(14)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
-                if let prose {
+                // Gary's two sentences on the two starters (founder, Aug 4 —
+                // "whatever two sentences Gary wants to say"); the assembled
+                // template line is the fallback when the board carries none.
+                if let take = d.armsTake {
+                    Text(take)
+                        .font(.system(size: 15))
+                        .foregroundStyle(ScoutMock.warm.opacity(0.92))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let prose {
                     prose
                         .font(.system(size: 15).monospacedDigit())
                         .lineSpacing(4)
@@ -21495,12 +21718,8 @@ struct PicksGamePage: View {
             // from this page (struct kept while the design settles).
             let trio = ScoutTrioData(matchup: group.matchup, row: scoutRow, board: scoutBoard, wire: scoutWire,
                                      commence: group.commence, isDoubleheader: group.dh)
-            if trio.awayStarter != nil || trio.tonightLine != nil || trio.wireText != nil {
-                Text("SCOUTING REPORT")
-                    .font(GaryFonts.accent(11.5)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.65))
-                    .padding(.horizontal, 16)
-            }
+            // "SCOUTING REPORT" label removed (founder, Aug 4) — the page
+            // opens straight with THE ARMS.
             ScoutArmsSection(d: trio)
             ScoutNotebookSection(d: trio)
             ScoutBigNumbersSection(d: trio, edges: edges)

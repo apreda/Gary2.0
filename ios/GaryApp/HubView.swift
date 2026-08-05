@@ -100,6 +100,11 @@ func hubValueTint(_ s: Signal) -> Color {
     if s.kind == .streak, let first = s.value.first, first == "O" || first == "U" {
         return GaryColors.gold
     }
+    // HR Threat prices are a price, not a hot/cold verdict — same carve-out
+    // as O/U streaks above (founder, Aug 4: the green odds "read as already
+    // graded"). Cosmetic only: s.tone itself is untouched, so the morning
+    // grader's branch on it is unaffected.
+    if s.kind == .hrThreat { return GaryColors.gold }
     return s.tone.color
 }
 
@@ -477,10 +482,6 @@ struct HubView: View {
     @State private var intelCards: [PlayerInsightCardRow] = []
     @State private var namedCard: PlayerInsightCardRow? = nil
     @State private var todayBoard: TomorrowBoard? = nil
-    /// Tonight's HR-lane prop calls — the priced fun-lane tickets. Retired from
-    /// the props boards and the props record (founder, Jul 29/Aug 3); the Home
-    /// Run Threats beat below is their only home, the Billfold keeps the tally.
-    @State private var hrCalls: [PropPick] = []
     /// LEAGUE PULSE (moved from the Picks page — founder, Jul 30): league-wide
     /// daily tables, fetched with the page load so pull-to-refresh and the
     /// staleness refetch cover it like everything else on the page.
@@ -596,9 +597,6 @@ struct HubView: View {
         async let intelF = SupabaseAPI.fetchPlayerIntelRows(date: date)
         // Force past the 30-min pulse cache on refresh/rollover, not first paint.
         async let pulseF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
-        // Tonight's HR-lane calls ride the same parallel wave (fun-lane tickets
-        // for the Home Run Threats beat — see the hrCalls doc above).
-        async let hrPropsF = SupabaseAPI.fetchPropPicks(date: date)
 
         var collected: [Signal] = []
         var anyError = false
@@ -659,12 +657,9 @@ struct HubView: View {
         }
         yday = Self.dedupe(yday)
         let intel = await intelF
-        let hrProps = (try? await hrPropsF) ?? []
 
         await MainActor.run {
             intelCards = intel
-            hrCalls = hrProps.filter { $0.isHRLane }
-                .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
             didLoad = true
             loadedAt = Date()
             loadedDate = date
@@ -925,12 +920,14 @@ struct HubView: View {
 
     @ViewBuilder private func beatView(_ beat: Beat) -> some View {
         let rows = beatRows(beat)
-        // Home Run Threats carries Gary's priced HR calls too —
-        // the fun-lane tickets live here now (retired from the
-        // props boards and the props record; the Billfold's
-        // longshot tracker keeps their tally).
-        let beatHRCalls = beat.anchor == "hr" && sel == .mlb ? hrCalls : []
-        if !rows.isEmpty || !beatHRCalls.isEmpty {
+        // (The second HR block — "Gary's HR Calls Tonight / Longshot Lane",
+        // HubHRCallsBlock — was removed Aug 4 2026 on the founder's call: two
+        // HR sections back to back was one too many. The gold-priced Home Run
+        // Threats beat above stays. The struct and its isolated data path
+        // (hrCalls/hrProps/hrPropsF) were fully self-contained — confirmed no
+        // other surface referenced them — so this was a clean removal, not a
+        // flag-off.)
+        if !rows.isEmpty {
             // The Matchups reads as a slate storyboard —
             // one block per game (founder, Jul 30) — while
             // every other beat keeps the flat feed.
@@ -944,28 +941,6 @@ struct HubView: View {
                     onProfile: { breakdownSignal = $0 },
                     onGame: { openGameSheet(for: $0) }
                 )
-                .id(beat.anchor)
-            } else if !beatHRCalls.isEmpty {
-                VStack(alignment: .leading, spacing: 14) {
-                    if rows.isEmpty {
-                        // Reads posted nothing yet — the calls
-                        // still need the section masthead.
-                        HubHead(title: beat.title)
-                    } else {
-                        HubBeatSection(
-                            anchor: beat.anchor,
-                            title: beat.title,
-                            rows: rows,
-                            openBeats: $openBeats,
-                            kickerFor: kickerText,
-                            onRow: { s in openSignal(s) },
-                            onProfile: { breakdownSignal = $0 }
-                        )
-                    }
-                    HubHRCallsBlock(calls: beatHRCalls,
-                                    cardFor: { intelCard(for: $0) },
-                                    onPlayer: { namedCard = $0 })
-                }
                 .id(beat.anchor)
             } else {
                 HubBeatSection(
@@ -1600,23 +1575,28 @@ fileprivate struct HubMasthead: View {
                 }
             })
 
-            if leagues.count > 1 {
-                HStack(spacing: 22) {
-                    ForEach(leagues, id: \.self) { l in
-                        let on = l == sel
-                        Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l } } label: {
-                            VStack(spacing: 5) {
-                                Text(l.label)
-                                    .font(HubFont.kicker(12))
-                                    .tracking(1.6)
-                                    .foregroundStyle(on ? GaryColors.warmWhite : .white.opacity(0.5))
-                                Capsule().fill(GaryColors.gold)
-                                    .frame(width: 22, height: 2)
-                                    .opacity(on ? 1 : 0)
-                            }
-                            .contentShape(Rectangle())
+            // LEAGUE WORDS (founder pick, mock 64): underline league tabs →
+            // one trigger; the full-screen typographic switcher does the rest.
+            // Shows at any league count (not just >1, unlike the old tabs it
+            // replaced) — it's also the page's "you're on MLB" label, and the
+            // only way to see the feature before more leagues are in season.
+            if !leagues.isEmpty {
+                HStack {
+                    LeagueWordsTrigger(current: sel.label) {
+                        let opts = leagues.map { l -> LeagueOverlayState.Option in
+                            let n = l == sel ? gameCount : 0
+                            return .init(code: l.label,
+                                         sup: n > 0 ? "\(n) GAME\(n == 1 ? "" : "S")" : nil,
+                                         live: false, selected: l == sel)
                         }
-                        .buttonStyle(.plain)
+                        // The whole calendar, not just what's live (founder, Aug 4).
+                        let full = opts + LeagueOverlayState.offSeasonOptions(
+                            excluding: Set(leagues.map(\.label)))
+                        LeagueOverlayState.shared.present(full) { picked in
+                            if let hit = leagues.first(where: { $0.label == picked }) {
+                                withAnimation(.easeInOut(duration: 0.2)) { sel = hit }
+                            }
+                        }
                     }
                     Spacer()
                 }
@@ -2334,84 +2314,6 @@ fileprivate struct HubStreakWatch: View {
 /// A beat: section head + top rows + "See all n". Rows keep the feed's
 /// relevance order; each carries its own lane kicker and special shape
 /// (swap / tug-of-war / first-inning dots) when its meta calls for one.
-/// Gary's priced HR calls for tonight — the fun-lane tickets, living INSIDE
-/// the Home Run Threats beat (their only surface: the props boards and the
-/// props record retired the lane; the Billfold's longshot tracker keeps the
-/// tally). Flat hub grammar — kicker, rows, hairlines — collapsed to six with
-/// the house SEE ALL toggle on the big-slate nights.
-fileprivate struct HubHRCallsBlock: View {
-    let calls: [PropPick]
-    /// Tap-a-name → player card (routing law; names with no card stay plain).
-    var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
-    var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
-    @State private var open = false
-    private let topCount = 6
-
-    private var visible: [PropPick] { open ? calls : Array(calls.prefix(topCount)) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(GaryColors.gold)
-                HubKicker(text: "Gary's HR calls tonight")
-                Text("\(calls.count)")
-                    .font(HubFont.data(11))
-                    .foregroundStyle(.white.opacity(0.7))
-                Spacer(minLength: 6)
-                HubKicker(text: "Longshot lane", size: 9.5, color: .white.opacity(0.5))
-            }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 2)
-
-            ForEach(Array(visible.enumerated()), id: \.element.id) { i, p in
-                if i > 0 { HubRule(inset: 18) }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    // The name routes to the player card when the day has one
-                    // (routing law); same ink either way — taps don't shout.
-                    let nameLabel = Text((p.player ?? p.team ?? "HR call").uppercased())
-                        .font(HubFont.body(14, .semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    if let card = cardFor(p.player) {
-                        Button { onPlayer(card) } label: { nameLabel.contentShape(Rectangle()) }
-                            .buttonStyle(.plain)
-                    } else {
-                        nameLabel
-                    }
-                    Text("HR")
-                        .font(HubFont.kicker(9.5)).tracking(1.1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    Spacer(minLength: 6)
-                    if let o = p.odds, !o.isEmpty {
-                        Text(o.hasPrefix("+") || o.hasPrefix("-") ? o : "+\(o)")
-                            .font(HubFont.data(14))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
-            }
-
-            if calls.count > topCount {
-                HubSeeAllButton(isOpen: open, total: calls.count) {
-                    withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
-                }
-                .padding(.top, 4)
-            }
-
-            Text("Lottery swings, tracked for the fun of it in the Billfold — never part of Gary's props record.")
-                .font(HubFont.body(11.5))
-                .foregroundStyle(.white.opacity(0.5))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 18)
-                .padding(.top, 8)
-        }
-    }
-}
-
 fileprivate struct HubBeatSection: View {
     let anchor: String
     let title: String

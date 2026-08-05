@@ -107,8 +107,13 @@ struct ContentView: View {
             // loading/empty state) — the "nav bar stuck in the middle" glitch.
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Tab bar — Gary is raised + larger center button
+            // Tab bar — the fade dock (founder pick, mock 34).
             GaryCenteredTabBar(selectedTab: $selectedTab)
+
+            // League Words (founder pick, mock 64) — the full-screen
+            // typographic league switcher. Mounted HERE so it dims the whole
+            // screen, dock included, exactly as the mock drew it.
+            LeagueWordsOverlay()
         }
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
@@ -343,125 +348,58 @@ struct SettingsSheetView: View {
 
 // MARK: - Gary-Centered Tab Bar (Gary as raised center primary action)
 
-/// Tab bar with 4 normal tabs (Home, Winners | Picks, Billfold) and Gary as
-/// the floating center tab (index 2). Gary is THE main thing — the bear
-/// floats between the bar's two halves, and the bar reflects that.
-// PSEUDO-SEPARATION (founder, Aug 4: "the logo in the middle of the nav bar
-// kind of floating in between the two parts... not like a full separation").
-// One continuous silhouette: two full-height slabs joined by a slim center
-// bridge — a waist, not a cut. The bear floats over the bridge and bursts
-// above the slabs' top edge. Drawn as ONE path so the fill and the hairline
-// stroke read as a single object.
-struct SplitWaistBarShape: Shape {
-    var cornerRadius: CGFloat   // rounding of the bar's outer ends
-    var gapHalf: CGFloat        // half-width of the center gap between slabs
-    var bridgeHeight: CGFloat   // the slim band that keeps the halves one bar
-    var neckRadius: CGFloat     // rounding where the slabs turn into the gap
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let w = rect.width, h = rect.height
-        let cx = rect.midX
-        let xL = cx - gapHalf          // left slab's inner wall
-        let xR = cx + gapHalf          // right slab's inner wall
-        let notch = (h - bridgeHeight) / 2   // depth of the waist from each edge
-        let r = cornerRadius
-        let n = min(neckRadius, notch / 2)
-
-        p.move(to: CGPoint(x: 0, y: r))
-        p.addQuadCurve(to: CGPoint(x: r, y: 0), control: .zero)                          // top-left corner
-        p.addLine(to: CGPoint(x: xL - n, y: 0))
-        p.addQuadCurve(to: CGPoint(x: xL, y: n), control: CGPoint(x: xL, y: 0))          // into the gap (convex)
-        p.addLine(to: CGPoint(x: xL, y: notch - n))
-        p.addQuadCurve(to: CGPoint(x: xL + n, y: notch), control: CGPoint(x: xL, y: notch)) // fillet onto bridge
-        p.addLine(to: CGPoint(x: xR - n, y: notch))                                      // bridge top
-        p.addQuadCurve(to: CGPoint(x: xR, y: notch - n), control: CGPoint(x: xR, y: notch))
-        p.addLine(to: CGPoint(x: xR, y: n))
-        p.addQuadCurve(to: CGPoint(x: xR + n, y: 0), control: CGPoint(x: xR, y: 0))      // out of the gap
-        p.addLine(to: CGPoint(x: w - r, y: 0))
-        p.addQuadCurve(to: CGPoint(x: w, y: r), control: CGPoint(x: w, y: 0))            // top-right corner
-        p.addLine(to: CGPoint(x: w, y: h - r))
-        p.addQuadCurve(to: CGPoint(x: w - r, y: h), control: CGPoint(x: w, y: h))        // bottom-right
-        p.addLine(to: CGPoint(x: xR + n, y: h))
-        p.addQuadCurve(to: CGPoint(x: xR, y: h - n), control: CGPoint(x: xR, y: h))      // bottom neck, mirrored
-        p.addLine(to: CGPoint(x: xR, y: h - notch + n))
-        p.addQuadCurve(to: CGPoint(x: xR - n, y: h - notch), control: CGPoint(x: xR, y: h - notch))
-        p.addLine(to: CGPoint(x: xL + n, y: h - notch))                                  // bridge bottom
-        p.addQuadCurve(to: CGPoint(x: xL, y: h - notch + n), control: CGPoint(x: xL, y: h - notch))
-        p.addLine(to: CGPoint(x: xL, y: h - n))
-        p.addQuadCurve(to: CGPoint(x: xL - n, y: h), control: CGPoint(x: xL, y: h))
-        p.addLine(to: CGPoint(x: r, y: h))
-        p.addQuadCurve(to: CGPoint(x: 0, y: h - r), control: CGPoint(x: 0, y: h))        // bottom-left
-        p.closeSubpath()
-        return p
-    }
-}
-
+// FADE DOCK (founder pick, Aug 4 — mock 34 off the drawing-board round).
+// No bar surface at all: the page fades into the ink underneath and five
+// destinations sit directly on the fade — four glyph tabs and the bear,
+// 46pt, labeled THE HUB. The dome (mock 01) and the split-waist bar (the
+// pseudo-separation experiment) both retired with this; their shapes were
+// deleted, not flagged off, per the founder's decisive pick.
 struct GaryCenteredTabBar: View {
     @Binding var selectedTab: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private struct TabItem { let icon: String; let label: String; let index: Int }
     private let leftTabs: [TabItem] = [
-        TabItem(icon: "house.fill", label: "Home", index: 0),
-        TabItem(icon: "checkmark.seal.fill", label: "Winners", index: 1),
+        TabItem(icon: "house.fill", label: "HOME", index: 0),
+        TabItem(icon: "checkmark.seal.fill", label: "WINNERS", index: 1),
     ]
     private let rightTabs: [TabItem] = [
-        TabItem(icon: "list.bullet.rectangle.fill", label: "Picks", index: 3),
-        TabItem(icon: "banknote.fill", label: "Billfold", index: 4),
+        TabItem(icon: "list.bullet.rectangle.fill", label: "PICKS", index: 3),
+        TabItem(icon: "banknote.fill", label: "BILLFOLD", index: 4),
     ]
     private let garyIndex: Int = 2
-
-    // PSEUDO-SEPARATION geometry (founder, Aug 4: dome gone; the bear floats
-    // between the bar's two halves): bar 72 tall, radius 27, 92pt gap between
-    // the slabs, 20pt bridge keeping them one bar, 78pt bear biased high —
-    // crown bursts 9pt above the slabs, chin stays 3pt inside the floor.
-    private let barHeight: CGFloat = 72
-    private let gapHalf: CGFloat = 46
-    private let bridgeHeight: CGFloat = 20
-    private let logoSize: CGFloat = 78
-    private let logoLift: CGFloat = 6
-
-    private var barShape: SplitWaistBarShape {
-        SplitWaistBarShape(cornerRadius: 27, gapHalf: gapHalf, bridgeHeight: bridgeHeight, neckRadius: 13)
-    }
+    /// Mock 34's proportions: 46pt bear, THE HUB kicker under it.
+    private let logoSize: CGFloat = 46
 
     var body: some View {
-        ZStack {
-            // Split-waist bar: solid ink fill, flat 10%-white hairline, no
-            // glass, no drop shadow.
-            //
-            // HUE FIX (founder, Aug 4: "the nav bar is a different color").
-            // #17161A is blue-leading (R23 G22 B26) — the exact grey-blue
-            // cast the page background was corrected away from. barSurface is
-            // its warm twin at MATCHED luminance (22.6 vs 22.5), so the
-            // elevation reads the same — only the hue family changes.
-            ZStack {
-                barShape.fill(GaryColors.barSurface)
-                barShape.stroke(Color.white.opacity(0.10), lineWidth: 1)
-            }
-            .frame(height: barHeight)
-
-            // Tabs live in the slabs.
-            HStack(spacing: 0) {
-                ForEach(leftTabs, id: \.index) { sideTab($0) }
-                // The bear IS the label (founder, Aug 3: "the logo in the
-                // middle doesn't need the word Hub under it") — the center
-                // slot reserves the gap between the slabs.
-                Color.clear.frame(width: gapHalf * 2, height: 26)
-                ForEach(rightTabs, id: \.index) { sideTab($0) }
-            }
-            .padding(.horizontal, 18)
-            .frame(height: barHeight)
-
-            // The bear floats in the gap, over the bridge — biased high so
-            // the crown bursts above the bar while the chin clears the floor.
-            garyLogo
-                .offset(y: -logoLift)
+        HStack(alignment: .bottom, spacing: 0) {
+            ForEach(leftTabs, id: \.index) { sideTab($0) }
+            centerHub
+                .frame(maxWidth: .infinity)
+            ForEach(rightTabs, id: \.index) { sideTab($0) }
         }
-        .frame(height: barHeight)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 14)
+        .padding(.top, 30)
+        // SEATED LOW (founder, Aug 4: "we can lower it still a bit"). The dock
+        // dips 6pt INTO the bottom safe area, so the labels finish ~28pt off
+        // the physical edge — still ~15pt clear of the home indicator's swipe
+        // zone, which is the floor this can't cross without stealing that
+        // gesture. Any lower and a Billfold tap starts competing with a
+        // swipe-up-to-close.
+        .padding(.bottom, -6)
+        .background(alignment: .bottom) {
+            // The fade IS the bar: page ink rising from the bottom edge, so
+            // content scrolls visibly underneath and dissolves into the dock.
+            // Anchored to the page background's own bottom tone (#0B0A09 —
+            // LiquidGlassBackground's gradient floor) for a seamless meet.
+            LinearGradient(stops: [
+                .init(color: Color(hex: "#0B0A09").opacity(0), location: 0),
+                .init(color: Color(hex: "#0B0A09").opacity(0.93), location: 0.40),
+                .init(color: Color(hex: "#0B0A09"), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea(edges: .bottom)
+            .allowsHitTesting(false)
+        }
     }
 
     // MARK: - Side tab (icon + label, color-only active state)
@@ -471,16 +409,13 @@ struct GaryCenteredTabBar: View {
         return Button {
             tabAction(index: tab.index)
         } label: {
-            VStack(spacing: 5) {
-                // Color-only active state (mock 01, and what this file's own
-                // header always claimed) — the gold capsule behind the icon
-                // was drift.
+            VStack(spacing: 4) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 19, weight: .semibold))
                     .frame(width: 46, height: 26)
-                // Bigger words (founder, Aug 3: mock 01 "make the words bigger").
                 Text(tab.label)
-                    .font(GaryFonts.text(11.5, .semibold))
+                    .font(GaryFonts.ui(10, .semibold))
+                    .tracking(0.4)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -490,33 +425,35 @@ struct GaryCenteredTabBar: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: active)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(tab.label) tab")
+        .accessibilityLabel("\(tab.label.capitalized) tab")
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    // MARK: - Center logo (sits inside the hump)
+    // MARK: - Center: the bear, labeled THE HUB (founder, mock 34)
 
-    private var garyLogo: some View {
+    private var centerHub: some View {
         let active = selectedTab == garyIndex
         return Button {
             tabAction(index: garyIndex)
         } label: {
-            Image(GaryBrand.mark)
-                .resizable()
-                .scaledToFit()
-                .frame(width: logoSize, height: logoSize)
-                .opacity(active ? 1.0 : 0.95)
-                // Mock 01: one small black drop shadow, no gold halo.
-                .shadow(color: .black.opacity(0.4), radius: 2, y: 2)
-                .contentShape(Circle())
+            VStack(spacing: 4) {
+                Image(GaryBrand.mark)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: logoSize, height: logoSize)
+                    .opacity(active ? 1.0 : 0.95)
+                    .shadow(color: .black.opacity(0.45), radius: 3, y: 2)
+                Text("THE HUB")
+                    .font(GaryFonts.ui(10, .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(GaryColors.gold.opacity(active ? 1 : 0.85))
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Was "Talk to Gary" — stale since the voice/chat feature was removed
-        // (Jul 2 2026 cleanup); this button has only ever opened the Hub since.
-        .accessibilityLabel("Hub")
+        .accessibilityLabel("The Hub")
         .accessibilityAddTraits(active ? .isSelected : [])
     }
-
 
     // MARK: - Tap action
 

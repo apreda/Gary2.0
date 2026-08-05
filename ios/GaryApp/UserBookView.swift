@@ -397,21 +397,16 @@ struct TailFadeRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // The action block's own masthead (Aug 3 — founder: tail/fade is a
-            // BIGGER part of the card back): kicker + live social proof. Hidden
-            // once the game locks with no bet — never advertise an action the
-            // user can no longer take.
-            if mine != nil || !locked {
-                HStack(spacing: 8) {
-                    Text("YOUR CALL")
-                        .font(GaryFonts.accent(11)).tracking(0.8)
-                        .foregroundStyle(GaryColors.gold)
+            // "YOUR CALL" kicker removed (founder, Aug 4: the words come off
+            // so everything moves up — the buttons speak for themselves).
+            // The riders social proof stays, right-aligned, only when real
+            // bodies are on the pick. Hidden once the game locks with no bet.
+            if let r = ridersLine, mine != nil || !locked {
+                HStack {
                     Spacer()
-                    if let r = ridersLine {
-                        Text(r.uppercased())
-                            .font(GaryFonts.mono(9.5)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    Text(r.uppercased())
+                        .font(GaryFonts.mono(9.5)).tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.55))
                 }
             }
             if let bet = mine {
@@ -1217,15 +1212,8 @@ struct PropTailFadeRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if mine != nil || !locked {
-                HStack(spacing: 8) {
-                    BroadcastBar(tint: GaryColors.silver, height: 10)
-                    Text("YOUR CALL")
-                        .font(GaryFonts.accent(11)).tracking(0.8)
-                        .foregroundStyle(GaryColors.silver)
-                    Spacer()
-                }
-            }
+            // "YOUR CALL" kicker removed (founder, Aug 4, both card backs) —
+            // the buttons speak for themselves and the block moves up.
             if let bet = mine {
                 placedChip(bet)
             } else if locked {
