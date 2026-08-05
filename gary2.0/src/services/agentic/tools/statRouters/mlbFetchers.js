@@ -1805,7 +1805,14 @@ export const mlbFetchers = {
             // 15-pitch four-out save and understates a 30-pitch single inning.
             const pitches = p?.stats?.pitching?.numberOfPitches;
             const pitchStr = pitches != null ? `, ${pitches} pitches` : '';
-            relievers.push(`${name} ${ip.toFixed(1)} IP${pitchStr}`);
+            // PEN CONTEXT (founder GO, Aug 5 PM: "we cannot build an AI system
+            // that makes accurate picks without knowing the closer blew two
+            // saves back-to-back"). ER = the appearance's result; the official
+            // decision note carries it by name — (BS, 4), (SV, 20), (H, 12) —
+            // so a blown save is a printed fact, not a hoped-for search hit.
+            const er = p?.stats?.pitching?.earnedRuns;
+            const note = p?.stats?.pitching?.note;
+            relievers.push(`${name} ${ip.toFixed(1)} IP${er != null ? `, ${er} ER` : ''}${pitchStr}${note ? ` ${note}` : ''}`);
             const outs = Math.floor(ip) * 3 + Math.round((ip % 1) * 10);
             const t = armTotals.get(name) || { outs: 0, pitches: 0, dates: [] };
             t.outs += outs;
