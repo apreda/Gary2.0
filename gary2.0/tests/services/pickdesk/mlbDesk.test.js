@@ -19,7 +19,7 @@ import { buildScoutReport } from '../../../src/services/agentic/scoutReport/scou
 import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
 import { fetchStats } from '../../../src/services/agentic/tools/statRouters/index.js';
 import { summarizeStatForContext } from '../../../src/services/agentic/orchestrator/orchestratorHelpers.js';
-import { buildMlbDesk, stakesLine, deadlineLine, morningBoardLine } from '../../../src/services/pickdesk/mlbDesk.js';
+import { buildMlbDesk, stakesLine, deadlineLine } from '../../../src/services/pickdesk/mlbDesk.js';
 
 const SCOUT_TEXT = `MATCHUP: Reds @ Cardinals
 
@@ -155,24 +155,8 @@ describe('buildMlbDesk matchup lab', () => {
   });
 });
 
-describe('morningBoardLine (founder GO Jul 31 — open→now on THE LINES)', () => {
-  it('renders MLs, home spread, total, and the ET as-of time — facts only, no lean language', () => {
-    const line = morningBoardLine({
-      ml_away: 142, ml_home: -168, spread: -1.5, total: 9,
-      created_at: '2026-07-31T09:34:00Z',
-    }, 'Dodgers', 'Mariners');
-    expect(line).toBe("This morning's board (5:34 AM ET): Mariners ML +142 | Dodgers ML -168 · Dodgers -1.5 · Total 9");
-    expect(line).not.toMatch(/steam|sharp|trap|lean|value/i);
-  });
-
-  it('omits missing pieces and returns empty for a null/bare row', () => {
-    expect(morningBoardLine(null, 'A', 'B')).toBe('');
-    expect(morningBoardLine({ created_at: '2026-07-31T09:34:00Z' }, 'A', 'B')).toBe('');
-    const noSpread = morningBoardLine({ ml_away: 100, ml_home: -120, total: 8.5 }, 'Homers', 'Aways');
-    expect(noSpread).toContain('Aways ML +100 | Homers ML -120 · Total 8.5');
-    expect(noSpread).not.toContain('·  ·');
-  });
-});
+// (morningBoardLine pins DELETED with the feature — founder, Aug 4 night:
+// the open-vs-now feed came off the desk entirely.)
 
 describe('deadlineLine', () => {
   it('counts days to July 31 from an ET date', () => {
