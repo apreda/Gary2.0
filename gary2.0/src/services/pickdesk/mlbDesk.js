@@ -378,7 +378,12 @@ export async function buildMlbDesk(game, options = {}) {
     `${deadlineLine()}` +
     (sampleNote ? `\n${sampleNote}` : '');
 
-  const { section: news, rest: shelfBase } = extractSection(scoutText, NEWS_HEADER);
+  const { section: news, rest: shelfWithOdds } = extractSection(scoutText, NEWS_HEADER);
+  // BLIND SPLIT (Aug 5): the scout report's own odds block is dropped from the
+  // desk entirely — THE LINES section is the only price surface, and it reaches
+  // the session in the ticket turn alone. Without this the "blind" read desk
+  // carried moneyline and run line through the shelf.
+  const { rest: shelfBase } = extractSection(shelfWithOdds, '═══ BETTING CONTEXT ═══');
   const worldBody = news ? news.replace(NEWS_HEADER, '').trim() : 'No same-day news.';
   const world = `═══ THE WORLD ═══\n${worldBody}`;
 
