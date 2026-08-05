@@ -5011,9 +5011,14 @@ struct HeadlineFlipCard: View {
                         .lineLimit(1).minimumScaleFactor(0.6)
                     Spacer(minLength: 4)
                     if !story.bullets.isEmpty {
-                        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.26))
+                        // A circular arrow reads as REFRESH, not as a card with
+                        // another side (founder, Aug 5). Two opposed arrows say
+                        // "swap to the other face" instead — and it's an iOS 13
+                        // symbol, so it can't come through blank on an older
+                        // deployment target the way the rotate glyph could.
+                        Image(systemName: "arrow.left.arrow.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
                 }
             }
@@ -5035,17 +5040,18 @@ struct HeadlineFlipCard: View {
                 // Money and price on ONE line (founder, Aug 5), the figure
                 // smaller and the price in gold beside it.
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    // Same size as the price beside it (founder, Aug 5) — the
-                    // pair reads as one line of two facts, told apart by
-                    // colour rather than by scale.
+                    // Money, price and the pick on the left are now ONE type
+                    // treatment (founder, Aug 5): same size, same tracking.
+                    // They were already the same point size — the pick's
+                    // letter-spacing was what made it read bigger.
                     Text(moneyText)
-                        .font(GaryFonts.mono(10.5, bold: true))
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.1)
                         .foregroundStyle(resultColor)
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .lineLimit(1).minimumScaleFactor(0.85)
                     Spacer(minLength: 3)
                     if !story.odds.isEmpty {
                         Text(story.odds)
-                            .font(GaryFonts.mono(10.5, bold: true))
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.1)
                             .foregroundStyle(GaryColors.gold)
                             .lineLimit(1)
                     }
