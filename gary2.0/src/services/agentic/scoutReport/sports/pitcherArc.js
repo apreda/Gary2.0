@@ -129,6 +129,32 @@ export function longLayoffFlag({ name, label, seasons, season, firstStartDate })
 }
 
 /**
+ * DISTORTION FLAG arithmetic (founder GO, Aug 5 2026 PM): does removing ONE
+ * start move the starts-only ERA by >= 0.75? ONE game by construction —
+ * there is no "outside those two starts" state, so the flag can never
+ * launder a bad stretch: when the outside number is still ugly, that IS the
+ * honest answer to "was it just one bad night?". Pure math; the scout
+ * attaches the game's official story where one exists.
+ */
+export function singleStartDistortion(starts) {
+  const rows = (Array.isArray(starts) ? starts : []).filter(g => outsFromIp(g.ip) != null);
+  if (rows.length < 4) return null;
+  let outs = 0, er = 0;
+  for (const g of rows) { outs += outsFromIp(g.ip); er += Number(g.er) || 0; }
+  if (outs <= 0) return null;
+  const base = (er * 27) / outs;
+  let worst = null, without = base;
+  for (const g of rows) {
+    const o = outs - outsFromIp(g.ip);
+    if (o <= 0) continue;
+    const w = ((er - (Number(g.er) || 0)) * 27) / o;
+    if (w < without) { without = w; worst = g; }
+  }
+  if (!worst || base - without < 0.75) return null;
+  return { base, without, worst, startCount: rows.length };
+}
+
+/**
  * SAMPLE CONTEXT: a mid-season gap between starts (IL stint, demotion, role
  * change — the flag states the gap, never guesses the reason). Fires on a
  * ≥21-day gap between consecutive starts this season; the All-Star break

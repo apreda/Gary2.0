@@ -31,7 +31,7 @@ import {
   getPitcherMonthSplits,
   getPitcherCareerProfile,
 } from '../../../mlbStatsApiService.js';
-import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag } from './pitcherArc.js';
+import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, computeMlbSituationalRecords, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
@@ -372,6 +372,27 @@ export async function buildMlbScoutReport(game, options = {}) {
     }) || null;
   };
 
+  const fetchGameStory = async (gamePk) => {
+    if (!gamePk) return null;
+    return await getCachedOrFetch(`mlb_game_story_${gamePk}`, async () => {
+      const resp = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/content`);
+      if (!resp.ok) return null;
+      const j = await resp.json();
+      const rec = j?.editorial?.recap?.mlb || j?.editorial?.wrap?.mlb || null;
+      if (!rec?.body) return null;
+      const clean = String(rec.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return { headline: rec.headline || '', body: clean.slice(0, 4000) };
+    }, 7 * 24 * 60).catch(() => null);
+  };
+
+  const sentenceTrim = (body, cap) => {
+    const str = String(body || '');
+    if (str.length <= cap) return str;
+    const cut = str.slice(0, cap);
+    const end = cut.lastIndexOf('. ');
+    return end > cap * 0.5 ? cut.slice(0, end + 1) : cut;
+  };
+
   let probablePitchersSection = 'Probable pitchers not yet announced.';
   const pitcherStats = {};
   const pitcherArcData = {}; // per-side career/season provenance for the SAMPLE CONTEXT flags
@@ -443,7 +464,7 @@ export async function buildMlbScoutReport(game, options = {}) {
           // log is already cached by the lastStarts fetch, so the first-start
           // date costs no extra network.
           const allStarts = mlbamId ? await getPitcherLastStarts(mlbamId, season, 99).catch(() => []) : [];
-          pitcherArcData[side] = { careerProfile, firstStartDate: allStarts[0]?.date ?? null, startDates: allStarts.map(g => g.date) };
+          pitcherArcData[side] = { careerProfile, firstStartDate: allStarts[0]?.date ?? null, startDates: allStarts.map(g => g.date), starts: allStarts };
         }
 
         if (lastStarts.length) {
@@ -587,6 +608,25 @@ export async function buildMlbScoutReport(game, options = {}) {
           startDates: arc.startDates,
         });
         if (gap) smallSampleFlags.push(gap);
+        // DISTORTION FLAG (founder GO, Aug 5 PM): one start moving the
+        // starts-only ERA >= 0.75 prints both numbers, the game named, and
+        // that game's official story — context, not another naked rate.
+        const dist = singleStartDistortion(arc.starts);
+        if (dist) {
+          const g = dist.worst;
+          const ipNum = parseFloat(g.ip);
+          // Mid-inning exit only — a whole-number IP means he finished the
+          // frame, and "pulled in the Nth" would then be a guess.
+          const frac = Number.isFinite(ipNum) && Math.round((ipNum % 1) * 10) > 0;
+          const exitN = Math.floor(ipNum || 0) + 1;
+          const ordWord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
+          let line = `${pitcher.fullName} (${label}): across his ${dist.startCount} starts — ${dist.base.toFixed(2)} ERA, ${dist.without.toFixed(2)} outside ${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent} (${g.ip} IP, ${g.er} ER${g.bb ? `, ${g.bb} BB` : ''}${frac ? ` — pulled in the ${ordWord(exitN)}` : ''}).`;
+          if (g.gamePk) {
+            const story = await fetchGameStory(g.gamePk).catch(() => null);
+            if (story?.body) line += `\n  That game, as written: ${sentenceTrim(story.body, 450)}`;
+          }
+          smallSampleFlags.push(line);
+        }
       }
     } catch { /* arc flags are additive — never sink the section */ }
     const pitcherId = stats?.player?.id;
@@ -647,30 +687,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   // THE WIRE (Jul 26 2026): the official MLB.com game story for each team's
   // most recent final — the AP-style factual narrative, sourced as DATA from
   // the Stats API content endpoint (no search). Finals are immutable → 7d cache.
-  const fetchGameStory = async (gamePk) => {
-    if (!gamePk) return null;
-    return await getCachedOrFetch(`mlb_game_story_${gamePk}`, async () => {
-      const resp = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/content`);
-      if (!resp.ok) return null;
-      const j = await resp.json();
-      const rec = j?.editorial?.recap?.mlb || j?.editorial?.wrap?.mlb || null;
-      if (!rec?.body) return null;
-      const clean = String(rec.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return { headline: rec.headline || '', body: clean.slice(0, 4000) };
-    }, 7 * 24 * 60).catch(() => null);
-  };
+  // (fetchGameStory hoisted above the starter block — the distortion flag uses it too.)
   // THE WEEK AS WRITTEN (founder GO, Aug 5 2026): the last THREE finals per
   // team — most recent story in full, the two before as ledes — plus any
   // earlier games of the current head-to-head series. A five-game skid stops
   // being five bare "L"s: the arc arrives in writer prose. A game the two
   // teams shared prints once, labeled "These two".
-  const sentenceTrim = (body, cap) => {
-    const str = String(body || '');
-    if (str.length <= cap) return str;
-    const cut = str.slice(0, cap);
-    const end = cut.lastIndexOf('. ');
-    return end > cap * 0.5 ? cut.slice(0, end + 1) : cut;
-  };
+  // (sentenceTrim hoisted above the starter block.)
   const wireGamesFor = (games, oppNick) => {
     const finals = (games || []).filter(g => g?.gamePk);
     const picked = new Map();
@@ -985,17 +1008,64 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ═══════════════════════════════════════════════════════════════════
   let recentResults = 'No recent games available.';
   {
+    // Opponent records ride each row (founder, Aug 5 PM: "3-7 against WHOM —
+    // you can tell a lot about the quality of a team even in the losses").
+    const recordOf = (teamNameStr) => {
+      const tn = String(teamNameStr || '').toLowerCase();
+      const row = (bdlStandings || []).find(st => {
+        const dn = (st.team?.display_name || st.team?.full_name || '').toLowerCase();
+        return dn && (tn === dn || tn.endsWith(dn.split(' ').pop()));
+      });
+      return row ? ` (${row.wins}-${row.losses})` : '';
+    };
     const formatRecentGames = (games, teamName) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
+      const lw = teamName.toLowerCase().split(' ').pop();
       const lines = games.map(g => {
         const home = g.teams?.home;
         const away = g.teams?.away;
         const date = g.officialDate || g.gameDate?.split('T')[0] || '';
-        return `  ${date}: ${away?.team?.name} ${away?.score || 0} @ ${home?.team?.name} ${home?.score || 0}`;
+        const homeIsUs = (home?.team?.name || '').toLowerCase().endsWith(lw);
+        const awayTag = homeIsUs ? recordOf(away?.team?.name) : '';
+        const homeTag = homeIsUs ? '' : recordOf(home?.team?.name);
+        return `  ${date}: ${away?.team?.name}${awayTag} ${away?.score || 0} @ ${home?.team?.name}${homeTag} ${home?.score || 0}`;
       });
       return `${teamName} (Last ${games.length}):\n${lines.join('\n')}`;
     };
+    // RUN SHAPE (founder GO, Aug 5 PM): the two-week scoring truth with the
+    // single outlier named — "the 18 runs is what it is; say who it was
+    // against." One line per club, exclusions only past a full run per game.
+    const runShape = (games, teamName) => {
+      const rows = (games || []).filter(g => g?.teams);
+      if (rows.length < 5) return null;
+      const lw = teamName.toLowerCase().split(' ').pop();
+      const per = rows.map(g => {
+        const homeSide = (g.teams.home?.team?.name || '').toLowerCase().endsWith(lw);
+        const us = homeSide ? g.teams.home : g.teams.away;
+        const them = homeSide ? g.teams.away : g.teams.home;
+        return {
+          f: Number(us?.score) || 0,
+          a: Number(them?.score) || 0,
+          date: (g.officialDate || g.gameDate || '').slice(0, 10),
+          opp: them?.team?.name || '?',
+          vs: homeSide ? 'vs' : '@',
+        };
+      });
+      const n = per.length;
+      const sumF = per.reduce((acc, x) => acc + x.f, 0);
+      const sumA = per.reduce((acc, x) => acc + x.a, 0);
+      const bits = [`${teamName}, last ${n}: scored ${(sumF / n).toFixed(1)}/gm, allowed ${(sumA / n).toFixed(1)}/gm`];
+      const maxF = per.reduce((m, x) => (x.f > m.f ? x : m), per[0]);
+      const outF = (sumF - maxF.f) / (n - 1);
+      if (sumF / n - outF >= 1.0) bits.push(`— scoring ${outF.toFixed(1)} outside ${maxF.date} ${maxF.vs} ${maxF.opp} (${maxF.f} runs)`);
+      const maxA = per.reduce((m, x) => (x.a > m.a ? x : m), per[0]);
+      const outA = (sumA - maxA.a) / (n - 1);
+      if (sumA / n - outA >= 1.0) bits.push(`— allowing ${outA.toFixed(1)} outside ${maxA.date} ${maxA.vs} ${maxA.opp} (${maxA.a} allowed)`);
+      return bits.join(' ');
+    };
     const parts = [];
+    const shapes = [runShape(homeRecentGames, homeTeam), runShape(awayRecentGames, awayTeam)].filter(Boolean);
+    if (shapes.length) parts.push(shapes.join('\n'));
     parts.push(formatRecentGames(homeRecentGames, homeTeam));
     parts.push(formatRecentGames(awayRecentGames, awayTeam));
     recentResults = parts.join('\n\n');

@@ -525,6 +525,9 @@ export async function getPitcherLastStarts(personId, season, limit = 3) {
     .slice(-limit)
     .map(g => ({
       date: g.date,
+      // gamePk (Aug 5): lets a distortion flag attach THAT game's official
+      // story — the context layer's pointer, not display data.
+      gamePk: g.game?.gamePk ?? null,
       opponent: g.opponent?.name || '?',
       isHome: !!g.isHome,
       ip: g.stat?.inningsPitched, h: g.stat?.hits, er: g.stat?.earnedRuns,
