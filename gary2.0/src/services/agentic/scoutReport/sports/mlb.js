@@ -33,7 +33,7 @@ import {
 } from '../../../mlbStatsApiService.js';
 import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, computeMlbSituationalRecords, toEtDate } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
@@ -935,15 +935,11 @@ export async function buildMlbScoutReport(game, options = {}) {
   } catch { thisSeriesHotSection = ''; }
 
   // ═══════════════════════════════════════════════════════════════════
-  // SITUATIONAL RECORDS (Jul 26 2026) — after a loss / blowout / win,
-  // series finales, off days. Pure compute from the season index.
-  // ═══════════════════════════════════════════════════════════════════
-  let situationalSection = '';
-  {
-    const homeSit = computeMlbSituationalRecords(seasonIndex, homeTeamBdlId, homeTeam);
-    const awaySit = computeMlbSituationalRecords(seasonIndex, awayTeamBdlId, awayTeam);
-    situationalSection = [homeSit?.line, awaySit?.line].filter(Boolean).join('\n');
-  }
+  // (SITUATIONAL RECORDS section REMOVED — founder, Aug 5 PM: "record tells
+  // the end result with zero context of what happened." After-a-loss /
+  // after-a-win / finale / off-day season records are the exact species —
+  // end-results as pattern bait. Its one recency clause (14-day run rates)
+  // is covered by the run-shape lines and TEAM SEASON STATS' season R/G.)
 
   // ═══════════════════════════════════════════════════════════════════
   // WITHOUT KEY PLAYERS (Jul 26 2026) — team record in games each currently
@@ -1771,8 +1767,6 @@ ${lastGameSection}
 ═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══
 ${wireSection}
 
-═══ SITUATIONAL RECORDS ═══
-${situationalSection || 'Insufficient season data.'}
 ${withoutPlayersSection ? `\n═══ WITHOUT KEY PLAYERS (this season) ═══\n${withoutPlayersSection}\n` : ''}
 
 ═══ ROSTER MOVES — LAST 7 DAYS ═══

@@ -99,39 +99,6 @@ export function oneRunRecordFrom(index, teamId) {
   return (w + l) >= 5 ? `${w}-${l}` : null;
 }
 
-/**
- * Month-by-month W-L from the season game index (founder GO, Aug 5 2026 PM:
- * "how can Gary identify that they're in that month where they're playing
- * bad?"). The team twin of the pitcher month arc — the season record's own
- * components, one line, facts only. Null under 2 months with decisions.
- */
-export function monthRecordFrom(index, teamId) {
-  if (!index || typeof index.values !== 'function' || teamId == null) return null;
-  const NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const acc = new Map();
-  for (const g of index.values()) {
-    if (g.status !== 'STATUS_FINAL' || g.seasonType === 'spring_training') continue;
-    const isHome = g.homeId === teamId;
-    const isAway = g.awayId === teamId;
-    if (!isHome && !isAway) continue;
-    const hr = Number(g.homeRuns), ar = Number(g.awayRuns);
-    if (!Number.isFinite(hr) || !Number.isFinite(ar) || hr === ar) continue;
-    const won = isHome ? hr > ar : ar > hr;
-    const d = new Date(g.date);
-    if (Number.isNaN(d.getTime())) continue;
-    const m = Number(d.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'numeric' })) - 1;
-    if (!(m >= 0 && m <= 11)) continue;
-    const row = acc.get(m) || { w: 0, l: 0 };
-    won ? row.w++ : row.l++;
-    acc.set(m, row);
-  }
-  if (acc.size < 2) return null;
-  return [...acc.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([m, r]) => `${NAMES[m]} ${r.w}-${r.l}`)
-    .join(' · ');
-}
-
 export function deadlineLine(today = todayEST()) {
   const days = Math.round(
     (new Date(`${TRADE_DEADLINE}T00:00:00-04:00`) - new Date(`${today}T00:00:00-04:00`)) / 86400000
@@ -411,13 +378,15 @@ export async function buildMlbDesk(game, options = {}) {
       norm(s.team?.display_name || s.team?.name || s.team_name).includes(norm(name).split(' ').pop()));
     return row?.team?.id ?? null;
   };
-  const homeMonths = monthRecordFrom(seasonIndex, teamIdFor(homeTeam));
-  const awayMonths = monthRecordFrom(seasonIndex, teamIdFor(awayTeam));
+  // (Team BY MONTH lines REMOVED same day they shipped — founder, Aug 5 PM:
+  // "the Dodgers are 0-4 in August — what does that mean? August just
+  // started; that's just the last four days dressed as a month." Calendar
+  // buckets are arbitrary for teams; L3/L5/L10, streak, and run shape carry
+  // recency at the right grain. The PITCHER month arc stays — its job is
+  // decomposing the season aggregate beside it, not calendar prediction.)
   const stakes = `═══ THE STAKES ═══\n` +
     `${stakesLine(standings, homeTeam, oneRunRecordFrom(seasonIndex, teamIdFor(homeTeam)))}\n` +
-    (homeMonths ? `  By month: ${homeMonths}\n` : '') +
     `${stakesLine(standings, awayTeam, oneRunRecordFrom(seasonIndex, teamIdFor(awayTeam)))}\n` +
-    (awayMonths ? `  By month: ${awayMonths}\n` : '') +
     `${deadlineLine()}` +
     (sampleNote ? `\n${sampleNote}` : '');
 
