@@ -101,11 +101,10 @@ self-corrects). Flagged, his to re-decide, not touched.
   innings arc read as stretching-out when the pitcher was being managed down, and
   vice versa. Reverse removed; the sibling "Last N starts" ledger keeps its
   newest-first display with dates visible.
-- **OPEN — CLOSERS/BULLPEN season lists show departed arms unmarked.** Aug 4 Angels
-  desk listed Zeferjahn (traded), Yates (traded), Bachman (arm fatigue) as tonight's
-  high-leverage arms with season lines. THE STAKES' departures note saved the read
-  that night, but the section itself contradicts the roster. Fix needs the
-  departures feed plumbed into the closer/bullpen fetchers — proposal on request.
+- **FIXED (034f14c9) — CLOSERS/BULLPEN departed arms.** Pen names now fold-join
+  against the current MLB Stats API roster; a departed arm renders with
+  " — not on current roster" (Zeferjahn/Yates verified absent, Bachman present).
+  A failed roster fetch tags nothing.
 - **RESOLVED-BY-REMOVAL — the 16-22 AB "splits" mystery.** Those rows were
   Away/Day/Home/Night trivia the byBreakdown array carried under the L/R header.
   The lab diet (d36c6cb9) prints platoon rows only and removed per-hitter venue
