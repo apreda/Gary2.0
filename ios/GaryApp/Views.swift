@@ -5022,29 +5022,44 @@ struct HeadlineFlipCard: View {
             Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
 
             VStack(alignment: .leading, spacing: 0) {
+                // Two rows, nothing computed on top of them (founder, Aug 5:
+                // a margin row is just the two numbers above it subtracted).
+                // Real box lines — hits, errors, the winning pitcher — need a
+                // pipeline field first: game_results stores only the score.
                 if let s = Self.sides(story) {
                     scoreRow(s.away.name, s.away.runs, winner: s.away.runs > s.home.runs)
-                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                        .padding(.vertical, 4)
+                    boxRule
                     scoreRow(s.home.name, s.home.runs, winner: s.home.runs > s.away.runs)
                 }
-                Spacer(minLength: 8)
-                // The money in the box's spare room. No "$100" caption — the
-                // price is on the ticket and the figure is signed.
-                Text(moneyText)
-                    .font(GaryFonts.display(24))
-                    .foregroundStyle(resultColor)
-                    .lineLimit(1).minimumScaleFactor(0.5)
-                Text(story.odds.isEmpty ? story.verdict : story.odds)
-                    .font(GaryFonts.kicker(9)).tracking(1.4)
-                    .foregroundStyle(.white.opacity(0.3))
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                    .padding(.top, 3)
+                Spacer(minLength: 6)
+                // Money and price on ONE line (founder, Aug 5), the figure
+                // smaller and the price in gold beside it.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(moneyText)
+                        .font(GaryFonts.display(23))
+                        .foregroundStyle(resultColor)
+                        .lineLimit(1).minimumScaleFactor(0.5)
+                    Spacer(minLength: 3)
+                    if !story.odds.isEmpty {
+                        Text(story.odds)
+                            .font(GaryFonts.mono(10.5, bold: true))
+                            .foregroundStyle(GaryColors.gold)
+                            .lineLimit(1)
+                    }
+                }
             }
-            .frame(width: 104, alignment: .leading)
+            .frame(width: 122, alignment: .leading)
         }
         .padding(.horizontal, 15).padding(.vertical, 14)
         .frame(width: Self.W, height: Self.H, alignment: .topLeading)
+    }
+
+    /// The box's own hairline — every row separated the same way. Tight on
+    /// purpose: the extra rows come out of the space the one-line money
+    /// figure freed, NOT out of a taller card (founder, Aug 5).
+    private var boxRule: some View {
+        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+            .padding(.vertical, 2.5)
     }
 
     /// One box row: club left, runs right, the winner in gold.
