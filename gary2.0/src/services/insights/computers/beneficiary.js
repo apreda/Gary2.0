@@ -34,6 +34,7 @@ import {
   makeRow, TONES, pickVariant, pct3, round,
   getBreakdownSplit, splitNameForPitcherFacing, parseBatsThrows,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const RECENT_DAYS = 14;        // an injury this fresh is a live role change
@@ -225,6 +226,12 @@ export async function computeBeneficiary(ctx) {
       },
     }));
   }
+
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('beneficiary', rows, detailFact, {
+    ask: 'what this absence actually opens up tonight — who inherits the work or the spot, and what changes for the lineup around him',
+  });
 
   console.log(`[beneficiary] examined ${opened.length}, emitted ${rows.length}`);
   return rows;

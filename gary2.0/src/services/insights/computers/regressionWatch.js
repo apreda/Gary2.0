@@ -131,6 +131,10 @@ export async function computeRegressionWatch(ctx) {
     },
     {
       ask: 'why this gap between his results and his expected numbers exists — whether the peripherals say it is deserved or luck — and what that means for this specific start',
+      // This lane hand-filters to the rows it wants read (and its tomorrow rows
+      // surface on their own board, outside the per-category cap), so it opts
+      // out of the ship-cap the other lanes take by default.
+      limit: Infinity,
     });
 
   return rows;

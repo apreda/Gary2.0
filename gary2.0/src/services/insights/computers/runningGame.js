@@ -36,6 +36,7 @@ import {
   makeRow, TONES, round, clampScore, pickVariant,
 } from '../shared.js';
 import mlbStatsApi from '../../mlbStatsApiService.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const MIN_CATCHER_INNINGS = 120;   // real season workload behind the plate
@@ -142,6 +143,12 @@ export async function computeRunningGame(ctx) {
 
   rows.sort((a, b) => b.relevance_score - a.relevance_score);
   const capped = rows.slice(0, MAX_ROWS);
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('runningGame', capped, detailFact, {
+    ask: 'what this running game actually means tonight — who controls the bases in this matchup and what that does to how runs score',
+  });
+
   console.log(`[runningGame] examined ${examined}, emitted ${capped.length}`);
   return capped;
 }

@@ -16,7 +16,7 @@
 //  • getPitcherXStats(season) [Savant]: xERA vs ERA for arms.
 // Defensive: missing data skips the player; failures return [].
 
-import { makeRow, TONES, clampScore, round, nameKey } from '../shared.js';
+import { makeRow, TONES, clampScore, round, nameKey, ordinal } from '../shared.js';
 import { getPitcherXStats } from '../../baseballSavantService.js';
 import { generateSolText } from '../solText.js';
 
@@ -144,7 +144,7 @@ export async function computeCutList(ctx) {
     rows.push(makeRow({
       category: 'cutList',
       headline: b.name,
-      detail: `Still hitting ${b.order}th for ${b.team} — ${note}.`,
+      detail: `Still hitting ${ordinal(b.order)} for ${b.team} — ${note}.`,
       game: `${b.team} tonight`,
       value: `${b.ops.toFixed(3)} OPS`,
       tone: TONES.WARN,
@@ -180,7 +180,7 @@ async function writeReadsChunk(rows) {
     return m.role === 'SP'
       ? `${i}. PITCHER ${r.headline} (${m.team}) — season xERA ${m.xera}` +
         (m.era != null ? `, surface ERA ${m.era}` : '') + `. Starts tonight.`
-      : `${i}. HITTER ${r.headline} (${m.team}, bats ${m.batting_order}th) — season OPS ${m.ops}` +
+      : `${i}. HITTER ${r.headline} (${m.team}, bats ${ordinal(m.batting_order)}) — season OPS ${m.ops}` +
         (m.avg != null ? `, AVG ${m.avg}` : '') + `. In tonight's lineup.`;
   }).join('\n');
 

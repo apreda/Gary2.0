@@ -34,6 +34,7 @@
 import {
   makeRow, TONES, scoreFromEdge, nameKey, pct3, pickVariant, round,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const MIN_AB = 10;                 // require a real career sample
@@ -90,6 +91,12 @@ export async function computeOwned(ctx) {
       // continue to next game
     }
   }
+
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('owned', rows, detailFact, {
+    ask: 'what this history against tonight\'s starter actually means — how the at-bats have gone and what it sets up in this start',
+  });
 
   console.log(
     `[owned] examined ${battersChecked} batter(s), found ${matchupsFound} matchup(s), emitted ${rows.length}`,

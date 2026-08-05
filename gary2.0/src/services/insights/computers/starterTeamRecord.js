@@ -32,6 +32,7 @@
 // Defensive: any missing piece -> skip that starter silently; never throws.
 
 import { makeRow, TONES, scoreFromEdge, parseIpThirds } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const WINDOW_STARTS = 8;     // "his last 8 starts"
@@ -58,6 +59,12 @@ export async function computeStarterTeamRecord(ctx) {
   candidates.sort((a, b) => b.relevance_score - a.relevance_score);
   const rows = candidates.slice(0, MAX_ROWS);
   stats.emitted = rows.length;
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('starterTeamRecord', rows, detailFact, {
+    ask: 'what this record behind the starter actually means — what the club does on his days and what that sets up tonight',
+  });
+
   console.log(`[starterTeamRecord] examined ${stats.examined}, emitted ${stats.emitted}`);
   return rows;
 }

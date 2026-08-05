@@ -44,6 +44,7 @@
 import {
   makeRow, TONES, scoreFromEdge, round, pct3, pickVariant,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const MIN_RECENT_PA = 25;          // require a real recent PA sample
@@ -72,6 +73,12 @@ export async function computeHeatCheck(ctx) {
     }
   }
   stats.emitted = rows.length;
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('heatCheck', rows, detailFact, {
+    ask: 'what this hot stretch actually means tonight — whether it is real form or a run of soft matchups, and what it sets up against tonight\'s pitching',
+  });
+
   console.log(`[heatCheck] examined ${stats.examined}, emitted ${stats.emitted}`);
   return rows;
 }

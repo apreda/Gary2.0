@@ -44,8 +44,9 @@
 
 import {
   makeRow, TONES, parseBatsThrows, effectiveBatterSide, splitNameForPitcherFacing,
-  scoreFromEdge, getBreakdownSplit, pickVariant, clampScore, round, pct3,
+  scoreFromEdge, getBreakdownSplit, pickVariant, clampScore, round, pct3, ordinal,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 const MIN_SPLIT_AB = 40;        // require a real platoon-side sample
 const MIN_OFFSIDE_AB = 25;      // off-side must also be real or the gap is noise
@@ -96,6 +97,12 @@ export async function computePlatoonEdge(ctx) {
       console.error('[platoonEdge] game error:', err?.message || err);
     }
   }
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('platoonEdge', rows, detailFact, {
+    ask: 'what this platoon split actually means tonight — why the handedness matchup lands where it does in the order, and what it sets up against this starter',
+  });
+
   console.log(`[platoonEdge] examined ${examined}, emitted ${rows.length}`);
   return rows;
 }
@@ -234,12 +241,6 @@ async function collectSide({ side, teamId, oppPitcher, oppThrows, season, bdl })
     });
   }
   return { examined, candidates };
-}
-
-function ordinal(n) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 export default { computePlatoonEdge };

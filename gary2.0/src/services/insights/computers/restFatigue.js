@@ -32,8 +32,9 @@
 // summary log makes a 0-row run diagnosable.
 
 import {
-  makeRow, TONES, scoreFromEdge, nameKey, round, pickVariant,
+  makeRow, TONES, scoreFromEdge, nameKey, round, pickVariant, ordinal,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // --- Schedule density tunables ---
 const LOOKBACK_DAYS = 10;          // how many prior calendar days to assemble
@@ -65,6 +66,12 @@ export async function computeRestFatigue(ctx) {
       console.error('[restFatigue] game error:', err?.message || err);
     }
   }
+
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('restFatigue', rows, detailFact, {
+    ask: 'what this schedule actually does to this team tonight — where the legs and the arms are, and what it sets up in this matchup',
+  });
 
   console.log(`[restFatigue] examined ${examined}, emitted ${rows.length}`);
   return rows;
@@ -290,19 +297,6 @@ function addDays(dateStr, delta) {
   const mm = String(shifted.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(shifted.getUTCDate()).padStart(2, '0');
   return `${yy}-${mm}-${dd}`;
-}
-
-/** 1 -> "1st", 2 -> "2nd", 14 -> "14th". */
-function ordinal(n) {
-  const x = Number(n) || 0;
-  const mod100 = x % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${x}th`;
-  switch (x % 10) {
-    case 1: return `${x}st`;
-    case 2: return `${x}nd`;
-    case 3: return `${x}rd`;
-    default: return `${x}th`;
-  }
 }
 
 export default { computeRestFatigue };

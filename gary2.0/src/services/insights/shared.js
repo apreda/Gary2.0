@@ -432,3 +432,20 @@ export function attachPropRates(props, rows, statMap, { window, minRows, phraseF
     p.rate = custom || `${cleared}/${win.length} over`;
   }
 }
+
+/**
+ * 1 -> "1st", 2 -> "2nd", 14 -> "14th". Lives here because three lanes were
+ * each carrying (or, in cutList's case, faking) their own — the founder caught
+ * "hitting 1th" on the Hub, Aug 4 2026.
+ */
+export function ordinal(n) {
+  const x = Number(n) || 0;
+  const mod100 = x % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${x}th`;
+  switch (x % 10) {
+    case 1: return `${x}st`;
+    case 2: return `${x}nd`;
+    case 3: return `${x}rd`;
+    default: return `${x}th`;
+  }
+}

@@ -34,6 +34,7 @@ import {
 } from '../shared.js';
 import mlbStatsApi from '../../mlbStatsApiService.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // ── NRFI engine (founder GO, Jul 27 2026) ───────────────────────────────────
 // Two enrichments per surfaced game, both facts: tonight's live 1st-inning
@@ -311,6 +312,12 @@ export async function computeFirstInning(ctx) {
 
   rows.sort((a, b) => b.relevance_score - a.relevance_score);
   const capped = rows.slice(0, MAX_ROWS);
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('firstInning', capped, detailFact, {
+    ask: 'what this first-inning pattern actually means tonight — how the top of the game is likely to go and what that sets up for the rest of it',
+  });
+
   console.log(`[firstInning] examined ${examined}, emitted ${capped.length}`);
   return capped;
 }

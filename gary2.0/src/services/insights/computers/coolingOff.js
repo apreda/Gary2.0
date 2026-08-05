@@ -27,6 +27,7 @@ import {
   makeRow, TONES, scoreFromEdge, round, pct3, pickVariant,
   getBreakdownSplit, splitNameForPitcherFacing, parseBatsThrows,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 const MIN_RECENT_PA = 25;     // require a real recent PA sample
 const MIN_RECENT_AB = 22;     // lower floor when only at_bats is available
@@ -51,6 +52,12 @@ export async function computeCoolingOff(ctx) {
     }
   }
   stats.emitted = rows.length;
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('coolingOff', rows, detailFact, {
+    ask: 'what this slump actually means tonight — whether the swing looks off or the results are lagging the contact, and what it sets up in this matchup',
+  });
+
   console.log(`[coolingOff] examined ${stats.examined}, emitted ${stats.emitted}`);
   return rows;
 }

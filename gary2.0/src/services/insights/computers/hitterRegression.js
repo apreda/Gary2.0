@@ -46,6 +46,7 @@ import {
   makeRow, TONES, scoreFromEdge, pct3, nameKey, pickVariant,
 } from '../shared.js';
 import { getBatterXStats } from '../../baseballSavantService.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const MIN_SAVANT_PA = 100;     // require a real Savant sample (CSV `pa` field)
@@ -88,6 +89,12 @@ export async function computeHitterRegression(ctx) {
       // continue to next game
     }
   }
+
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('hitterRegression', rows, detailFact, {
+    ask: 'what this gap between the contact and the results actually means tonight — which way it is likely to move and what it sets up in this matchup',
+  });
 
   stats.emitted = rows.length;
   console.log(`[hitterRegression] examined ${stats.examined}, emitted ${stats.emitted}`);

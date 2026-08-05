@@ -17,6 +17,7 @@
 // Defensive: any missing piece -> skip that game silently; never throws.
 
 import { makeRow, TONES, scoreFromEdge } from '../shared.js';
+import { attachLaneReads } from '../laneReads.js';
 
 const MIN_GAMES = 4;        // a real H2H sample (division rivals have plenty by June)
 const SURFACE_DIFF = 3;     // |wins - losses| over the series to be an angle
@@ -122,6 +123,22 @@ export async function computeHeadToHead(ctx) {
 
   candidates.sort((a, b) => b.relevance_score - a.relevance_score);
   const rows = candidates.slice(0, MAX_ROWS);
+
+  // THE GARY LAYER (founder, Aug 5). This lane can headline the page, and a
+  // bare season series ("did good last time") is the emptiest read there is —
+  // the drop-down has to say whether anything explains it.
+  await attachLaneReads('headToHead', rows, (r) => {
+    const m = r.meta || {};
+    if (!m.dominant_name || !m.opponent_name) return null;
+    const last = m.last_meeting;
+    const lastLine = last?.score
+      ? ` Last meeting: ${last.winner} won it ${last.score}.`
+      : '';
+    return `${m.dominant_name} are ${m.wins}-${m.losses} against ${m.opponent_name} across ${m.games} meeting(s) this season.${lastLine} Tonight: ${r.game}.`;
+  }, {
+    ask: "what this season series actually means for tonight — whether anything in the matchup explains it (arms they've faced, where the games were played, how they were won) or it is just history that has no hold on tonight",
+  });
+
   console.log(`[headToHead] examined ${examined}, emitted ${rows.length}`);
   return rows;
 }

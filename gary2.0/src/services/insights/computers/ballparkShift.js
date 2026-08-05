@@ -41,6 +41,7 @@
 import {
   makeRow, TONES, scoreFromEdge, round, pct3, venueFirstWord, pickVariant,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Founder, Jul 30: a 2-start park split reads as a mirage to anyone who
 // follows the team ("he's pitched there twice"). Three games and 15 innings
@@ -69,6 +70,12 @@ export async function computeBallparkShift(ctx) {
       // continue to next game
     }
   }
+
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('ballparkShift', rows, detailFact, {
+    ask: 'what this venue split actually means for tonight — whether the park is doing the work or the pitcher is, and what it sets up in this start',
+  });
 
   console.log(
     `[ballparkShift] starters examined ${stats.examined}, ` +

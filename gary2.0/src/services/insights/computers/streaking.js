@@ -40,6 +40,7 @@ import axios from 'axios';
 import {
   makeRow, TONES, pickVariant, round, median, shiftDateStr,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Same env resolution as garyHrThreats.js / src/supabaseClient.js — daily_slate
 // is read under whichever key is present (anon can SELECT it; service role too).
@@ -196,6 +197,12 @@ export async function computeStreaking(ctx) {
 
   rows.sort((a, b) => b.relevance_score - a.relevance_score);
   const capped = rows.slice(0, MAX_ROWS);
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('streaking', capped, detailFact, {
+    ask: 'what this team streak actually means tonight — what has been carrying it, and whether tonight\'s matchup feeds it or tests it',
+  });
+
   console.log(`[streaking] examined ${examined}, emitted ${capped.length}`);
   return capped;
 }

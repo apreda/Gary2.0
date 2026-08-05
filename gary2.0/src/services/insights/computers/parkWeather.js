@@ -35,6 +35,7 @@ import {
   makeRow, TONES, clampScore, nameKey, etDateStr, median, pickVariant,
 } from '../shared.js';
 import mlbStatsApi from '../../mlbStatsApiService.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const WIND_MIN = 10;       // mph out/in before the wind "is playing"
@@ -192,6 +193,12 @@ export async function computeParkWeather(ctx) {
 
   rows.sort((a, b) => b.relevance_score - a.relevance_score);
   const capped = rows.slice(0, MAX_ROWS);
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('parkWeather', capped, detailFact, {
+    ask: 'what these conditions actually mean tonight — how the ball plays in this park in this air, and what that sets up for both sides',
+  });
+
   console.log(`[parkWeather] examined ${examined}, emitted ${capped.length}`);
   return capped;
 }

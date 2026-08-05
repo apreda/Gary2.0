@@ -33,6 +33,7 @@
 import {
   makeRow, TONES, scoreFromEdge, round, parseIpThirds, pickVariant,
 } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 
 // Tunables.
 const WINDOW_STARTS = 3;        // "last 3 starts" window
@@ -61,6 +62,12 @@ export async function computeStarterForm(ctx) {
   candidates.sort((a, b) => b.relevance_score - a.relevance_score);
   const rows = candidates.slice(0, MAX_ROWS);
   stats.emitted = rows.length;
+  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
+  // repeats the headline. Fenced to this lane's own computed facts.
+  await attachLaneReads('starterForm', rows, detailFact, {
+    ask: 'what this starter is actually pitching like right now — what has changed across these outings and what it sets up against tonight\'s lineup',
+  });
+
   console.log(`[starterForm] examined ${stats.examined}, emitted ${stats.emitted}`);
   return rows;
 }
