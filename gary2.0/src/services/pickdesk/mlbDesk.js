@@ -199,50 +199,10 @@ async function buildMatchupLab(game, homeTeam, awayTeam, gamePk) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Pure formatter: one club's recent-pick rows → ledger lines. Exported for pins. */
-export function yourBookSection(clubs) {
-  const blocks = [];
-  for (const { club, rows } of clubs) {
-    if (!rows.length) continue;
-    const lines = rows.slice(0, 5).map((r) =>
-      `  ${r.date}: ${r.pick} — ${r.result}${r.score ? ` (${r.score})` : ''}`);
-    blocks.push(`${club} — your last ${lines.length} pick(s) on their games:\n${lines.join('\n')}`);
-  }
-  if (!blocks.length) return '';
-  return `═══ YOUR BOOK — your recent picks touching tonight's clubs ═══\n${blocks.join('\n')}`;
-}
-
-/** Last-14-days graded picks touching either club, newest first. */
-async function fetchYourBook(homeTeam, awayTeam) {
-  if (!SLATE_SUPABASE_URL || !SLATE_SUPABASE_KEY) return '';
-  try {
-    const since = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
-    const nick = (t) => String(t || '').split(' ').pop();
-    const resp = await axios.get(`${SLATE_SUPABASE_URL}/rest/v1/game_results`, {
-      params: {
-        game_date: `gte.${since}`, league: 'eq.MLB',
-        select: 'game_date,pick_text,result,final_score,matchup',
-        order: 'game_date.desc', limit: '200',
-      },
-      headers: { apikey: SLATE_SUPABASE_KEY, Authorization: `Bearer ${SLATE_SUPABASE_KEY}` },
-      timeout: 8000,
-    });
-    const rows = Array.isArray(resp.data) ? resp.data : [];
-    const clubs = [awayTeam, homeTeam].map((team) => {
-      const n = nick(team);
-      const mine = rows.filter((r) => String(r.matchup || '').includes(n));
-      return {
-        club: team,
-        rows: mine.map((r) => ({
-          date: r.game_date,
-          pick: r.pick_text,
-          result: r.result || 'pending',
-          score: r.final_score || null,
-        })),
-      };
-    });
-    return yourBookSection(clubs);
-  } catch { return ''; }
-}
+// (YOUR BOOK section REMOVED — founder, Aug 5 PM: "take it off the desk
+// completely." Under the blind read, his own recent picks on tonight's
+// clubs added self-consistency pressure, not information — fresh eyes is
+// the point of the read. Picks history stays stored for audits/app.)
 
 // TEAM SAMPLE flag (founder GO, Aug 4 — post-deadline twin of the pitcher
 // sample flags): season/L10 team aggregates include games played by players
@@ -317,14 +277,13 @@ export async function buildMlbDesk(game, options = {}) {
 
   const season = new Date().getFullYear();
   const gameIds = [game.bdl_game_id ?? game.id].filter(Boolean);
-  const [oddsRowsRaw, standings, matchupLab, yourBook, sampleNote] = await Promise.all([
+  const [oddsRowsRaw, standings, matchupLab, sampleNote] = await Promise.all([
     gameIds.length
       ? ballDontLieService.getOddsV2({ game_ids: gameIds }, 'baseball_mlb').catch(() => [])
       : Promise.resolve([]),
     ballDontLieService.getMlbStandings(season).catch(() => []),
     buildMatchupLab(game, homeTeam, awayTeam, scout.gamePk).catch(() => ''),
     // YOUR BOOK (Aug 4) — his own recent picks touching tonight's clubs.
-    fetchYourBook(homeTeam, awayTeam).catch(() => ''),
     // TEAM SAMPLE flag (Aug 4) — trades out of either club, last 10 days.
     fetchDepartures(homeTeam, awayTeam).catch(() => ''),
   ]);
@@ -379,7 +338,7 @@ export async function buildMlbDesk(game, options = {}) {
   // no prices on it — deskTextBlind. THE LINES arrive only with the ticket ask
   // (boardText). deskText stays the full surface, board first, for the stored
   // snapshot: the audit record is everything Gary saw across both turns.
-  const deskTextBlind = `${stakes}\n\n${yourBook ? `${yourBook}\n\n` : ''}${world}\n\n${shelf}`;
+  const deskTextBlind = `${stakes}\n\n${world}\n\n${shelf}`;
   const deskText = `${board}\n\n${deskTextBlind}`;
   return {
     deskText,
