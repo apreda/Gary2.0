@@ -27,7 +27,10 @@ import {
 
 const MAX_HEADLINE_CHARS = 90;
 const MAX_RECAP_CHARS = 700;
-const MAX_BULLET_CHARS = 45;
+// Room for a two-market bullet to carry both prices — "Ernie Clement 1 HR,
+// 2 RBI (+300 · +150)" is 39, and a longer name needs the slack. The cap is a
+// hard slice, so a tight ceiling would chop the second price off mid-token.
+const MAX_BULLET_CHARS = 56;
 const MAX_BULLETS = 4;
 // A stalled connection to the Gemini API otherwise hangs the whole nightly
 // run — observed during the June 10 backfill (calls hung 8+ minutes).
@@ -95,7 +98,15 @@ function buildPrompt({ pick, result, evidence }) {
     `STRICTLY from the evidence. Carry a price ONLY where that exact price is in the evidence ` +
     `("Matt Olson 2 HR (+340 to homer)" only if Olson's HR prop price is listed; else "Matt Olson ` +
     `2 HR"). The total is a fine bullet on its own: "Over 9.5 hit · 11 runs". Never invent a price, ` +
-    `line, or stat.\n\n` +
+    `line, or stat.\n` +
+    `- A bullet naming MORE THAN ONE market for the same player carries one price per market, in ` +
+    `the same order the markets are named, in a single trailing parenthetical separated by " · ": ` +
+    `"Ernie Clement 1 HR, 2 RBI (+300 · +150)". List a price only for the markets the evidence ` +
+    `prices — if only the home run is priced, only that price rides ("Ernie Clement 1 HR, 2 RBI ` +
+    `(+300)"), and the parenthetical is omitted entirely when neither is.\n` +
+    `- Never state how many runs a home run drove in ("2-run HR", "three-run shot"). The evidence ` +
+    `gives per-player totals, not which runs came from which swing — a batter with 1 HR and 2 RBI ` +
+    `may have hit a two-run homer OR a solo homer plus a run-scoring out. Write the totals.\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
     `{"headline":"...","recap":"...","bullets":["...","..."]}`
   );

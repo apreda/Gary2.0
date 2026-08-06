@@ -5200,9 +5200,12 @@ struct HeadlineFlipCard: View {
             Spacer(minLength: 4)
             if let price = parts.price {
                 Text(price)
+                    // A two-market bullet carries two prices ("+300 · +150"),
+                    // so the gold column can now run long. It scales like the
+                    // stat beside it rather than truncating — no ellipsis, ever.
                     .font(GaryFonts.mono(10.5, bold: true))
                     .foregroundStyle(GaryColors.warmGold)
-                    .lineLimit(1)
+                    .lineLimit(1).minimumScaleFactor(0.6)
             }
         }
     }

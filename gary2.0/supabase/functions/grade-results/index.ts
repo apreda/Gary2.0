@@ -127,7 +127,11 @@ async function writeResult(row: any): Promise<"insert" | "update" | "noop" | "fa
 
 const RECAP_MAX_HEADLINE_CHARS = 90;
 const RECAP_MAX_RECAP_CHARS = 700;
-const RECAP_MAX_BULLET_CHARS = 45;
+// Room for a two-market bullet to carry both prices — "Ernie Clement 1 HR,
+// 2 RBI (+300 · +150)" is 39, and a longer name needs the slack. The cap is a
+// hard slice, so a tight ceiling would chop the second price off mid-token.
+// Kept in lockstep with MAX_BULLET_CHARS in src/services/gameRecap.js.
+const RECAP_MAX_BULLET_CHARS = 56;
 const RECAP_MAX_BULLETS = 4;
 const RECAP_GEMINI_RETRIES = 4; // hardened (local writer retries twice) — 3-4 with backoff
 
@@ -259,7 +263,15 @@ function recapBuildPrompt(args: { pick: any; result: string; evidence: string })
     `line is the bet above). Never invent a price, a line, or a stat.\n` +
     `- A player-prop bullet (shots, saves, goals, assists, tackles, K's, HR) may carry a ` +
     `price ONLY if that exact player's prop price is printed in the evidence above. ` +
-    `Never invent a player's stat line or a market that is not in the evidence.\n\n` +
+    `Never invent a player's stat line or a market that is not in the evidence.\n` +
+    `- A bullet naming MORE THAN ONE market for the same player carries one price per market, in ` +
+    `the same order the markets are named, in a single trailing parenthetical separated by " · ": ` +
+    `"Ernie Clement 1 HR, 2 RBI (+300 · +150)". List a price only for the markets the evidence ` +
+    `prices — if only the home run is priced, only that price rides ("Ernie Clement 1 HR, 2 RBI ` +
+    `(+300)"), and the parenthetical is omitted entirely when neither is.\n` +
+    `- Never state how many runs a home run drove in ("2-run HR", "three-run shot"). The evidence ` +
+    `gives per-player totals, not which runs came from which swing — a batter with 1 HR and 2 RBI ` +
+    `may have hit a two-run homer OR a solo homer plus a run-scoring out. Write the totals.\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +
     `{"headline":"...","recap":"...","bullets":["...","..."]}`
   );
@@ -393,6 +405,43 @@ async function recapFetchPropRows(dateStr: string, cache: Map<string, any[]>): P
   return rows;
 }
 
+// THE MENU, BACK OUT — port of propMenuEvidence() in scripts/run-game-recaps.js.
+// propsBrain snapshots every priced market at seal time; without this the live
+// writer could only price Gary's OWN graded props, so a bullet about a market he
+// passed on ("Ernie Clement 1 HR, 2 RBI") could never say what it paid. Same gap
+// the box line had: built in the manual script, never ported to the function
+// that actually runs. The writer's own rule still governs — a price rides ONLY
+// where it appears here, so a game with no snapshot simply prices nothing.
+async function recapPropMenuEvidence(
+  gameDate: string, matchup: string, cache: Map<string, string>,
+): Promise<string> {
+  const key = `${gameDate}|${matchup}`;
+  if (cache.has(key)) return cache.get(key)!;
+  let out = "";
+  try {
+    const rows = await sbGet("prop_menu",
+      `game_date=eq.${gameDate}&matchup=eq.${encodeURIComponent(matchup)}&select=markets`);
+    const markets = rows?.[0]?.markets;
+    if (Array.isArray(markets) && markets.length) {
+      const fmt = (o: unknown) =>
+        o == null ? null : (Number(o) > 0 ? `+${o}` : `${o}`);
+      const lines = markets.slice(0, 60).map((m: any) => {
+        const over = fmt(m.over), under = fmt(m.under);
+        const price = over && under ? `Over ${over} / Under ${under}`
+          : over ? `Over ${over}` : under ? `Under ${under}` : null;
+        return price ? `- ${m.player} ${m.prop_type} ${m.line}: ${price}` : null;
+      }).filter(Boolean);
+      if (lines.length) {
+        out = `\n\nPROP PRICES OFFERED BEFORE THIS GAME (pregame board):\n${lines.join("\n")}`;
+      }
+    }
+  } catch (e) {
+    console.warn(`  [Recap] prop_menu fetch failed (prices omitted): ${(e as Error).message}`);
+  }
+  cache.set(key, out);
+  return out;
+}
+
 // Filter prop_results rows to one game (port of filterPropsForGame).
 function recapFilterPropsForGame(propRows: any[], homeTeam: string, awayTeam: string): any[] {
   const normTeam = (s: unknown) => String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -453,8 +502,9 @@ async function writeRecap(args: {
   pick: any; league: string; gameDate: string; result: string;
   hScore: number; vScore: number; mlbGameId: number | null;
   statsCache: Map<string, any[]>; propsCache: Map<string, any[]>;
+  menuCache: Map<string, string>;
 }): Promise<"recap" | "regenerated" | "exists" | "skip" | "fail"> {
-  const { pick, league, gameDate, result, hScore, vScore, mlbGameId, statsCache, propsCache } = args;
+  const { pick, league, gameDate, result, hScore, vScore, mlbGameId, statsCache, propsCache, menuCache } = args;
   if (!GEMINI_KEY) return "skip";
   const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
 
@@ -474,7 +524,7 @@ async function writeRecap(args: {
   const evidence = recapBuildEvidence({
     league, homeTeam: pick.homeTeam, awayTeam: pick.awayTeam,
     homeScore: hScore, awayScore: vScore, mlbStats, gradedProps,
-  });
+  }) + (league === "MLB" ? await recapPropMenuEvidence(gameDate, matchup, menuCache) : "");
 
   const recap = await recapGenerate({ pick, result, evidence });
   if (!recap) return "fail";
@@ -525,6 +575,7 @@ Deno.serve(async (req) => {
   // Per-run evidence caches shared across recaps (BDL box score + prop_results).
   const statsCache = new Map<string, any[]>();
   const propsCache = new Map<string, any[]>();
+  const menuCache = new Map<string, string>();
   // Your Book: every pick graded this run, so user tail/fades settle after the loop.
   const gradedForUserBets: Array<{ game_date: string; pick_text: string; result: string }> = [];
 
@@ -644,7 +695,7 @@ Deno.serve(async (req) => {
       if (outcome === "insert" || outcome === "update" || outcome === "noop") {
         try {
           const r = await writeRecap({
-            pick, league, gameDate: date, result, hScore, vScore, mlbGameId, statsCache, propsCache,
+            pick, league, gameDate: date, result, hScore, vScore, mlbGameId, statsCache, propsCache, menuCache,
           });
           if (r === "recap") stats.recap++;
           else if (r === "regenerated") stats.recap_regenerated++;
