@@ -5210,25 +5210,47 @@ struct HeadlineFlipCard: View {
         }
     }
 
-    /// "Pete Alonso 2 RBI (+110 TB lost)" → stat + "+110 TB lost". Only splits
-    /// on a trailing parenthetical that actually contains a price; anything
-    /// else stays part of the stat line untouched.
+    /// "Pete Alonso 2 RBI (+110 TB lost)" → stat + "+110 TB lost". Pulls EVERY
+    /// parenthetical that really holds an American price out of the line,
+    /// wherever it sits, and hands them to the gold column.
+    ///
+    /// Placement-agnostic on purpose (founder, Aug 6): the writer's contract
+    /// says one TRAILING parenthetical, but on a two-market bullet where only
+    /// one market is priced it attaches the price inline — "JJ Bleday 1 HR
+    /// (+336), 1 RBI" — and a trailing-only parser left that +336 stranded in
+    /// the stat text while the row above it wore its price in gold. Parsing
+    /// beats another prompt law here: the price lands in the same column no
+    /// matter where the model puts it.
     static func splitPrice(_ raw: String) -> (stat: String, price: String?) {
-        guard raw.hasSuffix(")"), let open = raw.lastIndex(of: "(") else { return (raw, nil) }
-        let inner = String(raw[raw.index(after: open)..<raw.index(before: raw.endIndex)])
-        guard inner.range(of: #"[-+−]\d{2,}"#, options: .regularExpression) != nil else {
-            return (raw, nil)
+        // A parenthetical qualifies only if it contains a signed 2+ digit
+        // number, so "(6.2 IP)" or "(2 for 5)" stay part of the stat.
+        let pattern = #"\(([^()]*[-+−]\d{2,}[^()]*)\)"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return (raw, nil) }
+        let ns = raw as NSString
+        let full = NSRange(location: 0, length: ns.length)
+        let matches = re.matches(in: raw, range: full)
+        guard !matches.isEmpty else { return (raw, nil) }
+
+        var prices: [String] = []
+        for m in matches {
+            let inner = ns.substring(with: m.range(at: 1))
+            // A price that DIDN'T cash has no business in gold under a header
+            // that says "what else hit" — the recap writer sometimes annotates
+            // Gary's own losing prop there ("Pete Alonso 2 RBI (+110 TB
+            // lost)"). The stat is true and stays; the payout comes off.
+            if inner.range(of: #"\b(lost|loses|losing|missed|miss|no cash)\b"#,
+                           options: [.regularExpression, .caseInsensitive]) != nil { continue }
+            prices.append(inner.trimmingCharacters(in: .whitespaces))
         }
-        let stat = raw[raw.startIndex..<open].trimmingCharacters(in: .whitespaces)
-        // A price that DIDN'T cash has no business in gold under a header that
-        // says "what else hit" — the recap writer sometimes annotates Gary's
-        // own losing prop there ("Pete Alonso 2 RBI (+110 TB lost)"). The stat
-        // is true and stays; the misleading payout comes off.
-        if inner.range(of: #"\b(lost|loses|losing|missed|miss|no cash)\b"#,
-                       options: [.regularExpression, .caseInsensitive]) != nil {
-            return (stat, nil)
-        }
-        return (stat, inner)
+
+        // Strip the priced parentheticals, then close the seams the removal
+        // leaves ("1 HR , 1 RBI", a dangling trailing comma).
+        var stat = re.stringByReplacingMatches(in: raw, range: full, withTemplate: "")
+        stat = stat.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        stat = stat.replacingOccurrences(of: #"\s+([,;])"#, with: "$1", options: .regularExpression)
+        stat = stat.trimmingCharacters(in: CharacterSet(charactersIn: " ,;"))
+
+        return (stat, prices.isEmpty ? nil : prices.joined(separator: " · "))
     }
 }
 
