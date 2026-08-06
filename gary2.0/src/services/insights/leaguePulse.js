@@ -48,12 +48,16 @@ const BAT_TREND_OPS_GAP = 0.080;  // L30 OPS vs season OPS gap to flag hot/cold
 const PEN_GAMES = 3;              // last N completed games per team
 const PEN_HEAVY_IP = 11;          // relief IP over the window flagged "heavy"
 
-// MLB injuries — LOCKED label thresholds (read-only consume, do NOT change logic):
-//   FRESH = 0-3 days on the real injury timeline (BDL return_date / onset date),
-//   PRICED-IN = > 3 days. Keyed on the canonical timeline, NOT a row's last-edit
-//   metadata (updated_at / report_date), so a long-standing injury edited today
-//   is correctly PRICED-IN. See freshnessLabel().
-const INJ_FRESH_MAX_DAYS = 3;
+// MLB injuries — the PULSE TABLE's label ladder (founder, Aug 6: "only 10 day
+// or less injuries are fresh, the rest need different labels" — the old logic
+// stamped FRESH on ANY injury with a future return_date, which is nearly all
+// of them, so the whole column read FRESH). Age is measured from injury ONSET
+// (the real timeline), never a row's last-edit metadata; a return_date within
+// the next week outranks age because an imminent return is the actionable
+// story. Gary's scout-report FRESH/PRICED IN engine is separate and untouched.
+const INJ_FRESH_MAX_DAYS = 10;    // ≤10d since onset → FRESH
+const INJ_KNOWN_MAX_DAYS = 30;    // 11-30d → PRICED IN; older → LONG-TERM
+const INJ_BACK_SOON_DAYS = 7;     // return_date within +7d → BACK SOON
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public entry
@@ -496,7 +500,7 @@ async function buildMlbInjuries({ date, bdl, teamMeta }) {
     const status = inj.status || null;
     const note = injuryNote(inj);
 
-    // FRESH (0-3d) / PRICED-IN (>3d) — read-only consume of the LOCKED definition.
+    // BACK SOON / FRESH / PRICED IN / LONG-TERM (founder ladder, Aug 6).
     const since = freshnessLabel(inj, todayMs);
 
     rows.push({
@@ -509,8 +513,10 @@ async function buildMlbInjuries({ date, bdl, teamMeta }) {
   }
 
   if (!rows.length) return null;
-  // FRESH rows first (most actionable), then the rest; cap.
-  rows.sort((a, b) => (a.since === 'FRESH' ? 0 : 1) - (b.since === 'FRESH' ? 0 : 1));
+  // Actionability order: new news first, imminent returns next, then the
+  // absorbed and the long-gone; cap.
+  const laneRank = { FRESH: 0, 'BACK SOON': 1, 'PRICED IN': 2, 'LONG-TERM': 3 };
+  rows.sort((a, b) => (laneRank[a.since] ?? 4) - (laneRank[b.since] ?? 4));
   const capped = rows.slice(0, TOP_N);
 
   // Column diet (no-ellipsis law): the team abbr already rides beside the
@@ -585,42 +591,47 @@ async function playerHeader(bdl, playerId) {
 function injuryNote(inj) {
   const c = String(inj?.comment || inj?.injury_type || inj?.note || '').trim();
   if (!c) return null;
-  // Keep it short — first clause / sentence.
+  // Keep it short — first clause / sentence. A long clause cuts at a word
+  // boundary, whole words only (no-ellipsis law: never "…" in a cell).
   const first = c.split(/[.;\n]/)[0].trim();
-  return first.length > 48 ? `${first.slice(0, 45)}…` : first;
+  if (first.length <= 48) return first;
+  const cut = first.slice(0, 48);
+  const atWord = cut.slice(0, cut.lastIndexOf(' '));
+  return atWord || cut;
 }
 
 /**
- * FRESH (0-3 days) / PRICED-IN (>3 days) label — consumes the LOCKED injury
- * timeline the canonical engine reads (the BDL `return_date` / `date` signal),
- * NOT a row's last-edit metadata. This is deliberate: keying on `updated_at` /
- * `report_date` (when the row was last touched) mislabels a long-standing,
- * priced-in injury that merely got edited today as FRESH. The real injury
- * timeline is the BDL `return_date` (projected return — the LOCKED FRESH/PRICED-IN
- * signal per CLAUDE.md + the BDL injury-endpoint docs) with `date` (injury onset)
- * as the fallback when no return date is published. When neither timeline field
- * is present, returns null (no guess). updated_at / report_date are intentionally
- * NOT consulted.
+ * The pulse table's injury label ladder (founder rule, Aug 6). The old logic
+ * called ANY injury with a future return_date FRESH — and BDL publishes a
+ * projected return for nearly every row, so a 60-day IL stint from May wore
+ * FRESH in August. Age now comes from injury ONSET (`date`); an imminent
+ * return_date outranks age because "he's almost back" is the actionable story.
+ *
+ *   BACK SOON  — return_date within the next INJ_BACK_SOON_DAYS
+ *   FRESH      — hurt within the last INJ_FRESH_MAX_DAYS (≤10d)
+ *   PRICED IN  — 11-30 days on the shelf; the market has absorbed it
+ *   LONG-TERM  — >30 days out
+ *   null       — no timeline data (no guess)
+ *
+ * updated_at / report_date are intentionally NOT consulted — keying on when a
+ * row was last edited mislabels a long-standing injury as news.
  */
 function freshnessLabel(inj, todayMs) {
   if (todayMs == null) return null;
 
-  // Primary: projected return_date — the canonical FRESH/PRICED-IN timeline.
-  // A return still in the future (or just passed) = a live, FRESH absence; a
-  // return date well in the past means the situation has long been on the board.
   const ret = inj?.return_date ? Date.parse(String(inj.return_date)) : NaN;
   if (Number.isFinite(ret)) {
     const daysToReturn = Math.floor((ret - todayMs) / 86400000);
-    // Future/imminent return is fresh news; a return that lapsed >3d ago is priced in.
-    return daysToReturn >= -INJ_FRESH_MAX_DAYS ? 'FRESH' : 'PRICED-IN';
+    if (daysToReturn >= 0 && daysToReturn <= INJ_BACK_SOON_DAYS) return 'BACK SOON';
   }
 
-  // Fallback: injury onset date (`date`) — how long the injury has been a thing.
   const onset = inj?.date ? Date.parse(String(inj.date)) : NaN;
   if (Number.isFinite(onset)) {
     const ageDays = Math.floor((todayMs - onset) / 86400000);
     if (ageDays < 0) return null;
-    return ageDays <= INJ_FRESH_MAX_DAYS ? 'FRESH' : 'PRICED-IN';
+    if (ageDays <= INJ_FRESH_MAX_DAYS) return 'FRESH';
+    if (ageDays <= INJ_KNOWN_MAX_DAYS) return 'PRICED IN';
+    return 'LONG-TERM';
   }
 
   return null;

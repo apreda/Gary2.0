@@ -65,6 +65,17 @@ const HIT_CAP = 12;              // keep only the longest N hit streaks
 const HITLESS_CAP = 12;          // ... and hitless skids
 const REGULAR_MIN_SEASON_AB = 150;  // hitless skids: regulars only —
 const REGULAR_MIN_AB_PER_GAME = 3;  // season AB >= 150 OR AB/G >= 3.0
+// A player streak must be LIVE: its owner appeared within this many days of
+// the as-of date. Without this gate an IL'd player's frozen log read as an
+// eternal skid — Friedl "0-for-18 since July 17" was still on the board
+// Aug 6 (founder: "we shouldnt show injured players"). Injury-clock doctrine:
+// clock from LAST APPEARANCE, data-side. 4 covers off-days + a short benching.
+const PLAYER_ACTIVE_MAX_IDLE_DAYS = 4;
+// A hitless skid must be CURRENT, full usage — not a returning/part-time bat
+// drip-feeding ABs (Friedl post-IL: 18 AB across 19 days slid under every
+// gap rule). A slumping REGULAR takes this many AB inside the last 7 days
+// (Schwarber's real skid: 17 in 5 days); a rehab cameo doesn't.
+const HITLESS_MIN_RECENT_AB = 8;
 const STATS_BATCH = 3;           // game_ids per stats request (~30 lines/game, 100/page)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -128,6 +139,13 @@ function todayET() {
 function humanDate(dateStr) {
   const [, m, d] = dateStr.split('-').map(Number);
   return `${MONTHS[m - 1]} ${d}`;
+}
+
+/** Whole days between two ET date strings (a - b). */
+function dayGap(aET, bET) {
+  const a = Date.parse(`${aET}T12:00:00Z`), b = Date.parse(`${bET}T12:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.round((a - b) / 86400000);
 }
 
 /** ".393" from hits/ab (data-voice batting average, no leading zero). */
@@ -436,8 +454,10 @@ function buildPlayerLogs(statRows, gamesById) {
   return byPlayer;
 }
 
-/** Player hit / hitless / hr streak rows (hitless filtered to regulars later). */
-function buildPlayerStreaks(playerLogs) {
+/** Player hit / hitless / hr streak rows (hitless filtered to regulars later).
+ *  asOfDate drives the recent-usage floor on hitless skids. */
+function buildPlayerStreaks(playerLogs, asOfDate) {
+  const recentFloor = shiftDateStr(asOfDate, -6); // last 7 days incl. as-of
   const hit = [];
   const hitless = [];
   const hr = [];
@@ -445,13 +465,19 @@ function buildPlayerStreaks(playerLogs) {
   for (const [pid, log] of playerLogs) {
     const games = log.games;
     if (!games.length) continue;
+    // Newest game's ET date rides every row this player produces — the
+    // liveness gate in writeStreaks() compares it to the as-of date.
+    const lastET = games[0]?.etDate || null;
 
     // Hitting streak: consecutive games with a hit; 0-AB games neither
     // extend nor break (see file header for the documented simplifications).
-    let hitLen = 0, hitH = 0, hitAB = 0;
+    let hitLen = 0, hitH = 0, hitAB = 0, hitPrevET = null;
     for (const g of games) {
       if (g.ab === 0) continue;
-      if (g.hits >= 1) { hitLen++; hitH += g.hits; hitAB += g.ab; continue; }
+      // An activity gap (IL stint, option) BREAKS the streak — a run glued
+      // across weeks a player didn't play isn't a streak (Friedl, Aug 6).
+      if (hitPrevET && dayGap(hitPrevET, g.etDate) > PLAYER_ACTIVE_MAX_IDLE_DAYS) break;
+      if (g.hits >= 1) { hitLen++; hitH += g.hits; hitAB += g.ab; hitPrevET = g.etDate; continue; }
       break;
     }
     if (hitLen >= HIT_MIN) {
@@ -459,31 +485,41 @@ function buildPlayerStreaks(playerLogs) {
         subject_type: 'player', subject: log.name, team: log.team,
         kind: 'hit', length: hitLen,
         detail: `${hitLen} games — ${hitH}-for-${hitAB} (${avgStr(hitH, hitAB)})`,
+        _lastET: lastET,
       });
     }
 
     // Hitless skid: at-bats across complete hitless games since the last hit.
-    let hitlessAB = 0, sinceET = null;
+    let hitlessAB = 0, sinceET = null, coldPrevET = null;
     for (const g of games) {
       if (g.hits > 0) break;
+      // Same gap rule as the hit streak: an IL stint inside the window ends
+      // the skid — only the CONTIGUOUS run since his return counts, so a
+      // returning bat shows "0-for-8 since August 1", not an IL-spanning
+      // "0-for-18 since July 17".
+      if (coldPrevET && g.ab > 0 && dayGap(coldPrevET, g.etDate) > PLAYER_ACTIVE_MAX_IDLE_DAYS) break;
       hitlessAB += g.ab;
-      if (g.ab > 0) sinceET = g.etDate; // oldest hitless game with an AB so far
+      if (g.ab > 0) { sinceET = g.etDate; coldPrevET = g.etDate; } // oldest hitless game with an AB so far
     }
-    if (hitlessAB >= HITLESS_MIN_AB && sinceET) {
+    const recentAB = games.reduce(
+      (sum, g) => sum + (g.etDate >= recentFloor ? (g.ab || 0) : 0), 0);
+    if (hitlessAB >= HITLESS_MIN_AB && sinceET && recentAB >= HITLESS_MIN_RECENT_AB) {
       hitless.push({
         subject_type: 'player', subject: log.name, team: log.team,
         kind: 'hitless', length: hitlessAB,
         detail: `0-for-${hitlessAB} since ${humanDate(sinceET)}`,
         _playerId: pid, // regulars filter joins season stats on this, then strips it
+        _lastET: lastET,
       });
     }
 
     // HR-game streak: consecutive games WITH a homer; any game played (AB > 0)
     // without one breaks it; 0-AB games skip.
-    let hrLen = 0, hrTotal = 0;
+    let hrLen = 0, hrTotal = 0, hrPrevET = null;
     for (const g of games) {
       if (g.ab === 0 && g.hr === 0) continue;
-      if (g.hr >= 1) { hrLen++; hrTotal += g.hr; continue; }
+      if (hrPrevET && dayGap(hrPrevET, g.etDate) > PLAYER_ACTIVE_MAX_IDLE_DAYS) break;
+      if (g.hr >= 1) { hrLen++; hrTotal += g.hr; hrPrevET = g.etDate; continue; }
       break;
     }
     if (hrLen >= HR_MIN) {
@@ -491,6 +527,7 @@ function buildPlayerStreaks(playerLogs) {
         subject_type: 'player', subject: log.name, team: log.team,
         kind: 'hr', length: hrLen,
         detail: `HR in ${hrLen} straight — ${hrTotal} total`,
+        _lastET: lastET,
       });
     }
   }
@@ -535,7 +572,19 @@ export async function writeStreaks({ supabase, bdlApiKey, date, dryRun = false }
   const statRows = await fetchStatsForGames(finals.map((g) => g.id), bdlApiKey);
   console.log(`  📊 ${statRows.length} stat lines across ${finals.length} games`);
   const playerLogs = buildPlayerLogs(statRows, gamesById);
-  let { hit, hitless, hr } = buildPlayerStreaks(playerLogs);
+  let { hit, hitless, hr } = buildPlayerStreaks(playerLogs, date);
+
+  // LIVE streaks only: the owner must have appeared within the idle window of
+  // the as-of date. An IL'd bat's log freezes, and a frozen log is not a
+  // streak — it's an absence (Friedl/Steer, Aug 6).
+  const activeFloor = shiftDateStr(date, -PLAYER_ACTIVE_MAX_IDLE_DAYS);
+  const isLive = (r) => r._lastET != null && r._lastET >= activeFloor;
+  const staleN = [...hit, ...hitless, ...hr].filter((r) => !isLive(r)).length;
+  if (staleN) console.log(`  💤 dropped ${staleN} streak(s) from players idle since before ${activeFloor}`);
+  hit = hit.filter(isLive);
+  hitless = hitless.filter(isLive);
+  hr = hr.filter(isLive);
+  for (const r of [...hit, ...hitless, ...hr]) delete r._lastET;
 
   // Hitless skids surface for REGULARS only (season AB >= 150 or AB/G >= 3.0)
   // — a bench bat sitting 0-for-16 across a month isn't a story.

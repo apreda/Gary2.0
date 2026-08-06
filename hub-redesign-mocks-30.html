@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub Redesign — 30 Mocks (H2H · NRFI · League Pulse)</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0B0A09; --panel:rgba(246,241,231,0.03); --stroke:rgba(246,241,231,0.09);
+    --gold:#C9A227; --warmgold:#F4E4BA; --warmwhite:#F6F1E7;
+    --green:#9cc88a; --red:#cf6b5b; --win:#3FB950; --loss:#E5484D;
+    --hair:rgba(255,255,255,0.07);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#070606; color:var(--warmwhite);
+         font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif; padding:28px 22px 80px; }
+  .bebas { font-family:"Bebas Neue",sans-serif; font-weight:400; letter-spacing:.5px; }
+  .data { font-variant-numeric:tabular-nums; font-weight:600; }
+  h1 { font-family:"Bebas Neue",sans-serif; font-size:40px; color:var(--warmwhite); margin-bottom:4px; }
+  .sub { color:rgba(255,255,255,.5); font-size:13px; margin-bottom:30px; }
+  h2 { font-family:"Bebas Neue",sans-serif; font-size:30px; color:var(--gold); margin:44px 0 14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(390px,1fr)); gap:22px; }
+  .mock { background:var(--bg); border:1px solid var(--stroke); border-radius:14px; padding:0; overflow:hidden; }
+  .mocktag { display:flex; justify-content:space-between; align-items:baseline;
+             padding:10px 14px; border-bottom:1px solid var(--hair); background:rgba(0,0,0,.35); }
+  .mocktag .id { color:var(--gold); font-weight:700; font-size:12px; letter-spacing:1.5px; }
+  .mocktag .nm { color:rgba(255,255,255,.55); font-size:11px; letter-spacing:.4px; }
+  .ph { padding:18px; }
+  .kicker { color:var(--gold); font-size:10.5px; font-weight:600; letter-spacing:1.8px; text-transform:uppercase; }
+  .kicker.dim { color:rgba(255,255,255,.45); }
+  .rule { height:1px; background:var(--hair); margin:10px 0; }
+  .panel { background:var(--panel); border:1px solid var(--stroke); border-radius:12px; padding:14px; }
+  .meta { color:rgba(255,255,255,.55); font-size:10.5px; letter-spacing:.6px; }
+  .tag { display:inline-block; border-radius:4px; padding:2px 7px 3px; font-size:9.5px; font-weight:700; letter-spacing:1px; }
+  .tag.gold { color:#0B0A09; background:var(--gold); }
+  .tag.goldline { color:var(--gold); border:1px solid rgba(201,162,39,.55); }
+  .tag.green { color:#0B0A09; background:var(--green); }
+  .tag.greenline { color:var(--green); border:1px solid rgba(156,200,138,.5); }
+  .tag.dimline { color:rgba(255,255,255,.55); border:1px solid rgba(255,255,255,.22); }
+  .tag.faintline { color:rgba(255,255,255,.35); border:1px solid rgba(255,255,255,.14); }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:5px; }
+  .dot.clean { background:var(--green); }
+  .dot.scored { background:rgba(255,255,255,.16); }
+  .dot.red { background:var(--red); }
+  .sq { width:13px; height:13px; border-radius:3px; display:inline-block; margin-right:4px; }
+  .sq.clean { background:rgba(156,200,138,.85); }
+  .sq.scored { background:rgba(207,107,91,.55); }
+  .bar { height:8px; border-radius:2px; }
+  table { width:100%; border-collapse:collapse; }
+  td,th { padding:7px 0; font-size:12.5px; }
+  th { color:rgba(255,255,255,.45); font-size:9.5px; font-weight:600; letter-spacing:1.2px; text-align:left; }
+  tr { border-bottom:1px solid var(--hair); }
+  tr:last-child { border-bottom:none; }
+  .r { text-align:right; }
+  .g { color:var(--green); } .rd { color:var(--red); } .gd { color:var(--gold); }
+  .wg { color:var(--warmgold); }
+  .dim { color:rgba(255,255,255,.55); } .faint { color:rgba(255,255,255,.35); }
+</style>
+</head>
+<body>
+
+<h1>HUB REDESIGN — 30 MOCKS</h1>
+<div class="sub">10 head-to-head &nbsp;·&nbsp; 10 NRFI/YRFI watch &nbsp;·&nbsp; 10 League Pulse — real Aug 6 data where the pipeline has it. The Matchups section retires; the H2H pick replaces it.</div>
+
+<h2>THE HEAD-TO-HEAD — 10</h2>
+<div class="grid">
+
+<!-- H1 -->
+<div class="mock"><div class="mocktag"><span class="id">H1</span><span class="nm">SERIES TUG</span></div><div class="ph">
+  <div class="kicker">Head-to-Head</div>
+  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:10px;">
+    <span class="bebas" style="font-size:27px;">BRAVES</span>
+    <span class="data" style="font-size:15px; color:rgba(255,255,255,.55);">vs</span>
+    <span class="bebas" style="font-size:27px; color:rgba(255,255,255,.6);">MARLINS</span>
+  </div>
+  <div style="display:flex; gap:3px; margin:12px 0 6px;">
+    <div class="bar" style="flex:7; background:var(--green);"></div>
+    <div class="bar" style="flex:2; background:rgba(255,255,255,.18);"></div>
+  </div>
+  <div style="display:flex; justify-content:space-between;">
+    <span class="data" style="font-size:18px; color:var(--green);">7</span>
+    <span class="meta">SEASON SERIES</span>
+    <span class="data" style="font-size:18px; color:rgba(255,255,255,.55);">2</span>
+  </div>
+  <div class="rule"></div>
+  <div style="display:flex; justify-content:space-between;">
+    <span class="meta">RUNS 51–38 ATL</span><span class="meta">TONIGHT 7:15 PM ET</span>
+  </div>
+</div></div>
+
+<!-- H2 -->
+<div class="mock"><div class="mocktag"><span class="id">H2</span><span class="nm">THE LEDGER</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <div><div class="kicker">Head-to-Head</div>
+    <div class="bebas" style="font-size:24px; margin-top:8px;">BRAVES OWN THE MARLINS</div></div>
+    <div class="bebas data" style="font-size:44px; color:var(--green);">7–2</div>
+  </div>
+  <div class="rule"></div>
+  <table>
+    <tr><td class="dim">Aug 5</td><td>ATL 4 · MIA 1</td><td class="r g">W</td></tr>
+    <tr><td class="dim">Jul 21</td><td>ATL 6 · MIA 2</td><td class="r g">W</td></tr>
+    <tr><td class="dim">Jul 20</td><td>MIA 5 · ATL 3</td><td class="r rd">L</td></tr>
+  </table>
+  <div class="rule"></div>
+  <div class="meta">LAST 3 MEETINGS · MIA @ ATL 7:15 PM ET</div>
+</div></div>
+
+<!-- H3 -->
+<div class="mock"><div class="mocktag"><span class="id">H3</span><span class="nm">VENUE SPLIT</span></div><div class="ph">
+  <div class="kicker">Head-to-Head · MIA @ ATL</div>
+  <div style="display:flex; gap:14px; margin-top:12px;">
+    <div class="panel" style="flex:1; text-align:center;">
+      <div class="meta">SEASON</div>
+      <div class="bebas data" style="font-size:34px; color:var(--green); margin-top:4px;">7–2</div>
+      <div class="meta" style="margin-top:4px;">BRAVES</div>
+    </div>
+    <div class="panel" style="flex:1; text-align:center;">
+      <div class="meta">IN ATLANTA</div>
+      <div class="bebas data" style="font-size:34px; color:var(--green); margin-top:4px;">4–0</div>
+      <div class="meta" style="margin-top:4px;">BRAVES</div>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div class="meta">TONIGHT AT TRUIST PARK · 7:15 PM ET · ATL −165</div>
+</div></div>
+
+<!-- H4 -->
+<div class="mock"><div class="mocktag"><span class="id">H4</span><span class="nm">MEETING DOTS</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <span class="kicker">Head-to-Head</span><span class="meta">MIA @ ATL</span>
+  </div>
+  <div class="bebas" style="font-size:23px; margin-top:8px;">BRAVES ARE 7–2 VS MARLINS THIS SEASON</div>
+  <div style="margin:12px 0 4px;">
+    <span class="dot clean"></span><span class="dot clean"></span><span class="dot red"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot red"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span>
+  </div>
+  <div class="meta">NINE MEETINGS, OLDEST → NEWEST · ATL WON THE LAST 2</div>
+  <div class="rule"></div>
+  <div style="display:flex; justify-content:space-between;">
+    <span class="meta">AVG SCORE ATL 5.7 · MIA 4.2</span><span class="data gd" style="font-size:12px;">7:15 PM</span>
+  </div>
+</div></div>
+
+<!-- H5 -->
+<div class="mock"><div class="mocktag"><span class="id">H5</span><span class="nm">FACE-OFF PLATES</span></div><div class="ph">
+  <div class="kicker" style="text-align:center;">Head-to-Head</div>
+  <div style="display:flex; align-items:center; gap:10px; margin-top:12px;">
+    <div class="panel" style="flex:1; text-align:center; border-color:rgba(156,200,138,.35);">
+      <div class="bebas" style="font-size:22px;">BRAVES</div>
+      <div class="data g" style="font-size:13px;">W7 STREAK</div>
+    </div>
+    <div class="bebas data" style="font-size:30px; color:var(--warmgold); white-space:nowrap;">7–2</div>
+    <div class="panel" style="flex:1; text-align:center;">
+      <div class="bebas" style="font-size:22px; color:rgba(255,255,255,.6);">MARLINS</div>
+      <div class="data dim" style="font-size:13px;">U6 STREAK</div>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div class="meta" style="text-align:center;">SEASON SERIES · TONIGHT 7:15 PM ET</div>
+</div></div>
+
+<!-- H6 -->
+<div class="mock"><div class="mocktag"><span class="id">H6</span><span class="nm">THE CASE (EDITORIAL)</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between;"><span class="kicker">Head-to-Head</span><span class="meta">MIA @ ATL</span></div>
+  <div class="bebas" style="font-size:26px; margin-top:8px;">SEVEN OF NINE TO THE BRAVES</div>
+  <div style="font-size:13.5px; color:rgba(255,255,255,.82); line-height:1.45; margin-top:8px;">
+    Atlanta's taken the season series 7–2 and outscored Miami 51–38 doing it — and the two losses both came in Miami, a park they don't see tonight.
+  </div>
+  <div class="rule"></div>
+  <div style="display:flex; gap:16px;">
+    <span class="meta">SERIES <span class="data g" style="font-size:12px;">7–2</span></span>
+    <span class="meta">AT ATL <span class="data g" style="font-size:12px;">4–0</span></span>
+    <span class="meta">LAST <span class="data" style="font-size:12px; color:var(--warmwhite);">ATL 4–1</span></span>
+  </div>
+</div></div>
+
+<!-- H7 -->
+<div class="mock"><div class="mocktag"><span class="id">H7</span><span class="nm">AGATE MATRIX</span></div><div class="ph">
+  <div class="kicker">Head-to-Head · MIA @ ATL · 7:15 PM ET</div>
+  <table style="margin-top:10px;">
+    <tr><th></th><th class="r">SERIES</th><th class="r">RUNS</th><th class="r">HOME</th><th class="r">ML TONIGHT</th></tr>
+    <tr><td class="wg" style="font-weight:600;">Braves</td><td class="r data g">7–2</td><td class="r data">51</td><td class="r data">4–0</td><td class="r data gd">−165</td></tr>
+    <tr><td class="dim">Marlins</td><td class="r data dim">2–7</td><td class="r data dim">38</td><td class="r data dim">2–3</td><td class="r data dim">+140</td></tr>
+  </table>
+</div></div>
+
+<!-- H8 -->
+<div class="mock"><div class="mocktag"><span class="id">H8</span><span class="nm">STREAK BAND</span></div><div class="ph">
+  <div class="kicker">Head-to-Head</div>
+  <div class="bebas" style="font-size:24px; margin-top:8px;">BRAVES HAVE TAKEN 5 STRAIGHT MEETINGS</div>
+  <div class="panel" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+    <span class="data" style="font-size:13px;">MIA @ ATL</span>
+    <span><span class="dot red"></span><span class="dot red"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span></span>
+    <span class="bebas data" style="font-size:24px; color:var(--green);">W5</span>
+  </div>
+  <div class="rule"></div>
+  <div class="meta">SEASON SERIES 7–2 ATL · TONIGHT 7:15 PM ET</div>
+</div></div>
+
+<!-- H9 -->
+<div class="mock"><div class="mocktag"><span class="id">H9</span><span class="nm">BIG NUMBER CENTER</span></div><div class="ph" style="text-align:center;">
+  <div class="kicker">Head-to-Head · This Season</div>
+  <div style="display:flex; justify-content:center; align-items:baseline; gap:18px; margin-top:6px;">
+    <span class="bebas" style="font-size:25px;">ATL</span>
+    <span class="bebas data" style="font-size:64px; color:var(--warmgold);">7–2</span>
+    <span class="bebas" style="font-size:25px; color:rgba(255,255,255,.55);">MIA</span>
+  </div>
+  <div class="meta">OUTSCORED 51–38 · MEET AGAIN TONIGHT 7:15 PM ET</div>
+</div></div>
+
+<!-- H10 -->
+<div class="mock"><div class="mocktag"><span class="id">H10</span><span class="nm">BROADCAST LOWER-THIRD</span></div><div class="ph">
+  <div style="font-weight:900; font-style:italic; font-size:13px; letter-spacing:1px; color:var(--gold);">SEASON SERIES</div>
+  <div class="bebas" style="font-size:27px; margin-top:6px;">BRAVES 7 · MARLINS 2</div>
+  <div style="margin-top:10px; display:flex; flex-direction:column; gap:5px;">
+    <div style="display:flex; align-items:center; gap:8px;"><span class="meta" style="width:56px;">RUNS/GM</span><div class="bar" style="width:62%; background:var(--green);"></div><span class="data" style="font-size:11px;">5.7</span></div>
+    <div style="display:flex; align-items:center; gap:8px;"><span class="meta" style="width:56px;"></span><div class="bar" style="width:46%; background:rgba(255,255,255,.2);"></div><span class="data dim" style="font-size:11px;">4.2</span></div>
+  </div>
+  <div class="rule"></div>
+  <div class="meta">MIA @ ATL · TRUIST PARK · 7:15 PM ET</div>
+</div></div>
+
+</div>
+
+<h2>THE NRFI / YRFI WATCH — 10</h2>
+<div class="grid">
+
+<!-- N1 -->
+<div class="mock"><div class="mocktag"><span class="id">N1</span><span class="nm">DOT ROWS (REFINED CURRENT)</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between;"><span class="kicker">NRFI Watch</span><span class="tag greenline">NRFI LEAN</span></div>
+  <div class="bebas" style="font-size:23px; margin-top:8px;">QUIET FIRSTS ON BOTH SIDES OF PIT @ MIL</div>
+  <div style="margin-top:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span class="data" style="font-size:12px; width:34px;">PIT</span>
+      <span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot scored" style="background:rgba(207,107,91,.6);"></span><span class="dot clean"></span><span class="dot scored" style="background:rgba(207,107,91,.6);"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot scored" style="background:rgba(207,107,91,.6);"></span><span class="dot clean"></span></span>
+      <span class="data g" style="font-size:12px;">7/10 CLEAN</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span class="data" style="font-size:12px; width:34px;">MIL</span>
+      <span><span class="dot clean"></span><span class="dot clean"></span><span class="dot scored" style="background:rgba(207,107,91,.6);"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot scored" style="background:rgba(207,107,91,.6);"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span></span>
+      <span class="data g" style="font-size:12px;">8/10 CLEAN</span>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div style="display:flex; justify-content:space-between;"><span class="meta">1ST-INNING O0.5 +100 / U0.5 −130</span><span class="meta">2:10 PM ET</span></div>
+</div></div>
+
+<!-- N2 -->
+<div class="mock"><div class="mocktag"><span class="id">N2</span><span class="nm">COMBINED GAUGE</span></div><div class="ph" style="text-align:center;">
+  <div class="kicker">NRFI Watch · PIT @ MIL</div>
+  <div class="bebas data" style="font-size:56px; color:var(--green); margin-top:4px;">15<span style="font-size:26px; color:rgba(255,255,255,.5);">/20</span></div>
+  <div class="meta">CLEAN OPENING FRAMES, BOTH SIDES, LAST 10 EACH</div>
+  <div style="display:flex; gap:3px; margin:12px 0;">
+    <div class="bar" style="flex:15; background:var(--green);"></div>
+    <div class="bar" style="flex:5; background:rgba(255,255,255,.15);"></div>
+  </div>
+  <div class="meta">UNDER 0.5 −130 AT DRAFTKINGS · FIRST PITCH 2:10 PM ET</div>
+</div></div>
+
+<!-- N3 -->
+<div class="mock"><div class="mocktag"><span class="id">N3</span><span class="nm">SIDE PLATES + ARMS</span></div><div class="ph">
+  <div class="kicker">NRFI Watch</div>
+  <div style="display:flex; gap:12px; margin-top:10px;">
+    <div class="panel" style="flex:1;">
+      <div class="bebas" style="font-size:20px;">PIRATES</div>
+      <div class="data g" style="font-size:15px;">7/10 QUIET</div>
+      <div class="meta" style="margin-top:6px;">SKENES 1ST-INN: 1.98 ERA</div>
+    </div>
+    <div class="panel" style="flex:1;">
+      <div class="bebas" style="font-size:20px;">BREWERS</div>
+      <div class="data g" style="font-size:15px;">8/10 QUIET</div>
+      <div class="meta" style="margin-top:6px;">MAY 1ST-INN: 2.40 ERA</div>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div style="display:flex; justify-content:space-between;"><span class="tag greenline">NRFI</span><span class="meta">O0.5 +100 · U0.5 −130 · 2:10 PM</span></div>
+</div></div>
+
+<!-- N4 -->
+<div class="mock"><div class="mocktag"><span class="id">N4</span><span class="nm">SLATE LADDER</span></div><div class="ph">
+  <div class="kicker">NRFI Watch · Tonight's Board</div>
+  <table style="margin-top:8px;">
+    <tr>
+      <td><div class="data" style="font-size:13px;">PIT @ MIL</div><div class="meta">15/20 CLEAN · U −130</div></td>
+      <td class="r"><span class="tag green">NRFI</span></td>
+    </tr>
+    <tr>
+      <td><div class="data" style="font-size:13px;">MIA @ ATL</div><div class="meta">14/20 CLEAN · O −135</div></td>
+      <td class="r"><span class="tag greenline">NRFI</span></td>
+    </tr>
+    <tr>
+      <td><div class="data" style="font-size:13px;">TOR @ CHC</div><div class="meta">TOR QUIET 10 STRAIGHT · U −145</div></td>
+      <td class="r"><span class="tag dimline">TEAM QUIET</span></td>
+    </tr>
+  </table>
+</div></div>
+
+<!-- N5 -->
+<div class="mock"><div class="mocktag"><span class="id">N5</span><span class="nm">BIG VERDICT</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div>
+      <div class="kicker">First Inning · PIT @ MIL</div>
+      <div class="bebas" style="font-size:44px; color:var(--green); margin-top:2px;">NRFI</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="data" style="font-size:14px;">7/10 + 8/10</div>
+      <div class="meta">CLEAN FRAMES L10</div>
+    </div>
+  </div>
+  <div style="font-size:13px; color:rgba(255,255,255,.82); line-height:1.45; margin-top:6px;">
+    Fifteen clean opening frames between them in the last ten apiece, and both starters' first-inning numbers back the trend rather than fight it.
+  </div>
+  <div class="rule"></div>
+  <div class="meta">UNDER 0.5 −130 · FIRST PITCH 2:10 PM ET</div>
+</div></div>
+
+<!-- N6 -->
+<div class="mock"><div class="mocktag"><span class="id">N6</span><span class="nm">HEAT CELLS</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between;"><span class="kicker">NRFI Watch</span><span class="meta">MIA @ ATL · 7:15 PM</span></div>
+  <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
+    <span class="data" style="font-size:12px; width:30px;">MIA</span>
+    <span><span class="sq clean"></span><span class="sq clean"></span><span class="sq clean"></span><span class="sq scored"></span><span class="sq clean"></span><span class="sq clean"></span><span class="sq clean"></span><span class="sq scored"></span><span class="sq scored"></span><span class="sq clean"></span></span>
+  </div>
+  <div style="margin-top:6px; display:flex; align-items:center; gap:10px;">
+    <span class="data" style="font-size:12px; width:30px;">ATL</span>
+    <span><span class="sq clean"></span><span class="sq scored"></span><span class="sq clean"></span><span class="sq clean"></span><span class="sq clean"></span><span class="sq scored"></span><span class="sq clean"></span><span class="sq clean"></span><span class="sq clean"></span><span class="sq scored"></span></span>
+  </div>
+  <div class="rule"></div>
+  <div style="display:flex; justify-content:space-between;">
+    <span class="meta">GREEN = SCORELESS 1ST</span>
+    <span class="data gd" style="font-size:12px;">O0.5 −135 · U0.5 +105</span>
+  </div>
+</div></div>
+
+<!-- N7 -->
+<div class="mock"><div class="mocktag"><span class="id">N7</span><span class="nm">STARTERS LEAD</span></div><div class="ph">
+  <div class="kicker">NRFI Watch · PIT @ MIL</div>
+  <table style="margin-top:8px;">
+    <tr>
+      <td><div style="font-weight:600; font-size:14px;">Paul Skenes</div><div class="meta">1ST-INN ERA 1.98 · 14/17 CLEAN</div></td>
+      <td class="r data g" style="font-size:15px;">PIT 7/10</td>
+    </tr>
+    <tr>
+      <td><div style="font-weight:600; font-size:14px;">Jacob May</div><div class="meta">1ST-INN ERA 2.40 · 12/16 CLEAN</div></td>
+      <td class="r data g" style="font-size:15px;">MIL 8/10</td>
+    </tr>
+  </table>
+  <div class="rule"></div>
+  <div style="display:flex; justify-content:space-between;"><span class="tag greenline">NRFI</span><span class="meta">U0.5 −130 · 2:10 PM ET</span></div>
+</div></div>
+
+<!-- N8 -->
+<div class="mock"><div class="mocktag"><span class="id">N8</span><span class="nm">WATCHLIST AGATE</span></div><div class="ph">
+  <div class="kicker">First Innings · Around Tonight</div>
+  <table style="margin-top:8px;">
+    <tr><th>GAME</th><th class="r">AWAY L10</th><th class="r">HOME L10</th><th class="r">1ST O/U</th></tr>
+    <tr><td class="data">PIT @ MIL</td><td class="r data g">7 CLEAN</td><td class="r data g">8 CLEAN</td><td class="r data gd">−130 U</td></tr>
+    <tr><td class="data">MIA @ ATL</td><td class="r data g">7 CLEAN</td><td class="r data g">7 CLEAN</td><td class="r data gd">−135 O</td></tr>
+    <tr><td class="data">TOR @ CHC</td><td class="r data g">10 QUIET</td><td class="r data dim">5 CLEAN</td><td class="r data gd">−145 U</td></tr>
+    <tr><td class="data">MIN @ KC</td><td class="r data g">9 QUIET</td><td class="r data dim">6 CLEAN</td><td class="r data gd">−105 U</td></tr>
+  </table>
+</div></div>
+
+<!-- N9 -->
+<div class="mock"><div class="mocktag"><span class="id">N9</span><span class="nm">RATE BARS</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between;"><span class="kicker">NRFI Watch</span><span class="tag greenline">NRFI</span></div>
+  <div class="bebas" style="font-size:22px; margin-top:8px;">PIT @ MIL · 2:10 PM ET</div>
+  <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+    <div>
+      <div style="display:flex; justify-content:space-between;"><span class="meta">PIRATES SCORELESS 1STS</span><span class="data g" style="font-size:12px;">70%</span></div>
+      <div style="display:flex; gap:3px; margin-top:3px;"><div class="bar" style="flex:7; background:var(--green);"></div><div class="bar" style="flex:3; background:rgba(255,255,255,.12);"></div></div>
+    </div>
+    <div>
+      <div style="display:flex; justify-content:space-between;"><span class="meta">BREWERS SCORELESS 1STS</span><span class="data g" style="font-size:12px;">80%</span></div>
+      <div style="display:flex; gap:3px; margin-top:3px;"><div class="bar" style="flex:8; background:var(--green);"></div><div class="bar" style="flex:2; background:rgba(255,255,255,.12);"></div></div>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div class="meta">LAST 10 EACH · UNDER 0.5 −130</div>
+</div></div>
+
+<!-- N10 -->
+<div class="mock"><div class="mocktag"><span class="id">N10</span><span class="nm">STORY CARD</span></div><div class="ph">
+  <div style="display:flex; justify-content:space-between;"><span class="kicker">NRFI Watch</span><span class="meta">TOR @ CHC</span></div>
+  <div class="bebas" style="font-size:24px; margin-top:8px;">TORONTO'S FIRST INNINGS HAVE GONE SILENT</div>
+  <div style="font-size:13px; color:rgba(255,255,255,.82); line-height:1.45; margin-top:6px;">
+    Zero first-inning runs in ten straight — about as complete a cold spell as the stat gets, and tonight's number still hangs at −145 to stay quiet.
+  </div>
+  <div style="margin-top:10px;"><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span><span class="dot clean"></span>
+  <span class="meta" style="margin-left:8px;">0 FOR THEIR LAST 10</span></div>
+</div></div>
+
+</div>
+
+<h2>LEAGUE PULSE — 10 &nbsp;<span style="font-size:14px; color:rgba(255,255,255,.45); font-family:-apple-system,sans-serif; letter-spacing:.5px;">new injury ladder: FRESH ≤10d · BACK SOON · PRICED IN 11–30d · LONG-TERM 30d+</span></h2>
+<div class="grid">
+
+<!-- P1 -->
+<div class="mock"><div class="mocktag"><span class="id">P1</span><span class="nm">CURRENT SHAPE, NEW LADDER</span></div><div class="ph">
+  <div class="kicker">League Pulse · Around the League</div>
+  <div style="display:flex; gap:16px; margin:10px 0 4px;">
+    <span class="kicker dim">STARTERS</span><span class="kicker dim">BATS</span><span class="kicker dim">BULLPEN</span><span class="kicker" style="border-bottom:2px solid var(--gold); padding-bottom:4px;">INJURIES</span>
+  </div>
+  <table>
+    <tr><th>PLAYER</th><th class="r">STATUS</th><th class="r"></th></tr>
+    <tr><td>H. Greene <span class="faint">CIN</span></td><td class="r data">IL-15</td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td>F. Freeman <span class="faint">LAD</span></td><td class="r data">DTD</td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td>Z. Gallen <span class="faint">ARI</span></td><td class="r data">IL-15</td><td class="r"><span class="tag greenline">BACK SOON</span></td></tr>
+    <tr><td>B. Bichette <span class="faint">TOR</span></td><td class="r data">IL-10</td><td class="r"><span class="tag dimline">PRICED IN</span></td></tr>
+    <tr><td>A. Judge <span class="faint">NYY</span></td><td class="r data">IL-60</td><td class="r"><span class="tag faintline">LONG-TERM</span></td></tr>
+  </table>
+</div></div>
+
+<!-- P2 -->
+<div class="mock"><div class="mocktag"><span class="id">P2</span><span class="nm">LANE CARDS</span></div><div class="ph">
+  <div class="kicker">League Pulse</div>
+  <div class="panel" style="margin-top:10px;">
+    <div style="display:flex; justify-content:space-between;"><span class="kicker dim">KEY INJURIES</span><span class="meta">5 TRACKED</span></div>
+    <table style="margin-top:4px;">
+      <tr><td>H. Greene <span class="faint">CIN · IL-15</span></td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+      <tr><td>Z. Gallen <span class="faint">ARI · IL-15</span></td><td class="r"><span class="tag greenline">BACK SOON</span></td></tr>
+    </table>
+  </div>
+  <div class="panel" style="margin-top:10px;">
+    <div style="display:flex; justify-content:space-between;"><span class="kicker dim">BULLPENS TAXED</span><span class="meta">RELIEF IP, L3</span></div>
+    <table style="margin-top:4px;">
+      <tr><td>Blue Jays</td><td class="r data rd">15.3 IP</td></tr>
+      <tr><td>Nationals</td><td class="r data rd">15.0 IP</td></tr>
+    </table>
+  </div>
+</div></div>
+
+<!-- P3 -->
+<div class="mock"><div class="mocktag"><span class="id">P3</span><span class="nm">ONE DENSE BOARD</span></div><div class="ph">
+  <div class="kicker">League Pulse · One Board</div>
+  <table style="margin-top:8px;">
+    <tr><th>LANE</th><th></th><th class="r"></th></tr>
+    <tr><td class="kicker dim" style="font-size:9px;">INJURY</td><td>H. Greene CIN · IL-15, elbow</td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td class="kicker dim" style="font-size:9px;">INJURY</td><td>A. Judge NYY · IL-60, rib</td><td class="r"><span class="tag faintline">LONG-TERM</span></td></tr>
+    <tr><td class="kicker dim" style="font-size:9px;">BULLPEN</td><td>Blue Jays pen · 15.3 relief IP in 3</td><td class="r data rd">TAXED</td></tr>
+    <tr><td class="kicker dim" style="font-size:9px;">BATS</td><td>Freeman riding a 15-game hit streak</td><td class="r data g">.466</td></tr>
+    <tr><td class="kicker dim" style="font-size:9px;">STARTER</td><td>Peterson 1.45 ERA, last 3 starts</td><td class="r data g">HOT</td></tr>
+  </table>
+</div></div>
+
+<!-- P4 -->
+<div class="mock"><div class="mocktag"><span class="id">P4</span><span class="nm">INJURY BANDS</span></div><div class="ph">
+  <div class="kicker">Key Injuries · The Ladder</div>
+  <div style="margin-top:10px;">
+    <div class="kicker" style="font-size:9.5px;">FRESH · LAST 10 DAYS</div>
+    <table><tr><td>H. Greene <span class="faint">CIN</span></td><td class="r data">IL-15 · 1D</td></tr>
+    <tr><td>F. Freeman <span class="faint">LAD</span></td><td class="r data">DTD · 1D</td></tr></table>
+    <div class="kicker dim" style="font-size:9.5px; margin-top:10px; color:var(--green);">BACK SOON</div>
+    <table><tr><td>Z. Gallen <span class="faint">ARI</span></td><td class="r data">RETURNS FRI</td></tr></table>
+    <div class="kicker dim" style="font-size:9.5px; margin-top:10px;">ON THE BOARD ALREADY</div>
+    <table><tr><td>B. Bichette <span class="faint">TOR · 18D</span></td><td class="r data dim">IL-10</td></tr>
+    <tr><td>A. Judge <span class="faint">NYY · 64D</span></td><td class="r data faint">IL-60</td></tr></table>
+  </div>
+</div></div>
+
+<!-- P5 -->
+<div class="mock"><div class="mocktag"><span class="id">P5</span><span class="nm">TICKER ROWS</span></div><div class="ph">
+  <div class="kicker">League Pulse</div>
+  <div style="margin-top:8px; display:flex; flex-direction:column;">
+    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--hair);">
+      <span style="font-size:13px;"><span class="gd" style="font-weight:700;">INJ</span> · Greene to IL-15, elbow soreness</span><span class="tag gold">FRESH</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--hair);">
+      <span style="font-size:13px;"><span class="gd" style="font-weight:700;">INJ</span> · Gallen throws Friday in Arizona</span><span class="tag greenline">BACK SOON</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--hair);">
+      <span style="font-size:13px;"><span class="gd" style="font-weight:700;">PEN</span> · Jays relievers at 15.3 IP over 3</span><span class="data rd" style="font-size:12px;">TAXED</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; padding:8px 0;">
+      <span style="font-size:13px;"><span class="gd" style="font-weight:700;">BAT</span> · Ohtani 16-for-35 across 9 straight</span><span class="data g" style="font-size:12px;">.457</span>
+    </div>
+  </div>
+</div></div>
+
+<!-- P6 -->
+<div class="mock"><div class="mocktag"><span class="id">P6</span><span class="nm">SPLIT HALVES</span></div><div class="ph">
+  <div class="kicker">League Pulse</div>
+  <div style="display:flex; gap:12px; margin-top:10px;">
+    <div style="flex:1;">
+      <div class="kicker dim" style="font-size:9.5px;">ARMS</div>
+      <table>
+        <tr><td style="font-size:12px;">Peterson</td><td class="r data g" style="font-size:11px;">1.45</td></tr>
+        <tr><td style="font-size:12px;">Cameron</td><td class="r data g" style="font-size:11px;">2.05</td></tr>
+        <tr><td style="font-size:12px;">Mize</td><td class="r data rd" style="font-size:11px;">8 ER</td></tr>
+      </table>
+    </div>
+    <div style="width:1px; background:var(--hair);"></div>
+    <div style="flex:1;">
+      <div class="kicker dim" style="font-size:9.5px;">BATS</div>
+      <table>
+        <tr><td style="font-size:12px;">Freeman</td><td class="r data g" style="font-size:11px;">15 GM</td></tr>
+        <tr><td style="font-size:12px;">Ohtani</td><td class="r data g" style="font-size:11px;">9 GM</td></tr>
+        <tr><td style="font-size:12px;">Schwarber</td><td class="r data rd" style="font-size:11px;">0-17</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <div class="meta">INJURIES + BULLPENS ON THEIR OWN TABS</div>
+</div></div>
+
+<!-- P7 -->
+<div class="mock"><div class="mocktag"><span class="id">P7</span><span class="nm">BIG TAB WORDS</span></div><div class="ph">
+  <div style="display:flex; gap:14px; align-items:baseline;">
+    <span class="bebas" style="font-size:26px; color:var(--gold);">INJURIES</span>
+    <span class="bebas" style="font-size:20px; color:rgba(255,255,255,.35);">STARTERS</span>
+    <span class="bebas" style="font-size:20px; color:rgba(255,255,255,.35);">BATS</span>
+    <span class="bebas" style="font-size:20px; color:rgba(255,255,255,.35);">PENS</span>
+  </div>
+  <table style="margin-top:8px;">
+    <tr><td>H. Greene <span class="faint">CIN</span></td><td class="r data">IL-15</td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td>Z. Gallen <span class="faint">ARI</span></td><td class="r data">IL-15</td><td class="r"><span class="tag greenline">BACK SOON</span></td></tr>
+    <tr><td>A. Judge <span class="faint">NYY</span></td><td class="r data">IL-60</td><td class="r"><span class="tag faintline">LONG-TERM</span></td></tr>
+  </table>
+</div></div>
+
+<!-- P8 -->
+<div class="mock"><div class="mocktag"><span class="id">P8</span><span class="nm">DAY-COUNT COLUMN</span></div><div class="ph">
+  <div class="kicker">Key Injuries · Sorted by Age</div>
+  <table style="margin-top:8px;">
+    <tr><th>PLAYER</th><th class="r">STATUS</th><th class="r">DAYS</th><th class="r"></th></tr>
+    <tr><td>H. Greene <span class="faint">CIN</span></td><td class="r data">IL-15</td><td class="r data gd">1D</td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td>F. Freeman <span class="faint">LAD</span></td><td class="r data">DTD</td><td class="r data gd">1D</td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td>Z. Gallen <span class="faint">ARI</span></td><td class="r data">IL-15</td><td class="r data">9D</td><td class="r"><span class="tag greenline">BACK SOON</span></td></tr>
+    <tr><td>B. Bichette <span class="faint">TOR</span></td><td class="r data">IL-10</td><td class="r data dim">18D</td><td class="r"><span class="tag dimline">PRICED IN</span></td></tr>
+    <tr><td>A. Judge <span class="faint">NYY</span></td><td class="r data">IL-60</td><td class="r data faint">64D</td><td class="r"><span class="tag faintline">LONG-TERM</span></td></tr>
+  </table>
+</div></div>
+
+<!-- P9 -->
+<div class="mock"><div class="mocktag"><span class="id">P9</span><span class="nm">STATUS PLATES</span></div><div class="ph">
+  <div class="kicker">Key Injuries</div>
+  <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+    <div class="panel" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px;">
+      <div><div style="font-weight:600; font-size:13.5px;">Hunter Greene <span class="faint">CIN SP</span></div>
+      <div class="meta">IL-15 · ELBOW SORENESS · DAY 1</div></div>
+      <span class="tag gold">FRESH</span>
+    </div>
+    <div class="panel" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-color:rgba(156,200,138,.3);">
+      <div><div style="font-weight:600; font-size:13.5px;">Zac Gallen <span class="faint">ARI SP</span></div>
+      <div class="meta">IL-15 · FOREARM · THROWS FRIDAY</div></div>
+      <span class="tag greenline">BACK SOON</span>
+    </div>
+    <div class="panel" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px;">
+      <div><div style="font-weight:600; font-size:13.5px;">Aaron Judge <span class="faint">NYY RF</span></div>
+      <div class="meta">IL-60 · RIB · DAY 64</div></div>
+      <span class="tag faintline">LONG-TERM</span>
+    </div>
+  </div>
+</div></div>
+
+<!-- P10 -->
+<div class="mock"><div class="mocktag"><span class="id">P10</span><span class="nm">EDITORIAL PULSE</span></div><div class="ph">
+  <div class="kicker">League Pulse</div>
+  <div class="bebas" style="font-size:23px; margin-top:8px;">TWO FRESH INJURIES, ONE ARM ALMOST BACK</div>
+  <div style="font-size:13px; color:rgba(255,255,255,.82); line-height:1.45; margin-top:6px;">
+    Greene hit the shelf this morning and Freeman is day-to-day — while Gallen throws Friday and could rejoin Arizona's rotation inside the week.
+  </div>
+  <div class="rule"></div>
+  <table>
+    <tr><td>H. Greene <span class="faint">CIN · IL-15</span></td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td>F. Freeman <span class="faint">LAD · DTD</span></td><td class="r"><span class="tag gold">FRESH</span></td></tr>
+    <tr><td>Z. Gallen <span class="faint">ARI · IL-15</span></td><td class="r"><span class="tag greenline">BACK SOON</span></td></tr>
+  </table>
+</div></div>
+
+</div>
+</body>
+</html>
