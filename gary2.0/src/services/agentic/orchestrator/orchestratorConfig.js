@@ -51,7 +51,10 @@ export const GEMINI_PROPS_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'gemi
 // models in order at their top thinking level. 3.6 Flash first (newest Gemini,
 // Jul 21 GA; the Flash line WAS Gary's brain until the Jul 22 Sol cutover),
 // 3.1 Pro as the different-family second layer.
-export const DESK_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-3.1-pro-preview'];
+// Two subscription tanks, then pennies (founder GO, Aug 6): whichever bridge
+// is PRIMARY, the other backs it up before the metered Gemini last resorts.
+// The chain filters out the primary so a quota error never retries itself.
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-opus-5', 'gemini-3.6-flash', 'gemini-3.1-pro-preview'].filter((m) => m !== GAME_PICK_MODEL);
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Claude entries are $0: the subscription bridge has no marginal token cost.
