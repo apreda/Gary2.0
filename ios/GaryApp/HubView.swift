@@ -7,7 +7,8 @@ import SwiftUI
 // sports section instead of a filing cabinet of lanes: the lead story, the
 // best of the board (relevance-ranked across every lane), the signature
 // boards (Regression, Streak Watch), the beats (the long tail in four human
-// sections), and the receipts closing the page all day.
+// sections). (The Receipts section came off the page Aug 6 — graded rows
+// now surface only through search.)
 //
 // Visual language (Jul 4, founder-tuned): heavy SF display for the wordmark
 // and headlines, mono uppercase kickers for lanes/sections, monospaced digits
@@ -643,7 +644,8 @@ struct HubView: View {
         let tb = await tbF
         let rec = await recordF
         let pulse = await pulseF
-        // The receipts close the page ALL DAY now (not just the morning void).
+        // Graded rows still load — not for a page section (The Receipts came
+        // off Aug 6), but search surfaces them and the tally maths read them.
         let receiptsDate = gradedDate
         var yday: [Signal] = []
         await withTaskGroup(of: [Signal].self) { group in
@@ -1100,13 +1102,8 @@ struct HubView: View {
             .id("lastNight")
         }
 
-        if !selYdaySignals.isEmpty {
-            HubCollapsible(anchor: "receipts", open: $openBeats,
-                           title: "The Receipts", sub: receiptsTally) {
-                HubReceipts(signals: selYdaySignals) { selectedSignal = $0 }
-            }
-            .id("receipts")
-        }
+        // (The Receipts section came off the page entirely — founder, Aug 6.
+        // ydaySignals stays fetched: graded rows still power Hub search.)
     }
 
     // The page stack, extracted from body (Aug 4) — the inline stack plus
@@ -1168,7 +1165,7 @@ struct HubView: View {
 
                     // (League Pulse moved to the reference shelf at the bottom
                     // — founder, Aug 3: the agate tables broke the page's flow
-                    // mid-editorial. It lives with Last Night + Receipts now.)
+                    // mid-editorial. It lives with Last Night now.)
 
                     streakWatchSection
 
@@ -1206,7 +1203,7 @@ struct HubView: View {
         .overlay(alignment: .bottomTrailing) {
             if !searchOpen, didLoad, !jumpItems.isEmpty, hubScope != "fantasy" {
                 HubSectionNav(items: jumpItems, open: $sectionNavOpen) { anchor in
-                    if ["lastNight", "receipts"].contains(anchor) { openBeats.insert(anchor) }
+                    if anchor == "lastNight" { openBeats.insert(anchor) }
                     withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
                 }
                 .padding(.trailing, 14)
@@ -1399,19 +1396,7 @@ struct HubView: View {
             if sel == .wc, !wcIntelSignals.isEmpty { out.append(("wcIntel", "Intel")) }
         }
         if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
-        if !selYdaySignals.isEmpty { out.append(("receipts", "Receipts")) }
         return out
-    }
-
-    private var receiptsTally: String {
-        let rows = selYdaySignals
-        let (hit, graded) = hitRate
-            ?? (rows.filter { $0.result == "hit" }.count,
-                rows.filter { $0.result == "hit" || $0.result == "miss" }.count)
-        guard graded > 0 else { return "" }
-        let pct = Int((Double(hit) / Double(graded) * 100).rounded())
-        let day = gradedIsYesterday ? "yday" : gradedDayShort
-        return "\(hit) of \(graded) hit · \(pct)% · \(day)"
     }
 
     // ---- page states ----
@@ -1451,7 +1436,7 @@ struct HubView: View {
     }
 
     /// Pre-lineup morning: the paper still has a front section (slate, streaks,
-    /// last night, receipts render below) — this is just the honest note.
+    /// last night render below) — this is just the honest note.
     private var hubMorningNotice: some View {
         VStack(alignment: .leading, spacing: 6) {
             HubKicker(text: "Tonight's Board")
@@ -3806,7 +3791,7 @@ fileprivate struct HubNightBoard: View {
     }
 }
 
-// MARK: - The Receipts
+// MARK: - Receipt rows (search results only — the page section came off Aug 6)
 
 fileprivate struct HubReceipts: View {
     let signals: [Signal]
