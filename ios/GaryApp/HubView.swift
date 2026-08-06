@@ -787,6 +787,15 @@ struct HubView: View {
 
     // ---- the front page ranking ----
 
+    /// Every kind that lives in the Fantasy Corner — those rows render as
+    /// FantasyCards (tier word + stat strip + the read); the front-page row
+    /// template has none of that, so a leaked one strips to a naked player
+    /// name ("Kohl Drake / ARI TONIGHT" — the Aug 6 bug: only .fantasyPickups
+    /// was filtered).
+    private static let fantasyKinds: Set<SignalKind> = [
+        .fantasyPickups, .twoStart, .closerWatch, .returnWatch, .cutList,
+    ]
+
     /// Relevance-ranked stories across every lane (rows arrive relevance-
     /// ordered per league): no look-ahead regression, no confirmed-XI cards,
     /// no fantasy corner content, max 2 per lane so the top of the page mixes.
@@ -795,7 +804,7 @@ struct HubView: View {
         var out: [Signal] = []
         for s in leagueSignals {
             if s.confirmedXI != nil { continue }
-            if s.kind == .fantasyPickups { continue }
+            if Self.fantasyKinds.contains(s.kind) { continue }
             if s.reg?.day == "tomorrow" { continue }
             let c = counts[s.kind] ?? 0
             guard c < 2 else { continue }
@@ -902,8 +911,7 @@ struct HubView: View {
     /// Everything not already on the page — a safety net so a future backend
     /// lane always renders somewhere instead of vanishing.
     private var overflow: [Signal] {
-        var placed: Set<SignalKind> = [.regression, .fantasyPickups, .streak,
-                                       .twoStart, .closerWatch, .returnWatch, .cutList]
+        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak])
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
@@ -1825,7 +1833,10 @@ fileprivate struct HubBestOf: View {
 
     @ViewBuilder private func row(_ i: Int, _ s: Signal) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            Text(String(format: "%02d", i + 2))
+            // 01-based: the list is its own board. (It used to start at 02 —
+            // "the lead is 01" — but the lead wears THE LEAD, not a number,
+            // so the 02 open read as a missing row, Aug 6.)
+            Text(String(format: "%02d", i + 1))
                 .font(HubFont.data(13, .medium))
                 .foregroundStyle(.white.opacity(0.62))
                 .frame(width: 24, alignment: .leading)

@@ -392,9 +392,16 @@ struct GaryCenteredTabBar: View {
             // content scrolls visibly underneath and dissolves into the dock.
             // Anchored to the page background's own bottom tone (#0B0A09 —
             // LiquidGlassBackground's gradient floor) for a seamless meet.
+            // RAMP LOWERED Aug 6 (founder: "makes the actual page fade when
+            // it's close to it") — 0.93 ink at 40% of a frame whose top edge
+            // sits ~30pt above the icons was dimming rows that were still
+            // page, not dock. Transparent through the frame's upper third
+            // now; the dissolve happens across the icon band itself.
             LinearGradient(stops: [
                 .init(color: Color(hex: "#0B0A09").opacity(0), location: 0),
-                .init(color: Color(hex: "#0B0A09").opacity(0.93), location: 0.40),
+                .init(color: Color(hex: "#0B0A09").opacity(0), location: 0.30),
+                .init(color: Color(hex: "#0B0A09").opacity(0.55), location: 0.55),
+                .init(color: Color(hex: "#0B0A09").opacity(0.95), location: 0.78),
                 .init(color: Color(hex: "#0B0A09"), location: 1),
             ], startPoint: .top, endPoint: .bottom)
             .ignoresSafeArea(edges: .bottom)
