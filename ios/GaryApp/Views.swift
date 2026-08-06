@@ -2554,12 +2554,13 @@ struct HomeView: View {
         // The day-cycle clock, view-side: has today's first pitch happened?
         let cycleLive = slateGames.contains { parseISO8601($0.commence_time ?? "").map { $0 <= Date() } ?? false }
 
-        // ── THE HEADLINES as a dashboard container (founder, Aug 3).
-        // Placement rides the cycle: the stories lead the page until the
-        // day's first pitch; once games are on, the live board takes the
-        // door and the headlines sit right under it, rebuilding one story
-        // at a time as tonight's games grade.
-        if !cycleLive, !stories.isEmpty {
+        // ── THE HEADLINES lead the page, ALL DAY (founder, Aug 5). They do
+        // not move at first pitch and they do not move again at the last out:
+        // the stories own the top of Home, above the countdown, and each game's
+        // recap card lands up here as that game finishes. (Until Aug 5 this
+        // rendered twice — once above the marquee pre-slate, once below the
+        // board after — so the rail appeared to jump mid-day. One instance now.)
+        if !stories.isEmpty {
             HomeHeadlinesBoard(stories: stories) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
             }
@@ -2626,15 +2627,8 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
         }
 
-        // Headlines under the board once the day is rolling — tonight's
-        // stories build here as games finish.
-        if cycleLive, !stories.isEmpty {
-            HomeHeadlinesBoard(stories: stories) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
-        }
+        // (The second headlines instance that used to sit here came out Aug 5 —
+        // the rail lives at the top of the page now, in every day-state.)
 
         // ── THE FUN STUFF — funnels only, never advice (founder, Aug 3:
         // "Cut Shane Bieber" doesn't belong on a clean front page; the doors
@@ -2716,6 +2710,10 @@ struct HomeView: View {
         let title: String
         let callLine: String?
         let pendingLine: String?
+        /// GAME state, riding the score line: "▶ INN 8", "FINAL". Separate from
+        /// `statusText`, which is GARY's state (founder, Aug 5) — the clock
+        /// belongs next to the score it's describing, not in the verdict slot.
+        var clockText: String? = nil
         let statusText: String
         let statusColor: Color
         let bigOne: Bool
@@ -2809,6 +2807,7 @@ struct HomeView: View {
                 if !bits.isEmpty { pendingLine = bits.joined(separator: " · ") }
             }
             var hitLines: [String] = []
+            var clockText: String? = nil
             if let ls, ls.isFinal || ls.isLive {
                 title = ls.scoreLine ?? title
                 let verdicts = calls.map { HomeLiveVerdict.evaluate(pick: $0, live: ls) }
@@ -2826,27 +2825,38 @@ struct HomeView: View {
                               combined > line else { return nil }
                         return Self.homePickLabel(p.pick)
                     }
-                    let det = (ls.detail ?? "LIVE").uppercased()
+                    // The inning rides the SCORE (founder, Aug 5) — it describes
+                    // the game, so it sits next to the game. The right column is
+                    // Gary's standing alone, in plain English: WINNING / LOSING.
+                    clockText = "▶ \((ls.detail ?? "LIVE").uppercased())"
                     if verdicts.contains(.covering), !verdicts.contains(.trailing) {
-                        statusText = "▶ COVERING · \(det)"; statusColor = GaryColors.win
+                        statusText = "COVERING"; statusColor = GaryColors.win
                     } else if verdicts.contains(.trailing), !verdicts.contains(.covering) {
-                        statusText = "▶ IN THE RED · \(det)"; statusColor = GaryColors.loss
+                        statusText = "LOSING"; statusColor = GaryColors.loss
                     } else if verdicts.contains(.covering) && verdicts.contains(.trailing) {
-                        statusText = "▶ SPLIT · \(det)"; statusColor = GaryColors.gold
+                        statusText = "SPLIT"; statusColor = GaryColors.gold
                     } else {
-                        statusText = "▶ \(det)"; statusColor = GaryColors.gold
+                        // Gary has a call the score hasn't settled — level on the
+                        // money, sitting on the number, or a total still cooking.
+                        // That's a SWEAT, and it wears neutral gray so green and
+                        // red keep the board's color to themselves. No call on the
+                        // game means nothing to sweat: the slot stays empty.
+                        statusText = calls.isEmpty ? "" : "SWEATING"
+                        statusColor = Color.white.opacity(0.62)
                     }
                 } else {
                     zone = .settled
                     // What cashed in the game stays on the settled row — the
                     // feed is history, not a live-only flourish (founder, Jul 7).
                     hitLines = Self.liveHitStrings(ls)
+                    // Same split as live: FINAL is game state, the stamp is Gary's.
+                    clockText = "FINAL"
                     let cashed = verdicts.filter { $0 == .covering }.count
                     let lost = verdicts.filter { $0 == .trailing }.count
                     if cashed > 0 && lost == 0 { statusText = "✓ CASHED"; statusColor = GaryColors.win }
                     else if lost > 0 && cashed == 0 { statusText = "✗ LOST"; statusColor = GaryColors.loss }
                     else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
-                    else { statusText = "FINAL"; statusColor = Color.white.opacity(0.62) }
+                    else { statusText = ""; statusColor = Color.white.opacity(0.62) }
                 }
             }
             // (Per-row "PICK ~x:xx" labels removed Jul 27 — the Tonight header
@@ -2856,7 +2866,8 @@ struct HomeView: View {
             if zone == .upcoming, let ct = g.commence_time, let d = parseISO8601(ct),
                d.addingTimeInterval(180) < Date() {
                 zone = .live
-                statusText = "▶ STARTED"
+                clockText = "▶ STARTED"
+                statusText = ""
                 statusColor = GaryColors.gold
             }
             // The market line is a PRE-GAME slot only — a live/final row must
@@ -2870,6 +2881,7 @@ struct HomeView: View {
                 title: title,
                 callLine: callLine,
                 pendingLine: pendingLine,
+                clockText: clockText,
                 statusText: statusText,
                 statusColor: statusColor,
                 bigOne: bigKey == "\(away)@\(home)",
@@ -5243,6 +5255,15 @@ struct HomeSheetRowView: View {
                         .tracking(0.5)
                         .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
                         .lineLimit(1).minimumScaleFactor(0.75)
+                    // The clock belongs to the SCORE (founder, Aug 5): "LAA 2 ·
+                    // BAL 3   ▶ INN 8". Gold while live, neutral once final —
+                    // the same weight the verdict slot used to carry it at.
+                    if let clock = row.clockText {
+                        Text(clock)
+                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(row.zone == .live ? GaryColors.gold : Color.white.opacity(0.55))
+                            .lineLimit(1).fixedSize()
+                    }
                     if row.bigOne {
                         Text("THE BIG ONE")
                             .font(.system(size: 12, weight: .bold).monospacedDigit()).tracking(0.8)
@@ -5276,10 +5297,15 @@ struct HomeSheetRowView: View {
             // row wears the same geometry, live or scheduled.
             // (hitLines data still rides the rows for a future home that
             // doesn't warp the queue.)
-            Text(row.statusText)
-                .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
-                .foregroundStyle(row.statusColor)
-                .lineLimit(1)
+            // Empty on a live row Gary has no call on (or hasn't been decided
+            // yet) — the slot says how HIS call stands, so it says nothing when
+            // there's nothing to stand on, rather than echoing the clock.
+            if !row.statusText.isEmpty {
+                Text(row.statusText)
+                    .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(row.statusColor)
+                    .lineLimit(1).fixedSize()
+            }
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))
@@ -6095,16 +6121,32 @@ enum HomeLiveVerdict {
             return live.isFinal ? .covering : .neutral
         }
 
-        // Side picks: which team does the text name?
+        // Side picks: which team does the text name? SCORED, not a yes/no
+        // (Aug 5 bug: "Red Sox ML -140" in a White Sox @ Red Sox game read
+        // SWEATING with Boston up 3-0). A boolean can't split two clubs that
+        // share a word — "sox" names both — and the old >3-character filter
+        // dropped "red" and "sox" entirely, so NEITHER side matched and every
+        // Red Sox game fell through to neutral. Scoring settles it: the pick
+        // text scores 2 on Boston (red + sox) and 1 on Chicago (sox alone),
+        // and the higher score is the side Gary took. A genuine tie is still
+        // neutral — that's an unreadable pick, not a coin flip.
         let words = text.split { !$0.isLetter }.map(String.init)
-        func mentions(_ name: String?, _ abbr: String?) -> Bool {
-            if let a = abbr?.lowercased(), a.count >= 2, words.contains(a) { return true }
-            guard let n = name?.lowercased() else { return false }
-            return n.split(separator: " ").contains { $0.count > 3 && text.contains($0) }
+        func nameScore(_ name: String?, _ abbr: String?) -> Int {
+            var score = 0
+            // The abbreviation is unambiguous when it's there, so it outweighs
+            // any single shared nickname word.
+            if let a = abbr?.lowercased(), a.count >= 2, words.contains(a) { score += 2 }
+            if let n = name?.lowercased() {
+                for token in n.split(separator: " ") where token.count >= 3 {
+                    if words.contains(String(token)) { score += 1 }
+                }
+            }
+            return score
         }
-        let tookAway = mentions(pick.awayTeam, live.away_abbr)
-        let tookHome = mentions(pick.homeTeam, live.home_abbr)
-        guard tookAway != tookHome else { return .neutral }
+        let awayScore = nameScore(pick.awayTeam, live.away_abbr)
+        let homeScore = nameScore(pick.homeTeam, live.home_abbr)
+        guard awayScore != homeScore else { return .neutral }
+        let tookAway = awayScore > homeScore
         let margin = Double(tookAway ? away - home : home - away)
 
         if let spread = signedNumber(in: text) {                     // spread
