@@ -2291,13 +2291,15 @@ export const mlbFetchers = {
         // A reliever = zero starts (Jul 30; the old ip<50 heuristic misfiled
         // low-IP starters and dropped late-season setup workhorses). Saves,
         // then holds, then innings — high-leverage arms, not just save totals.
+        // EVERY ARM (founder GO, Aug 6 eve: "each member of the bullpen laid
+        // out") — the old top-4 cap hid the middle relief that owns innings
+        // 5-7 when a starter exits early. High-leverage arms still sort first.
         const relievers = (result.stats || [])
           .filter(s => s.pitching_ip > 0 && (s.pitching_gs || 0) === 0 && s.pitching_era != null)
           .sort((a, b) =>
             (b.pitching_sv || 0) - (a.pitching_sv || 0) ||
             (b.pitching_hld || 0) - (a.pitching_hld || 0) ||
-            (b.pitching_ip || 0) - (a.pitching_ip || 0))
-          .slice(0, 4);
+            (b.pitching_ip || 0) - (a.pitching_ip || 0));
 
         if (relievers.length > 0) {
           usedBdl = true;
@@ -2312,6 +2314,27 @@ export const mlbFetchers = {
             const whip = r.pitching_whip != null ? r.pitching_whip.toFixed(2) : '—';
             const bb = r.pitching_bb ?? '—';
             lines.push(`${name}: ${sv} SV, ${hld} HLD, ${era} ERA, ${whip} WHIP, ${k} K, ${bb} BB in ${ip} IP${goneTag(rosterFolds, name)}`);
+          }
+          // THE PEN AS A UNIT (founder GO, Aug 6 eve: "the overall bullpen
+          // stats too") — season aggregate, current-roster arms only when
+          // the roster is known, so a traded arm's innings stop flattering
+          // tonight's unit. Pure outs-weighted arithmetic.
+          const unitArms = relievers.filter(r => {
+            if (!rosterFolds) return true;
+            const nm = r.player?.full_name || r.player?.last_name || '';
+            return rosterFolds.has(foldName(nm));
+          });
+          let uOuts = 0, uEr = 0, uWhipOuts = 0;
+          for (const r of unitArms) {
+            const ipn = Number(r.pitching_ip) || 0;
+            const outs = Math.floor(ipn) * 3 + Math.round((ipn % 1) * 10);
+            if (outs <= 0) continue;
+            uOuts += outs;
+            uEr += ((Number(r.pitching_era) || 0) * outs) / 27;
+            uWhipOuts += (Number(r.pitching_whip) || 0) * outs;
+          }
+          if (uOuts > 0) {
+            lines.push(`${teamName} pen as a unit (${rosterFolds ? 'current arms, ' : ''}season): ${((uEr * 27) / uOuts).toFixed(2)} ERA, ${(uWhipOuts / uOuts).toFixed(2)} WHIP over ${Math.floor(uOuts / 3)}.${uOuts % 3} IP`);
           }
           continue;
         }
