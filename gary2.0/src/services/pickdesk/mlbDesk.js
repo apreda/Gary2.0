@@ -132,6 +132,21 @@ export function buildBoardSection(rows, homeTeam, awayTeam) {
   return `═══ THE LINES (${label}) ═══\n${lines.join('\n')}`;
 }
 
+/**
+ * RUN-LINE GAME board (founder GO, Aug 6 2026): when either moneyline runs
+ * past -200, the game routes as a run-line game — both moneylines off the
+ * board entirely, the ±1.5 as the question from the very first word. The
+ * sealed-winner flow would anchor the margin question ("will they cover?"
+ * asked after an allegiance exists defaults to yes); these rare games skip
+ * the blind split and ask the real question organically.
+ */
+export function buildRunLineBoardSection(rows, homeTeam, awayTeam) {
+  const book = chooseBook(rows);
+  if (!book || book.spread_home_value == null) return null;
+  const label = BOOK_LABELS[(book.vendor || '').toLowerCase()] || book.vendor || 'Book';
+  return `═══ THE LINES (${label}) ═══\n${awayTeam} ${fmtOdds(book.spread_away_value)} (${fmtOdds(book.spread_away_odds)}) | ${homeTeam} ${book.spread_home_value} (${fmtOdds(book.spread_home_odds)})`;
+}
+
 function boardMeta(rows, homeTeam, awayTeam) {
   const book = chooseBook(rows) || {};
   return {
@@ -382,6 +397,14 @@ export async function buildMlbDesk(game, options = {}) {
   const clubsBlock = CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
   const wireBlock = takeSection('═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══');
   const shelfBanner = (t) => `━━━━━━━━━━━━━━━ ${t} ━━━━━━━━━━━━━━━`;
+  // Pre-flight fork (founder GO, Aug 6): heavier than -200 on either ML =
+  // run-line game. Requires a spread on the board; without one the game
+  // falls back to the normal blind flow (the ML is all that exists).
+  const metaNow = boardMeta(oddsRows, homeTeam, awayTeam);
+  const heavy = (o) => typeof o === 'number' && o < -200;
+  const boardTextRunLine = buildRunLineBoardSection(oddsRows, homeTeam, awayTeam);
+  const runLineGame = Boolean((heavy(metaNow.moneylineHome) || heavy(metaNow.moneylineAway)) && boardTextRunLine);
+
   const deskTextBlind = [
     shelfRest.trim(),
     shelfBanner('TONIGHT'),
@@ -393,15 +416,19 @@ export async function buildMlbDesk(game, options = {}) {
     world,
     wireBlock || '',
   ].filter(Boolean).join('\n\n');
-  const deskText = `${board}\n\n${deskTextBlind}`;
+  // The snapshot carries the board Gary actually saw: run-line games never
+  // show him a moneyline, so the stored desk must not either.
+  const deskText = `${runLineGame ? boardTextRunLine : board}\n\n${deskTextBlind}`;
   return {
     deskText,
     deskTextBlind,
     boardText: board,
+    boardTextRunLine,
+    runLineGame,
     tapeRows: scout.verifiedTaleOfTape?.rows || [],
     verifiedTaleOfTape: scout.verifiedTaleOfTape || null,
     recentScores: scout.recentScores || null,
     scout,
-    meta: boardMeta(oddsRows, homeTeam, awayTeam),
+    meta: metaNow,
   };
 }

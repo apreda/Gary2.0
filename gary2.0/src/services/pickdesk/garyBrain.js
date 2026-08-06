@@ -81,12 +81,29 @@ export const buildTicketAsk = (winner, boardText) => `Your winner is sealed: ${w
 
 ${boardText}
 
-House limit: past -200 on the moneyline, the ticket is a run line.
-
 Take your bet. Output only:
 
 \`\`\`json
 { "final_pick": "[Team] [bet] [exact odds]", "confidence_score": 0.XX }
+\`\`\`
+
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
+
+// THE RUN-LINE GAME (founder GO, Aug 6 2026): when either moneyline runs
+// past -200 pre-flight, the blind split would poison the margin question —
+// a sealed winner makes "do they cover?" a commitment check, not a fresh
+// read. These rare games (a game or two a slate at most) run un-blind with
+// ONLY the run line on the board: the ±1.5 is the question from the first
+// word, the dog's +1.5 a first-class answer, and the decision seals in one
+// shot with its read stored like any blind game's.
+export const buildRunLineAsk = (runLineBoard) => `${runLineBoard}
+
+Tonight's question is the run line — the moneyline is off the board.
+
+Who covers? Output only:
+
+\`\`\`json
+{ "final_pick": "[Team] [+1.5 or -1.5] [exact odds]", "read": "why — a few sentences", "confidence_score": 0.XX }
 \`\`\`
 
 confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
@@ -175,7 +192,7 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
 // readable when contract wording changes — eras join in SQL, never inferred
 // from timestamps again. Register new eras in the prompt_eras table.
 export const PROMPT_SHA = createHash('sha256')
-  .update(buildGarySystemPrompt('{date}') + THE_READ_ASK + buildTicketAsk('{winner}', '{board}') + buildCardAsk('{pick}'))
+  .update(buildGarySystemPrompt('{date}') + THE_READ_ASK + buildTicketAsk('{winner}', '{board}') + buildRunLineAsk('{board}') + buildCardAsk('{pick}'))
   .digest('hex')
   .slice(0, 12);
 
@@ -190,7 +207,7 @@ const topThinkingLevel = (modelName) => (modelName.startsWith('gemini') ? 'high'
  * warnings } or a contained { error } (parse/rails). Provider/quota failures
  * THROW — the cascade in analyzeGameDesk owns those.
  */
-async function runBrainPass(modelName, systemPrompt, blindMessage, boardText, auditAll) {
+async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, auditAll, runLineGame = false) {
   const session = await createGeminiSession({
     modelName,
     systemPrompt,
@@ -206,48 +223,57 @@ async function runBrainPass(modelName, systemPrompt, blindMessage, boardText, au
     console.log(`   [Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)}`);
   };
 
-  // TURN 1 — THE READ. The blind desk in (no lines anywhere), the winner out.
-  // No price exists yet, so no price can author this.
-  let res = await sendToSessionWithRetry(session, blindMessage, {});
-  bump(res);
-  let read = parseReadJson(res.content);
-  if (!read) {
-    res = await sendToSessionWithRetry(session, 'Return your read JSON now.', {});
-    bump(res);
-    read = parseReadJson(res.content);
-    if (!read) { logCost(); return { error: 'parse: no read JSON after re-ask' }; }
-  }
+  let read = null;
+  let ticket = null;
+  const isRunLineTicket = (t) => /[+-]1\.5|run\s*line/i.test(String(t?.final_pick || ''));
 
-  // TURN 2 — THE TICKET. The lines arrive with the read already sealed.
-  res = await sendToSessionWithRetry(session, buildTicketAsk(read.winner, boardText), {});
-  bump(res);
-  let ticket = parseFinalJson(res.content);
-  if (!ticket) {
-    res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
-    bump(res);
-    ticket = parseFinalJson(res.content);
-    if (!ticket) { logCost(); return { error: 'parse: no ticket JSON after re-ask' }; }
-  }
+  if (runLineGame) {
+    // RUN-LINE GAME — one decision turn, un-blind by design: the ±1.5 was
+    // the question from the first word, so there is no winner to seal and
+    // no second ask to anchor. read_winner stays null (no winner call
+    // exists); the why is stored as the read.
+    let res1 = await sendToSessionWithRetry(session, firstMessage, {});
+    bump(res1);
+    ticket = parseFinalJson(res1.content);
+    if (!ticket) {
+      res1 = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+      bump(res1);
+      ticket = parseFinalJson(res1.content);
+      if (!ticket) { logCost(); return { error: 'parse: no run-line JSON after re-ask' }; }
+    }
+    if (!isRunLineTicket(ticket)) {
+      res1 = await sendToSessionWithRetry(session, 'Tonight\'s question is the run line — the moneyline is off the board. Return your final JSON.', {});
+      bump(res1);
+      const rt = parseFinalJson(res1.content);
+      if (!rt || !isRunLineTicket(rt)) { logCost(); return { error: 'rails: run-line game produced a non-run-line ticket' }; }
+      ticket = rt;
+    }
+    read = { winner: null, read: ticket.read ?? null };
+  } else {
+    // TURN 1 — THE READ. The blind desk in (no lines anywhere), the winner
+    // out. No price exists yet, so no price can author this.
+    let res1 = await sendToSessionWithRetry(session, firstMessage, {});
+    bump(res1);
+    read = parseReadJson(res1.content);
+    if (!read) {
+      res1 = await sendToSessionWithRetry(session, 'Return your read JSON now.', {});
+      bump(res1);
+      read = parseReadJson(res1.content);
+      if (!read) { logCost(); return { error: 'parse: no read JSON after re-ask' }; }
+    }
 
-  // THE HOUSE LIMIT (founder GO, Aug 5 2026 night — his "keep it even"
-  // framing): past -200 the game is a run-line game; the payout math law he
-  // believed was enforced all along never existed in the MLB path. Menu
-  // version, NO side-lock — a ticket crossing the sealed read stays legal
-  // and visible in the ledger (read_winner vs pick side). Rails pattern:
-  // one corrective re-ask, then a contained no-pick.
-  const mlPastLimit = (t) => {
-    const fp = String(t?.final_pick || '');
-    if (/[+-]1\.5|run\s*line/i.test(fp)) return false;
-    const m = fp.replace(/\(\s*([+-]\d{3,4})\s*\)/g, '$1').trim().match(/([+-]\d{3,4})$/);
-    return m ? parseInt(m[1], 10) < -200 : false;
-  };
-  if (mlPastLimit(ticket)) {
-    res = await sendToSessionWithRetry(session, 'House limit: past -200 on the moneyline, the ticket is a run line. Return your final JSON.', {});
-    bump(res);
-    const rt = parseFinalJson(res.content);
-    if (!rt || mlPastLimit(rt)) { logCost(); return { error: 'rails: moneyline past the -200 house limit' }; }
-    ticket = rt;
+    // TURN 2 — THE TICKET. The lines arrive with the read already sealed.
+    let res2 = await sendToSessionWithRetry(session, buildTicketAsk(read.winner, boardText), {});
+    bump(res2);
+    ticket = parseFinalJson(res2.content);
+    if (!ticket) {
+      res2 = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+      bump(res2);
+      ticket = parseFinalJson(res2.content);
+      if (!ticket) { logCost(); return { error: 'parse: no ticket JSON after re-ask' }; }
+    }
   }
+  let res;
 
   // THE SEAL: from here on, ticket.final_pick is the pick. Turn 3 and any
   // rails retry write prose only — a different final_pick in a later reply
@@ -296,9 +322,13 @@ export async function analyzeGameDesk(game, options = {}) {
   const { homeTeam, awayTeam } = desk.meta;
 
   const systemPrompt = buildGarySystemPrompt(todayLong());
-  // The read turn sees the blind desk — THE LINES reach the session only in
-  // turn 2's ticket ask. The stored snapshot (deskText) keeps the full surface.
-  const blindMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${THE_READ_ASK}`;
+  // Pre-flight fork (founder GO, Aug 6): a run-line game skips the blind
+  // split — the ±1.5 is the question from the first word, no winner seal to
+  // anchor it. Every other game: the read turn sees the blind desk and THE
+  // LINES reach the session only in turn 2's ticket ask.
+  const firstMessage = desk.runLineGame
+    ? `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${buildRunLineAsk(desk.boardTextRunLine)}`
+    : `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${THE_READ_ASK}`;
 
   const corpus = [{ content: desk.deskText }];
   const auditAll = (rationale) => {
@@ -312,7 +342,7 @@ export async function analyzeGameDesk(game, options = {}) {
   for (let i = 0; i < cascade.length; i++) {
     const modelName = cascade[i];
     try {
-      pass = await runBrainPass(modelName, systemPrompt, blindMessage, desk.boardText, auditAll);
+      pass = await runBrainPass(modelName, systemPrompt, firstMessage, desk.boardText, auditAll, desk.runLineGame);
       if (i > 0) console.warn(`   [Brain] FALLBACK brain produced this pass: ${modelName}`);
       break;
     } catch (err) {
