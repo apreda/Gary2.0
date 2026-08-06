@@ -407,12 +407,19 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ CATCHERS — the running game ═══',
     '═══ PROBABLE PITCHERS ═══',
     '═══ PITCHER SAMPLE CONTEXT ═══',
-    '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
     `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`,
     '═══ THE PARK ═══',
     '═══ REST & SCHEDULE SITUATION ═══',
   ];
   const tonightBlock = (runLineGame ? TONIGHT_SECTIONS_RL : TONIGHT_SECTIONS).map(takeSection).filter(Boolean).join('\n\n');
+  // PITCH TYPES CUT from run-line desks (founder GO, Aug 6 eve — "just to
+  // see what effect that has"): the whole per-pitch category — rates,
+  // arsenal, velocity — extracted and DISCARDED, because the fail-open
+  // design would otherwise resurface an un-taken section in the preamble.
+  // Whole-or-gone doctrine: never curated down, fully cut. Blind desks and
+  // the props lane keep the category untouched; the RL starter picture is
+  // results-shaped (season line, career, months, the arc, the flags).
+  if (runLineGame) takeSection('═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══');
   const clubsBlock = CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
   const wireBlock = takeSection('═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══');
   const shelfBanner = (t) => `━━━━━━━━━━━━━━━ ${t} ━━━━━━━━━━━━━━━`;
