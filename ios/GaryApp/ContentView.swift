@@ -115,6 +115,15 @@ struct ContentView: View {
             // screen, dock included, exactly as the mock drew it.
             LeagueWordsOverlay()
         }
+        // The root chrome NEVER rides the keyboard (founder bug, Aug 6: come
+        // back from the Google auth sheet — whose passcode prompt had raised
+        // the keyboard — and the whole app sat squished into the top half of
+        // the screen, dock mid-air, black void below). A system overlay's
+        // keyboard inset can outlive its dismissal on the underlying window;
+        // ignoring the keyboard safe area here makes the stale inset
+        // harmless. Text entry in the app lives in sheets, which handle
+        // their own avoidance, and the Hub search field is top-anchored.
+        .ignoresSafeArea(.keyboard)
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
                 .environmentObject(authManager)
