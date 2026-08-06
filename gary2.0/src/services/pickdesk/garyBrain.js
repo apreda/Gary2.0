@@ -100,7 +100,7 @@ export const buildRunLineAsk = (runLineBoard) => `${runLineBoard}
 
 Tonight's question is the run line — the moneyline is off the board.
 
-Who covers? Output only:
+Which run line is the better bet? Output only:
 
 \`\`\`json
 { "final_pick": "[Team] [+1.5 or -1.5] [exact odds]", "read": "why — a few sentences", "confidence_score": 0.XX }
