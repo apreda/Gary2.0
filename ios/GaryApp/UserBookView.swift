@@ -449,8 +449,10 @@ struct TailFadeRow: View {
         // is made (stake picker tint + the placed chip). The "goes on the
         // record at lock" caption came off with it.
         HStack(spacing: 8) {
-            tailFadeButton("TAIL GARY") { arm("tail") }
-            tailFadeButton("FADE") { arm("fade") }
+            // "BET WITH GARY" / "FADE THE BEAR" (founder, Aug 6) — the app's
+            // own name on the tail side, the bear on the fade.
+            tailFadeButton("BET WITH GARY") { arm("tail") }
+            tailFadeButton("FADE THE BEAR") { arm("fade") }
         }
     }
 
@@ -459,6 +461,8 @@ struct TailFadeRow: View {
             Text(label)
                 .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
                 .foregroundStyle(.white.opacity(0.85))
+                // The longer words scale before they ever wrap or clip.
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(
@@ -1222,8 +1226,9 @@ struct PropTailFadeRow: View {
                 stakePicker(side)
             } else {
                 HStack(spacing: 8) {
-                    bigButton("TAIL GARY", tint: GaryColors.silverLight, solid: true) { arm("tail") }
-                    bigButton("FADE", tint: Color(hex: "#8B93A7"), solid: false) { arm("fade") }
+                    // Same words as the game card back (founder, Aug 6).
+                    bigButton("BET WITH GARY", tint: GaryColors.silverLight, solid: true) { arm("tail") }
+                    bigButton("FADE THE BEAR", tint: Color(hex: "#8B93A7"), solid: false) { arm("fade") }
                 }
             }
             if let e = errorText {
@@ -1253,6 +1258,8 @@ struct PropTailFadeRow: View {
             Text(label)
                 .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
                 .foregroundStyle(solid ? GaryColors.ink : tint)
+                // The longer words scale before they ever wrap or clip.
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(
