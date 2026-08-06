@@ -1871,7 +1871,9 @@ export const mlbFetchers = {
         // days. Facts only; what that means for tonight is the brain's call.
         if (armTotals.size) {
           const totalOuts = [...armTotals.values()].reduce((s, a) => s + a.outs, 0);
-          const lastTwo = gameDates.slice(-2);
+          // Distinct dates — a doubleheader made everyone 'worked both of
+          // the last two game days' (live catch, Rockies Aug 5 DH).
+          const lastTwo = [...new Set(gameDates)].slice(-2);
           const b2b = [...armTotals.entries()]
             .filter(([, a]) => lastTwo.length === 2 && lastTwo.every((d) => a.dates.includes(d)))
             .map(([n]) => n);
@@ -2296,6 +2298,10 @@ export const mlbFetchers = {
         // 5-7 when a starter exits early. High-leverage arms still sort first.
         const relievers = (result.stats || [])
           .filter(s => s.pitching_ip > 0 && (s.pitching_gs || 0) === 0 && s.pitching_era != null)
+          // Membership floor (same small-sample honesty as the >=20 AB hitter
+          // gate): 3+ IP or any save/hold — a position player's mop-up inning
+          // is not a pen arm (live catch: a catcher at 18.00 in 1.0 IP).
+          .filter(s => (Number(s.pitching_ip) || 0) >= 3 || (s.pitching_sv || 0) > 0 || (s.pitching_hld || 0) > 0)
           .sort((a, b) =>
             (b.pitching_sv || 0) - (a.pitching_sv || 0) ||
             (b.pitching_hld || 0) - (a.pitching_hld || 0) ||
