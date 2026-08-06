@@ -298,10 +298,37 @@ const MENU_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
   if (!MENU_URL || !MENU_KEY || !Array.isArray(markets) || !markets.length) return;
   try {
-    const rows = markets.map((m) => ({
+    let rows = markets.map((m) => ({
       player: m.player, team: m.team ?? null, prop_type: m.prop_type,
       line: m.line, over: m.over_odds ?? null, under: m.under_odds ?? null,
     }));
+
+    // THE MENU ONLY GROWS (founder bug, Aug 6: a recap bullet said "Yohel
+    // Pozo 1 HR, 1 RBI" with no price while the row above it wore +467).
+    // The upsert REPLACES the row, and the HR lane (run-mlb-hr-picks.js,
+    // hrOnly) builds a home-runs-only board — so whichever run fired last
+    // owned the menu, and an HR run left the game with HR prices only:
+    // three of today's six snapshots were 8/13/17 markets, one per player,
+    // 100% home_runs, against 146-150 across 15 market types for the rest.
+    // Union with whatever is already stored (fresh prices win on a repeat
+    // key), so no partial board can ever shrink a fuller one.
+    try {
+      const prior = await fetch(
+        `${MENU_URL}/rest/v1/prop_menu?select=markets&game_date=eq.${gameDate}`
+          + `&matchup=eq.${encodeURIComponent(matchup)}`,
+        { headers: { apikey: MENU_KEY, Authorization: `Bearer ${MENU_KEY}` } },
+      );
+      if (prior.ok) {
+        const existing = (await prior.json())?.[0]?.markets;
+        if (Array.isArray(existing) && existing.length) {
+          const key = (m) => `${String(m.player).toLowerCase()}|${m.prop_type}|${m.line}`;
+          const merged = new Map(existing.map((m) => [key(m), m]));
+          for (const m of rows) merged.set(key(m), m);   // fresher price wins
+          rows = [...merged.values()];
+        }
+      }
+    } catch { /* fail-soft: a merge that can't read just writes this board */ }
+
     const res = await fetch(`${MENU_URL}/rest/v1/prop_menu`, {
       method: 'POST',
       headers: {
@@ -318,7 +345,7 @@ async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
       console.warn(`   [Props Brain] menu snapshot skipped (${res.status})`);
       return;
     }
-    console.log(`   [Props Brain] menu snapshot: ${rows.length} priced markets`);
+    console.log(`   [Props Brain] menu snapshot: ${rows.length} priced markets` + `${markets.length !== rows.length ? ` (${markets.length} this board, merged with stored)` : ''}`);
   } catch (e) {
     console.warn(`   [Props Brain] menu snapshot failed: ${e?.message || e}`);
   }
