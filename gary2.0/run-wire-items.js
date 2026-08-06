@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 /**
- * The Wire — Betting-Angle News Generator
+ * The Wire — The Day in Baseball
  *
- * Produces the Home page "Wire" feed: short, bettor-framed news items
- * (results vs the closing number, line moves, injury line-reactions, analyst
- * voices, pace notes) for the active leagues. ONE grounded Gemini call per
- * league (cheap Flash model + google_search) returns a strict JSON array; the
- * runner normalizes those to flat `wire_items` rows and writes them with the
- * same service-role DELETE-then-INSERT idempotency as run-insight-connections.js
- * (mirrors storeDailyPicks in src/supabaseClient.js). iOS reads via the anon
- * SELECT policy.
+ * Produces the Home page "Wire" feed: short items about what is happening in
+ * the league TODAY — notable in-game moments (multi-HR nights, no-hitters,
+ * milestone lines, wild finals), injury news with its consequence, line moves
+ * on tonight's slate, and totals-relevant environment notes. ONE grounded
+ * Gemini call per league (cheap Flash model + google_search) returns a strict
+ * JSON array; the runner normalizes those to flat `wire_items` rows and writes
+ * them with the same service-role DELETE-then-INSERT idempotency as
+ * run-insight-connections.js. iOS reads via the anon SELECT policy.
+ *
+ * REDESIGNED Aug 5 2026 (founder): the old feed led with "result" items —
+ * yesterday's games recapped against the closing number. Those duplicated the
+ * headline recap cards at the top of Home and read a day stale by evening
+ * (a fresh 8:49 PM run was still telling Monday's 14-2 rout on Wednesday
+ * night). The "result" kind is retired; "moment" leads. Freshness is a prompt
+ * LAW: today first, yesterday only when the copy says so, nothing older.
  *
  * Idempotent per day: the day's existing rows for each league are replaced so
- * re-runs (the later launchd passes) never duplicate.
+ * re-runs (the later scheduled passes) never duplicate.
  *
  * Usage:
  *   node run-wire-items.js                       # today (EST), all active leagues
@@ -36,14 +43,6 @@ import { getESTDate } from './src/utils/dateUtils.js';
 // Leagues the Wire covers. Mirrors run-insight-connections.js ACTIVE_LEAGUES.
 const ACTIVE_LEAGUES = ['MLB', 'NBA'];
 
-// ── EDIT ME ──────────────────────────────────────────────────────────────────
-// Curated public betting voices the model should PREFER when sourcing a real,
-// recent (last 24h) analyst post/quote for a 'voice' item. Add/remove handles
-// here. The model must still find an ACTUAL post via search — it never
-// fabricates. Handles are passed verbatim into the prompt.
-const X_VOICES = ['@HaralabosV', '@RufusPeabody', '@ActionNetworkHQ', '@br_betting'];
-// ─────────────────────────────────────────────────────────────────────────────
-
 // Cheap grounding model — same as the insights pipeline.
 const WIRE_MODEL = 'gemini-3-flash-preview';
 
@@ -62,6 +61,10 @@ const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 
 // game_results is the grounding source for "Gary-relevant" framing.
 const RESULTS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/game_results` : null;
+
+// game_recaps carries each final's box line (R/H/HR per side) and its
+// sanitizer-verified stat bullets — the ground truth for 'moment' stat claims.
+const RECAPS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/game_recaps` : null;
 
 // daily_picks is the grounding source for TODAY's real slate (the teams Gary is
 // actually dealing with). Used to build the real-team allowlist that prevents the
@@ -163,31 +166,79 @@ function yesterdayOf(dateStr) {
 }
 
 /**
- * Pull yesterday's graded game_results rows for a league so the model can frame
- * 'result' items against Gary-relevant games. Best-effort: a failure here just
- * yields no extra context (the run still proceeds on pure search grounding).
+ * Pull one day's graded game_results rows for a league. The grader writes each
+ * game minutes after its final, so an evening run sees TONIGHT's finished games
+ * here — the freshest "day in baseball" grounding there is. Best-effort: a
+ * failure just yields no extra context (the run proceeds on search grounding).
  */
-async function fetchResultsContext(date, league) {
+async function fetchFinalsForDay(date, league) {
   if (!RESULTS_REST_URL) return [];
-  const yday = yesterdayOf(date);
   try {
     const resp = await axios({
       method: 'GET',
       url: RESULTS_REST_URL,
       headers: restHeaders,
       params: {
-        select: 'league,result,final_score,pick_text,matchup',
+        select: 'league,final_score,matchup',
         league: `eq.${league}`,
-        game_date: `eq.${yday}`,
+        game_date: `eq.${date}`,
         limit: 25,
       },
     });
     return Array.isArray(resp.data) ? resp.data : [];
   } catch (err) {
     const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-    console.warn(`   ⚠️  [${league}] results context fetch failed (non-fatal): ${detail}`);
+    console.warn(`   ⚠️  [${league}] finals context fetch failed (non-fatal): ${detail}`);
     return [];
   }
+}
+
+/**
+ * Join one day's finals with their game_recaps box lines + stat bullets, as
+ * ready-to-print context lines. The bullets were already fact-checked at recap
+ * time (the price sanitizer + box are built from the real BDL batting lines),
+ * so a 'moment' grounded here can't invent a stat — the Aug 6 dry run had the
+ * model take a real 6-0 final and embellish "held to three hits" onto a team
+ * that actually had eight.
+ */
+async function fetchFinalsWithNotes(date, league) {
+  const finals = await fetchFinalsForDay(date, league);
+  if (!finals.length || !RECAPS_REST_URL) return finals.map((r) => ({ ...r, note: null }));
+  let recaps = [];
+  try {
+    const resp = await axios({
+      method: 'GET',
+      url: RECAPS_REST_URL,
+      headers: restHeaders,
+      params: {
+        select: 'matchup,box,bullets',
+        league: `eq.${league}`,
+        game_date: `eq.${date}`,
+        limit: 25,
+      },
+    });
+    recaps = Array.isArray(resp.data) ? resp.data : [];
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.warn(`   ⚠️  [${league}] recap-notes fetch failed (non-fatal): ${detail}`);
+  }
+  const byMatchup = new Map(recaps.map((r) => [String(r.matchup || '').toLowerCase(), r]));
+  return finals.map((r) => {
+    const rec = byMatchup.get(String(r.matchup || '').toLowerCase());
+    const bits = [];
+    const side = (s) => (s && s.runs != null ? `${s.runs}R/${s.hits ?? '?'}H/${s.hr ?? '?'}HR` : null);
+    const away = side(rec?.box?.away), home = side(rec?.box?.home);
+    if (away && home) bits.push(`box: away ${away} — home ${home}`);
+    if (Array.isArray(rec?.bullets) && rec.bullets.length) bits.push(`notes: ${rec.bullets.join('; ')}`);
+    return { ...r, note: bits.length ? bits.join(' | ') : null };
+  });
+}
+
+/** "9:41 PM" ET right now — the prompt's freshness anchor. */
+function nowClockET() {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -249,12 +300,12 @@ async function fetchSlateTeams(date, league) {
 
 /**
  * Build the real-team allowlist for a league: full names (for the prompt) + a token
- * set (for validation), drawn from today's slate and yesterday's graded results.
+ * set (for validation), drawn from today's slate and the last two days' finals.
  */
-function buildAllowlist(slateTeams, resultsContext) {
+function buildAllowlist(slateTeams, finalsRows) {
   const names = new Set();
   for (const n of slateTeams) if (n) names.add(String(n).trim());
-  for (const r of resultsContext) {
+  for (const r of finalsRows) {
     // matchup is "Away @ Home"
     for (const side of String(r.matchup || '').split(/\s*@\s*|\s+vs\.?\s+/i)) {
       const s = side.trim();
@@ -274,7 +325,7 @@ function buildAllowlist(slateTeams, resultsContext) {
  */
 function isItemGrounded(item, allowTokens) {
   if (!allowTokens || allowTokens.size === 0) return false;
-  const gameSpecific = item.kind === 'result' || item.kind === 'line_move' || item.kind === 'injury';
+  const gameSpecific = item.kind === 'moment' || item.kind === 'line_move' || item.kind === 'injury';
   const hay = `${item.game || ''} ${item.headline || ''} ${item.subline || ''}`;
   const refTokens = teamTokens(hay);
   const overlap = refTokens.some((t) => allowTokens.has(t));
@@ -296,48 +347,70 @@ function isItemGrounded(item, allowTokens) {
 // Prompt + Gemini call (grounded)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildPrompt({ date, league, resultsContext, allowNames }) {
+function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames }) {
   const yday = yesterdayOf(date);
-  const ctxBlock = resultsContext.length
-    ? resultsContext
-        .map(
-          (r) =>
-            `- ${r.matchup || '?'} | final ${r.final_score || '?'} | Gary: ${r.pick_text || '?'} (${r.result || '?'})`
-        )
-        .join('\n')
-    : '(no graded Gary games on file for yesterday — use search results only)';
+  const clock = nowClockET();
+  const finalsLine = (rows) =>
+    rows
+      .map((r) => `- ${r.matchup || '?'} | final ${r.final_score || '?'}${r.note ? ` | ${r.note}` : ''}`)
+      .join('\n');
+  const todayBlock = todayFinals.length
+    ? finalsLine(todayFinals)
+    : '(none final yet — early in the day, or games still in progress)';
+  const ydayBlock = ydayFinals.length ? finalsLine(ydayFinals) : '(none on file)';
 
   const teamsBlock = allowNames && allowNames.length
     ? allowNames.map((n) => `- ${n}`).join('\n')
     : '(none)';
 
-  return `You are the editor of "The Wire", a betting-news ticker for sharp sports bettors. ` +
-    `Generate news items for ${league} for ${date} (today, ET). Yesterday was ${yday}.\n\n` +
-    `These are the ONLY real teams in play right now (today's slate + yesterday's graded games). ` +
+  return `You are the editor of "The Wire" — the day-in-${league} ticker on a sports betting app's ` +
+    `front page. It is ${clock} ET on ${date}. Yesterday was ${yday}. Generate today's items.\n\n` +
+    `These are the ONLY real teams in play right now (today's slate + the last graded games). ` +
     `Every item MUST be about one of these teams. Do NOT write about any team not on this list, and ` +
     `do NOT invent matchups, series, or playoff rounds from memory — if you are not certain a game is ` +
     `happening on the real ${date} schedule, omit it:\n${teamsBlock}\n\n` +
-    `Use Google Search to find REAL, current information about THESE teams: yesterday's final scores ` +
-    `against the closing spread/total, line moves on today's slate, injury news and its market reaction, ` +
-    `recent posts from prominent betting analysts, and pace/scoring-environment notes.\n\n` +
-    `Gary's recently graded games (for framing 'result' items against games our users bet):\n${ctxBlock}\n\n` +
+    `Games already FINAL today, ${date} (freshest material — lead here):\n${todayBlock}\n\n` +
+    `Yesterday's finals, ${yday} (usable ONLY under the freshness rules below):\n${ydayBlock}\n\n` +
+    `Use Google Search to find REAL, current information about these teams: tonight's standout ` +
+    `individual performances and game stories, today's injury news, line moves on the upcoming slate, ` +
+    `and scoring-environment notes.\n\n` +
     `Return a STRICT JSON array (no prose, no markdown fences, no commentary) of 4 to 8 items. ` +
     `Each item is an object with EXACTLY these keys:\n` +
-    `  "kind": one of "result" | "line_move" | "injury" | "voice" | "pace"\n` +
+    `  "kind": one of "moment" | "injury" | "line_move" | "pace"\n` +
     `  "headline": short, punchy, <= 90 chars\n` +
     `  "subline": one sentence of supporting detail (or null)\n` +
-    `  "body": 2-3 further sentences for readers who tap to expand — what happened, why the ` +
-    `market moved, and what it means for tonight. No repetition of the headline/subline. (or null)\n` +
-    `  "source_handle": the analyst handle for 'voice' items, else null\n` +
+    `  "body": 2-3 further sentences for readers who tap to expand. No repetition of the ` +
+    `headline/subline. (or null)\n` +
+    `  "source_handle": always null\n` +
     `  "game": the matchup this is about ("Away @ Home"), or null if league-wide\n` +
     `  "relevance_score": integer 0-100 (higher = more lead-worthy / front-page)\n\n` +
-    `EDITORIAL RULES (every item is written from a sports BETTOR's perspective):\n` +
-    `- result: frame against the CLOSING number, never a plain score. ` +
-    `Good: "Spurs don't cover the 6.5 in a 4-point win". Bad: "Spurs win 110-106".\n` +
+    `EDITORIAL RULES:\n` +
+    `- moment (the feed's LEAD kind): a thing that HAPPENED in a game worth telling a friend about — ` +
+    `a multi-homer night, a double-digit strikeout start, a no-hitter or one taken deep into the game, ` +
+    `a huge RBI line, a walk-off, an extra-innings marathon, a slugfest or a shutout of note, a ` +
+    `milestone reached, a streak extended or snapped. Name the player and the real number ` +
+    `("Caminero homers twice in Coors", "Skenes strikes out 11 over 7"). This is fan-interest copy, ` +
+    `NOT a betting recap — never frame a moment against a spread or closing number.\n` +
+    `- STAT GROUNDING LAW for moments: a moment is built EXCLUSIVELY from that game's line in the ` +
+    `FINALS blocks above — the final, the box, the notes. Not from search, not from memory: not the ` +
+    `stats, not the opponent, not season context ("first time this season", "joins Mays and Bonds"). ` +
+    `A game whose line has NO "notes:" section is not eligible for a moment at all. Never add a ` +
+    `player fact the notes don't state — handedness, age, rookie status, position, nationality. ` +
+    `If the blocks don't support it, it doesn't exist — write fewer items. Search is for injury, ` +
+    `line_move, and pace items only.\n` +
+    `- injury: real injury, IL, or return-timeline news from today and what it changes (rotation, ` +
+    `lineup, market). A call-up, trade, or lineup preference is NOT an injury item — if it fits no ` +
+    `kind, it doesn't run.\n` +
+    `- The night's best moments are the feed's lead — when the notes produced real ones, score them ` +
+    `above everything else.\n` +
     `- line_move: name the OLD number and the NEW number ("Total dropped from 9 to 8.5").\n` +
-    `- injury: state the BETTING CONSEQUENCE (team total / spread / ML reaction), not just the news.\n` +
-    `- voice: DISABLED. Do NOT generate any voice items. Gary never attributes quotes to real handles or analysts.\n` +
-    `- pace: scoring-environment / pace / weather note relevant to totals.\n` +
+    `- pace: scoring-environment / park / weather note relevant to totals.\n` +
+    `FRESHNESS LAWS (the reason this feed exists — violating them ships stale news):\n` +
+    `- Lead with TODAY: things that happened today, injury news from today, moves on the upcoming slate.\n` +
+    `- An item about yesterday is allowed ONLY when today has not yet produced its own material ` +
+    `(a morning run), and its copy MUST say when it happened ("Tuesday night") — never present an ` +
+    `old game as if it just happened.\n` +
+    `- NOTHING older than yesterday. No season retrospectives, no "earlier this week".\n` +
     `- Plain, professional copy. No hype, no clickbait, no exclamation marks.\n` +
     `- Only include items you can ground in real, current information. Fewer real items beats padding.\n\n` +
     `Output ONLY the JSON array.`;
@@ -366,9 +439,11 @@ async function callWireModel(prompt) {
 // Robust JSON extraction (clone of the insights/props "search all blocks" pattern)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// 'voice' removed — Gary never fabricates attributed analyst quotes (founder). Any
-// stray voice item the model emits is dropped at validation by its absence here.
-const VALID_KINDS = new Set(['result', 'line_move', 'injury', 'pace']);
+// 'voice' removed — Gary never fabricates attributed analyst quotes (founder).
+// 'result' retired Aug 5 2026 — yesterday-recaps duplicated the headline cards
+// and read stale by evening (founder). Any stray item of either kind the model
+// emits is dropped at validation by its absence here.
+const VALID_KINDS = new Set(['moment', 'line_move', 'injury', 'pace']);
 
 /**
  * Pull the first valid JSON array of items out of the model text. Tolerates
@@ -409,11 +484,35 @@ function parseWireItems(text) {
   return [];
 }
 
+/**
+ * The notes never state a pitcher's handedness, but the model keeps guessing it
+ * anyway ("the Royals right-hander" — Cameron throws left; it survived three
+ * prompt-law dry runs on Aug 6). Prompt laws don't hold here, so the word class
+ * comes out deterministically: "pitcher" is always true, never a coin flip.
+ */
+function scrubHandedness(s) {
+  if (!s) return s;
+  return String(s)
+    // noun forms stand in for the player — swap for a word that's always true
+    .replace(/\b(?:right|left)-hander\b/gi, 'pitcher')
+    .replace(/\b(?:righty|lefty|southpaw)\b/gi, 'pitcher')
+    // adjective form just modifies a noun that follows — drop it
+    .replace(/\b(?:right|left)-handed\s+/gi, '')
+    .replace(/\s{2,}/g, ' ');
+}
+
 /** Coerce an arbitrary parsed item into a normalized wire_items row (or null). */
 function toRow(item, league, date) {
   if (!item || typeof item !== 'object') return null;
   const kind = String(item.kind || '').trim().toLowerCase();
   if (!VALID_KINDS.has(kind)) return null;
+  // Moments are written from the notes alone, and the notes carry no
+  // handedness — any that appears is invented.
+  if (kind === 'moment') {
+    for (const k of ['headline', 'subline', 'body']) {
+      if (item[k] != null) item[k] = scrubHandedness(item[k]);
+    }
+  }
   const headline = item.headline != null ? String(item.headline).trim() : '';
   if (!headline) return null;
 
@@ -484,11 +583,15 @@ async function run() {
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
     try {
-      const resultsContext = await fetchResultsContext(targetDate, league);
+      // Today's finals are the lead material (the grader writes each game
+      // minutes after its final); yesterday's ride along for morning runs.
+      // Each final carries its box line + recap notes — the stat ground truth.
+      const todayFinals = await fetchFinalsWithNotes(targetDate, league);
+      const ydayFinals = await fetchFinalsWithNotes(yesterdayOf(targetDate), league);
       const slateTeams = await fetchSlateTeams(targetDate, league);
-      const allow = buildAllowlist(slateTeams, resultsContext);
+      const allow = buildAllowlist(slateTeams, [...todayFinals, ...ydayFinals]);
       console.log(
-        `   Context: ${resultsContext.length} graded result row(s), ` +
+        `   Context: ${todayFinals.length} final(s) today, ${ydayFinals.length} yesterday, ` +
           `${slateTeams.length} slate team-slot(s) → ${allow.names.length} real team(s).`
       );
 
@@ -503,7 +606,7 @@ async function run() {
         continue;
       }
 
-      const prompt = buildPrompt({ date: targetDate, league, resultsContext, allowNames: allow.names });
+      const prompt = buildPrompt({ date: targetDate, league, todayFinals, ydayFinals, allowNames: allow.names });
       const text = await callWireModel(prompt);
       const parsed = parseWireItems(text);
 
@@ -512,11 +615,30 @@ async function run() {
         .filter(Boolean);
 
       // Drop items naming a team that isn't really in play (caught fabrications).
-      const rows = allRows.filter((r) => isItemGrounded(r, allow.tokens));
-      const dropped = allRows.length - rows.length;
+      let rows = allRows.filter((r) => isItemGrounded(r, allow.tokens));
+      let dropped = allRows.length - rows.length;
       if (dropped > 0) {
         console.log(`   🚫 Dropped ${dropped} ungrounded item(s) (team not on the real slate).`);
       }
+
+      // ENFORCED stat-grounding for moments (the prompt law alone did not hold:
+      // the Aug 6 dry runs kept inventing a one-hitter onto whichever game had
+      // no notes). A moment is only valid for a game whose finals line carried
+      // a notes section — those notes are the sanitizer-verified recap bullets,
+      // the one stat source the model was allowed to write from.
+      const notedTokens = new Set();
+      for (const f of [...todayFinals, ...ydayFinals]) {
+        if (f.note && f.note.includes('notes:')) {
+          for (const t of teamTokens(f.matchup)) notedTokens.add(t);
+        }
+      }
+      const withNotes = rows.filter((r) =>
+        r.kind !== 'moment' || teamTokens(r.game || r.headline).some((t) => notedTokens.has(t)));
+      dropped = rows.length - withNotes.length;
+      if (dropped > 0) {
+        console.log(`   🚫 Dropped ${dropped} moment(s) about games with no verified notes.`);
+      }
+      rows = withNotes;
 
       if (rows.length === 0) {
         console.log(`   No grounded wire items for ${league} on ${targetDate}.`);
