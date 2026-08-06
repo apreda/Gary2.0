@@ -15149,7 +15149,6 @@ struct CompactPickRow: View {
     // content, green footer verdict. Losses recede — content dims to ~40%, a
     // whisper-faint ✕ behind, lostTint footer verdict at full strength. The
     // stamp survives only on the gold bar (its treatment is still being picked).
-    private var isDarkLost: Bool { !premiumFinish && displayResult == "lost" }
     private var isGoldLost: Bool { premiumFinish && displayResult == "lost" }
     private var isGoldWon: Bool { premiumFinish && displayResult == "won" }
     /// Premium type scale (founder call, Jul 3): EVERYTHING on the gold bar
@@ -15614,13 +15613,15 @@ struct CompactPickRow: View {
             // the same giant check on a WIN (founder call, Jul 4 — the free-card
             // look), struck in deep win-green ink; a premium LOSS keeps the
             // crack fracture instead, no ghost.
-            if let verdict = displayResult, verdict != "push",
-               !premiumFinish || verdict == "won" {
-                Text(verdict == "won" ? "✓" : "✕")
-                    .font(.system(size: verdict == "won" ? 200 : 185, weight: .regular, design: .serif))
+            // A WIN celebrates with the ghost check. A LOSS carries the crack
+            // and nothing else on EVERY finish now (founder, Aug 6: "no X
+            // please just the crack") — the ✕ behind a fracture was two marks
+            // telling one story.
+            if displayResult == "won" {
+                Text("✓")
+                    .font(.system(size: 200, weight: .regular, design: .serif))
                     .foregroundStyle(premiumFinish ? Self.goldWinGreen.opacity(0.18)
-                                     : (verdict == "won" ? GaryColors.win.opacity(0.14)
-                                                         : GaryColors.loss.opacity(0.07)))
+                                                   : GaryColors.win.opacity(0.14))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .offset(x: 12, y: -14)
                     .allowsHitTesting(false)
@@ -23450,13 +23451,13 @@ struct CompactPropRow: View {
             // loss ✕ red 7%), clipped by the card shape. The silver bar carries
             // the giant check on a WIN too (game-card parity, Jul 4); a premium
             // LOSS keeps the crack fracture instead, no ghost.
-            if let verdict = resolvedResult, verdict != "push",
-               !premiumFinish || verdict == "won" {
-                Text(verdict == "won" ? "✓" : "✕")
-                    .font(.system(size: verdict == "won" ? 200 : 185, weight: .regular, design: .serif))
+            // Game-card parity (founder, Aug 6): the win keeps its ghost check,
+            // the loss is the crack alone on every finish.
+            if resolvedResult == "won" {
+                Text("✓")
+                    .font(.system(size: 200, weight: .regular, design: .serif))
                     .foregroundStyle(premiumFinish ? Color(hex: "#1E6B33").opacity(0.16)
-                                     : (verdict == "won" ? GaryColors.win.opacity(0.14)
-                                                         : GaryColors.loss.opacity(0.07)))
+                                                   : GaryColors.win.opacity(0.14))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .offset(x: 12, y: -14)
                     .allowsHitTesting(false)
