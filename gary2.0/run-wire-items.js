@@ -556,8 +556,22 @@ async function deleteDayRows(date, league) {
   });
 }
 
-/** INSERT the day's freshly-computed rows (idempotency comes from delete first). */
-async function insertRows(rows) {
+/**
+ * Replace the day's rows for a league: INSERT the fresh rows FIRST, then delete
+ * the old ones by id. The old order (DELETE-then-INSERT) had a failure mode
+ * where a rejected insert — e.g. a schema constraint the migration hasn't
+ * reached yet — left the day's Wire EMPTY after its rows were already deleted.
+ * This order fails safe: an insert that throws leaves yesterday's copy intact.
+ */
+async function replaceDayRows(date, league, rows) {
+  const existing = await axios({
+    method: 'GET',
+    url: REST_URL,
+    headers: restHeaders,
+    params: { select: 'id', date: `eq.${date}`, league: `eq.${league}`, limit: 100 },
+  });
+  const oldIds = (Array.isArray(existing.data) ? existing.data : []).map((r) => r.id);
+
   const sanitized = JSON.parse(JSON.stringify(rows));
   await axios({
     method: 'POST',
@@ -565,6 +579,15 @@ async function insertRows(rows) {
     data: sanitized,
     headers: { ...restHeaders, Prefer: 'return=minimal' },
   });
+
+  if (oldIds.length) {
+    await axios({
+      method: 'DELETE',
+      url: REST_URL,
+      headers: { ...restHeaders, Prefer: 'return=minimal' },
+      params: { id: `in.(${oldIds.join(',')})` },
+    });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -658,9 +681,9 @@ async function run() {
         continue;
       }
 
-      // Idempotency: clear the day's rows for this league, then insert fresh.
-      await deleteDayRows(targetDate, league);
-      await insertRows(rows);
+      // Idempotency: insert fresh rows first, then clear the old copy — an
+      // insert failure leaves the previous rows standing (never a dark Wire).
+      await replaceDayRows(targetDate, league, rows);
       console.log(`   ✅ Stored ${rows.length} wire item(s) for ${league} (${targetDate}).`);
     } catch (err) {
       failures += 1;
