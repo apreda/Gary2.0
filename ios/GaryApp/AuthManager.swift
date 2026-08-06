@@ -218,6 +218,15 @@ final class AuthManager: ObservableObject {
             URLQueryItem(name: "provider", value: provider.rawValue),
             URLQueryItem(name: "redirect_to", value: redirectURL)
         ]
+        if provider == .google {
+            // Classic account chooser, not Google's passkey-first interstitial
+            // (founder, Aug 6: "we can just do normal google sign in").
+            // GoTrue forwards `prompt` to Google — verified live against
+            // auth.betwithgary.ai: the accounts.google.com redirect carries
+            // prompt=select_account. The chooser always offers the plain
+            // account/password path alongside whatever Google is pushing.
+            components.queryItems?.append(URLQueryItem(name: "prompt", value: "select_account"))
+        }
         return components.url
     }
 

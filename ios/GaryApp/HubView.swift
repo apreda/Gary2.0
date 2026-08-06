@@ -857,18 +857,25 @@ struct HubView: View {
         // Jul 22; debut gated to Jul 23 so the first run is a fresh slate —
         // self-activates at the 3 AM ET rollover). Until then HR reads keep
         // riding The Bats exactly as before.
+        // The Matchups storyboard retired for MLB (founder, Aug 6: "we only
+        // need the head to head") — H2H and the NRFI watch stand alone in the
+        // founder-picked shapes (mocks H6 + N10). The storyboard's other
+        // kinds (injury swaps, running game, park weather) fall through to
+        // the More Edges overflow net, so nothing vanishes.
         if Self.hrThreatsLive {
             return [
                 Beat(anchor: "hr", title: "Home Run Threats", kinds: [.hrThreat]),
                 Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon]),
                 Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
-                Beat(anchor: "matchups", title: "The Matchups", kinds: [.h2h, .injury, .firstInning, .runningGame, .parkWeather]),
+                Beat(anchor: "h2h", title: "The Head-to-Head", kinds: [.h2h]),
+                Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
             ]
         }
         return [
             Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .hrThreat]),
             Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
-            Beat(anchor: "matchups", title: "The Matchups", kinds: [.h2h, .injury, .firstInning, .runningGame, .parkWeather]),
+            Beat(anchor: "h2h", title: "The Head-to-Head", kinds: [.h2h]),
+            Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
         ]
     }
     /// Founder, Jul 22: "green light it but don't run it tonight — first run
@@ -938,10 +945,16 @@ struct HubView: View {
         // other surface referenced them — so this was a clean removal, not a
         // flag-off.)
         if !rows.isEmpty {
-            // The Matchups reads as a slate storyboard —
-            // one block per game (founder, Jul 30) — while
-            // every other beat keeps the flat feed.
-            if beat.anchor == "matchups" {
+            // Founder-picked shapes (Aug 6): H2H = the case card (mock H6),
+            // NRFI = the story card (mock N10). WC still speaks the old
+            // storyboard; every other beat keeps the flat feed.
+            if beat.anchor == "h2h" {
+                HubH2HSection(rows: rows) { s in openSignal(s) }
+                    .id(beat.anchor)
+            } else if beat.anchor == "nrfi" {
+                HubNrfiSection(rows: rows) { s in openSignal(s) }
+                    .id(beat.anchor)
+            } else if beat.anchor == "matchups" {
                 HubMatchupsSection(
                     rows: rows,
                     slateIndexFor: { slateIndexFor($0) },
@@ -2684,7 +2697,204 @@ fileprivate struct HubDotsRow: View {
     }
 }
 
-// MARK: - The Matchups (per-game storyboard — founder, Jul 30 redesign)
+// MARK: - The Head-to-Head (mock H6 "The Case" — founder pick, Aug 6)
+
+/// One editorial case per season-series edge: kicker row (lane + game),
+/// the headline in the display face, Gary's read, then a receipts strip of
+/// the numbers that back it — series record, last meeting. Replaces the MLB
+/// Matchups storyboard (founder: "we only need the head to head").
+fileprivate struct HubH2HSection: View {
+    let rows: [Signal]
+    let onTap: (Signal) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HubHead(title: "The Head-to-Head", count: rows.count)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, s in
+                    Button { onTap(s) } label: { card(s) }.buttonStyle(.plain)
+                    if i < rows.count - 1 { HubRule(inset: 18) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func card(_ s: Signal) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                HubKicker(text: "Head-to-Head", size: 9.5, color: GaryColors.gold.opacity(0.9))
+                Spacer()
+                Text(s.game.uppercased())
+                    .font(HubFont.data(9.5, .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Text(s.headline)
+                .font(HubFont.display(21))
+                .foregroundStyle(GaryColors.warmWhite)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 7)
+            Text(s.detail)
+                .font(HubFont.body(13.5))
+                .foregroundStyle(.white.opacity(0.82))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+            HubRule().padding(.vertical, 10)
+            // The receipts strip — only the numbers the row actually carries.
+            HStack(spacing: 18) {
+                if let w = s.h2h?.wins, let l = s.h2h?.losses {
+                    receipt("SERIES", "\(w)–\(l)", tint: HubPalette.green)
+                } else if !s.value.isEmpty {
+                    receipt("SERIES", s.value, tint: HubPalette.green)
+                }
+                if let last = s.h2h?.last_meeting, let winner = last.winner, let score = last.score {
+                    receipt("LAST", "\(winner) \(score)", tint: .white.opacity(0.85))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.25))
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private func receipt(_ label: String, _ value: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(HubFont.kicker(9)).tracking(1.2)
+                .foregroundStyle(.white.opacity(0.45))
+            Text(value)
+                .font(HubFont.data(12, .bold))
+                .foregroundStyle(tint)
+        }
+    }
+}
+
+// MARK: - The NRFI Watch (mock N10 story card — founder pick, Aug 6)
+
+/// One story card per first-inning edge: kicker row (the row's own side word
+/// + game), display-face headline, Gary's read, then the evidence — each
+/// side's last-10 first innings as dots (color law, Jul 30: a run SCORED
+/// glows green, a scoreless first burns red) and the 1st-inning price line.
+fileprivate struct HubNrfiSection: View {
+    let rows: [Signal]
+    let onTap: (Signal) -> Void
+
+    private let green = HubPalette.green
+    private let red = HubPalette.red
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HubHead(title: "The NRFI Watch", count: rows.count)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, s in
+                    Button { onTap(s) } label: { card(s) }.buttonStyle(.plain)
+                    if i < rows.count - 1 { HubRule(inset: 18) }
+                }
+            }
+        }
+    }
+
+    private func sideWord(_ s: Signal) -> String {
+        switch s.nrfi?.side {
+        case "NRFI": return "NRFI"
+        case "YRFI": return "YRFI"
+        case "TEAM_QUIET": return "Quiet Start"
+        case "TEAM_HOT": return "Hot Start"
+        default: return "First Inning"
+        }
+    }
+
+    @ViewBuilder private func card(_ s: Signal) -> some View {
+        let m = s.nrfi
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                HubKicker(text: sideWord(s), size: 9.5, color: GaryColors.gold.opacity(0.9))
+                Spacer()
+                Text(s.game.uppercased())
+                    .font(HubFont.data(9.5, .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Text(s.headline)
+                .font(HubFont.display(21))
+                .foregroundStyle(GaryColors.warmWhite)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 7)
+            Text(s.detail)
+                .font(HubFont.body(13.5))
+                .foregroundStyle(.white.opacity(0.82))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+            // The evidence: both sides' sequences, or the one side the row is
+            // about — drawn only when the payload really carries them.
+            VStack(alignment: .leading, spacing: 6) {
+                if let abbr = m?.away_abbr, let seq = m?.away_seq, !seq.isEmpty {
+                    seqRow(abbr, seq)
+                }
+                if let abbr = m?.home_abbr, let seq = m?.home_seq, !seq.isEmpty {
+                    seqRow(abbr, seq)
+                }
+                if let abbr = m?.team_abbr, let seq = m?.team_seq, !seq.isEmpty,
+                   m?.away_seq == nil, m?.home_seq == nil {
+                    seqRow(abbr, seq)
+                }
+            }
+            .padding(.top, 10)
+            if let p = m?.price, p.over != nil || p.under != nil {
+                HStack(spacing: 12) {
+                    Text("1ST-INNING RUN")
+                        .font(HubFont.kicker(9)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.45))
+                    if let o = p.over { priceBit("O0.5", o) }
+                    if let u = p.under { priceBit("U0.5", u) }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.25))
+                }
+                .padding(.top, 10)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private func priceBit(_ side: String, _ odds: Int) -> some View {
+        HStack(spacing: 4) {
+            Text(side)
+                .font(HubFont.data(10, .semibold))
+                .foregroundStyle(.white.opacity(0.62))
+            Text(odds > 0 ? "+\(odds)" : "\(odds)")
+                .font(HubFont.data(12, .bold))
+                .foregroundStyle(GaryColors.gold)
+        }
+    }
+
+    @ViewBuilder private func seqRow(_ abbr: String, _ seq: [Int]) -> some View {
+        let clean = seq.filter { $0 == 0 }.count
+        HStack(spacing: 8) {
+            Text(abbr.uppercased())
+                .font(GaryFonts.accent(11)).foregroundStyle(.white.opacity(0.85))
+                .frame(width: 40, alignment: .leading)
+            HStack(spacing: 3.5) {
+                ForEach(Array(seq.enumerated()), id: \.offset) { _, v in
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(v > 0 ? green.opacity(0.9) : red.opacity(0.45))
+                        .frame(width: 10, height: 10)
+                }
+            }
+            Spacer(minLength: 6)
+            Text("CLEAN \(clean)/\(seq.count)")
+                .font(HubFont.data(10, .bold)).foregroundStyle(.white.opacity(0.7))
+        }
+    }
+}
+
+// MARK: - The Matchups (per-game storyboard — WC only since Aug 6; the MLB
+// slate now speaks the H2H + NRFI sections above)
 
 /// The Matchups, rebuilt as a slate storyboard: one block per GAME in
 /// first-pitch order — a matchup masthead (away @ home in the display face,

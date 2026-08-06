@@ -164,6 +164,15 @@ struct SwapMeta: Decodable {
     let team_seq: [Int]?
     let team_scored: Int?
     let team_n: Int?
+    /// Tonight's 1st-inning O/U 0.5 price, snapshotted at write time — the
+    /// NRFI Watch card's money line (N10, founder pick Aug 6).
+    let price: NrfiPrice?
+}
+
+/// The 1st-inning market snapshot on an nrfi row.
+struct NrfiPrice: Decodable {
+    let over: Int?
+    let under: Int?
 }
 
 /// The last meeting in a head-to-head series (revenge read).
