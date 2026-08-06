@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseCore
+import GoogleSignIn
 import FirebaseMessaging
 import UserNotifications
 
@@ -130,6 +131,14 @@ struct GaryApp: App {
                 }
             }
             .preferredColorScheme(.dark)
+            // Native Google sign-in's redirect (the reversed-client-id
+            // scheme) routes back through the SDK; every other URL is
+            // untouched (handle() returns false and nothing else consumes
+            // URLs here — the Supabase web flow completes inside its own
+            // ASWebAuthenticationSession).
+            .onOpenURL { url in
+                _ = GIDSignIn.sharedInstance.handle(url)
+            }
             .task {
                 #if DEBUG
                 dumpShareCardRendersIfRequested()

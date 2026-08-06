@@ -104,7 +104,17 @@ struct AuthView: View {
                         SocialSignInButton(
                             title: "Continue with Google",
                             iconName: "g.circle.fill",
-                            action: { handleOAuth(provider: .google) }
+                            action: {
+                                // Native Google sheet when configured (the
+                                // industry-standard tap-your-account flow);
+                                // web OAuth as the fallback until the iOS
+                                // client ships in GoogleService-Info.plist.
+                                if authManager.googleNativeClientID != nil {
+                                    Task { try? await authManager.signInWithGoogleNative() }
+                                } else {
+                                    handleOAuth(provider: .google)
+                                }
+                            }
                         )
                     }
                     .padding(.horizontal, 24)

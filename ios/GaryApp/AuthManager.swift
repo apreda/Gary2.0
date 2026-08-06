@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AuthenticationServices
+import GoogleSignIn
 
 // MARK: - Auth Manager
 
@@ -205,6 +206,75 @@ final class AuthManager: ObservableObject {
             errorMessage = message
             throw AuthError.serverError(message)
         }
+    }
+
+    // MARK: - OAuth (Google) — native sheet (industry standard)
+
+    /// The iOS OAuth client from GoogleService-Info.plist. Present only once
+    /// Google is enabled as a Firebase sign-in provider and the refreshed
+    /// plist ships — until then the button falls back to the web flow, so
+    /// nothing breaks in the gap (founder, Aug 6: sign-in must feel like
+    /// "all the other times they used google" — tap the account, Continue).
+    var googleNativeClientID: String? {
+        guard let url = Bundle.main.url(forResource: "GoogleService-Info", withExtension: "plist"),
+              let dict = NSDictionary(contentsOf: url) as? [String: Any],
+              let id = dict["CLIENT_ID"] as? String, !id.isEmpty else { return nil }
+        return id
+    }
+
+    /// The native Google sheet → Supabase id_token grant. The Google SDK
+    /// presents the standard account chooser (accounts already on the device,
+    /// one tap, Continue); the resulting ID token exchanges directly against
+    /// GoTrue — no browser round-trip, no passkey interstitial.
+    func signInWithGoogleNative() async throws {
+        errorMessage = nil
+        guard let clientID = googleNativeClientID else {
+            throw AuthError.serverError("Google native sign-in not configured")
+        }
+        guard let root = Self.topViewController() else {
+            throw AuthError.serverError("No view controller to present from")
+        }
+
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: root)
+        guard let idToken = result.user.idToken?.tokenString else {
+            throw AuthError.serverError("Google returned no identity token")
+        }
+
+        let url = try authURL("/auth/v1/token?grant_type=id_token")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "apikey")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "provider": "google",
+            "id_token": idToken,
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AuthError.networkError }
+        guard http.statusCode == 200 else {
+            let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
+            let message = errorBody?.error_description ?? errorBody?.msg ?? "Google sign-in failed"
+            errorMessage = message
+            throw AuthError.serverError(message)
+        }
+
+        let session = try JSONDecoder().decode(AuthResponse.self, from: data)
+        handleAuthResponse(session)
+        let user = try await fetchCurrentUser()
+        currentUser = user
+        isAuthenticated = true
+    }
+
+    /// Frontmost view controller — the Google sheet's presentation anchor.
+    private static func topViewController() -> UIViewController? {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        var top = scene?.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        return top
     }
 
     // MARK: - OAuth (Google) — Opens web flow
