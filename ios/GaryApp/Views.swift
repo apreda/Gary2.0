@@ -21639,13 +21639,15 @@ fileprivate struct ScoutArmsSection: View {
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                // .fixedSize(vertical:) makes the row size to its TALLEST
-                // plate, which the maxHeight above then fills into.
+                // No fixedSize here: an HStack already sizes to its tallest
+                // child, and THAT height is what the plates' maxHeight
+                // .infinity stretches into. Forcing ideal height (the Aug 6
+                // first attempt) removed the definite container height the
+                // stretch needs, so the short plate stayed a stub.
                 HStack(alignment: .top, spacing: 8) {
                     plate(d.awayStarter, home: false)
                     plate(d.homeStarter, home: true)
                 }
-                .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -22890,54 +22892,55 @@ struct FirstInningRow: View {
     }
 }
 
-/// Head-to-Head row — season-series dominance as a tug-of-war bar + the last
-/// meeting (the revenge read). Reads the h2h meta off the Signal.
+/// Head-to-Head row — THE LEDGER (mock H2, founder pick Aug 6). Replaces the
+/// tug-of-war bar: the season series big on the right, then every meeting as
+/// its own line with the venue that night (away @ home), the score, and the
+/// dominant side's W/L. Same shape the Hub's H2H section speaks, so the two
+/// surfaces read as one design. Rows written before the `meetings` payload
+/// fall back to the last-meeting line rather than an empty table.
 struct HeadToHeadRow: View {
     let s: Signal
     var onTap: (Signal) -> Void
     private let green = Color(hex: "#63D17E")
+    private let red = Color(hex: "#cf6b5b")
 
     var body: some View {
         let h = s.h2h
         let wins = max(h?.wins ?? 0, 0)
         let losses = max(h?.losses ?? 0, 0)
-        let total = max(wins + losses, 1)
         let domName = h?.dominant_name ?? "Team"
         let oppName = h?.opponent_name ?? "Opponent"
         let domAbbr = h?.dominant ?? ""
         let oppAbbr = h?.opponent ?? ""
         let last = h?.last_meeting
+        let meetings = h?.meetings ?? []
 
         Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(domName).font(GaryFonts.text(14, .semibold)).foregroundStyle(.white)
                     Text("own \(oppName)").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                     Spacer(minLength: 6)
-                    Text("\(wins)-\(losses)").font(GaryFonts.mono(15, bold: true)).foregroundStyle(green)
+                    Text("\(wins)-\(losses)")
+                        .font(GaryFonts.display(26)).foregroundStyle(green)
+                        .lineLimit(1).fixedSize()
                 }
-                GeometryReader { geo in
-                    let w = max(geo.size.width * CGFloat(wins) / CGFloat(total), 30)
-                    HStack(spacing: 0) {
-                        Text("\(domAbbr) \(wins)")
-                            .font(GaryFonts.mono(10, bold: true)).foregroundStyle(Color(hex: "#0B160C"))
-                            .padding(.leading, 8)
-                            .frame(width: w, height: 20, alignment: .leading)
-                            .background(LinearGradient(colors: [green.opacity(0.9), green.opacity(0.5)], startPoint: .leading, endPoint: .trailing))
-                        Text("\(oppAbbr) \(losses)")
-                            .font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.55))
-                            .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 8)
-                            .frame(height: 20)
-                            .background(Color.white.opacity(0.08))
+                if !meetings.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(meetings.reversed().prefix(4).enumerated()), id: \.offset) { i, m in
+                            if i > 0 {
+                                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                            }
+                            meetingRow(m)
+                        }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                }
-                .frame(height: 20)
-                if let last, let score = last.score {
+                    .padding(.top, 8)
+                } else if let last, let score = last.score {
                     Text(last.revenge == true
                          ? "\(oppAbbr) took the last meeting \(score) — revenge spot"
                          : "\(domAbbr) won the last meeting \(score)")
                         .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.62))
+                        .padding(.top, 8)
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -22945,6 +22948,40 @@ struct HeadToHeadRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// One ledger line: date · the venue that night · score · W/L.
+    @ViewBuilder private func meetingRow(_ m: H2HMeeting) -> some View {
+        HStack(spacing: 10) {
+            Text(Self.shortDate(m.date))
+                .font(GaryFonts.mono(10.5))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 44, alignment: .leading)
+            Text("\(m.away ?? "—") @ \(m.home ?? "—")")
+                .font(GaryFonts.mono(11.5, bold: true))
+                .foregroundStyle(.white.opacity(0.88))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Text("\(m.away_runs ?? 0)–\(m.home_runs ?? 0)")
+                .font(GaryFonts.mono(11.5, bold: true))
+                .foregroundStyle(.white.opacity(0.7))
+            Text(m.dom_won == true ? "W" : "L")
+                .font(GaryFonts.mono(11.5, bold: true))
+                .foregroundStyle(m.dom_won == true ? green : red)
+                .frame(width: 12, alignment: .trailing)
+        }
+        .padding(.vertical, 6)
+    }
+
+    /// "2026-07-21" → "Jul 21".
+    static func shortDate(_ iso: String?) -> String {
+        guard let iso, iso.count >= 10 else { return "—" }
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: String(iso.prefix(10))) else { return "—" }
+        let out = DateFormatter(); out.dateFormat = "MMM d"
+        out.timeZone = TimeZone(identifier: "America/New_York")
+        return out.string(from: d)
     }
 }
 
