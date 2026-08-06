@@ -354,6 +354,16 @@ export async function buildMlbDesk(game, options = {}) {
   // no prices on it — deskTextBlind. THE LINES arrive only with the ticket ask
   // (boardText). deskText stays the full surface, board first, for the stored
   // snapshot: the audit record is everything Gary saw across both turns.
+  // Pre-flight fork (founder GO, Aug 6; threshold his call, -179): heavier
+  // than -179 on either ML = run-line game. Requires a spread on the board;
+  // without one the game falls back to the normal blind flow (the ML is all
+  // that exists there — the brain rails still cap what it may pay).
+  const metaNow = boardMeta(oddsRows, homeTeam, awayTeam);
+  const heavy = (o) => typeof o === 'number' && o < -179;
+  const boardTextRunLine = buildRunLineBoardSection(oddsRows, homeTeam, awayTeam);
+  const runLineGame = Boolean((heavy(metaNow.moneylineHome) || heavy(metaNow.moneylineAway)) && boardTextRunLine);
+
+
   // ── THE THREE SHELVES (founder GO, Aug 5 eve) ──────────────────────────
   // Same facts, filed the way a bettor's head files them: TONIGHT (the
   // decision inputs — arms, lineups, pens, park), THE CLUBS (who these teams
@@ -423,15 +433,6 @@ export async function buildMlbDesk(game, options = {}) {
   const clubsBlock = CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
   const wireBlock = takeSection('═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══');
   const shelfBanner = (t) => `━━━━━━━━━━━━━━━ ${t} ━━━━━━━━━━━━━━━`;
-  // Pre-flight fork (founder GO, Aug 6; threshold his call, -179): heavier
-  // than -179 on either ML = run-line game. Requires a spread on the board;
-  // without one the game falls back to the normal blind flow (the ML is all
-  // that exists there — the brain rails still cap what it may pay).
-  const metaNow = boardMeta(oddsRows, homeTeam, awayTeam);
-  const heavy = (o) => typeof o === 'number' && o < -179;
-  const boardTextRunLine = buildRunLineBoardSection(oddsRows, homeTeam, awayTeam);
-  const runLineGame = Boolean((heavy(metaNow.moneylineHome) || heavy(metaNow.moneylineAway)) && boardTextRunLine);
-
   const deskTextBlind = [
     shelfRest.trim(),
     shelfBanner('TONIGHT'),
