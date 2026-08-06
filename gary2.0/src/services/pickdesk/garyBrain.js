@@ -81,8 +81,6 @@ export const buildTicketAsk = (winner, boardText) => `Your winner is sealed: ${w
 
 ${boardText}
 
-House limit: no moneyline past -200.
-
 Take your bet. Output only:
 
 \`\`\`json
@@ -227,23 +225,6 @@ async function runBrainPass(modelName, systemPrompt, blindMessage, boardText, au
     bump(res);
     ticket = parseFinalJson(res.content);
     if (!ticket) { logCost(); return { error: 'parse: no ticket JSON after re-ask' }; }
-  }
-
-  // THE HOUSE LIMIT (founder, Aug 5 2026): no moneyline past -200 — the
-  // payout math law he believed was enforced all along (it never was in the
-  // MLB path). One corrective re-ask, then a contained no-pick, rails-style.
-  const mlPastLimit = (t) => {
-    const fp = String(t?.final_pick || '');
-    if (/[+-]1\.5|run\s*line/i.test(fp)) return false;
-    const m = fp.replace(/\(\s*([+-]\d{3,4})\s*\)/g, '$1').trim().match(/([+-]\d{3,4})$/);
-    return m ? parseInt(m[1], 10) < -200 : false;
-  };
-  if (mlPastLimit(ticket)) {
-    res = await sendToSessionWithRetry(session, 'House limit: no moneyline past -200. Return your final JSON.', {});
-    bump(res);
-    const rt = parseFinalJson(res.content);
-    if (!rt || mlPastLimit(rt)) { logCost(); return { error: 'rails: moneyline past the -200 house limit' }; }
-    ticket = rt;
   }
 
   // THE SEAL: from here on, ticket.final_pick is the pick. Turn 3 and any
