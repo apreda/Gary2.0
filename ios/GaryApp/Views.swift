@@ -14473,15 +14473,9 @@ enum SilverBar {
                         .init(color: Color(hex: "#E8E8EE").opacity(0.18), location: 0.46),
                         .init(color: .clear, location: 0.62)
                     ], startPoint: UnitPoint(x: 0, y: 0.1), endPoint: UnitPoint(x: 1, y: 0.9))))
-            .overlay(
-                // GOLD trim on the silver metal (founder call, Jul 3 PM): the
-                // machined lip is gold, so the card still reads Gary before it
-                // reads silver — lit gold above, deep bronze below.
-                RoundedRectangle(cornerRadius: r, style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [Color(hex: "#E8C95A").opacity(0.9),
-                                                          Color(hex: "#4A3A08").opacity(0.75)],
-                                                 startPoint: .top, endPoint: .bottom),
-                                  lineWidth: 2))
+            // (The gold trim came off Aug 6 — founder: "remove the gold outline
+            // around the prop picks". The silver bar carries the card on its
+            // own metal now; the Jul 3 machined-lip rim is gone, not dimmed.)
             .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
     }
 }

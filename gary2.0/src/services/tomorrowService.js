@@ -1200,13 +1200,26 @@ One entry per game listed above.`;
   const m = String(res.content || '').match(/```json\s*([\s\S]*?)```/i) || String(res.content || '').match(/(\[[\s\S]*\])/);
   if (!m) throw new Error('arms takes: no JSON in response');
   const entries = JSON.parse(m[1]);
+  // Tolerant key match (founder, Aug 6: DET @ SEA was still showing the old
+  // template ladder while the rest of the board had Gary's paragraph — 8 of
+  // 11 attached). The lookup was an EXACT string hit on the matchup we sent,
+  // so any game the model echoed back with different spacing, punctuation or
+  // full team names silently kept no take and fell through to the fallback.
+  // Normalize both sides, then fall back to the model's own ordering when the
+  // batch came back one-per-game in order.
+  const keyOf = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const takeByMatchup = new Map();
+  const inOrder = [];
   for (const e of entries) {
-    if (e?.matchup && typeof e.take === 'string') takeByMatchup.set(e.matchup.trim(), e.take.trim());
+    if (e?.matchup && typeof e.take === 'string') {
+      takeByMatchup.set(keyOf(e.matchup), e.take.trim());
+      inOrder.push(e.take.trim());
+    }
   }
   let attached = 0;
-  for (const j of jobs) {
-    const take = takeByMatchup.get(j.matchup);
+  for (const [i, j] of jobs.entries()) {
+    const take = takeByMatchup.get(keyOf(j.matchup))
+      ?? (inOrder.length === jobs.length ? inOrder[i] : undefined);
     // Guards are LAWS, not style: no ellipsis ever; no emojis; length sane.
     if (!take || take.length < 40 || take.length > 420) continue;
     if (take.includes('…') || take.includes('...')) continue;
@@ -1214,7 +1227,8 @@ One entry per game listed above.`;
     j.row.arms_take = take;
     attached += 1;
   }
-  console.log(`[TomorrowBoard] arms takes attached: ${attached}/${jobs.length}`);
+  const missed = jobs.length - attached;
+  console.log(`[TomorrowBoard] arms takes attached: ${attached}/${jobs.length}` + `${missed ? ` — ${missed} fell back to the template ladder` : ''}`);
 }
 
 /**
