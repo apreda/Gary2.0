@@ -643,9 +643,13 @@ async function run() {
           const needsVoice = !(s.meta && typeof s.meta === 'object' && s.meta.evidence) && r.meta?.evidence;
           const needsId = s.player_id == null && r.player_id != null;
           // Fresh factual enrichment the stored row predates (NRFI price /
-          // starter first-inning splits, Jul 27) — same zero-churn contract.
-          const needsEnrich = (r.meta?.price != null || r.meta?.sp_first_inning != null)
-            && s.meta?.price == null && s.meta?.sp_first_inning == null;
+          // starter first-inning splits, Jul 27; the head-to-head meetings
+          // ledger, Aug 6) — same zero-churn contract: a stored row gains a
+          // field it never had, and nothing already published changes.
+          const needsEnrich = ((r.meta?.price != null || r.meta?.sp_first_inning != null)
+              && s.meta?.price == null && s.meta?.sp_first_inning == null)
+            || (Array.isArray(r.meta?.meetings) && r.meta.meetings.length
+              && !Array.isArray(s.meta?.meetings));
           if (!needsVoice && !needsId && !needsEnrich) continue;
           const patch = {};
           if (needsVoice || needsEnrich) {

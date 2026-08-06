@@ -21597,7 +21597,12 @@ fileprivate struct ScoutArmsSection: View {
                 stack("L3 · Rest", l3RestLine(p))
             }
             .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Both plates fill the pair's height (founder, Aug 6: "Perez's box
+            // is messed up") — a starter with only a season line used to draw
+            // a stub half the height of the arm beside him. maxHeight .infinity
+            // inside an equal-height HStack row makes the two plates match
+            // whatever the fuller one needs; the shorter one just carries air.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(ScoutMock.warm.opacity(0.04))
@@ -21615,50 +21620,36 @@ fileprivate struct ScoutArmsSection: View {
                 // "whatever two sentences Gary wants to say"); the assembled
                 // template line is the fallback when the board carries none.
                 if let take = d.armsTake {
-                    // Mock A1 minus the rail (founder pick, Aug 6): the take
-                    // opens on a Bebas drop cap in gold, so the block reads as
-                    // a written piece rather than a paragraph dropped on the
-                    // page. The cap is the paragraph's own first letter — no
-                    // added chrome, nothing to keep in sync with the words.
-                    ArmsDropCapText(take: take)
+                    // The take reads exactly as it did before (founder, Aug 6:
+                    // the drop cap came back out — "it was fine how it was") —
+                    // a hairline gold border is the only frame it wears now.
+                    Text(take)
+                        .font(.system(size: 15))
+                        .foregroundStyle(ScoutMock.warm.opacity(0.92))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 13).padding(.vertical, 11)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))
                 } else if let prose {
                     prose
                         .font(.system(size: 15).monospacedDigit())
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // .fixedSize(vertical:) makes the row size to its TALLEST
+                // plate, which the maxHeight above then fills into.
                 HStack(alignment: .top, spacing: 8) {
                     plate(d.awayStarter, home: false)
                     plate(d.homeStarter, home: true)
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
         }
-    }
-}
-
-/// Gary's arms paragraph with a display-face drop cap (mock A1, rail-free).
-/// SwiftUI has no drop-cap primitive, so the first character is peeled into
-/// its own Bebas glyph and the remaining text flows beside it: a fixed-width
-/// first block holds the cap, and the tail wraps under it at full width.
-fileprivate struct ArmsDropCapText: View {
-    let take: String
-
-    private var cap: String { String(take.prefix(1)) }
-    private var rest: String { String(take.dropFirst()) }
-
-    var body: some View {
-        // foregroundColor, not foregroundStyle — the Text + Text concatenation
-        // operator predates foregroundStyle's Text overload (iOS 17) and the
-        // app ships to 16.
-        Text(cap)
-            .font(GaryFonts.display(46))
-            .foregroundColor(GaryColors.gold)
-            .baselineOffset(-6)
-        + Text(rest)
-            .font(.system(size: 15))
-            .foregroundColor(ScoutMock.warm.opacity(0.92))
     }
 }
 

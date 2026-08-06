@@ -2728,48 +2728,96 @@ fileprivate struct HubH2HSection: View {
                     .font(HubFont.data(9.5, .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
-            Text(s.headline)
-                .font(HubFont.display(21))
-                .foregroundStyle(GaryColors.warmWhite)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 7)
-            Text(s.detail)
-                .font(HubFont.body(13.5))
-                .foregroundStyle(.white.opacity(0.82))
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
-            HubRule().padding(.vertical, 10)
-            // The receipts strip — only the numbers the row actually carries.
-            HStack(spacing: 18) {
-                if let w = s.h2h?.wins, let l = s.h2h?.losses {
-                    receipt("SERIES", "\(w)–\(l)", tint: HubPalette.green)
-                } else if !s.value.isEmpty {
-                    receipt("SERIES", s.value, tint: HubPalette.green)
+            // THE LEDGER (mock H2, founder pick Aug 6): headline left, the
+            // season series big on the right, then every meeting as a row —
+            // date, the venue that night as away @ home, the score, and the
+            // W/L tick from the dominant side's view.
+            HStack(alignment: .top, spacing: 12) {
+                Text(s.headline)
+                    .font(HubFont.display(21))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Text(seriesRecord(s))
+                    .font(HubFont.display(34))
+                    .foregroundStyle(HubPalette.green)
+                    .lineLimit(1).fixedSize()
+            }
+            .padding(.top, 7)
+
+            if let meetings = s.h2h?.meetings, !meetings.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(meetings.reversed().prefix(4).enumerated()), id: \.offset) { i, m in
+                        if i > 0 { HubRule(inset: 0).padding(.vertical, 1) }
+                        meetingRow(m)
+                    }
                 }
-                if let last = s.h2h?.last_meeting, let winner = last.winner, let score = last.score {
-                    receipt("LAST", "\(winner) \(score)", tint: .white.opacity(0.85))
+                .padding(.top, 10)
+                HStack {
+                    Text("THIS SEASON'S MEETINGS")
+                        .font(HubFont.kicker(9)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.45))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.25))
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.25))
+                .padding(.top, 9)
+            } else {
+                // No stored ledger (a row written before the meetings payload)
+                // — Gary's read carries the card rather than an empty table.
+                Text(s.detail)
+                    .font(HubFont.body(13.5))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
         .contentShape(Rectangle())
     }
 
-    private func receipt(_ label: String, _ value: String, tint: Color) -> some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .font(HubFont.kicker(9)).tracking(1.2)
-                .foregroundStyle(.white.opacity(0.45))
-            Text(value)
-                .font(HubFont.data(12, .bold))
-                .foregroundStyle(tint)
-        }
+    /// "7–2" from the stored counts, falling back to the row's own value.
+    private func seriesRecord(_ s: Signal) -> String {
+        if let w = s.h2h?.wins, let l = s.h2h?.losses { return "\(w)–\(l)" }
+        return s.value
     }
+
+    /// One ledger line: date · venue · score · the dominant side's W/L.
+    @ViewBuilder private func meetingRow(_ m: H2HMeeting) -> some View {
+        HStack(spacing: 10) {
+            Text(shortDate(m.date))
+                .font(HubFont.data(11, .medium))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 46, alignment: .leading)
+            Text("\(m.away ?? "—") @ \(m.home ?? "—")")
+                .font(HubFont.data(12, .semibold))
+                .foregroundStyle(.white.opacity(0.88))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Text("\(m.away_runs ?? 0)–\(m.home_runs ?? 0)")
+                .font(HubFont.data(12, .bold))
+                .foregroundStyle(.white.opacity(0.7))
+            Text(m.dom_won == true ? "W" : "L")
+                .font(HubFont.data(12, .bold))
+                .foregroundStyle(m.dom_won == true ? HubPalette.green : HubPalette.red)
+                .frame(width: 13, alignment: .trailing)
+        }
+        .padding(.vertical, 6)
+    }
+
+    /// "2026-07-21" → "Jul 21".
+    private func shortDate(_ iso: String?) -> String {
+        guard let iso, iso.count >= 10 else { return "—" }
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: String(iso.prefix(10))) else { return "—" }
+        let out = DateFormatter(); out.dateFormat = "MMM d"
+        out.timeZone = TimeZone(identifier: "America/New_York")
+        return out.string(from: d)
+    }
+
 }
 
 // MARK: - The NRFI Watch (mock N10 story card — founder pick, Aug 6)

@@ -149,6 +149,8 @@ struct SwapMeta: Decodable {
     let losses: Int?
     let games: Int?
     let last_meeting: H2HLast?
+    /// Every meeting this season, oldest → newest — the H2 ledger's rows.
+    let meetings: [H2HMeeting]?
     // NRFI/YRFI payload (kind == "nrfi"): each side's recent 1st-inning sequence.
     let side: String?         // "NRFI" | "YRFI"
     let home_abbr: String?
@@ -194,6 +196,19 @@ struct H2HLast: Decodable {
     let score: String?
     let winner: String?
     let revenge: Bool?
+}
+
+/// One past meeting on the head-to-head ledger. `away`/`home` are the abbrs of
+/// the clubs as they lined up THAT night, so the card can print the real venue
+/// ("MIA @ ATL") instead of repeating tonight's matchup (founder, Aug 6).
+struct H2HMeeting: Decodable {
+    let date: String?
+    let away: String?
+    let home: String?
+    let away_runs: Int?
+    let home_runs: Int?
+    /// Did the series' dominant side win this one — the W/L tick.
+    let dom_won: Bool?
 }
 
 /// One team's confirmed starting XI (WC Confirmed XI lane).

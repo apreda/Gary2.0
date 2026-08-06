@@ -20,6 +20,7 @@ import { makeRow, TONES, scoreFromEdge } from '../shared.js';
 import { attachLaneReads } from '../laneReads.js';
 
 const MIN_GAMES = 4;        // a real H2H sample (division rivals have plenty by June)
+const MEETINGS_KEPT = 8;      // meetings stored on the row for the card's ledger
 const SURFACE_DIFF = 3;     // |wins - losses| over the series to be an angle
 const MAX_ROWS = 8;         // slate-wide cap, most-lopsided first
 const RELEVANCE_SCALE = 13;
@@ -116,6 +117,28 @@ export async function computeHeadToHead(ctx) {
         losses: subWins,
         games: h2h.length,
         last_meeting: { winner: domWonLast ? dom.abbr : sub.abbr, score: lastScore, revenge: !domWonLast },
+        // Every meeting this season, oldest -> newest, for the card's ledger
+        // (founder, Aug 6 — mock H2 plus "where the game was played, which you
+        // can with just the team names and @"). Each entry carries the real
+        // venue as away@home ABBRS, so the row reads "MIA @ ATL" without the
+        // card inferring anything. Capped so a divisional series can't bloat
+        // the row; the card shows the most recent few anyway.
+        meetings: h2h.slice(-MEETINGS_KEPT).map((g) => {
+          // Which club HOSTED that particular meeting (the series alternates
+          // parks, which is the whole point of showing the venue).
+          const hosted = g.homeId === home.id ? home : away;
+          const visited = g.homeId === home.id ? away : home;
+          const domRuns = Number(g.homeId === dom.id ? g.homeRuns : g.awayRuns);
+          const subRuns = Number(g.homeId === dom.id ? g.awayRuns : g.homeRuns);
+          return {
+            date: g.date || null,
+            away: visited.abbr,
+            home: hosted.abbr,
+            away_runs: Number(g.awayRuns),
+            home_runs: Number(g.homeRuns),
+            dom_won: domRuns > subRuns,   // drives the card's W/L tick
+          };
+        }),
         season,
       },
     }));
