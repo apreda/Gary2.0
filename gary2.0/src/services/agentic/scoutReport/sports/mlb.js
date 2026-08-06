@@ -619,6 +619,14 @@ export async function buildMlbScoutReport(game, options = {}) {
     const totalStarts = games.length;
     const currentTeamStarts = currentTeamBdlId != null ? (teamCounts.get(currentTeamBdlId) || 0) : 0;
 
+    // TONIGHT'S DEBUT (Aug 5 night, the Taillon class): every season start
+    // came with another club and tonight is his first for this one — the
+    // state the DFA/trade lore keys on, as a plain fact.
+    if (currentTeamBdlId != null && totalStarts > 0 && currentTeamStarts === 0) {
+      smallSampleFlags.push(
+        `${pitcher.fullName} (${label}): first start for ${label} — all ${totalStarts} of his ${season} starts came with another club.`
+      );
+    }
     if (teamCounts.size >= 2 && currentTeamBdlId != null) {
       const otherStarts = totalStarts - currentTeamStarts;
       smallSampleFlags.push(
@@ -1515,6 +1523,58 @@ export async function buildMlbScoutReport(game, options = {}) {
     historicH2h = computeMlbH2hBySeason(priorRows, homeTeamBdlId, awayTeamBdlId, homeTeam);
   } catch { /* omit on failure */ }
 
+  // SITUATION FLAGS (founder GO, Aug 5 night): the detectable states behind
+  // betting lore — "first games without the everyday star", "just activated",
+  // — printed as naked facts in exactly the shape the pattern keys on. The
+  // state prompts the model's own knowledge; no effect names, no direction.
+  // Built from transactions + season stats only; the locked injury rendering
+  // is not touched. Same-day lineup scratches stay news-borne (no transaction
+  // exists for a scratch).
+  let situationFlagsSection = '';
+  try {
+    const teamGamesOf = (teamName) => {
+      const lw = teamName.toLowerCase().split(' ').pop();
+      const row = (bdlStandings || []).find(st =>
+        (st.team?.display_name || st.team?.full_name || '').toLowerCase().includes(lw));
+      return row ? (Number(row.wins) || 0) + (Number(row.losses) || 0) : null;
+    };
+    const gpOf = (stats, playerName) => {
+      const target = foldName(playerName);
+      const row = (stats || []).find(st => foldName(st.player?.full_name) === target);
+      if (!row) return null;
+      return row.batting_gp ?? row.games_played ?? row.batting_games ?? null;
+    };
+    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const todayEtFlag = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const flagLines = [];
+    for (const [teamName, teamId, seasonStats] of [
+      [homeTeam, homeTeamId, homePlayerSeasonStats],
+      [awayTeam, awayTeamId, awayPlayerSeasonStats],
+    ]) {
+      if (!teamId) continue;
+      const rows = await getMlbTransactions(teamId, threeDaysAgo, todayEtFlag).catch(() => []);
+      const seen = new Set();
+      for (const r of rows) {
+        const d = String(r.description || '');
+        const placed = d.match(/placed\s+(?:[A-Z0-9]{1,3}\s+)?(.+?)\s+on the .*injured list/i);
+        const activated = d.match(/activated\s+(?:[A-Z0-9]{1,3}\s+)?(.+?)\s+from the .*injured list/i);
+        const m = placed || activated;
+        if (!m || seen.has(m[1])) continue;
+        seen.add(m[1]);
+        const playerName = m[1];
+        if (placed) {
+          const gp = gpOf(seasonStats, playerName);
+          const tg = teamGamesOf(teamName);
+          const share = gp != null && tg ? ` — had played ${gp} of the team's ${tg} games` : '';
+          flagLines.push(`FRESH ABSENCE: ${playerName} (${teamName}) — placed on the injured list ${r.date}${share}. First game(s) without him.`);
+        } else {
+          flagLines.push(`JUST BACK: ${playerName} (${teamName}) — activated from the injured list ${r.date}.`);
+        }
+      }
+    }
+    situationFlagsSection = flagLines.join('\n');
+  } catch { situationFlagsSection = ''; }
+
   // Roster moves, last 14 days (founder, Aug 5 PM: a fan knows who got
   // traded — deadline arrivals must stay visible past the one-week mark, so
   // "he was traded to the Dodgers on Jul 31" is on the desk through mid-Aug).
@@ -1734,7 +1794,7 @@ ${wireSection}
 
 ${withoutPlayersSection ? `\n═══ WITHOUT KEY PLAYERS (this season) ═══\n${withoutPlayersSection}\n` : ''}
 
-═══ ROSTER MOVES — LAST 14 DAYS ═══
+${situationFlagsSection ? `═══ SITUATION FLAGS ═══\n${situationFlagsSection}\n\n` : ''}═══ ROSTER MOVES — LAST 14 DAYS ═══
 ${rosterMovesSection}
 
 ═══ SCHEDULE SHAPE ═══

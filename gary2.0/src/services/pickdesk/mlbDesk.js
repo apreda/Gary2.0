@@ -361,6 +361,7 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ CONFIRMED LINEUPS ═══',
     '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
     '═══ INJURIES (BDL Structured) ═══',
+    '═══ SITUATION FLAGS ═══',
     '═══ THE PEN — high-leverage arms ═══',
     '═══ BULLPEN WORKLOAD (recent appearances) ═══',
     '═══ CATCHERS — the running game ═══',

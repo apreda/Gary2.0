@@ -489,12 +489,20 @@ export const mlbFetchers = {
     // Per-pitch velocity from Baseball Savant arsenal CSV (BDL carries no pitch speed).
     // Keyed by MLBAM id with name fallback; null when Savant has no row.
     const arsenals = new Map(); // resolved index -> arsenal | null
+    const prevArsenals = new Map(); // prior season, for the velocity trend
     for (let i = 0; i < resolved.length; i++) {
       const r = resolved[i];
-      if (!r.name) { arsenals.set(i, null); continue; }
+      if (!r.name) { arsenals.set(i, null); prevArsenals.set(i, null); continue; }
       const arsenal = await getPitcherArsenal(r.mlbamId ?? r.name, currentYear).catch(() => null)
         || await getPitcherArsenal(r.name, currentYear).catch(() => null);
       arsenals.set(i, arsenal);
+      // VELOCITY TREND (founder, Aug 5 night — the Skenes trap): this
+      // season's mph alone reads elite in isolation; last season's beside it
+      // makes lost velocity a printed fact instead of an invisible one.
+      const prev = arsenal
+        ? await getPitcherArsenal(r.mlbamId ?? r.name, currentYear - 1).catch(() => null)
+        : null;
+      prevArsenals.set(i, prev);
     }
 
     const playerIds = resolved.map(r => r.bdlId).filter(id => id != null);
@@ -516,15 +524,20 @@ export const mlbFetchers = {
     }
     const fmtPct = (v) => (v != null && Number.isFinite(Number(v))) ? `${Number(v).toFixed(1)}%` : '—';
     const fmtAvg = (v) => (v != null && Number.isFinite(Number(v))) ? Number(v).toFixed(3) : '—';
-    const formatPitcher = ({ teamName, name, bdlId }, arsenal) => {
+    const formatPitcher = ({ teamName, name, bdlId }, arsenal, prevArsenal) => {
       if (!name) return `${teamName}: SP not announced`;
       // mph lookup keyed by pitch CODE (FF/SI/FS...) — both sources carry codes
       // and codes are stable; display-name strings can drift ("4-Seam" vs
       // "Four-Seam"). Name map kept as fallback for codeless BDL rows.
       const mphByCode = new Map((arsenal?.pitches || []).map(p => [p.code, p.mph]));
       const mphByName = new Map((arsenal?.pitches || []).map(p => [p.name.toLowerCase(), p.mph]));
+      const prevMphByCode = new Map((prevArsenal?.pitches || []).map(p => [p.code, p.mph]));
+      const prevMphByName = new Map((prevArsenal?.pitches || []).map(p => [p.name.toLowerCase(), p.mph]));
       const velocityLine = arsenal
-        ? `  Velocity (Savant ${currentYear}): ${arsenal.pitches.map(p => `${p.name} ${p.mph} mph`).join(' | ')}`
+        ? `  Velocity (Savant ${currentYear}): ${arsenal.pitches.map(p => {
+            const prev = prevMphByCode.get(p.code) ?? prevMphByName.get(p.name.toLowerCase());
+            return `${p.name} ${p.mph} mph${prev != null ? ` (${prev} in ${currentYear - 1})` : ''}`;
+          }).join(' | ')}`
         : `  Velocity: NOT AVAILABLE — do not cite pitch speeds for ${name}`;
       if (bdlId == null) return `${teamName}: ${name} — not found in BDL season stats\n${velocityLine}`;
       const list = (byPlayer.get(bdlId) || []).slice();
@@ -546,8 +559,8 @@ export const mlbFetchers = {
     };
 
     return {
-      homeValue: formatPitcher(resolved[0], arsenals.get(0)),
-      awayValue: formatPitcher(resolved[1], arsenals.get(1)),
+      homeValue: formatPitcher(resolved[0], arsenals.get(0), prevArsenals.get(0)),
+      awayValue: formatPitcher(resolved[1], arsenals.get(1), prevArsenals.get(1)),
       comparison: `Probable SP pitch-type breakdown (${currentYear} season)`,
       source: 'BDL API (pitch-type season stats) + Baseball Savant (velocity)',
     };
