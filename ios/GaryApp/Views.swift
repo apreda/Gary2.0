@@ -6598,44 +6598,15 @@ func garyGameResultKey(matchupKey: String, pickText: String?) -> String {
 }
 
 /// Winners slot curation (founder call, Jul 23 2026): the Winners card is a
-/// DAY OF ACTION, not a confidence leaderboard. Four slots, one game each,
-/// each doing a different job for the fan's day — and the card NEVER names
-/// them ("no words"): the slot speaks only through the edge rail's color.
+/// DAY OF ACTION, not a confidence leaderboard. Slots do different jobs for
+/// the fan's day and now only ORDER the card — the edge-rail color cue that
+/// used to voice them came off Aug 6 (founder: "what are those little green
+/// and white stripes? remove those"), taking the `tone` palette with it.
 enum WinnersSlot: Int {
     case anchor = 0    // highest conviction on the board
     case dog = 1       // the plus-money sweat
     case marquee = 2   // the day's biggest game (pipeline-ranked big_games)
     case nightcap = 3  // the latest start — carries action into the evening
-}
-
-/// The wordless slot cue: a hairline rail down the card's leading edge with a
-/// faint bleed into the face. Same geometry on every card — color is the slot's
-/// entire voice. Ink authority for the anchor, money green for the dog,
-/// spotlight white for the marquee, night indigo for the nightcap.
-extension WinnersSlot {
-    /// The slot's entire voice — one color, no words (founder, Jul 23).
-    var tone: Color {
-        switch self {
-        case .anchor:   return GoldBar.inkStrong
-        case .dog:      return Color(hex: "#1F7A4A")
-        case .marquee:  return .white
-        case .nightcap: return Color(hex: "#2A3A66")
-        }
-    }
-}
-
-struct WinnersSlotRail: View {
-    let slot: WinnersSlot
-    var body: some View {
-        HStack(spacing: 0) {
-            Rectangle().fill(slot.tone.opacity(0.9)).frame(width: 4)
-            LinearGradient(colors: [slot.tone.opacity(0.13), .clear],
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(width: 16)
-            Spacer(minLength: 0)
-        }
-        .allowsHitTesting(false)
-    }
 }
 
 /// Team abbreviation for the day-card seal timeline ("PHI 5:10") — the league
@@ -7504,9 +7475,10 @@ struct PremiumPicksView: View {
             // match count (same math as the fully-pre-post comingSoonShelf).
             target = min((todaySlateCounts["WC"] ?? 0) * 2, 12)
         } else {
-            // The four-slot card (anchor/dog/marquee/nightcap) — capped by the
-            // real slate so a 2-game day never promises four plays.
-            target = min(4, max(1, todaySlateCounts[shelf.league.uppercased()] ?? 4))
+            // The card fills to winnersCardCap as the day's picks post —
+            // capped by the real slate so a 2-game day never promises six.
+            target = min(Self.winnersCardCap,
+                         max(1, todaySlateCounts[shelf.league.uppercased()] ?? Self.winnersCardCap))
         }
         return max(0, target - shelf.picks.count)
     }
@@ -7862,12 +7834,18 @@ struct PremiumPicksView: View {
         return Int(text[r])
     }
 
-    /// Builds the four-slot Winners card from a league's game picks. One game
-    /// per slot, no repeats; slots collapse gracefully on thin slates. Returns
-    /// the curated picks in slot order plus the pick.id → slot map for the
-    /// edge-rail cue. Selection is downstream-only: Gary still picks every
-    /// game exactly as before — this layer just chooses which four make the
-    /// members card.
+    /// How many plays a league's Winners card carries for the day — games and
+    /// props alike (founder, Aug 6: "we're capping that at six total picks.
+    /// Same thing goes with the prop side"). The four slots fill first; the
+    /// day's later picks accumulate behind them up to this.
+    static let winnersCardCap = 6
+
+    /// Builds the Winners card from a league's game picks: the four slots
+    /// (anchor/dog/marquee/nightcap) fill first, then the card keeps
+    /// ACCUMULATING up to `winnersCardCap` as the day's later picks post.
+    /// Returns the curated picks in slot order plus the pick.id → slot map
+    /// that orders them. Selection is downstream-only: Gary still picks every
+    /// game exactly as before — this layer just chooses which make the card.
     private func curateWinnersSlots(_ picks: [GaryPick],
                                     bigGames: [TomorrowBigGame]) -> ([GaryPick], [String: WinnersSlot]) {
         // One candidate per game — the higher-confidence side wins, so a
@@ -7913,6 +7891,21 @@ struct PremiumPicksView: View {
         // NIGHTCAP — the latest start left, so the card closes the day out.
         if let n = pool.max(by: { ($0.commence_time ?? "") < ($1.commence_time ?? "") }) {
             take(n, .nightcap)
+        }
+        // THE CARD ACCUMULATES, IT NEVER SWAPS (founder, Aug 6: "these picks
+        // that are happening and finishing get replaced. That should not
+        // happen... they should all stay there").
+        //
+        // The four slots re-derived from the WHOLE list on every refresh, and
+        // NIGHTCAP is by definition "the latest start" — so each evening pick
+        // that posted evicted the afternoon game a user had been watching,
+        // sometimes mid-game. Ordering by start time makes membership
+        // monotonic instead: a later pick can only ever be added AFTER the
+        // ones already on the card, never in place of one. Slotted picks keep
+        // their rhythm at the front; the rest fill by first pitch to the cap.
+        for extra in pool.sorted(by: { ($0.commence_time ?? "") < ($1.commence_time ?? "") }) {
+            guard chosen.count < Self.winnersCardCap else { break }
+            chosen.append(extra)
         }
         return (chosen, slots)
     }
@@ -7987,8 +7980,24 @@ struct PremiumPicksView: View {
     /// Premium props: the top 5 by confidence across the sport — no per-game
     /// cap, so a game whose props BOTH qualify forms a slip and a game with
     /// one qualifier stands as a single card. The mix falls out of the data.
+    /// The prop card accumulates the same way the game card does (founder,
+    /// Aug 6: "Same thing goes with the prop side"), capped at
+    /// `winnersCardCap`.
+    ///
+    /// This REPLACES the straight confidence cut. A top-N-by-confidence set
+    /// re-ranks every refresh, so a late high-conviction prop evicted one a
+    /// user had been watching — the same eviction the game card had. Start
+    /// time is monotonic (props post T-90 before their game, so a later prop
+    /// can only sort behind the ones already on the card); confidence still
+    /// breaks ties inside a slot, keeping the best-first feel where it can't
+    /// cost stability. No per-game cap, as before.
     private func selectPremiumProps(_ props: [PropPick]) -> [PropPick] {
-        Array(props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
+        let ordered = props.sorted { a, b in
+            let at = a.commence_time ?? "", bt = b.commence_time ?? ""
+            if at != bt { return at < bt }
+            return (a.confidence ?? 0) > (b.confidence ?? 0)
+        }
+        return Array(ordered.prefix(Self.winnersCardCap))
     }
 
     // MARK: - Date browser (Winners history)
@@ -8205,7 +8214,7 @@ struct PremiumPicksView: View {
             return chosen
         }
         for lg in order {
-            let shelfCap = lg == "WC" ? 12 : 4   // four slots: anchor/dog/marquee/nightcap
+            let shelfCap = lg == "WC" ? 12 : Self.winnersCardCap
             if let tp = todayByLeague[lg], !tp.isEmpty {
                 let picks = lg == "WC" ? Array(sortedWC(tp).prefix(shelfCap))
                                        : curated(tp, bigGames: bigGamesToday)
@@ -15843,12 +15852,10 @@ struct CompactPickRow: View {
         // minHeight let 2-line heroes stay taller than 1-line ones (the bug).
         .frame(minHeight: fixedHeight == nil ? 210 : nil)
         .frame(height: fixedHeight)
-        // The wordless Winners slot rail rides the leading edge, above content
-        // but under the clip — so it hugs the card's rounded corners whole
-        // (never a cut-off edge).
-        .overlay(alignment: .leading) {
-            if let slot = winnersSlot { WinnersSlotRail(slot: slot) }
-        }
+        // (The wordless Winners slot rail came off the leading edge Aug 6 —
+        // founder: "what are those little green and white stripes? remove
+        // those". The slot system still ORDERS the card; it just no longer
+        // paints a cue. winnersSlot rides on for that ordering.)
         // Contains the oversized D3 ghost mark; background (and its shadow)
         // draws after this, so the card's drop shadow is unaffected.
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
