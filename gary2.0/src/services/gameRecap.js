@@ -251,24 +251,31 @@ export async function generateRecap({ pick, result, evidence }) {
  * for the prompt and then drops them. This keeps runs + hits per side so the
  * headline card's box column can be a real box instead of two scores.
  *
- * Sides are matched on the club's last word ("Los Angeles Angels" → "angels"),
- * the same join the desk uses. Returns null unless BOTH sides resolve — a
- * half-built box is worse than none, and the card treats null as "runs only".
+ * Sides are matched by containing the club's FULL name inside the BDL team name
+ * ("Boston Red Sox" contains "Red Sox"). The old join took the last word only —
+ * so White Sox and Red Sox both keyed to "sox", collided, and the whole box was
+ * dropped (that game was the single null on Aug 4 2026). A batter whose team
+ * matches both sides or neither is skipped rather than guessed at.
+ *
+ * Returns null unless BOTH sides resolve — a half-built box is worse than none,
+ * and the card treats null as "runs only".
  */
 export function buildBoxLine({ mlbStats, awayTeam, homeTeam, awayScore, homeScore }) {
   if (!Array.isArray(mlbStats) || !mlbStats.length) return null;
-  const key = (s) => String(s || '').toLowerCase().trim().split(' ').pop();
-  const awayKey = key(awayTeam), homeKey = key(homeTeam);
-  if (!awayKey || !homeKey || awayKey === homeKey) return null;
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const awayName = norm(awayTeam), homeName = norm(homeTeam);
+  if (!awayName || !homeName || awayName === homeName) return null;
 
   let awayHits = null, homeHits = null, awayHr = 0, homeHr = 0;
   for (const s of mlbStats) {
     if (s?.at_bats == null) continue;              // batters only
-    const k = key(s.team_name);
+    const team = norm(s.team_name);
+    const isAway = team.includes(awayName), isHome = team.includes(homeName);
+    if (isAway === isHome) continue;               // ambiguous or unrecognised
     const h = Number(s.hits) || 0;
     const hr = Number(s.hr) || 0;
-    if (k === awayKey) { awayHits = (awayHits ?? 0) + h; awayHr += hr; }
-    else if (k === homeKey) { homeHits = (homeHits ?? 0) + h; homeHr += hr; }
+    if (isAway) { awayHits = (awayHits ?? 0) + h; awayHr += hr; }
+    else { homeHits = (homeHits ?? 0) + h; homeHr += hr; }
   }
   if (awayHits == null || homeHits == null) return null;
 

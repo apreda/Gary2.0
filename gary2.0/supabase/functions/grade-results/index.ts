@@ -406,6 +406,48 @@ function recapFilterPropsForGame(propRows: any[], homeTeam: string, awayTeam: st
   });
 }
 
+// THE BOX LINE, on the live path (Aug 5 2026). Port of buildBoxLine() in
+// src/services/gameRecap.js — kept in lockstep with it. Until now the box was
+// only ever written by scripts/run-game-recaps.js, which is a MANUAL backfill
+// tool that nothing schedules; this function is what actually writes recaps in
+// production, and it had no box code at all. So the headline card's HOMERS line
+// never appeared on any day that wasn't hand-backfilled. The batting rows are
+// already in hand here (recapFetchMlbStats, for the evidence pack) — persisting
+// them costs no extra API call.
+//
+// Sides match by containing the club's FULL name in the BDL team name; a
+// last-word join would collide White Sox with Red Sox on "sox".
+function recapBuildBoxLine(args: {
+  mlbStats: any[] | null; awayTeam: string; homeTeam: string;
+  awayScore: number; homeScore: number;
+}): Record<string, unknown> | null {
+  const { mlbStats, awayTeam, homeTeam, awayScore, homeScore } = args;
+  if (!Array.isArray(mlbStats) || !mlbStats.length) return null;
+  const norm = (s: unknown) =>
+    String(s ?? "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const awayName = norm(awayTeam), homeName = norm(homeTeam);
+  if (!awayName || !homeName || awayName === homeName) return null;
+
+  let awayHits: number | null = null, homeHits: number | null = null;
+  let awayHr = 0, homeHr = 0;
+  for (const s of mlbStats) {
+    if (s?.at_bats == null) continue;               // batters only
+    const team = norm(s.team_name);
+    const isAway = team.includes(awayName), isHome = team.includes(homeName);
+    if (isAway === isHome) continue;                // ambiguous or unrecognised
+    const h = Number(s.hits) || 0;
+    const hr = Number(s.hr) || 0;
+    if (isAway) { awayHits = (awayHits ?? 0) + h; awayHr += hr; }
+    else { homeHits = (homeHits ?? 0) + h; homeHr += hr; }
+  }
+  if (awayHits == null || homeHits == null) return null;
+
+  return {
+    away: { runs: Number.isFinite(awayScore) ? awayScore : null, hits: awayHits, hr: awayHr },
+    home: { runs: Number.isFinite(homeScore) ? homeScore : null, hits: homeHits, hr: homeHr },
+  };
+}
+
 // ── upsert into game_recaps (skip if one exists AND still matches — else regenerate) ──
 async function writeRecap(args: {
   pick: any; league: string; gameDate: string; result: string;
@@ -437,11 +479,19 @@ async function writeRecap(args: {
   const recap = await recapGenerate({ pick, result, evidence });
   if (!recap) return "fail";
 
+  // Built from the same batting rows the evidence pack used. Null on a non-MLB
+  // game or a feed with no batting lines — the card renders runs only.
+  const box = recapBuildBoxLine({
+    mlbStats, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam,
+    awayScore: vScore, homeScore: hScore,
+  });
+
   if (stale) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/game_recaps?id=eq.${existing[0].id}`, {
       method: "PATCH", headers: { ...sbHeaders, Prefer: "return=minimal" },
       body: JSON.stringify({
         result, headline: recap.headline, recap: recap.recap, bullets: recap.bullets || [],
+        ...(box ? { box } : {}),
       }),
     });
     return res.ok ? "regenerated" : "fail";
@@ -455,6 +505,7 @@ async function writeRecap(args: {
     body: JSON.stringify({
       game_date: gameDate, league, matchup, pick_text: pick.pick, result,
       headline: recap.headline, recap: recap.recap, bullets: recap.bullets || [],
+      ...(box ? { box } : {}),
     }),
   });
   return res.ok ? "recap" : "fail";
