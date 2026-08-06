@@ -272,6 +272,22 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
       ticket = parseFinalJson(res2.content);
       if (!ticket) { logCost(); return { error: 'parse: no ticket JSON after re-ask' }; }
     }
+    // Belt-and-suspenders cap (threshold -179, founder): a heavy-ML game
+    // normally routes run-line pre-flight; the only way a past-cap ML can
+    // reach this flow is the no-spread-on-board fallback. Never pay it.
+    const mlPastCap = (t) => {
+      const fp = String(t?.final_pick || '');
+      if (/[+-]1\.5|run\s*line/i.test(fp)) return false;
+      const m = fp.replace(/\(\s*([+-]\d{3,4})\s*\)/g, '$1').trim().match(/([+-]\d{3,4})$/);
+      return m ? parseInt(m[1], 10) < -179 : false;
+    };
+    if (mlPastCap(ticket)) {
+      res2 = await sendToSessionWithRetry(session, 'House limit: no moneyline heavier than -179. Return your final JSON.', {});
+      bump(res2);
+      const rt = parseFinalJson(res2.content);
+      if (!rt || mlPastCap(rt)) { logCost(); return { error: 'rails: moneyline past the -179 house limit' }; }
+      ticket = rt;
+    }
   }
   let res;
 
