@@ -393,7 +393,26 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ ROSTER MOVES — LAST 14 DAYS ═══',
     '═══ SCHEDULE SHAPE ═══',
   ];
-  const tonightBlock = TONIGHT_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
+  // RL-ONLY REORDER (founder GO, Aug 6 PM): run-line games read team-first —
+  // who's playing and what shape they're in, pens, THEN the starters. The
+  // blind flow keeps the exact order that's winning; only the lane that
+  // misfired gets the surgery. Same sections, same words, different order.
+  const TONIGHT_SECTIONS_RL = [
+    '═══ CONFIRMED LINEUPS ═══',
+    '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
+    '═══ INJURIES (BDL Structured) ═══',
+    '═══ SITUATION FLAGS ═══',
+    '═══ THE PEN — high-leverage arms ═══',
+    '═══ BULLPEN WORKLOAD (recent appearances) ═══',
+    '═══ CATCHERS — the running game ═══',
+    '═══ PROBABLE PITCHERS ═══',
+    '═══ PITCHER SAMPLE CONTEXT ═══',
+    '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
+    `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`,
+    '═══ THE PARK ═══',
+    '═══ REST & SCHEDULE SITUATION ═══',
+  ];
+  const tonightBlock = (runLineGame ? TONIGHT_SECTIONS_RL : TONIGHT_SECTIONS).map(takeSection).filter(Boolean).join('\n\n');
   const clubsBlock = CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
   const wireBlock = takeSection('═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══');
   const shelfBanner = (t) => `━━━━━━━━━━━━━━━ ${t} ━━━━━━━━━━━━━━━`;
