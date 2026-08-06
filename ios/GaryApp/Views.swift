@@ -19277,6 +19277,10 @@ enum SignalKind {
     // Fantasy Corner lanes (Jul 26): two-start arms, the ninth-inning ladder,
     // IL players listed back inside the stash window, and the drop side
     case twoStart, closerWatch, returnWatch, cutList
+    // MLB career batter-vs-pitcher edge (the `owned` lane). Distinct from
+    // .h2h, which is a TEAM season series — both used to map to .h2h and so
+    // wore one HEAD-TO-HEAD label on two unrelated reads (founder, Aug 6).
+    case batterVsArm
     // MLB team angle — a team's record in tonight's starter's last N starts
     case teamRecord
     // MLB team angle — bullpen workload (relief IP) over the last 3 games
@@ -19306,6 +19310,7 @@ enum SignalKind {
         case .closerWatch: return "9.circle.fill"
         case .returnWatch: return "arrow.uturn.backward.circle.fill"
         case .cutList: return "scissors"
+        case .batterVsArm: return "figure.baseball"
         case .teamRecord: return "person.3.fill"
         case .bullpenFatigue: return "bolt.slash.fill"
         }
@@ -19347,6 +19352,7 @@ enum SignalKind {
         case .closerWatch: return "CLOSER WATCH"
         case .returnWatch: return "BACK SOON"
         case .cutList: return "CUT LIST"
+        case .batterVsArm: return "VS THIS ARM"
         case .teamRecord: return "RECORD"
         case .bullpenFatigue: return "BULLPEN"
         }
@@ -19460,7 +19466,19 @@ struct EdgesSection: View {
                     .pageGutter().padding(.vertical, 8)
             } else {
                 if tabbed && kinds.count > 1 { categoryTabBar }
-                VStack(spacing: 0) { ForEach(shown) { SignalRow(s: $0) } }
+                // A team season series draws THE LEDGER (founder, Aug 6) —
+                // dates, the venue that night, scores, W/L. Every other lane
+                // keeps the standard headline + read row.
+                VStack(spacing: 0) {
+                    ForEach(shown) { s in
+                        if s.kind == .h2h, let m = s.h2h?.meetings, !m.isEmpty {
+                            HeadToHeadRow(s: s) { _ in }
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        } else {
+                            SignalRow(s: s)
+                        }
+                    }
+                }
                     .pageGutter()
             }
         }
@@ -22530,7 +22548,8 @@ extension SignalKind {
     static func from(_ raw: String?) -> SignalKind? {
         switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "streak": return .streak
-        case "h2h", "head-to-head", "head_to_head", "owned": return .h2h
+        case "h2h", "head-to-head", "head_to_head": return .h2h
+        case "owned", "h2h_form": return .batterVsArm
         case "hot", "heat", "heat check", "heat_check": return .hot
         case "cold", "cooling", "cooling off", "cooling_off": return .cold
         case "injury", "replacement", "beneficiary": return .injury
@@ -22929,12 +22948,26 @@ struct HeadToHeadRow: View {
 
         Button { onTap(s) } label: {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(domName).font(GaryFonts.text(14, .semibold)).foregroundStyle(.white)
-                    Text("own \(oppName)").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                // Same header grammar every edge row wears — lane kicker left,
+                // the game right — so the ledger sits in the feed instead of
+                // floating headerless (founder, Aug 6).
+                HStack {
+                    Text(s.kind.chip)
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                    Spacer()
+                    Text(s.game.uppercased())
+                        .font(GaryFonts.mono(9.5))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .padding(.bottom, 7)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(s.headline.isEmpty ? "\(domName) own \(oppName)" : s.headline)
+                        .font(GaryFonts.text(16, .semibold)).foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 6)
                     Text("\(wins)-\(losses)")
-                        .font(GaryFonts.display(26)).foregroundStyle(green)
+                        .font(GaryFonts.display(28)).foregroundStyle(green)
                         .lineLimit(1).fixedSize()
                 }
                 if !meetings.isEmpty {
@@ -22947,6 +22980,10 @@ struct HeadToHeadRow: View {
                         }
                     }
                     .padding(.top, 8)
+                    Text("THIS SEASON'S MEETINGS")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.top, 8)
                 } else if let last, let score = last.score {
                     Text(last.revenge == true
                          ? "\(oppAbbr) took the last meeting \(score) — revenge spot"

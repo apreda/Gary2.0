@@ -719,7 +719,7 @@ struct HubView: View {
         case .streak:                                anchor = "streaks"
         case .fantasyPickups, .twoStart,
              .closerWatch, .returnWatch, .cutList:   anchor = "fantasy"
-        case .hot, .cold, .platoon:                  anchor = "bats"
+        case .hot, .cold, .platoon, .batterVsArm:    anchor = "bats"
         case .hrThreat:                              anchor = HubView.hrThreatsLive ? "hr" : "bats"
         case .starterForm, .teamRecord,
              .bullpenFatigue, .ballpark:             anchor = sel == .wc ? "matchups" : "arms"
@@ -865,16 +865,14 @@ struct HubView: View {
         if Self.hrThreatsLive {
             return [
                 Beat(anchor: "hr", title: "Home Run Threats", kinds: [.hrThreat]),
-                Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon]),
+                Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .batterVsArm]),
                 Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
-                Beat(anchor: "h2h", title: "The Head-to-Head", kinds: [.h2h]),
                 Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
             ]
         }
         return [
-            Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .hrThreat]),
+            Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .hrThreat, .batterVsArm]),
             Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
-            Beat(anchor: "h2h", title: "The Head-to-Head", kinds: [.h2h]),
             Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
         ]
     }
@@ -920,7 +918,11 @@ struct HubView: View {
     /// Everything not already on the page — a safety net so a future backend
     /// lane always renders somewhere instead of vanishing.
     private var overflow: [Signal] {
-        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak])
+        // .h2h is EXCLUDED from the Hub, not merely placed (founder, Aug 6:
+        // "the H2H parts here doesnt need to be on The Hub") — the team season
+        // series lives on the Picks page game view, where the ledger renders.
+        // Without this it would fall through to More Edges and reappear.
+        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h])
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
@@ -948,10 +950,7 @@ struct HubView: View {
             // Founder-picked shapes (Aug 6): H2H = the case card (mock H6),
             // NRFI = the story card (mock N10). WC still speaks the old
             // storyboard; every other beat keeps the flat feed.
-            if beat.anchor == "h2h" {
-                HubH2HSection(rows: rows) { s in openSignal(s) }
-                    .id(beat.anchor)
-            } else if beat.anchor == "nrfi" {
+            if beat.anchor == "nrfi" {
                 HubNrfiSection(rows: rows) { s in openSignal(s) }
                     .id(beat.anchor)
             } else if beat.anchor == "matchups" {
@@ -2695,129 +2694,6 @@ fileprivate struct HubDotsRow: View {
             }
         }
     }
-}
-
-// MARK: - The Head-to-Head (mock H6 "The Case" — founder pick, Aug 6)
-
-/// One editorial case per season-series edge: kicker row (lane + game),
-/// the headline in the display face, Gary's read, then a receipts strip of
-/// the numbers that back it — series record, last meeting. Replaces the MLB
-/// Matchups storyboard (founder: "we only need the head to head").
-fileprivate struct HubH2HSection: View {
-    let rows: [Signal]
-    let onTap: (Signal) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HubHead(title: "The Head-to-Head", count: rows.count)
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { i, s in
-                    Button { onTap(s) } label: { card(s) }.buttonStyle(.plain)
-                    if i < rows.count - 1 { HubRule(inset: 18) }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private func card(_ s: Signal) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                HubKicker(text: "Head-to-Head", size: 9.5, color: GaryColors.gold.opacity(0.9))
-                Spacer()
-                Text(s.game.uppercased())
-                    .font(HubFont.data(9.5, .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-            // THE LEDGER (mock H2, founder pick Aug 6): headline left, the
-            // season series big on the right, then every meeting as a row —
-            // date, the venue that night as away @ home, the score, and the
-            // W/L tick from the dominant side's view.
-            HStack(alignment: .top, spacing: 12) {
-                Text(s.headline)
-                    .font(HubFont.display(21))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
-                Text(seriesRecord(s))
-                    .font(HubFont.display(34))
-                    .foregroundStyle(HubPalette.green)
-                    .lineLimit(1).fixedSize()
-            }
-            .padding(.top, 7)
-
-            if let meetings = s.h2h?.meetings, !meetings.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(meetings.reversed().prefix(4).enumerated()), id: \.offset) { i, m in
-                        if i > 0 { HubRule(inset: 0).padding(.vertical, 1) }
-                        meetingRow(m)
-                    }
-                }
-                .padding(.top, 10)
-                HStack {
-                    Text("THIS SEASON'S MEETINGS")
-                        .font(HubFont.kicker(9)).tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.45))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.25))
-                }
-                .padding(.top, 9)
-            } else {
-                // No stored ledger (a row written before the meetings payload)
-                // — Gary's read carries the card rather than an empty table.
-                Text(s.detail)
-                    .font(HubFont.body(13.5))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-            }
-        }
-        .padding(.horizontal, 18).padding(.vertical, 12)
-        .contentShape(Rectangle())
-    }
-
-    /// "7–2" from the stored counts, falling back to the row's own value.
-    private func seriesRecord(_ s: Signal) -> String {
-        if let w = s.h2h?.wins, let l = s.h2h?.losses { return "\(w)–\(l)" }
-        return s.value
-    }
-
-    /// One ledger line: date · venue · score · the dominant side's W/L.
-    @ViewBuilder private func meetingRow(_ m: H2HMeeting) -> some View {
-        HStack(spacing: 10) {
-            Text(shortDate(m.date))
-                .font(HubFont.data(11, .medium))
-                .foregroundStyle(.white.opacity(0.5))
-                .frame(width: 46, alignment: .leading)
-            Text("\(m.away ?? "—") @ \(m.home ?? "—")")
-                .font(HubFont.data(12, .semibold))
-                .foregroundStyle(.white.opacity(0.88))
-                .lineLimit(1)
-            Spacer(minLength: 6)
-            Text("\(m.away_runs ?? 0)–\(m.home_runs ?? 0)")
-                .font(HubFont.data(12, .bold))
-                .foregroundStyle(.white.opacity(0.7))
-            Text(m.dom_won == true ? "W" : "L")
-                .font(HubFont.data(12, .bold))
-                .foregroundStyle(m.dom_won == true ? HubPalette.green : HubPalette.red)
-                .frame(width: 13, alignment: .trailing)
-        }
-        .padding(.vertical, 6)
-    }
-
-    /// "2026-07-21" → "Jul 21".
-    private func shortDate(_ iso: String?) -> String {
-        guard let iso, iso.count >= 10 else { return "—" }
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        guard let d = f.date(from: String(iso.prefix(10))) else { return "—" }
-        let out = DateFormatter(); out.dateFormat = "MMM d"
-        out.timeZone = TimeZone(identifier: "America/New_York")
-        return out.string(from: d)
-    }
-
 }
 
 // MARK: - The NRFI Watch (mock N10 story card — founder pick, Aug 6)
