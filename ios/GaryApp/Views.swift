@@ -20684,12 +20684,23 @@ struct PicksCarouselView: View {
         return base.filter { $0.league == lg }
     }
 
+    /// Fantasy-corner lanes never ride the Picks page (founder, Aug 6: "remove
+    /// the Cut List from the Picks page just keep it in the fantasy part").
+    /// These rows are roster advice, not a read on tonight's bet, and their
+    /// cards carry a tier word + stat strip the edge rows can't render — a
+    /// leaked one printed a wall of cut-or-keep prose under a game. Same set
+    /// the Hub's front page excludes; Fantasy remains their one home.
+    static let fantasyOnlyKinds: Set<SignalKind> = [
+        .fantasyPickups, .twoStart, .closerWatch, .returnWatch, .cutList,
+    ]
+
     private func loadConnections() async {
         let date = SupabaseAPI.todayEST()
         var out: [Signal] = []
         for lg in AppFlags.insightLeagues {
             if let conns = try? await SupabaseAPI.fetchInsightConnections(date: date, league: lg) {
-                out.append(contentsOf: conns.compactMap { $0.toSignal() })
+                out.append(contentsOf: conns.compactMap { $0.toSignal() }
+                    .filter { !Self.fantasyOnlyKinds.contains($0.kind) })
             }
         }
         await MainActor.run { connections = out; connLoaded = true }
