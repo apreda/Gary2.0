@@ -44,6 +44,29 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Native Google sign-in callback (REVERSED_CLIENT_ID from
+				     GoogleService-Info.plist). The SDK returns to the app on
+				     this scheme; GaryApp.onOpenURL hands it to GIDSignIn. -->
+				<string>com.googleusercontent.apps.163595982698-k9vmgqvtj716n55l1ppnomg2ttb85592</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Supabase web-OAuth fallback (AuthManager.oauthURL). -->
+				<string>com.gary.app</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
