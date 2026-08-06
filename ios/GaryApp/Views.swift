@@ -15838,6 +15838,21 @@ struct CompactPickRow: View {
                     .allowsHitTesting(false)
             }
 
+            // DARK LOSS carries the same fracture (founder, Aug 6: the Picks
+            // page should crack like Winners does) — but the card never dims
+            // here, so the crack is the whole story rather than a companion to
+            // a mute. Struck in ink with a loss-red kick, the dark-card
+            // inversion of the gold bar's light one.
+            if !premiumFinish, displayResult == "lost" {
+                CrackShape()
+                    .stroke(Color.black.opacity(0.75), lineWidth: 2)
+                    .allowsHitTesting(false)
+                CrackShape()
+                    .stroke(GaryColors.loss.opacity(0.38), lineWidth: 1)
+                    .offset(x: 2)
+                    .allowsHitTesting(false)
+            }
+
             // One-shot confetti for a fresh gold win (bar palette, self-clearing).
             if showConfetti { GoldConfettiBurst() }
         }
@@ -21600,11 +21615,12 @@ fileprivate struct ScoutArmsSection: View {
                 // "whatever two sentences Gary wants to say"); the assembled
                 // template line is the fallback when the board carries none.
                 if let take = d.armsTake {
-                    Text(take)
-                        .font(.system(size: 15))
-                        .foregroundStyle(ScoutMock.warm.opacity(0.92))
-                        .lineSpacing(4)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // Mock A1 minus the rail (founder pick, Aug 6): the take
+                    // opens on a Bebas drop cap in gold, so the block reads as
+                    // a written piece rather than a paragraph dropped on the
+                    // page. The cap is the paragraph's own first letter — no
+                    // added chrome, nothing to keep in sync with the words.
+                    ArmsDropCapText(take: take)
                 } else if let prose {
                     prose
                         .font(.system(size: 15).monospacedDigit())
@@ -21619,6 +21635,30 @@ fileprivate struct ScoutArmsSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
         }
+    }
+}
+
+/// Gary's arms paragraph with a display-face drop cap (mock A1, rail-free).
+/// SwiftUI has no drop-cap primitive, so the first character is peeled into
+/// its own Bebas glyph and the remaining text flows beside it: a fixed-width
+/// first block holds the cap, and the tail wraps under it at full width.
+fileprivate struct ArmsDropCapText: View {
+    let take: String
+
+    private var cap: String { String(take.prefix(1)) }
+    private var rest: String { String(take.dropFirst()) }
+
+    var body: some View {
+        // foregroundColor, not foregroundStyle — the Text + Text concatenation
+        // operator predates foregroundStyle's Text overload (iOS 17) and the
+        // app ships to 16.
+        Text(cap)
+            .font(GaryFonts.display(46))
+            .foregroundColor(GaryColors.gold)
+            .baselineOffset(-6)
+        + Text(rest)
+            .font(.system(size: 15))
+            .foregroundColor(ScoutMock.warm.opacity(0.92))
     }
 }
 
@@ -23418,12 +23458,25 @@ struct CompactPropRow: View {
                 // Skyscraper hero (game-card parity): one Text per line with tight
                 // leading; both prop lines run long and self-scale. Premium leading
                 // matches the gold bar's fixed −24 (leading does not scale with pf).
-                VStack(alignment: .leading, spacing: premiumFinish ? -24 : -18) {
+                // Each line gets an EXPLICIT box instead of a negative-leading
+                // stack (founder bug, Aug 6: "NATHANIEL LOWE" and "H+R+RBI
+                // OVER 1.5" collided on the silver card while the dark card
+                // read fine). A prop hero is two LONG lines — the player and
+                // the market — and on a won premium card the payout column
+                // narrows them further; natural line boxes plus -24 made the
+                // block taller than the card's hero band, so the layout
+                // compressed the stack and the lines touched. A fixed
+                // per-line height can't compress, so the pair holds its
+                // spacing at any scale. 0.86 reproduces the dark card's own
+                // effective line advance, which is the one the founder called
+                // correct.
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
                         Text(line)
                             .font(GaryFonts.display(propHeroSize * pf))
                             .lineLimit(1)
                             .minimumScaleFactor(0.4)
+                            .frame(height: propHeroSize * pf * 0.86, alignment: .leading)
                     }
                 }
                     .foregroundStyle(heroTint)
@@ -23546,6 +23599,18 @@ struct CompactPropRow: View {
                     .allowsHitTesting(false)
                 CrackShape()
                     .stroke(SilverBar.sheen.opacity(0.45), lineWidth: 1)
+                    .offset(x: 2)
+                    .allowsHitTesting(false)
+            }
+
+            // DARK LOSS cracks too (founder, Aug 6) — game-card parity, and no
+            // dim on the Picks page, so the fracture carries the verdict alone.
+            if !premiumFinish, resolvedResult == "lost" {
+                CrackShape()
+                    .stroke(Color.black.opacity(0.75), lineWidth: 2)
+                    .allowsHitTesting(false)
+                CrackShape()
+                    .stroke(GaryColors.loss.opacity(0.38), lineWidth: 1)
                     .offset(x: 2)
                     .allowsHitTesting(false)
             }
