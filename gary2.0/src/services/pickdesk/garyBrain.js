@@ -346,6 +346,15 @@ export async function analyzeGameDesk(game, options = {}) {
     ? `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${buildRunLineAsk(desk.boardTextRunLine)}`
     : `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${THE_READ_ASK}`;
 
+  // NO LINES, NO TICKET (Aug 6 night — the Padres degenerate pick: the BDL
+  // odds fetch came back empty, THE LINES said so, and the ticket turn
+  // faithfully produced "Padres moneyline — odds unavailable" @ 0.50, which
+  // the app then displayed verbatim). A board with no prices cannot seal a
+  // bet: contained no-pick, and the later tiers retry once the book posts.
+  if (!desk.runLineGame && desk.meta.moneylineHome == null && desk.meta.moneylineAway == null) {
+    return { error: 'no lines on the board — odds fetch empty; retry tier owns it' };
+  }
+
   const corpus = [{ content: desk.deskText }];
   const auditAll = (rationale) => {
     const a = auditPickRationale({ rationale }, corpus);
