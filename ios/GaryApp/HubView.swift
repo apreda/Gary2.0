@@ -1600,7 +1600,7 @@ fileprivate struct HubMasthead: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(searchOpen ? "Close search" : "Search")
                 }
-                .padding(.top, 12)
+                .padding(.top, 4)
                 .pageGutter()
             }
 

@@ -1829,7 +1829,6 @@ struct HomeView: View {
     /// Which time-state the home shows. Opens on Morning — the results-first view
     /// the user lands on — and stays wherever the switcher is set.
     @State private var selectedPhase: HomePhase = .morning
-    @Namespace private var phaseTabNS
     @State private var receiptLanes: [HomeReceiptsSection.LaneRecord] = []
     @State private var receiptsSub = "Yesterday's boards, graded"
     @State private var edgesPostedToday = 0
@@ -1911,7 +1910,7 @@ struct HomeView: View {
                     // user lands on) and stays on whichever state they pick.
                     // Pre-game and Live are one tap away on the switcher.
                     phaseSwitcher
-                        .padding(.top, 6)
+                        .padding(.top, 14)
 
                     // TODAY is one full merged page that evolves through the day —
                     // results-first in the morning, the slate + board + World Cup
@@ -3342,20 +3341,13 @@ struct HomeView: View {
             if reduceMotion { selectedPhase = target }
             else { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selectedPhase = target } }
         } label: {
-            VStack(spacing: 6) {
-                Text(label)
-                    .font(GaryFonts.mono(12.5, bold: on)).tracking(0.6)
-                    .foregroundStyle(on ? .white : .white.opacity(0.4))
-                ZStack {
-                    Capsule().fill(Color.clear).frame(height: 2)
-                    if on {
-                        Capsule().fill(GaryColors.gold).frame(height: 2)
-                            .matchedGeometryEffect(id: "phaseUnderline", in: phaseTabNS)
-                    }
-                }
-            }
-            .fixedSize()
-            .contentShape(Rectangle())
+            // Color IS the state (founder, Aug 6 night): the active day wears
+            // gold, the other waits dim — no underline hardware.
+            Text(label)
+                .font(GaryFonts.mono(12.5, bold: on)).tracking(0.6)
+                .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.4))
+                .fixedSize()
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -6851,18 +6843,15 @@ struct PremiumPicksView: View {
                         } else if !hasContent {
                             emptyState
                         } else {
-                            Section {
-                                // League jump bar retired (Jul 5 design review):
-                                // styled like the GAMES/PROPS tabs one line up, it
-                                // read as a second filter row and re-said what the
-                                // shelf headers already say. Deep links still
-                                // scroll via jumpToSport.
-                                modeContent
-                                    .padding(.top, 14)
-                                    .padding(.bottom, 120)
-                            } header: {
-                                toggleBar
-                            }
+                            // League jump bar retired (Jul 5 design review):
+                            // styled like the GAMES/PROPS tabs one line up, it
+                            // read as a second filter row and re-said what the
+                            // shelf headers already say. Deep links still
+                            // scroll via jumpToSport. (GAMES/PROPS now ride
+                            // the single header line above.)
+                            modeContent
+                                .padding(.top, 8)
+                                .padding(.bottom, 120)
                         }
                     }
                 }
@@ -6967,12 +6956,17 @@ struct PremiumPicksView: View {
 
     // MARK: - Header / states
 
-    // Masthead OFF (founder, Aug 6 night: headers off every page but Picks).
-    // The one functional piece — the day dropdown — survives as a slim
-    // right-aligned meta row; the shelves open the page.
+    // Masthead OFF (founder, Aug 6 night: headers off every page but Picks) —
+    // and ONE control line: GAMES/PROPS on the left, the day dropdown on the
+    // right, nothing stacked above or below. Lives outside the content
+    // Section so the day menu survives loading/coming-soon/empty states
+    // (it's the only way back off a past date).
     private var header: some View {
-        HStack {
-            Spacer()
+        HStack(spacing: 0) {
+            tabSegment("GAMES", count: gameCount, active: mode == .games) { mode = .games }
+            Spacer().frame(width: 28)
+            tabSegment("PROPS", count: propCount, active: mode == .props) { mode = .props }
+            Spacer(minLength: 12)
             Menu {
                 ForEach(0..<8, id: \.self) { offset in
                     Button(daySelectorLabel(offset)) {
@@ -6990,8 +6984,8 @@ struct PremiumPicksView: View {
             }
         }
         .pageGutter()
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
 
     /// Long-form date for the header dropdown trigger — "Thursday, June 18" today,
@@ -7143,19 +7137,7 @@ struct PremiumPicksView: View {
 
     // MARK: - Toggle bar (Terminal Tape) + mode content
 
-    private var toggleBar: some View {
-        HStack(spacing: 0) {
-            tabSegment("GAMES", count: gameCount, active: mode == .games) { mode = .games }
-            Spacer().frame(width: 28)
-            tabSegment("PROPS", count: propCount, active: mode == .props) { mode = .props }
-            Spacer(minLength: 0)
-        }
-        .pageGutter()
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        // No fill, no hairline — the underline marks the active tab and
-        // proximity does the separating (8 inside the nav group, 24+ after).
-    }
+    // (toggleBar folded into `header` Aug 6 night — one control line.)
 
     private func tabSegment(_ label: String, count: Int, active: Bool, action: @escaping () -> Void) -> some View {
         Button {
@@ -12477,15 +12459,14 @@ struct BillfoldView: View {
             leatherBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Pinned wallet header + index tabs; the paper statements scroll beneath.
-                headerBar
-
                 if AppFlags.userBookEnabled, billfoldScope == "you" {
-                    // YOUR book takes the whole page below the header —
-                    // Gary's tabs/timeframes are his-book controls only.
+                    // YOUR book takes the whole page — Gary's tabs/timeframes
+                    // are his-book controls only, so the GARY/YOU switch rides
+                    // its own slim line here (the only way back to his book).
+                    headerBar
                     ScrollView(showsIndicators: false) {
                         UserBookSection(expanded: true)
-                            .padding(.top, 14)
+                            .padding(.top, 6)
                             .padding(.bottom, 120)
                     }
                 } else {
@@ -12663,7 +12644,7 @@ struct BillfoldView: View {
                 bookScopeToggle
             }
             .pageGutter()
-            .padding(.top, 12)
+            .padding(.top, 4)
             .padding(.bottom, 2)
         }
     }
@@ -12748,8 +12729,15 @@ struct BillfoldView: View {
                     passbookChip(timeframe.uppercased())
                 }
             }
+
+            // GARY/YOU rides the same line (founder, Aug 6 night: one control
+            // line per page, nothing stacked).
+            if AppFlags.userBookEnabled {
+                bookScopeToggle
+            }
         }
         .padding(.horizontal, 18)
+        .padding(.top, 4)
     }
 
     private func passbookChip(_ label: String) -> some View {
