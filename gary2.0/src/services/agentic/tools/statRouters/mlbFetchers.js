@@ -928,7 +928,7 @@ export const mlbFetchers = {
     const hasBdlInjuries = options?.game?.injuries && options.game.injuries.length > 50;
     if (hasBdlInjuries) {
       return {
-        homeValue: 'See scout report INJURIES section (BDL structured data with NEW/KNOWN labels)',
+        homeValue: 'See scout report INJURIES section (BDL structured data with FRESH/ESTABLISHED routing labels)',
         awayValue: '',
         comparison: `Structured injury data already in scout report for ${awayTeam} @ ${homeTeam}`,
         source: 'BDL (via scout report)',

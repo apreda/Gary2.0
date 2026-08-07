@@ -3,7 +3,7 @@
  *
  * Uses BDL (GOAT tier) for structured data:
  * - Standings (W-L, home/away, L10, streak, GB, division)
- * - Injuries (with NEW/KNOWN/SP-SCRATCH labels)
+ * - Injuries (with FRESH/ESTABLISHED/SP-SCRATCH routing labels)
  * Uses MLB Stats API (free, no key) for:
  * - Rosters, recent games, probable pitchers, player career stats
  * - Lineup fallback when BDL's lineup feed gaps a team (boxscore is authoritative)
@@ -35,6 +35,14 @@ import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareer
 import { foldName } from '../../../../utils/nameUtils.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
+import {
+  completedMlbTeamGames,
+  resolveMlbGamesMissed,
+  isMeaningfulMlbAbsence,
+  classifyMlbInjuryContext,
+  mlbGamesMissedLabel,
+  isMlbPitcherPosition,
+} from './mlbInjuryContext.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -186,6 +194,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     // separate from same-day hard news. Facts and reported narratives only.
     openaiWebSearch(
       `MLB: what are the current storylines around the ${awayTeam} and the ${homeTeam} heading into today's ${awayTeam} at ${homeTeam} game — team momentum narratives as reported, manager or clubhouse news, notable player storylines, post-game comments from managers or players after each team's last game, tonight's scheduled starting pitchers' situations (role changes such as a converted reliever or an opener/bullpen game, innings or pitch limits, rehab returns, rotation shuffles), and trade-deadline rumors involving either team's players as reported, and how each team's last week has actually gone as reported — the shape of any current streak or skid and what has driven it. ` +
+      `Do not re-list a player's static, ongoing injured-list absence as a current storyline. Include injury context here only when there is a new status change, scratch, activation/return, rehab-role development, or other concrete new development today; the structured injury section owns absence freshness. ` +
       `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
       { maxTokens: 2200 }
     ).then(r => r?.data || '').catch(() => ''),
@@ -916,64 +925,6 @@ export async function buildMlbScoutReport(game, options = {}) {
   // is covered by the run-shape lines and TEAM SEASON STATS' season R/G.)
 
   // ═══════════════════════════════════════════════════════════════════
-  // WITHOUT KEY PLAYERS (Jul 26 2026) — team record in games each currently
-  // injured position player has missed this season. Facts only.
-  // ═══════════════════════════════════════════════════════════════════
-  let withoutPlayersSection = '';
-  try {
-    const seasonYear = new Date().getFullYear();
-    const teamGamesByDate = (teamBdlId) => {
-      const rows = new Map();
-      for (const [, g] of (seasonIndex?.entries?.() ? seasonIndex.entries() : [])) {
-        if (g.homeId !== teamBdlId && g.awayId !== teamBdlId) continue;
-        if (!/final/i.test(String(g.status || ''))) continue;
-        if (g.seasonType === 'spring_training') continue; // regular season only
-        if (g.homeRuns == null || g.awayRuns == null) continue;
-        const isHome = g.homeId === teamBdlId;
-        rows.set(toEtDate(g.date), (isHome ? g.homeRuns > g.awayRuns : g.awayRuns > g.homeRuns));
-      }
-      return rows;
-    };
-    const sideDefs = [
-      { name: homeTeam, bdlId: homeTeamBdlId },
-      { name: awayTeam, bdlId: awayTeamBdlId },
-    ];
-    const lines = [];
-    for (const side of sideDefs) {
-      if (!side.bdlId) continue;
-      const games = teamGamesByDate(side.bdlId);
-      if (games.size < 20) continue;
-      const lw = side.name.toLowerCase().split(' ').pop();
-      const teamInjuries = (bdlInjuries || []).filter(r => {
-        const tn = (r.player?.team?.display_name || r.team?.display_name || r.team_name || '').toLowerCase();
-        return tn.includes(lw);
-      });
-      const positionPlayers = teamInjuries.filter(r => {
-        const pos = (r.player?.position || r.position || '').toUpperCase();
-        return pos && !pos.includes('P');
-      }).slice(0, 3);
-      for (const inj of positionPlayers) {
-        const pid = inj.player?.id;
-        const pname = [inj.player?.first_name, inj.player?.last_name].filter(Boolean).join(' ');
-        if (!pid || !pname) continue;
-        try {
-          const logs = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, seasonYear);
-          const playedDates = new Set((logs || []).map(l => toEtDate(l._game?.date || l.game?.date || l.date)).filter(Boolean));
-          let wW = 0, wL = 0, woW = 0, woL = 0;
-          for (const [d, won] of games.entries()) {
-            if (playedDates.has(d)) { won ? wW++ : wL++; } else { won ? woW++ : woL++; }
-          }
-          // Only meaningful when he has actually played AND missed real time.
-          if (woW + woL >= 3 && wW + wL >= 3) {
-            lines.push(`${side.name} without ${pname}: ${woW}-${woL} | with: ${wW}-${wL}`);
-          }
-        } catch { /* one player's logs missing — skip him */ }
-      }
-    }
-    withoutPlayersSection = lines.join('\n');
-  } catch { withoutPlayersSection = ''; }
-
-  // ═══════════════════════════════════════════════════════════════════
   // RECENT RESULTS (last 10 games for each team — individual game scores)
   // ═══════════════════════════════════════════════════════════════════
   let recentResults = 'No recent games available.';
@@ -1276,115 +1227,6 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // INJURIES (BDL structured data with freshness labels)
-  //
-  // Jul 29 2026 (founder): the NEW/KNOWN clock is GAMES-BASED — days since
-  // the player last actually appeared in a box score — never the report
-  // date. BDL refreshes an injury record every time a beat writer posts a
-  // rehab update, so a weeks-old absence kept resurfacing as "[NEW] — 0d
-  // ago" ("may not be in the line yet") and steered picks off injuries the
-  // market priced long ago (Rutschman/Basallo on the Jul 29 Tigers desk).
-  // Same concept as the NBA duration labels (daysSinceOut): the market
-  // watches games, so freshness is measured in games the team has already
-  // played without him. Pitchers rest 4-5 days between starts by design, so
-  // their clock stays report-based UNLESS they haven't appeared in 10+ days
-  // (long-known absence). SP SCRATCH stays report-based — a scratch IS news.
-  // ═══════════════════════════════════════════════════════════════════
-  let injuriesSection = '';
-  if (bdlInjuries && bdlInjuries.length > 0) {
-    const now = new Date();
-    const homeInjuries = [];
-    const awayInjuries = [];
-
-    // One cached game-log fetch per injured player: when did he LAST PLAY?
-    // Map value: Date of last appearance, null = no appearance this season,
-    // absent from map = fetch failed (fall back to the report-date clock).
-    const seasonYear = now.getFullYear();
-    const lastPlayedById = new Map();
-    await Promise.all(
-      [...new Set(bdlInjuries.map((i) => i.player?.id).filter((x) => x != null))].map(async (pid) => {
-        try {
-          const rows = await ballDontLieService.getMlbPlayerGameRowsChrono(pid, seasonYear);
-          const played = (Array.isArray(rows) ? rows : []).filter(
-            (r) => r?.at_bats != null || (r?.ip != null && parseFloat(r.ip) > 0),
-          );
-          const last = played.length ? played[played.length - 1] : null;
-          const d = last?._game?.date ? new Date(String(last._game.date).slice(0, 10)) : null;
-          lastPlayedById.set(pid, d && !Number.isNaN(d.getTime()) ? d : null);
-        } catch { /* per-player fallback to report-date clock */ }
-      }),
-    );
-
-    for (const inj of bdlInjuries) {
-      const playerName = inj.player?.full_name || `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
-      const position = inj.player?.position || '—';
-      const injuryType = inj.type || inj.detail || 'Unknown';
-      const side = inj.side ? ` (${inj.side})` : '';
-      const status = inj.status || 'Unknown';
-      const comment = inj.short_comment || inj.long_comment || '';
-
-      const reportDate = inj.date ? new Date(inj.date) : null;
-      const daysSinceReport = reportDate ? Math.floor((now - reportDate) / (1000 * 60 * 60 * 24)) : null;
-      const isPitcher = (position || '').toLowerCase().includes('pitcher') || (position || '').toLowerCase() === 'p';
-
-      const hasLog = lastPlayedById.has(inj.player?.id);
-      const lastPlayed = hasLog ? lastPlayedById.get(inj.player?.id) : undefined;
-      const daysOut = lastPlayed ? Math.floor((now - lastPlayed) / (1000 * 60 * 60 * 24)) : null;
-
-      // The games-based clock. Hitters: NEW only while the absence itself is
-      // days old. Pitchers: report clock unless the log shows a long absence.
-      let label = 'KNOWN';
-      if (hasLog && lastPlayed === null) {
-        label = 'KNOWN'; // no appearance all season — as priced-in as it gets
-      } else if (hasLog && !isPitcher) {
-        label = daysOut <= 3 ? 'NEW' : 'KNOWN';
-      } else if (hasLog && isPitcher) {
-        label = daysOut > 10 ? 'KNOWN' : (daysSinceReport !== null && daysSinceReport <= 3 ? 'NEW' : 'KNOWN');
-      } else if (daysSinceReport !== null) {
-        label = daysSinceReport <= 3 ? 'NEW' : 'KNOWN'; // no log available — old behavior
-      }
-
-      // SP SCRATCH detection — pitcher position + very recent + "scratched" or "out" status
-      const isScratched = (status || '').toLowerCase().includes('scratch') ||
-                          ((status || '').toLowerCase().includes('out') && isPitcher && daysSinceReport !== null && daysSinceReport <= 1);
-      if (isPitcher && isScratched) {
-        label = 'SP SCRATCH';
-      }
-
-      const fmtD = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const dateBits = [];
-      if (lastPlayed) dateBits.push(`last played ${fmtD(lastPlayed)} — ${daysOut}d out`);
-      else if (hasLog && lastPlayed === null) dateBits.push('no appearances this season');
-      if (reportDate) dateBits.push(`update ${fmtD(reportDate)}`);
-      const formatted = `[${label}] ${playerName} (${position}) — ${injuryType}${side}: ${comment || status}${dateBits.length ? ` (${dateBits.join('; ')})` : ''}`;
-
-      // Assign to home or away based on player team
-      const playerTeamId = inj.player?.team?.id || inj.team?.id;
-      if (playerTeamId === homeTeamBdlId) {
-        homeInjuries.push(formatted);
-      } else if (playerTeamId === awayTeamBdlId) {
-        awayInjuries.push(formatted);
-      } else {
-        // Fallback: try matching team name
-        const playerTeamName = (inj.player?.team?.display_name || inj.player?.team?.full_name || '').toLowerCase();
-        if (playerTeamName.includes(homeTeam.toLowerCase().split(' ').pop())) {
-          homeInjuries.push(formatted);
-        } else {
-          awayInjuries.push(formatted);
-        }
-      }
-    }
-
-    const parts = [];
-    if (homeInjuries.length > 0) parts.push(`${homeTeam}:\n${homeInjuries.map(i => `  ${i}`).join('\n')}`);
-    if (awayInjuries.length > 0) parts.push(`${awayTeam}:\n${awayInjuries.map(i => `  ${i}`).join('\n')}`);
-    if (parts.length > 0) {
-      injuriesSection = parts.join('\n\n');
-      console.log(`[Scout Report] MLB BDL injuries: ${homeInjuries.length} ${homeTeam}, ${awayInjuries.length} ${awayTeam}`);
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
   // CONFIRMED LINEUPS — BDL first; the official MLB Stats API boxscore
   // fills whichever side BDL leaves short (BDL's feed can gap a whole
   // team: 2026-06-10 it returned 0 batters while statsapi had 9/9).
@@ -1446,6 +1288,183 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (!homeHasPitcher) missing.push(`${homeTeam} starting pitcher`);
     if (!awayHasPitcher) missing.push(`${awayTeam} starting pitcher`);
     throw new Error(`[Scout Report] HARD FAIL — MLB requires lineups + starting pitchers for ${awayTeam} @ ${homeTeam} (checked BDL + MLB Stats API). Missing: ${missing.join(', ')}. Run picks closer to game time (per BDL docs, lineups typically appear 1-2 hours before first pitch — the T-90 tier can race the posting; later tiers pick it up).`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // INJURIES — TEAM GAMES MISSED IS A ROUTING CLOCK, NOT A CAUSAL MODEL.
+  //
+  // 0-2 completed team games: show as a fresh roster change.
+  // 3-9: show only a mechanical regular/meaningful-role filter, neutrally.
+  // 10+: keep off the nightly desk; confirmed lineups and current team form
+  // already describe the roster Gary is evaluating. No "with/without" record
+  // is calculated, so later team results are never attributed to one injury.
+  // This one shared path handles both teams and every injured player.
+  // ═══════════════════════════════════════════════════════════════════
+  let injuriesSection = '';
+  if (Array.isArray(bdlInjuries) && bdlInjuries.length > 0) {
+    const sameId = (a, b) => a != null && b != null && String(a) === String(b);
+    const playerNameOf = (injury) => injury?.player?.full_name
+      || [injury?.player?.first_name, injury?.player?.last_name].filter(Boolean).join(' ')
+      || 'Unknown player';
+    const injuryTeamName = (injury) => injury?.player?.team?.display_name
+      || injury?.player?.team?.full_name
+      || injury?.team?.display_name
+      || injury?.team?.full_name
+      || injury?.team_name
+      || '';
+    const sideFor = (injury) => {
+      const teamId = injury?.player?.team?.id ?? injury?.team?.id ?? injury?.team_id;
+      if (sameId(teamId, homeTeamBdlId)) return 'home';
+      if (sameId(teamId, awayTeamBdlId)) return 'away';
+      const teamName = injuryTeamName(injury).toLowerCase();
+      if (teamName.includes(lastWord(homeTeam))) return 'home';
+      if (teamName.includes(lastWord(awayTeam))) return 'away';
+      return null;
+    };
+    const formatMlbDate = (value) => {
+      const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return null;
+      const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+    };
+
+    const sides = {
+      home: {
+        teamName: homeTeam,
+        teamGames: completedMlbTeamGames(seasonIndex, homeTeamBdlId),
+        seasonStats: homePlayerSeasonStats,
+        lines: [],
+      },
+      away: {
+        teamName: awayTeam,
+        teamGames: completedMlbTeamGames(seasonIndex, awayTeamBdlId),
+        seasonStats: awayPlayerSeasonStats,
+        lines: [],
+      },
+    };
+
+    // A structured injury row can lag an activation. The confirmed lineup is
+    // authoritative for tonight, so a player actually starting is not "out."
+    const lineupNames = new Set([
+      ...(homeData?.batters || []).map((b) => b.name),
+      homeData?.pitcher?.name,
+      ...(awayData?.batters || []).map((b) => b.name),
+      awayData?.pitcher?.name,
+    ].filter(Boolean).map(foldName));
+
+    const relevantInjuries = bdlInjuries.filter((injury) => {
+      const side = sideFor(injury);
+      return side && injury?.player?.id != null && !lineupNames.has(foldName(playerNameOf(injury)));
+    });
+    const statsByPlayerId = new Map(
+      [...homePlayerSeasonStats, ...awayPlayerSeasonStats]
+        .filter((row) => row?.player?.id != null)
+        .map((row) => [String(row.player.id), row]),
+    );
+
+    // One cached log lookup per relevant injured player. Exact game-id matching
+    // makes doubleheaders safe. If logs come back empty for someone whose
+    // season stats prove he played, leave the clock unresolved instead of
+    // falsely treating a feed failure as "out all season."
+    const lastAppearanceById = new Map();
+    await Promise.all(
+      [...new Set(relevantInjuries.map((injury) => injury.player.id))].map(async (playerId) => {
+        try {
+          const rows = await ballDontLieService.getMlbPlayerGameRowsChrono(playerId, season);
+          const played = (Array.isArray(rows) ? rows : []).filter(
+            (row) => row?.at_bats != null || row?.plate_appearances != null
+              || (row?.ip != null && parseFloat(row.ip) > 0),
+          );
+          const last = played.length ? played[played.length - 1] : null;
+          if (!last) {
+            const seasonRow = statsByPlayerId.get(String(playerId));
+            const knownGames = Number(
+              seasonRow?.batting_gp ?? seasonRow?.pitching_gp
+              ?? seasonRow?.games_played ?? seasonRow?.gp ?? 0,
+            );
+            if (knownGames > 0) return;
+          }
+          lastAppearanceById.set(playerId, last ? {
+            gameId: last.game_id,
+            date: last._game?.date || last.game?.date || last.date,
+          } : null);
+        } catch (error) {
+          console.warn(`[Scout Report] MLB injury clock unavailable for player ${playerId}: ${error.message}`);
+        }
+      }),
+    );
+
+    const routedCounts = { FRESH: 0, ESTABLISHED: 0, 'SP SCRATCH': 0, omitted: 0, unresolved: 0 };
+    for (const injury of relevantInjuries) {
+      const sideKey = sideFor(injury);
+      const side = sides[sideKey];
+      if (!side) continue;
+
+      const playerId = injury.player.id;
+      const playerName = playerNameOf(injury);
+      const position = injury.player?.position || injury.position || '—';
+      const injuryType = injury.type || injury.detail || 'Unknown';
+      const injurySide = injury.side ? ` (${injury.side})` : '';
+      const status = injury.status || 'Unknown';
+      const comment = injury.short_comment || injury.long_comment || '';
+      const isPitcher = isMlbPitcherPosition(position);
+      const scratchText = [status, injuryType, comment].filter(Boolean).join(' ').toLowerCase();
+      const isScratch = /\bscratch(?:ed)?\b/.test(scratchText);
+      const lastAppearance = lastAppearanceById.has(playerId)
+        ? lastAppearanceById.get(playerId)
+        : undefined;
+      // An empty completed-game list may mean Opening Day, but it may also mean
+      // the season-index request failed. Do not call every absence "fresh" in
+      // either case; only an explicit SP scratch can bypass an unresolved clock.
+      const { gamesMissed, isMinimum } = side.teamGames.length > 0
+        ? resolveMlbGamesMissed(side.teamGames, lastAppearance)
+        : { gamesMissed: null, isMinimum: false };
+      const isMeaningful = isMeaningfulMlbAbsence(
+        injury,
+        side.seasonStats,
+        side.teamGames.length,
+      );
+      const route = classifyMlbInjuryContext({
+        gamesMissed,
+        gamesMissedIsMinimum: isMinimum,
+        isPitcher,
+        isScratch,
+        isMeaningful,
+      });
+
+      if (!route.include) {
+        routedCounts.omitted += 1;
+        if (route.reason === 'missing_game_clock') routedCounts.unresolved += 1;
+        continue;
+      }
+      routedCounts[route.tag] += 1;
+
+      const dateBits = [];
+      const lastPlayedLabel = formatMlbDate(lastAppearance?.date);
+      const updateLabel = formatMlbDate(injury.date);
+      if (lastPlayedLabel) dateBits.push(`last played ${lastPlayedLabel}`);
+      else if (lastAppearance === null) dateBits.push('no appearances this season');
+      if (updateLabel) dateBits.push(`update ${updateLabel}`);
+      const clock = route.tag === 'SP SCRATCH'
+        ? ''
+        : ` — ${mlbGamesMissedLabel(gamesMissed, isMinimum)}`;
+      side.lines.push(
+        `[${route.tag}${clock}] ${playerName} (${position}) — ${injuryType}${injurySide}: ${comment || status}`
+        + (dateBits.length ? ` (${dateBits.join('; ')})` : ''),
+      );
+    }
+
+    const parts = Object.values(sides)
+      .filter((side) => side.lines.length > 0)
+      .map((side) => `${side.teamName}:\n${side.lines.map((line) => `  ${line}`).join('\n')}`);
+    injuriesSection = parts.join('\n\n')
+      || 'No fresh or lineup-relevant absences. Long-term and depth IL entries are represented by tonight\'s confirmed lineups and current team baselines.';
+    console.log(
+      `[Scout Report] MLB injury routing: fresh=${routedCounts.FRESH}, established=${routedCounts.ESTABLISHED}, `
+      + `scratches=${routedCounts['SP SCRATCH']}, omitted=${routedCounts.omitted}, unresolved=${routedCounts.unresolved}`,
+    );
+  } else {
+    injuriesSection = 'No current structured injuries reported.';
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1791,8 +1810,6 @@ ${lastGameSection}
 
 ═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══
 ${wireSection}
-
-${withoutPlayersSection ? `\n═══ WITHOUT KEY PLAYERS (this season) ═══\n${withoutPlayersSection}\n` : ''}
 
 ${situationFlagsSection ? `═══ SITUATION FLAGS ═══\n${situationFlagsSection}\n\n` : ''}═══ ROSTER MOVES — LAST 14 DAYS ═══
 ${rosterMovesSection}

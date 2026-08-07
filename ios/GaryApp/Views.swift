@@ -19885,6 +19885,22 @@ func liveGradeGamePick(pickText: String, betType: String = "", awayPicked: Bool,
 
 enum PicksDay { case today, yesterday }
 
+/// The single showcase card at the top of the Picks landing page is a
+/// published pick, not a live leaderboard. Once a current-day game or prop is
+/// shown for a league, persist the full payload so later pick drops (or a
+/// backend refresh with different ordering/confidence) cannot replace it.
+/// The date is SupabaseAPI.todayEST(), so the lock naturally turns over with
+/// the rest of the board at 6 a.m. ET.
+private struct PicksShowcaseLock: Codable {
+    enum Kind: String, Codable { case game, prop }
+
+    let slateDate: String
+    let league: String
+    let kind: Kind
+    let gamePick: GaryPick?
+    let propPick: PropPick?
+}
+
 struct PicksCarouselView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = PropsSlateStore()
@@ -19915,6 +19931,11 @@ struct PicksCarouselView: View {
     /// each strip block's O/U.
     @State private var record7: (w: Int, l: Int)? = nil
     @State private var stripBoard: TomorrowBoard? = nil
+    /// Day + league scoped snapshot of the ONE pick shown on the landing page.
+    /// Keeping the payload (rather than only its id) also protects the published
+    /// wording and number if the upstream row is later regenerated.
+    @State private var showcaseLock: PicksShowcaseLock? = nil
+    private static let showcaseLockPrefix = "gary.picks.showcase.v1."
 
     /// Every league with content: today's props/picks plus the per-sport
     /// yesterday recaps (a sport with no picks today shows its results —
@@ -20186,6 +20207,100 @@ struct PicksCarouselView: View {
         guard let p = filtered.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first else { return nil }
         return (p, pickDay == .yesterday)
     }
+
+    /// Current-day candidates used only when establishing the immutable landing
+    /// card. Yesterday fallback cards are deliberately not locked: a real pick
+    /// for the new board must still be able to replace that recap once it drops.
+    private var freshShowcaseGame: GaryPick? {
+        let rows = sport == "ALL"
+            ? store.gamePicks
+            : store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
+        return rows.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
+    }
+    private var freshShowcaseProp: PropPick? {
+        filteredTodayProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
+    }
+
+    /// Only a lock for the currently visible slate day + league may render.
+    private var activeShowcaseLock: PicksShowcaseLock? {
+        guard let lock = showcaseLock,
+              lock.slateDate == SupabaseAPI.todayEST(),
+              lock.league == sport else { return nil }
+        return lock
+    }
+
+    /// Feed the landing page exactly one side of its game-vs-prop chooser once
+    /// locked, making later arrivals unable to win a new confidence comparison.
+    private var landingTopProps: [PropPick] {
+        guard pickDay == .today, let lock = activeShowcaseLock else { return topProps }
+        return lock.kind == .prop ? lock.propPick.map { [$0] } ?? [] : []
+    }
+    private var landingTopGamePick: (pick: GaryPick, isYesterday: Bool)? {
+        guard pickDay == .today, let lock = activeShowcaseLock else { return topGamePick }
+        guard lock.kind == .game, let pick = lock.gamePick else { return nil }
+        return (pick, false)
+    }
+
+    private static func showcaseStorageKey(date: String, league: String) -> String {
+        "\(showcaseLockPrefix)\(date).\(league.uppercased())"
+    }
+
+    /// Restore the league's published card, or freeze the best current-day
+    /// candidate the first time one exists. New games/props can continue loading;
+    /// they simply cannot displace the card users already saw.
+    private func lockShowcaseIfNeeded() {
+        guard pickDay == .today,
+              AppFlags.picksAllTab || sport != "ALL" else { return }
+
+        let date = SupabaseAPI.todayEST()
+        if let lock = activeShowcaseLock,
+           lock.slateDate == date,
+           lock.league == sport { return }
+
+        let defaults = UserDefaults.standard
+        let key = Self.showcaseStorageKey(date: date, league: sport)
+        if let data = defaults.data(forKey: key),
+           let restored = try? JSONDecoder().decode(PicksShowcaseLock.self, from: data),
+           restored.slateDate == date,
+           restored.league == sport,
+           (restored.gamePick != nil || restored.propPick != nil) {
+            showcaseLock = restored
+            return
+        }
+
+        showcaseLock = nil
+        let game = freshShowcaseGame
+        let prop = freshShowcaseProp
+        let lock: PicksShowcaseLock?
+        if let game, let prop {
+            if (game.confidence ?? 0) >= (prop.confidence ?? 0) {
+                lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .game,
+                                         gamePick: game, propPick: nil)
+            } else {
+                lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .prop,
+                                         gamePick: nil, propPick: prop)
+            }
+        } else if let game {
+            lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .game,
+                                     gamePick: game, propPick: nil)
+        } else if let prop {
+            lock = PicksShowcaseLock(slateDate: date, league: sport, kind: .prop,
+                                     gamePick: nil, propPick: prop)
+        } else {
+            lock = nil
+        }
+
+        guard let lock, let data = try? JSONEncoder().encode(lock) else { return }
+        defaults.set(data, forKey: key)
+        // One small snapshot per active league is enough. Remove prior board
+        // dates so UserDefaults never grows with a season of full pick payloads.
+        let keepPrefix = "\(Self.showcaseLockPrefix)\(date)."
+        for oldKey in defaults.dictionaryRepresentation().keys
+            where oldKey.hasPrefix(Self.showcaseLockPrefix) && !oldKey.hasPrefix(keepPrefix) {
+            defaults.removeObject(forKey: oldKey)
+        }
+        showcaseLock = lock
+    }
     private var hasContent: Bool { !topProps.isEmpty || topGamePick != nil || !games.isEmpty }
 
     var body: some View {
@@ -20202,6 +20317,7 @@ struct PicksCarouselView: View {
             await store.loadIfNeeded()
             rebuildMemo()          // build the memo before consumeFocus reads `games`
             snapSportIfAllHidden()
+            lockShowcaseIfNeeded()
             consumeFocus()
             if !connLoaded { await loadConnections() }
             rebuildMemo()          // fold the just-loaded connections into the edge index
@@ -20219,13 +20335,13 @@ struct PicksCarouselView: View {
             // its own snapshot that could disagree with the cards.
             LiveScoreCache.shared.startIfNeeded()
         }
-        .onChange(of: sport) { _ in page = 0; rebuildMemo() }
-        .onChange(of: pickDay) { _ in rebuildMemo() }
+        .onChange(of: sport) { _ in page = 0; rebuildMemo(); lockShowcaseIfNeeded() }
+        .onChange(of: pickDay) { _ in rebuildMemo(); lockShowcaseIfNeeded() }
         .onChange(of: connLoaded) { _ in rebuildMemo() }
         // The store's picks/props/slate settle asynchronously after each load — a
         // count signature fires rebuildMemo() once they land (and after a refresh),
         // so the memo tracks the data without recomputing on every live-score tick.
-        .onChange(of: dataSignature) { _ in rebuildMemo(); snapSportIfAllHidden() }
+        .onChange(of: dataSignature) { _ in rebuildMemo(); snapSportIfAllHidden(); lockShowcaseIfNeeded() }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
         .onChange(of: store.loading) { loading in if !loading { consumeFocus() } }
         .onChange(of: scenePhase) { phase in
@@ -20299,7 +20415,7 @@ struct PicksCarouselView: View {
         VStack(spacing: 0) {
             TabView(selection: $page) {
                 ScrollView(showsIndicators: false) {
-                    PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
+                    PicksTodayPage(topProps: landingTopProps, topGamePick: landingTopGamePick,
                                    gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
                                    edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)

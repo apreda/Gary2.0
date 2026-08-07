@@ -31,7 +31,7 @@ const SLATE_SUPABASE_KEY =
 const TRADE_DEADLINE = '2026-07-31'; // MLB calendar fact; update each season
 // (Bet-mechanics legend deleted Jul 26 2026 — founder razor: never explain a
 // run line to a frontier model. The board rows carry the offered bets.)
-const INJURY_LEGEND = `Tags: [NEW] = the absence itself is days old — he played within the last 3 days (may not be in the line yet). [KNOWN] = this team has already been playing without him; the line and recent results reflect it. [SP SCRATCH] = scheduled starter replaced.`;
+const INJURY_LEGEND = `Tags: [FRESH — 0-2 team games missed] = a current roster change. [ESTABLISHED — 3-9 team games missed] = a meaningful regular still out; evaluate today's actual lineup and current team baselines. [SP SCRATCH] = a scheduled starter replaced. Long-term and depth IL entries stay off the nightly desk.`;
 const NEWS_HEADER = `═══ TODAY'S BREAKING NEWS ═══`;
 const INJURIES_HEADER = `═══ INJURIES (BDL Structured) ═══`;
 
@@ -399,7 +399,6 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ TEAM DEFENSE ═══',
     '═══ RECENT FORM ═══',
     '═══ SERIES STATE ═══',
-    '═══ WITHOUT KEY PLAYERS (this season) ═══',
     '═══ ROSTER MOVES — LAST 14 DAYS ═══',
     '═══ SCHEDULE SHAPE ═══',
   ];

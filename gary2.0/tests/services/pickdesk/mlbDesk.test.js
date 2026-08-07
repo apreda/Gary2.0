@@ -115,7 +115,7 @@ describe('buildMlbDesk', () => {
   it('inserts the injury tag legend under the injuries header', async () => {
     const { deskText } = await buildMlbDesk(game);
     const header = deskText.indexOf('═══ INJURIES (BDL Structured) ═══');
-    const legend = deskText.indexOf('Tags: [NEW]');
+    const legend = deskText.indexOf('Tags: [FRESH');
     const body = deskText.indexOf('injuries here');
     expect(legend).toBeGreaterThan(header);
     expect(legend).toBeLessThan(body);
