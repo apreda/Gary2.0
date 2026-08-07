@@ -22,7 +22,11 @@ import { attachLaneReads } from '../laneReads.js';
 const MIN_GAMES = 4;        // a real H2H sample (division rivals have plenty by June)
 const MEETINGS_KEPT = 8;      // meetings stored on the row for the card's ledger
 const SURFACE_DIFF = 3;     // |wins - losses| over the series to be an angle
-const MAX_ROWS = 8;         // slate-wide cap, most-lopsided first
+// One row per GAME now, not a slate-wide feed item (founder, Aug 6: the
+// series renders only under its own matchup), so the cap just has to clear a
+// full slate — an 8-row cap silently dropped qualifying games like PIT @ MIL,
+// which then kept the old prose format because it had no meetings ledger.
+const MAX_ROWS = 20;
 const RELEVANCE_SCALE = 13;
 
 const isFinal = (g) => String(g?.status || '').toUpperCase().includes('FINAL');
@@ -47,7 +51,12 @@ export async function computeHeadToHead(ctx) {
   let examined = 0;
 
   for (const game of games) {
-    if (isFinal(game)) continue;
+    // Finals are NOT skipped (founder, Aug 6: a finished game's card was
+    // still drawing the old prose format because its row could never be
+    // recomputed, so the meetings ledger had nothing to backfill from). A
+    // season series is history either way, and this lane now renders only on
+    // the game's own page — where a finished game showing its series reads
+    // correctly rather than as dead "tonight" content.
     const gameId = game?.id;
     const home = { id: game?.home_team?.id, abbr: game?.home_team?.abbreviation, name: game?.home_team?.name };
     const away = { id: game?.away_team?.id, abbr: game?.away_team?.abbreviation, name: game?.away_team?.name };
