@@ -16003,6 +16003,9 @@ struct FlippablePickCard: View {
             hasEverFlipped = true; flipped.toggle()
             // A caller that pinned backHeight wants the full-page read open.
             if flipped && backHeight != nil { backGrown = true }
+            // Closing the card resets the growth — the next flip starts
+            // compact again; expanding is always a click, never inherited.
+            if !flipped { backGrown = false }
         }
         .onGaryTour { verb, _ in
             if verb == "flip" { hasEverFlipped = true; flipped.toggle() }
@@ -17248,6 +17251,18 @@ struct PickCardBack: View {
                     .trimmingCharacters(in: CharacterSet(charactersIn: ":").union(.whitespacesAndNewlines))
                 break
             }
+            // The plain translator sometimes leads with a bare logistics
+            // line ("Marlins at Braves, 7:15 in Atlanta") — scene data the
+            // dossier strip and the card front already carry. Drop ONLY that
+            // leading pattern; the stored text is untouched (Aug 6 night).
+            if let dot = t.firstIndex(of: "."), t.distance(from: t.startIndex, to: dot) <= 64 {
+                let first = String(t[..<dot])
+                let looksLikeMatchup = first.contains(" at ") || first.contains(" @ ")
+                let hasClockDigit = first.range(of: #"\d"#, options: .regularExpression) != nil
+                if looksLikeMatchup && hasClockDigit {
+                    t = String(t[t.index(after: dot)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
             if !t.isEmpty { return t }
         }
         let parts = splitTake(pick.rationale)
@@ -17484,6 +17499,11 @@ struct PickCardBack: View {
         .onAppear { grown = caseExpanded || tab != .take }
         .onChange(of: caseExpanded) { _ in grown = caseExpanded || tab != .take }
         .onChange(of: tab) { _ in grown = caseExpanded || tab != .take }
+        .onChange(of: grown) { g in
+            // The wrapper drops growth on unflip — fold the file back to the
+            // compact case so the next open starts fresh.
+            if g == false { caseExpanded = false; tab = .take }
+        }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
 }
