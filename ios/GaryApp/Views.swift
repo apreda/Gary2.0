@@ -6767,7 +6767,6 @@ struct PremiumPicksView: View {
         checkoutItem = CheckoutItem(url: url)
     }
     @State private var sportRecords: [String: (w: Int, l: Int)] = [:]
-    @Namespace private var tabNS
 
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
     // Any extra league present in the data is appended automatically.
@@ -6959,8 +6958,8 @@ struct PremiumPicksView: View {
     private var header: some View {
         GaryPageHeader(title: "Winners", trailing: {
             HStack(spacing: 14) {
-                tabSegment("GAMES", count: gameCount, active: mode == .games) { mode = .games }
-                tabSegment("PROPS", count: propCount, active: mode == .props) { mode = .props }
+                tabSegment("GAMES", active: mode == .games) { mode = .games }
+                tabSegment("PROPS", active: mode == .props) { mode = .props }
                 Menu {
                     ForEach(0..<8, id: \.self) { offset in
                         Button(daySelectorLabel(offset)) {
@@ -6970,7 +6969,8 @@ struct PremiumPicksView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text(headerDateLabel)
-                            .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                            .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55))
+                            .fixedSize()
                         Image(systemName: "chevron.down")
                             .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.62))
                     }
@@ -7025,12 +7025,14 @@ struct PremiumPicksView: View {
         // the how-it-works block now sits UNDER the not-ready cards, where
         // it answers the question those cards raise instead of pre-empting it.
         VStack(spacing: 22) {
-            winnersRecordBand
             ForEach(gameShelves) { shelf in
                 comingSoonShelf(shelf.league)
             }
             comingSoonIntro
                 .pageGutter()
+            // The record signs the page off (founder, Aug 6 night: off the
+            // top — "below or just removed") — honesty stays, the board leads.
+            winnersRecordBand
         }
         .padding(.top, 14)
         .padding(.bottom, 120)
@@ -7132,31 +7134,18 @@ struct PremiumPicksView: View {
 
     // (toggleBar folded into `header` Aug 6 night — one control line.)
 
-    private func tabSegment(_ label: String, count: Int, active: Bool, action: @escaping () -> Void) -> some View {
+    /// Gold-text mode word — the header line's grammar (founder, Aug 6 night:
+    /// color is the state, no underline hardware, no counts crowding the
+    /// line — the shelves announce their own).
+    private func tabSegment(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { action() }
         } label: {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    Text(label)
-                        .font(GaryFonts.mono(13, bold: true))
-                        .foregroundStyle(active ? .white : .white.opacity(0.45))
-                    // Counts earn their place — a morning of zeros is not a stat.
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(GaryFonts.mono(13, bold: true))
-                            .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.3))
-                    }
-                }
-                Group {
-                    if active {
-                        Capsule().fill(GaryColors.gold).frame(height: 2)
-                            .matchedGeometryEffect(id: "tabUnderline", in: tabNS)
-                    } else {
-                        Capsule().fill(Color.clear).frame(height: 2)
-                    }
-                }
-            }
+            Text(label)
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.5))
+                .fixedSize()
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -7194,8 +7183,8 @@ struct PremiumPicksView: View {
             if mode == .games {
                 // Day card removed here too (founder, Aug 5) — it was the same
                 // component, so leaving it on the posted board would have put it
-                // back on screen the moment the first pick landed.
-                winnersRecordBand
+                // back on screen the moment the first pick landed. The record
+                // band moved to the sign-off slot (Aug 6 night: off the top).
                 // (Tonight's Top Plays carousel removed from Winners per founder.)
                 // Paid boards lead with full cards. Locked boards with content
                 // follow as blurred previews — the user sees the real board
@@ -7212,6 +7201,7 @@ struct PremiumPicksView: View {
                 if !lockedGameBoards.isEmpty {
                     storefrontTail(lockedGameBoards)
                 }
+                winnersRecordBand
             } else {
                 if propShelves.isEmpty {
                     propsEmptyState
@@ -12465,7 +12455,7 @@ struct BillfoldView: View {
                     }
                 } else {
                 billfoldTopBar
-                    .padding(.top, 10)
+                    .padding(.top, 4)
 
                 if loading && settledCount == 0 {
                     Spacer(minLength: 0)
@@ -12485,7 +12475,7 @@ struct BillfoldView: View {
                             performanceLedger
                             hrFunTracker
                         }
-                        .padding(.top, 14)
+                        .padding(.top, 4)
                         .padding(.bottom, 120)
                     }
                     .refreshable {
@@ -12740,7 +12730,9 @@ struct BillfoldView: View {
         }
         .foregroundStyle(brass)
         .padding(.horizontal, 6)
-        .frame(minHeight: 44)
+        // 36 keeps a real tap target without the old 44pt row's dead slack
+        // under the small type (founder, Aug 6 night: "weird spacing").
+        .frame(minHeight: 36)
         .contentShape(Rectangle())
     }
 
