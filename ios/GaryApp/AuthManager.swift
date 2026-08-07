@@ -246,10 +246,14 @@ final class AuthManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "provider": "google",
-            "id_token": idToken,
-        ])
+        // GoTrue law: "Passed nonce and nonce in id_token should either both
+        // exist or not." GoogleSignIn 8.0 exposes no nonce parameter yet
+        // mints a nonce claim into the token anyway — so the exchange failed
+        // for every Google user (live, Aug 6). Read the claim off the token
+        // and echo it back; both sides hold the same value on any SDK.
+        var tokenBody: [String: Any] = ["provider": "google", "id_token": idToken]
+        if let nonceClaim = Self.jwtClaim(idToken, "nonce") { tokenBody["nonce"] = nonceClaim }
+        request.httpBody = try JSONSerialization.data(withJSONObject: tokenBody)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw AuthError.networkError }
@@ -265,6 +269,18 @@ final class AuthManager: ObservableObject {
         let user = try await fetchCurrentUser()
         currentUser = user
         isAuthenticated = true
+    }
+
+    /// Base64url-decode one JWT payload claim WITHOUT verification — echo
+    /// use only (verification is GoTrue's job, not the client's).
+    private static func jwtClaim(_ jwt: String, _ key: String) -> String? {
+        let parts = jwt.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var b64 = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while b64.count % 4 != 0 { b64 += "=" }
+        guard let data = Data(base64Encoded: b64),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj[key] as? String
     }
 
     /// Frontmost view controller — the Google sheet's presentation anchor.

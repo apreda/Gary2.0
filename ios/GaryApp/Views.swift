@@ -17246,30 +17246,34 @@ struct PickCardBack: View {
     @ViewBuilder private func paneTab(_ t: BackTab) -> some View {
         let active = tab == t
         Button { withAnimation(.easeInOut(duration: 0.15)) { tab = t } } label: {
-            VStack(spacing: 3) {
-                Text(t.rawValue)
-                    .font(GaryFonts.display(11)).tracking(1.4)
-                    .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
-                Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 1.5)
-            }
-            .fixedSize()
+            // No underline indicator (Aug 6 redesign) — the active pane is
+            // gold, the rest sit back. State by color, not by another line.
+            Text(t.rawValue)
+                .font(GaryFonts.display(11)).tracking(1.4)
+                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.38))
+                .fixedSize()
         }
         .buttonStyle(.plain)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text("GARY'S TAKE")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                // THE PICK rides the header slot (founder, Aug 4: "people
-                // know from the front what the game is" — the matchup line
-                // came off, the pick took its place and size).
-                Text(pick.pick ?? "")
-                    .font(GaryFonts.mono(10, bold: true))
-                    .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.6)
+            HStack(alignment: .center, spacing: 10) {
+                // Back-header redesign (founder, Aug 6: "super messy... I
+                // don't like those lines"): eyebrow + pick as one two-line
+                // stack — a single strong line instead of two gold fragments
+                // sharing a row. NO rules anywhere on the back; hierarchy is
+                // type and spacing only.
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("GARY'S TAKE")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.6)
+                        .foregroundStyle(GaryColors.gold.opacity(0.92))
+                    Text(pick.pick ?? "")
+                        .font(GaryFonts.display(15))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+                Spacer(minLength: 8)
                 // Copy the take VERBATIM (founder, Jul 31) — whichever
                 // register is on screen, exactly as written, so it can be
                 // pasted word for word.
@@ -17328,15 +17332,9 @@ struct PickCardBack: View {
                 }
             }
 
-            if pick.confidence != nil {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1E1A1A"))
-                        RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: geo.size.width * confidence)
-                    }
-                }
-                .frame(height: 2)
-            }
+            // (Confidence bar REMOVED — founder, Aug 6: it read as a stray
+            // gold underline in the header stack. The number still stores;
+            // the back carries no meters.)
 
             if AppFlags.userBookEnabled {
                 TailFadeRow(pick: pick)
@@ -19466,19 +19464,9 @@ struct EdgesSection: View {
                     .pageGutter().padding(.vertical, 8)
             } else {
                 if tabbed && kinds.count > 1 { categoryTabBar }
-                // A team season series draws THE LEDGER (founder, Aug 6) —
-                // dates, the venue that night, scores, W/L. Every other lane
-                // keeps the standard headline + read row.
-                VStack(spacing: 0) {
-                    ForEach(shown) { s in
-                        if s.kind == .h2h, let m = s.h2h?.meetings, !m.isEmpty {
-                            HeadToHeadRow(s: s) { _ in }
-                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                        } else {
-                            SignalRow(s: s)
-                        }
-                    }
-                }
+                // (The ledger no longer renders from a list — it owns its own
+                // section on the game page, GameH2HSection.)
+                VStack(spacing: 0) { ForEach(shown) { SignalRow(s: $0) } }
                     .pageGutter()
             }
         }
@@ -20321,7 +20309,10 @@ struct PicksCarouselView: View {
     // sport tab row is this page's control strip, stacked under the template.
     private var masthead: some View {
         VStack(alignment: .leading, spacing: 0) {
-            GaryPageHeader(title: "The", goldPart: "Picks", trailing: {
+            // MLB PICKS as the switcher (founder, Aug 6): the league moved
+            // into the wordmark — tap the title to change sport — and the
+            // separate trigger row below retired, buying back its height.
+            GaryPageHeader(title: sport.isEmpty ? "The" : sport, goldPart: "Picks ▾", trailing: {
                 if let r = record7 {
                     let pct = Int((Double(r.w) / Double(max(r.w + r.l, 1)) * 100).rounded())
                     HStack(spacing: 5) {
@@ -20343,15 +20334,9 @@ struct PicksCarouselView: View {
             // a real league to label — it's the page's "you're looking at
             // MLB" readout as much as a switcher, and today it's the only way
             // to see the feature at all before football/basketball are live.
-            if !sports.isEmpty {
-                HStack {
-                    LeagueWordsTrigger(current: sport) { presentLeagueWords() }
-                    Spacer()
-                }
-                .padding(.top, 10)
-                .pageGutter()
-            }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { if !sports.isEmpty { presentLeagueWords() } }
     }
 
     /// Tonight's slate count for a sport tab — the overlay's superscript.
@@ -20753,7 +20738,11 @@ struct PicksTodayPage: View {
             if scopeLeague == "WC" {
                 WCTodaySection(edges: edges)
             } else {
-                EdgesSection(title: "TODAY'S EDGES", edges: edges, tabbed: true)
+                // The season series belongs to its GAME, not the day's list
+                // (founder, Aug 6: "Head to Head should not be on the Today's
+                // page ONLY under the the matchup/game of the two teams").
+                EdgesSection(title: "TODAY'S EDGES",
+                             edges: edges.filter { $0.kind != .h2h }, tabbed: true)
             }
         }
     }
@@ -21771,6 +21760,33 @@ fileprivate struct ScoutNotebookSection: View {
     }
 }
 
+/// THE HEAD-TO-HEAD — the season series, on the GAME page only (founder,
+/// Aug 6). One contained section: its own title, then the ledger. Renders
+/// nothing when the game has no series row or the row predates the meetings
+/// payload, so a thin day simply drops the section instead of showing a stub.
+fileprivate struct GameH2HSection: View {
+    let edges: [Signal]
+
+    private var row: Signal? {
+        edges.first { $0.kind == .h2h && !($0.h2h?.meetings ?? []).isEmpty }
+    }
+
+    var body: some View {
+        if let row {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("THE HEAD-TO-HEAD")
+                    .font(GaryFonts.display(13)).tracking(0.8)
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.horizontal, 14).padding(.top, 12)
+                HeadToHeadRow(s: row) { _ in }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(ScoutMock.cardShape)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
 fileprivate extension String {
     /// "wind at 2 mph · total sits at 9" → "Wind at 2 mph · total sits at 9".
     /// Only the first character moves — the rest keeps whatever case the real
@@ -21787,6 +21803,17 @@ fileprivate struct ScoutBigNumbersSection: View {
     let d: ScoutTrioData
     let edges: [Signal]
 
+    /// The lanes this rail speaks (founder, Aug 6). Deliberately excludes:
+    /// .hrThreat (the HR fun lane — an odds value and a name-only headline),
+    /// .h2h (owns its own ledger section below), .firstInning (NRFI came off
+    /// the page), and .starterForm (the pitcher read THE ARMS already carries
+    /// in full — "all i didnt want there was more pitcher data"). The hitter
+    /// and team lanes stay, which is what keeps the rail at five rows.
+    static let railKinds: Set<SignalKind> = [
+        .hot, .cold, .platoon, .streak, .teamRecord,
+        .bullpenFatigue, .ballpark, .injury, .runningGame, .situational,
+    ]
+
     private struct Row: Identifiable {
         let id: String
         let numeral: String
@@ -21800,8 +21827,13 @@ fileprivate struct ScoutBigNumbersSection: View {
         // temperature and the series record.
         var out: [Row] = []
         for s in edges where out.count < 3 {
+            guard Self.railKinds.contains(s.kind) else { continue }
             let v = s.value.trimmingCharacters(in: .whitespaces)
             guard !v.isEmpty, v.count <= 4, !s.headline.isEmpty else { continue }
+            // A signed price is odds, never a stat — the HR fun lane stores
+            // "+600" as its value and the player's bare name as its headline,
+            // which rendered as "+600 Matt Olson" and said nothing.
+            guard !(v.hasPrefix("+") || v.hasPrefix("-")) else { continue }
             out.append(Row(id: "edge-\(s.id)", numeral: v, bold: s.headline, rest: ""))
         }
         if let w = weatherRow { out.append(w) }
@@ -22013,6 +22045,8 @@ struct PicksGamePage: View {
             ScoutArmsSection(d: trio)
             ScoutNotebookSection(d: trio)
             ScoutBigNumbersSection(d: trio, edges: edges)
+            // The season series lives HERE and only here (founder, Aug 6).
+            GameH2HSection(edges: edges)
             PlayerIntelSection(matchup: group.matchup)
             }
             if isMLB {
@@ -22993,19 +23027,10 @@ struct HeadToHeadRow: View {
 
         Button { onTap(s) } label: {
             VStack(alignment: .leading, spacing: 0) {
-                // Same header grammar every edge row wears — lane kicker left,
-                // the game right — so the ledger sits in the feed instead of
-                // floating headerless (founder, Aug 6).
-                HStack {
-                    Text(s.kind.chip)
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    Spacer()
-                    Text(s.game.uppercased())
-                        .font(GaryFonts.mono(9.5))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .padding(.bottom, 7)
+                // No lane kicker here (founder, Aug 6: "duplicate head to head
+                // delete the one in grey") — the section that owns this row
+                // already carries the title, so a second HEAD-TO-HEAD inside
+                // the card said it twice.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(s.headline.isEmpty ? "\(domName) own \(oppName)" : s.headline)
                         .font(GaryFonts.text(16, .semibold)).foregroundStyle(.white)
@@ -23025,10 +23050,6 @@ struct HeadToHeadRow: View {
                         }
                     }
                     .padding(.top, 8)
-                    Text("THIS SEASON'S MEETINGS")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.45))
-                        .padding(.top, 8)
                 } else if let last, let score = last.score {
                     Text(last.revenge == true
                          ? "\(oppAbbr) took the last meeting \(score) — revenge spot"
