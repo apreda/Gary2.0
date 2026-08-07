@@ -3,6 +3,7 @@ import { getGeminiClient } from '../modelConfig.js';
 import { GoogleAICacheManager } from '@google/generative-ai/server';
 import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISessionChat } from './providerAdapters/openaiSession.js';
 import { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat } from './providerAdapters/claudeCliSession.js';
+import { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat } from './providerAdapters/codexCliSession.js';
 
 // Minimum cacheable content size (Gemini 3 Flash min is 1024 tokens; ~4K chars is safe).
 // Below this we skip caching — break-even doesn't work and the API rejects small caches.
@@ -42,6 +43,9 @@ export async function createGeminiSession(options = {}) {
   }
   if (isClaudeCliModel(options.modelName)) {
     return createClaudeCliSession(options);
+  }
+  if (isCodexCliModel(options.modelName)) {
+    return createCodexCliSession(options);
   }
   const {
     modelName = 'gemini-3-flash-preview',
@@ -195,6 +199,9 @@ export function resetSessionChat(session, seedHistory = []) {
   if (session?.provider === 'claude-cli') {
     return resetClaudeCliSessionChat(session, seedHistory);
   }
+  if (session?.provider === 'codex-cli') {
+    return resetCodexCliSessionChat(session, seedHistory);
+  }
   const systemInstruction = session._usingCache
     ? undefined
     : (session._systemPrompt ? { parts: [{ text: session._systemPrompt }] } : undefined);
@@ -219,6 +226,9 @@ export async function sendToSession(session, message, options = {}) {
   }
   if (session?.provider === 'claude-cli') {
     return sendToClaudeCliSession(session, message, options);
+  }
+  if (session?.provider === 'codex-cli') {
+    return sendToCodexCliSession(session, message, options);
   }
   const { isFunctionResponse = false } = options;
   const startTime = Date.now();
