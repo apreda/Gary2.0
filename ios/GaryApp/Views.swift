@@ -21455,6 +21455,9 @@ fileprivate struct ScoutTrioData {
     let total: Double?
     let seriesLine: String?         // split_line
     let lastMeeting: (d: String, line: String)?
+    /// Every stored meeting, NEWEST FIRST (the board's own order), each with
+    /// its own venue — the rail reads the current series off the head of it.
+    let seriesMeetings: [TomorrowMeeting]
     let wireLines: [String]
     /// THE ARMS IN GARY'S VOICE (Aug 4) — the board's two sentences on the
     /// game's two starters. nil = the assembled template prose renders.
@@ -21509,8 +21512,12 @@ fileprivate struct ScoutTrioData {
         tempF = w?.temp_f; windMph = w?.wind_mph; weatherNote = w?.note
         total = row?.total
         seriesLine = row?.series?.split_line
+        seriesMeetings = row?.series?.meetings ?? []
         armsTake = row?.arms_take
-        if let m = row?.series?.meetings?.last, let d = m.d, let line = m.line {
+        // .first, not .last — the board stores meetings NEWEST FIRST, so the
+        // old .last was showing the OLDEST meeting as "last meeting" (that's
+        // why a May game kept printing as the most recent one).
+        if let m = row?.series?.meetings?.first, let d = m.d, let line = m.line {
             lastMeeting = (d, line)
         } else { lastMeeting = nil }
 
@@ -21884,19 +21891,36 @@ fileprivate struct ScoutBigNumbersSection: View {
                    bold: bits.joined(separator: " · ").capitalizedFirst, rest: "")
     }
 
-    /// The series record as the numeral ("4-1"), the venues + last meeting beside it.
+    /// THIS series only — the set they're playing right now (founder, Aug 6:
+    /// "for the SEries its ONLY tHIS series they are currently playing not the
+    /// past one that is what the H2h is for"). Each stored meeting carries its
+    /// own venue, so the current set is the trailing run sharing the most
+    /// recent one; anything before the venue changed was a different trip and
+    /// belongs to the head-to-head ledger, not here.
     private var seriesRow: Row? {
-        guard let line = d.seriesLine, !line.isEmpty else { return nil }
-        // seriesLine reads "4-1 AT TRUIST · 3-1 AT LOANDEPOT" — the leading
-        // record is the numeral, the rest is the sentence.
-        let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
-        let numeral = parts.first ?? line
-        var text = parts.count > 1 ? parts[1] : ""
-        if let m = d.lastMeeting {
-            text += (text.isEmpty ? "" : " — ") + "last meeting \(m.d): \(m.line)"
+        let all = d.seriesMeetings          // newest first
+        guard let latest = all.first, let venue = latest.venue, !venue.isEmpty else { return nil }
+        var current: [TomorrowMeeting] = []
+        for m in all {
+            guard m.venue == venue else { break }
+            current.append(m)
         }
-        guard !text.isEmpty else { return nil }
-        return Row(id: "series", numeral: numeral, bold: text.capitalizedFirst, rest: "")
+        guard !current.isEmpty else { return nil }
+        // `won` is stored as "away"/"home" relative to TONIGHT'S sides, so it
+        // reads straight without re-deriving who hosted.
+        let homeWins = current.filter { $0.won == "home" }.count
+        let awayWins = current.count - homeWins
+        let numeral = "\(max(homeWins, awayWins))-\(min(homeWins, awayWins))"
+        var text: String
+        if homeWins == awayWins {
+            text = "Series even \(venue)"
+        } else {
+            text = "\(homeWins > awayWins ? d.homeName : d.awayName) lead this series \(venue)"
+        }
+        if let last = current.first, let line = last.line, let day = last.d {
+            text += " — \(day): \(line)"
+        }
+        return Row(id: "series", numeral: numeral, bold: text, rest: "")
     }
 
     var body: some View {

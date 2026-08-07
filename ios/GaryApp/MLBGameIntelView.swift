@@ -189,8 +189,23 @@ struct MLBGameIntelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if showHeader { header }
-            stateTabs
-            fieldCard
+            // The lineup gets a container (founder, Aug 6: "the Lineup needs a
+            // container") — the tabs, the team switch and the field read as one
+            // card now instead of floating loose on the page like every other
+            // section already does.
+            VStack(alignment: .leading, spacing: 0) {
+                stateTabs
+                fieldCard
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(GaryColors.warmWhite.opacity(0.03))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(GaryColors.warmWhite.opacity(0.09), lineWidth: 1))
+            )
+            .padding(.horizontal, 16)
             // (The second Head-to-Head that sat under the lineup came off
             // Aug 6 — founder: "why is head head still here at the bottom we
             // dont need two of them". GameH2HSection above owns the series,
