@@ -16,7 +16,7 @@ import SwiftUI
 // never newspaper-serif, never crypto-dashboard. Palette stays Gary: warm
 // black, gold signature, HubPalette green/red tones.
 //
-// Data machinery (staleness gates, 3am EST rollover, graded-date walk-back,
+// Data machinery (staleness gates, 6am ET rollover, graded-date walk-back,
 // kept-alive-tab visibility flips) is carried over from the original Hub page
 // (PropsHubView, removed Jul 4 2026 once the founder approved this one) — that
 // plumbing encodes weeks of fixed production bugs and is presentation-free.
@@ -468,9 +468,8 @@ struct HubView: View {
     @State private var loadedAt: Date? = nil
     @State private var loadedDate: String = ""
     @State private var fetchErrored = false
-    /// Yesterday's graded tally + the rolling 7-day record (masthead).
+    /// Yesterday's graded tally.
     @State private var hitRate: (hit: Int, graded: Int)? = nil
-    @State private var record7: (hit: Int, miss: Int)? = nil
     /// Whether the graded surface really is yesterday (vs the walk-back day).
     @State private var gradedIsYesterday = true
     @State private var gradedDayShort = ""
@@ -594,7 +593,6 @@ struct HubView: View {
         async let nightF = SupabaseAPI.fetchNightHighlights(date: gradedDate0)
         async let streaksF = SupabaseAPI.fetchStreaks()
         async let tbF = SupabaseAPI.fetchTodayBoard(date: date)
-        async let recordF = SupabaseAPI.fetchInsightRecord(days: 7)
         async let intelF = SupabaseAPI.fetchPlayerIntelRows(date: date)
         // Force past the 30-min pulse cache on refresh/rollover, not first paint.
         async let pulseF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
@@ -628,7 +626,7 @@ struct HubView: View {
         try? dbg.write(toFile: NSTemporaryDirectory() + "hub-debug.txt", atomically: true, encoding: .utf8)
         #endif
 
-        // Graded surfaces flip at 3am ET but grading lands ~6:45am — walk back
+        // Graded surfaces flip at 6am ET but grading lands ~6:45am — walk back
         // one day when the morning void has nothing yet.
         var gradedDate = gradedDate0
         var rate = await rateF
@@ -642,7 +640,6 @@ struct HubView: View {
         }
         let liveStreaks = await streaksF
         let tb = await tbF
-        let rec = await recordF
         let pulse = await pulseF
         // Graded rows still load — not for a page section (The Receipts came
         // off Aug 6), but search surfaces them and the tally maths read them.
@@ -667,7 +664,6 @@ struct HubView: View {
             loadedDate = date
             fetchErrored = anyError && collected.isEmpty
             hitRate = rate
-            record7 = rec
             gradedIsYesterday = (gradedDate == gradedDate0)
             if gradedIsYesterday { gradedDayShort = "" } else {
                 let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"; inF.timeZone = TimeZone(identifier: "America/New_York")
@@ -680,7 +676,7 @@ struct HubView: View {
             todayBoard = tb
             pulseRows = pulse
             // Keep last-good data only when the fetch ERRORED; a successful
-            // zero-row day must clear the board (3am rollover honesty).
+            // zero-row day must clear the board (6am rollover honesty).
             if !collected.isEmpty || !anyError {
                 fetched = collected
                 itemsIndex = Self.buildItemsIndex(collected)
@@ -855,7 +851,7 @@ struct HubView: View {
         }
         // HOME RUN THREATS gets its own stage back (founder green-light
         // Jul 22; debut gated to Jul 23 so the first run is a fresh slate —
-        // self-activates at the 3 AM ET rollover). Until then HR reads keep
+        // self-activates at the 6 AM ET rollover). Until then HR reads keep
         // riding The Bats exactly as before.
         // The Matchups storyboard retired for MLB (founder, Aug 6: "we only
         // need the head to head") — H2H and the NRFI watch stand alone in the
@@ -1097,74 +1093,97 @@ struct HubView: View {
         // ydaySignals stays fetched: graded rows still power Hub search.)
     }
 
-    // The page stack, extracted from body (Aug 4) — the inline stack plus
-    // its modifier chain blew the type-checker's budget once the width pin
-    // joined the frame call (same lesson beatView learned earlier).
-    @ViewBuilder private var hubPageStack: some View {
+    // Keep the top-level stack's concrete type deliberately shallow. Build 6
+    // produced two TestFlight crashes in Swift's runtime demangler while it
+    // instantiated the nested _ConditionalContent type generated here. The
+    // state/scope branches below are erased independently so Release builds do
+    // not have to materialize that pathological generic type at launch.
+    private var hubPageStack: some View {
         VStack(alignment: .leading, spacing: 26) {
-                HubMasthead(
-                    sel: $sel,
-                    leagues: availableLeagues,
-                    gameCount: slateRows.count,
-                    record7: record7,
-                    searchOpen: $searchOpen,
-                    searchText: $searchText,
-                    searchFocused: $searchFocused
-                )
-                .id("top")
+            HubMasthead(
+                sel: $sel,
+                leagues: availableLeagues,
+                gameCount: slateRows.count,
+                searchOpen: $searchOpen,
+                searchText: $searchText,
+                searchFocused: $searchFocused
+            )
+            .id("top")
 
-                if hubScope == "fantasy" {
-                    FantasyCornerPage(
-                        pickups: items(.fantasyPickups),
-                        cuts: items(.cutList),
-                        twoStarts: items(.twoStart),
-                        closers: items(.closerWatch),
-                        returners: items(.returnWatch),
-                        loaded: didLoad
-                    ) { s in openSignal(s) }
-                } else {
+            hubScopeContent
+        }
+    }
 
-                // ── ALL-STAR WEEK — one-off break surface (Jul 13-14 2026 only;
-                // the date gate self-retires it). Founder call Jul 13: the break
-                // is an acquisition window — "its not an all-star break for Gary".
-                // MLB tab only (founder): All-Star is MLB — never mixed into WC.
-                if sel == .mlb, ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST()) {
-                    HubAllStarCard()
+    private var hubScopeContent: AnyView {
+        if hubScope == "fantasy" {
+            return AnyView(
+                FantasyCornerPage(
+                    pickups: items(.fantasyPickups),
+                    cuts: items(.cutList),
+                    twoStarts: items(.twoStart),
+                    closers: items(.closerWatch),
+                    returners: items(.returnWatch),
+                    loaded: didLoad
+                ) { s in openSignal(s) }
+            )
+        }
+
+        return AnyView(hubEditorialContent)
+    }
+
+    private var hubEditorialContent: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            // ── ALL-STAR WEEK — one-off break surface (Jul 13-14 2026 only;
+            // the date gate self-retires it). Founder call Jul 13: the break
+            // is an acquisition window — "its not an all-star break for Gary".
+            // MLB tab only (founder): All-Star is MLB — never mixed into WC.
+            if sel == .mlb, ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST()) {
+                HubAllStarCard()
+            }
+
+            hubEditorialStateContent
+        }
+    }
+
+    private var hubEditorialStateContent: AnyView {
+        if !didLoad {
+            return AnyView(hubLoading)
+        }
+        if searchOpen && !searchText.isEmpty {
+            return AnyView(searchResultsView)
+        }
+        if fetchErrored && leagueSignals.isEmpty && ydaySignals.isEmpty
+            && nightRows.isEmpty && streakRows.isEmpty {
+            return AnyView(hubError)
+        }
+        return AnyView(hubLoadedContent)
+    }
+
+    private var hubLoadedContent: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            if !slateRows.isEmpty {
+                HubSlateStrip(rows: slateRows) { r in
+                    gameSheet = HubGameSel(row: r)
                 }
+            }
 
-                if !didLoad {
-                    hubLoading
-                } else if searchOpen && !searchText.isEmpty {
-                    searchResultsView
-                } else if fetchErrored && leagueSignals.isEmpty && ydaySignals.isEmpty
-                            && nightRows.isEmpty && streakRows.isEmpty {
-                    hubError
-                } else {
-                    if !slateRows.isEmpty {
-                        HubSlateStrip(rows: slateRows) { r in
-                            gameSheet = HubGameSel(row: r)
-                        }
-                    }
+            if leagueSignals.isEmpty {
+                hubMorningNotice
+            } else {
+                frontPageBoards
+            }
 
-                    if leagueSignals.isEmpty {
-                        hubMorningNotice
-                    } else {
-                        frontPageBoards
-                    }
+            // (League Pulse moved to the reference shelf at the bottom
+            // — founder, Aug 3: the agate tables broke the page's flow
+            // mid-editorial. It lives with Last Night now.)
 
-                    // (League Pulse moved to the reference shelf at the bottom
-                    // — founder, Aug 3: the agate tables broke the page's flow
-                    // mid-editorial. It lives with Last Night now.)
+            streakWatchSection
 
-                    streakWatchSection
+            if !leagueSignals.isEmpty {
+                beatsAndOverflow
+            }
 
-                    if !leagueSignals.isEmpty {
-                        beatsAndOverflow
-                    }
-
-                    referenceShelf
-                }
-                }
+            referenceShelf
         }
     }
 
@@ -1509,7 +1528,6 @@ fileprivate struct HubMasthead: View {
     @Binding var sel: HubLeagueSel
     let leagues: [HubLeagueSel]
     let gameCount: Int
-    let record7: (hit: Int, miss: Int)?
     @Binding var searchOpen: Bool
     @Binding var searchText: String
     var searchFocused: FocusState<Bool>.Binding
@@ -1520,9 +1538,9 @@ fileprivate struct HubMasthead: View {
         VStack(alignment: .leading, spacing: 0) {
             // NO masthead on the Hub (founder, Aug 6 night, third ruling) —
             // one flat line at the very top, all four pieces horizontal:
-            // MLB (league words) · THE HUB · FANTASY …… L7 record. Scope tabs
-            // wear gold-text state, underline hardware gone (his call: "just
-            // use gold font"); search keeps its corner seat.
+            // MLB (league words) · THE HUB · FANTASY. Scope tabs wear
+            // gold-text state, underline hardware gone (his call: "just use
+            // gold font"); search keeps its corner seat.
             HStack(spacing: 16) {
                 if !leagues.isEmpty {
                     LeagueWordsTrigger(current: sel.label) {
@@ -1545,15 +1563,6 @@ fileprivate struct HubMasthead: View {
                 scopeWord("THE HUB", on: hubScope != "fantasy") { hubScope = "hub" }
                 scopeWord("FANTASY", on: hubScope == "fantasy") { hubScope = "fantasy" }
                 Spacer(minLength: 8)
-                if let r = record7 {
-                    let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
-                    HStack(spacing: 5) {
-                        HubKicker(text: "L7", size: 9.5, color: .white.opacity(0.62))
-                        Text("\(r.hit)–\(r.miss) · \(pct)%")
-                            .font(HubFont.data(11))
-                            .foregroundStyle(GaryColors.gold)
-                    }
-                }
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         searchOpen.toggle()
@@ -1846,7 +1855,7 @@ fileprivate struct HubBestOf: View {
 fileprivate struct HubRegressionBoard: View {
     let signals: [Signal]
     /// The CURRENT EST slate day — anchors the Tonight/Tomorrow split so the
-    /// 3am rollover re-buckets rows instead of trusting their baked strings.
+    /// 6am rollover re-buckets rows instead of trusting their baked strings.
     var todayEST: String = SupabaseAPI.todayEST()
     let onTap: (Signal) -> Void
     @State private var tab: Tab? = nil

@@ -59,18 +59,29 @@ enum SupabaseAPI {
     
     // MARK: - Date Utilities
     
-    /// Current date in EST timezone (YYYY-MM-DD format)
-    /// Picks reset at 3am EST instead of midnight to keep late-night games visible
-    static func todayEST() -> String {
-        guard let tz = TimeZone(identifier: "America/New_York") else { return formatDateEST(Date()) }
+    /// Current betting-slate date in Eastern time (YYYY-MM-DD format).
+    /// The completed board, including its CASHED/LOST grades, remains the active
+    /// day until 6:00 AM ET. At 6 the app advances every date-keyed surface to
+    /// the new slate together instead of exposing a half-rolled board overnight.
+    static let slateRolloverHourET = 6
+
+    static func todayEST(now: Date = Date()) -> String {
+        #if DEBUG
+        // Local regression harness: lets simulator checks reopen a historical
+        // board without changing device time. Never exists in TestFlight.
+        let args = ProcessInfo.processInfo.arguments
+        if let flag = args.firstIndex(of: "-previewSlateDate"), args.indices.contains(flag + 1) {
+            return args[flag + 1]
+        }
+        #endif
+        guard let tz = TimeZone(identifier: "America/New_York") else { return formatDateEST(now) }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
-        
-        let now = Date()
+
         let hour = cal.component(.hour, from: now)
-        
-        // Before 3am EST, show previous day's picks
-        if hour < 3 {
+
+        // Before 6am ET, keep the completed prior slate and its grades visible.
+        if hour < slateRolloverHourET {
             if let yesterday = cal.date(byAdding: .day, value: -1, to: now) {
                 return formatDateEST(yesterday)
             }
@@ -92,8 +103,8 @@ enum SupabaseAPI {
     }
     
     /// Yesterday's date in EST timezone (YYYY-MM-DD format).
-    /// One day before the 3am-aware SLATE day (todayEST), NOT before wall-clock now:
-    /// between midnight–3am ET, todayEST() is already yesterday's calendar date, so
+    /// One day before the 6am-aware SLATE day (todayEST), NOT before wall-clock now:
+    /// between midnight–6am ET, todayEST() is already yesterday's calendar date, so
     /// subtracting from `now` would return the slate day itself (showing 2-days-ago
     /// as "yesterday"). Anchor on todayEST so it stays one real day behind the slate.
     static func yesterdayEST() -> String {
@@ -496,7 +507,7 @@ enum SupabaseAPI {
     // MARK: - Insight Connections ("Today's Edges" hub)
 
     /// The day before `todayEST()` — the hub's "yesterday" for the graded-edge
-    /// track record. Rollover-aware: between midnight and 3am EST, todayEST()
+    /// track record. Rollover-aware: between midnight and 6am ET, todayEST()
     /// is already yesterday's slate, so this returns two calendar days back
     /// (unlike the plain-calendar `yesterdayEST()` used elsewhere).
     static func hubGradedDateEST() -> String {
@@ -640,7 +651,7 @@ enum SupabaseAPI {
     /// date+league), [] on any failure — the section then collapses.
     private static var _leaguePulseCache: [String: (rows: [LeaguePulseRow], at: Date)] = [:]
     /// - Parameter forceRefresh: bypass the 30-min cache (pull-to-refresh / EST
-    ///   day rollover) so a manual refresh and the 3am slate flip always refetch.
+    ///   day rollover) so a manual refresh and the 6am slate flip always refetch.
     static func fetchLeaguePulse(date: String, league: String, forceRefresh: Bool = false) async -> [LeaguePulseRow] {
         let cacheKey = "\(date)|\(league)"
         if !forceRefresh, let c = _leaguePulseCache[cacheKey], Date().timeIntervalSince(c.at) < 1800 {
@@ -721,7 +732,7 @@ enum SupabaseAPI {
         // FALLBACK: today_board is unpopulated (nothing writes it) — the scheduler
         // publishes the day's board to tomorrow_board keyed by GAME DATE, so today's
         // row lives there. Read that so the Home countdown/board never vanishes on the
-        // 3am rollover instead of skipping the whole hero (todayBoard == nil).
+        // 6am rollover instead of skipping the whole hero (todayBoard == nil).
         return await fetchTomorrowBoard(date: date)
     }
 

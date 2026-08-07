@@ -1766,7 +1766,7 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var animateIn = false
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
-    /// The record-box label — rolls "TODAY"/"LIVE" once today's slate (EST 3am
+    /// The record-box label — rolls "TODAY"/"LIVE" once today's slate (6am ET
     /// anchor) has started, back to "YESTERDAY" once the day rolls over.
     @State private var recordBoxLabel: String = "YESTERDAY"
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
@@ -1806,6 +1806,16 @@ struct HomeView: View {
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
     @State private var slateGames: [DailySlateRow] = []
+    /// Date key actually backing `slateGames`. Keeping it beside the payload
+    /// avoids mixing yesterday's rows with today's results during the 6am reload.
+    @State private var loadedSlateDate = ""
+    /// Durable grades for the active board. The live-score table is a transient
+    /// tracker and can shed/duplicate rows after FINAL; these records keep each
+    /// CASHED/LOST stamp pinned until the slate rolls the following morning.
+    @State private var sheetGameResults: [GameResult] = []
+    /// A foreground app may remain open across the cutoff. Check cheaply once a
+    /// minute so the new board loads at 6am ET without requiring a relaunch.
+    private let slateRolloverTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
@@ -2189,7 +2199,7 @@ struct HomeView: View {
                     gamesLiveNow = liveRows.filter { $0.isLive }.count
                     initialLive = liveRows
 
-                    // Record box rolls on the EST slate day (todayEST() = 3am-ET anchor).
+                    // Record box rolls on the ET slate day (todayEST() = 6am anchor).
                     // DAY-CYCLE RESET (founder, Aug 3 — supersedes the Jun "wait for the
                     // first grade" guard): the box flips to LIVE at the day's FIRST PITCH,
                     // 0–0 and all — that 0–0 now reads as "the day is rolling", not as a
@@ -2291,7 +2301,14 @@ struct HomeView: View {
                     let recapsToday = await recapsTodayF
                     nightRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
+                    // Commit the board and its durable grades under the SAME
+                    // captured date. A 6am rollover during this async load can
+                    // never pair one day's schedule with the other day's results.
+                    sheetGameResults = recentGameResults.filter {
+                        $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
+                    }
                     slateGames = slateRowsResolved   // slateF resolved above for the cycle clock
+                    loadedSlateDate = date
                     tomorrowBoard = await tomorrowBoardF
                     todayBoard = await todayBoardF
                     homeStreaks = await streaksF
@@ -2300,8 +2317,8 @@ struct HomeView: View {
                         : "Boards graded \(Self.prettyDate(gradedDate))"
 
                     // Yesterday's top pick & prop (shown when today's aren't ready yet).
-                    // 3am-aware yesterday (one real day before the slate day), not a
-                    // raw now-minus-1 that would show two-days-ago before 3am ET.
+                    // 6am-aware yesterday (one real day before the slate day), not a
+                    // raw now-minus-1 that would show two-days-ago before 6am ET.
                     do {
                         if let yPicks = try? await yPicksFetch, !yPicks.isEmpty {
                             let top = yPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
@@ -2342,7 +2359,7 @@ struct HomeView: View {
                     loading = true
                     let allPicks = try? await picksFetch
 
-                    // Filter to TODAY's games, visible until 3am EST the next day
+                    // Filter to TODAY's games, visible until 6am ET the next day
                     // This matches the GaryPicksView logic for consistency
                     let todayOnlyPicks: [GaryPick]? = allPicks?.filter { pick in
                         guard let commenceTime = pick.commence_time else { return true }
@@ -2357,9 +2374,9 @@ struct HomeView: View {
                         let now = Date()
                         let todayStart = estCalendar.startOfDay(for: now)
 
-                        // Calculate 3am EST the next day (the cutoff for "today's" picks)
+                        // Calculate the next 6am ET cutoff for "today's" picks.
                         guard let tomorrowEST = estCalendar.date(byAdding: .day, value: 1, to: todayStart),
-                              let cutoffTime = estCalendar.date(bySettingHour: 3, minute: 0, second: 0, of: tomorrowEST) else {
+                              let cutoffTime = estCalendar.date(bySettingHour: SupabaseAPI.slateRolloverHourET, minute: 0, second: 0, of: tomorrowEST) else {
                             return true
                         }
 
@@ -2368,7 +2385,7 @@ struct HomeView: View {
 
                         // Show pick if:
                         // 1. Game is today (in EST), OR
-                        // 2. We haven't passed 3am EST yet (for late-night viewing of yesterday's picks)
+                        // 2. We haven't passed the 6am ET cutoff yet (overnight viewing).
                         let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
                         let isBeforeCutoff = now < cutoffTime
                         let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart)
@@ -2398,7 +2415,12 @@ struct HomeView: View {
                     if let allProps = try? await propPicksFetch, !allProps.isEmpty {
                         var estCal = Calendar.current
                         estCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-                        let todayStart = estCal.startOfDay(for: Date())
+                        let slateFormatter = DateFormatter()
+                        slateFormatter.calendar = estCal
+                        slateFormatter.timeZone = estCal.timeZone
+                        slateFormatter.dateFormat = "yyyy-MM-dd"
+                        let todayStart = slateFormatter.date(from: date).map { estCal.startOfDay(for: $0) }
+                            ?? estCal.startOfDay(for: Date())
                         let freshProps = allProps.filter { p in
                             guard !p.isHRLane else { return false }   // HR fun lane never fronts Home
                             guard let iso = p.commence_time, let gd = parseISO8601(iso) else { return false }
@@ -2440,6 +2462,13 @@ struct HomeView: View {
         .onChange(of: scenePhase) { phase in
             // Foreground → silently re-pull picks/results/recaps (no relaunch needed).
             if phase == .active { homeNonce &+= 1 }
+        }
+        .onReceive(slateRolloverTimer) { _ in
+            guard scenePhase == .active, !loadedSlateDate.isEmpty,
+                  loadedSlateDate != SupabaseAPI.todayEST() else { return }
+            // The betting day changed while Home remained alive. Reload the
+            // slate, picks, live rows, and durable grades as one date-keyed set.
+            homeNonce &+= 1
         }
     }
 
@@ -2710,12 +2739,65 @@ struct HomeView: View {
     }
 
     /// Freshest live/final row for a slate game (the cache once it has polled,
-    /// the one-shot fetch before that) — live beats scheduled beats final when
-    /// the poller carries duplicates.
-    private func sheetLive(_ full: String) -> LiveScore? {
-        let m = liveScoresNow.filter { abbrGameMatches($0.abbrGame, matchup: full) }
-        guard m.count > 1 else { return m.first }
-        return m.first { $0.isLive } ?? m.first { !$0.isFinal } ?? m.first
+    /// the one-shot fetch before that). Exact game id wins for doubleheaders.
+    /// When the poller carries both a stale scheduled row and a final row, the
+    /// scheduled row only wins before first pitch; after first pitch FINAL is
+    /// authoritative. The old unconditional scheduled-first rule caused the
+    /// finished board to regress to `STARTED` overnight.
+    private func sheetLive(_ full: String, gameID: Int? = nil, commence: String? = nil) -> LiveScore? {
+        let fuzzy = liveScoresNow.filter { abbrGameMatches($0.abbrGame, matchup: full) }
+        let matches: [LiveScore]
+        if let gameID {
+            let exact = fuzzy.filter { $0.game_id == String(gameID) }
+            // At the 6am roll the cache can briefly contain yesterday's same-team
+            // series game. Never fall back from today's id to a different id;
+            // id-less legacy rows remain eligible for older feeds.
+            matches = exact.isEmpty ? fuzzy.filter { $0.game_id == nil } : exact
+        } else {
+            matches = fuzzy
+        }
+
+        // Unknown start keeps the historical behavior; callers with a real slate
+        // timestamp get the stricter future/final protection.
+        let hasStarted = commence.flatMap(parseISO8601).map { $0 <= Date() } ?? true
+        guard matches.count > 1 else {
+            guard let only = matches.first else { return nil }
+            // A lone pregame FINAL is a stale/bogus poller artifact. The real
+            // schedule time is more trustworthy until this game actually starts.
+            return only.isFinal && !hasStarted ? nil : only
+        }
+        if let live = matches.first(where: { $0.isLive }) { return live }
+        if hasStarted {
+            return matches.first { $0.isFinal } ?? matches.first { !$0.isFinal } ?? matches.first
+        }
+        return matches.first { !$0.isFinal } ?? matches.first { $0.isFinal } ?? matches.first
+    }
+
+    /// Durable game-result rows belonging to this slate matchup. Results can
+    /// store either full team names or abbreviations, so match both directions
+    /// through the same league keyword maps used by the live board.
+    private func sheetResults(for full: String, away: String, home: String, league: String) -> [GameResult] {
+        let abbr = "\(Self.teamAbbrev(away, league: league)) @ \(Self.teamAbbrev(home, league: league))"
+        let fullKey = full.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+        let abbrKey = abbr.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+
+        return sheetGameResults.filter { row in
+            guard let matchup = row.matchup, !matchup.isEmpty else { return false }
+            let resultKey = matchup.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+            return resultKey == fullKey
+                || resultKey == abbrKey
+                || abbrGameMatches(matchup, matchup: full)
+                || abbrGameMatches(abbr, matchup: matchup)
+        }
+    }
+
+    /// A stored grade for this exact play. The pick signature strips only the
+    /// volatile odds tail, so a side and a total on the same game retain their
+    /// own independent CASHED/LOST result.
+    private func sheetStoredOutcome(for call: GaryPick, in rows: [GameResult]) -> String? {
+        let sig = garyGamePickSig(call.pick)
+        guard !sig.isEmpty else { return nil }
+        return rows.first { garyGamePickSig($0.pick_text) == sig }?.result?.lowercased()
     }
 
     private static func etClock(_ d: Date) -> String {
@@ -2770,7 +2852,8 @@ struct HomeView: View {
             let callLine: String? = calls.isEmpty ? nil
                 : hasSpecials ? "GARY'S BOARD — \(calls.count) PICKS · PICKS TAB"
                 : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  ")
-            let ls = sheetLive(full)
+            let ls = sheetLive(full, gameID: g.bdl_game_id, commence: g.commence_time)
+            let storedRows = sheetResults(for: full, away: away, home: home, league: (g.league ?? "").uppercased())
             var zone: HomeSheetRow.Zone = .upcoming
             // Abbreviations, not names (founder, Jul 27): "SEA @ TEX" reads
             // cleaner on the queue and matches the live scorebug rows.
@@ -2789,61 +2872,77 @@ struct HomeView: View {
                     let fh = mlH > 0 ? "+\(Int(mlH))" : "\(Int(mlH))"
                     bits.append("\(Self.teamAbbrev(away, league: lgUpper)) \(fa) · \(Self.teamAbbrev(home, league: lgUpper)) \(fh)")
                 }
-                if let t = g.total { bits.append("O/U \(t.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(t)) : String(t))") }
                 if !bits.isEmpty { pendingLine = bits.joined(separator: " · ") }
             }
             var hitLines: [String] = []
             var clockText: String? = nil
-            if let ls, ls.isFinal || ls.isLive {
+            if let ls, ls.isLive {
                 title = ls.scoreLine ?? title
                 let verdicts = calls.map { HomeLiveVerdict.evaluate(pick: $0, live: ls) }
-                if ls.isLive {
-                    zone = .live
-                    // The cashed-props feed (scorers/assists/cards, homers/
-                    // steals/multi-hit days) + any of Gary's overs the score
-                    // has already passed (founder, Jul 7).
-                    hitLines = Self.liveHitStrings(ls)
-                    let combined = Double((ls.away_score ?? 0) + (ls.home_score ?? 0))
-                    hitLines += calls.compactMap { p in
-                        let t = (p.pick ?? "").lowercased()
-                        guard t.contains("over"), !t.contains("under"),
-                              let line = HomeLiveVerdict.unsignedNumber(in: t),
-                              combined > line else { return nil }
-                        return Self.homePickLabel(p.pick)
-                    }
-                    // The inning rides the SCORE (founder, Aug 5) — it describes
-                    // the game, so it sits next to the game. The right column is
-                    // Gary's standing alone, in plain English: WINNING / LOSING.
-                    clockText = "▶ \((ls.detail ?? "LIVE").uppercased())"
-                    if verdicts.contains(.covering), !verdicts.contains(.trailing) {
-                        statusText = "COVERING"; statusColor = GaryColors.win
-                    } else if verdicts.contains(.trailing), !verdicts.contains(.covering) {
-                        statusText = "LOSING"; statusColor = GaryColors.loss
-                    } else if verdicts.contains(.covering) && verdicts.contains(.trailing) {
-                        statusText = "SPLIT"; statusColor = GaryColors.gold
-                    } else {
-                        // Gary has a call the score hasn't settled — level on the
-                        // money, sitting on the number, or a total still cooking.
-                        // That's a SWEAT, and it wears neutral gray so green and
-                        // red keep the board's color to themselves. No call on the
-                        // game means nothing to sweat: the slot stays empty.
-                        statusText = calls.isEmpty ? "" : "SWEATING"
-                        statusColor = Color.white.opacity(0.62)
-                    }
-                } else {
-                    zone = .settled
-                    // What cashed in the game stays on the settled row — the
-                    // feed is history, not a live-only flourish (founder, Jul 7).
-                    hitLines = Self.liveHitStrings(ls)
-                    // Same split as live: FINAL is game state, the stamp is Gary's.
-                    clockText = "FINAL"
-                    let cashed = verdicts.filter { $0 == .covering }.count
-                    let lost = verdicts.filter { $0 == .trailing }.count
-                    if cashed > 0 && lost == 0 { statusText = "✓ CASHED"; statusColor = GaryColors.win }
-                    else if lost > 0 && cashed == 0 { statusText = "✗ LOST"; statusColor = GaryColors.loss }
-                    else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
-                    else { statusText = ""; statusColor = Color.white.opacity(0.62) }
+                zone = .live
+                // The cashed-props feed (scorers/assists/cards, homers/
+                // steals/multi-hit days) + any of Gary's overs the score
+                // has already passed (founder, Jul 7).
+                hitLines = Self.liveHitStrings(ls)
+                let combined = Double((ls.away_score ?? 0) + (ls.home_score ?? 0))
+                hitLines += calls.compactMap { p in
+                    let t = (p.pick ?? "").lowercased()
+                    guard t.contains("over"), !t.contains("under"),
+                          let line = HomeLiveVerdict.unsignedNumber(in: t),
+                          combined > line else { return nil }
+                    return Self.homePickLabel(p.pick)
                 }
+                // The inning rides the SCORE (founder, Aug 5) — it describes
+                // the game, so it sits next to the game. The right column is
+                // Gary's standing alone, in plain English: WINNING / LOSING.
+                clockText = "▶ \((ls.detail ?? "LIVE").uppercased())"
+                if verdicts.contains(.covering), !verdicts.contains(.trailing) {
+                    statusText = "COVERING"; statusColor = GaryColors.win
+                } else if verdicts.contains(.trailing), !verdicts.contains(.covering) {
+                    statusText = "LOSING"; statusColor = GaryColors.loss
+                } else if verdicts.contains(.covering) && verdicts.contains(.trailing) {
+                    statusText = "SPLIT"; statusColor = GaryColors.gold
+                } else {
+                    // Gary has a call the score hasn't settled — level on the
+                    // money, sitting on the number, or a total still cooking.
+                    // That's a SWEAT, and it wears neutral gray so green and
+                    // red keep the board's color to themselves. No call on the
+                    // game means nothing to sweat: the slot stays empty.
+                    statusText = calls.isEmpty ? "" : "SWEATING"
+                    statusColor = Color.white.opacity(0.62)
+                }
+            } else if (ls?.isFinal ?? false) || !storedRows.isEmpty {
+                // A durable grade is just as authoritative as a live-score
+                // FINAL and outlives that transient feed until the 6am roll.
+                zone = .settled
+                if let score = ls?.scoreLine
+                    ?? storedRows.compactMap({ $0.final_score }).first(where: { !$0.isEmpty }) {
+                    title = score.uppercased()
+                }
+                if let ls, ls.isFinal { hitLines = Self.liveHitStrings(ls) }
+                clockText = "FINAL"
+
+                let outcomes: [String] = calls.compactMap { call in
+                    if let stored = sheetStoredOutcome(for: call, in: storedRows) { return stored }
+                    // Defensive fallback for a legacy one-pick result whose
+                    // pick_text formatting predates the normalized signature.
+                    if calls.count == 1, storedRows.count == 1,
+                       let only = storedRows.first?.result?.lowercased() { return only }
+                    guard let ls, ls.isFinal else { return nil }
+                    switch HomeLiveVerdict.evaluate(pick: call, live: ls) {
+                    case .covering: return "won"
+                    case .trailing: return "lost"
+                    case .neutral:  return nil
+                    }
+                }
+                let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
+                let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
+                let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
+                if cashed > 0 && lost == 0 { statusText = "✓ CASHED"; statusColor = GaryColors.win }
+                else if lost > 0 && cashed == 0 { statusText = "✗ LOST"; statusColor = GaryColors.loss }
+                else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
+                else if pushed > 0 { statusText = "PUSH"; statusColor = GaryColors.gold }
+                else { statusText = ""; statusColor = Color.white.opacity(0.62) }
             }
             // (Per-row "PICK ~x:xx" labels removed Jul 27 — the Tonight header
             // carries one "PICKS DROP 90 MIN BEFORE" note instead.)
@@ -2851,10 +2950,20 @@ struct HomeView: View {
             // move it to LIVE honestly instead of listing a past start time.
             if zone == .upcoming, let ct = g.commence_time, let d = parseISO8601(ct),
                d.addingTimeInterval(180) < Date() {
-                zone = .live
-                clockText = "▶ STARTED"
-                statusText = ""
-                statusColor = GaryColors.gold
+                if d.addingTimeInterval(6 * 60 * 60) < Date() {
+                    // If both feeds are delayed, do not lie that a many-hours-old
+                    // game merely "started". The next refresh replaces this with
+                    // the durable CASHED/LOST grade as soon as it lands.
+                    zone = .settled
+                    clockText = "RESULT PENDING"
+                    statusText = ""
+                    statusColor = Color.white.opacity(0.55)
+                } else {
+                    zone = .live
+                    clockText = "▶ STARTED"
+                    statusText = ""
+                    statusColor = GaryColors.gold
+                }
             }
             // The market line is a PRE-GAME slot only — a live/final row must
             // never show the stale morning number where the score now speaks.
@@ -2932,7 +3041,13 @@ struct HomeView: View {
             // No "PICK ~x:xx" line on the countdown hero (founder, Jul 27) —
             // the container tightens by exactly that row until the pick lands.
             let pendingLine: String? = nil
-            let ls = sheetLive(matchup)
+            let ls = sheetLive(matchup, commence: big.commence_time)
+            let storedRows = sheetResults(
+                for: matchup,
+                away: away,
+                home: home,
+                league: (big.league ?? "").uppercased()
+            )
             let verdicts = calls.map { p in ls.map { HomeLiveVerdict.evaluate(pick: p, live: $0) } ?? .neutral }
             var result: (String, Color)? = nil
             if let ls, ls.isFinal {
@@ -2941,6 +3056,25 @@ struct HomeView: View {
                 if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
                 else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
                 else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
+                else { result = ("FINAL", Color.white.opacity(0.7)) }
+            } else if !storedRows.isEmpty {
+                // The marquee ribbon shares the sheet's durable grades. A
+                // transient final-score row may disappear overnight, but the
+                // CASHED/LOST stamp must remain everywhere until the 6am roll.
+                let outcomes: [String] = calls.compactMap { call in
+                    if let stored = sheetStoredOutcome(for: call, in: storedRows) { return stored }
+                    if calls.count == 1, storedRows.count == 1 {
+                        return storedRows.first?.result?.lowercased()
+                    }
+                    return nil
+                }
+                let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
+                let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
+                let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
+                if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
+                else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
+                else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
+                else if pushed > 0 { result = ("PUSH", GaryColors.gold) }
                 else { result = ("FINAL", Color.white.opacity(0.7)) }
             }
             // MLB shows BOTH probable starters, away @ home — WC (and any
@@ -3024,7 +3158,7 @@ struct HomeView: View {
                 pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
                 pendingLine: nil,
                 oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
-                live: sheetLive(matchup),
+                live: sheetLive(matchup, gameID: br.bdl_game_id, commence: br.commence_time),
                 verdict: nil,
                 result: nil,
                 railWorthy: false
@@ -3388,7 +3522,7 @@ struct HomeView: View {
             // graded — so MLB reads 0-0 LIVE once tonight's games start, not last
             // night's record. Only holds last night when today hasn't started yet.
             // ALWAYS today's slate-day record — 0-0 until tonight's games grade, LIVE
-            // once underway. Resets at the 3am ET slate roll. No more holding last
+            // once underway. Resets at the 6am ET slate roll. No more holding last
             // night's record, which lingered stale all the next day (founder Jul 1:
             // "MLB should be 0-0 since no MLB games are live for today").
             cells.append(DailyFormCell(league: sport, wins: tw, losses: tl, pushes: tp,
@@ -5599,7 +5733,7 @@ struct HomeCountdownText: View {
 /// logos: facts are free). League chip up top, the game headline, and the
 /// receipt bar: "Gary had it · Phillies TT over 4.5 — CASHED +145".
 // Day-keyed on-disk cache of the derived headline cards, so the Home marquee paints instantly
-// on cold open and then refreshes. Keyed on the graded night (rolls 3am EST) so it can never
+// on cold open and then refreshes. Keyed on the graded night (rolls 6am ET) so it can never
 // surface yesterday's card today; never stores [] so a transient failure can't poison it.
 private struct HomeHeadlinesCacheEntry: Codable {
     let payloadDayKey: String
@@ -8034,9 +8168,9 @@ struct PremiumPicksView: View {
     // the date next to the "WINNERS" wordmark is now the day dropdown. The old "TODAY ▾"
     // pill and its `dateChipLabel`/`dateSelector` were retired here.
 
-    /// ET-midnight of the 3am-anchored SLATE day (todayEST) — so offset 0 == today's
+    /// ET-midnight of the 6am-anchored SLATE day (todayEST) — so offset 0 == today's
     /// slate and offset 1 == yesterday's. NOT wall-clock now, which is a day AHEAD of
-    /// the slate between ET-midnight and 3am (that's what made "Yesterday" load today's
+    /// the slate between ET-midnight and 6am (that's what made "Yesterday" load today's
     /// slate, force-stamped settled). Matches how load()/yesterdayEST() already anchor.
     private func slateBaseDate() -> Date {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
@@ -9032,7 +9166,7 @@ struct GaryPicksView: View {
             }
         }
         
-        // Show all picks for today until 3am EST the next day (no filtering by game start time)
+        // Show all picks for today until 6am ET the next day (no filtering by game start time)
         // This matches the web app behavior where users can see all picks for the day
         let filterToTodaysPicks: ([GaryPick]) -> [GaryPick] = { picks in
             let now = Date()
@@ -9044,9 +9178,9 @@ struct GaryPicksView: View {
             // Get today's date in EST
             let todayEST = estCalendar.startOfDay(for: now)
             
-            // Calculate 3am EST the next day (the cutoff for "today's" picks)
+            // Calculate 6am ET the next day (the cutoff for "today's" picks)
             guard let tomorrowEST = estCalendar.date(byAdding: .day, value: 1, to: todayEST),
-                  let cutoffTime = estCalendar.date(bySettingHour: 3, minute: 0, second: 0, of: tomorrowEST) else {
+                  let cutoffTime = estCalendar.date(bySettingHour: SupabaseAPI.slateRolloverHourET, minute: 0, second: 0, of: tomorrowEST) else {
                 return picks // If we can't calculate, show all picks
             }
             
@@ -9068,7 +9202,7 @@ struct GaryPicksView: View {
                 
                 // Show pick if:
                 // 1. Game is today (in EST), OR
-                // 2. We haven't passed 3am EST yet (for late-night viewing of yesterday's picks)
+                // 2. We haven't passed 6am ET yet (for overnight viewing of yesterday's picks)
                 let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
                 let isBeforeCutoff = now < cutoffTime
                 let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayEST) ?? todayEST)
@@ -18637,7 +18771,7 @@ final class PropsSlateStore: ObservableObject {
     @Published var slate: [DailySlateRow] = []
 
     /// The EST slate day the TODAY-state (allProps/gamePicks/slate) was loaded for.
-    /// If the app sits open past the 3am ET rollover, keep-last-good would otherwise
+    /// If the app sits open past the 6am ET rollover, keep-last-good would otherwise
     /// pin the board to yesterday — a mismatch here forces a reset + refetch.
     @Published var loadedDate: String = ""
 
@@ -18654,7 +18788,7 @@ final class PropsSlateStore: ObservableObject {
     /// Loads props + game picks once. Safe to call from multiple views' `.task`;
     /// only the first call does the network work, the rest no-op (unless forced).
     /// Reset the TODAY-state when the EST slate day has rolled (app left open past
-    /// the 3am ET rollover). Called at the top of EVERY load path — loadIfNeeded AND
+    /// the 6am ET rollover). Called at the top of EVERY load path — loadIfNeeded AND
     /// refresh (foreground) — so keep-last-good can never pin the board to yesterday
     /// under a "Today" header. No-op on first load and within the same day.
     private func resetIfDayRolled() async {
@@ -18715,8 +18849,8 @@ final class PropsSlateStore: ObservableObject {
         // yesterday-results fallback below still surfaces graded recaps.
         var freshCal = Calendar.current
         freshCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-        // Anchor freshness on the 3am-aware SLATE day (todayEST), NOT wall-clock
-        // midnight: between ET-midnight and 3am, todayEST() is still the prior calendar
+        // Anchor freshness on the 6am-aware SLATE day (todayEST), NOT wall-clock
+        // midnight: between ET-midnight and 6am, todayEST() is still the prior calendar
         // date, so its ET-midnight keeps that slate's night props visible instead of
         // dropping the WHOLE board on a cold load in that window.
         let slateFmt = DateFormatter()
@@ -19300,7 +19434,7 @@ struct Signal: Identifiable {
     /// The row's own EST slate day (insight_connections.date). Lets surfaces
     /// like the Regression Board re-anchor "Today"/"Tomorrow" against the
     /// CURRENT EST slate day (todayEST) instead of trusting a baked string,
-    /// so a carried-forward row can never be mislabeled past the 3am rollover.
+    /// so a carried-forward row can never be mislabeled past the 6am rollover.
     var slateDate: String? = nil
     /// Live first-pitch park-weather payload (park_weather lane) — temp/wind/lean drive the MLB weather chip + sheet.
     var weather: SwapMeta? = nil
@@ -25329,4 +25463,3 @@ enum Formatters {
         return String(team.prefix(maxLength))
     }
 }
-
