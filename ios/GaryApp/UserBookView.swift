@@ -450,26 +450,26 @@ struct TailFadeRow: View {
         // record at lock" caption came off with it.
         HStack(spacing: 8) {
             // "BET WITH GARY" / "FADE THE BEAR" (founder, Aug 6) — the app's
-            // own name on the tail side, the bear on the fade. Redesign same
-            // day: boxes off, fills on — the outlined twins read as clutter
-            // over the take. Primary = solid silver, fade = quiet elevation.
-            tailFadeButton("BET WITH GARY", primary: true) { arm("tail") }
-            tailFadeButton("FADE THE BEAR", primary: false) { arm("fade") }
+            // own name on the tail side, the bear on the fade.
+            tailFadeButton("BET WITH GARY") { arm("tail") }
+            tailFadeButton("FADE THE BEAR") { arm("fade") }
         }
     }
 
-    private func tailFadeButton(_ label: String, primary: Bool, action: @escaping () -> Void) -> some View {
+    private func tailFadeButton(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
-                .foregroundStyle(primary ? GaryColors.ink : .white.opacity(0.72))
+                .foregroundStyle(.white.opacity(0.85))
                 // The longer words scale before they ever wrap or clip.
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(primary ? AnyShapeStyle(GaryColors.silverLight) : AnyShapeStyle(Color.white.opacity(0.07)))
+                        .fill(Color.clear)
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(Color.white.opacity(0.22), lineWidth: 1))
                 )
                 .contentShape(Rectangle())
         }

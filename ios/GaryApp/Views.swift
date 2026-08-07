@@ -17253,34 +17253,30 @@ struct PickCardBack: View {
     @ViewBuilder private func paneTab(_ t: BackTab) -> some View {
         let active = tab == t
         Button { withAnimation(.easeInOut(duration: 0.15)) { tab = t } } label: {
-            // No underline indicator (Aug 6 redesign) — the active pane is
-            // gold, the rest sit back. State by color, not by another line.
-            Text(t.rawValue)
-                .font(GaryFonts.display(11)).tracking(1.4)
-                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.38))
-                .fixedSize()
+            VStack(spacing: 3) {
+                Text(t.rawValue)
+                    .font(GaryFonts.display(11)).tracking(1.4)
+                    .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
+                Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 1.5)
+            }
+            .fixedSize()
         }
         .buttonStyle(.plain)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .center, spacing: 10) {
-                // Back-header redesign (founder, Aug 6: "super messy... I
-                // don't like those lines"): eyebrow + pick as one two-line
-                // stack — a single strong line instead of two gold fragments
-                // sharing a row. NO rules anywhere on the back; hierarchy is
-                // type and spacing only.
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("GARY'S TAKE")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.6)
-                        .foregroundStyle(GaryColors.gold.opacity(0.92))
-                    Text(pick.pick ?? "")
-                        .font(GaryFonts.display(15))
-                        .foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                }
-                Spacer(minLength: 8)
+            HStack {
+                Text("GARY'S TAKE")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer()
+                // THE PICK rides the header slot (founder, Aug 4: "people
+                // know from the front what the game is" — the matchup line
+                // came off, the pick took its place and size).
+                Text(pick.pick ?? "")
+                    .font(GaryFonts.mono(10, bold: true))
+                    .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.6)
                 // Copy the take VERBATIM (founder, Jul 31) — whichever
                 // register is on screen, exactly as written, so it can be
                 // pasted word for word.
@@ -17339,9 +17335,15 @@ struct PickCardBack: View {
                 }
             }
 
-            // (Confidence bar REMOVED — founder, Aug 6: it read as a stray
-            // gold underline in the header stack. The number still stores;
-            // the back carries no meters.)
+            if pick.confidence != nil {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1E1A1A"))
+                        RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: geo.size.width * confidence)
+                    }
+                }
+                .frame(height: 2)
+            }
 
             if AppFlags.userBookEnabled {
                 TailFadeRow(pick: pick)
