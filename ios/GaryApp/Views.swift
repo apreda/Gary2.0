@@ -15970,6 +15970,8 @@ struct FlippablePickCard: View {
     /// most users never open. Front already drives the height, so no visual change.
     @State private var hasEverFlipped = false
     @State private var frontH: CGFloat = CompactPickRow.uniformHeight
+    /// Back is showing a tall file (expanded case / lines / tape).
+    @State private var backGrown = false
 
     private var expandedH: CGFloat {
         let base = max(frontH + 320, 480)
@@ -15985,16 +15987,23 @@ struct FlippablePickCard: View {
                 .opacity(flipped ? 0 : 1)
 
             if flipped || hasEverFlipped {
-                PickCardBack(pick: pick, gameResult: gameResult)
+                PickCardBack(grown: $backGrown, pick: pick, gameResult: gameResult)
                     .opacity(flipped ? 1 : 0)
                     .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             }
         }
-        .frame(height: flipped ? expandedH : frontH)
+        // Compact until a file grows (option 06): the collapsed dossier hugs
+        // its content; expanded case / lines / tape take the full height.
+        .frame(height: flipped ? (backGrown ? expandedH : nil) : frontH)
+        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: backGrown)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
-        .onTapGesture { hasEverFlipped = true; flipped.toggle() }
+        .onTapGesture {
+            hasEverFlipped = true; flipped.toggle()
+            // A caller that pinned backHeight wants the full-page read open.
+            if flipped && backHeight != nil { backGrown = true }
+        }
         .onGaryTour { verb, _ in
             if verb == "flip" { hasEverFlipped = true; flipped.toggle() }
         }
@@ -17202,6 +17211,10 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
 }
 
 struct PickCardBack: View {
+    /// True when the back is showing a tall file (expanded case, lines, or
+    /// tape) — the flip wrapper reads it to grow the card; collapsed CASE
+    /// keeps the card compact, like the dossier mock.
+    @Binding var grown: Bool
     let pick: GaryPick
     var gameResult: String? = nil
     @State private var shareItem: PickShareItem? = nil
@@ -17260,6 +17273,14 @@ struct PickCardBack: View {
         if let r = fp.range(of: #"[+-]\d{3,4}$"#, options: .regularExpression) { return String(fp[r]) }
         return "—"
     }
+    /// The card-colored bottom fade — the back's one truncation device.
+    private var backFade: some View {
+        LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
+                       startPoint: .top, endPoint: .bottom)
+            .frame(height: 24)
+            .allowsHitTesting(false)
+    }
+
     @ViewBuilder private func dossierCell(_ label: String, _ value: String, gold: Bool) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label)
@@ -17274,19 +17295,6 @@ struct PickCardBack: View {
     private var pickedHome: Bool {
         guard let h = pick.homeTeam, !h.isEmpty else { return false }
         return (pick.pick ?? "").localizedCaseInsensitiveContains(h)
-    }
-
-    @ViewBuilder private func paneTab(_ t: BackTab) -> some View {
-        let active = tab == t
-        Button { withAnimation(.easeInOut(duration: 0.15)) { tab = t } } label: {
-            // Option 06: no underline indicator — the active pane is gold,
-            // the rest sit back. State by color, not by another line.
-            Text(t.rawValue)
-                .font(GaryFonts.display(11)).tracking(1.4)
-                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.38))
-                .fixedSize()
-        }
-        .buttonStyle(.plain)
     }
 
     var body: some View {
@@ -17361,75 +17369,71 @@ struct PickCardBack: View {
             // (Confidence bar retired with option 06 — the dossier carries no
             // meters; the number still stores.)
 
-            if AppFlags.userBookEnabled {
-                TailFadeRow(pick: pick)
-            }
-
-            // Pane tabs up top (founder, Aug 4) — the lines and the tape are a
-            // tap away, not a scroll-below-the-take discovery. The strip only
-            // renders when there's more than the take to switch to.
-            if availableTabs.count > 1 {
-                HStack(spacing: 16) {
-                    ForEach(availableTabs, id: \.rawValue) { paneTab($0) }
-                    Spacer()
-                }
-            }
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 12) {
-                    switch tab {
-                    case .take:
-                        // THE CASE (option 06 supersedes the Aug 4 no-heading
-                        // rule — founder picked the kicker back): a three-line
-                        // preview under the fade, the full case one tap away.
-                        // The fade, never an ellipsis — the truncation law.
-                        if let take = takeText {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("THE CASE")
-                                    .font(GaryFonts.mono(9, bold: true)).tracking(2.2)
-                                    .foregroundStyle(GaryColors.gold)
-                                if caseExpanded {
+            // ── THE FILE (option 06): the active pane. THE CASE opens as a
+            // three-line preview behind the card fade and expands in place;
+            // LINES and THE TAPE open as full files and the card grows.
+            switch tab {
+            case .take:
+                if let take = takeText {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("THE CASE")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(2.2)
+                            .foregroundStyle(GaryColors.gold)
+                        if caseExpanded {
+                            ScrollView(showsIndicators: false) {
+                                VStack(alignment: .leading, spacing: 0) {
                                     Text(take)
                                         .font(GaryFonts.text(14.5))
                                         .foregroundStyle(.white.opacity(0.88))
                                         .lineSpacing(3.5)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                } else {
-                                    ZStack(alignment: .bottom) {
-                                        Text(take)
-                                            .font(GaryFonts.text(14.5))
-                                            .foregroundStyle(.white.opacity(0.88))
-                                            .lineSpacing(3.5)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .frame(maxHeight: 70, alignment: .top)
-                                            .clipped()
-                                        LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
-                                                       startPoint: .top, endPoint: .bottom)
-                                            .frame(height: 26)
-                                            .allowsHitTesting(false)
-                                    }
+                                    Color.clear.frame(height: 26)
                                 }
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.2)) { caseExpanded.toggle() }
-                                } label: {
-                                    HStack(spacing: 5) {
-                                        Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL CASE")
-                                            .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
-                                        Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
-                                            .font(.system(size: 8, weight: .bold))
-                                    }
-                                    .foregroundStyle(GaryColors.gold.opacity(0.85))
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
+                            }
+                            .overlay(alignment: .bottom) { backFade }
+                        } else {
+                            // Three lines under the fade — the fade, never an
+                            // ellipsis (the truncation law).
+                            ZStack(alignment: .bottom) {
+                                Text(take)
+                                    .font(GaryFonts.text(14.5))
+                                    .foregroundStyle(.white.opacity(0.88))
+                                    .lineSpacing(3.5)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .frame(height: 70, alignment: .top)
+                                    .clipped()
+                                backFade
                             }
                         }
-                    case .lines:
-                        if let odds = pick.sportsbook_odds, !odds.isEmpty {
-                            SportsbookLinesDropdown(odds: odds)
+                        Button {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL CASE")
+                                    .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
+                                Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            .foregroundStyle(GaryColors.gold.opacity(0.85))
+                            .contentShape(Rectangle())
                         }
-                    case .tape:
-                        if let stats = pick.statsData, !stats.isEmpty {
+                        .buttonStyle(.plain)
+                    }
+                }
+            case .lines:
+                if let odds = pick.sportsbook_odds, !odds.isEmpty {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            SportsbookLinesDropdown(odds: odds)
+                            Color.clear.frame(height: 26)
+                        }
+                    }
+                    .overlay(alignment: .bottom) { backFade }
+                }
+            case .tape:
+                if let stats = pick.statsData, !stats.isEmpty {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 12) {
                             TaleOfTapeSection(
                                 homeTeam: pick.homeTeam ?? "",
                                 awayTeam: pick.awayTeam ?? "",
@@ -17437,35 +17441,49 @@ struct PickCardBack: View {
                                 injuries: pick.injuries,
                                 garyPickedHome: pickedHome
                             )
+                            Color.clear.frame(height: 26)
                         }
                     }
-                    // Tail room: the last sentence must clear the bottom fade
-                    // fully when scrolled to the end (founder: the rationale
-                    // read as cut off).
-                    Color.clear.frame(height: 30)
+                    .overlay(alignment: .bottom) { backFade }
                 }
             }
-            // The case scrolls INSIDE the card — without a fade the viewport
-            // edge cuts a sentence mid-line and reads as truncation.
-            .overlay(alignment: .bottom) {
-                LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 24)
-                    .allowsHitTesting(false)
+
+            // The stamps ride BELOW the case (the mock's order — read first,
+            // decide under what you read).
+            if AppFlags.userBookEnabled {
+                TailFadeRow(pick: pick)
             }
 
-            Text("tap to flip back  ↺")
-                .font(GaryFonts.mono(9, bold: false))
-                .foregroundStyle(.white.opacity(0.62))
-                .frame(maxWidth: .infinity, alignment: .center)
+            // Footer index: the dossier's files on the left, the flip cue on
+            // the right — one quiet line instead of a tab bar plus a caption.
+            HStack(spacing: 12) {
+                ForEach(availableTabs, id: \.rawValue) { t in
+                    Button {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { tab = t }
+                    } label: {
+                        Text(t.rawValue)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.6)
+                            .foregroundStyle(tab == t ? GaryColors.gold : .white.opacity(0.35))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+                Text("flip ↺")
+                    .font(GaryFonts.mono(9, bold: false))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
         }
         .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: grown ? .infinity : nil, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(hex: "#1C1A1A"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
+        .onAppear { grown = caseExpanded || tab != .take }
+        .onChange(of: caseExpanded) { _ in grown = caseExpanded || tab != .take }
+        .onChange(of: tab) { _ in grown = caseExpanded || tab != .take }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
 }
