@@ -891,29 +891,8 @@ struct HubView: View {
     /// Fantasy is its OWN page (founder, Jul 26): never a section in the feed.
     @AppStorage("hubScope") private var hubScope = "hub"
 
-    private var hubScopeToggle: some View {
-        // House selector grammar: text + underline bar, never a pill
-        // (founder law, Jul 26 — no oval bubbles).
-        HStack(spacing: 18) {
-            hubScopeTab("THE HUB", isOn: hubScope != "fantasy") { hubScope = "hub" }
-            hubScopeTab("FANTASY", isOn: hubScope == "fantasy") { hubScope = "fantasy" }
-            Spacer()
-        }
-        .padding(.horizontal, 18)
-    }
-
-    private func hubScopeTab(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
-        Button(action: tap) {
-            VStack(spacing: 4) {
-                Text(label)
-                    .font(HubFont.data(11, .bold)).tracking(1.2)
-                    .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
-                Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
-            }
-            .fixedSize()
-        }
-        .buttonStyle(.plain)
-    }
+    // (hubScopeToggle folded onto the masthead line Aug 6 night — THE HUB /
+    // FANTASY ride beside the league words as gold-text tabs, no underline.)
 
     /// Everything not already on the page — a safety net so a future backend
     /// lane always renders somewhere instead of vanishing.
@@ -1133,8 +1112,6 @@ struct HubView: View {
                     searchFocused: $searchFocused
                 )
                 .id("top")
-
-                hubScopeToggle
 
                 if hubScope == "fantasy" {
                     FantasyCornerPage(
@@ -1536,67 +1513,65 @@ fileprivate struct HubMasthead: View {
     @Binding var searchOpen: Bool
     @Binding var searchText: String
     var searchFocused: FocusState<Bool>.Binding
-
-    private var dateLine: String {
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEEE, MMMM d"
-        return f.string(from: Date())
-    }
+    /// Same key the page reads — the scope tabs live on the masthead line now.
+    @AppStorage("hubScope") private var hubScope = "hub"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ONE-LINE masthead (founder, Aug 6 night, second ruling: headers
-            // back, everything horizontal on the line): THE HUB left; the
-            // LEAGUE WORDS trigger (mock 64 — the full-screen typographic
-            // switcher does the rest), L7 record, and search toggle all ride
-            // the trailing slot. No stacked control rows.
-            GaryPageHeader(title: "The", goldPart: "Hub", trailing: {
-                HStack(spacing: 10) {
-                    if !leagues.isEmpty {
-                        LeagueWordsTrigger(current: sel.label) {
-                            let opts = leagues.map { l -> LeagueOverlayState.Option in
-                                let n = l == sel ? gameCount : 0
-                                return .init(code: l.label,
-                                             sup: n > 0 ? "\(n) GAME\(n == 1 ? "" : "S")" : nil,
-                                             live: false, selected: l == sel)
-                            }
-                            // The whole calendar, not just what's live (founder, Aug 4).
-                            let full = opts + LeagueOverlayState.offSeasonOptions(
-                                excluding: Set(leagues.map(\.label)))
-                            LeagueOverlayState.shared.present(full) { picked in
-                                if let hit = leagues.first(where: { $0.label == picked }) {
-                                    withAnimation(.easeInOut(duration: 0.2)) { sel = hit }
-                                }
+            // NO masthead on the Hub (founder, Aug 6 night, third ruling) —
+            // one flat line at the very top, all four pieces horizontal:
+            // MLB (league words) · THE HUB · FANTASY …… L7 record. Scope tabs
+            // wear gold-text state, underline hardware gone (his call: "just
+            // use gold font"); search keeps its corner seat.
+            HStack(spacing: 16) {
+                if !leagues.isEmpty {
+                    LeagueWordsTrigger(current: sel.label) {
+                        let opts = leagues.map { l -> LeagueOverlayState.Option in
+                            let n = l == sel ? gameCount : 0
+                            return .init(code: l.label,
+                                         sup: n > 0 ? "\(n) GAME\(n == 1 ? "" : "S")" : nil,
+                                         live: false, selected: l == sel)
+                        }
+                        // The whole calendar, not just what's live (founder, Aug 4).
+                        let full = opts + LeagueOverlayState.offSeasonOptions(
+                            excluding: Set(leagues.map(\.label)))
+                        LeagueOverlayState.shared.present(full) { picked in
+                            if let hit = leagues.first(where: { $0.label == picked }) {
+                                withAnimation(.easeInOut(duration: 0.2)) { sel = hit }
                             }
                         }
                     }
-                    if let r = record7 {
-                        let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
-                        HStack(spacing: 5) {
-                            HubKicker(text: "L7", size: 9.5, color: .white.opacity(0.62))
-                            Text("\(r.hit)–\(r.miss) · \(pct)%")
-                                .font(HubFont.data(11))
-                                .foregroundStyle(GaryColors.gold)
-                        }
-                    }
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            searchOpen.toggle()
-                            if !searchOpen { searchText = ""; searchFocused.wrappedValue = false }
-                            else { searchFocused.wrappedValue = true }
-                        }
-                    } label: {
-                        Image(systemName: searchOpen ? "xmark" : "magnifyingglass")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(searchOpen ? 0.8 : 0.55))
-                            .frame(width: 30, height: 30)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(searchOpen ? "Close search" : "Search")
                 }
-            })
+                scopeWord("THE HUB", on: hubScope != "fantasy") { hubScope = "hub" }
+                scopeWord("FANTASY", on: hubScope == "fantasy") { hubScope = "fantasy" }
+                Spacer(minLength: 8)
+                if let r = record7 {
+                    let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
+                    HStack(spacing: 5) {
+                        HubKicker(text: "L7", size: 9.5, color: .white.opacity(0.62))
+                        Text("\(r.hit)–\(r.miss) · \(pct)%")
+                            .font(HubFont.data(11))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        searchOpen.toggle()
+                        if !searchOpen { searchText = ""; searchFocused.wrappedValue = false }
+                        else { searchFocused.wrappedValue = true }
+                    }
+                } label: {
+                    Image(systemName: searchOpen ? "xmark" : "magnifyingglass")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(searchOpen ? 0.8 : 0.55))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(searchOpen ? "Close search" : "Search")
+            }
+            .padding(.top, 10)
+            .pageGutter()
 
             if searchOpen {
                 HStack(spacing: 8) {
@@ -1629,8 +1604,20 @@ fileprivate struct HubMasthead: View {
                 .pageGutter()
             }
         }
-        // (No outer gutter — GaryPageHeader gutters itself; the control rows
-        // above carry .pageGutter() individually.)
+        // (No outer gutter — the top line and search field gutter themselves.)
+    }
+
+    /// Gold-text scope word — active wears gold, inactive waits dim; no
+    /// underline (founder, Aug 6 night — same grammar as Home's day tabs).
+    private func scopeWord(_ label: String, on: Bool, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(label)
+                .font(HubFont.data(11, .bold)).tracking(1.2)
+                .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.5))
+                .fixedSize()
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -4897,9 +4897,9 @@ struct HomeHeadlinesBoard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Bare rule — the cards themselves (headline + pick + verdict)
-            // say "headlines" louder than any label or count did.
-            HomeSectionRule()
+            // No rule of its own — headlines lead the page all day, so a rule
+            // here just doubled the masthead's hairline with a dead band
+            // between (founder screenshot, Aug 6 night: "duplicate lines").
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(Array(stories.prefix(6).enumerated()), id: \.offset) { _, s in
