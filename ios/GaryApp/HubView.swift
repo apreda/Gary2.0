@@ -1546,35 +1546,31 @@ fileprivate struct HubMasthead: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Masthead OFF (founder, Aug 6 night: headers off every page but
-            // Picks) — the Hub opens straight on its own control row: LEAGUE
-            // WORDS left, the L7 record + search toggle (the old header's
-            // trailing pieces) folded onto the right.
-            //
-            // LEAGUE WORDS (founder pick, mock 64): underline league tabs →
-            // one trigger; the full-screen typographic switcher does the rest.
-            // Shows at any league count (not just >1, unlike the old tabs it
-            // replaced) — it's also the page's "you're on MLB" label, and the
-            // only way to see the feature before more leagues are in season.
-            if !leagues.isEmpty {
-                HStack(spacing: 8) {
-                    LeagueWordsTrigger(current: sel.label) {
-                        let opts = leagues.map { l -> LeagueOverlayState.Option in
-                            let n = l == sel ? gameCount : 0
-                            return .init(code: l.label,
-                                         sup: n > 0 ? "\(n) GAME\(n == 1 ? "" : "S")" : nil,
-                                         live: false, selected: l == sel)
-                        }
-                        // The whole calendar, not just what's live (founder, Aug 4).
-                        let full = opts + LeagueOverlayState.offSeasonOptions(
-                            excluding: Set(leagues.map(\.label)))
-                        LeagueOverlayState.shared.present(full) { picked in
-                            if let hit = leagues.first(where: { $0.label == picked }) {
-                                withAnimation(.easeInOut(duration: 0.2)) { sel = hit }
+            // ONE-LINE masthead (founder, Aug 6 night, second ruling: headers
+            // back, everything horizontal on the line): THE HUB left; the
+            // LEAGUE WORDS trigger (mock 64 — the full-screen typographic
+            // switcher does the rest), L7 record, and search toggle all ride
+            // the trailing slot. No stacked control rows.
+            GaryPageHeader(title: "The", goldPart: "Hub", trailing: {
+                HStack(spacing: 10) {
+                    if !leagues.isEmpty {
+                        LeagueWordsTrigger(current: sel.label) {
+                            let opts = leagues.map { l -> LeagueOverlayState.Option in
+                                let n = l == sel ? gameCount : 0
+                                return .init(code: l.label,
+                                             sup: n > 0 ? "\(n) GAME\(n == 1 ? "" : "S")" : nil,
+                                             live: false, selected: l == sel)
+                            }
+                            // The whole calendar, not just what's live (founder, Aug 4).
+                            let full = opts + LeagueOverlayState.offSeasonOptions(
+                                excluding: Set(leagues.map(\.label)))
+                            LeagueOverlayState.shared.present(full) { picked in
+                                if let hit = leagues.first(where: { $0.label == picked }) {
+                                    withAnimation(.easeInOut(duration: 0.2)) { sel = hit }
+                                }
                             }
                         }
                     }
-                    Spacer()
                     if let r = record7 {
                         let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
                         HStack(spacing: 5) {
@@ -1600,9 +1596,7 @@ fileprivate struct HubMasthead: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(searchOpen ? "Close search" : "Search")
                 }
-                .padding(.top, 4)
-                .pageGutter()
-            }
+            })
 
             if searchOpen {
                 HStack(spacing: 8) {

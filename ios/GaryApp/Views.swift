@@ -1902,15 +1902,12 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
 
-                    // Masthead OFF (founder, Aug 6 night: headers off every
-                    // page but Picks — "everything is more fitted"). Home
-                    // opens straight on the day; the brand lives in the tab
-                    // bar's bear and the Picks masthead.
-                    // The home opens on Morning (results-first — the view the
-                    // user lands on) and stays on whichever state they pick.
-                    // Pre-game and Live are one tap away on the switcher.
-                    phaseSwitcher
-                        .padding(.top, 14)
+                    // ONE-LINE masthead (founder, Aug 6 night, second ruling:
+                    // "all apps have headers — bring them back, but all in one
+                    // line, horizontal not vertical"). Brand left, the
+                    // TODAY/TOMORROW switcher rides the same line; no date
+                    // accent — the tabs get the room.
+                    GaryPageHeader(title: "Gary", goldPart: "A.I.", trailing: { phaseSwitcher })
 
                     // TODAY is one full merged page that evolves through the day —
                     // results-first in the morning, the slate + board + World Cup
@@ -3318,14 +3315,12 @@ struct HomeView: View {
     // plain labels, the active one white/bold over a gold underline bar, the
     // rest grey with no underline. Replaces the old matte-capsule pill.
     private var phaseSwitcher: some View {
-        HStack(spacing: 26) {
+        // Rides the masthead's trailing slot — no gutter or trailing spacer
+        // of its own (the header line owns the layout).
+        HStack(spacing: 22) {
             switcherTab("TODAY", pill: .today)
             switcherTab("TOMORROW", pill: .tomorrow)
-            Spacer(minLength: 8)
-            // (The per-sport live record cells left this row Jul 6 — founder:
-            // data crowding the nav. The strip + THE RECORD carry the day.)
         }
-        .pageGutter()
     }
 
     // (liveFormInline removed Jul 6 — founder: records crowded the nav row.
@@ -6956,47 +6951,45 @@ struct PremiumPicksView: View {
 
     // MARK: - Header / states
 
-    // Masthead OFF (founder, Aug 6 night: headers off every page but Picks) —
-    // and ONE control line: GAMES/PROPS on the left, the day dropdown on the
-    // right, nothing stacked above or below. Lives outside the content
-    // Section so the day menu survives loading/coming-soon/empty states
+    // ONE-LINE masthead (founder, Aug 6 night, second ruling: headers back,
+    // everything horizontal on the line). Title left; GAMES/PROPS and the
+    // compact day dropdown ride the trailing slot. Sits outside the content
+    // branch so the day menu survives loading/coming-soon/empty states
     // (it's the only way back off a past date).
     private var header: some View {
-        HStack(spacing: 0) {
-            tabSegment("GAMES", count: gameCount, active: mode == .games) { mode = .games }
-            Spacer().frame(width: 28)
-            tabSegment("PROPS", count: propCount, active: mode == .props) { mode = .props }
-            Spacer(minLength: 12)
-            Menu {
-                ForEach(0..<8, id: \.self) { offset in
-                    Button(daySelectorLabel(offset)) {
-                        withAnimation { selectedDate = offset == 0 ? nil : dayDateString(offset) }
+        GaryPageHeader(title: "Winners", trailing: {
+            HStack(spacing: 14) {
+                tabSegment("GAMES", count: gameCount, active: mode == .games) { mode = .games }
+                tabSegment("PROPS", count: propCount, active: mode == .props) { mode = .props }
+                Menu {
+                    ForEach(0..<8, id: \.self) { offset in
+                        Button(daySelectorLabel(offset)) {
+                            withAnimation { selectedDate = offset == 0 ? nil : dayDateString(offset) }
+                        }
                     }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(headerDateLabel)
+                            .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.62))
+                    }
+                    .contentShape(Rectangle())
                 }
-            } label: {
-                HStack(spacing: 5) {
-                    Text(headerDateLabel)
-                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.62))
-                }
-                .contentShape(Rectangle())
             }
-        }
-        .pageGutter()
-        .padding(.top, 4)
+        })
         .padding(.bottom, 8)
     }
 
-    /// Long-form date for the header dropdown trigger — "Thursday, June 18" today,
-    /// or the chosen day. Replaces the old "TODAY ▾" pill.
+    /// Compact date for the one-line header trigger — "TODAY", or "AUG 5" on
+    /// a chosen past day (the long form crowded the shared line).
     private var headerDateLabel: String {
-        guard let d = selectedDate else { return GaryPageHeader<EmptyView>.dateLabel() }
+        guard let d = selectedDate else { return "TODAY" }
         let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"
         inF.timeZone = TimeZone(identifier: "America/New_York")
         guard let date = inF.date(from: d) else { return d }
-        let outF = DateFormatter(); outF.dateFormat = "EEEE, MMMM d"; outF.timeZone = inF.timeZone
-        return outF.string(from: date)
+        let outF = DateFormatter(); outF.dateFormat = "MMM d"; outF.timeZone = inF.timeZone
+        return outF.string(from: date).uppercased()
     }
 
     private var emptyState: some View {
@@ -12459,11 +12452,12 @@ struct BillfoldView: View {
             leatherBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // The one-line wallet header + index tabs; paper scrolls beneath.
+                headerBar
+
                 if AppFlags.userBookEnabled, billfoldScope == "you" {
-                    // YOUR book takes the whole page — Gary's tabs/timeframes
-                    // are his-book controls only, so the GARY/YOU switch rides
-                    // its own slim line here (the only way back to his book).
-                    headerBar
+                    // YOUR book takes the whole page below the header —
+                    // Gary's tabs/timeframes are his-book controls only.
                     ScrollView(showsIndicators: false) {
                         UserBookSection(expanded: true)
                             .padding(.top, 6)
@@ -12634,19 +12628,21 @@ struct BillfoldView: View {
 
     // MARK: - Header Bar
 
-    // Masthead OFF (founder, Aug 6 night: headers off every page but Picks).
-    // The wallet opens straight on its index tabs; the GARY/YOU book switch —
-    // the header's one functional piece — survives as a slim trailing row.
-    @ViewBuilder private var headerBar: some View {
-        if AppFlags.userBookEnabled {
-            HStack {
-                Spacer()
-                bookScopeToggle
-            }
-            .pageGutter()
-            .padding(.top, 4)
-            .padding(.bottom, 2)
-        }
+    // ONE-LINE masthead (founder, Aug 6 night, second ruling: headers back,
+    // horizontal). Title + GARY/YOU on the same line; the brass stitch — the
+    // wallet's one signature — rides the rule slot.
+    private var headerBar: some View {
+        GaryPageHeader(title: "Billfold",
+                       rule: AnyView(
+                           StitchLine()
+                               .stroke(brass.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                               .frame(height: 1)
+                       ),
+                       trailing: {
+                           if AppFlags.userBookEnabled {
+                               bookScopeToggle
+                           }
+                       })
     }
 
     /// GARY / YOU book switch — whose record the page shows. Persisted so the
@@ -12730,14 +12726,8 @@ struct BillfoldView: View {
                 }
             }
 
-            // GARY/YOU rides the same line (founder, Aug 6 night: one control
-            // line per page, nothing stacked).
-            if AppFlags.userBookEnabled {
-                bookScopeToggle
-            }
         }
         .padding(.horizontal, 18)
-        .padding(.top, 4)
     }
 
     private func passbookChip(_ label: String) -> some View {
