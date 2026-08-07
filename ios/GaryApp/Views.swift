@@ -17214,6 +17214,8 @@ struct PickCardBack: View {
     // lives on backend-only as the audit trail the graders run against.)
     private enum BackTab: String { case take = "THE TAKE", lines = "LINES", tape = "THE TAPE" }
     @State private var tab: BackTab = .take
+    /// THE CASE preview (founder pick, option 06): three lines, expand on tap.
+    @State private var caseExpanded = false
     private var availableTabs: [BackTab] {
         var t: [BackTab] = [.take]
         if let odds = pick.sportsbook_odds, !odds.isEmpty { t.append(.lines) }
@@ -17245,6 +17247,30 @@ struct PickCardBack: View {
     /// Copy = exactly the prose on screen, word for word (founder, Jul 31).
     private var takeCopyText: String { takeText ?? "" }
     private var confidence: CGFloat { CGFloat(max(0.1, min(1.0, pick.confidence ?? 0.7))) }
+
+    /// Dossier strip words: the pick without its trailing price, and the price
+    /// alone — both straight from the stored pick text (the chassis normalizes
+    /// bare trailing odds, so the regex is the single source of truth).
+    private var dossierPickWord: String {
+        let fp = (pick.pick ?? "").replacingOccurrences(of: #"\s*[+-]\d{3,4}$"#, with: "", options: .regularExpression)
+        return fp.isEmpty ? "—" : fp
+    }
+    private var dossierPriceWord: String {
+        let fp = pick.pick ?? ""
+        if let r = fp.range(of: #"[+-]\d{3,4}$"#, options: .regularExpression) { return String(fp[r]) }
+        return "—"
+    }
+    @ViewBuilder private func dossierCell(_ label: String, _ value: String, gold: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(GaryFonts.mono(8.5, bold: true)).tracking(1.8)
+                .foregroundStyle(.white.opacity(0.38))
+            Text(value)
+                .font(GaryFonts.mono(12, bold: true))
+                .foregroundStyle(gold ? GaryColors.gold : GaryColors.warmWhite)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
     private var pickedHome: Bool {
         guard let h = pick.homeTeam, !h.isEmpty else { return false }
         return (pick.pick ?? "").localizedCaseInsensitiveContains(h)
@@ -17253,30 +17279,27 @@ struct PickCardBack: View {
     @ViewBuilder private func paneTab(_ t: BackTab) -> some View {
         let active = tab == t
         Button { withAnimation(.easeInOut(duration: 0.15)) { tab = t } } label: {
-            VStack(spacing: 3) {
-                Text(t.rawValue)
-                    .font(GaryFonts.display(11)).tracking(1.4)
-                    .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
-                Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 1.5)
-            }
-            .fixedSize()
+            // Option 06: no underline indicator — the active pane is gold,
+            // the rest sit back. State by color, not by another line.
+            Text(t.rawValue)
+                .font(GaryFonts.display(11)).tracking(1.4)
+                .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.38))
+                .fixedSize()
         }
         .buttonStyle(.plain)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text("GARY'S TAKE")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                // THE PICK rides the header slot (founder, Aug 4: "people
-                // know from the front what the game is" — the matchup line
-                // came off, the pick took its place and size).
-                Text(pick.pick ?? "")
-                    .font(GaryFonts.mono(10, bold: true))
-                    .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.6)
+            // THE DOSSIER (founder pick, option 06 — Aug 6 night): the header
+            // is a labeled data strip — PICK / PRICE / FIRST PITCH — instead
+            // of an eyebrow fighting the pick across one row. The only
+            // borders left on the back are the stamps' own.
+            HStack(alignment: .top, spacing: 14) {
+                dossierCell("PICK", dossierPickWord, gold: true)
+                dossierCell("PRICE", dossierPriceWord, gold: false)
+                dossierCell("FIRST PITCH", pick.time ?? "TONIGHT", gold: false)
+                Spacer(minLength: 4)
                 // Copy the take VERBATIM (founder, Jul 31) — whichever
                 // register is on screen, exactly as written, so it can be
                 // pasted word for word.
@@ -17335,15 +17358,8 @@ struct PickCardBack: View {
                 }
             }
 
-            if pick.confidence != nil {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1E1A1A"))
-                        RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: geo.size.width * confidence)
-                    }
-                }
-                .frame(height: 2)
-            }
+            // (Confidence bar retired with option 06 — the dossier carries no
+            // meters; the number still stores.)
 
             if AppFlags.userBookEnabled {
                 TailFadeRow(pick: pick)
@@ -17363,14 +17379,50 @@ struct PickCardBack: View {
                 VStack(alignment: .leading, spacing: 12) {
                     switch tab {
                     case .take:
-                        // Straight into the rationale — no inner heading, no
-                        // registers (founder, Aug 4).
+                        // THE CASE (option 06 supersedes the Aug 4 no-heading
+                        // rule — founder picked the kicker back): a three-line
+                        // preview under the fade, the full case one tap away.
+                        // The fade, never an ellipsis — the truncation law.
                         if let take = takeText {
-                            Text(take)
-                                .font(GaryFonts.text(14.5))
-                                .foregroundStyle(.white.opacity(0.88))
-                                .lineSpacing(3.5)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("THE CASE")
+                                    .font(GaryFonts.mono(9, bold: true)).tracking(2.2)
+                                    .foregroundStyle(GaryColors.gold)
+                                if caseExpanded {
+                                    Text(take)
+                                        .font(GaryFonts.text(14.5))
+                                        .foregroundStyle(.white.opacity(0.88))
+                                        .lineSpacing(3.5)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                } else {
+                                    ZStack(alignment: .bottom) {
+                                        Text(take)
+                                            .font(GaryFonts.text(14.5))
+                                            .foregroundStyle(.white.opacity(0.88))
+                                            .lineSpacing(3.5)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .frame(maxHeight: 70, alignment: .top)
+                                            .clipped()
+                                        LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
+                                                       startPoint: .top, endPoint: .bottom)
+                                            .frame(height: 26)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) { caseExpanded.toggle() }
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL CASE")
+                                            .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
+                                        Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
+                                            .font(.system(size: 8, weight: .bold))
+                                    }
+                                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     case .lines:
                         if let odds = pick.sportsbook_odds, !odds.isEmpty {

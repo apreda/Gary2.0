@@ -466,10 +466,11 @@ struct TailFadeRow: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(Color.clear)
-                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(Color.white.opacity(0.22), lineWidth: 1))
+                    // Option 06 stamps (founder pick, Aug 6): tight-cornered,
+                    // letterpress-weight borders — the one place on the back
+                    // where a border means something. Idle twins stay equals.
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.white.opacity(0.30), lineWidth: 1.5)
                 )
                 .contentShape(Rectangle())
         }
