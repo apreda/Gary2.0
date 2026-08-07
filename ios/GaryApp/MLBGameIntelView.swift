@@ -158,9 +158,17 @@ struct MLBGameIntelView: View {
     // (pitchingEdges / batsEdges removed Aug 6 with the sections they fed.)
     // parkEdges stays: the field view's own weather chip + read still read it.
     private var parkEdges: [Signal] { module([.parkWeather, .ballpark]) }
+    /// MORE INTEL carries this game's remaining reads — the same lanes the
+    /// Today page lists, minus anything already said on this page (founder,
+    /// Aug 6: "this is where the insight should have gone where they are
+    /// relevant to that games players teams"). Excluded: the three the Big
+    /// Numbers rail drew (shared GameRail selection, so the two surfaces
+    /// can't disagree), the season series (its own section), the HR fun lane,
+    /// the retired NRFI dots, and the park/weather now living in the rail.
     private var otherEdges: [Signal] {
-        let claimed: Set<SignalKind> = [.starterForm, .firstInning, .runningGame, .hot, .cold, .platoon, .regression, .hrThreat, .h2h, .streak, .parkWeather, .ballpark]
-        return edges.filter { !claimed.contains($0.kind) }
+        let railIDs = GameRail.chosenIDs(edges)
+        let dropped: Set<SignalKind> = [.h2h, .firstInning, .hrThreat, .parkWeather, .ballpark]
+        return edges.filter { !railIDs.contains($0.id) && !dropped.contains($0.kind) }
     }
 
     private func playerEdges(_ name: String) -> [Signal] {
@@ -183,19 +191,10 @@ struct MLBGameIntelView: View {
             if showHeader { header }
             stateTabs
             fieldCard
-            // Head-to-Head — the season-series dominance, right under the lineup
-            // (founder, Image #68). HeadToHeadRow carries the tug-of-war bar.
-            if let h2hEdge = edges.first(where: { $0.h2h != nil }) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("HEAD-TO-HEAD")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.4))
-                        .padding(.horizontal, 16).padding(.top, 4)
-                    HeadToHeadRow(s: h2hEdge) { _ in }
-                        .padding(.horizontal, 16)
-                }
-                .padding(.top, 8)
-            }
+            // (The second Head-to-Head that sat under the lineup came off
+            // Aug 6 — founder: "why is head head still here at the bottom we
+            // dont need two of them". GameH2HSection above owns the series,
+            // once, in its own container.)
             // FIRST INNING, PITCHING, BATS and PARK & WEATHER all came off
             // this view (founder, Aug 6): the pitching/bats rows repeated the
             // Big Numbers rail above, the weather now lives in that rail, and

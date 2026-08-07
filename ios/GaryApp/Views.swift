@@ -3158,8 +3158,11 @@ struct HomeView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(GaryColors.panelFill)
+                // GOLD outline (founder, Aug 6: "the outline around The Board
+                // shold be Gold") — the board wears Gary's color now, whether
+                // or not games are live.
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(liveGlow ? GaryColors.win.opacity(0.3) : GaryColors.warmWhite.opacity(0.07), lineWidth: 1))
+                    .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1))
         )
         .pageGutter()
     }
@@ -16028,7 +16031,11 @@ enum SportsbookNames {
 /// the multi-book spread/ML comparison from the pick's sportsbook_odds.
 struct SportsbookLinesDropdown: View {
     let odds: [SportsbookOdds]
-    @State private var open = false
+    // Open on arrival (founder, Aug 6: "the sportsbook lines should already be
+    // dropped down") — the LINES tab exists to show the lines, so opening it
+    // and then having to open it again was a door in front of a door. The
+    // disclosure still collapses on tap.
+    @State private var open = true
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { withAnimation(.easeInOut(duration: 0.2)) { open.toggle() } } label: {
@@ -21787,6 +21794,39 @@ fileprivate struct GameH2HSection: View {
     }
 }
 
+/// What the game page's Big Numbers rail takes, and therefore what the intel
+/// list below it must NOT repeat. One definition, read by both (founder,
+/// Aug 6 — the two surfaces were each guessing and the page said things twice).
+enum GameRail {
+    /// The lanes the rail speaks. Deliberately excludes .hrThreat (the HR fun
+    /// lane — an odds value and a name-only headline), .h2h (its own ledger
+    /// section), .firstInning (NRFI came off the page) and .starterForm (THE
+    /// ARMS carries the pitcher in full: "all i didnt want there was more
+    /// pitcher data"). The hitter and team lanes stay.
+    static let kinds: Set<SignalKind> = [
+        .hot, .cold, .platoon, .streak, .teamRecord,
+        .bullpenFatigue, .injury, .runningGame, .situational,
+    ]
+
+    /// Can this edge be a rail row: right lane, short real value, and NOT a
+    /// signed price (odds are not a stat).
+    static func isRailEdge(_ s: Signal) -> Bool {
+        guard kinds.contains(s.kind), !s.headline.isEmpty else { return false }
+        let v = s.value.trimmingCharacters(in: .whitespaces)
+        guard !v.isEmpty, v.count <= 4 else { return false }
+        return !(v.hasPrefix("+") || v.hasPrefix("-"))
+    }
+
+    /// The three the rail will actually draw, in its own order.
+    static func chosenIDs(_ edges: [Signal]) -> Set<UUID> {
+        var out = Set<UUID>()
+        for s in edges where out.count < 3 {
+            if isRailEdge(s) { out.insert(s.id) }
+        }
+        return out
+    }
+}
+
 fileprivate extension String {
     /// "wind at 2 mph · total sits at 9" → "Wind at 2 mph · total sits at 9".
     /// Only the first character moves — the rest keeps whatever case the real
@@ -21803,17 +21843,6 @@ fileprivate struct ScoutBigNumbersSection: View {
     let d: ScoutTrioData
     let edges: [Signal]
 
-    /// The lanes this rail speaks (founder, Aug 6). Deliberately excludes:
-    /// .hrThreat (the HR fun lane — an odds value and a name-only headline),
-    /// .h2h (owns its own ledger section below), .firstInning (NRFI came off
-    /// the page), and .starterForm (the pitcher read THE ARMS already carries
-    /// in full — "all i didnt want there was more pitcher data"). The hitter
-    /// and team lanes stay, which is what keeps the rail at five rows.
-    static let railKinds: Set<SignalKind> = [
-        .hot, .cold, .platoon, .streak, .teamRecord,
-        .bullpenFatigue, .ballpark, .injury, .runningGame, .situational,
-    ]
-
     private struct Row: Identifiable {
         let id: String
         let numeral: String
@@ -21827,14 +21856,10 @@ fileprivate struct ScoutBigNumbersSection: View {
         // temperature and the series record.
         var out: [Row] = []
         for s in edges where out.count < 3 {
-            guard Self.railKinds.contains(s.kind) else { continue }
-            let v = s.value.trimmingCharacters(in: .whitespaces)
-            guard !v.isEmpty, v.count <= 4, !s.headline.isEmpty else { continue }
-            // A signed price is odds, never a stat — the HR fun lane stores
-            // "+600" as its value and the player's bare name as its headline,
-            // which rendered as "+600 Matt Olson" and said nothing.
-            guard !(v.hasPrefix("+") || v.hasPrefix("-")) else { continue }
-            out.append(Row(id: "edge-\(s.id)", numeral: v, bold: s.headline, rest: ""))
+            guard GameRail.isRailEdge(s) else { continue }
+            out.append(Row(id: "edge-\(s.id)",
+                           numeral: s.value.trimmingCharacters(in: .whitespaces),
+                           bold: s.headline, rest: ""))
         }
         if let w = weatherRow { out.append(w) }
         if let sr = seriesRow { out.append(sr) }
