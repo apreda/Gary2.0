@@ -21757,19 +21757,27 @@ fileprivate struct ScoutNotebookSection: View {
     }
 
     var body: some View {
-        let park = parkProse, series = seriesProse
-        if park != nil || series != nil || !d.wireLines.isEmpty {
+        // THE PARK and THE SERIES moved into the Big Numbers rail (founder,
+        // Aug 6) — each fact lives once on the page. THE NEWS stays: the wire
+        // is the one chapter nothing else on the page carries.
+        if !d.wireLines.isEmpty, let wire = d.wireText {
             VStack(alignment: .leading, spacing: 0) {
-                if let park { chapter("The Park", prose: park) }
-                if let wire = d.wireText {
-                    chapter("The News", prose: Text(wire).foregroundColor(ScoutMock.warm.opacity(0.88)))
-                }
-                if let series { chapter("The Series", prose: series, data: seriesData) }
+                chapter("The News", prose: Text(wire).foregroundColor(ScoutMock.warm.opacity(0.88)))
             }
             .padding(.horizontal, 15).padding(.top, 2).padding(.bottom, 14)
             .background(ScoutMock.cardShape)
             .padding(.horizontal, 16)
         }
+    }
+}
+
+fileprivate extension String {
+    /// "wind at 2 mph · total sits at 9" → "Wind at 2 mph · total sits at 9".
+    /// Only the first character moves — the rest keeps whatever case the real
+    /// field had (venue names, team abbrs).
+    var capitalizedFirst: String {
+        guard let f = first else { return self }
+        return String(f).uppercased() + dropFirst()
     }
 }
 
@@ -21786,17 +21794,50 @@ fileprivate struct ScoutBigNumbersSection: View {
         let rest: String
     }
     private var rows: [Row] {
-        // Edges ONLY (founder, Jul 22 dedup): this card is the layer the
-        // chapters above can't say — player and team reads from the insights
-        // pipeline (".865 vs righties", "the pen is rested"). No QS/form/
-        // weather/series fallbacks here: those live once, in the Notebook.
+        // THREE edges, then the weather and the series (founder, Aug 6) —
+        // those two moved UP here out of the Notebook, so the page says each
+        // fact once. Both carry a real numeral like every other row: the
+        // temperature and the series record.
         var out: [Row] = []
-        for s in edges where out.count < 5 {
+        for s in edges where out.count < 3 {
             let v = s.value.trimmingCharacters(in: .whitespaces)
             guard !v.isEmpty, v.count <= 4, !s.headline.isEmpty else { continue }
             out.append(Row(id: "edge-\(s.id)", numeral: v, bold: s.headline, rest: ""))
         }
+        if let w = weatherRow { out.append(w) }
+        if let sr = seriesRow { out.append(sr) }
         return out
+    }
+
+    /// "83°" + the wind and total beside it.
+    private var weatherRow: Row? {
+        guard let t = d.tempF else { return nil }
+        var bits: [String] = []
+        if let w = d.windMph { bits.append("wind at \(w) mph") }
+        if let note = d.weatherNote, !note.isEmpty { bits.append(note) }
+        if let total = d.total {
+            let shown = total == total.rounded() ? String(format: "%.0f", total)
+                                                 : String(format: "%.1f", total)
+            bits.append("total sits at \(shown)")
+        }
+        guard !bits.isEmpty else { return nil }
+        return Row(id: "weather", numeral: "\(t)°",
+                   bold: bits.joined(separator: " · ").capitalizedFirst, rest: "")
+    }
+
+    /// The series record as the numeral ("4-1"), the venues + last meeting beside it.
+    private var seriesRow: Row? {
+        guard let line = d.seriesLine, !line.isEmpty else { return nil }
+        // seriesLine reads "4-1 AT TRUIST · 3-1 AT LOANDEPOT" — the leading
+        // record is the numeral, the rest is the sentence.
+        let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
+        let numeral = parts.first ?? line
+        var text = parts.count > 1 ? parts[1] : ""
+        if let m = d.lastMeeting {
+            text += (text.isEmpty ? "" : " — ") + "last meeting \(m.d): \(m.line)"
+        }
+        guard !text.isEmpty else { return nil }
+        return Row(id: "series", numeral: numeral, bold: text.capitalizedFirst, rest: "")
     }
 
     var body: some View {
@@ -21804,7 +21845,11 @@ fileprivate struct ScoutBigNumbersSection: View {
         if !built.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(built.enumerated()), id: \.element.id) { i, r in
-                    HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    // CENTER, not baseline (founder, Aug 6: "the words next to
+                    // it should be in the middle not like at the bottom") — a
+                    // 40pt numeral against a two-line sentence sat the words on
+                    // the numeral's baseline, i.e. at its foot.
+                    HStack(alignment: .center, spacing: 14) {
                         Text(r.numeral)
                             .font(GaryFonts.display(40))
                             .foregroundStyle(i < 2 ? GaryColors.gold : ScoutMock.warm)

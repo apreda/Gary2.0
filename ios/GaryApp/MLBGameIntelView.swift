@@ -155,8 +155,8 @@ struct MLBGameIntelView: View {
     private var shownTeam: SupabaseAPI.MLBTeamLineup? { homeUp ? realHome : realAway }
 
     private func module(_ kinds: Set<SignalKind>) -> [Signal] { edges.filter { kinds.contains($0.kind) } }
-    private var pitchingEdges: [Signal] { module([.starterForm, .firstInning, .runningGame]).filter { $0.nrfi == nil } }
-    private var batsEdges: [Signal] { module([.hot, .cold, .platoon, .regression, .hrThreat, .h2h, .streak]).filter { $0.h2h == nil } }
+    // (pitchingEdges / batsEdges removed Aug 6 with the sections they fed.)
+    // parkEdges stays: the field view's own weather chip + read still read it.
     private var parkEdges: [Signal] { module([.parkWeather, .ballpark]) }
     private var otherEdges: [Signal] {
         let claimed: Set<SignalKind> = [.starterForm, .firstInning, .runningGame, .hot, .cold, .platoon, .regression, .hrThreat, .h2h, .streak, .parkWeather, .ballpark]
@@ -196,22 +196,11 @@ struct MLBGameIntelView: View {
                 }
                 .padding(.top, 8)
             }
-            // First Inning — the NRFI/YRFI dots (each side's recent first innings).
-            if let nrfiEdge = edges.first(where: { $0.nrfi != nil }) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("FIRST INNING")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.4))
-                        .padding(.horizontal, 16).padding(.top, 4)
-                    FirstInningRow(s: nrfiEdge) { _ in }
-                        .padding(.horizontal, 16)
-                }
-                .padding(.top, 8)
-            }
-            // THE READ removed (Jun 19, founder) — redundant with the modules below.
-            if !pitchingEdges.isEmpty { EdgesSection(title: "PITCHING", edges: pitchingEdges).padding(.top, 8) }
-            if !batsEdges.isEmpty     { EdgesSection(title: "BATS", edges: batsEdges).padding(.top, 8) }
-            if !parkEdges.isEmpty     { EdgesSection(title: "PARK & WEATHER", edges: parkEdges).padding(.top, 8) }
+            // FIRST INNING, PITCHING, BATS and PARK & WEATHER all came off
+            // this view (founder, Aug 6): the pitching/bats rows repeated the
+            // Big Numbers rail above, the weather now lives in that rail, and
+            // the NRFI dots plus the park-factor rows are gone by his call.
+            // The field + lineup is what this section is for.
             if !otherEdges.isEmpty    { EdgesSection(title: "MORE INTEL", edges: otherEdges).padding(.top, 8) }
         }
         .padding(.top, showHeader ? 14 : 0).padding(.bottom, 14)
