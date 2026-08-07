@@ -1903,18 +1903,15 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
 
-                    // ── ① Masthead — the serif front-door wordmark (the emerging
-                    // app language the Hub established Jul 4). No record up top:
-                    // most users are free users who came for tonight, not Gary's
-                    // ledger (founder) — The Record signs the page off instead.
-                    HomeMasthead()
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6), value: animateIn)
-
+                    // Masthead OFF (founder, Aug 6 night: headers off every
+                    // page but Picks — "everything is more fitted"). Home
+                    // opens straight on the day; the brand lives in the tab
+                    // bar's bear and the Picks masthead.
                     // The home opens on Morning (results-first — the view the
                     // user lands on) and stays on whichever state they pick.
                     // Pre-game and Live are one tap away on the switcher.
                     phaseSwitcher
+                        .padding(.top, 6)
 
                     // TODAY is one full merged page that evolves through the day —
                     // results-first in the morning, the slate + board + World Cup
@@ -3990,20 +3987,8 @@ struct HomeView: View {
 /// the founder's "too much motion, too much green" note was about THE BOARD
 /// section, not this one. Restored Jul 14 (founder: Live/Earlier Today was
 /// never supposed to lose the roll) — same current type/color, cycling back.
-struct HomeMasthead: View {
-    private var dateLine: String {
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEE, MMM d"
-        return f.string(from: Date()).uppercased()
-    }
-    // The ONE header (Aug 4) — Home's 40pt-logo/36pt-wordmark front door was
-    // the tallest of five different mastheads; it now opens exactly like every
-    // other page and the brand still leads the app.
-    var body: some View {
-        GaryPageHeader(title: "Gary", goldPart: "A.I.", accent: dateLine)
-    }
-}
+// (HomeMasthead retired Aug 6 night — headers came off every page but Picks;
+// Home opens straight on the phase switcher.)
 
 /// Act head — mock language: gold hairline, mono uppercase label, mono count,
 /// quiet sub right-aligned. Twin of the Hub's section head.
@@ -6982,13 +6967,12 @@ struct PremiumPicksView: View {
 
     // MARK: - Header / states
 
-    // The locked masthead formula — the last header in the app to adopt it.
-    // One commanding title, the date as quiet meta, yesterday's record as a
-    // single labeled badge (tap -> Billfold), gold stitch. PREMIUM pill,
-    // AWAITING SLATE, and league chips all retired: the body owns its states
-    // and the shelves announce their own leagues.
+    // Masthead OFF (founder, Aug 6 night: headers off every page but Picks).
+    // The one functional piece — the day dropdown — survives as a slim
+    // right-aligned meta row; the shelves open the page.
     private var header: some View {
-        GaryPageHeader(title: "Winners", accentMenu: AnyView(
+        HStack {
+            Spacer()
             Menu {
                 ForEach(0..<8, id: \.self) { offset in
                     Button(daySelectorLabel(offset)) {
@@ -7002,9 +6986,12 @@ struct PremiumPicksView: View {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .bold)).foregroundStyle(.white.opacity(0.62))
                 }
+                .contentShape(Rectangle())
             }
-        ))
-            .padding(.bottom, 8)
+        }
+        .pageGutter()
+        .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     /// Long-form date for the header dropdown trigger — "Thursday, June 18" today,
@@ -7529,7 +7516,6 @@ struct PremiumPicksView: View {
                                                           gameResult: shelf.settled ? gamePickResult(pick) : nil,
                                                           finalScore: shelf.settled ? gamePickScore(pick) : nil,
                                                           showSportBadge: false,
-                                                          backHeight: UIScreen.main.bounds.height * 0.68,
                                                           premiumFinish: true,
                                                           winnersSlot: winnersSlotMap[pick.id])
                                     }
@@ -12667,22 +12653,19 @@ struct BillfoldView: View {
 
     // MARK: - Header Bar
 
-    // The ONE header (Aug 4) — Billfold joins the template; the wallet keeps
-    // exactly one signature: the brass stitch rides the header's rule slot in
-    // place of the gold hairline. (Settings routes through the shared
-    // ShowSettingsMenu notification like every other page — same sheet.)
-    private var headerBar: some View {
-        GaryPageHeader(title: "Billfold", accent: statementDateLabel,
-                       rule: AnyView(
-                           StitchLine()
-                               .stroke(brass.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
-                               .frame(height: 1)
-                       ),
-                       trailing: {
-                           if AppFlags.userBookEnabled {
-                               bookScopeToggle
-                           }
-                       })
+    // Masthead OFF (founder, Aug 6 night: headers off every page but Picks).
+    // The wallet opens straight on its index tabs; the GARY/YOU book switch —
+    // the header's one functional piece — survives as a slim trailing row.
+    @ViewBuilder private var headerBar: some View {
+        if AppFlags.userBookEnabled {
+            HStack {
+                Spacer()
+                bookScopeToggle
+            }
+            .pageGutter()
+            .padding(.top, 12)
+            .padding(.bottom, 2)
+        }
     }
 
     /// GARY / YOU book switch — whose record the page shows. Persisted so the
@@ -12706,16 +12689,6 @@ struct BillfoldView: View {
             .fixedSize()
         }
         .buttonStyle(.plain)
-    }
-
-    private static let statementDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "EEEE, MMMM d"
-        return f
-    }()
-
-    private var statementDateLabel: String {
-        Self.statementDateFormatter.string(from: Date())
     }
 
     // MARK: - Sport Tabs + Picks/Props + Timeframe
@@ -15956,9 +15929,6 @@ struct FlippablePickCard: View {
     var finalScore: String? = nil
     var showSportBadge: Bool = false
     var liveInSlot: Bool = true
-    /// When set, the flipped back grows to at least this height — Best Bets
-    /// wants a full-page read; the default keeps the compact expansion elsewhere.
-    var backHeight: CGFloat? = nil
     /// 21B-S poured-gold front for entitled Winners cards (back stays dark).
     var premiumFinish: Bool = false
     /// Winners slot for the wordless edge-rail cue (front face only).
@@ -15970,13 +15940,6 @@ struct FlippablePickCard: View {
     /// most users never open. Front already drives the height, so no visual change.
     @State private var hasEverFlipped = false
     @State private var frontH: CGFloat = CompactPickRow.uniformHeight
-    /// Back is showing a tall file (expanded case / lines / tape).
-    @State private var backGrown = false
-
-    private var expandedH: CGFloat {
-        let base = max(frontH + 320, 480)
-        return backHeight.map { max($0, base) } ?? base
-    }
 
     var body: some View {
         ZStack {
@@ -15987,25 +15950,21 @@ struct FlippablePickCard: View {
                 .opacity(flipped ? 0 : 1)
 
             if flipped || hasEverFlipped {
-                PickCardBack(grown: $backGrown, pick: pick, gameResult: gameResult)
+                PickCardBack(flipped: flipped, pick: pick, gameResult: gameResult)
                     .opacity(flipped ? 1 : 0)
                     .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             }
         }
-        // Compact until a file grows (option 06): the collapsed dossier hugs
-        // its content; expanded case / lines / tape take the full height.
-        .frame(height: flipped ? (backGrown ? expandedH : nil) : frontH)
-        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: backGrown)
+        // The back NEVER wears a synthetic height (the expandedH/maxHeight pair
+        // blanked whole pages inside the horizontal pick carousels — Aug 6):
+        // flipped, the card is exactly its content's height; expanding the take
+        // just renders more content and the page reflows around it.
+        .frame(height: flipped ? nil : frontH)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
         .onTapGesture {
             hasEverFlipped = true; flipped.toggle()
-            // A caller that pinned backHeight wants the full-page read open.
-            if flipped && backHeight != nil { backGrown = true }
-            // Closing the card resets the growth — the next flip starts
-            // compact again; expanding is always a click, never inherited.
-            if !flipped { backGrown = false }
         }
         .onGaryTour { verb, _ in
             if verb == "flip" { hasEverFlipped = true; flipped.toggle() }
@@ -17214,30 +17173,22 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
 }
 
 struct PickCardBack: View {
-    /// True when the back is showing a tall file (expanded case, lines, or
-    /// tape) — the flip wrapper reads it to grow the card; collapsed CASE
-    /// keeps the card compact, like the dossier mock.
-    @Binding var grown: Bool
+    /// The wrapper's flip state — the back only needs the falling edge: when
+    /// the card closes, the open file folds back to the compact take so the
+    /// next flip starts fresh (expanding is a click, never inherited).
+    let flipped: Bool
     let pick: GaryPick
     var gameResult: String? = nil
     @State private var shareItem: PickShareItem? = nil
     @State private var copiedTake = false
 
-    // The back's content panes (founder, Aug 4): the take reads first; the
-    // sportsbook lines and the Tale of the Tape moved from below-the-scroll
-    // to TABS up top. (The old PLAIN/ANALYSIS register toggle is GONE — the
-    // analysis register came off the card entirely; the technical rationale
-    // lives on backend-only as the audit trail the graders run against.)
-    private enum BackTab: String { case take = "THE TAKE", lines = "LINES", tape = "THE TAPE" }
-    @State private var tab: BackTab = .take
-    /// THE CASE preview (founder pick, option 06): three lines, expand on tap.
+    // The back is ONE thing now (founder, Aug 6 night): Gary's take. The
+    // sportsbook-lines and Tale-of-Tape files came off the card with the
+    // data strip — the freed room goes to a deeper preview. (The old
+    // PLAIN/ANALYSIS register toggle is long gone; the technical rationale
+    // lives backend-only as the audit trail the graders run against.)
+    /// The take preview (founder pick, option 06): a few lines, expand on tap.
     @State private var caseExpanded = false
-    private var availableTabs: [BackTab] {
-        var t: [BackTab] = [.take]
-        if let odds = pick.sportsbook_odds, !odds.isEmpty { t.append(.lines) }
-        if let stats = pick.statsData, !stats.isEmpty { t.append(.tape) }
-        return t
-    }
 
     /// The take as shown: the plain fan register, opened directly on its
     /// first sentence — a stored "Gary's Take" heading line is stripped
@@ -17274,20 +17225,7 @@ struct PickCardBack: View {
     }
     /// Copy = exactly the prose on screen, word for word (founder, Jul 31).
     private var takeCopyText: String { takeText ?? "" }
-    private var confidence: CGFloat { CGFloat(max(0.1, min(1.0, pick.confidence ?? 0.7))) }
 
-    /// Dossier strip words: the pick without its trailing price, and the price
-    /// alone — both straight from the stored pick text (the chassis normalizes
-    /// bare trailing odds, so the regex is the single source of truth).
-    private var dossierPickWord: String {
-        let fp = (pick.pick ?? "").replacingOccurrences(of: #"\s*[+-]\d{3,4}$"#, with: "", options: .regularExpression)
-        return fp.isEmpty ? "—" : fp
-    }
-    private var dossierPriceWord: String {
-        let fp = pick.pick ?? ""
-        if let r = fp.range(of: #"[+-]\d{3,4}$"#, options: .regularExpression) { return String(fp[r]) }
-        return "—"
-    }
     /// The card-colored bottom fade — the back's one truncation device.
     private var backFade: some View {
         LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
@@ -17296,170 +17234,89 @@ struct PickCardBack: View {
             .allowsHitTesting(false)
     }
 
-    @ViewBuilder private func dossierCell(_ label: String, _ value: String, gold: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(GaryFonts.mono(8.5, bold: true)).tracking(1.8)
-                .foregroundStyle(.white.opacity(0.38))
-            Text(value)
-                .font(GaryFonts.mono(12, bold: true))
-                .foregroundStyle(gold ? GaryColors.gold : GaryColors.warmWhite)
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }
-    }
-    private var pickedHome: Bool {
-        guard let h = pick.homeTeam, !h.isEmpty else { return false }
-        return (pick.pick ?? "").localizedCaseInsensitiveContains(h)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            // THE DOSSIER (founder pick, option 06 — Aug 6 night): the header
-            // is a labeled data strip — PICK / PRICE / FIRST PITCH — instead
-            // of an eyebrow fighting the pick across one row. The only
-            // borders left on the back are the stamps' own.
-            HStack(alignment: .top, spacing: 14) {
-                dossierCell("PICK", dossierPickWord, gold: true)
-                dossierCell("PRICE", dossierPriceWord, gold: false)
-                dossierCell("FIRST PITCH", pick.time ?? "TONIGHT", gold: false)
-                Spacer(minLength: 4)
-                // Copy the take VERBATIM (founder, Jul 31) — whichever
-                // register is on screen, exactly as written, so it can be
-                // pasted word for word.
-                Button {
-                    UIPasteboard.general.string = takeCopyText
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation(.easeOut(duration: 0.15)) { copiedTake = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                        withAnimation(.easeIn(duration: 0.25)) { copiedTake = false }
-                    }
-                } label: {
-                    Image(systemName: copiedTake ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(copiedTake ? GaryColors.gold : .white.opacity(0.62))
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copiedTake ? "Take copied" : "Copy Gary's take")
-
-                Button {
-                    let images = renderPickShareImages(pick: pick, gameResult: gameResult)
-                    if !images.isEmpty { shareItem = PickShareItem(images: images) }
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Share this pick")
-            }
-
-            // (The big gold pick line came off Aug 4 with the header swap —
-            // the pick lives in the header slot now, the take gets the room.)
-
-            // World Cup tournament context (e.g. "Group A · Group Stage"); nil for other sports
-            if let wcContext = pick.soccerContext {
-                Text(wcContext)
-                    .font(GaryFonts.mono(9, bold: true))
-                    .foregroundStyle(Color(hex: "#16A34A").opacity(0.9))
-                    .lineLimit(1)
-            }
-
-            // Venue / stadium (BDL supplies it for WC). On the back so the front stays uncrowded.
-            if let venue = pick.venue, !venue.isEmpty {
-                HStack(spacing: 5) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.62))
-                    Text(venue)
-                        .font(GaryFonts.mono(9.5)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-            }
-
-            // (Confidence bar retired with option 06 — the dossier carries no
-            // meters; the number still stores.)
-
-            // ── THE FILE (option 06): the active pane. THE CASE opens as a
-            // three-line preview behind the card fade and expands in place;
-            // LINES and THE TAPE open as full files and the card grows.
-            switch tab {
-            case .take:
-                if let take = takeText {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("THE CASE")
+            // Nothing rides above the take (founder, Aug 6 night: "we don't
+            // need anything above The Case") — the front face already carries
+            // the pick, price, and first pitch; the back opens on the words.
+            // Copy and share sit small on the kicker line.
+            if let take = takeText {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 0) {
+                        Text("GARY'S TAKE")
                             .font(GaryFonts.mono(9, bold: true)).tracking(2.2)
                             .foregroundStyle(GaryColors.gold)
-                        if caseExpanded {
-                            ScrollView(showsIndicators: false) {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(take)
-                                        .font(GaryFonts.text(14.5))
-                                        .foregroundStyle(.white.opacity(0.88))
-                                        .lineSpacing(3.5)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    Color.clear.frame(height: 26)
-                                }
-                            }
-                            .overlay(alignment: .bottom) { backFade }
-                        } else {
-                            // Three lines under the fade — the fade, never an
-                            // ellipsis (the truncation law).
-                            ZStack(alignment: .bottom) {
-                                Text(take)
-                                    .font(GaryFonts.text(14.5))
-                                    .foregroundStyle(.white.opacity(0.88))
-                                    .lineSpacing(3.5)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .frame(height: 70, alignment: .top)
-                                    .clipped()
-                                backFade
-                            }
-                        }
+                        Spacer(minLength: 8)
+                        // Copy the take VERBATIM (founder, Jul 31) —
+                        // exactly as written, pasteable word for word.
                         Button {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
-                        } label: {
-                            HStack(spacing: 5) {
-                                Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL CASE")
-                                    .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
-                                Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 8, weight: .bold))
+                            UIPasteboard.general.string = takeCopyText
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(.easeOut(duration: 0.15)) { copiedTake = true }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                                withAnimation(.easeIn(duration: 0.25)) { copiedTake = false }
                             }
-                            .foregroundStyle(GaryColors.gold.opacity(0.85))
-                            .contentShape(Rectangle())
+                        } label: {
+                            Image(systemName: copiedTake ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .foregroundStyle(copiedTake ? GaryColors.gold : .white.opacity(0.5))
+                                .frame(width: 24, height: 18)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(copiedTake ? "Take copied" : "Copy Gary's take")
+
+                        Button {
+                            let images = renderPickShareImages(pick: pick, gameResult: gameResult)
+                            if !images.isEmpty { shareItem = PickShareItem(images: images) }
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .frame(width: 24, height: 18)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Share this pick")
                     }
-                }
-            case .lines:
-                if let odds = pick.sportsbook_odds, !odds.isEmpty {
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            SportsbookLinesDropdown(odds: odds)
-                            Color.clear.frame(height: 26)
+                    if caseExpanded {
+                        // The full take rides INLINE — the card grows to
+                        // fit it and the page scrolls; no inner scroller,
+                        // no pinned height (the height games are what
+                        // blanked pages inside the carousels).
+                        Text(take)
+                            .font(GaryFonts.text(14.5))
+                            .foregroundStyle(.white.opacity(0.88))
+                            .lineSpacing(3.5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        // The deep preview — five lines under the fade (the
+                        // room the lines/tape files freed up); the fade,
+                        // never an ellipsis (the truncation law).
+                        ZStack(alignment: .bottom) {
+                            Text(take)
+                                .font(GaryFonts.text(14.5))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineSpacing(3.5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(height: 108, alignment: .top)
+                                .clipped()
+                            backFade
                         }
                     }
-                    .overlay(alignment: .bottom) { backFade }
-                }
-            case .tape:
-                if let stats = pick.statsData, !stats.isEmpty {
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            TaleOfTapeSection(
-                                homeTeam: pick.homeTeam ?? "",
-                                awayTeam: pick.awayTeam ?? "",
-                                statsData: stats,
-                                injuries: pick.injuries,
-                                garyPickedHome: pickedHome
-                            )
-                            Color.clear.frame(height: 26)
+                    Button {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL TAKE")
+                                .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
+                            Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
                         }
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                        .contentShape(Rectangle())
                     }
-                    .overlay(alignment: .bottom) { backFade }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -17469,20 +17326,9 @@ struct PickCardBack: View {
                 TailFadeRow(pick: pick)
             }
 
-            // Footer index: the dossier's files on the left, the flip cue on
-            // the right — one quiet line instead of a tab bar plus a caption.
-            HStack(spacing: 12) {
-                ForEach(availableTabs, id: \.rawValue) { t in
-                    Button {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { tab = t }
-                    } label: {
-                        Text(t.rawValue)
-                            .font(GaryFonts.mono(9, bold: true)).tracking(1.6)
-                            .foregroundStyle(tab == t ? GaryColors.gold : .white.opacity(0.35))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+            // Footer: just the flip cue — the file index retired with the
+            // lines/tape files (founder, Aug 6 night).
+            HStack {
                 Spacer()
                 Text("flip ↺")
                     .font(GaryFonts.mono(9, bold: false))
@@ -17490,19 +17336,16 @@ struct PickCardBack: View {
             }
         }
         .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: grown ? .infinity : nil, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(hex: "#1C1A1A"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
-        .onAppear { grown = caseExpanded || tab != .take }
-        .onChange(of: caseExpanded) { _ in grown = caseExpanded || tab != .take }
-        .onChange(of: tab) { _ in grown = caseExpanded || tab != .take }
-        .onChange(of: grown) { g in
-            // The wrapper drops growth on unflip — fold the file back to the
-            // compact case so the next open starts fresh.
-            if g == false { caseExpanded = false; tab = .take }
+        .onChange(of: flipped) { f in
+            // Closing the card folds the take back to the preview — the next
+            // flip starts fresh; expanding is a click, never inherited.
+            if !f { caseExpanded = false }
         }
         .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }

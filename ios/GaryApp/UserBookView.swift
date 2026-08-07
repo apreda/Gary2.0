@@ -459,18 +459,25 @@ struct TailFadeRow: View {
     private func tailFadeButton(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
                 .foregroundStyle(.white.opacity(0.85))
                 // The longer words scale before they ever wrap or clip.
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
+                // Slimmer than the take they sit under (founder, Aug 6) — the
+                // stamps are the ballot line, not the headline.
+                .padding(.vertical, 9)
                 .background(
-                    // Option 06 stamps (founder pick, Aug 6): tight-cornered,
-                    // letterpress-weight borders — the one place on the back
-                    // where a border means something. Idle twins stay equals.
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(Color.white.opacity(0.30), lineWidth: 1.5)
+                    // Floating-soft (founder, Aug 6 night: "softer… floating
+                    // tech feel, not rigidness") — the letterpress border
+                    // retired for a frosted chip: soft fill, breath of an
+                    // edge, round shoulders. Idle twins stay equals.
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        )
                 )
                 .contentShape(Rectangle())
         }

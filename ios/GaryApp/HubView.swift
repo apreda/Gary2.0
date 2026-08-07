@@ -1546,13 +1546,35 @@ fileprivate struct HubMasthead: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The ONE header (Aug 4) — the Hub's logo/wordmark/rule now come
-            // from GaryPageHeader; the search toggle + 7-day record ride the
-            // trailing slot. The double-rule "newspaper seam" retired with the
-            // five-masthead era. League tabs + the search field remain this
-            // page's own control rows, stacked under the template.
-            GaryPageHeader(title: "The", goldPart: "Hub", trailing: {
+            // Masthead OFF (founder, Aug 6 night: headers off every page but
+            // Picks) — the Hub opens straight on its own control row: LEAGUE
+            // WORDS left, the L7 record + search toggle (the old header's
+            // trailing pieces) folded onto the right.
+            //
+            // LEAGUE WORDS (founder pick, mock 64): underline league tabs →
+            // one trigger; the full-screen typographic switcher does the rest.
+            // Shows at any league count (not just >1, unlike the old tabs it
+            // replaced) — it's also the page's "you're on MLB" label, and the
+            // only way to see the feature before more leagues are in season.
+            if !leagues.isEmpty {
                 HStack(spacing: 8) {
+                    LeagueWordsTrigger(current: sel.label) {
+                        let opts = leagues.map { l -> LeagueOverlayState.Option in
+                            let n = l == sel ? gameCount : 0
+                            return .init(code: l.label,
+                                         sup: n > 0 ? "\(n) GAME\(n == 1 ? "" : "S")" : nil,
+                                         live: false, selected: l == sel)
+                        }
+                        // The whole calendar, not just what's live (founder, Aug 4).
+                        let full = opts + LeagueOverlayState.offSeasonOptions(
+                            excluding: Set(leagues.map(\.label)))
+                        LeagueOverlayState.shared.present(full) { picked in
+                            if let hit = leagues.first(where: { $0.label == picked }) {
+                                withAnimation(.easeInOut(duration: 0.2)) { sel = hit }
+                            }
+                        }
+                    }
+                    Spacer()
                     if let r = record7 {
                         let pct = Int((Double(r.hit) / Double(max(r.hit + r.miss, 1)) * 100).rounded())
                         HStack(spacing: 5) {
@@ -1578,34 +1600,7 @@ fileprivate struct HubMasthead: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(searchOpen ? "Close search" : "Search")
                 }
-            })
-
-            // LEAGUE WORDS (founder pick, mock 64): underline league tabs →
-            // one trigger; the full-screen typographic switcher does the rest.
-            // Shows at any league count (not just >1, unlike the old tabs it
-            // replaced) — it's also the page's "you're on MLB" label, and the
-            // only way to see the feature before more leagues are in season.
-            if !leagues.isEmpty {
-                HStack {
-                    LeagueWordsTrigger(current: sel.label) {
-                        let opts = leagues.map { l -> LeagueOverlayState.Option in
-                            let n = l == sel ? gameCount : 0
-                            return .init(code: l.label,
-                                         sup: n > 0 ? "\(n) GAME\(n == 1 ? "" : "S")" : nil,
-                                         live: false, selected: l == sel)
-                        }
-                        // The whole calendar, not just what's live (founder, Aug 4).
-                        let full = opts + LeagueOverlayState.offSeasonOptions(
-                            excluding: Set(leagues.map(\.label)))
-                        LeagueOverlayState.shared.present(full) { picked in
-                            if let hit = leagues.first(where: { $0.label == picked }) {
-                                withAnimation(.easeInOut(duration: 0.2)) { sel = hit }
-                            }
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(.top, 10)
+                .padding(.top, 12)
                 .pageGutter()
             }
 
