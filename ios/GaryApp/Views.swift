@@ -84,17 +84,10 @@ struct GaryPageHeader<Trailing: View>: View {
                 }
                 Spacer()
                 trailing()
-                // The three-dot settings button lives in every header's corner.
-                Button {
-                    NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
+                // The corner belongs to the PERSON now (Aug 7): the profile
+                // chip opens their book; settings rides inside the profile
+                // (the gear), like most apps put it.
+                ProfileHeaderChip()
             }
             .pageGutter()
             Group {

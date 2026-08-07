@@ -1729,11 +1729,331 @@ struct HandleClaimSheet: View {
             defer { busy = false }
             do {
                 let claimed = try await UserBookAPI.claimHandle(name.trimmingCharacters(in: .whitespaces))
+                // Header avatar + profile read this cache — keep it warm from
+                // every claim path.
+                UserDefaults.standard.set(claimed, forKey: "myHandle")
                 onClaimed(claimed)
                 dismiss()
             } catch {
                 errorText = error.localizedDescription
             }
         }
+    }
+}
+
+// MARK: - Profile (Aug 7 2026 — the front door to the user's whole book)
+//
+// The Jul 26 mega-build shipped the machinery (tail/fade ledger, manual
+// logging, streaks, leaderboard, handle claim) but left it buried behind
+// Billfold's YOU toggle with no identity anywhere in the chrome. This is
+// the missing front door: every page header's corner opens it, and it
+// assembles the existing pieces — nothing here re-implements the book.
+
+/// The header-corner entry: an avatar chip when a handle is claimed, the
+/// person glyph otherwise. Posts ShowProfile; ContentView presents globally.
+struct ProfileHeaderChip: View {
+    @AppStorage("myHandle") private var myHandle = ""
+    var body: some View {
+        Button {
+            NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil)
+        } label: {
+            if let first = myHandle.first {
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.08))
+                    Circle().stroke(GaryColors.gold.opacity(0.45), lineWidth: 1)
+                    Text(String(first).uppercased())
+                        .font(GaryFonts.mono(12, bold: true))
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .frame(width: 26, height: 26)
+            } else {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .frame(width: 26, height: 26)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Your profile")
+    }
+}
+
+struct ProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("myHandle") private var myHandle = ""
+    @AppStorage("selectedTab") private var selectedTab = 0
+    @AppStorage("billfoldScope") private var billfoldScope = "gary"
+    @State private var bets: [UserBet] = []
+    @State private var streak: UserBookAPI.UserStreak? = nil
+    @State private var loading = true
+    @State private var showClaim = false
+    @State private var showQuickLog = false
+    @State private var showAuth = false
+    @State private var signedIn = AuthManager.shared.bearerToken != nil
+
+    private var withGary: [UserBet] { bets.filter { $0.isVerified } }
+    private var yourPlays: [UserBet] { bets.filter { $0.kind == "manual" } }
+    private var openSlips: [UserBet] { bets.filter { $0.isPending } }
+
+    private func record(_ rows: [UserBet]) -> (w: Int, l: Int, p: Int, units: Double) {
+        var w = 0, l = 0, p = 0; var u = 0.0
+        for b in rows where !b.isPending {
+            switch b.status {
+            case "won": w += 1
+            case "lost": l += 1
+            case "push": p += 1
+            default: break
+            }
+            u += b.units_net ?? 0
+        }
+        return (w, l, p, u)
+    }
+
+    var body: some View {
+        ZStack {
+            Color(hex: "#0F0D0C").ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    identityRow
+                    if !signedIn {
+                        signedOutPitch
+                    } else if loading {
+                        ProgressView().tint(GaryColors.gold).frame(maxWidth: .infinity).padding(.top, 30)
+                    } else {
+                        recordPanel
+                        actionRow
+                        if !openSlips.isEmpty { openSlipsBlock }
+                        UserBookLeaderboard()
+                        signOutRow
+                    }
+                }
+                .padding(18)
+                .padding(.bottom, 40)
+            }
+        }
+        .task { await load() }
+        .sheet(isPresented: $showClaim) {
+            HandleClaimSheet { myHandle = $0 }
+        }
+        .sheet(isPresented: $showQuickLog) {
+            QuickLogSheet { bets.insert($0, at: 0) }
+        }
+        .sheet(isPresented: $showAuth, onDismiss: {
+            signedIn = AuthManager.shared.bearerToken != nil
+            Task { await load() }
+        }) { AuthView() }
+    }
+
+    // ── Identity: avatar + handle + the gear (settings lives IN the profile
+    // now — the header corner belongs to the person, like everywhere else).
+    private var identityRow: some View {
+        HStack(spacing: 14) {
+            Button { if signedIn { showClaim = true } } label: {
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.07))
+                    Circle().stroke(GaryColors.gold.opacity(0.5), lineWidth: 1.2)
+                    if let first = myHandle.first {
+                        Text(String(first).uppercased())
+                            .font(GaryFonts.display(24))
+                            .foregroundStyle(GaryColors.gold)
+                    } else {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+                .frame(width: 54, height: 54)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 3) {
+                if myHandle.isEmpty {
+                    Button { if signedIn { showClaim = true } else { showAuth = true } } label: {
+                        Text(signedIn ? "CLAIM YOUR HANDLE" : "YOUR BOOK")
+                            .font(GaryFonts.mono(13, bold: true)).tracking(1.4)
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button { showClaim = true } label: {
+                        Text(myHandle)
+                            .font(GaryFonts.display(24))
+                            .foregroundStyle(GaryColors.warmWhite)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text(signedIn ? "YOUR BOOK · GRADED BY THE MACHINE" : "SIGN IN TO START YOUR BOOK")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            Spacer(minLength: 8)
+
+            Button {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
+                }
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+        }
+    }
+
+    private var signedOutPitch: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Sign in and every pick you tail or fade goes on your own record — locked before first pitch, graded by the same system that grades Gary. Log your outside bets beside it and claim a handle for the standings.")
+                .font(GaryFonts.text(14))
+                .foregroundStyle(.white.opacity(0.7))
+                .fixedSize(horizontal: false, vertical: true)
+            Button { showAuth = true } label: {
+                Text("Sign in")
+                    .font(GaryFonts.mono(12, bold: true)).tracking(1)
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 6)
+    }
+
+    // ── The record: verified WITH GARY line first, self-tracked under it,
+    // the streak beside — the numbers the Billfold YOU page shows, compressed.
+    private var recordPanel: some View {
+        let g = record(withGary)
+        let m = record(yourPlays)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("WITH GARY")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer()
+                Text("\(g.w)\u{2013}\(g.l)\(g.p > 0 ? "\u{2013}\(g.p)" : "")")
+                    .font(GaryFonts.mono(16, bold: true))
+                    .foregroundStyle(GaryColors.warmWhite)
+                Text(BookMoney.netTotal(g.units))
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(g.units >= 0 ? GaryColors.win : GaryColors.loss)
+            }
+            if m.w + m.l + m.p > 0 {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("YOUR PLAYS")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("self-tracked")
+                        .font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.35))
+                    Spacer()
+                    Text("\(m.w)\u{2013}\(m.l)\(m.p > 0 ? "\u{2013}\(m.p)" : "")")
+                        .font(GaryFonts.mono(14, bold: true))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            if let s = streak, s.best > 0 {
+                HStack(spacing: 6) {
+                    Text("STREAK")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("\(s.current)")
+                        .font(GaryFonts.mono(14, bold: true))
+                        .foregroundStyle(s.current > 0 ? GaryColors.gold : .white.opacity(0.7))
+                    Text("BEST \(s.best)")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.45))
+                    Spacer()
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.07), lineWidth: 1))
+        )
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            Button { showQuickLog = true } label: {
+                Text("+ LOG A BET")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+            Button {
+                dismiss()
+                billfoldScope = "you"
+                selectedTab = 4
+            } label: {
+                Text("FULL BOOK \u{203A}")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Color.white.opacity(0.07))
+                            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .stroke(Color.white.opacity(0.10), lineWidth: 1))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var openSlipsBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("OPEN SLIPS")
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                .foregroundStyle(.white.opacity(0.5))
+            ForEach(openSlips.prefix(4)) { bet in
+                UserBetSlipRow(bet: bet,
+                               onUpdate: { updated in
+                                   if let i = bets.firstIndex(where: { $0.id == updated.id }) { bets[i] = updated }
+                               },
+                               onDelete: {
+                                   bets.removeAll { $0.id == bet.id }
+                               })
+            }
+        }
+    }
+
+    private var signOutRow: some View {
+        Button {
+            AuthManager.shared.signOut()
+            myHandle = ""
+            signedIn = false
+            bets = []
+        } label: {
+            Text("Sign out")
+                .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
+    }
+
+    private func load() async {
+        signedIn = AuthManager.shared.bearerToken != nil
+        guard signedIn else { loading = false; return }
+        loading = bets.isEmpty
+        // Handle first — the identity row and header chip hang off it.
+        if let h = await UserBookAPI.fetchMyHandle() { myHandle = h }
+        let all = await UserBookAPI.fetchMyBets()
+        if !all.isEmpty { bets = all }
+        streak = await UserBookAPI.fetchMyStreak()
+        loading = false
     }
 }

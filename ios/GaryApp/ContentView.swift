@@ -64,6 +64,7 @@ struct ContentView: View {
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @AppStorage("hasSeenGaryIntro") private var hasSeenGaryIntro: Bool = false
     @State private var showingSettings = false
+    @State private var showingProfile = false
     @State private var showingGaryIntro = false
     @StateObject private var pickDetailState = PickDetailState.shared
     @State private var loadedTabs: Set<Int> = []
@@ -131,6 +132,14 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSettingsMenu"))) { _ in
             showingSettings = true
         }
+        // The profile — every page header's corner chip opens it (Aug 7).
+        .sheet(isPresented: $showingProfile) {
+            ProfileView()
+                .environmentObject(authManager)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowProfile"))) { _ in
+            showingProfile = true
+        }
         .onGaryTour { verb, arg in
             if verb == "tab", let idx = Int(arg), (0...lastValidTabIndex).contains(idx) {
                 selectedTab = idx
@@ -153,6 +162,11 @@ struct ContentView: View {
             // are current on the very first screen, not only after a tab that pokes it.
             LiveScoreCache.shared.startIfNeeded()
             await BillfoldSnapshotStore.shared.prewarmIfNeeded()
+            // Warm the handle cache — every header's profile chip reads it.
+            if AuthManager.shared.bearerToken != nil,
+               let h = await UserBookAPI.fetchMyHandle() {
+                UserDefaults.standard.set(h, forKey: "myHandle")
+            }
         }
         .onChange(of: selectedTab) { newTab in
             loadedTabs.insert(newTab)
