@@ -255,10 +255,16 @@ final class BillfoldSnapshotStore {
     }
 
     func prewarmIfNeeded() async {
-        // ALL is the Billfold's default window. Warm only its lightweight
-        // settled ledgers; the much larger pick-card metadata is loaded lazily
-        // after the page itself is already usable.
-        _ = try? await load(fullHistory: true)
+        // ALL is the Billfold's default window. Warm both settled ledgers after
+        // Home has had first use of the network. SupabaseAPI's Billfold cache is
+        // shared with BillfoldView.loadData(), so opening Picks/Props or changing
+        // sports consumes memory-resident rows instead of starting a new fetch.
+        async let games: BillfoldSnapshot? = try? load(fullHistory: true)
+        async let props: [PropResult]? = try? SupabaseAPI.fetchPropResults(
+            since: nil,
+            billfold: true
+        )
+        _ = await (games, props)
     }
 
     fileprivate func load(forceRefresh: Bool = false, fullHistory: Bool = false) async throws -> BillfoldSnapshot {
@@ -376,6 +382,18 @@ private enum BillfoldCompute {
 
     static func date(from iso: String?) -> Date {
         parseDate(iso ?? "") ?? Date.distantPast
+    }
+
+    /// Result rows are keyed by ISO calendar dates. Keep filtering and sorting
+    /// on that stable key instead of repeatedly constructing DateFormatter
+    /// values inside O(n log n) sorts. Full Date parsing remains only where a
+    /// chart actually needs a Date axis.
+    static func dateKey(_ iso: String?) -> String {
+        String((iso ?? "").prefix(10))
+    }
+
+    static func cutoffKey(_ cutoff: Date?) -> String? {
+        cutoff.map(dayFormatter.string(from:))
     }
 
     static func parseAmericanOdds(_ string: String?) -> Int? {
@@ -723,14 +741,15 @@ private enum BillfoldCompute {
     }
 
     static func dailyTrend(items: [(String?, Double)]) -> [BillfoldTrendPoint] {
-        let grouped = Dictionary(grouping: items.compactMap { item -> (Date, Double)? in
-            guard let iso = item.0, let parsed = parseDate(iso) else { return nil }
-            return (Calendar.current.startOfDay(for: parsed), item.1)
+        let grouped = Dictionary(grouping: items.compactMap { item -> (String, Double)? in
+            let key = dateKey(item.0)
+            return key.isEmpty ? nil : (key, item.1)
         }) { $0.0 }
 
         var running = 0.0
-        return grouped.keys.sorted().map { date in
-            let total = grouped[date]?.reduce(0.0) { $0 + $1.1 } ?? 0
+        return grouped.keys.sorted().compactMap { key in
+            guard let date = dayFormatter.date(from: key) else { return nil }
+            let total = grouped[key]?.reduce(0.0) { $0 + $1.1 } ?? 0
             running += total
             return BillfoldTrendPoint(
                 date: date,
@@ -742,14 +761,15 @@ private enum BillfoldCompute {
     }
 
     static func dailyCandlesticks(items: [(String?, Double)]) -> [BillfoldCandlestick] {
-        let grouped = Dictionary(grouping: items.compactMap { item -> (Date, Double)? in
-            guard let iso = item.0, let parsed = parseDate(iso) else { return nil }
-            return (Calendar.current.startOfDay(for: parsed), item.1)
+        let grouped = Dictionary(grouping: items.compactMap { item -> (String, Double)? in
+            let key = dateKey(item.0)
+            return key.isEmpty ? nil : (key, item.1)
         }) { $0.0 }
 
         var running = 0.0
-        return grouped.keys.sorted().map { date in
-            let bets = grouped[date]?.map { $0.1 } ?? []
+        return grouped.keys.sorted().compactMap { key in
+            guard let date = dayFormatter.date(from: key) else { return nil }
+            let bets = grouped[key]?.map { $0.1 } ?? []
             let dayOpen = running
             var intraHigh = running
             var intraLow = running
@@ -834,11 +854,11 @@ private enum BillfoldCompute {
     }
 
     static func sortGames(_ rows: [GameResult]) -> [GameResult] {
-        rows.sorted { date(from: $0.game_date) > date(from: $1.game_date) }
+        rows.sorted { dateKey($0.game_date) > dateKey($1.game_date) }
     }
 
     static func sortProps(_ rows: [PropResult]) -> [PropResult] {
-        rows.sorted { date(from: $0.game_date) > date(from: $1.game_date) }
+        rows.sorted { dateKey($0.game_date) > dateKey($1.game_date) }
     }
 
     static func filterGameResults(
@@ -846,8 +866,8 @@ private enum BillfoldCompute {
         cutoff: Date?,
         selectedSport: Sport
     ) -> [GameResult] {
-        let filteredByTime = cutoff.map { cutoff in
-            rows.filter { date(from: $0.game_date) >= cutoff }
+        let filteredByTime = cutoffKey(cutoff).map { key in
+            rows.filter { dateKey($0.game_date) >= key }
         } ?? rows
 
         let filteredBySport: [GameResult]
@@ -866,8 +886,8 @@ private enum BillfoldCompute {
         selectedSport: Sport
     ) -> [PropResult] {
         let validRows = rows.filter(isLegitPropResult)
-        let filteredByTime = cutoff.map { cutoff in
-            validRows.filter { date(from: $0.game_date) >= cutoff }
+        let filteredByTime = cutoffKey(cutoff).map { key in
+            validRows.filter { dateKey($0.game_date) >= key }
         } ?? validRows
 
         let filteredBySport: [PropResult]
@@ -970,26 +990,28 @@ private enum BillfoldCompute {
 
         // Last 10 individual results, oldest → newest (newest renders rightmost)
         let sortedResults = streakItems
-            .compactMap { item -> (Date, String)? in
+            .compactMap { item -> (String, String)? in
                 guard let r = item.1, r == "won" || r == "lost" || r == "push" else { return nil }
-                return (date(from: item.0), r)
+                let key = dateKey(item.0)
+                return key.isEmpty ? nil : (key, r)
             }
             .sorted { $0.0 < $1.0 }
         let last10 = Array(sortedResults.suffix(10)).map { $0.1 }
 
         // Per-day W-L-P from the bet results; per-day net from the trend series
         let cal = Calendar.current
-        var dayRecord: [Date: (w: Int, l: Int, p: Int)] = [:]
+        var dayRecord: [String: (w: Int, l: Int, p: Int)] = [:]
         for item in streakItems {
             guard let r = item.1, r == "won" || r == "lost" || r == "push" else { continue }
-            let d = cal.startOfDay(for: date(from: item.0))
-            var rec = dayRecord[d] ?? (0, 0, 0)
+            let key = dateKey(item.0)
+            guard !key.isEmpty else { continue }
+            var rec = dayRecord[key] ?? (0, 0, 0)
             if r == "won" { rec.w += 1 } else if r == "lost" { rec.l += 1 } else { rec.p += 1 }
-            dayRecord[d] = rec
+            dayRecord[key] = rec
         }
         var days: [BillfoldDayRow] = trend.map { point in
             let d = cal.startOfDay(for: point.date)
-            let rec = dayRecord[d] ?? (0, 0, 0)
+            let rec = dayRecord[dayFormatter.string(from: d)] ?? (0, 0, 0)
             return BillfoldDayRow(
                 id: d,
                 label: journalDayFormatter.string(from: d).uppercased(),
@@ -1037,12 +1059,12 @@ private enum BillfoldCompute {
         let sportTimeframeCutoff = BillfoldView.sinceDateValueStatic(for: sportTimeframe)
         let validProps = propResults.filter(isLegitPropResult)
         let timeframeGamesAll = filterGameResults(gameResults, cutoff: timeframeCutoff, selectedSport: .all)
-        let timeframePropsAll = timeframeCutoff.map { cutoff in
-            validProps.filter { date(from: $0.game_date) >= cutoff }
+        let timeframePropsAll = cutoffKey(timeframeCutoff).map { key in
+            validProps.filter { dateKey($0.game_date) >= key }
         } ?? validProps
         let sportTimeframeGames = filterGameResults(gameResults, cutoff: sportTimeframeCutoff, selectedSport: .all)
-        let sportTimeframeProps = sportTimeframeCutoff.map { cutoff in
-            validProps.filter { date(from: $0.game_date) >= cutoff }
+        let sportTimeframeProps = cutoffKey(sportTimeframeCutoff).map { key in
+            validProps.filter { dateKey($0.game_date) >= key }
         } ?? validProps
         // Fun lanes (HR bets, TDs) never touch Gary's metrics — the by-sport
         // grid and per-sport equity lines count CORE props only. The unfiltered
@@ -1883,8 +1905,6 @@ struct HomeView: View {
     @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     @State private var gamesNightNet: Double? = nil
     @State private var gamesNightBest: Double? = nil
-    @State private var settledYesterdayGameRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
-    @State private var settledYesterdayPropRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     @State private var showDailyRecap = false
     @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
@@ -2138,31 +2158,6 @@ struct HomeView: View {
 
                     let recentGameResults = (try? await gameResultsFetch) ?? []
                     let recentPropResults = (try? await propResultsFetch) ?? []
-
-                    // Home's compact receipt is always the actual prior slate,
-                    // split into game picks and core props. It is deliberately
-                    // independent of the rolling/live record box below The Board.
-                    let yesterday = SupabaseAPI.yesterdayEST()
-                    var priorGames = (wins: 0, losses: 0, pushes: 0)
-                    for row in recentGameResults where row.game_date == yesterday {
-                        switch (row.result ?? "").lowercased() {
-                        case "won", "win", "w": priorGames.wins += 1
-                        case "lost", "loss", "l": priorGames.losses += 1
-                        case "push", "p": priorGames.pushes += 1
-                        default: break
-                        }
-                    }
-                    var priorProps = (wins: 0, losses: 0, pushes: 0)
-                    for row in recentPropResults where row.game_date == yesterday && !row.isHRResult {
-                        switch (row.result ?? "").lowercased() {
-                        case "won", "win", "w": priorProps.wins += 1
-                        case "lost", "loss", "l": priorProps.losses += 1
-                        case "push", "p": priorProps.pushes += 1
-                        default: break
-                        }
-                    }
-                    settledYesterdayGameRecord = priorGames
-                    settledYesterdayPropRecord = priorProps
 
                     // Fallback: if the separate 7-day fetch came back empty, build the
                     // form from the reliable recentGameResults (the board's data, which
@@ -2761,14 +2756,6 @@ struct HomeView: View {
             UserDefaults.standard.set("hub", forKey: "hubScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
         }
-        HomeYesterdayRecords(
-            gameRecord: settledYesterdayGameRecord,
-            propRecord: settledYesterdayPropRecord
-        ) {
-            UserDefaults.standard.set("you", forKey: "billfoldScope")
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-        }
-
         // ── WINNERS — the sealed card, slip-styled (the one conversion door).
         HomeWinnersStub(onOpen: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }

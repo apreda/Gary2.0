@@ -52,6 +52,10 @@ const adminKey = supabaseServiceKey || supabaseAnonKey;
 
 const TABLE = 'insight_connections';
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
+// These facts can be invalidated by the most recently completed game. Unlike
+// editorial reads, they must refresh in place across the day rather than obey
+// the first-write-wins copy freeze.
+const VOLATILE_CATEGORIES = new Set(['streaking', 'streak']);
 
 // Per-player breakdown packs (the iOS Hub "full breakdown" view). Built for MLB
 // (hitter/pitcher) after the day's insight_connections insert succeeds; failures
@@ -263,6 +267,45 @@ async function insertRows(rows) {
     data: sanitized,
     headers: { ...restHeaders, Prefer: 'return=minimal' },
   });
+}
+
+/** Replace only volatile factual lanes that produced a healthy fresh snapshot. */
+async function replaceVolatileRows(date, league, rows) {
+  const categories = [...new Set(
+    rows.map((r) => r.category).filter((category) => VOLATILE_CATEGORIES.has(category))
+  )];
+  const replacedKeys = new Set();
+
+  for (const category of categories) {
+    const fresh = rows.filter((r) => r.category === category);
+    // A non-empty fresh lane proves the computer completed. Never delete the
+    // last-good lane on a zero-row/transient-data run.
+    if (!fresh.length) continue;
+    const { data: existing } = await axios.get(REST_URL, {
+      headers: restHeaders,
+      params: {
+        date: `eq.${date}`,
+        league: `eq.${league}`,
+        category: `eq.${category}`,
+        select: 'id',
+      },
+    });
+    // Insert first: a failed write leaves the prior snapshot intact. Once the
+    // replacement is durable, remove only the exact ids observed above.
+    await insertRows(fresh);
+    const oldIds = (existing || []).map((row) => row.id).filter((id) => id != null);
+    if (oldIds.length) {
+      await axios({
+        method: 'DELETE',
+        url: REST_URL,
+        headers: { ...restHeaders, Prefer: 'return=minimal' },
+        params: { id: `in.(${oldIds.join(',')})` },
+      });
+    }
+    for (const row of fresh) replacedKeys.add(rowKey(row));
+  }
+
+  return replacedKeys;
 }
 
 /** Stored rows for (date, league) with the fields the content patch needs. */
@@ -611,6 +654,11 @@ async function run() {
         upgraded += gameConfirmedXi.length;
       }
 
+      // Volatile factual lanes refresh as a scoped snapshot. This removes a
+      // streak the moment the latest completed game breaks it while leaving
+      // every editorial/AI-authored card under the normal no-churn freeze.
+      const volatileKeys = await replaceVolatileRows(targetDate, league, rows);
+
       // Additive-freeze for every other row (first-write-wins). The confirmedXI rows
       // for those games were just written above, so exclude ONLY them here — sibling
       // situational rows still flow through the normal freeze so a fresh one lands
@@ -622,7 +670,7 @@ async function run() {
             r.category === 'situational' &&
             r.meta?.kind === 'confirmedXI' &&
             confirmedXiGameIds.has(String(r.game_id))
-          ) &&
+          ) && !VOLATILE_CATEGORIES.has(r.category) &&
           !seen.has(rowKey(r))
       );
       if (fresh.length) await insertRows(fresh);
@@ -667,7 +715,7 @@ async function run() {
         console.warn(`   [Content patch] skipped: ${e.message}`);
       }
 
-      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${rows.length - fresh.length - upgraded} already posted (frozen); ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids).`);
+      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${Math.max(0, rows.length - fresh.length - upgraded - volatileKeys.size)} already posted (frozen); ${volatileKeys.size} volatile row(s) refreshed; ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids).`);
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });

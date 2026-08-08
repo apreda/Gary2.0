@@ -124,7 +124,11 @@ export async function computeStreaking(ctx) {
 
       // Team's finals, newest first.
       const results = [...finalsById.values()]
-        .filter((g) => g?.home_team?.id === teamId || g?.visitor_team?.id === teamId)
+        // MLB's documented shape is `away_team`; `visitor_team` is only an
+        // orchestrator alias on TODAY'S slate. Lookback games come straight
+        // from BDL, so filtering only visitor_team silently discarded every
+        // historical road game (including Atlanta's Aug 7 loss at New York).
+        .filter((g) => teamPlayedGame(g, teamId))
         .sort((a, b) => String(b?.date || '').localeCompare(String(a?.date || '')))
         .map((g) => resultForTeam(g, teamId, lineByGameId))
         .filter(Boolean);
@@ -210,6 +214,12 @@ export async function computeStreaking(ctx) {
 /** A BDL MLB game is final by status (scores live during play, so status only). */
 function isFinal(game) {
   return String(game?.status || '').toUpperCase().includes('FINAL');
+}
+
+/** Team membership across raw MLB (`away_team`) and aliased (`visitor_team`) shapes. */
+export function teamPlayedGame(game, teamId) {
+  const away = game?.away_team || game?.visitor_team;
+  return game?.home_team?.id === teamId || away?.id === teamId;
 }
 
 // ── daily_slate pregame-line join ───────────────────────────────────────────

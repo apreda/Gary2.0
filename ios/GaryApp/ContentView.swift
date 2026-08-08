@@ -161,9 +161,10 @@ struct ContentView: View {
             // Warm the shared live-score poll loop at launch (idempotent) so scores
             // are current on the very first screen, not only after a tab that pokes it.
             LiveScoreCache.shared.startIfNeeded()
-            // Give Home's visible requests first use of the network/main actor.
-            // Billfold's game ledger is small and prewarms shortly afterward;
-            // its larger prop ledger now hydrates only after Billfold is opened.
+            // Give Home's visible requests first use of the network/main actor,
+            // then warm both Billfold ledgers while the user is elsewhere. The
+            // work is background-only, but makes Picks/Props and sport switches
+            // data-ready before the Billfold is opened.
             Task(priority: .background) {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 await BillfoldSnapshotStore.shared.prewarmIfNeeded()
