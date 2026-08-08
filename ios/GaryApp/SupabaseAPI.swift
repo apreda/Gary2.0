@@ -1367,20 +1367,25 @@ enum SupabaseAPI {
         return result
     }
     
-    /// Fetch all daily_picks rows (for TOPD matching)
-    static func fetchAllDailyPicksRaw(forceRefresh: Bool = false, billfold: Bool = false) async throws -> [DailyPicksRow] {
+    /// Fetch daily_picks rows used for TOPD/confidence matching.
+    /// Ordinary Billfold loads pass the same bounded history window as results;
+    /// only explicit YTD/all-time views should page the full JSON archive.
+    static func fetchAllDailyPicksRaw(since dateFilter: String? = nil, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [DailyPicksRow] {
         let cacheScope = billfold ? "_billfold_\(billfoldSnapshotWindowKey())" : ""
-        let cacheKey = "dailyPicksRaw\(cacheScope)"
+        let cacheKey = "dailyPicksRaw_\(dateFilter ?? "all")\(cacheScope)"
         let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
 
         if !forceRefresh, let cached: [DailyPicksRow] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
             return cached
         }
 
-        let query = [
+        var query = [
             URLQueryItem(name: "select", value: "picks::text,date"),
             URLQueryItem(name: "order", value: "date.desc")
         ]
+        if let dateFilter, !dateFilter.isEmpty {
+            query.insert(URLQueryItem(name: "date", value: "gte.\(dateFilter)"), at: 1)
+        }
         let result: [DailyPicksRow] = try await fetchAllPages(table: "daily_picks", baseQuery: query)
         await APICache.shared.set(cacheKey, value: result)
         return result

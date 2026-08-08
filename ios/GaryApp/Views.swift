@@ -275,7 +275,7 @@ final class BillfoldSnapshotStore {
             let (games, props, picks) = try await withTimeout(seconds: 30) {
                 async let gameTask = SupabaseAPI.fetchAllGameResults(since: since, forceRefresh: forceRefresh, billfold: true)
                 async let propTask = SupabaseAPI.fetchPropResults(since: since, forceRefresh: forceRefresh, billfold: true)
-                async let pickTask = SupabaseAPI.fetchAllDailyPicksRaw(forceRefresh: forceRefresh, billfold: true)
+                async let pickTask = SupabaseAPI.fetchAllDailyPicksRaw(since: since, forceRefresh: forceRefresh, billfold: true)
                 return try await (gameTask, propTask, pickTask)
             }
 
