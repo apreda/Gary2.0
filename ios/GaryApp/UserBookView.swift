@@ -185,17 +185,58 @@ enum UserBookAPI {
 
     private static func run(_ req: URLRequest) async throws -> Data {
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            // PostgREST error bodies carry {"message": "..."} — surface the
-            // real reason ("game is locked") instead of a generic failure.
-            let msg = (try? JSONDecoder().decode(PostgrestError.self, from: data))?.message
-                ?? String(data: data, encoding: .utf8) ?? "Request failed"
-            throw UserBookError.server(msg)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode
+        guard let statusCode, (200...299).contains(statusCode) else {
+            // Keep the diagnostic in developer logs, never in user-facing copy.
+            // Gateways sometimes return raw JSON such as
+            // {"detail":"Bad Request"}; that is not useful product language.
+            let diagnostic = (try? JSONDecoder().decode(PostgrestError.self, from: data))?.message
+                ?? String(data: data, encoding: .utf8)
+                ?? "HTTP \(statusCode.map(String.init) ?? "unknown")"
+            print("[YourBook] request failed: \(diagnostic)")
+            throw UserBookError.server(friendlyMessage(for: diagnostic))
         }
         return data
     }
 
-    private struct PostgrestError: Decodable { let message: String? }
+    private struct PostgrestError: Decodable {
+        let message: String?
+        let detail: String?
+        let error_description: String?
+
+        private enum CodingKeys: String, CodingKey { case message, detail, error_description }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            message = try c.decodeIfPresent(String.self, forKey: .message)
+                ?? c.decodeIfPresent(String.self, forKey: .detail)
+                ?? c.decodeIfPresent(String.self, forKey: .error_description)
+            detail = try c.decodeIfPresent(String.self, forKey: .detail)
+            error_description = try c.decodeIfPresent(String.self, forKey: .error_description)
+        }
+    }
+
+    private static func friendlyMessage(for diagnostic: String) -> String {
+        let lower = diagnostic.lowercased()
+        if lower.contains("locked") || lower.contains("already started") {
+            return "This game has already started, so that choice is locked."
+        }
+        if lower.contains("pick not found") || lower.contains("no rows") {
+            return "That pick is no longer available. Refresh and try again."
+        }
+        if lower.contains("lock time") {
+            return "This pick isn't open for tracking yet. Try again shortly."
+        }
+        if lower.contains("not signed in") || lower.contains("jwt") || lower.contains("unauthorized") {
+            return "Sign in to save this to your book."
+        }
+        if lower.contains("handle") {
+            if lower.contains("taken") { return "That handle is already taken." }
+            if lower.contains("reserved") { return "That handle is reserved. Try another." }
+            return "Use 3–18 letters, numbers, or underscores."
+        }
+        return "We couldn't save that right now. Please try again."
+    }
 
     @MainActor static func placeBet(gameDate: String, pickId: String?, pickText: String, kind: String, stake: Double, streak: Bool = false) async throws -> UserBet {
         let url = rest.appendingPathComponent("rpc/place_user_bet")
@@ -255,6 +296,7 @@ enum UserBookAPI {
 
     /// Public standings (aggregate-only RPC; anon-readable by design).
     static func fetchLeaderboard(window: String) async -> [BoardRow] {
+        async let garyRow = fetchGaryLeaderboardRow(window: window)
         guard let url = URL(string: "\(Secrets.supabaseURL.absoluteString)/rest/v1/rpc/your_book_leaderboard") else { return [] }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -262,9 +304,77 @@ enum UserBookAPI {
         req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_window": window])
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
-        return (try? JSONDecoder().decode([BoardRow].self, from: data)) ?? []
+        let users: [BoardRow]
+        if let (data, resp) = try? await URLSession.shared.data(for: req),
+           (resp as? HTTPURLResponse)?.statusCode == 200 {
+            users = (try? JSONDecoder().decode([BoardRow].self, from: data)) ?? []
+        } else {
+            users = []
+        }
+        guard let gary = await garyRow else { return users }
+        // Gary is an official comparator on the same units board, derived from
+        // the public graded ledger rather than a fake auth account. Manual user
+        // bets remain excluded; only system-graded Tail/Fade rows rank users.
+        return (users.filter { $0.display_name.caseInsensitiveCompare(gary.display_name) != .orderedSame } + [gary])
+            .sorted { $0.units == $1.units ? $0.display_name < $1.display_name : $0.units > $1.units }
+    }
+
+    private static func fetchGaryLeaderboardRow(window: String) async -> BoardRow? {
+        func officialUnits(result: String, odds: String?) -> Double {
+            switch result {
+            case "lost": return -1
+            case "push": return 0
+            case "won":
+                let price = Double((odds ?? "-110").replacingOccurrences(of: "+", with: "")) ?? -110
+                return price > 0 ? price / 100 : 100 / abs(price)
+            default: return 0
+            }
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? calendar.timeZone
+        let days = window.lowercased() == "7d" ? -7 : (window.lowercased() == "season" ? nil : -30)
+        let since: String
+        if let days, let date = calendar.date(byAdding: .day, value: days, to: Date()) {
+            let f = DateFormatter(); f.calendar = calendar; f.timeZone = calendar.timeZone; f.dateFormat = "yyyy-MM-dd"
+            since = f.string(from: date)
+        } else {
+            since = "2026-03-01"
+        }
+
+        async let gameLoad = try? SupabaseAPI.fetchAllGameResults(since: since)
+        async let propLoad = try? SupabaseAPI.fetchPropResults(since: since)
+        let games = await gameLoad ?? []
+        let props = (await propLoad ?? []).filter { !$0.isHRResult }
+
+        struct Settled {
+            let date: String
+            let result: String
+            let units: Double
+        }
+        var settled: [Settled] = []
+        for g in games {
+            guard let result = g.result?.lowercased(), ["won", "lost", "push"].contains(result) else { continue }
+            settled.append(Settled(date: g.game_date ?? "", result: result,
+                                   units: officialUnits(result: result, odds: g.effectiveOdds)))
+        }
+        for p in props {
+            guard let result = p.result?.lowercased(), ["won", "lost", "push"].contains(result) else { continue }
+            settled.append(Settled(date: p.game_date ?? "", result: result,
+                                   units: officialUnits(result: result, odds: p.odds?.value)))
+        }
+        guard !settled.isEmpty else { return nil }
+
+        let wins = settled.filter { $0.result == "won" }.count
+        let losses = settled.filter { $0.result == "lost" }.count
+        let pushes = settled.filter { $0.result == "push" }.count
+        var running = 0, best = 0
+        for row in settled.sorted(by: { $0.date < $1.date }) {
+            if row.result == "won" { running += 1; best = max(best, running) }
+            else if row.result == "lost" { running = 0 }
+        }
+        return BoardRow(display_name: "GARY A.I.", wins: wins, losses: losses,
+                        pushes: pushes, units: settled.reduce(0) { $0 + $1.units },
+                        best_streak: best)
     }
 
     /// The signed-in user's claimed handle, if any (owner-only select).
@@ -293,7 +403,7 @@ enum UserBookAPI {
     }
 
     @MainActor static func logManual(_ draft: ManualBetDraft) async throws -> UserBet {
-        guard var comps = URLComponents(url: rest.appendingPathComponent("user_bets"), resolvingAgainstBaseURL: false) else { throw UserBookError.server("bad url") }
+        guard var comps = URLComponents(url: rest.appendingPathComponent("user_bets"), resolvingAgainstBaseURL: false) else { throw UserBookError.server("We couldn't open the bet form. Please try again.") }
         comps.queryItems = [URLQueryItem(name: "select", value: "*")]
         guard let uid = AuthManager.shared.currentUser?.id
             ?? UserDefaults.standard.string(forKey: "gary_user_id"), !uid.isEmpty else {
@@ -313,7 +423,7 @@ enum UserBookAPI {
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         let data = try await run(req)
         let rows = try JSONDecoder().decode([UserBet].self, from: data)
-        guard let row = rows.first else { throw UserBookError.server("insert returned nothing") }
+        guard let row = rows.first else { throw UserBookError.server("We couldn't save that bet. Please try again.") }
         return row
     }
 

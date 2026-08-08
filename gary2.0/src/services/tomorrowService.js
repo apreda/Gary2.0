@@ -14,8 +14,9 @@
  * earliest-game countdown — don't fit daily_slate's flat per-game shape. A
  * single jsonb snapshot keyed on (date) keeps ranking logic out of Swift.
  *
- * Lanes (each wrapped per-source in try/catch — one flaky source never sinks
- * the board; GROUNDED only — "—"/empty when unposted, never fabricated):
+ * Lanes are GROUNDED only — "—"/empty when source facts are genuinely
+ * unposted, never fabricated. Data enrichments are best-effort; the generated
+ * Arms read is the deliberate exception and must be complete before publish:
  *   1. SLATE + LINES — reuses dailySlateService.buildLeagueRows for every slate
  *      sport at tomorrow's ET date, so the Tomorrow board never drifts from the
  *      Today slate. Lines null => board renders "—". any_lines=false when ZERO
@@ -67,7 +68,12 @@ import {
   SLATE_SPORTS_LIST,
   getETDateStr,
 } from './dailySlateService.js';
-import { getMlbSchedule, getMlbStandings, getMlbTeams } from './mlbStatsApiService.js';
+import {
+  getMlbSchedule,
+  getMlbStandings,
+  getMlbTeams,
+  getPitcherLastStarts,
+} from './mlbStatsApiService.js';
 import { getPitcherXStats } from './baseballSavantService.js';
 import { ballDontLieService as bdl } from './ballDontLieService.js';
 import { GEMINI_PROPS_MODEL } from './agentic/orchestrator/orchestratorConfig.js';
@@ -99,15 +105,42 @@ export function tomorrowET() {
 /* ─────────────────────────── name / key helpers ─────────────────────────── */
 
 function nameKey(s) {
-  return String(s || '').toLowerCase().replace(/[.\-']/g, '').replace(/\s+/g, ' ').trim();
+  return String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[.\-'’]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// MLB's schedule and the player-stat providers do not always agree about
+// whether a suffix is present (or how it is punctuated). Treat suffixes as
+// identity metadata, never as the surname. This also prevents a probable such
+// as "Luis Severino IV" from rendering as simply "IV" in the app.
+const PLAYER_NAME_SUFFIXES = new Set(['JR', 'SR', 'II', 'III', 'IV', 'V']);
+function playerNameParts(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  while (parts.length > 1) {
+    const suffix = parts[parts.length - 1].replace(/[.,]/g, '').toUpperCase();
+    if (!PLAYER_NAME_SUFFIXES.has(suffix)) break;
+    parts.pop();
+  }
+  return parts;
+}
+function playerNameWithoutSuffix(fullName) {
+  return playerNameParts(fullName).join(' ');
+}
+function playerNameKey(fullName) {
+  return nameKey(playerNameWithoutSuffix(fullName));
 }
 function lastNameKey(fullName) {
-  const parts = String(fullName || '').trim().split(/\s+/);
+  const parts = playerNameParts(fullName);
   return nameKey(parts[parts.length - 1] || '');
 }
 /** "Gerrit Cole" -> "G. Cole" (mock's compact starter name format). */
 function abbrevName(fullName) {
-  const parts = String(fullName || '').trim().split(/\s+/);
+  const parts = playerNameParts(fullName);
   if (parts.length < 2) return fullName || '';
   const last = parts[parts.length - 1];
   const first = parts[0];
@@ -115,7 +148,8 @@ function abbrevName(fullName) {
 }
 /** "Gerrit Cole" -> "Cole" (probable-pitcher last name); "" when no name. */
 function lastNameOf(fullName) {
-  return String(fullName || '').trim().split(/\s+/).pop() || '';
+  const parts = playerNameParts(fullName);
+  return parts[parts.length - 1] || '';
 }
 
 /* ─────────────────────────── ET time formatting ─────────────────────────── */
@@ -376,6 +410,7 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
           league: 'MLB',
           name: abbrevName(name),
           full_name: name,              // un-abbreviated (scout-extras id resolution)
+          person_id: t?.probablePitcher?.id ?? null, // exact MLB id; avoids fragile name joins
           team: abbr,
           abbr,                         // explicit alias (iOS gold team-name source)
           era,                          // number | null
@@ -393,7 +428,7 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
           detail,                       // legacy "HOU 4.03" string (kept for back-compat)
         });
         if (era != null && era <= ACE_ERA) {
-          const last = String(name).trim().split(/\s+/).pop();
+          const last = lastNameOf(name);
           gameAces.push({ lastName: last, era });
         }
       }
@@ -497,15 +532,19 @@ async function bdlTeamMaps() {
 
 /** Resolve a probable's BDL player id by full name (+ team when it can). */
 async function resolvePitcherBdlId(fullName, teamId) {
-  const last = String(fullName || '').trim().split(/\s+/).pop();
+  const last = lastNameOf(fullName);
   if (!last) return null;
-  const res = await bdl.getPlayersGeneric('baseball_mlb', { search: last, per_page: 100 });
-  const players = Array.isArray(res) ? res : (res?.data || []);
+  const searches = [...new Set([last, playerNameWithoutSuffix(fullName)].filter(Boolean))];
+  const found = await Promise.all(searches.map(async (search) => {
+    const res = await bdl.getPlayersGeneric('baseball_mlb', { search, per_page: 100 });
+    return Array.isArray(res) ? res : (res?.data || []);
+  }));
+  const players = [...new Map(found.flat().filter((p) => p?.id != null).map((p) => [p.id, p])).values()];
   if (!players.length) return null;
-  const want = nameKey(fullName);
+  const want = playerNameKey(fullName);
   const byName = players.filter((p) => {
     const full = p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ');
-    return nameKey(full) === want;
+    return playerNameKey(full) === want;
   });
   if (byName.length === 1) return byName[0].id;
   if (byName.length > 1 && teamId != null) {
@@ -516,10 +555,67 @@ async function resolvePitcherBdlId(fullName, teamId) {
   // No exact full-name hit — same last name + the right team is still safe.
   if (teamId != null) {
     const teamHits = players.filter((p) =>
-      nameKey(p.last_name || '') === nameKey(last) && (p.team?.id ?? p.team_id) === teamId);
+      lastNameKey(p.last_name || '') === lastNameKey(last) && (p.team?.id ?? p.team_id) === teamId);
     if (teamHits.length === 1) return teamHits[0].id;
   }
+  // Trades and provider roster lag can make the team id stale. A unique
+  // suffix-aware surname hit is still safer than dropping the whole game log.
+  const lastHits = players.filter((p) => lastNameKey(p.last_name || '') === lastNameKey(last));
+  if (lastHits.length === 1) return lastHits[0].id;
   return null;
+}
+
+/** Apply official MLB Stats API start rows to a starter in the board shape. */
+function attachOfficialStartRows(st, starts, etDateStr, teamIndex) {
+  if (!Array.isArray(starts) || !starts.length) return false;
+  const last = starts[starts.length - 1];
+  const outs = scoutIpOuts(last.ip);
+  st.last_outing = {
+    ip: scoutOutsToIp(outs),
+    er: Number(last.er) || 0,
+    k: Number(last.k) || 0,
+    opp: abbrFor(last.opponent, teamIndex) || last.opponent || null,
+    at: last.isHome == null ? null : (last.isHome ? 'vs' : 'at'),
+    date: scoutShortDate(last.date),
+  };
+  const restDiff = scoutDayDiff(last.date, etDateStr);
+  if (restDiff != null && restDiff >= 1) st.rest = { days: restDiff - 1 };
+
+  const l3rows = starts.slice(-3);
+  if (l3rows.length >= 2) {
+    let l3o = 0; let l3er = 0; let l3k = 0;
+    for (const r of l3rows) {
+      l3o += scoutIpOuts(r.ip);
+      l3er += Number(r.er) || 0;
+      l3k += Number(r.k) || 0;
+    }
+    st.l3 = { gs: l3rows.length, ip: scoutOutsToIp(l3o), er: l3er, k: l3k };
+  }
+
+  const qsWin = starts.slice(-5)
+    .map((r) => scoutIpOuts(r.ip) >= 18 && (Number(r.er) || 0) <= 3);
+  let qsStreak = 0;
+  for (let i = qsWin.length - 1; i >= 0; i--) {
+    if (qsWin[i]) qsStreak += 1; else break;
+  }
+  st.qs_form = {
+    streak: qsStreak,
+    qs: qsWin.filter(Boolean).length,
+    window: qsWin.length,
+  };
+
+  const vs = starts.filter((r) => abbrFor(r.opponent, teamIndex) === st.opponent);
+  if (vs.length) {
+    let vOuts = 0; let vEr = 0;
+    for (const r of vs) { vOuts += scoutIpOuts(r.ip); vEr += Number(r.er) || 0; }
+    st.vs_opp = {
+      gs: vs.length,
+      ip: scoutOutsToIp(vOuts),
+      er: vEr,
+      era: vOuts > 0 ? Number(((vEr * 27) / vOuts).toFixed(2)) : null,
+    };
+  }
+  return true;
 }
 
 /**
@@ -527,19 +623,45 @@ async function resolvePitcherBdlId(fullName, teamId) {
  * last_outing = his most recent regular-season START (never relief);
  * vs_opp = this season's starts against tonight's opponent, aggregated.
  */
-async function enrichStartersWithOutings(starters, etDateStr) {
-  const { idByAbbr, abbrById } = await bdlTeamMaps();
+async function enrichStartersWithOutings(starters, etDateStr, teamIndex) {
+  let idByAbbr = new Map();
+  let abbrById = new Map();
+  try {
+    ({ idByAbbr, abbrById } = await bdlTeamMaps());
+  } catch (e) {
+    // Official MLB ids/logs below do not need BDL. A BDL teams outage must not
+    // prevent those primary enrichments from filling the starter cards.
+    console.warn(`[TomorrowBoard] BDL team map unavailable for outing fallback: ${e.message}`);
+  }
   const mlb = starters.filter((st) => st.league === 'MLB' && (st.full_name || st.name));
   const CHUNK = 4;
   for (let i = 0; i < mlb.length; i += CHUNK) {
     await Promise.all(mlb.slice(i, i + CHUNK).map(async (st) => {
       try {
+        // The schedule already supplies MLB's exact person id. Its official
+        // game log is the primary source, so punctuation, suffixes, trades and
+        // third-party roster lag cannot leave one side of the matchup empty.
+        if (st.person_id != null) {
+          try {
+            const official = await getPitcherLastStarts(st.person_id, SEASON, 50);
+            if (attachOfficialStartRows(st, official, etDateStr, teamIndex)) return;
+            console.warn(`[TomorrowBoard] official start log empty for ${st.full_name || st.name}; trying BDL`);
+          } catch (e) {
+            console.warn(`[TomorrowBoard] official start log failed for ${st.full_name || st.name}: ${e.message}; trying BDL`);
+          }
+        }
         const teamId = idByAbbr.get(String(st.team || '').toUpperCase()) ?? null;
         const pid = await resolvePitcherBdlId(st.full_name || st.name, teamId);
-        if (!pid) return;
+        if (!pid) {
+          console.warn(`[TomorrowBoard] no stats id for ${st.full_name || st.name}`);
+          return;
+        }
         const rows = await bdl.getMlbPlayerGameRowsChrono(pid, SEASON);
-        const startRows = (rows || []).filter((r) => Number(r.games_started) === 1);
-        if (!startRows.length) return;
+        const startRows = (rows || []).filter((r) => Number(r.games_started) > 0);
+        if (!startRows.length) {
+          console.warn(`[TomorrowBoard] no completed starts for ${st.full_name || st.name}`);
+          return;
+        }
         const last = startRows[startRows.length - 1];
         const outs = scoutIpOuts(last.ip);
         let oppAbbr = null;
@@ -1130,8 +1252,9 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
 // THE ARMS, IN GARY'S VOICE (founder GO, Aug 4 2026): the scouting card opens
 // straight with the arms, and the arms SPEAK — two sentences from Gary on the
 // game's two starters, replacing the stat ladder. ONE batched call for the
-// whole slate on the props-lane model (bridge, $0 marginal). Fail-soft at
-// every seam: a game without a take renders the existing iOS ladder instead.
+// whole slate on the props-lane model (bridge, $0 marginal). Publishing is
+// all-or-nothing for every game whose two probable starters are posted: an
+// incomplete response is retried per game and never overwrites a good board.
 // The facts below are the take's ONLY world — same prevent-fabrication
 // posture as the desks (data in, nothing invented).
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1161,26 +1284,40 @@ Your training data is old; the pitcher data provided is current — say nothing 
 For each game: TWO sentences on the game's two starting pitchers — whatever you'd actually say about these arms tonight. No emojis.`;
 
 /**
- * Attach `arms_take` to MLB board rows — one batched voice call, JSON out.
- * Any failure (session, parse, per-game miss) leaves rows untouched.
+ * Attach `arms_take` to MLB board rows — one batched voice call, JSON out,
+ * then focused retries for any missed game. Throws while any eligible game is
+ * incomplete so the caller cannot silently publish an old/template treatment.
  */
 async function attachArmsTakes(board, starters) {
-  const byAbbr = new Map();
-  for (const st of starters) {
-    if (st.league === 'MLB' && st.team) byAbbr.set(String(st.team).toUpperCase(), st);
-  }
+  const starterFor = (row, team) => {
+    const matchup = `${row.away_abbr || row.away_team} @ ${row.home_abbr || row.home_team}`;
+    const candidates = starters.filter((st) => st.league === 'MLB'
+      && String(st.team || '').toUpperCase() === String(team || '').toUpperCase()
+      && (!st.game || st.game === matchup));
+    if (candidates.length <= 1) return candidates[0] || null;
+    const rowTime = Date.parse(row.commence_time);
+    if (!Number.isFinite(rowTime)) return candidates[0];
+    return [...candidates].sort((a, b) => {
+      const aDelta = Math.abs((Date.parse(a.game_time) || rowTime) - rowTime);
+      const bDelta = Math.abs((Date.parse(b.game_time) || rowTime) - rowTime);
+      return aDelta - bDelta;
+    })[0];
+  };
   const jobs = [];
   for (const r of board) {
     if (r.league !== 'MLB') continue;
-    const a = armsFactLine(byAbbr.get(String(r.away_abbr || '').toUpperCase()));
-    const h = armsFactLine(byAbbr.get(String(r.home_abbr || '').toUpperCase()));
-    if (!a && !h) continue; // nothing to speak about — ladder fallback owns it
+    const a = armsFactLine(starterFor(r, r.away_abbr));
+    const h = armsFactLine(starterFor(r, r.home_abbr));
+    // A take is required once both official probables exist. Before probable
+    // pitchers are posted there is not enough grounded material to demand one.
+    if (!a || !h) continue;
     const matchup = `${r.away_abbr || r.away_team} @ ${r.home_abbr || r.home_team}`;
     jobs.push({ row: r, matchup, facts: [a, h].filter(Boolean).join('\n') });
   }
   if (!jobs.length) return;
 
-  const userMessage = `${jobs.map((j) => `## ${j.matchup}\n${j.facts}`).join('\n\n')}
+  const requestTakes = async (pending) => {
+    const userMessage = `${pending.map((j) => `## ${j.matchup}\n${j.facts}`).join('\n\n')}
 
 Output JSON only:
 
@@ -1190,45 +1327,68 @@ Output JSON only:
 
 One entry per game listed above.`;
 
-  const session = await createGeminiSession({
-    modelName: GEMINI_PROPS_MODEL,
-    systemPrompt: ARMS_VOICE_CONTRACT,
-    tools: [],
-    thinkingLevel: 'low',
-  });
-  const res = await sendToSessionWithRetry(session, userMessage, {});
-  const m = String(res.content || '').match(/```json\s*([\s\S]*?)```/i) || String(res.content || '').match(/(\[[\s\S]*\])/);
-  if (!m) throw new Error('arms takes: no JSON in response');
-  const entries = JSON.parse(m[1]);
-  // Tolerant key match (founder, Aug 6: DET @ SEA was still showing the old
-  // template ladder while the rest of the board had Gary's paragraph — 8 of
-  // 11 attached). The lookup was an EXACT string hit on the matchup we sent,
-  // so any game the model echoed back with different spacing, punctuation or
-  // full team names silently kept no take and fell through to the fallback.
-  // Normalize both sides, then fall back to the model's own ordering when the
-  // batch came back one-per-game in order.
+    const session = await createGeminiSession({
+      modelName: GEMINI_PROPS_MODEL,
+      systemPrompt: ARMS_VOICE_CONTRACT,
+      tools: [],
+      thinkingLevel: 'low',
+    });
+    const res = await sendToSessionWithRetry(session, userMessage, {});
+    const m = String(res.content || '').match(/```json\s*([\s\S]*?)```/i)
+      || String(res.content || '').match(/(\[[\s\S]*\])/);
+    if (!m) throw new Error('arms takes: no JSON in response');
+    const entries = JSON.parse(m[1]);
+    if (!Array.isArray(entries)) throw new Error('arms takes: JSON was not an array');
+    return entries;
+  };
+
   const keyOf = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const takeByMatchup = new Map();
-  const inOrder = [];
-  for (const e of entries) {
-    if (e?.matchup && typeof e.take === 'string') {
-      takeByMatchup.set(keyOf(e.matchup), e.take.trim());
-      inOrder.push(e.take.trim());
+  const validTake = (take) => typeof take === 'string'
+    && take.trim().length >= 40
+    && take.trim().length <= 420
+    && !take.includes('…')
+    && !take.includes('...')
+    && !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take);
+  const attachEntries = (pending, entries) => {
+    const takeByMatchup = new Map();
+    const inOrder = [];
+    for (const e of entries) {
+      if (e?.matchup && typeof e.take === 'string') {
+        takeByMatchup.set(keyOf(e.matchup), e.take.trim());
+        inOrder.push(e.take.trim());
+      }
+    }
+    for (const [i, j] of pending.entries()) {
+      const take = takeByMatchup.get(keyOf(j.matchup))
+        ?? (inOrder.length === pending.length ? inOrder[i] : undefined);
+      if (validTake(take)) j.row.arms_take = take.trim();
+    }
+  };
+
+  try {
+    attachEntries(jobs, await requestTakes(jobs));
+  } catch (e) {
+    console.warn(`[TomorrowBoard] batched arms write failed: ${e.message}; retrying per game`);
+  }
+
+  // A malformed/missing entry in a large batch should not poison the slate.
+  // Retry each miss in isolation twice; the session send already performs its
+  // own network/server retry policy inside each attempt.
+  for (const job of jobs.filter((j) => !j.row.arms_take)) {
+    for (let attempt = 1; attempt <= 2 && !job.row.arms_take; attempt++) {
+      try {
+        attachEntries([job], await requestTakes([job]));
+      } catch (e) {
+        console.warn(`[TomorrowBoard] arms retry ${attempt}/2 failed for ${job.matchup}: ${e.message}`);
+      }
     }
   }
-  let attached = 0;
-  for (const [i, j] of jobs.entries()) {
-    const take = takeByMatchup.get(keyOf(j.matchup))
-      ?? (inOrder.length === jobs.length ? inOrder[i] : undefined);
-    // Guards are LAWS, not style: no ellipsis ever; no emojis; length sane.
-    if (!take || take.length < 40 || take.length > 420) continue;
-    if (take.includes('…') || take.includes('...')) continue;
-    if (/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take)) continue;
-    j.row.arms_take = take;
-    attached += 1;
+
+  const missed = jobs.filter((j) => !j.row.arms_take);
+  if (missed.length) {
+    throw new Error(`arms takes incomplete for ${missed.map((j) => j.matchup).join(', ')}`);
   }
-  const missed = jobs.length - attached;
-  console.log(`[TomorrowBoard] arms takes attached: ${attached}/${jobs.length}` + `${missed ? ` — ${missed} fell back to the template ladder` : ''}`);
+  console.log(`[TomorrowBoard] arms takes attached: ${jobs.length}/${jobs.length}`);
 }
 
 /**
@@ -1296,7 +1456,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   // 2c. SCOUT EXTRAS — each probable's last outing + this-season record vs
   // tonight's opponent (BDL box scores; grounded, omit-when-short).
   try {
-    await enrichStartersWithOutings(starters, etDateStr);
+    await enrichStartersWithOutings(starters, etDateStr, teamIndex);
   } catch (e) {
     console.warn(`[TomorrowBoard] starter outings failed (honest-empty): ${e.message}`);
   }
@@ -1335,12 +1495,9 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     console.warn(`[TomorrowBoard] season series failed (honest-empty): ${e.message}`);
   }
   // THE ARMS IN GARY'S VOICE (Aug 4) — two sentences per game on the two
-  // starters, from the enriched facts above. Fail-soft: no take, ladder shows.
-  try {
-    await attachArmsTakes(board, starters);
-  } catch (e) {
-    console.warn(`[TomorrowBoard] arms takes failed (ladder fallback): ${e.message}`);
-  }
+  // posted starters. This intentionally throws before the upsert if generation
+  // is incomplete, preserving the last good snapshot for the scheduler retry.
+  await attachArmsTakes(board, starters);
   const any_lines = board.some(
     (r) => r.spread != null || r.ml_home != null || r.ml_away != null || r.total != null,
   );

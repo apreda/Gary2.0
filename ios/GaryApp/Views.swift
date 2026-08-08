@@ -6839,9 +6839,9 @@ struct PremiumPicksView: View {
     private func sportUnlocked(_ lg: String) -> Bool {
         Self.freeLaunch || devAllAccess || entitledSports.contains("ALL") || entitledSports.contains(lg)
     }
-    /// Stripe Payment Links, June 5 pricing: single sport $9.99/mo,
-    /// All-Access $34.99/mo with a 3-day card-required trial, WC Pass $14.99
-    /// one-time. Debug builds sell TEST links (card 4242 4242 4242 4242);
+    /// Stripe Payment Links, June 5 pricing: single sport $9.99/mo and
+    /// All-Access monthly/annual plans. Debug builds sell TEST links
+    /// (card 4242 4242 4242 4242);
     /// Release sells LIVE — real money. Same sports, same prices. The
     /// signed-in identity rides along as client_reference_id.
     #if DEBUG
@@ -6857,7 +6857,6 @@ struct PremiumPicksView: View {
         // June 9 flip: $29.99/mo + $179/yr, both 7-day card-required trials.
         "ALL":        "https://buy.stripe.com/test_00w9AU2MQ8ql5SW0lKaIM0h",
         "ALL_ANNUAL": "https://buy.stripe.com/test_fZu14o0EI9up3KOgkIaIM0i",
-        "WC":    "https://buy.stripe.com/test_5kQeVe9befSN9582tSaIM0f",
     ]
     #else
     fileprivate static let checkoutLinks: [String: String] = [
@@ -6873,7 +6872,6 @@ struct PremiumPicksView: View {
         // build that shipped it is gone — deactivate it post-release.
         "ALL":        "https://buy.stripe.com/9B6eVednG5dL0MQ09xao80a",
         "ALL_ANNUAL": "https://buy.stripe.com/3cI7sM4RagWtcvy3lJao80b",
-        "WC":    "https://buy.stripe.com/7sYbJ2abubC9dzCe0nao808",
     ]
     #endif
     private func openCheckout(_ league: String, surface: String = "storefront") {
@@ -6887,8 +6885,7 @@ struct PremiumPicksView: View {
               let url = URL(string: "\(base)?client_reference_id=\(SupabaseAPI.identityId)") else { return }
         SupabaseAPI.logEvent("checkout_started", [
             "plan": league == "ALL" ? "all_access"
-                  : (league == "ALL_ANNUAL" ? "all_access_annual"
-                  : (league == "WC" ? "world_cup" : "single")),
+                  : (league == "ALL_ANNUAL" ? "all_access_annual" : "single"),
             "sport": league, "surface": surface,
         ])
         checkoutItem = CheckoutItem(url: url)
@@ -8410,8 +8407,8 @@ struct SafariView: UIViewControllerRepresentable {
 // MARK: - Plans / Pricing sheet (the paywall)
 //
 // A two-state conversion paywall, not a flat price list. State 1 (the default)
-// sells: hero → benefits → a LIVE graded-results receipt → two featured plans
-// (All-Access pre-selected, World Cup Pass during its window) → an "all plans"
+// sells: hero → benefits → a LIVE graded-results receipt → featured plans
+// (All-Access pre-selected) → an "all plans"
 // link. State 2 is the full menu (single sports, bundles, the free tier). One
 // dominant gold CTA at the bottom follows the current selection and discloses
 // the Stripe/Safari hand-off; everything else is quiet. Checkout still rides
@@ -8419,7 +8416,7 @@ struct SafariView: UIViewControllerRepresentable {
 struct PlansSheetView: View {
     let focus: String?               // league context from a blurred-board tap
     let signedIn: Bool
-    var onSelect: (String) -> Void   // league key ("MLB", "ALL", "WC") -> checkout
+    var onSelect: (String) -> Void   // league key ("MLB", "ALL", ...) -> checkout
     var onBundle: ([String]) -> Void // picked bundle sports -> server checkout
     var onAccount: () -> Void        // open sign-in / create account
     @Environment(\.dismiss) private var dismiss
@@ -8429,7 +8426,7 @@ struct PlansSheetView: View {
     /// What the single dominant CTA acts on.
     /// One selection model: tap sports and the plan derives itself —
     /// 1 = single pass, 2-3 = bundle, automatically. No separate bundle UI.
-    private enum PlanSelection: Equatable { case allAccess, allAccessAnnual, sports, worldCup }
+    private enum PlanSelection: Equatable { case allAccess, allAccessAnnual, sports }
 
     /// The annual card unhides itself once a build flavor carries an
     /// ALL_ANNUAL checkout link (DEBUG today; RELEASE after the live swap).
@@ -8478,8 +8475,6 @@ struct PlansSheetView: View {
         if let f = focus, Self.sports.contains(f) {
             _selection = State(initialValue: .sports)
             _pickedSports = State(initialValue: [f])
-        } else if AppFlags.worldCupEnabled, focus == "WC", Self.worldCupWindowActive() {
-            _selection = State(initialValue: .worldCup)
         } else {
             _selection = State(initialValue: .allAccess)
         }
@@ -8490,20 +8485,6 @@ struct PlansSheetView: View {
         guard let f = focus, Self.sports.contains(f) else { return Self.sports }
         return [f] + Self.sports.filter { $0 != f }
     }
-
-    /// The World Cup pass is featured only inside the tournament window (run-up
-    /// through the final) — outside it the pass would be dead, confusing inventory.
-    private static func worldCupWindowActive() -> Bool {
-        var cal = Calendar(identifier: .gregorian)
-        if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
-        let start = DateComponents(calendar: cal, year: 2026, month: 6, day: 4).date ?? Date()
-        let end = DateComponents(calendar: cal, year: 2026, month: 7, day: 20).date ?? Date()
-        let now = Date()
-        return now >= start && now < end
-    }
-    // Gated behind the World Cup feature flag: off ⇒ the WORLD CUP PASS plan
-    // never appears in the paywall (and `.worldCup` selection stays unreachable).
-    private var wcActive: Bool { AppFlags.worldCupEnabled && Self.worldCupWindowActive() }
 
     // MARK: Body
 
@@ -8673,7 +8654,6 @@ struct PlansSheetView: View {
             }
 
             sportGridSection
-            if wcActive { wcRowSection }
             includedFreeSection
             if !signedIn { createAccountSection }
             legalFooter
@@ -8686,24 +8666,6 @@ struct PlansSheetView: View {
                              sub: "One \(GaryPricing.single)/mo · two \(GaryPricing.twoSport) · three \(GaryPricing.threeSport) — bundles itself")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(orderedSports, id: \.self) { sportCard($0) }
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
-    private var wcRowSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HubSectionHeader(eyebrow: "Limited", sub: "One-time, no renewal")
-            let phase = worldCupPhase()
-            planCard(selected: selection == .worldCup,
-                     ribbon: phase == .preTournament ? "Kicks off June 11" : "Tournament live now",
-                     ribbonTeal: true,
-                     title: "WORLD CUP PASS",
-                     sub: phase == .preTournament ? "All 104 matches · one-time, no renewal"
-                                                  : "Every match through the final · one-time, no renewal",
-                     price: GaryPricing.worldCup, per: "ONE-TIME",
-                     a11y: "World Cup Pass. \(GaryPricing.worldCup), one time. Every match through the final." + (selection == .worldCup ? " Selected." : "")) {
-                select(.worldCup)
             }
             .padding(.horizontal, 16)
         }
@@ -8823,7 +8785,6 @@ struct PlansSheetView: View {
         if !signedIn {
             switch selection {
             case .allAccess, .allAccessAnnual: return "SIGN IN TO START YOUR TRIAL"
-            case .worldCup: return "SIGN IN TO PRE-ORDER"
             case .sports:
                 return pickedSports.isEmpty ? "PICK A SPORT" : "SIGN IN TO START"
             }
@@ -8831,7 +8792,6 @@ struct PlansSheetView: View {
         switch selection {
         case .allAccess:       return "START \(GaryPricing.trialDays)-DAY FREE TRIAL"
         case .allAccessAnnual: return "START FREE TRIAL — \(GaryPricing.allAccessAnnual)/YR"
-        case .worldCup:       return "PRE-ORDER WORLD CUP PASS"
         case .sports:
             switch pickedSports.count {
             case 0:  return "PICK A SPORT"
@@ -8850,8 +8810,6 @@ struct PlansSheetView: View {
             return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessMonthly)/mo. Cancel anytime. \(tail)"
         case .allAccessAnnual:
             return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessAnnual)/yr — \(GaryPricing.allAccessAnnualMonthly)/mo. Cancel anytime. \(tail)"
-        case .worldCup:
-            return "\(GaryPricing.worldCup) once. No renewal — yours for all 104 matches. \(tail)"
         case .sports:
             if capHint {
                 return "Three is the max — All-Access covers all 7 boards for \(GaryPricing.allAccessMonthly)/mo."
@@ -8870,7 +8828,6 @@ struct PlansSheetView: View {
         switch selection {
         case .allAccess:       onSelect("ALL")
         case .allAccessAnnual: onSelect("ALL_ANNUAL")
-        case .worldCup:       onSelect("WC")
         case .sports:
             switch pickedSports.count {
             case 0:  return
@@ -8890,7 +8847,6 @@ struct PlansSheetView: View {
         switch s {
         case .allAccess:       SupabaseAPI.logEvent("plan_selected", ["plan": "all_access", "billing": "monthly"])
         case .allAccessAnnual: SupabaseAPI.logEvent("plan_selected", ["plan": "all_access", "billing": "annual"])
-        case .worldCup:       SupabaseAPI.logEvent("plan_selected", ["plan": "world_cup", "billing": "one_time"])
         case .sports:         break   // logged in toggleSport with the actual sports
         }
     }
@@ -19920,9 +19876,9 @@ struct PicksCarouselView: View {
     @State private var selectedProp: PropPick?
     /// PERF#1(b/c): memoized UNSORTED game set + precomputed per-game edge index.
     /// Rebuilt by rebuildMemo() only when picks/props/slate/connections or the
-    /// day/sport filter change — never on a live-score tick. The cheap live-status
-    /// sort layers on top in `games`, so a 20-25s score publish re-orders + relabels
-    /// without redoing the grouping or the games×connections edge scan.
+    /// day/sport filter change — never on a live-score tick. Page order is frozen
+    /// after it is published: changing the backing order during an interactive
+    /// `TabView` swipe can strand UIKit halfway between two game controllers.
     @State private var gamesMemo: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
     @State private var edgeIndex: [String: [Signal]] = [:]
     /// Masthead + strip context (founder, Jul 22: the Hub's upper part —
@@ -20092,17 +20048,7 @@ struct PicksCarouselView: View {
     }
 
     private var games: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] {
-        let out = gamesMemo
-        // Today: LIVE games first, then upcoming by start time, then finished/graded
-        // bumped to the very back — so the bar stays current as the day rolls on.
-        // Yesterday is already all-settled; keep its existing time order. This is the
-        // only per-tick work (a small sort over an already-built set) — the grouping
-        // above is memoized, so a live-score publish re-orders without re-grouping.
-        guard pickDay == .today else { return out }
-        return out
-            .map { (g: $0, bucket: gameStatusBucket($0), start: gameStart($0)) }
-            .sorted { ($0.bucket, $0.start) < ($1.bucket, $1.start) }
-            .map { $0.g }
+        gamesMemo
     }
 
     /// Recompute the memoized game set + edge index. Called on first load and
@@ -20112,7 +20058,28 @@ struct PicksCarouselView: View {
     /// on a transient empty refresh).
     private func rebuildMemo() {
         let built = computeGamesUnsorted()
-        gamesMemo = built
+        // Initial publication: LIVE → upcoming → final, then first pitch.
+        // Refreshes keep every existing identity at the same page index and append
+        // genuinely new games. SwiftUI's page TabView is backed by
+        // UIPageViewController; reordering its children while a finger is down is
+        // what produced the two half-pages stuck together in the Aug 7 screenshot.
+        let oldOrder = Dictionary(uniqueKeysWithValues: gamesMemo.enumerated().map {
+            (Self.gameIdentityKey($0.element.matchup, $0.element.commence), $0.offset)
+        })
+        let ordered = built.sorted { lhs, rhs in
+            let l = oldOrder[Self.gameIdentityKey(lhs.matchup, lhs.commence)]
+            let r = oldOrder[Self.gameIdentityKey(rhs.matchup, rhs.commence)]
+            switch (l, r) {
+            case let (li?, ri?): return li < ri
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil):
+                guard pickDay == .today else { return gameStart(lhs) < gameStart(rhs) }
+                return (gameStatusBucket(lhs), gameStart(lhs)) < (gameStatusBucket(rhs), gameStart(rhs))
+            }
+        }
+        gamesMemo = ordered
+        if page > ordered.count { page = 0 }
         // PERF#1(c): precompute each game's edge list ONCE (the N×M games×connections
         // scan), keyed by the game's IDENTITY key, so edges(for:) is an O(1) dict
         // lookup at render time. String match (abbrGameMatches / matchup key) finds
@@ -20335,8 +20302,8 @@ struct PicksCarouselView: View {
             // its own snapshot that could disagree with the cards.
             LiveScoreCache.shared.startIfNeeded()
         }
-        .onChange(of: sport) { _ in page = 0; rebuildMemo(); lockShowcaseIfNeeded() }
-        .onChange(of: pickDay) { _ in rebuildMemo(); lockShowcaseIfNeeded() }
+        .onChange(of: sport) { _ in page = 0; gamesMemo = []; rebuildMemo(); lockShowcaseIfNeeded() }
+        .onChange(of: pickDay) { _ in page = 0; gamesMemo = []; rebuildMemo(); lockShowcaseIfNeeded() }
         .onChange(of: connLoaded) { _ in rebuildMemo() }
         // The store's picks/props/slate settle asynchronously after each load — a
         // count signature fires rebuildMemo() once they land (and after a refresh),
@@ -20421,6 +20388,7 @@ struct PicksCarouselView: View {
                         .padding(.bottom, 130)
                 }
                 .refreshable { await store.refresh() }
+                .clipped()
                 .tag(0)
                 ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                     ScrollView(showsIndicators: false) {
@@ -20445,6 +20413,8 @@ struct PicksCarouselView: View {
                             .padding(.bottom, 130)
                     }
                     .refreshable { await store.refresh() }
+                    .clipped()
+                    .id(Self.gameIdentityKey(g.matchup, g.commence))
                     .tag(idx + 1)
                 }
             }
@@ -21696,41 +21666,26 @@ fileprivate struct ScoutTrioData {
     var wireText: String? { wireLines.isEmpty ? nil : wireLines.joined(separator: " · ") }
 }
 
-/// THE ARMS (Comp C "The Notebook Wraps", founder-picked Jul 22 evening —
-/// replaced the Tug's bars): the gold chapter header, a prose line assembled
-/// strictly from real fields, then the two starters as soft side-by-side
-/// plates. Cardless — the plates are the only containers, per the mock.
+/// THE ARMS: Gary's generated two-sentence read, then the two starters as soft
+/// side-by-side plates. There is deliberately no template-prose fallback: the
+/// server retains the last complete snapshot instead of publishing a missed
+/// daily generation as a different treatment.
 fileprivate struct ScoutArmsSection: View {
     let d: ScoutTrioData
-
-    /// "3 straight quality starts" / "2 quality starts in his last 5" /
-    /// "a 3.44 ERA" — the arm's calling card, from qs_form else season ERA.
-    /// A ZERO-QS run falls through to the ERA form ("brings 0 quality
-    /// starts" is honest but reads like a typo — sim-caught Jul 22).
-    private func phrase(_ p: TomorrowPerson?) -> String? {
-        if let s = p?.qs_form?.streak, s >= 2 { return "\(s) straight quality starts" }
-        if let q = p?.qs_form?.qs, q >= 1, let w = p?.qs_form?.window, w >= 2 { return "\(q) quality starts in his last \(w)" }
-        if let e = p?.era { return String(format: "a %.2f ERA", e) }
-        return nil
-    }
-    private var prose: Text? {
-        guard let aN = d.awayStarter?.name, let hN = d.homeStarter?.name,
-              let aP = phrase(d.awayStarter), let hP = phrase(d.homeStarter) else { return nil }
-        let dim = ScoutMock.warm.opacity(0.88)
-        var t = Text("\(aN) brings ").foregroundColor(dim)
-            + Text(aP).bold().foregroundColor(ScoutMock.warm)
-        if let rest = d.awayStarter?.rest?.days {
-            t = t + Text(" on \(rest) days' rest").foregroundColor(dim)
-        }
-        return t + Text("; \(hN) counters with ").foregroundColor(dim)
-            + Text(hP).bold().foregroundColor(ScoutMock.warm)
-            + Text(".").foregroundColor(dim)
-    }
 
     /// "LODOLO" — surname in display caps, the plate's title.
     private func surname(_ p: TomorrowPerson) -> String {
         let full = p.full_name ?? p.name ?? ""
-        return (full.split(separator: " ").last.map(String.init) ?? full).uppercased()
+        let suffixes: Set<String> = ["JR", "SR", "II", "III", "IV", "V"]
+        var parts = full.split(separator: " ").map(String.init)
+        while parts.count > 1 {
+            let candidate = parts.last?
+                .trimmingCharacters(in: CharacterSet(charactersIn: ".,"))
+                .uppercased() ?? ""
+            guard suffixes.contains(candidate) else { break }
+            parts.removeLast()
+        }
+        return (parts.last ?? full).uppercased()
     }
     private func seasonLine(_ p: TomorrowPerson) -> String? {
         guard let e = p.era else { return nil }
@@ -21798,8 +21753,7 @@ fileprivate struct ScoutArmsSection: View {
                     .font(GaryFonts.display(14)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
                 // Gary's two sentences on the two starters (founder, Aug 4 —
-                // "whatever two sentences Gary wants to say"); the assembled
-                // template line is the fallback when the board carries none.
+                // "whatever two sentences Gary wants to say").
                 if let take = d.armsTake {
                     // The take reads exactly as it did before (founder, Aug 6:
                     // the drop cap came back out — "it was fine how it was") —
@@ -21814,11 +21768,6 @@ fileprivate struct ScoutArmsSection: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))
-                } else if let prose {
-                    prose
-                        .font(.system(size: 15).monospacedDigit())
-                        .lineSpacing(4)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 // No fixedSize here: an HStack already sizes to its tallest
                 // child, and THAT height is what the plates' maxHeight

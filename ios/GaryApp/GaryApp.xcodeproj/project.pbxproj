@@ -37,6 +37,7 @@
 		96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */; };
 		962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */; };
 		A641F13CFD4AAED442495A5E /* SecretsLocal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430996827B4DF85995FED6C0 /* SecretsLocal.swift */; };
+		A78F90C47A654E2EB7800001 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A78F90C47A654E2EB7800002 /* LaunchScreen.storyboard */; };
 		A9719630F2ABAA18AF50CEDE /* BarlowCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */; };
 		AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF21EE7054E8EF36A963E61 /* GaryTour.swift */; };
 		B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */ = {isa = PBXBuildFile; fileRef = 4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */; };
@@ -87,6 +88,7 @@
 		8C13DC9C410DA7F379D05F31 /* HomeAdditions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeAdditions.swift; sourceTree = "<group>"; };
 		A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBBallparks.swift; sourceTree = "<group>"; };
 		A6B153703E9F452BFFC5A392 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A78F90C47A654E2EB7800002 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		B24536929674F3304E9497C4 /* ChangelogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogView.swift; sourceTree = "<group>"; };
 		C0DAD9374914257AC6D8B7EC /* MLBGameIntelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBGameIntelView.swift; sourceTree = "<group>"; };
 		C20455738476664B4F69306C /* BebasNeue-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BebasNeue-Regular.ttf"; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				8C13DC9C410DA7F379D05F31 /* HomeAdditions.swift */,
 				5B069FA2D1F2F173C8F4EB9F /* HubView.swift */,
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
+				A78F90C47A654E2EB7800002 /* LaunchScreen.storyboard */,
 				C98E3F91D643EAE8E4199E0A /* KeychainStorage.swift */,
 				A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */,
 				C0DAD9374914257AC6D8B7EC /* MLBGameIntelView.swift */,
@@ -304,6 +307,7 @@
 				267600A11B006CB6E5273D50 /* Rajdhani-Bold.ttf in Resources */,
 				40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */,
 				E47A0DFC2EF791B02919F0D0 /* SairaCondensed-Bold.ttf in Resources */,
+				A78F90C47A654E2EB7800001 /* LaunchScreen.storyboard in Resources */,
 				FA4DDE4BB0C86346543A168F /* SecretsLocal.swift.example in Resources */,
 				96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */,
 				CAF9190DE725143E36BFCD16 /* ci_post_clone.sh in Resources */,
@@ -381,7 +385,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -468,7 +472,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -542,7 +546,7 @@
 			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 8.0.0;
+				minimumVersion = 9.2.0;
 			};
 		};
 		333152C5F459BE3101ADA03F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
