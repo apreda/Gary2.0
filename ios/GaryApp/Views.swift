@@ -5433,13 +5433,13 @@ struct HeadlineFlipCard: View {
                 HStack(spacing: 6) {
                     if !story.league.isEmpty {
                         Text(story.league.uppercased())
-                            .font(GaryFonts.kicker(9)).tracking(1.6)
+                            .font(GaryFonts.kicker(9.9)).tracking(1.6)
                             .foregroundStyle(leagueAccent)
                     }
                     if !story.date.isEmpty {
                         Text(story.league.isEmpty ? story.date : "· \(story.date)")
-                            .font(GaryFonts.kicker(9)).tracking(1.6)
-                            .foregroundStyle(.white.opacity(0.42))
+                            .font(GaryFonts.kicker(9.9)).tracking(1.6)
+                            .foregroundStyle(GaryColors.gold)
                     }
                     Spacer(minLength: 4)
                     if !story.bullets.isEmpty {
@@ -19984,7 +19984,7 @@ struct EdgesSection: View {
     /// (Situational, Platoon Edge…) instead of scrolling the mixed feed. Off by
     /// default, so per-game GAME INTEL keeps its plain list.
     var tabbed: Bool = false
-    @State private var selectedKind: SignalKind? = nil   // nil = ALL
+    @State private var selectedKind: SignalKind? = nil   // nil = THE SHOW
 
     /// Unique categories present, in first-appearance (feed) order.
     private var kinds: [SignalKind] {
@@ -19992,15 +19992,26 @@ struct EdgesSection: View {
         for e in edges where !seen.contains(e.kind) { seen.insert(e.kind); out.append(e.kind) }
         return out
     }
-    /// No "ALL" tab (user call) — the feed opens on the FIRST lane present and
-    /// selectedKind only changes on a tap, so the default tracks whatever leads
-    /// the feed (Streak today).
+    /// nil is THE SHOW: the full, mixed feed. A stale selection (for example
+    /// after a sport switch removes that lane) also returns to THE SHOW instead
+    /// of silently landing on whichever category happens to arrive first.
     private var activeKind: SignalKind? {
         if let k = selectedKind, kinds.contains(k) { return k }
-        return kinds.first
+        return nil
+    }
+
+    /// THE SHOW should feel like the whole slate, not one category followed by
+    /// another category. Round-robin the live lanes while preserving the
+    /// pipeline's ranking inside each lane.
+    private var showMix: [Signal] {
+        let buckets = kinds.map { kind in edges.filter { $0.kind == kind } }
+        let longest = buckets.map(\.count).max() ?? 0
+        return (0..<longest).flatMap { index in
+            buckets.compactMap { index < $0.count ? $0[index] : nil }
+        }
     }
     private var shown: [Signal] {
-        guard let k = activeKind else { return edges }
+        guard let k = activeKind else { return showMix }
         return edges.filter { $0.kind == k }
     }
     // WC tags its venue/stadium intel as .ballpark; label it "VENUE" for soccer, not "Ballpark".
@@ -20034,31 +20045,63 @@ struct EdgesSection: View {
     private var categoryTabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 22) {
+                showTab
                 ForEach(kinds, id: \.self) { categoryTab($0) }
                 // Scroll affordance — there are more lanes off the right edge.
-                if kinds.count > 2 {
+                if !kinds.isEmpty {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.25))
-                        .padding(.bottom, 9)
+                        .padding(.bottom, 12)
                 }
             }
             .pageGutter().padding(.top, 8).padding(.bottom, 2)
         }
     }
 
+    private var showTab: some View {
+        categoryTabLabel(icon: "sparkles", title: "THE SHOW", active: activeKind == nil) {
+            selectedKind = nil
+        }
+    }
+
     @ViewBuilder
     private func categoryTab(_ kind: SignalKind) -> some View {
-        let active = activeKind == kind
-        Button { withAnimation(.easeInOut(duration: 0.15)) { selectedKind = kind } } label: {
+        categoryTabLabel(
+            icon: kind.icon,
+            title: (kind == .ballpark && isWC) ? "VENUE" : kind.chip,
+            active: activeKind == kind
+        ) {
+            selectedKind = kind
+        }
+    }
+
+    private func categoryTabLabel(icon: String, title: String, active: Bool,
+                                  action: @escaping () -> Void) -> some View {
+        Button { withAnimation(.easeInOut(duration: 0.18)) { action() } } label: {
             HStack(spacing: 6) {
-                Image(systemName: kind.icon).font(.system(size: 11, weight: .bold))
-                Text((kind == .ballpark && isWC) ? "VENUE" : kind.chip).font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
+                Image(systemName: icon).font(.system(size: 11, weight: .bold))
+                Text(title).font(GaryFonts.mono(11.5, bold: true)).tracking(1.2)
             }
             .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
-            .padding(.bottom, 8)
+            .padding(.bottom, 11)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(active ? GaryColors.gold : .clear).frame(height: 2)
+                ZStack(alignment: .trailing) {
+                    Capsule()
+                        .fill(Color.white.opacity(active ? 0.10 : 0.045))
+                        .frame(height: 1)
+                    if active {
+                        Capsule()
+                            .fill(LinearGradient(
+                                colors: [GaryColors.gold.opacity(0.42), GaryColors.gold, Color.white.opacity(0.78)],
+                                startPoint: .leading, endPoint: .trailing))
+                            .frame(height: 2.5)
+                            .shadow(color: GaryColors.gold.opacity(0.35), radius: 2, y: 1)
+                        Circle()
+                            .fill(Color.white.opacity(0.9))
+                            .frame(width: 3.5, height: 3.5)
+                    }
+                }
             }
         }
         .buttonStyle(.plain)
