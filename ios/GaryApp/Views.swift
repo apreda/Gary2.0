@@ -19969,6 +19969,14 @@ struct PicksCarouselView: View {
     /// wording and number if the upstream row is later regenerated.
     @State private var showcaseLock: PicksShowcaseLock? = nil
     private static let showcaseLockPrefix = "gary.picks.showcase.v1."
+    private static let showcaseDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 
     /// Every league with content: today's props/picks plus the per-sport
     /// yesterday recaps (a sport with no picks today shows its results —
@@ -20269,8 +20277,30 @@ struct PicksCarouselView: View {
     private var activeShowcaseLock: PicksShowcaseLock? {
         guard let lock = showcaseLock,
               lock.slateDate == SupabaseAPI.todayEST(),
-              lock.league == sport else { return nil }
+              lock.league == sport,
+              showcasePayloadBelongsToCurrentSlate(lock) else { return nil }
         return lock
+    }
+
+    /// A lock preserves a posted pick for its own board, but it must never carry
+    /// a prior-day result into the next 6 a.m. slate. Prefer the payload's game
+    /// time; older records without one must still exist in today's fresh feed.
+    private func showcasePayloadBelongsToCurrentSlate(_ lock: PicksShowcaseLock) -> Bool {
+        let today = SupabaseAPI.todayEST()
+        switch lock.kind {
+        case .game:
+            guard let pick = lock.gamePick else { return false }
+            if let iso = pick.commence_time, let date = parseISO8601(iso) {
+                return Self.showcaseDayFormatter.string(from: date) == today
+            }
+            return store.gamePicks.contains { $0.id == pick.id }
+        case .prop:
+            guard let prop = lock.propPick else { return false }
+            if let iso = prop.commence_time, let date = parseISO8601(iso) {
+                return Self.showcaseDayFormatter.string(from: date) == today
+            }
+            return store.allProps.contains { $0.id == prop.id }
+        }
     }
 
     /// Feed the landing page exactly one side of its game-vs-prop chooser once
@@ -20307,10 +20337,15 @@ struct PicksCarouselView: View {
            let restored = try? JSONDecoder().decode(PicksShowcaseLock.self, from: data),
            restored.slateDate == date,
            restored.league == sport,
-           (restored.gamePick != nil || restored.propPick != nil) {
+           showcasePayloadBelongsToCurrentSlate(restored) {
             showcaseLock = restored
             return
         }
+
+        // Invalid current-date locks are legacy/stale payloads (for example a
+        // prior-night prop first seen during a failed morning refresh). Remove
+        // only this derived UI snapshot; the database pick/result is untouched.
+        defaults.removeObject(forKey: key)
 
         showcaseLock = nil
         let game = freshShowcaseGame
