@@ -853,7 +853,7 @@ struct UserBookSection: View {
                     todayPicks = picks
                 }
                 let scores = await SupabaseAPI.fetchLiveScores(date: today)
-                if !scores.isEmpty { liveScores = scores }
+                if let scores, !scores.isEmpty { liveScores = scores }
             }
             loading = false
             // First landing on YOUR page without a unit size: ask right here,

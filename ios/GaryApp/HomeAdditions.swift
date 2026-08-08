@@ -132,7 +132,7 @@ struct HomeYourNight: View {
             todayPicks = picks
         }
         let scores = await SupabaseAPI.fetchLiveScores(date: today)
-        if !scores.isEmpty { liveScores = scores }
+        if let scores, !scores.isEmpty { liveScores = scores }
     }
 }
 

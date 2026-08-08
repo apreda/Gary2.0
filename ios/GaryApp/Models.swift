@@ -475,15 +475,25 @@ struct SportsbookOdds: Codable, Identifiable {
     let spread_odds: String?
     let ml: String?
 
-    var id: String { book ?? UUID().uuidString }
+    /// Identifiable values must be stable across SwiftUI body evaluations. A
+    /// freshly generated UUID here rebuilt every nil-book row on every render.
+    var id: String {
+        [book ?? "unknown", spread.map { String($0) } ?? "", spread_odds ?? "", ml ?? ""]
+            .joined(separator: "|")
+    }
 
     /// Parse from dictionary
     static func from(dict: [String: Any]) -> SportsbookOdds? {
+        func text(_ value: Any?) -> String? {
+            if let value = value as? String { return value }
+            if let value = value as? NSNumber { return value.stringValue }
+            return nil
+        }
         return SportsbookOdds(
             book: dict["book"] as? String,
             spread: (dict["spread"] as? NSNumber)?.doubleValue,
-            spread_odds: (dict["spread_odds"] as? NSNumber)?.stringValue,
-            ml: (dict["ml"] as? NSNumber)?.stringValue
+            spread_odds: text(dict["spread_odds"]),
+            ml: text(dict["ml"])
         )
     }
 }
@@ -540,7 +550,12 @@ struct GaryPick: Identifiable, Codable {
     let soccerGroup: String?
     let soccerRound: String?
 
-    var id: String { pick_id ?? "\(homeTeam ?? "?")-\(awayTeam ?? "?")-\(league ?? "?")-\(type ?? "?")" }
+    var id: String {
+        pick_id ?? [
+            league ?? "?", game_id.map { String($0) } ?? "", commence_time ?? "",
+            awayTeam ?? "?", homeTeam ?? "?", type ?? "?", pick ?? "?",
+        ].joined(separator: "|")
+    }
 
     /// Compact tournament context line for World Cup pick cards (e.g. "Group A · Group Stage", "Round of 16").
     var soccerContext: String? {
@@ -1418,7 +1433,11 @@ struct PropPick: Identifiable, Codable {
     }
     
     var id: String {
-        "\(team ?? player ?? "prop")-\(prop ?? "")-\(odds ?? "")-\(tdCategory ?? "")"
+        [
+            effectiveLeague ?? "?", game_id.map { String($0) } ?? "", commence_time ?? "",
+            matchup ?? "", team ?? "", player ?? "prop", prop ?? "", line ?? "",
+            bet ?? "", odds ?? "", tdCategory ?? "",
+        ].joined(separator: "|")
     }
     
     /// Whether this is a TD scorer pick

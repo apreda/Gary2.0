@@ -522,15 +522,17 @@ enum SupabaseAPI {
     }
 
     /// Today's live-score snapshots (status/detail/scores per game), written by
-    /// the 2-minute poller. Returns [] on any failure.
-    static func fetchLiveScores(date: String) async -> [LiveScore] {
+    /// the 2-minute poller. nil means transport/HTTP/decode failure; an empty
+    /// array is a successful response with no rows. Keeping those states distinct
+    /// prevents one network hiccup from wiping every live card.
+    static func fetchLiveScores(date: String) async -> [LiveScore]? {
         let url = buildURL(table: "live_scores", query: [
             URLQueryItem(name: "select", value: "league,game_id,away_abbr,home_abbr,away_score,home_score,status,detail,outs,bases,events"),
             URLQueryItem(name: "date", value: "eq.\(date)")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([LiveScore].self, from: data) else { return [] }
+              let rows = try? JSONDecoder().decode([LiveScore].self, from: data) else { return nil }
         return rows
     }
 

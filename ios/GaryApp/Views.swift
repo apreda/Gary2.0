@@ -2195,7 +2195,7 @@ struct HomeView: View {
                     pulseRows = pulse
 
                     // ⑤ Door counts — live games + edges posted tonight.
-                    let liveRows = await liveFetch
+                    let liveRows = await liveFetch ?? []
                     gamesLiveNow = liveRows.filter { $0.isLive }.count
                     initialLive = liveRows
 
@@ -18516,12 +18516,16 @@ final class LiveScoreCache: ObservableObject {
     /// prevents a card that already said CASHED/LOST from reverting to pregame.
     private var loadedSlateDate = ""
     private static let persistedFinalsPrefix = "gary.liveScoreFinals."
+    /// Mirrors the bytes already stored for this slate. Without this guard the
+    /// 22-second live poll encoded and rewrote identical finals on the main actor.
+    private var persistedFinalsSnapshot: [LiveScore] = []
 
     /// Adaptive poll cadence. While any game is live the board must feel live, so
     /// poll fast; with nothing live (all scheduled/final) back off hard — the
     /// backend only writes every 1-2 min and an idle board doesn't change.
     private let liveInterval: UInt64 = 22_000_000_000   // ~22s while a game is live
     private let idleInterval: UInt64 = 180_000_000_000  // 3 min when nothing is live
+    private let retryInterval: UInt64 = 30_000_000_000  // recover quickly from transport failure
 
     @MainActor
     func startIfNeeded() {
@@ -18544,10 +18548,18 @@ final class LiveScoreCache: ObservableObject {
                 // threads" and the per-tick whole-carousel rerender — PERF#1a.)
                 let slateDate = SupabaseAPI.todayEST()
                 let fresh = await SupabaseAPI.fetchLiveScores(date: slateDate)
-                self.apply(fresh, slateDate: slateDate)
+                if let fresh {
+                    self.apply(fresh, slateDate: slateDate)
+                } else if self.loadedSlateDate != slateDate {
+                    // Even with a failed first request after 6 a.m., retire the
+                    // prior slate immediately instead of showing it under Today.
+                    self.apply([], slateDate: slateDate)
+                }
                 if Task.isCancelled { return }
-                // Fast while live, slow when idle — derived from what's on the board.
-                let interval = fresh.contains(where: { $0.isLive }) ? self.liveInterval : self.idleInterval
+                // Failed requests retry promptly. Successful requests derive the
+                // cadence from the merged cache, not raw response ordering.
+                let interval = fresh == nil ? self.retryInterval
+                    : (self.scores.contains(where: { $0.isLive }) ? self.liveInterval : self.idleInterval)
                 await self.sleepOrWake(interval)
             }
         }
@@ -18605,9 +18617,12 @@ final class LiveScoreCache: ObservableObject {
     private func apply(_ fresh: [LiveScore], slateDate: String) {
         if loadedSlateDate != slateDate {
             loadedSlateDate = slateDate
-            scores = persistedFinals(for: slateDate)
+            let persisted = persistedFinals(for: slateDate)
+            scores = persisted
+            persistedFinalsSnapshot = persisted
             gradedFinals = [:]
             rebuildIndexes()
+            prunePersistedFinals(keeping: slateDate)
         }
 
         // A final is monotonic within one slate: once observed, a later empty
@@ -18623,7 +18638,13 @@ final class LiveScoreCache: ObservableObject {
             }
         }
 
-        persistFinals(stable.filter(\.isFinal), for: slateDate)
+        // Feed order has no meaning to consumers. Canonical order avoids a full
+        // app-wide score publish if the API returns identical rows shuffled.
+        stable.sort { scoreSortKey($0) < scoreSortKey($1) }
+        let finals = stable.filter(\.isFinal)
+        if finals != persistedFinalsSnapshot, persistFinals(finals, for: slateDate) {
+            persistedFinalsSnapshot = finals
+        }
         guard stable != scores else { return }
         scores = stable
         rebuildIndexes()
@@ -18636,6 +18657,12 @@ final class LiveScoreCache: ObservableObject {
             .joined(separator: "|")
     }
 
+    private func scoreSortKey(_ score: LiveScore) -> String {
+        [scoreIdentity(score), score.status ?? "", score.detail ?? "",
+         score.away_score.map { String($0) } ?? "", score.home_score.map { String($0) } ?? ""]
+            .joined(separator: "|")
+    }
+
     private func persistedFinals(for slateDate: String) -> [LiveScore] {
         let key = Self.persistedFinalsPrefix + slateDate
         guard let data = UserDefaults.standard.data(forKey: key),
@@ -18643,10 +18670,18 @@ final class LiveScoreCache: ObservableObject {
         return rows.filter(\.isFinal)
     }
 
-    private func persistFinals(_ finals: [LiveScore], for slateDate: String) {
+    @discardableResult
+    private func persistFinals(_ finals: [LiveScore], for slateDate: String) -> Bool {
         let defaults = UserDefaults.standard
         let key = Self.persistedFinalsPrefix + slateDate
-        if let data = try? JSONEncoder().encode(finals) { defaults.set(data, forKey: key) }
+        guard let data = try? JSONEncoder().encode(finals) else { return false }
+        defaults.set(data, forKey: key)
+        return true
+    }
+
+    private func prunePersistedFinals(keeping slateDate: String) {
+        let defaults = UserDefaults.standard
+        let key = Self.persistedFinalsPrefix + slateDate
         // One slate is sufficient. At 6 a.m. the date changes and the previous
         // day's persisted finals are retired with every other board surface.
         for oldKey in defaults.dictionaryRepresentation().keys
@@ -18694,11 +18729,16 @@ final class LiveScoreCache: ObservableObject {
             matches = scores.filter { abbrGameMatches($0.abbrGame, matchup: matchup) }
         }
         guard matches.count > 1 else { return matches.first }
-        // Poller artifact: duplicate rows for one matchup (seen live Jun 10 —
-        // a bogus pre-game "final" alongside the real "scheduled" row). A
-        // live row wins; otherwise scheduled beats final — a true final
-        // never coexists with a scheduled row for the same game.
-        return matches.first { $0.isLive } ?? matches.first { !$0.isFinal } ?? matches.first
+        // Poller artifact: duplicate rows for one matchup. LIVE is always the
+        // active game. Afterward, a FINAL carrying an actual score beats a stale
+        // scheduled twin — otherwise a Picks-page win can regress from its green
+        // check to the start time overnight. A scoreless bogus pre-game final
+        // still loses to scheduled, preserving the original safety guard.
+        if let live = matches.first(where: { $0.isLive }) { return live }
+        if let scoredFinal = matches.first(where: {
+            $0.isFinal && (($0.away_score ?? 0) != 0 || ($0.home_score ?? 0) != 0)
+        }) { return scoredFinal }
+        return matches.first { !$0.isFinal } ?? matches.first
     }
 
     /// Live score for an EXACT game by its game_id — disambiguates doubleheaders (two games
@@ -19894,10 +19934,6 @@ private struct PicksShowcaseLock: Codable {
 struct PicksCarouselView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = PropsSlateStore()
-    /// Observe the live-score cache so the board re-renders the moment a game goes
-    /// live or final. It was read via .shared without observing, so a running app
-    /// kept showing the scheduled time ("1:00 PM ET") until the user relaunched.
-    @ObservedObject private var liveCache = LiveScoreCache.shared
     /// Today vs Yesterday — the day dropdown (user call, Jun 17) replaces the old
     /// mixed matchup row + per-tab "YESTERDAY" tags. Today shows upcoming-first
     /// matchups; Yesterday shows that day's matchups + picks with CASHED/LOST tags.
