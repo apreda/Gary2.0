@@ -27,7 +27,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func configureFirebaseIfValid() -> Bool {
-        if FirebaseApp.app() != nil { return true }
         guard let url = Bundle.main.url(forResource: "GoogleService-Info", withExtension: "plist"),
               let data = try? Data(contentsOf: url),
               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],

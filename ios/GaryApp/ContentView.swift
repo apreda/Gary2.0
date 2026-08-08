@@ -161,7 +161,13 @@ struct ContentView: View {
             // Warm the shared live-score poll loop at launch (idempotent) so scores
             // are current on the very first screen, not only after a tab that pokes it.
             LiveScoreCache.shared.startIfNeeded()
-            await BillfoldSnapshotStore.shared.prewarmIfNeeded()
+            // Give Home's visible requests first use of the network/main actor.
+            // Billfold's game ledger is small and prewarms shortly afterward;
+            // its larger prop ledger now hydrates only after Billfold is opened.
+            Task(priority: .background) {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                await BillfoldSnapshotStore.shared.prewarmIfNeeded()
+            }
             // Warm the handle cache — every header's profile chip reads it.
             if AuthManager.shared.bearerToken != nil,
                let h = await UserBookAPI.fetchMyHandle() {
@@ -186,6 +192,7 @@ struct ContentView: View {
             // (the loop's adaptive sleep otherwise runs out before the next fetch).
             LiveScoreCache.shared.refreshNow()
             Task(priority: .utility) {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 await BillfoldSnapshotStore.shared.prewarmIfNeeded()
             }
         }

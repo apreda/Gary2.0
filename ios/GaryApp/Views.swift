@@ -288,15 +288,21 @@ final class BillfoldSnapshotStore {
             ? nil
             : BillfoldCompute.dayFormatter.string(
                 from: Calendar.current.date(byAdding: .day, value: -Self.defaultHistoryDays, to: Date()) ?? Date())
-        // Detached (not the @MainActor-inherited `Task {}`) so BOTH the decode
-        // and the heavy `deriveState` run OFF the main actor; the resulting
-        // value-type snapshot is assigned back on MainActor below.
+        // The visible default is the game-pick book, so make that ledger the
+        // critical path. Props are hydrated immediately after this snapshot is
+        // painted by BillfoldView.loadData(); they must never hold the first
+        // frame hostage or compete with Home during the launch prewarm.
+        // Detached (not the @MainActor-inherited `Task {}`) keeps both decoding
+        // and the heavy deriveState work off the main actor.
         let task = Task.detached(priority: .utility) {
-            let (games, props) = try await withTimeout(seconds: 30) {
-                async let gameTask = SupabaseAPI.fetchAllGameResults(since: resultSince, forceRefresh: forceRefresh, billfold: true)
-                async let propTask = SupabaseAPI.fetchPropResults(since: resultSince, forceRefresh: forceRefresh, billfold: true)
-                return try await (gameTask, propTask)
+            let games = try await withTimeout(seconds: 30) {
+                try await SupabaseAPI.fetchAllGameResults(
+                    since: resultSince,
+                    forceRefresh: forceRefresh,
+                    billfold: true
+                )
             }
+            let props: [PropResult] = []
 
             let resultLookup = BillfoldCompute.gameResultLookup(from: games)
             let defaultDerivedState = BillfoldCompute.deriveState(
@@ -903,14 +909,48 @@ private enum BillfoldCompute {
         return leagues
     }
 
-    static func sortedSports(selectedTab: Int, availableSports: Set<String>) -> [Sport] {
+    static func sortedSports(
+        selectedTab: Int,
+        availableSports: Set<String>,
+        gameRows: [GameResult],
+        propRows: [PropResult]
+    ) -> [Sport] {
         // Only ALL + sports that actually have entries in the active window/tab.
-        // Ghost tabs for dormant sports read as inaccurate; the row stays honest.
-        Sport.allCases.filter { sport in
+        // Put the sport being played most recently immediately after ALL, so
+        // the in-season league leads naturally (MLB in August, NFL in fall,
+        // etc.) without a calendar of hard-coded season boundaries.
+        let visible = Sport.allCases.filter { sport in
             if sport == .all { return true }
             if selectedTab == 0 && sport.isPropsOnly { return false }
             return availableSports.contains(sport.rawValue)
         }
+        let originalOrder = Dictionary(uniqueKeysWithValues: Sport.allCases.enumerated().map { ($0.element, $0.offset) })
+
+        func latestDate(for sport: Sport) -> String {
+            if selectedTab == 0 {
+                return gameRows
+                    .filter { $0.effectiveLeague == sport.rawValue }
+                    .compactMap(\.game_date)
+                    .max() ?? ""
+            }
+            return propRows.filter { row in
+                switch sport {
+                case .nflTDs: return row.isTDResult
+                case .mlbHR: return row.isHRResult
+                default: return row.effectiveLeague == sport.rawValue
+                }
+            }
+            .compactMap(\.game_date)
+            .max() ?? ""
+        }
+
+        let leagues = visible.filter { $0 != .all }.sorted { lhs, rhs in
+            let leftDate = latestDate(for: lhs)
+            let rightDate = latestDate(for: rhs)
+            if leftDate != rightDate { return leftDate > rightDate }
+            return (originalOrder[lhs] ?? .max) < (originalOrder[rhs] ?? .max)
+        }
+        return [.all] + leagues
     }
 
     private static let journalDayFormatter: DateFormatter = {
@@ -1058,7 +1098,12 @@ private enum BillfoldCompute {
             candles: candles,
             sportSeries: sportSeries(selectedTab: selectedTab, games: timeframeGamesAll, props: metricsPropsAll),
             availableSports: availableSports,
-            sortedSports: sortedSports(selectedTab: selectedTab, availableSports: availableSports),
+            sortedSports: sortedSports(
+                selectedTab: selectedTab,
+                availableSports: availableSports,
+                gameRows: timeframeGamesAll,
+                propRows: timeframePropsAll
+            ),
             sportPerformance: sportPerformance(
                 selectedTab: selectedTab,
                 selectedSport: selectedSport,
@@ -1838,6 +1883,8 @@ struct HomeView: View {
     @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     @State private var gamesNightNet: Double? = nil
     @State private var gamesNightBest: Double? = nil
+    @State private var settledYesterdayGameRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
+    @State private var settledYesterdayPropRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     @State private var showDailyRecap = false
     @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
@@ -2091,6 +2138,31 @@ struct HomeView: View {
 
                     let recentGameResults = (try? await gameResultsFetch) ?? []
                     let recentPropResults = (try? await propResultsFetch) ?? []
+
+                    // Home's compact receipt is always the actual prior slate,
+                    // split into game picks and core props. It is deliberately
+                    // independent of the rolling/live record box below The Board.
+                    let yesterday = SupabaseAPI.yesterdayEST()
+                    var priorGames = (wins: 0, losses: 0, pushes: 0)
+                    for row in recentGameResults where row.game_date == yesterday {
+                        switch (row.result ?? "").lowercased() {
+                        case "won", "win", "w": priorGames.wins += 1
+                        case "lost", "loss", "l": priorGames.losses += 1
+                        case "push", "p": priorGames.pushes += 1
+                        default: break
+                        }
+                    }
+                    var priorProps = (wins: 0, losses: 0, pushes: 0)
+                    for row in recentPropResults where row.game_date == yesterday && !row.isHRResult {
+                        switch (row.result ?? "").lowercased() {
+                        case "won", "win", "w": priorProps.wins += 1
+                        case "lost", "loss", "l": priorProps.losses += 1
+                        case "push", "p": priorProps.pushes += 1
+                        default: break
+                        }
+                    }
+                    settledYesterdayGameRecord = priorGames
+                    settledYesterdayPropRecord = priorProps
 
                     // Fallback: if the separate 7-day fetch came back empty, build the
                     // form from the reliable recentGameResults (the board's data, which
@@ -2603,8 +2675,6 @@ struct HomeView: View {
     @ViewBuilder private var todaySections: some View {
         // Compute once per body eval (live ticks re-run this often).
         let stories = headlineStories
-        // The day-cycle clock, view-side: has today's first pitch happened?
-        let cycleLive = slateGames.contains { parseISO8601($0.commence_time ?? "").map { $0 <= Date() } ?? false }
 
         // ── THE HEADLINES lead the page, ALL DAY (founder, Aug 5). They do
         // not move at first pitch and they do not move again at the last out:
@@ -2658,26 +2728,16 @@ struct HomeView: View {
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
-        // ── THE RECORD travels with the day (founder, Aug 3 round 4):
-        // yesterday's final numbers sit ABOVE the board until first pitch...
-        if !cycleLive {
-            recordBlock
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.055), value: animateIn)
-        }
-
         // ── THE BOARD — every game, one list, all day.
         homeSheet
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
-        // ...then the LIVE record rides directly under the board, above
-        // everything else, building as games grade.
-        if cycleLive {
-            recordBlock
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
-        }
+        // THE RECORD always belongs directly under The Board. Its numbers still
+        // roll from yesterday to today's live slate; only its position is fixed.
+        recordBlock
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
 
         // (The second headlines instance that used to sit here came out Aug 5 —
         // the rail lives at the top of the page now, in every day-state.)
@@ -2697,11 +2757,14 @@ struct HomeView: View {
             }
         }
         .pageGutter()
-        HomeWireMini {
+        HomeWireMini(items: wireItems) {
             UserDefaults.standard.set("hub", forKey: "hubScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
         }
-        HomeLeaderboardPodium {
+        HomeYesterdayRecords(
+            gameRecord: settledYesterdayGameRecord,
+            propRecord: settledYesterdayPropRecord
+        ) {
             UserDefaults.standard.set("you", forKey: "billfoldScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         }
@@ -12724,7 +12787,12 @@ struct BillfoldView: View {
 
     private func applySnapshot(_ snapshot: BillfoldSnapshot) {
         gameResults = snapshot.games
-        propResults = snapshot.props
+        // The game-first snapshot intentionally carries no props. Preserve a
+        // previously hydrated prop ledger across foreground refreshes instead
+        // of flashing the Props tab/HR lane back to empty for a frame.
+        if !snapshot.props.isEmpty || propResults.isEmpty {
+            propResults = snapshot.props
+        }
         gameResultLookup = snapshot.resultLookup
         topPickCandidates = snapshot.topPickRows
         pickConfidenceIndex = snapshot.confidenceIndex
@@ -14229,10 +14297,37 @@ struct BillfoldView: View {
         }
 
         do {
+            let propSince: String? = wantsFull
+                ? nil
+                : BillfoldCompute.dayFormatter.string(
+                    from: Calendar.current.date(
+                        byAdding: .day,
+                        value: -150,
+                        to: Date()
+                    ) ?? Date()
+                )
+            // Start props at the same time, but do not await them before the
+            // game-pick ledger is visible. The Props tab and HR fun lane fill
+            // in as soon as this small projected result query finishes.
+            let propTask = Task.detached(priority: .utility) {
+                try await SupabaseAPI.fetchPropResults(
+                    since: propSince,
+                    forceRefresh: forceRefresh,
+                    billfold: true
+                )
+            }
             let snapshot = try await BillfoldSnapshotStore.shared.load(forceRefresh: forceRefresh, fullHistory: wantsFull)
             await MainActor.run {
                 guard loadGeneration == billfoldLoadGeneration else { return }
                 applySnapshot(snapshot)
+            }
+
+            if let props = try? await propTask.value {
+                await MainActor.run {
+                    guard loadGeneration == billfoldLoadGeneration else { return }
+                    propResults = props
+                    recomputeCache()
+                }
             }
 
             // Let SwiftUI present the ledger before adding the optional
@@ -20316,32 +20411,22 @@ struct PicksCarouselView: View {
         g.commence ?? .distantFuture
     }
     private var topProps: [PropPick] {
-        // TODAY keeps yesterday's settled recap on the landing page until the
-        // first real pick for the new board posts. Matchup pages remain scoped
-        // to today's slate and continue to show PICKS INCOMING independently.
-        let dayProps: [PropPick]
-        if pickDay == .yesterday {
-            dayProps = filteredYesterdayProps
-        } else if !filteredTodayProps.isEmpty {
-            dayProps = filteredTodayProps
-        } else {
-            dayProps = filteredYesterdayProps
-        }
+        // TODAY is strictly today's slate. Yesterday's settled cards live only
+        // behind the explicit Yesterday selector; an empty morning board shows
+        // PICKS INCOMING instead of relabeling an old result as today's pick.
+        let dayProps = pickDay == .yesterday ? filteredYesterdayProps : filteredTodayProps
         return Array(dayProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
     }
-    /// The selected day's top pick, with yesterday's settled recap held on the
-    /// TODAY landing page until a fresh current-board pick exists.
+    /// The selected day's top game pick. The Today overview never borrows a
+    /// prior-day pick; Yesterday uses its complete, explicitly selected board.
     private var topGamePick: (pick: GaryPick, isYesterday: Bool)? {
-        let fresh = sport == "ALL"
-            ? store.gamePicks
-            : store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
-        let previous = sport == "ALL"
-            ? store.yesterdayGamePicks
-            : store.yesterdayGamePicks.filter { ($0.league ?? "").uppercased() == sport }
-        let usesPrevious = pickDay == .yesterday || fresh.isEmpty
-        let source = usesPrevious ? previous : fresh
+        let isYesterday = pickDay == .yesterday
+        let rows = isYesterday ? store.yesterdayGamePicksAll : store.gamePicks
+        let source = sport == "ALL"
+            ? rows
+            : rows.filter { ($0.league ?? "").uppercased() == sport }
         guard let pick = source.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first else { return nil }
-        return (pick, usesPrevious)
+        return (pick, isYesterday)
     }
 
     /// Current-day candidates used only when establishing the immutable landing

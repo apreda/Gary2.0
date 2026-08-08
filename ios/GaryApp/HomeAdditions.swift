@@ -141,8 +141,8 @@ struct HomeYourNight: View {
 // Three wire headlines (already written 3x daily) — the betting-news pulse
 // on the front page, routing into the Hub.
 struct HomeWireMini: View {
+    let items: [SupabaseAPI.WireItem]
     var onOpen: () -> Void
-    @State private var items: [SupabaseAPI.WireItem] = []
 
     var body: some View {
         if !items.isEmpty {
@@ -188,65 +188,58 @@ struct HomeWireMini: View {
                 .garyPanel(radius: 12)
                 .pageGutter()
             }
-        } else {
-            Color.clear.frame(width: 0, height: 0)
-                .task {
-                    let rows = await SupabaseAPI.fetchWireItems(date: SupabaseAPI.todayEST(), limit: 3)
-                    if !rows.isEmpty { items = rows }
-                }
         }
     }
 }
 
-// ── THE PODIUM ──────────────────────────────────────────────────────────────
-// The week's top three verified books. Appears once the standings have
-// bodies; routes to the YOU page's full board.
-struct HomeLeaderboardPodium: View {
+// ── YESTERDAY'S BOOK ────────────────────────────────────────────────────────
+// The compact Home receipt is Gary's two actual betting lanes from the last
+// completed slate. The social leaderboard remains in Billfold, where its
+// window and scope controls are visible.
+struct HomeYesterdayRecords: View {
+    let gameRecord: (wins: Int, losses: Int, pushes: Int)
+    let propRecord: (wins: Int, losses: Int, pushes: Int)
     var onOpen: () -> Void
-    @State private var rows: [UserBookAPI.BoardRow] = []
+
+    private func recordText(_ record: (wins: Int, losses: Int, pushes: Int)) -> String {
+        record.pushes > 0
+            ? "\(record.wins)–\(record.losses)–\(record.pushes)"
+            : "\(record.wins)–\(record.losses)"
+    }
+
+    private func lane(_ title: String, _ record: (wins: Int, losses: Int, pushes: Int)) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(GaryFonts.mono(9, bold: true)).tracking(1)
+                .foregroundStyle(.white.opacity(0.48))
+            Text(recordText(record))
+                .font(GaryFonts.mono(22, bold: true))
+                .foregroundStyle(.white.opacity(0.92))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     var body: some View {
-        if !rows.isEmpty {
+        Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("THE STANDINGS · 7 DAYS")
+                    Text("YESTERDAY'S PICKS")
                         .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
                         .foregroundStyle(GaryColors.gold)
                     Spacer()
-                    Button(action: onOpen) {
-                        Text("FULL BOARD")
-                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-                    .buttonStyle(.plain)
+                    Text("BILLFOLD  ›")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.5))
                 }
-                ForEach(Array(rows.prefix(3).enumerated()), id: \.element.id) { i, r in
-                    HStack(spacing: 10) {
-                        Text("\(i + 1)")
-                            .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(i == 0 ? GaryColors.gold : .white.opacity(0.45))
-                            .frame(width: 14, alignment: .leading)
-                        Text(r.display_name)
-                            .font(GaryFonts.text(12.5, .semibold))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .lineLimit(1)
-                        Spacer()
-                        Text("\(r.wins)-\(r.losses)")
-                            .font(GaryFonts.mono(10.5, bold: true))
-                            .foregroundStyle(.white.opacity(0.55))
-                        Text(String(format: "%+.1fu", r.units))
-                            .font(GaryFonts.mono(10.5, bold: true))
-                            .foregroundStyle(r.units >= 0 ? GaryColors.win : GaryColors.loss)
-                    }
+                HStack(spacing: 16) {
+                    lane("GAME PICKS", gameRecord)
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 38)
+                    lane("PROP PICKS", propRecord)
                 }
             }
             .pageGutter()
-        } else {
-            Color.clear.frame(width: 0, height: 0)
-                .task {
-                    let board = await UserBookAPI.fetchLeaderboard(window: "7d")
-                    if !board.isEmpty { rows = board }
-                }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
