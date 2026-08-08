@@ -391,7 +391,7 @@ enum SupabaseAPI {
     private static func fetchAllPages<T: Decodable>(
         table: String,
         baseQuery: [URLQueryItem],
-        pageSize: Int = 500
+        pageSize: Int = 1_000
     ) async throws -> [T] {
         var allRows: [T] = []
         var offset = 0
