@@ -2,7 +2,7 @@
 // Run: node --test gary2.0/supabase/functions/grade-results/grading.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pickSide, gradeGame, recapIsStale } from "./grading.ts";
+import { gameOnlyHeadline, pickSide, gradeGame, recapIsStale } from "./grading.ts";
 
 // ── The regression this module exists for ────────────────────────────────────
 // Boston Red Sox (away) beat Chicago White Sox (home) 5-0 on 2026-07-08. daily_picks
@@ -90,4 +90,29 @@ test("recapIsStale: existing recap matching the fresh grade is not stale", () =>
 test("recapIsStale: existing recap contradicting the fresh grade IS stale", () => {
   assert.equal(recapIsStale("won", "lost"), true);
   assert.equal(recapIsStale("lost", "won"), true);
+});
+
+const marlinsEvidence = "FINAL SCORE: Angels (away) 4 — Marlins (home) 3\n\nHOME RUNS:\n- Mike Trout (Angels): 1 HR, 1 RBI";
+
+test("gameOnlyHeadline keeps a clean game-result headline", () => {
+  assert.equal(
+    gameOnlyHeadline("Angels edge Marlins 4-3 behind two homers", marlinsEvidence),
+    "Angels edge Marlins 4-3 behind two homers",
+  );
+  assert.equal(
+    gameOnlyHeadline("Red Sox edge White Sox 12-11 in slugfest", marlinsEvidence),
+    "Red Sox edge White Sox 12-11 in slugfest",
+  );
+});
+
+test("gameOnlyHeadline replaces cash/odds framing with the grounded final score", () => {
+  assert.equal(
+    gameOnlyHeadline("Marlins fall 4-3 to Angels failing to cash -147 ML", marlinsEvidence),
+    "Angels beat Marlins 4-3",
+  );
+});
+
+test("gameOnlyHeadline replaces spread and total framing too", () => {
+  assert.equal(gameOnlyHeadline("Angels cover the spread", marlinsEvidence), "Angels beat Marlins 4-3");
+  assert.equal(gameOnlyHeadline("Over 6.5 cashes in Miami", marlinsEvidence), "Angels beat Marlins 4-3");
 });

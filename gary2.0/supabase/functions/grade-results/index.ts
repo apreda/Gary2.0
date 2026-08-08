@@ -29,7 +29,7 @@
 // Side-detection (which team a pick is on) + gradeGame live in the pure,
 // unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
 // graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
-import { gradeGame, recapIsStale } from "./grading.ts";
+import { gameOnlyHeadline, gradeGame, recapIsStale } from "./grading.ts";
 import { settleUserBetsForDates } from "./userbets.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -353,8 +353,7 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
   const parsed = recapParseResponse(text);
   if (!parsed) return null;
 
-  const headline = parsed.headline != null
-    ? String(parsed.headline).trim().replace(/\.$/, "").slice(0, RECAP_MAX_HEADLINE_CHARS) : "";
+  const headline = gameOnlyHeadline(parsed.headline, evidence, RECAP_MAX_HEADLINE_CHARS);
   const recap = parsed.recap != null
     ? String(parsed.recap).trim().slice(0, RECAP_MAX_RECAP_CHARS) : "";
   if (!headline || !recap) return null;

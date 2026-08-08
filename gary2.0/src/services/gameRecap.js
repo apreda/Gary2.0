@@ -1,7 +1,7 @@
 /**
- * Game Recap — ESPN-style 2-4 sentence recap of a settled game Gary picked,
- * told from the betting perspective: the price Gary took, how the game swung,
- * and the bet's fate, in the voice of a sharp friend recapping the night.
+ * Game Recap — ESPN-style 2-4 sentence recap of a settled game Gary picked.
+ * The headline describes the game itself; the body may explain the price Gary
+ * took, how the game swung, and the bet's fate.
  *
  * One cheap Flash call per graded game pick (no grounding, no tools): the model
  * gets the pick + odds + graded result and the same evidence pack the fact
@@ -35,6 +35,8 @@ const MAX_BULLETS = 4;
 // A stalled connection to the Gemini API otherwise hangs the whole nightly
 // run — observed during the June 10 backfill (calls hung 8+ minutes).
 const REQUEST_TIMEOUT_MS = 90_000;
+const BETTING_HEADLINE_RE =
+  /\b(?:bet(?:s|ting)?|cash(?:ed|es|ing)?|cover(?:ed|s|ing)?|moneyline|spread|favorite|underdog|chalk|odds?|prices?)\b|\bML\b|\b(?:over|under)\s+\d+(?:\.\d+)?\b|(?<!\d)[+-]\d{2,4}\b/i;
 
 let genAI = null;
 function getClient() {
@@ -79,17 +81,12 @@ function buildPrompt({ pick, result, evidence }) {
     `no cliches like "in a thrilling contest".\n` +
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
     `OUTPUT:\n` +
-    `- "headline": a betting-WIRE headline (not a generic ESPN recap). LEAD with the team + what ` +
-    `they actually did (the result), THEN the betting outcome — did the side cover, did the ML ` +
-    `clear, did the total go over/under. 6-12 words. You MAY use the price/line from THE BET line ` +
-    `("-196 ML", "the -1.5", "the 9.5 total") but NEVER invent another number. This is the GAME'S ` +
-    `betting story, NOT the bettor's bet — "Gary cashed" belongs on the receipt, never in the ` +
-    `headline. Plain, sharp, no hype verbs ("explodes", "erupts", "power show"), no clickbait, no ` +
-    `exclamation, no ending period. ` +
-    `Good: "Orioles fail to cover -196 in a 6-4 loss to the Nationals", ` +
-    `"Canada win 1-0 but fail to cover the 1.5 spread", "Brazil beat Japan 2-1 as the Over 2.5 hits". ` +
-    `Bad (bet-first): "Over 2.5 cashes in Brazil's 2-1 win". ` +
-    `Bad (ESPN, no betting angle): "Tigers take down the Astros behind Colt Keith's three homers".\n` +
+    `- "headline": a clean, professional game headline in plain English — the result and the one ` +
+    `thing that decided it. 6-12 words. Lead with the team and what they actually did. ` +
+    `NO betting jargon ("dogs", "chalk", "cover", "cashes"), NO hype verbs ("explodes", "erupts", ` +
+    `"power show", "roll"), NO odds or prices in the headline, NO cliches or clickbait. ` +
+    `Good: "Tigers take down the Astros behind Colt Keith's three homers". ` +
+    `Bad: "Tigers roll as +106 dogs behind Colt Keith power show". No ending period.\n` +
     `- "recap": the 2-4 sentence body.\n` +
     `- "bullets": 2-4 BETTING EVENTS that hit during the game — the markets that would have cashed: ` +
     `a home run, a strikeout / total prop, a goal scorer, the over/under total result, a player ` +
@@ -193,6 +190,31 @@ export function sanitizeBulletPrices(bullet, evidence) {
 }
 
 /**
+ * Enforce that Home's headline describes the game, not the bet. If the model
+ * violates the rule, use only the grounded final score to create a replacement.
+ */
+export function gameOnlyHeadline(generatedHeadline, evidence) {
+  const generated = String(generatedHeadline ?? '').trim().replace(/\.$/, '');
+  if (generated && !BETTING_HEADLINE_RE.test(generated)) {
+    return generated.slice(0, MAX_HEADLINE_CHARS);
+  }
+
+  const score = String(evidence ?? '').match(
+    /^FINAL SCORE:\s*(.*?) \(away\) (\d+)\s+—\s+(.*?) \(home\) (\d+)/m,
+  );
+  if (!score) return '';
+  const [, away, awayRaw, home, homeRaw] = score;
+  const awayScore = Number(awayRaw);
+  const homeScore = Number(homeRaw);
+  const fallback = awayScore > homeScore
+    ? `${away} beat ${home} ${awayScore}-${homeScore}`
+    : homeScore > awayScore
+      ? `${home} beat ${away} ${homeScore}-${awayScore}`
+      : `${away} and ${home} finish ${awayScore}-${homeScore}`;
+  return fallback.slice(0, MAX_HEADLINE_CHARS);
+}
+
+/**
  * Generate the betting recap for one graded game pick. ONE Flash call, low
  * temperature, evidence only — no tools, no search, no fabrication.
  *
@@ -236,9 +258,7 @@ export async function generateRecap({ pick, result, evidence }) {
   const parsed = parseRecapResponse(response.response.text());
   if (!parsed) return null;
 
-  const headline = parsed.headline != null
-    ? String(parsed.headline).trim().replace(/\.$/, '').slice(0, MAX_HEADLINE_CHARS)
-    : '';
+  const headline = gameOnlyHeadline(parsed.headline, evidence);
   const recap = parsed.recap != null
     ? String(parsed.recap).trim().slice(0, MAX_RECAP_CHARS)
     : '';

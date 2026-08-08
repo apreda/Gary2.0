@@ -17,6 +17,39 @@
 
 export type Side = "home" | "away" | null;
 
+// Home's headline card tells the story of the GAME. The recap body may explain
+// Gary's bet, but odds/cover/cash language in the headline makes the card read
+// like a receipt instead of a sports headline. Prompts are not enforcement, so
+// both recap writers run their model output through this pure guard.
+const BETTING_HEADLINE_RE =
+  /\b(?:bet(?:s|ting)?|cash(?:ed|es|ing)?|cover(?:ed|s|ing)?|moneyline|spread|favorite|underdog|chalk|odds?|prices?)\b|\bML\b|\b(?:over|under)\s+\d+(?:\.\d+)?\b|(?<!\d)[+-]\d{2,4}\b/i;
+
+export function gameOnlyHeadline(
+  generatedHeadline: unknown,
+  evidence: unknown,
+  maxChars = 90,
+): string {
+  const generated = String(generatedHeadline ?? "").trim().replace(/\.$/, "");
+  if (generated && !BETTING_HEADLINE_RE.test(generated)) return generated.slice(0, maxChars);
+
+  // Evidence always starts with this grounded final-score line. If the model
+  // gives us a betting headline, build a factual replacement from that line
+  // instead of publishing the violation or inventing a game detail.
+  const score = String(evidence ?? "").match(
+    /^FINAL SCORE:\s*(.*?) \(away\) (\d+)\s+—\s+(.*?) \(home\) (\d+)/m,
+  );
+  if (!score) return "";
+  const [, away, awayRaw, home, homeRaw] = score;
+  const awayScore = Number(awayRaw);
+  const homeScore = Number(homeRaw);
+  const fallback = awayScore > homeScore
+    ? `${away} beat ${home} ${awayScore}-${homeScore}`
+    : homeScore > awayScore
+    ? `${home} beat ${away} ${homeScore}-${awayScore}`
+    : `${away} and ${home} finish ${awayScore}-${homeScore}`;
+  return fallback.slice(0, maxChars);
+}
+
 // Alphanumeric tokens of a team name ("Chicago White Sox" -> ["chicago","white","sox"]).
 function teamWords(name: string): string[] {
   return name.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9]/g, "")).filter(Boolean);
