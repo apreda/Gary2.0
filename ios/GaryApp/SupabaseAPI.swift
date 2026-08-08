@@ -1313,7 +1313,7 @@ enum SupabaseAPI {
     /// Fetch game results with optional date filter (excludes NFL - those come from nfl_results)
     static func fetchGameResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
-            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,final_score"),
             URLQueryItem(name: "order", value: "game_date.desc")
         ]
         
@@ -1367,26 +1367,72 @@ enum SupabaseAPI {
         return result
     }
     
-    /// Fetch daily_picks rows used for TOPD/confidence matching.
-    /// Ordinary Billfold loads pass the same bounded history window as results;
-    /// only explicit YTD/all-time views should page the full JSON archive.
-    static func fetchAllDailyPicksRaw(since dateFilter: String? = nil, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [DailyPicksRow] {
-        let cacheScope = billfold ? "_billfold_\(billfoldSnapshotWindowKey())" : ""
-        let cacheKey = "dailyPicksRaw_\(dateFilter ?? "all")\(cacheScope)"
-        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
-
-        if !forceRefresh, let cached: [DailyPicksRow] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
+    /// Fetch only the historical pick facts Billfold actually displays.
+    ///
+    /// A `daily_picks.picks` row also contains full rationales, stat packs,
+    /// injury objects, and sportsbook snapshots. Pulling that entire JSON for
+    /// 90 days was a 12–13 MB request and made the page feel frozen. PostgREST
+    /// can project individual JSON-array fields, cutting the same request to
+    /// roughly 0.2 MB. Thirty slots covers the observed maximum (27) with room
+    /// to spare; game props live in their own table.
+    static func fetchBillfoldPickMetadata(
+        since dateFilter: String,
+        forceRefresh: Bool = false
+    ) async throws -> [BillfoldPickMetadata] {
+        let cacheKey = "billfoldPickMetadata_\(dateFilter)_\(billfoldSnapshotWindowKey())"
+        if !forceRefresh,
+           let cached: [BillfoldPickMetadata] = await APICache.shared.get(cacheKey, ttl: APICache.billfoldTTL) {
             return cached
         }
 
-        var query = [
-            URLQueryItem(name: "select", value: "picks::text,date"),
-            URLQueryItem(name: "order", value: "date.desc")
-        ]
-        if let dateFilter, !dateFilter.isEmpty {
-            query.insert(URLQueryItem(name: "date", value: "gte.\(dateFilter)"), at: 1)
+        var projection = ["date"]
+        for index in 0..<30 {
+            projection.append("p\(index)_pick:picks->\(index)->>pick")
+            projection.append("p\(index)_confidence:picks->\(index)->>confidence")
+            projection.append("p\(index)_top:picks->\(index)->>is_top_pick")
         }
-        let result: [DailyPicksRow] = try await fetchAllPages(table: "daily_picks", baseQuery: query)
+
+        let url = buildURL(table: "daily_picks", query: [
+            URLQueryItem(name: "select", value: projection.joined(separator: ",")),
+            URLQueryItem(name: "date", value: "gte.\(dateFilter)"),
+            URLQueryItem(name: "order", value: "date.desc")
+        ])
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            print("[SupabaseAPI] Billfold pick metadata fetch failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
+        var result: [BillfoldPickMetadata] = []
+        result.reserveCapacity(rows.count * 15)
+        for row in rows {
+            guard let date = row["date"] as? String else { continue }
+            for index in 0..<30 {
+                guard let pick = row["p\(index)_pick"] as? String, !pick.isEmpty else { continue }
+
+                let confidence: Double?
+                if let value = row["p\(index)_confidence"] as? String {
+                    confidence = Double(value)
+                } else if let value = row["p\(index)_confidence"] as? NSNumber {
+                    confidence = value.doubleValue
+                } else {
+                    confidence = nil
+                }
+
+                let topValue = row["p\(index)_top"]
+                let isTopPick = (topValue as? Bool)
+                    ?? ((topValue as? String)?.lowercased() == "true")
+                result.append(BillfoldPickMetadata(
+                    date: date,
+                    pick: pick,
+                    confidence: confidence,
+                    isTopPick: isTopPick
+                ))
+            }
+        }
+
         await APICache.shared.set(cacheKey, value: result)
         return result
     }
@@ -1404,7 +1450,10 @@ enum SupabaseAPI {
         }
 
         var query = [
-            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(
+                name: "select",
+                value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value"
+            ),
             URLQueryItem(name: "order", value: "game_date.desc")
         ]
 

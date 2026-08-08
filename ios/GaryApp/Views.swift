@@ -216,6 +216,24 @@ final class BillfoldSnapshotStore {
     /// margin; YTD + all-time fetch full history (see `needsFullHistory`).
     private static let defaultHistoryDays = 150
 
+    /// `daily_picks.picks` contains the complete rationale/stat payload for
+    /// every card and is far larger than the settled result ledger. Billfold
+    /// only needs it to identify TOP PICK and confidence over its 7/30/90-day
+    /// controls, so never download years of nested pick JSON for an all-time
+    /// balance. The all-time record, ROI, chart, and recent receipts still use
+    /// the complete result tables.
+    private static let pickMetadataHistoryDays = 90
+
+    fileprivate static func pickMetadataSince() -> String {
+        BillfoldCompute.dayFormatter.string(
+            from: Calendar.current.date(
+                byAdding: .day,
+                value: -pickMetadataHistoryDays,
+                to: Date()
+            ) ?? Date()
+        )
+    }
+
     /// Timeframes whose window can exceed the bounded floor need full history.
     /// YTD late in the year can reach ~365 days, so it joins all-time here.
     static func needsFullHistory(timeframe: String) -> Bool {
@@ -237,7 +255,10 @@ final class BillfoldSnapshotStore {
     }
 
     func prewarmIfNeeded() async {
-        _ = try? await load()
+        // ALL is the Billfold's default window. Warm only its lightweight
+        // settled ledgers; the much larger pick-card metadata is loaded lazily
+        // after the page itself is already usable.
+        _ = try? await load(fullHistory: true)
     }
 
     fileprivate func load(forceRefresh: Bool = false, fullHistory: Bool = false) async throws -> BillfoldSnapshot {
@@ -263,25 +284,21 @@ final class BillfoldSnapshotStore {
         // Bound the default fetch to the last `defaultHistoryDays`; only an
         // explicit all-time / YTD selection pages the entire history. This keeps
         // the default 36h snapshot from downloading + decoding years of rows.
-        let since: String? = fullHistory
+        let resultSince: String? = fullHistory
             ? nil
             : BillfoldCompute.dayFormatter.string(
                 from: Calendar.current.date(byAdding: .day, value: -Self.defaultHistoryDays, to: Date()) ?? Date())
-
         // Detached (not the @MainActor-inherited `Task {}`) so BOTH the decode
         // and the heavy `deriveState` run OFF the main actor; the resulting
         // value-type snapshot is assigned back on MainActor below.
         let task = Task.detached(priority: .utility) {
-            let (games, props, picks) = try await withTimeout(seconds: 30) {
-                async let gameTask = SupabaseAPI.fetchAllGameResults(since: since, forceRefresh: forceRefresh, billfold: true)
-                async let propTask = SupabaseAPI.fetchPropResults(since: since, forceRefresh: forceRefresh, billfold: true)
-                async let pickTask = SupabaseAPI.fetchAllDailyPicksRaw(since: since, forceRefresh: forceRefresh, billfold: true)
-                return try await (gameTask, propTask, pickTask)
+            let (games, props) = try await withTimeout(seconds: 30) {
+                async let gameTask = SupabaseAPI.fetchAllGameResults(since: resultSince, forceRefresh: forceRefresh, billfold: true)
+                async let propTask = SupabaseAPI.fetchPropResults(since: resultSince, forceRefresh: forceRefresh, billfold: true)
+                return try await (gameTask, propTask)
             }
 
             let resultLookup = BillfoldCompute.gameResultLookup(from: games)
-            let topPickRows = BillfoldCompute.topPickCandidates(from: picks)
-            let confidenceIndex = BillfoldCompute.confidenceIndex(from: picks)
             let defaultDerivedState = BillfoldCompute.deriveState(
                 selectedTab: 0,
                 selectedSport: .all,
@@ -292,8 +309,8 @@ final class BillfoldSnapshotStore {
                 gameResults: games,
                 propResults: props,
                 resultLookup: resultLookup,
-                topPickRows: topPickRows,
-                confidenceIndex: confidenceIndex
+                topPickRows: [],
+                confidenceIndex: [:]
             )
 
             return BillfoldSnapshot(
@@ -302,8 +319,8 @@ final class BillfoldSnapshotStore {
                 games: games,
                 props: props,
                 resultLookup: resultLookup,
-                topPickRows: topPickRows,
-                confidenceIndex: confidenceIndex,
+                topPickRows: [],
+                confidenceIndex: [:],
                 defaultDerivedState: defaultDerivedState
             )
         }
@@ -439,6 +456,26 @@ private enum BillfoldCompute {
                 index["\(row.date)|\(text)"] = conf
                 index[normalizedPickKey(date: row.date, pick: text)] = conf
             }
+        }
+        return index
+    }
+
+    static func topPickCandidates(from metadata: [BillfoldPickMetadata]) -> [BillfoldTopPickCandidate] {
+        Dictionary(grouping: metadata, by: \.date).compactMap { date, picks in
+            let topPick = picks.first(where: \.isTopPick)
+                ?? picks.max(by: { ($0.confidence ?? 0) < ($1.confidence ?? 0) })
+            guard let topPick else { return nil }
+            return BillfoldTopPickCandidate(date: date, pickText: topPick.pick)
+        }
+    }
+
+    static func confidenceIndex(from metadata: [BillfoldPickMetadata]) -> [String: Double] {
+        var index: [String: Double] = [:]
+        for item in metadata {
+            guard let rawConfidence = item.confidence, rawConfidence > 0 else { continue }
+            let confidence = rawConfidence > 1 ? rawConfidence / 100 : rawConfidence
+            index["\(item.date)|\(item.pick)"] = confidence
+            index[normalizedPickKey(date: item.date, pick: item.pick)] = confidence
         }
         return index
     }
@@ -12283,6 +12320,7 @@ struct BillfoldView: View {
     @State private var gameResultLookup: [String: GameResult] = [:]
     @State private var topPickCandidates: [BillfoldTopPickCandidate] = []
     @State private var billfoldSecondaryGeneration = 0
+    @State private var billfoldLoadGeneration = 0
     @State private var scrubDate: Date? = nil
     @State private var chartZoomScale: CGFloat = 1.0
     @State private var chartZoomAnchor: CGFloat = 1.0
@@ -12307,6 +12345,7 @@ struct BillfoldView: View {
     @State private var cachedSpreadSportsAvailable: [String] = ["NBA"]
 
     private let timeframes = ["7d", "30d", "90d", "ytd", "all"]
+    private let topPickTimeframes = ["7d", "30d", "90d"]
 
     private var positiveColor: Color { GaryColors.win }
     private var negativeColor: Color { GaryColors.loss }
@@ -13632,7 +13671,7 @@ struct BillfoldView: View {
                     HStack {
                         ledgerEyebrow("CONVICTION CALIBRATION")
                         Spacer()
-                        Text("TICK = CLAIMED")
+                        Text("90D \u{00B7} TICK = CLAIMED")
                             .font(GaryFonts.mono(8, bold: true))
                             .tracking(0.6)
                             .foregroundStyle(brass.opacity(0.7))
@@ -13694,7 +13733,7 @@ struct BillfoldView: View {
                     HStack {
                         ledgerEyebrow("TOP PICK")
                         Spacer()
-                        ledgerChip(topdTimeframe, options: timeframes) { topdTimeframe = $0 }
+                        ledgerChip(topdTimeframe, options: topPickTimeframes) { topdTimeframe = $0 }
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
@@ -14179,19 +14218,50 @@ struct BillfoldView: View {
     }
 
     private func loadData(forceRefresh: Bool = false) async {
-        let wantsFull = await MainActor.run { needsFullHistory }
+        let (wantsFull, loadGeneration) = await MainActor.run {
+            billfoldLoadGeneration += 1
+            return (needsFullHistory, billfoldLoadGeneration)
+        }
         let cachedSnapshot = await MainActor.run { BillfoldSnapshotStore.shared.cachedSnapshotIfFresh(fullHistory: wantsFull) }
         await MainActor.run {
             if settledCount == 0 && cachedSnapshot == nil { loading = true }
             error = nil
         }
+
         do {
             let snapshot = try await BillfoldSnapshotStore.shared.load(forceRefresh: forceRefresh, fullHistory: wantsFull)
             await MainActor.run {
+                guard loadGeneration == billfoldLoadGeneration else { return }
                 applySnapshot(snapshot)
+            }
+
+            // Let SwiftUI present the ledger before adding the optional
+            // Top-Pick/calibration data. This query projects only three small
+            // JSON fields per historical pick; it no longer downloads full
+            // rationales and stat packs.
+            let metadataSince = BillfoldSnapshotStore.pickMetadataSince()
+            let metadataTask = Task.detached(priority: .utility) {
+                let metadata = try await SupabaseAPI.fetchBillfoldPickMetadata(
+                    since: metadataSince,
+                    forceRefresh: forceRefresh
+                )
+                return (
+                    BillfoldCompute.topPickCandidates(from: metadata),
+                    BillfoldCompute.confidenceIndex(from: metadata)
+                )
+            }
+
+            if let metadata = try? await metadataTask.value {
+                await MainActor.run {
+                    guard loadGeneration == billfoldLoadGeneration else { return }
+                    topPickCandidates = metadata.0
+                    pickConfidenceIndex = metadata.1
+                    recomputeCache()
+                }
             }
         } catch {
             await MainActor.run {
+                guard loadGeneration == billfoldLoadGeneration else { return }
                 self.error = "Failed to load data"
                 loading = false
             }

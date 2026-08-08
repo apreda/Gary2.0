@@ -45,6 +45,16 @@ struct DailyPicksRow: Decodable {
     let picks: PicksValue<GaryPick>?
 }
 
+/// The tiny subset of a historical game pick that Billfold needs for its
+/// Top Pick and conviction-calibration panels. Keeping this separate prevents
+/// that page from downloading every old card's rationale, stats, and injuries.
+struct BillfoldPickMetadata {
+    let date: String
+    let pick: String
+    let confidence: Double?
+    let isTopPick: Bool
+}
+
 struct WeeklyNFLPicksRow: Decodable {
     let week_start: String
     let week_number: Int?

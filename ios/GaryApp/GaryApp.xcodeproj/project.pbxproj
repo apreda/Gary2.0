@@ -206,6 +206,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8F344E799FEC56645C29B39F /* Build configuration list for PBXNativeTarget "GaryApp" */;
 			buildPhases = (
+				91F4A77EAD174C33B8FB1010 /* Validate Release Configuration */,
 				7119331DA617EFB8F15E3E78 /* Sources */,
 				257D2E950608B14CB89B1681 /* Resources */,
 				FE30AD194F573DEA5E2DAD74 /* Frameworks */,
@@ -262,6 +263,26 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		91F4A77EAD174C33B8FB1010 /* Validate Release Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/GoogleService-Info.plist",
+				"$(SRCROOT)/ci_scripts/validate_release_config.sh",
+			);
+			name = "Validate Release Configuration";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/ci_scripts/validate_release_config.sh\"";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		257D2E950608B14CB89B1681 /* Resources */ = {

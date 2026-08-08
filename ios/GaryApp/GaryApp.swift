@@ -33,7 +33,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let apiKey = plist["API_KEY"] as? String,
               apiKey.count == 39,
-              apiKey.hasPrefix("A") else {
+              apiKey.hasPrefix("AIza"),
+              let bundleID = plist["BUNDLE_ID"] as? String,
+              bundleID == Bundle.main.bundleIdentifier,
+              let appID = plist["GOOGLE_APP_ID"] as? String,
+              appID.hasPrefix("1:"),
+              let projectID = plist["PROJECT_ID"] as? String,
+              !projectID.isEmpty else {
             print("[Firebase] Invalid or redacted GoogleService-Info.plist; push messaging disabled for this build")
             return false
         }
