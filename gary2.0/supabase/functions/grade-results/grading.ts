@@ -24,30 +24,107 @@ export type Side = "home" | "away" | null;
 const BETTING_HEADLINE_RE =
   /\b(?:bet(?:s|ting)?|cash(?:ed|es|ing)?|cover(?:ed|s|ing)?|moneyline|spread|favorite|underdog|chalk|odds?|prices?)\b|\bML\b|\b(?:over|under)\s+\d+(?:\.\d+)?\b|(?<!\d)[+-]\d{2,4}\b/i;
 
+// A final score is useful supporting information, but it is not the story by
+// itself when the evidence contains the performance that decided the game.
+// This catches the exact low-value shape that reached Home ("X beat Y 8-2")
+// while keeping real headlines such as "X beat Y 8-2 behind six RBI".
+const SCORE_ONLY_HEADLINE_RE =
+  /\b(?:beat(?:s)?|defeat(?:s|ed)?|edge(?:s|d)?|top(?:s|ped)?|down(?:s|ed)?|win(?:s)?|won|lose(?:s)?|lost|fall(?:s)?)\b.*\b\d{1,2}\s*[-–]\s*\d{1,2}\s*$/i;
+
+export function headlineNeedsRepair(headline: unknown): boolean {
+  const value = String(headline ?? "").trim();
+  return !value || BETTING_HEADLINE_RE.test(value) || SCORE_ONLY_HEADLINE_RE.test(value);
+}
+
+const countWord = (n: number): string => {
+  const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+  return words[n] ?? String(n);
+};
+
+const teamMatches = (candidate: string, team: string): boolean => {
+  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const a = clean(candidate), b = clean(team);
+  return !!a && !!b && (a.includes(b) || b.includes(a));
+};
+
+/** Build an editorial game headline from verified player/team evidence. */
+function evidenceHeadline(evidence: unknown, maxChars: number): string {
+  const ev = String(evidence ?? "");
+  const score = ev.match(
+    /^FINAL SCORE:\s*(.*?) \(away\) (\d+)\s+—\s+(.*?) \(home\) (\d+)/m,
+  );
+  if (!score) return "";
+  const [, away, awayRaw, home, homeRaw] = score;
+  const awayScore = Number(awayRaw), homeScore = Number(homeRaw);
+  if (awayScore === homeScore) {
+    return `${away} and ${home} finish ${awayScore}-${homeScore}`.slice(0, maxChars);
+  }
+  const winner = awayScore > homeScore ? away : home;
+  const loser = awayScore > homeScore ? home : away;
+  const winnerScore = Math.max(awayScore, homeScore);
+  const loserScore = Math.min(awayScore, homeScore);
+
+  type Candidate = { rank: number; tail: string; shortTail: string };
+  const candidates: Candidate[] = [];
+  let section = "";
+  for (const raw of ev.split("\n")) {
+    const line = raw.trim();
+    if (/^[A-Z][A-Z ']+:$/.test(line)) { section = line; continue; }
+    if (!line.startsWith("- ")) continue;
+
+    if (section === "HOME RUNS:") {
+      const m = line.match(/^- (.*?) \((.*?)\): (\d+) HR, (\d+) RBI/);
+      if (!m || !teamMatches(m[2], winner)) continue;
+      const hr = Number(m[3]), rbi = Number(m[4]);
+      const power = hr === 1 ? "home run" : `${countWord(hr)} home runs`;
+      const full = rbi >= 2 ? `behind ${m[1]}'s ${power} and ${countWord(rbi)} RBI`
+                            : `behind ${m[1]}'s ${power}`;
+      candidates.push({ rank: 100 + hr * 25 + rbi * 3, tail: full,
+        shortTail: `behind ${m[1]}'s ${power}` });
+    } else if (section === "PITCHING LINES:") {
+      const m = line.match(/^- (.*?) \((.*?)\): ([\d.]+) IP,.*? (\d+) ER,.*? (\d+) K/);
+      if (!m || !teamMatches(m[2], winner)) continue;
+      const ip = Number(m[3]), er = Number(m[4]), strikeouts = Number(m[5]);
+      if (ip < 5 || (strikeouts < 6 && er > 0)) continue;
+      const tail = er === 0 && ip >= 6
+        ? `behind ${countWord(Math.floor(ip))} scoreless innings from ${m[1]}`
+        : `behind ${m[1]}'s ${countWord(strikeouts)} strikeouts`;
+      candidates.push({ rank: 65 + strikeouts * 3 + ip - er * 5, tail, shortTail: tail });
+    } else if (section === "NOTABLE BATTING LINES:") {
+      const m = line.match(/^- (.*?) \((.*?)\): (\d+)-for-(\d+)(.*)$/);
+      if (!m || !teamMatches(m[2], winner)) continue;
+      const hits = Number(m[3]);
+      const rbi = Number(m[5].match(/(\d+) RBI/)?.[1] ?? 0);
+      const steals = Number(m[5].match(/(\d+) SB/)?.[1] ?? 0);
+      if (hits < 3 && rbi < 2 && steals < 2) continue;
+      const feat = rbi >= 2 ? `${countWord(rbi)} RBI`
+        : hits >= 3 ? `${countWord(hits)} hits` : `${countWord(steals)} steals`;
+      const tail = `behind ${m[1]}'s ${feat}`;
+      candidates.push({ rank: 45 + hits * 3 + rbi * 3 + steals * 2, tail, shortTail: tail });
+    }
+  }
+
+  const margin = winnerScore - loserScore;
+  const verb = loserScore === 0 ? "shut out" : margin >= 6 ? "rout" : margin === 1 ? "edge" : "beat";
+  const base = `${winner} ${verb} ${loser}`;
+  const best = candidates.sort((a, b) => b.rank - a.rank)[0];
+  if (best) {
+    const full = `${base} ${best.tail}`;
+    if (full.length <= maxChars) return full;
+    const short = `${base} ${best.shortTail}`;
+    if (short.length <= maxChars) return short;
+  }
+  return `${base} ${winnerScore}-${loserScore}`.slice(0, maxChars);
+}
+
 export function gameOnlyHeadline(
   generatedHeadline: unknown,
   evidence: unknown,
   maxChars = 90,
 ): string {
   const generated = String(generatedHeadline ?? "").trim().replace(/\.$/, "");
-  if (generated && !BETTING_HEADLINE_RE.test(generated)) return generated.slice(0, maxChars);
-
-  // Evidence always starts with this grounded final-score line. If the model
-  // gives us a betting headline, build a factual replacement from that line
-  // instead of publishing the violation or inventing a game detail.
-  const score = String(evidence ?? "").match(
-    /^FINAL SCORE:\s*(.*?) \(away\) (\d+)\s+—\s+(.*?) \(home\) (\d+)/m,
-  );
-  if (!score) return "";
-  const [, away, awayRaw, home, homeRaw] = score;
-  const awayScore = Number(awayRaw);
-  const homeScore = Number(homeRaw);
-  const fallback = awayScore > homeScore
-    ? `${away} beat ${home} ${awayScore}-${homeScore}`
-    : homeScore > awayScore
-    ? `${home} beat ${away} ${homeScore}-${awayScore}`
-    : `${away} and ${home} finish ${awayScore}-${homeScore}`;
-  return fallback.slice(0, maxChars);
+  if (!headlineNeedsRepair(generated)) return generated.slice(0, maxChars);
+  return evidenceHeadline(evidence, maxChars);
 }
 
 // Alphanumeric tokens of a team name ("Chicago White Sox" -> ["chicago","white","sox"]).

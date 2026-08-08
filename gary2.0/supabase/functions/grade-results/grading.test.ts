@@ -2,7 +2,9 @@
 // Run: node --test gary2.0/supabase/functions/grade-results/grading.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gameOnlyHeadline, pickSide, gradeGame, recapIsStale } from "./grading.ts";
+import {
+  gameOnlyHeadline, headlineNeedsRepair, pickSide, gradeGame, recapIsStale,
+} from "./grading.ts";
 
 // ── The regression this module exists for ────────────────────────────────────
 // Boston Red Sox (away) beat Chicago White Sox (home) 5-0 on 2026-07-08. daily_picks
@@ -105,14 +107,35 @@ test("gameOnlyHeadline keeps a clean game-result headline", () => {
   );
 });
 
-test("gameOnlyHeadline replaces cash/odds framing with the grounded final score", () => {
+test("gameOnlyHeadline replaces cash/odds framing with the grounded game performance", () => {
   assert.equal(
     gameOnlyHeadline("Marlins fall 4-3 to Angels failing to cash -147 ML", marlinsEvidence),
-    "Angels beat Marlins 4-3",
+    "Angels edge Marlins behind Mike Trout's home run",
   );
 });
 
 test("gameOnlyHeadline replaces spread and total framing too", () => {
-  assert.equal(gameOnlyHeadline("Angels cover the spread", marlinsEvidence), "Angels beat Marlins 4-3");
-  assert.equal(gameOnlyHeadline("Over 6.5 cashes in Miami", marlinsEvidence), "Angels beat Marlins 4-3");
+  assert.equal(gameOnlyHeadline("Angels cover the spread", marlinsEvidence),
+    "Angels edge Marlins behind Mike Trout's home run");
+  assert.equal(gameOnlyHeadline("Over 6.5 cashes in Miami", marlinsEvidence),
+    "Angels edge Marlins behind Mike Trout's home run");
+});
+
+test("gameOnlyHeadline upgrades a score-only result when richer evidence exists", () => {
+  const evidence = [
+    "FINAL SCORE: Guardians (away) 8 — White Sox (home) 2",
+    "",
+    "HOME RUNS:",
+    "- Angel Martinez (Guardians): 1 HR, 6 RBI",
+  ].join("\n");
+  assert.equal(headlineNeedsRepair("Guardians beat White Sox 8-2"), true);
+  assert.equal(
+    gameOnlyHeadline("Guardians beat White Sox 8-2", evidence),
+    "Guardians rout White Sox behind Angel Martinez's home run and six RBI",
+  );
+});
+
+test("headline repair detector leaves real editorial headlines alone", () => {
+  assert.equal(headlineNeedsRepair("Mets defeat Pirates behind Marcus Semien's home run and three RBI"), false);
+  assert.equal(headlineNeedsRepair("Guardians beat White Sox 8-2 as the -135 moneyline hits"), true);
 });

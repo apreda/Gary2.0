@@ -6062,7 +6062,9 @@ private struct HomeHeadlinesCacheEntry: Codable {
     let stories: [HomeMarqueeHero.Story]
 }
 enum HomeHeadlinesCache {
-    private static let key = "homeHeadlines"
+    // v2 drops the pre-editorial schema whose cached cards could still contain
+    // old betting-result copy after the database headline had been repaired.
+    private static let key = "homeHeadlines.editorial.v2"
     static func load() -> [HomeMarqueeHero.Story]? {
         guard let data = UserDefaults.standard.data(forKey: key),
               let entry = try? JSONDecoder().decode(HomeHeadlinesCacheEntry.self, from: data),

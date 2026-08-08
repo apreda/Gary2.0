@@ -16,7 +16,7 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { pickSide, matchGame } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
-import { generateRecap, filterPropsForGame } from '../src/services/gameRecap.js';
+import { generateRecap, filterPropsForGame, headlineNeedsRepair } from '../src/services/gameRecap.js';
 import { runNightHighlights } from '../src/services/nightHighlights.js';
 import { writeStreaks } from '../src/services/streaksService.js';
 // Load environment variables FIRST (centralized)
@@ -599,7 +599,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   // bug as writeRecap() in the cloud grade-results function).
   const { data: exist, error: dedupErr } = await supabase
     .from('game_recaps')
-    .select('id, result')
+    .select('id, result, headline')
     .eq('game_date', gameDate)
     .eq('league', league)
     .eq('matchup', matchup)
@@ -609,7 +609,8 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     return;
   }
   const stale = !!exist && exist.result !== result;
-  if (exist && !stale) {
+  const editorialRepair = !!exist && headlineNeedsRepair(exist.headline);
+  if (exist && !stale && !editorialRepair) {
     console.log(`  ⏩ Recap exists: ${league} ${matchup} (${gameDate})`);
     return;
   }
@@ -653,7 +654,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     return;
   }
 
-  if (stale) {
+  if (stale || editorialRepair) {
     const { error: updateErr } = await supabase
       .from('game_recaps')
       .update({ result, headline: recap.headline, recap: recap.recap, bullets: recap.bullets || [] })
@@ -661,7 +662,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     if (updateErr) {
       console.error(`  ❌ RECAP UPDATE FAILED [game_recaps] ${league} ${matchup} (${gameDate}): ${updateErr.message}`);
     } else {
-      console.log(`  📰 Re-recapped ${league} ${matchup} (was stale): "${recap.headline}"`);
+      console.log(`  📰 Re-recapped ${league} ${matchup} (${stale ? 'grade changed' : 'headline repaired'}): "${recap.headline}"`);
     }
     return;
   }

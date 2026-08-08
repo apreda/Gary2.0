@@ -22,11 +22,14 @@
  *   node scripts/run-game-recaps.js --date 2026-06-09                # one date, all leagues
  *   node scripts/run-game-recaps.js --date 2026-06-09 --league MLB   # one league
  *   node scripts/run-game-recaps.js --date 2026-06-09 --force        # redo existing rows
+ *   node scripts/run-game-recaps.js --date 2026-06-09 --repair-headlines-only
  *   node scripts/run-game-recaps.js --date 2026-06-09 --dry-run      # no writes
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { generateRecap, filterPropsForGame, buildBoxLine } from '../src/services/gameRecap.js';
+import {
+  generateRecap, filterPropsForGame, buildBoxLine, gameOnlyHeadline, headlineNeedsRepair,
+} from '../src/services/gameRecap.js';
 import { buildGameEvidence } from '../src/services/factCheck.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
@@ -62,6 +65,7 @@ function getArgValue(flag) {
 
 const dryRun = args.includes('--dry-run');
 const force = args.includes('--force');
+const repairHeadlinesOnly = args.includes('--repair-headlines-only');
 const leagueArg = getArgValue('--league')?.toUpperCase() || null;
 const explicitDate = getArgValue('--date');
 
@@ -90,21 +94,47 @@ for (const d of targetDates) {
 
 // ── Evidence helpers ─────────────────────────────────────────────────────────
 
-/** One cheap BDL fetch: per-game MLB player stats (pitcher lines, HRs, hits). */
-async function fetchMlbStatsForGame(gameId) {
-  if (!BDL_API_KEY || gameId == null) return null;
-  try {
-    const res = await fetch(
-      `https://api.balldontlie.io/mlb/v1/stats?game_ids[]=${gameId}&per_page=100`,
-      // The abort signal stops a stalled connection from hanging the backfill.
-      { headers: { 'Authorization': BDL_API_KEY }, signal: AbortSignal.timeout(20_000) }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.data?.length ? data.data : null;
-  } catch {
-    return null;
+/**
+ * Fetch a slate's MLB player stats as one cursor-paginated request. The old
+ * backfill made one request per game, which needlessly hit BDL's rate limit and
+ * left later cards with score-only headlines. One slate normally takes 4-6
+ * pages and every returned row is then grouped by game_id locally.
+ */
+async function fetchMlbStatsForGames(gameIds) {
+  const ids = [...new Set((gameIds || []).filter((id) => id != null).map(String))];
+  const byGame = new Map();
+  if (!BDL_API_KEY || !ids.length) return byGame;
+
+  let cursor = null;
+  for (let page = 0; page < 20; page++) {
+    const params = new URLSearchParams({ per_page: '100' });
+    for (const id of ids) params.append('game_ids[]', id);
+    if (cursor != null) params.set('cursor', String(cursor));
+
+    try {
+      const res = await fetch(`https://api.balldontlie.io/mlb/v1/stats?${params}`, {
+        headers: { 'Authorization': BDL_API_KEY },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) {
+        console.warn(`  ⚠️ MLB slate stats page ${page + 1} unavailable (${res.status})`);
+        break;
+      }
+      const payload = await res.json();
+      for (const row of payload?.data || []) {
+        const key = String(row.game_id ?? '');
+        if (!key) continue;
+        if (!byGame.has(key)) byGame.set(key, []);
+        byGame.get(key).push(row);
+      }
+      cursor = payload?.meta?.next_cursor ?? null;
+      if (cursor == null) break;
+    } catch (error) {
+      console.warn(`  ⚠️ MLB slate stats timed out: ${error.message}`);
+      break;
+    }
   }
+  return byGame;
 }
 
 
@@ -170,6 +200,12 @@ async function main(targetDate) {
   }
   const resultByPickText = new Map((results || []).map((r) => [r.pick_text, r]));
 
+  // Fetch the whole MLB slate once. This is both faster and materially more
+  // reliable than doing network I/O while rendering each recap one at a time.
+  const mlbStatsByGame = await fetchMlbStatsForGames(
+    picks.filter((p) => p.league?.toUpperCase() === 'MLB').map((p) => p.game_id),
+  );
+
   // The night's graded props (real betting prices) — same 2-day window. Each
   // game's subset goes into the evidence pack so bullets can carry the lens.
   const { data: propRows, error: propErr } = await supabase
@@ -196,30 +232,46 @@ async function main(targetDate) {
     const gameDate = graded.game_date;
 
     // Idempotency (mirrors the nightly path)
-    const { data: exist, error: dedupErr } = await supabase
-      .from('game_recaps').select('id')
+    let { data: exist, error: dedupErr } = await supabase
+      .from('game_recaps').select('id, headline')
       .eq('game_date', gameDate).eq('league', graded.league).eq('matchup', matchup)
       .maybeSingle();
+    // Older rows sometimes stored short team names ("Mariners @ Orioles")
+    // while daily_picks later carried the full names. The immutable pick text
+    // is the reliable identity fallback, and prevents a valid old recap from
+    // being mistaken for a missing one during repair/backfill.
+    if (!dedupErr && !exist) {
+      ({ data: exist, error: dedupErr } = await supabase
+        .from('game_recaps').select('id, headline')
+        .eq('game_date', gameDate).eq('league', graded.league).eq('pick_text', pick.pick)
+        .maybeSingle());
+    }
     if (dedupErr) {
       console.error(`  ❌ ${league} ${matchup}: dedup check failed: ${dedupErr.message}`);
       failed++;
       continue;
     }
+    const editorialRepair = !!exist && headlineNeedsRepair(exist.headline);
+    if (repairHeadlinesOnly && !exist) {
+      console.log(`  ⏭️  ${league} ${matchup}: no existing recap — repair pass skips creation`);
+      skipped++;
+      continue;
+    }
     if (exist) {
-      if (!force) {
+      if (!force && !editorialRepair) {
         console.log(`  ⏩ ${league} ${matchup}: recap exists — skipping (use --force to redo)`);
         skipped++;
         continue;
       }
-      if (!dryRun) {
-        await supabase.from('game_recaps').delete().eq('id', exist.id);
-      }
+      console.log(`  🔧 ${league} ${matchup}: ${force ? 'forced rewrite' : 'repairing non-editorial headline'}`);
     }
 
     // final_score is stored "away-home" (`${vs}-${hs}` in run-all-results.js)
     const [awayScore, homeScore] = String(graded.final_score || '').split('-').map(Number);
 
-    const mlbStats = league === 'MLB' ? await fetchMlbStatsForGame(pick.game_id) : null;
+    const mlbStats = league === 'MLB'
+      ? (mlbStatsByGame.get(String(pick.game_id)) || null)
+      : null;
     const gradedProps = filterPropsForGame(propRows || [], pick.homeTeam, pick.awayTeam);
     const evidence = buildGameEvidence({
       league,
@@ -230,6 +282,32 @@ async function main(targetDate) {
       mlbStats,
       gradedProps,
     }) + (league === 'MLB' ? await propMenuEvidence(gameDate, matchup) : '');
+
+    // Historical headline repair is deterministic and evidence-only. The
+    // existing recap body/bullets are already grounded and do not need another
+    // model rewrite; replace only the bad headline from the fresh box dossier.
+    if (exist && editorialRepair && !force) {
+      const headline = gameOnlyHeadline(exist.headline, evidence);
+      if (!headline) {
+        console.warn(`  ⚠️ ${league} ${matchup}: headline repair had no evidence`);
+        failed++;
+        continue;
+      }
+      if (dryRun) {
+        console.log(`  🧪 ${league} ${matchup}: ${headline}`);
+      } else {
+        const { error: repairErr } = await supabase.from('game_recaps')
+          .update({ headline }).eq('id', exist.id);
+        if (repairErr) {
+          console.error(`  ❌ ${league} ${matchup}: headline repair failed: ${repairErr.message}`);
+          failed++;
+          continue;
+        }
+        console.log(`  📰 ${league} ${matchup}: ${headline}`);
+      }
+      done++;
+      continue;
+    }
 
     try {
       const recap = await generateRecap({ pick, result: graded.result, evidence });
@@ -261,14 +339,20 @@ async function main(targetDate) {
         continue;
       }
 
-      let { error: insertErr } = await supabase.from('game_recaps').insert(row);
+      let writeQuery = exist
+        ? supabase.from('game_recaps').update(row).eq('id', exist.id)
+        : supabase.from('game_recaps').insert(row);
+      let { error: insertErr } = await writeQuery;
       // The box column ships ahead of its migration in some environments —
       // a recap is worth more than its box line, so retry without it rather
       // than losing the row.
       if (insertErr && /box/i.test(insertErr.message || '') && row.box) {
         console.warn(`  ⚠️ ${league} ${matchup}: no box column yet — writing recap without it`);
         const { box: _dropped, ...withoutBox } = row;
-        ({ error: insertErr } = await supabase.from('game_recaps').insert(withoutBox));
+        writeQuery = exist
+          ? supabase.from('game_recaps').update(withoutBox).eq('id', exist.id)
+          : supabase.from('game_recaps').insert(withoutBox);
+        ({ error: insertErr } = await writeQuery);
       }
       if (insertErr) {
         console.error(`  ❌ ${league} ${matchup}: insert failed: ${insertErr.message}`);

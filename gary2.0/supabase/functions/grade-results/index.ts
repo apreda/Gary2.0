@@ -29,7 +29,7 @@
 // Side-detection (which team a pick is on) + gradeGame live in the pure,
 // unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
 // graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
-import { gameOnlyHeadline, gradeGame, recapIsStale } from "./grading.ts";
+import { gameOnlyHeadline, gradeGame, headlineNeedsRepair, recapIsStale } from "./grading.ts";
 import { settleUserBetsForDates } from "./userbets.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -61,7 +61,10 @@ async function bdlGet(path: string, params: Record<string, string | string[]>): 
   for (const [k, v] of Object.entries(params)) {
     if (Array.isArray(v)) v.forEach((x) => qs.append(`${k}[]`, x)); else qs.append(k, v);
   }
-  const res = await fetch(`${BDL_BASE}${path}?${qs.toString()}`, { headers: { Authorization: BDL_KEY } });
+  const res = await fetch(`${BDL_BASE}${path}?${qs.toString()}`, {
+    headers: { Authorization: BDL_KEY },
+    signal: AbortSignal.timeout(20_000),
+  });
   if (!res.ok) throw new Error(`BDL ${path} ${res.status}`);
   const json = await res.json();
   return Array.isArray(json?.data) ? json.data : [];
@@ -248,7 +251,11 @@ function recapBuildPrompt(args: { pick: any; result: string; evidence: string })
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
     `OUTPUT:\n` +
     `- "headline": a clean, professional game headline in plain English — the result and the one ` +
-    `thing that decided it. 6-12 words. Lead with the team and what they actually did. ` +
+    `thing that decided it. 6-12 words. Lead with the team and what they actually did. First look ` +
+    `for the most newsworthy VERIFIED individual performance in the evidence (home runs, RBI, ` +
+    `strikeouts, a scoreless start); if there is none, use a verified team feat such as a shutout ` +
+    `or a huge hit total. A score-only result is the last resort when the evidence truly contains ` +
+    `nothing else. ` +
     `NO betting jargon ("dogs", "chalk", "cover", "cashes"), NO hype verbs ("explodes", "erupts", ` +
     `"power show", "roll"), NO odds or prices in the headline, NO cliches or clickbait. ` +
     `Good: "Tigers take down the Astros behind Colt Keith's three homers". ` +
@@ -513,9 +520,10 @@ async function writeRecap(args: {
   // (recapIsStale — Jul 10 2026 fix; game_recaps has no updated_at, so this result
   // comparison is the only signal), regenerate instead of trusting the stale copy.
   const existing = await sbGet("game_recaps",
-    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&select=id,result,box`);
+    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&select=id,result,headline,box`);
   const stale = existing.length > 0 && recapIsStale(existing[0].result, result);
-  if (existing.length && !stale) {
+  const editorialRepair = existing.length > 0 && headlineNeedsRepair(existing[0].headline);
+  if (existing.length && !stale && !editorialRepair) {
     // A transient batting-stats miss used to leave a permanent runs-only recap:
     // idempotency returned here forever, so HOMERS never appeared even after
     // the feed recovered. Retry only the deterministic box lane on later grader
@@ -554,7 +562,7 @@ async function writeRecap(args: {
     awayScore: vScore, homeScore: hScore,
   });
 
-  if (stale) {
+  if (stale || editorialRepair) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/game_recaps?id=eq.${existing[0].id}`, {
       method: "PATCH", headers: { ...sbHeaders, Prefer: "return=minimal" },
       body: JSON.stringify({
