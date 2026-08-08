@@ -21086,9 +21086,23 @@ enum TodayBoardCache {
     /// had repaired it. Complete boards refresh every five minutes; an MLB
     /// board missing Arms copy gets another chance after 30 seconds.
     private static func cacheLifetime(for board: TomorrowBoard) -> TimeInterval {
+        let postedStarters = Set(board.starters.compactMap { starter -> String? in
+            guard (starter.league ?? "").uppercased() == "MLB",
+                  let game = starter.game,
+                  let team = starter.abbr ?? starter.team else { return nil }
+            return "\(game)|\(team.uppercased())"
+        })
         let hasMissingMLBArms = board.board.contains {
-            ($0.league ?? "").uppercased() == "MLB"
-                && ($0.arms_take?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            guard ($0.league ?? "").uppercased() == "MLB",
+                  ($0.arms_take?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
+                  let away = $0.away_abbr,
+                  let home = $0.home_abbr else { return false }
+            let game = "\(away) @ \(home)"
+            // A take is required only after BOTH official probables exist.
+            // One-posted/TBA games are legitimately incomplete and can wait
+            // for the normal five-minute board refresh.
+            return postedStarters.contains("\(game)|\(away)")
+                && postedStarters.contains("\(game)|\(home)")
         }
         return hasMissingMLBArms ? 30 : 300
     }

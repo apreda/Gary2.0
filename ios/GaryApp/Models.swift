@@ -1778,8 +1778,8 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     /// last three meetings. nil until the clubs have met this season.
     let series: TomorrowSeries?
     /// THE ARMS IN GARY'S VOICE (Aug 4) — two sentences on the game's two
-    /// starters, generated at board-publish time. nil = the stat ladder
-    /// renders instead (fail-soft is backend law).
+    /// starters, generated at board-publish time. nil = the section stays out
+    /// until both probables are posted and the completed board refresh lands.
     let arms_take: String?
 }
 
