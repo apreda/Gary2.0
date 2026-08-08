@@ -21077,12 +21077,35 @@ struct TeasedPickCard: View {
 /// written the evening before) — ONE fetch feeds every game page's scout.
 @MainActor
 enum TodayBoardCache {
-    private static var stored: (day: String, board: TomorrowBoard)? = nil
+    private static var stored: (day: String, board: TomorrowBoard, fetchedAt: Date)? = nil
+    private static var inFlight: (day: String, task: Task<TomorrowBoard?, Never>)? = nil
+
+    /// A board can improve after the first morning read (probables, lines and
+    /// generated copy land in stages). The former day-long cache froze a 6 AM
+    /// incomplete snapshot until the app process died, even after the server
+    /// had repaired it. Complete boards refresh every five minutes; an MLB
+    /// board missing Arms copy gets another chance after 30 seconds.
+    private static func cacheLifetime(for board: TomorrowBoard) -> TimeInterval {
+        let hasMissingMLBArms = board.board.contains {
+            ($0.league ?? "").uppercased() == "MLB"
+                && ($0.arms_take?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }
+        return hasMissingMLBArms ? 30 : 300
+    }
+
     static func get() async -> TomorrowBoard? {
         let day = SupabaseAPI.todayEST()
-        if let stored, stored.day == day { return stored.board }
-        guard let board = await SupabaseAPI.fetchTodayBoard(date: day) else { return nil }
-        stored = (day, board)
+        if let stored, stored.day == day,
+           Date().timeIntervalSince(stored.fetchedAt) < cacheLifetime(for: stored.board) {
+            return stored.board
+        }
+        if let inFlight, inFlight.day == day { return await inFlight.task.value }
+        let task = Task { await SupabaseAPI.fetchTodayBoard(date: day) }
+        inFlight = (day, task)
+        let board = await task.value
+        if inFlight?.day == day { inFlight = nil }
+        guard let board else { return stored?.day == day ? stored?.board : nil }
+        stored = (day, board, Date())
         return board
     }
 }
@@ -21817,28 +21840,33 @@ fileprivate struct ScoutArmsSection: View {
     }
 
     var body: some View {
-        if d.awayStarter != nil || d.homeStarter != nil {
+        // Missing generated copy is not permission to resurrect the old
+        // stats-only/quality-starts treatment. The server publishes MLB rows
+        // atomically once every eligible matchup has its Arms take; if an
+        // incomplete legacy snapshot slips through, omit this section until
+        // the short board-cache refresh picks up the repaired snapshot.
+        if let take = d.armsTake?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !take.isEmpty,
+           d.awayStarter != nil || d.homeStarter != nil {
             VStack(alignment: .leading, spacing: 10) {
                 Text("THE ARMS")
                     .font(GaryFonts.display(14)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
                 // Gary's two sentences on the two starters (founder, Aug 4 —
                 // "whatever two sentences Gary wants to say").
-                if let take = d.armsTake {
-                    // The take reads exactly as it did before (founder, Aug 6:
-                    // the drop cap came back out — "it was fine how it was") —
-                    // a hairline gold border is the only frame it wears now.
-                    Text(take)
-                        .font(.system(size: 15))
-                        .foregroundStyle(ScoutMock.warm.opacity(0.92))
-                        .lineSpacing(4)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 13).padding(.vertical, 11)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))
-                }
+                // The take reads exactly as it did before (founder, Aug 6:
+                // the drop cap came back out — "it was fine how it was") —
+                // a hairline gold border is the only frame it wears now.
+                Text(take)
+                    .font(.system(size: 15))
+                    .foregroundStyle(ScoutMock.warm.opacity(0.92))
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 13).padding(.vertical, 11)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))
                 // No fixedSize here: an HStack already sizes to its tallest
                 // child, and THAT height is what the plates' maxHeight
                 // .infinity stretches into. Forcing ideal height (the Aug 6

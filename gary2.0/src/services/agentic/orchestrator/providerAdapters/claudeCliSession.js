@@ -62,10 +62,23 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
   });
 }
 
-const CAP_PATTERNS = /usage limit|rate limit|out of.*(usage|credits)|limit reached|too many requests|overloaded/i;
+const CAP_PATTERNS = /usage limit|weekly limit|hit your.*limit|rate limit|out of.*(usage|credits)|limit reached|too many requests|overloaded|\b429\b/i;
 
 function toError(code, stdout, stderr) {
-  const detail = (stderr || stdout || '').slice(0, 300);
+  // On quota failures the CLI exits non-zero but writes a JSON result whose
+  // useful message (for example "weekly limit") is near the END. Truncating
+  // the raw JSON first hid that message, so the provider cascade never knew
+  // it should fail over. Pull the structured result out before truncation.
+  let detail = stderr || stdout || '';
+  try {
+    const parsed = JSON.parse(String(stdout || ''));
+    if (parsed?.result) {
+      detail = `${parsed.result}${parsed.api_error_status ? ` (HTTP ${parsed.api_error_status})` : ''}`;
+    }
+  } catch {
+    // Plain-text CLI failures keep their original stderr/stdout detail.
+  }
+  detail = String(detail).slice(0, 500);
   const error = new Error(`claude CLI exit ${code}: ${detail}`);
   if (CAP_PATTERNS.test(detail)) error.isQuotaError = true;
   return error;
