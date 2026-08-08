@@ -1,18 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  TEMPLATE — copy to GoogleService-Info.plist and replace with real values.
-  Download the real file from Firebase Console:
-    https://console.firebase.google.com/ → Project Settings → iOS app → GoogleService-Info.plist
-
-  GoogleService-Info.plist is gitignored so real keys never end up in git.
-  Bundle ID restriction in Firebase + App Check protects against misuse,
-  but secret scanners (GitGuardian) still flag the key if committed.
--->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>REPLACE_WITH_FIREBASE_API_KEY</string>
+	<string>REDACTED_PRE_HISTORY_REWRITE</string>
 	<key>GCM_SENDER_ID</key>
 	<string>163595982698</string>
 	<key>PLIST_VERSION</key>
@@ -34,9 +25,9 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>CLIENT_ID</key>
-	<string>REPLACE_WITH_GOOGLE_IOS_CLIENT_ID</string>
+	<string>163595982698-k9vmgqvtj716n55l1ppnomg2ttb85592.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>REPLACE_WITH_REVERSED_GOOGLE_IOS_CLIENT_ID</string>
+	<string>com.googleusercontent.apps.163595982698-k9vmgqvtj716n55l1ppnomg2ttb85592</string>
 	<key>GOOGLE_APP_ID</key>
 	<string>1:163595982698:ios:bb5f539650f8d99fad7713</string>
 </dict>

@@ -22,12 +22,10 @@
 		2AC44BD89F056DF4FCA691AD /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008FA1BAD0680B6769DD9D2A /* AuthManager.swift */; };
 		2D89A2B6672D88763469087D /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DF7E972CC8D83F24D451BB7E /* JetBrainsMono-Bold.ttf */; };
 		3433EFC75CC07CD93065A1F0 /* JetBrainsMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 34634D1F59A3EC02C368C937 /* JetBrainsMono-Regular.ttf */; };
-		378B9D800A7778391AD461BC /* linked-project.json in Resources */ = {isa = PBXBuildFile; fileRef = 416DA2B9626C56AB4CAA087D /* linked-project.json */; };
 		40771064325B4E728A735AEA /* GaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49489C7FC0ABE55881B19E13 /* GaryApp.swift */; };
 		40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */; };
 		44FB25CBEB7324D5CDF9CAB7 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 19246C9DB6761505C046FD73 /* FirebaseMessaging */; };
 		5A432D05492831EB727B31A7 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE32BA2E5208CC9E994A26A /* Models.swift */; };
-		60CF1B9B3718AA56B8028E69 /* GoogleService-Info.plist.example in Resources */ = {isa = PBXBuildFile; fileRef = 00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */; };
 		71C1BBA0D0BFFF070BBE70FE /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = C4B05FFDB3FA92CCFC7CF3AC /* Lottie */; };
 		848433E84732600F7F27F78B /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98E3F91D643EAE8E4199E0A /* KeychainStorage.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
@@ -71,7 +69,6 @@
 		3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-Bold.ttf"; sourceTree = "<group>"; };
 		34634D1F59A3EC02C368C937 /* JetBrainsMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Regular.ttf"; sourceTree = "<group>"; };
 		3B00BB7C471BD1CE60801A0F /* Rajdhani-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Rajdhani-Bold.ttf"; sourceTree = "<group>"; };
-		416DA2B9626C56AB4CAA087D /* linked-project.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "linked-project.json"; sourceTree = "<group>"; };
 		423887686C6839DEC44C0DEA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		430996827B4DF85995FED6C0 /* SecretsLocal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretsLocal.swift; sourceTree = "<group>"; };
 		44D1E52AFB4EED7E97F55C36 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
@@ -168,20 +165,9 @@
 				0110A48840365DDC8DBFCABF /* UserBookView.swift */,
 				44D1E52AFB4EED7E97F55C36 /* Views.swift */,
 				4842B8C63C570D1C368D182A /* WCGameIntelView.swift */,
-				4ACEDA9F5C0505AFB5A47CD1 /* ci_scripts */,
-				9BF04537F523600B06ACFE41 /* Fonts */,
-				C5DD509A4D18927BCBFBCB63 /* supabase */,
 			);
 			name = GaryApp;
 			path = .;
-			sourceTree = "<group>";
-		};
-		7D6A247ACBFD89416DF4E1A4 /* .temp */ = {
-			isa = PBXGroup;
-			children = (
-				416DA2B9626C56AB4CAA087D /* linked-project.json */,
-			);
-			path = .temp;
 			sourceTree = "<group>";
 		};
 		91E7769BD9DC37D8974535EF = {
@@ -190,7 +176,6 @@
 				4ACEDA9F5C0505AFB5A47CD1 /* ci_scripts */,
 				9BF04537F523600B06ACFE41 /* Fonts */,
 				6CFD3216AB39252D9E52D645 /* GaryApp */,
-				C5DD509A4D18927BCBFBCB63 /* supabase */,
 				02F13D03245A29657A46163C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -212,14 +197,6 @@
 				71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */,
 			);
 			path = Fonts;
-			sourceTree = "<group>";
-		};
-		C5DD509A4D18927BCBFBCB63 /* supabase */ = {
-			isa = PBXGroup;
-			children = (
-				7D6A247ACBFD89416DF4E1A4 /* .temp */,
-			);
-			path = supabase;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -298,7 +275,6 @@
 				0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */,
 				962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */,
 				FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */,
-				60CF1B9B3718AA56B8028E69 /* GoogleService-Info.plist.example in Resources */,
 				2D89A2B6672D88763469087D /* JetBrainsMono-Bold.ttf in Resources */,
 				3433EFC75CC07CD93065A1F0 /* JetBrainsMono-Regular.ttf in Resources */,
 				251ECC987D0245D3D5E87E0B /* Oswald-Bold.ttf in Resources */,
@@ -311,7 +287,6 @@
 				FA4DDE4BB0C86346543A168F /* SecretsLocal.swift.example in Resources */,
 				96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */,
 				CAF9190DE725143E36BFCD16 /* ci_post_clone.sh in Resources */,
-				378B9D800A7778391AD461BC /* linked-project.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
