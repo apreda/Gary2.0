@@ -255,16 +255,15 @@ final class BillfoldSnapshotStore {
     }
 
     func prewarmIfNeeded() async {
-        // ALL is the Billfold's default window. Warm both settled ledgers after
-        // Home has had first use of the network. SupabaseAPI's Billfold cache is
-        // shared with BillfoldView.loadData(), so opening Picks/Props or changing
-        // sports consumes memory-resident rows instead of starting a new fetch.
-        async let games: BillfoldSnapshot? = try? load(fullHistory: true)
-        async let props: [PropResult]? = try? SupabaseAPI.fetchPropResults(
+        // ALL / Picks is the default view, so warm its game ledger first. The
+        // prop ledger is much larger and starting both together makes the two
+        // requests compete for the same connection just when Billfold opens.
+        // Once Picks is memory-resident, warm Props for later tab switches.
+        _ = try? await load(fullHistory: true)
+        _ = try? await SupabaseAPI.fetchPropResults(
             since: nil,
             billfold: true
         )
-        _ = await (games, props)
     }
 
     fileprivate func load(forceRefresh: Bool = false, fullHistory: Bool = false) async throws -> BillfoldSnapshot {
@@ -14293,23 +14292,22 @@ struct BillfoldView: View {
                         to: Date()
                     ) ?? Date()
                 )
-            // Start props at the same time, but do not await them before the
-            // game-pick ledger is visible. The Props tab and HR fun lane fill
-            // in as soon as this small projected result query finishes.
-            let propTask = Task.detached(priority: .utility) {
-                try await SupabaseAPI.fetchPropResults(
-                    since: propSince,
-                    forceRefresh: forceRefresh,
-                    billfold: true
-                )
-            }
             let snapshot = try await BillfoldSnapshotStore.shared.load(forceRefresh: forceRefresh, fullHistory: wantsFull)
             await MainActor.run {
                 guard loadGeneration == billfoldLoadGeneration else { return }
                 applySnapshot(snapshot)
             }
 
-            if let props = try? await propTask.value {
+            // The visible default is Picks. Hydrate the larger Props history
+            // only after Picks has painted so it cannot delay the first frame.
+            let props = try? await Task.detached(priority: .utility) {
+                try await SupabaseAPI.fetchPropResults(
+                    since: propSince,
+                    forceRefresh: forceRefresh,
+                    billfold: true
+                )
+            }.value
+            if let props {
                 await MainActor.run {
                     guard loadGeneration == billfoldLoadGeneration else { return }
                     propResults = props
