@@ -158,13 +158,21 @@ struct ContentView: View {
             if selectedTab < 0 || selectedTab > lastValidTabIndex { selectedTab = 0 }
             loadedTabs.insert(selectedTab)
             maybeShowGaryIntro(for: selectedTab)
+            // Prepare the regular content tabs one at a time after the first
+            // frame. Their existing view state then stays alive, so a first tap
+            // does not land on a blank loading page. Billfold is excluded here:
+            // its all-time ledger has a dedicated lightweight prewarm below.
+            let initialTab = selectedTab
+            Task(priority: .utility) {
+                await prewarmContentTabs(excluding: initialTab)
+            }
             // Warm the shared live-score poll loop at launch (idempotent) so scores
             // are current on the very first screen, not only after a tab that pokes it.
             LiveScoreCache.shared.startIfNeeded()
             // Give Home's visible requests first use of the network/main actor,
-            // then warm both Billfold ledgers while the user is elsewhere. The
-            // work is background-only, but makes Picks/Props and sport switches
-            // data-ready before the Billfold is opened.
+            // then warm Billfold's default all-time Picks ledger. Props is much
+            // larger and hydrates after Billfold opens, so launch-time work never
+            // competes with the next main tab the user taps.
             Task(priority: .background) {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 await BillfoldSnapshotStore.shared.prewarmIfNeeded()
@@ -204,6 +212,20 @@ struct ContentView: View {
     private func maybeShowGaryIntro(for tab: Int) {
         guard !hasSeenGaryIntro, tab == 1 || tab == 3 else { return }
         showingGaryIntro = true
+    }
+
+    /// Mount hidden content tabs progressively instead of making the user's
+    /// first tap pay for view construction plus its network request. Staggering
+    /// keeps launch responsive and lets shared API caches absorb overlapping
+    /// Home/Winners/Picks reads.
+    private func prewarmContentTabs(excluding initialTab: Int) async {
+        for index in [0, 3, 2, 1] where index != initialTab {
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                _ = loadedTabs.insert(index)
+            }
+        }
     }
 }
 

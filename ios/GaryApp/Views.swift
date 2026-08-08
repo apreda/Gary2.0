@@ -189,6 +189,22 @@ private struct BillfoldDerivedState {
     let calibration: [BillfoldCalibrationBucket]
 }
 
+/// The values that actually change when a user taps a Billfold sport chip.
+/// Keeping this separate prevents a simple filter tap from rebuilding every
+/// all-sports series, spread table, and Top Pick calculation on the page.
+private struct BillfoldSelectionDerivedState {
+    let filteredGames: [GameResult]
+    let filteredProps: [PropResult]
+    let record: (wins: Int, losses: Int, pushes: Int)
+    let netUnits: Double
+    let streak: (label: String, value: String, positive: Bool)
+    let trend: [BillfoldTrendPoint]
+    let candles: [BillfoldCandlestick]
+    let sportPerformance: [BillfoldSportPoint]
+    let journal: BillfoldJournal
+    let calibration: [BillfoldCalibrationBucket]
+}
+
 private struct BillfoldSnapshot {
     let windowKey: String
     let refreshedAt: Date
@@ -255,15 +271,11 @@ final class BillfoldSnapshotStore {
     }
 
     func prewarmIfNeeded() async {
-        // ALL / Picks is the default view, so warm its game ledger first. The
-        // prop ledger is much larger and starting both together makes the two
-        // requests compete for the same connection just when Billfold opens.
-        // Once Picks is memory-resident, warm Props for later tab switches.
+        // ALL / Picks is the default view, so warm only its game ledger. The
+        // all-time prop ledger is much larger; decoding it a couple seconds
+        // after launch competes with whichever main tab the user opens next.
+        // BillfoldView starts that prop fetch only after the page itself opens.
         _ = try? await load(fullHistory: true)
-        _ = try? await SupabaseAPI.fetchPropResults(
-            since: nil,
-            billfold: true
-        )
     }
 
     fileprivate func load(forceRefresh: Bool = false, fullHistory: Bool = false) async throws -> BillfoldSnapshot {
@@ -1038,6 +1050,79 @@ private enum BillfoldCompute {
             worstDay: worstDay,
             maxDrawdownUnits: maxDD,
             days: Array(days.prefix(10))
+        )
+    }
+
+    /// Focused derivation for the controls users tap most often. The previous
+    /// path called `deriveState` for every sport chip, repeating unrelated
+    /// all-sports charts and ledgers before the selected numbers could update.
+    static func deriveSelectionState(
+        selectedTab: Int,
+        selectedSport: Sport,
+        timeframe: String,
+        sportTimeframe: String,
+        gameResults: [GameResult],
+        propResults: [PropResult],
+        confidenceIndex: [String: Double]
+    ) -> BillfoldSelectionDerivedState {
+        let timeframeCutoff = BillfoldView.sinceDateValueStatic(for: timeframe)
+        let sportTimeframeCutoff = BillfoldView.sinceDateValueStatic(for: sportTimeframe)
+        let filteredGames = filterGameResults(gameResults, cutoff: timeframeCutoff, selectedSport: selectedSport)
+        let filteredProps = filterPropResults(propResults, cutoff: timeframeCutoff, selectedSport: selectedSport)
+
+        let activeResults = selectedTab == 0
+            ? filteredGames.map { $0.result ?? "" }
+            : filteredProps.map { $0.result ?? "" }
+        let record = activeResults.reduce(into: (wins: 0, losses: 0, pushes: 0)) { acc, result in
+            switch result {
+            case "won": acc.wins += 1
+            case "lost": acc.losses += 1
+            case "push": acc.pushes += 1
+            default: break
+            }
+        }
+
+        let netUnits: Double
+        let streakItems: [(String?, String?)]
+        let trendItems: [(String?, Double)]
+        if selectedTab == 0 {
+            netUnits = filteredGames.reduce(0) { $0 + units(for: $1.result, odds: $1.effectiveOdds) }
+            streakItems = filteredGames.map { ($0.game_date, $0.result) }
+            trendItems = filteredGames.map { ($0.game_date, units(for: $0.result, odds: $0.effectiveOdds)) }
+        } else {
+            netUnits = filteredProps.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
+            streakItems = filteredProps.map { ($0.game_date, $0.result) }
+            trendItems = filteredProps.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) }
+        }
+
+        let trend = dailyTrend(items: trendItems)
+        let validProps = propResults.filter(isLegitPropResult)
+        let sportGames = filterGameResults(gameResults, cutoff: sportTimeframeCutoff, selectedSport: .all)
+        let sportProps = cutoffKey(sportTimeframeCutoff).map { key in
+            validProps.filter { dateKey($0.game_date) >= key }
+        } ?? validProps
+
+        return BillfoldSelectionDerivedState(
+            filteredGames: filteredGames,
+            filteredProps: filteredProps,
+            record: record,
+            netUnits: netUnits,
+            streak: streakSummary(from: streakItems),
+            trend: trend,
+            candles: dailyCandlesticks(items: trendItems),
+            sportPerformance: sportPerformance(
+                selectedTab: selectedTab,
+                selectedSport: selectedSport,
+                gameRows: sportGames,
+                propRows: sportProps.filter { !$0.isTDResult && !$0.isHRResult }
+            ),
+            journal: journal(streakItems: streakItems, trend: trend, record: record, netUnits: netUnits),
+            calibration: calibration(
+                selectedTab: selectedTab,
+                games: filteredGames,
+                props: filteredProps,
+                confidenceIndex: confidenceIndex
+            )
         )
     }
 
@@ -3323,11 +3408,9 @@ struct HomeView: View {
         let anyLive = rows.contains { $0.zone == .live }
 
         if !rows.isEmpty {
-            // Bare rule — count + drop-time state came off (founder, Aug 4
-            // round 2; the drop promise still lives in the intro sheet, the
-            // Winners stub countdown, and the Picks empty state). Live games
-            // still turn the hairline win-green.
-            HomeSectionRule(tint: anyLive ? GaryColors.win : GaryColors.gold)
+            // The countdown/marquee-to-board boundary is neutral chrome. A
+            // green rule read like a graded win and changed color mid-slate.
+            HomeSectionRule(tint: GaryColors.warmWhite)
             let leagues = Array(Set(rows.map(\.league))).sorted { a, b in
                 let ea = rows.filter { $0.league == a }.map(\.commence).min() ?? ""
                 let eb = rows.filter { $0.league == b }.map(\.commence).min() ?? ""
@@ -12661,11 +12744,11 @@ struct BillfoldView: View {
             if phase == .active { Task { await loadData() } }
         }
         .onChange(of: selectedTab) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
-        .onChange(of: selectedSport) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
+        .onChange(of: selectedSport) { _ in recomputeSelectionCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
         .onChange(of: timeframe) { _ in onTimeframeChange(); chartZoomScale = 1; chartZoomAnchor = 1 }
-        .onChange(of: sportTimeframe) { _ in onTimeframeChange() }
-        .onChange(of: spreadSport) { _ in recomputeCache() }
-        .onChange(of: topdTimeframe) { _ in onTimeframeChange() }
+        .onChange(of: sportTimeframe) { _ in onSportTimeframeChange() }
+        .onChange(of: spreadSport) { _ in recomputeSpreadCache() }
+        .onChange(of: topdTimeframe) { _ in recomputeTopPickCache() }
         .onGaryTour { verb, arg in
             if verb == "billfold", let m = ChartMode(rawValue: arg.uppercased()) {
                 withAnimation { chartMode = m }
@@ -12680,6 +12763,16 @@ struct BillfoldView: View {
     /// a full-history load — `applySnapshot` recomputes again once it lands.
     private func onTimeframeChange() {
         recomputeCache()
+        if needsFullHistory, BillfoldSnapshotStore.shared.cachedSnapshotIfFresh(fullHistory: true) == nil {
+            Task { await loadData() }
+        }
+    }
+
+    /// The By Sport window affects only the sport comparison, so keep its tap
+    /// on the focused calculation path. If the user expands to YTD/all before
+    /// full history is resident, fetch that wider snapshot in parallel.
+    private func onSportTimeframeChange() {
+        recomputeSelectionCache()
         if needsFullHistory, BillfoldSnapshotStore.shared.cachedSnapshotIfFresh(fullHistory: true) == nil {
             Task { await loadData() }
         }
@@ -12738,6 +12831,94 @@ struct BillfoldView: View {
                 cachedJournal = derived.journal
                 cachedCalibration = derived.calibration
                 loading = false
+            }
+        }
+    }
+
+    /// Sport and By-Sport timeframe taps update only the values they affect.
+    /// This keeps the button response immediate instead of rebuilding the
+    /// all-sports chart, spread analysis, and Top Pick desk each time.
+    private func recomputeSelectionCache() {
+        billfoldSecondaryGeneration += 1
+        let generation = billfoldSecondaryGeneration
+        let selectedTabSnapshot = selectedTab
+        let selectedSportSnapshot = selectedSport
+        let timeframeSnapshot = timeframe
+        let sportTimeframeSnapshot = sportTimeframe
+        let gameResultsSnapshot = gameResults
+        let propResultsSnapshot = propResults
+        let confidenceIndexSnapshot = pickConfidenceIndex
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let derived = BillfoldCompute.deriveSelectionState(
+                selectedTab: selectedTabSnapshot,
+                selectedSport: selectedSportSnapshot,
+                timeframe: timeframeSnapshot,
+                sportTimeframe: sportTimeframeSnapshot,
+                gameResults: gameResultsSnapshot,
+                propResults: propResultsSnapshot,
+                confidenceIndex: confidenceIndexSnapshot
+            )
+
+            DispatchQueue.main.async {
+                guard generation == billfoldSecondaryGeneration else { return }
+                cachedFilteredGames = derived.filteredGames
+                cachedFilteredProps = derived.filteredProps
+                cachedRecord = derived.record
+                cachedNetUnits = derived.netUnits
+                cachedStreak = derived.streak
+                cachedTrend = derived.trend
+                cachedCandles = derived.candles
+                cachedSportPerf = derived.sportPerformance
+                cachedJournal = derived.journal
+                cachedCalibration = derived.calibration
+            }
+        }
+    }
+
+    private func recomputeSpreadCache() {
+        billfoldSecondaryGeneration += 1
+        let generation = billfoldSecondaryGeneration
+        let selectedTabSnapshot = selectedTab
+        let spreadSportSnapshot = spreadSport
+        let timeframeSnapshot = timeframe
+        let gameResultsSnapshot = gameResults
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let rows = BillfoldCompute.filterGameResults(
+                gameResultsSnapshot,
+                cutoff: Self.sinceDateValueStatic(for: timeframeSnapshot),
+                selectedSport: .all
+            )
+            let result = BillfoldCompute.spreadPerf(
+                selectedTab: selectedTabSnapshot,
+                spreadSport: spreadSportSnapshot,
+                buckets: BillfoldCompute.spreadBuckets(for: spreadSportSnapshot),
+                results: rows
+            )
+            DispatchQueue.main.async {
+                guard generation == billfoldSecondaryGeneration else { return }
+                cachedSpreadPerf = result
+            }
+        }
+    }
+
+    private func recomputeTopPickCache() {
+        billfoldSecondaryGeneration += 1
+        let generation = billfoldSecondaryGeneration
+        let timeframeSnapshot = topdTimeframe
+        let lookupSnapshot = gameResultLookup
+        let topPickSnapshot = topPickCandidates
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = BillfoldCompute.topdStats(
+                timeframe: timeframeSnapshot,
+                resultLookup: lookupSnapshot,
+                topPickRows: topPickSnapshot
+            )
+            DispatchQueue.main.async {
+                guard generation == billfoldSecondaryGeneration else { return }
+                cachedTopd = result
             }
         }
     }
@@ -12941,48 +13122,43 @@ struct BillfoldView: View {
                 .animation(.snappy, value: netDollars)
                 .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
 
-            HStack(spacing: 8) {
-                Text(String(format: "ROI %+.1f%%", journal.roiPct))
-                    .font(.system(size: 14, weight: .bold).monospacedDigit())
-                    .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
-
-                Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
-                    .font(.system(size: 13, weight: .semibold, design: .default))
-                    .foregroundStyle(paper.opacity(0.85))
-
-                Text("\u{00B7}")
-                    .foregroundStyle(brass.opacity(0.5))
-
-                Text(String(format: "%+.1fu", netUnits))
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(paper.opacity(0.75))
-
-                Text("\u{00B7}")
-                    .foregroundStyle(brass.opacity(0.5))
-
-                Text(String(format: "%.0f%% win", winRate))
-                    .font(.system(size: 12, weight: .medium, design: .default))
-                    .foregroundStyle(brass)
-
-                // Fun lanes (HR bets, TDs) live on long odds — the average
-                // price belongs next to the record (founder, Jul 29:
-                // "4-30 on HR bets at an average of +585").
-                if selectedTab == 1, selectedSport == .mlbHR || selectedSport == .nflTDs,
-                   let avg = funLaneAvgOdds {
-                    Text("\u{00B7}")
-                        .foregroundStyle(brass.opacity(0.5))
-                    Text("avg +\(avg)")
-                        .font(.system(size: 12, weight: .medium).monospacedDigit())
-                        .foregroundStyle(brass)
+            VStack(spacing: 5) {
+                HStack(spacing: 9) {
+                    Text(String(format: "ROI %+.1f%%", journal.roiPct))
+                        .font(.system(size: 14, weight: .bold).monospacedDigit())
+                        .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
+                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                    Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
+                        .font(.system(size: 13, weight: .semibold, design: .default))
+                        .foregroundStyle(paper.opacity(0.85))
+                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                    Text(String(format: "%+.1fu", netUnits))
+                        .font(GaryFonts.mono(12, bold: true))
+                        .foregroundStyle(paper.opacity(0.75))
                 }
 
-                Text("\u{00B7}")
-                    .foregroundStyle(brass.opacity(0.5))
+                HStack(spacing: 9) {
+                    Text(String(format: "%.0f%% win", winRate))
+                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .foregroundStyle(brass)
+                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                    Text(timeframeLabel)
+                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .foregroundStyle(brass)
 
-                Text(timeframeLabel)
-                    .font(.system(size: 12, weight: .medium, design: .default))
-                    .foregroundStyle(brass)
+                    // Fun lanes (HR bets, TDs) live on long odds — the average
+                    // price belongs next to the record.
+                    if selectedTab == 1, selectedSport == .mlbHR || selectedSport == .nflTDs,
+                       let avg = funLaneAvgOdds {
+                        Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                        Text("avg +\(avg)")
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(brass)
+                    }
+                }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 18)
 
             // Last-10 punch row — wallet card punches, oldest → newest
             HStack(spacing: 5) {
@@ -13165,28 +13341,30 @@ struct BillfoldView: View {
                     .lineLimit(1).minimumScaleFactor(0.7)
 
                 Spacer()
+            }
 
-                // LINE ⟷ CANDLES — no bubbles: the active mode wears brass,
-                // the rest stay dim (the app-wide colored-when-active rule).
-                HStack(spacing: 14) {
-                    ForEach(ChartMode.allCases, id: \.self) { mode in
-                        Button {
-                            withAnimation(.easeOut(duration: 0.15)) { chartMode = mode }
-                            scrubDate = nil
-                        } label: {
-                            Text(mode.rawValue)
-                                .font(.system(size: 9.5, weight: .bold))
-                                .tracking(0.6)
-                                .lineLimit(1)
-                                .fixedSize()   // never wrap mid-word ("CAND LES") when the header row squeezes
-                                .foregroundStyle(chartMode == mode ? brass : ink.opacity(0.45))
-                                .frame(minHeight: 32)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+            // Keep the chart modes on their own clean rail. Packing these into
+            // the title line was technically able to fit, but made the whole
+            // header look squeezed on an iPhone portrait width.
+            HStack(spacing: 18) {
+                ForEach(ChartMode.allCases, id: \.self) { mode in
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { chartMode = mode }
+                        scrubDate = nil
+                    } label: {
+                        Text(mode.rawValue)
+                            .font(.system(size: 9.5, weight: .bold))
+                            .tracking(0.6)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .foregroundStyle(chartMode == mode ? brass : ink.opacity(0.45))
+                            .frame(minHeight: 28)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
 
             // Scrub-aware value line
             HStack(spacing: 8) {
