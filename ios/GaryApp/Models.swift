@@ -236,13 +236,13 @@ struct XIMan: Decodable {
 /// A prop-market event that already CASHED in a live game — WC goals (anytime
 /// scorer) / assists / cards; MLB homers / steals / multi-hit days / K days.
 /// Written by the live poller's events pass.
-struct LiveEvent: Decodable, Equatable {
+struct LiveEvent: Codable, Equatable {
     let k: String?         // goal | assist | card | hr | sb | hits | ks
     let p: String?         // player (LAST NAME, uppercased server-side)
     let d: String?         // detail — "38'" / "x2" / "3 HITS" / "8 KS"
 }
 
-struct LiveScore: Decodable, Equatable {
+struct LiveScore: Codable, Equatable {
     let league: String?
     let game_id: String?
     let away_abbr: String?

@@ -7754,7 +7754,6 @@ struct PremiumPicksView: View {
                                                           finalScore: shelf.settled ? propScore(for: prop) : nil,
                                                           showSportBadge: false,
                                                           alwaysShowStartTime: true,
-                                                          backHeight: UIScreen.main.bounds.height * 0.68,
                                                           premiumFinish: true)
                                     }
                                 } else {
@@ -17225,29 +17224,141 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 
+/// One literal back-face layout for both game picks and prop picks. Supplying
+/// different take/share/book actions cannot change its typography, geometry,
+/// expansion behavior, fade, border, or footer.
+private struct GaryTakeCardBack<Tail: View>: View {
+    let flipped: Bool
+    let takeText: String?
+    let shareAccessibilityLabel: String
+    let shareImages: () -> [UIImage]
+    let tail: Tail
+
+    @State private var shareItem: PickShareItem? = nil
+    @State private var copiedTake = false
+    @State private var caseExpanded = false
+
+    init(flipped: Bool,
+         takeText: String?,
+         shareAccessibilityLabel: String,
+         shareImages: @escaping () -> [UIImage],
+         @ViewBuilder tail: () -> Tail) {
+        self.flipped = flipped
+        self.takeText = takeText
+        self.shareAccessibilityLabel = shareAccessibilityLabel
+        self.shareImages = shareImages
+        self.tail = tail()
+    }
+
+    private var backFade: some View {
+        LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
+                       startPoint: .top, endPoint: .bottom)
+            .frame(height: 24)
+            .allowsHitTesting(false)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let take = takeText, !take.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 0) {
+                        Text("GARY'S TAKE")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(2.2)
+                            .foregroundStyle(GaryColors.gold)
+                        Spacer(minLength: 8)
+                        Button {
+                            UIPasteboard.general.string = take
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(.easeOut(duration: 0.15)) { copiedTake = true }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                                withAnimation(.easeIn(duration: 0.25)) { copiedTake = false }
+                            }
+                        } label: {
+                            Image(systemName: copiedTake ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .foregroundStyle(copiedTake ? GaryColors.gold : .white.opacity(0.5))
+                                .frame(width: 24, height: 18)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(copiedTake ? "Take copied" : "Copy Gary's take")
+
+                        Button {
+                            let images = shareImages()
+                            if !images.isEmpty { shareItem = PickShareItem(images: images) }
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .frame(width: 24, height: 18)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(shareAccessibilityLabel)
+                    }
+
+                    if caseExpanded {
+                        Text(take)
+                            .font(GaryFonts.text(14.5))
+                            .foregroundStyle(.white.opacity(0.88))
+                            .lineSpacing(3.5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ZStack(alignment: .bottom) {
+                            Text(take)
+                                .font(GaryFonts.text(14.5))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineSpacing(3.5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(height: 108, alignment: .top)
+                                .clipped()
+                            backFade
+                        }
+                    }
+
+                    Button {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL TAKE")
+                                .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
+                            Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            tail
+
+            HStack {
+                Spacer()
+                Text("flip ↺")
+                    .font(GaryFonts.mono(9, bold: false))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#1C1A1A"))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
+        )
+        .onChange(of: flipped) { if !$0 { caseExpanded = false } }
+        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
+    }
+}
+
 struct PickCardBack: View {
-    /// The wrapper's flip state — the back only needs the falling edge: when
-    /// the card closes, the open file folds back to the compact take so the
-    /// next flip starts fresh (expanding is a click, never inherited).
     let flipped: Bool
     let pick: GaryPick
     var gameResult: String? = nil
-    @State private var shareItem: PickShareItem? = nil
-    @State private var copiedTake = false
 
-    // The back is ONE thing now (founder, Aug 6 night): Gary's take. The
-    // sportsbook-lines and Tale-of-Tape files came off the card with the
-    // data strip — the freed room goes to a deeper preview. (The old
-    // PLAIN/ANALYSIS register toggle is long gone; the technical rationale
-    // lives backend-only as the audit trail the graders run against.)
-    /// The take preview (founder pick, option 06): a few lines, expand on tap.
-    @State private var caseExpanded = false
-
-    /// The take as shown: the plain fan register, opened directly on its
-    /// first sentence — a stored "Gary's Take" heading line is stripped
-    /// (founder, Aug 4: "straight into the rationale"; the header eyebrow
-    /// already says it). Falls back to the audited rationale only when the
-    /// plain layer never arrived (its translator is non-blocking by contract).
     private var takeText: String? {
         if var t = pick.rationale_plain?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
             for h in ["gary's take", "garys take", "gary's take:"] where t.lowercased().hasPrefix(h) {
@@ -17255,10 +17366,6 @@ struct PickCardBack: View {
                     .trimmingCharacters(in: CharacterSet(charactersIn: ":").union(.whitespacesAndNewlines))
                 break
             }
-            // The plain translator sometimes leads with a bare logistics
-            // line ("Marlins at Braves, 7:15 in Atlanta") — scene data the
-            // dossier strip and the card front already carry. Drop ONLY that
-            // leading pattern; the stored text is untouched (Aug 6 night).
             if let dot = t.firstIndex(of: "."), t.distance(from: t.startIndex, to: dot) <= 64 {
                 let first = String(t[..<dot])
                 let looksLikeMatchup = first.contains(" at ") || first.contains(" @ ")
@@ -17276,131 +17383,14 @@ struct PickCardBack: View {
             .joined(separator: "\n\n")
         return joined.isEmpty ? nil : joined
     }
-    /// Copy = exactly the prose on screen, word for word (founder, Jul 31).
-    private var takeCopyText: String { takeText ?? "" }
-
-    /// The card-colored bottom fade — the back's one truncation device.
-    private var backFade: some View {
-        LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
-                       startPoint: .top, endPoint: .bottom)
-            .frame(height: 24)
-            .allowsHitTesting(false)
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            // Nothing rides above the take (founder, Aug 6 night: "we don't
-            // need anything above The Case") — the front face already carries
-            // the pick, price, and first pitch; the back opens on the words.
-            // Copy and share sit small on the kicker line.
-            if let take = takeText {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 0) {
-                        Text("GARY'S TAKE")
-                            .font(GaryFonts.mono(9, bold: true)).tracking(2.2)
-                            .foregroundStyle(GaryColors.gold)
-                        Spacer(minLength: 8)
-                        // Copy the take VERBATIM (founder, Jul 31) —
-                        // exactly as written, pasteable word for word.
-                        Button {
-                            UIPasteboard.general.string = takeCopyText
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            withAnimation(.easeOut(duration: 0.15)) { copiedTake = true }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                                withAnimation(.easeIn(duration: 0.25)) { copiedTake = false }
-                            }
-                        } label: {
-                            Image(systemName: copiedTake ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .foregroundStyle(copiedTake ? GaryColors.gold : .white.opacity(0.5))
-                                .frame(width: 24, height: 18)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(copiedTake ? "Take copied" : "Copy Gary's take")
-
-                        Button {
-                            let images = renderPickShareImages(pick: pick, gameResult: gameResult)
-                            if !images.isEmpty { shareItem = PickShareItem(images: images) }
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.5))
-                                .frame(width: 24, height: 18)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Share this pick")
-                    }
-                    if caseExpanded {
-                        // The full take rides INLINE — the card grows to
-                        // fit it and the page scrolls; no inner scroller,
-                        // no pinned height (the height games are what
-                        // blanked pages inside the carousels).
-                        Text(take)
-                            .font(GaryFonts.text(14.5))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .lineSpacing(3.5)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        // The deep preview — five lines under the fade (the
-                        // room the lines/tape files freed up); the fade,
-                        // never an ellipsis (the truncation law).
-                        ZStack(alignment: .bottom) {
-                            Text(take)
-                                .font(GaryFonts.text(14.5))
-                                .foregroundStyle(.white.opacity(0.88))
-                                .lineSpacing(3.5)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .frame(height: 108, alignment: .top)
-                                .clipped()
-                            backFade
-                        }
-                    }
-                    Button {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL TAKE")
-                                .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
-                            Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 8, weight: .bold))
-                        }
-                        .foregroundStyle(GaryColors.gold.opacity(0.85))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            // The stamps ride BELOW the case (the mock's order — read first,
-            // decide under what you read).
-            if AppFlags.userBookEnabled {
-                TailFadeRow(pick: pick)
-            }
-
-            // Footer: just the flip cue — the file index retired with the
-            // lines/tape files (founder, Aug 6 night).
-            HStack {
-                Spacer()
-                Text("flip ↺")
-                    .font(GaryFonts.mono(9, bold: false))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
+        GaryTakeCardBack(flipped: flipped,
+                         takeText: takeText,
+                         shareAccessibilityLabel: "Share this pick",
+                         shareImages: { renderPickShareImages(pick: pick, gameResult: gameResult) }) {
+            if AppFlags.userBookEnabled { TailFadeRow(pick: pick) }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#1C1A1A"))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
-        )
-        .onChange(of: flipped) { f in
-            // Closing the card folds the take back to the preview — the next
-            // flip starts fresh; expanding is a click, never inherited.
-            if !f { caseExpanded = false }
-        }
-        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
 }
 
@@ -17459,9 +17449,6 @@ struct FlippablePropCard: View {
     /// Passed straight to the front card — Winners shows the start time on settled
     /// cards (it sorts by time), mirroring the game card.
     var alwaysShowStartTime: Bool = false
-    /// When set, the flipped back grows to at least this height — Best Bets
-    /// wants a full-page read; the default keeps the compact expansion elsewhere.
-    var backHeight: CGFloat? = nil
     /// SilverBar front for sold (Winners) props — see CompactPropRow.
     var premiumFinish: Bool = false
 
@@ -17471,11 +17458,6 @@ struct FlippablePropCard: View {
     @State private var hasEverFlipped = false
     @State private var frontH: CGFloat = CompactPickRow.uniformHeight
 
-    private var expandedH: CGFloat {
-        let base = max(frontH + 170, 330)
-        return backHeight.map { max($0, base) } ?? base
-    }
-
     var body: some View {
         ZStack {
             // Front pinned to the shared uniform height so prop cards match the
@@ -17484,17 +17466,15 @@ struct FlippablePropCard: View {
             CompactPropRow(prop: prop, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish)
                 .opacity(flipped ? 0 : 1)
 
-            // ONE back design for prop cards everywhere — the slip's back
-            // (GARY'S TAKE · The Numbers · The Read). Same cards, every page.
+            // The exact same back-face shell as game picks: same take preview,
+            // expansion control, actions, book row, flip cue and natural height.
             if flipped || hasEverFlipped {
-                PropSlipBack(props: [prop], current: .constant(prop)) {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = false }
-                }
-                .opacity(flipped ? 1 : 0)
-                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                PropSlipBack(flipped: flipped, prop: prop, gameResult: gameResult)
+                    .opacity(flipped ? 1 : 0)
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             }
         }
-        .frame(height: flipped ? expandedH : frontH)
+        .frame(height: flipped ? nil : frontH)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
@@ -18530,6 +18510,12 @@ final class LiveScoreCache: ObservableObject {
     /// keyword scan happens once per refresh, not once per card per tick).
     private var byGameId: [String: LiveScore] = [:]
     private var byMatchupKey: [String: [LiveScore]] = [:]
+    /// Finals are part of the active slate until the 6 a.m. ET roll. The live
+    /// poller may prune a completed row around wall-clock midnight, before the
+    /// permanent grading table is available; remembering finals by slate day
+    /// prevents a card that already said CASHED/LOST from reverting to pregame.
+    private var loadedSlateDate = ""
+    private static let persistedFinalsPrefix = "gary.liveScoreFinals."
 
     /// Adaptive poll cadence. While any game is live the board must feel live, so
     /// poll fast; with nothing live (all scheduled/final) back off hard — the
@@ -18556,8 +18542,9 @@ final class LiveScoreCache: ObservableObject {
                 // @MainActor: fetch suspends off-main; only the assignment (gated to
                 // real changes) resumes on main. (Fixes "Publishing from background
                 // threads" and the per-tick whole-carousel rerender — PERF#1a.)
-                let fresh = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
-                self.apply(fresh)
+                let slateDate = SupabaseAPI.todayEST()
+                let fresh = await SupabaseAPI.fetchLiveScores(date: slateDate)
+                self.apply(fresh, slateDate: slateDate)
                 if Task.isCancelled { return }
                 // Fast while live, slow when idle — derived from what's on the board.
                 let interval = fresh.contains(where: { $0.isLive }) ? self.liveInterval : self.idleInterval
@@ -18615,10 +18602,57 @@ final class LiveScoreCache: ObservableObject {
     /// rebuild the O(1) indexes alongside it. Publishing an identical array would
     /// spuriously rerender every observer (the whole PicksCarousel) on every tick.
     @MainActor
-    private func apply(_ fresh: [LiveScore]) {
-        guard fresh != scores else { return }
-        scores = fresh
+    private func apply(_ fresh: [LiveScore], slateDate: String) {
+        if loadedSlateDate != slateDate {
+            loadedSlateDate = slateDate
+            scores = persistedFinals(for: slateDate)
+            gradedFinals = [:]
+            rebuildIndexes()
+        }
+
+        // A final is monotonic within one slate: once observed, a later empty
+        // response or bogus scheduled duplicate cannot make that game un-final.
+        // A genuinely live/final replacement is still allowed to update it.
+        var stable = fresh
+        for old in scores where old.isFinal {
+            let identity = scoreIdentity(old)
+            if let i = stable.firstIndex(where: { scoreIdentity($0) == identity }) {
+                if !stable[i].isLive && !stable[i].isFinal { stable[i] = old }
+            } else {
+                stable.append(old)
+            }
+        }
+
+        persistFinals(stable.filter(\.isFinal), for: slateDate)
+        guard stable != scores else { return }
+        scores = stable
         rebuildIndexes()
+    }
+
+    private func scoreIdentity(_ score: LiveScore) -> String {
+        if let id = score.game_id, !id.isEmpty { return "id:\(id)" }
+        return [score.league, score.away_abbr, score.home_abbr]
+            .map { ($0 ?? "").uppercased() }
+            .joined(separator: "|")
+    }
+
+    private func persistedFinals(for slateDate: String) -> [LiveScore] {
+        let key = Self.persistedFinalsPrefix + slateDate
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let rows = try? JSONDecoder().decode([LiveScore].self, from: data) else { return [] }
+        return rows.filter(\.isFinal)
+    }
+
+    private func persistFinals(_ finals: [LiveScore], for slateDate: String) {
+        let defaults = UserDefaults.standard
+        let key = Self.persistedFinalsPrefix + slateDate
+        if let data = try? JSONEncoder().encode(finals) { defaults.set(data, forKey: key) }
+        // One slate is sufficient. At 6 a.m. the date changes and the previous
+        // day's persisted finals are retired with every other board surface.
+        for oldKey in defaults.dictionaryRepresentation().keys
+            where oldKey.hasPrefix(Self.persistedFinalsPrefix) && oldKey != key {
+            defaults.removeObject(forKey: oldKey)
+        }
     }
 
     @MainActor
@@ -22533,155 +22567,30 @@ extension PropPick {
 }
 
 
-/// The slip's back face — one prop's take in the game-pick back's language:
-/// gold voice header, the pick, THE NUMBERS, THE READ, tap to flip home.
-/// A little player toggle hops between the slip's reads without flipping —
-/// one flip reads the whole slip instead of packing it all into one view.
+/// A prop's back supplies prop content to the exact same shell used by
+/// PickCardBack. Keeping this wrapper intentionally tiny makes visual drift
+/// between game and prop backs impossible.
 struct PropSlipBack: View {
-    let props: [PropPick]
-    @Binding var current: PropPick?
-    let onFlipBack: () -> Void
+    let flipped: Bool
+    let prop: PropPick
+    var gameResult: String? = nil
 
-    // Optional + guarded (was `props[0]` — crashed if ever handed an empty array;
-    // App Review runs on empty/fresh states, so no force-unwraps on the back).
-    private var prop: PropPick? { current ?? props.first }
-
-    private func toggleName(_ p: PropPick) -> String {
-        let full = p.player ?? p.team ?? ""
-        return (full.split(separator: " ").last.map(String.init) ?? full).uppercased()
+    private var takeText: String? {
+        guard let raw = prop.analysis?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        let cleaned = cleanPropAnalysis(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     var body: some View {
-        if let prop { bodyContent(prop) } else { EmptyView() }
-    }
-
-    @ViewBuilder private func bodyContent(_ prop: PropPick) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text("GARY'S TAKE")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                if let m = prop.matchup, !m.isEmpty {
-                    Text(m.uppercased())
-                        .font(GaryFonts.mono(10, bold: false))
-                        .foregroundStyle(.white.opacity(0.62)).lineLimit(1).minimumScaleFactor(0.7)
-                }
-            }
-
-            if props.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(props, id: \.id) { p in
-                            let on = p.id == prop.id
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.18)) { current = p }
-                            } label: {
-                                Text(toggleName(p))
-                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
-                                    .foregroundStyle(on ? Color.black.opacity(0.85) : GaryColors.silver.opacity(0.75))
-                                    .padding(.horizontal, 10).padding(.vertical, 5)
-                                    .background(
-                                        Capsule()
-                                            .fill(on ? GaryColors.silver.opacity(0.92) : Color.white.opacity(0.05))
-                                            .overlay(Capsule().stroke(GaryColors.silver.opacity(on ? 0 : 0.35), lineWidth: 1))
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(prop.player ?? "")
-                    .font(GaryFonts.text(19, .heavy))
-                    .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer()
-                if let team = prop.team, !team.isEmpty {
-                    Text(Formatters.shortTeamName(team, league: prop.effectiveLeague).uppercased())
-                        .font(GaryFonts.text(10, .semibold))
-                        .foregroundStyle(GaryColors.silver.opacity(0.7))
-                }
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                propPickStyled(prop.slipPickText)
-                    .font(GaryFonts.mono(15, bold: true)).tracking(0.6)
-                    .foregroundStyle(GaryColors.heroAccent)
-                    .lineLimit(1).minimumScaleFactor(0.65)
-                Spacer(minLength: 6)
-                Text(Formatters.americanOdds(prop.odds))
-                    .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(GaryColors.silver.opacity(0.8))
-            }
-
-            // YOUR CALL (Aug 3) — the prop back's action block, game-back
-            // parity: the slip is where the read lands, so the call lives here.
+        GaryTakeCardBack(flipped: flipped,
+                         takeText: takeText,
+                         shareAccessibilityLabel: "Share this prop pick",
+                         shareImages: { renderPropShareImages(prop: prop, gameResult: gameResult) }) {
             if AppFlags.userBookEnabled {
                 PropTailFadeRow(prop: prop)
-                    .id(prop.id)   // slip toggles swap the prop — reload the row's bet state
             }
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let stats = prop.key_stats, !stats.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("The Numbers")
-                                .font(GaryFonts.display(15))
-                                .foregroundStyle(GaryColors.sectionHead)
-                            ForEach(Array(stats.prefix(4).enumerated()), id: \.offset) { _, s in
-                                HStack(alignment: .top, spacing: 7) {
-                                    Circle().fill(GaryColors.silver.opacity(0.7))
-                                        .frame(width: 4, height: 4).padding(.top, 7)
-                                    Text(s)
-                                        .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.85))
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                        }
-                    }
-                    if let a = prop.analysis, !a.isEmpty {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("The Read")
-                                .font(GaryFonts.display(15))
-                                .foregroundStyle(GaryColors.sectionHead)
-                            Text(cleanPropAnalysis(a))
-                                .font(GaryFonts.text(14.5)).foregroundStyle(.white.opacity(0.75))
-                                .lineSpacing(3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    // Tail room so the last line clears the fade (game-back parity).
-                    Color.clear.frame(height: 30)
-                }
-            }
-            // Scroll-affordance fade (game-back parity): the read continues
-            // below the fold — never let a hard cut look like truncation.
-            .overlay(alignment: .bottom) {
-                LinearGradient(colors: [Color(hex: "#1C1A1A").opacity(0), Color(hex: "#1C1A1A")],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 24)
-                    .allowsHitTesting(false)
-            }
-
-            Text("tap to flip back  ↺")
-                .font(GaryFonts.mono(9, bold: false)).tracking(0.6)
-                .foregroundStyle(.white.opacity(0.62))
-                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#1C1A1A"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(GaryColors.silver.opacity(0.32), lineWidth: 1)
-                )
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { onFlipBack() }
     }
 }
 
