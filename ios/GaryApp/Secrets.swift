@@ -9,6 +9,10 @@ enum Secrets {
     // sign-in sheet shows instead of the raw project subdomain. Serves the
     // full API (auth/rest/functions); the supabase.co original keeps working.
     static let supabaseURL = URL(string: "https://auth.betwithgary.ai")!
+    // REST reads do not need the OAuth callback proxy. Use Supabase's origin so
+    // a Cloudflare/custom-domain issue cannot blank every data surface while
+    // sign-in itself remains healthy.
+    static let supabaseRESTOriginURL = URL(string: "https://xuttubsfgdcjfgmskcol.supabase.co")!
 
     /// Supabase anonymous key (public, safe for client — RLS enforced server-side)
     static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1dHR1YnNmZ2RjamZnbXNrY29sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4OTY4MDQsImV4cCI6MjA1OTQ3MjgwNH0.wppXQAUHQXoD0z5wbjy93_0KYMREPufl_BCtb4Ugd40"

@@ -18799,6 +18799,9 @@ final class PropsSlateStore: ObservableObject {
     /// Picks page can surface today's matchups with a "pick drops near game
     /// time" placeholder + intel before Gary's picks actually post.
     @Published var slate: [DailySlateRow] = []
+    /// True only when today's slate request failed and no same-day last-good
+    /// snapshot exists. Distinguishes an outage from a genuine dark league day.
+    @Published var slateUnavailable = false
 
     /// The EST slate day the TODAY-state (allProps/gamePicks/slate) was loaded for.
     /// If the app sits open past the 6am ET rollover, keep-last-good would otherwise
@@ -18826,7 +18829,7 @@ final class PropsSlateStore: ObservableObject {
         guard loadedDate != today else { return }
         await MainActor.run {
             if !loadedDate.isEmpty {
-                allProps = []; gamePicks = []; slate = []
+                allProps = []; gamePicks = []; slate = []; slateUnavailable = false
                 todayGameResults = [:]; todayPropResults = [:]
                 // Also drop the yesterday-fallback so a PRIOR day's fallback can't
                 // survive the roll before the fresh fetch resolves.
@@ -18970,15 +18973,19 @@ final class PropsSlateStore: ObservableObject {
 
     private func loadGamePicks(forceRefresh: Bool) async {
         let date = SupabaseAPI.todayEST()
-        var today: [GaryPick] = []
-        if let arr = try? await SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh) {
-            today = arr.filter { !($0.pick ?? "").isEmpty }
-        }
+        // The slate is the pre-pick page's critical path. Start it alongside
+        // today's picks so an empty/slow picks table cannot postpone the 15 game
+        // placeholders users should see all morning.
+        async let todayFetch = SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh)
+        async let slateFetch = SupabaseAPI.fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh)
+        let today = ((try? await todayFetch) ?? []).filter { !(($0.pick ?? "").isEmpty) }
         // Today's full slate — every scheduled game, so the Picks page shows
         // tonight's matchups (with a "pick drops near game time" placeholder +
         // intel) before Gary's picks post.
-        let freshSlate = await SupabaseAPI.fetchDailySlate(date: date)
+        let slateResult = await slateFetch
+        let freshSlate = slateResult.rows
         if !freshSlate.isEmpty || slate.isEmpty { slate = freshSlate }   // keep-last-good
+        slateUnavailable = !slateResult.succeeded && slate.isEmpty
         let freshSports = Set(today.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
 
         var yPicks: [GaryPick] = []
@@ -20439,7 +20446,7 @@ struct PicksCarouselView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if store.loading && !hasContent {
+        if store.loading && !hasContent && !store.slateUnavailable {
             Spacer(); ProgressView().tint(GaryColors.gold); Spacer()
         } else if !hasContent {
             emptyState
@@ -20767,6 +20774,18 @@ struct PicksCarouselView: View {
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.7))
                     .pageGutter().padding(.top, 20)
+            } else if store.slateUnavailable {
+                HStack(spacing: 8) {
+                    BroadcastBar(height: 11)
+                    Text("BOARD TEMPORARILY UNAVAILABLE")
+                        .font(GaryFonts.accent(13)).tracking(0.6)
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .pageGutter().padding(.top, 20)
+                Text("Gary couldn't reach today's slate. Pull down to retry — this is a connection problem, not a dark day.")
+                    .font(GaryFonts.text(13))
+                    .foregroundStyle(GaryColors.sectionSub)
+                    .pageGutter().padding(.top, 8)
             } else if rows.isEmpty {
                 // Dark day for this sport — say it straight.
                 HStack(spacing: 8) {

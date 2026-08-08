@@ -18,10 +18,10 @@ const SYSTEM = `You are Gary, a professional sports bettor, rewriting your own p
 export async function translateRationalePlain(rationale) {
   if (typeof rationale !== 'string' || rationale.trim().length < 40) return null;
   const work = (async () => {
-    // Provider seam + one fallback (Jul 29): when the primary brain's
+    // Provider seam + full independent fallback chain: when the primary brain's
     // provider is down — the exact moment a fallback-brained pick most
     // needs its plain layer — this re-register must not die with it.
-    for (const modelName of [GAME_PICK_MODEL, DESK_FALLBACK_MODELS[0]].filter(Boolean)) {
+    for (const modelName of [...new Set([GAME_PICK_MODEL, ...DESK_FALLBACK_MODELS])].filter(Boolean)) {
       try {
         const session = await createGeminiSession({
           modelName,

@@ -378,7 +378,7 @@ struct PlayerInsightPack: Decodable {
 }
 
 // MARK: - Daily Slate (every game + opening lines, from the 5am snapshot)
-struct DailySlateRow: Decodable {
+struct DailySlateRow: Codable {
     let league: String?
     let away_team: String?
     let home_team: String?

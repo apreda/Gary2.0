@@ -17,7 +17,7 @@
  */
 import { createHash } from 'crypto';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
-import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
@@ -500,7 +500,10 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     return { parsed, audits, usage };
   };
 
-  const cascade = [GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK];
+  // Match the game-desk resilience policy: subscription primary, the other
+  // subscription provider, then the metered Gemini fallbacks. De-duplicate so
+  // an override can never retry the same exhausted model under another slot.
+  const cascade = [...new Set([GEMINI_PROPS_MODEL, ...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])];
   let pass = null;
   for (let i = 0; i < cascade.length; i++) {
     try {

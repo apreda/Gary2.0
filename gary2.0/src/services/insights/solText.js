@@ -13,19 +13,33 @@
  * write-ups get "3.6 Flash on high reasoning" — never Sol's $5/$30 again).
  */
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { DESK_FALLBACK_MODELS } from '../agentic/orchestrator/orchestratorConfig.js';
 
 export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'gemini-3.6-flash';
+export const contentModelCascade = () => [...new Set([contentModel(), ...DESK_FALLBACK_MODELS])];
 
 export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high' } = {}) {
-  const session = await createGeminiSession({
-    modelName: contentModel(),
-    systemPrompt: '',
-    tools: [],
-    thinkingLevel: effort,
-    maxOutputTokens: maxTokens,
-  });
-  const res = await sendToSessionWithRetry(session, prompt, {});
-  return res?.content || '';
+  const failures = [];
+  for (const modelName of contentModelCascade()) {
+    try {
+      const session = await createGeminiSession({
+        modelName,
+        systemPrompt: '',
+        tools: [],
+        thinkingLevel: effort,
+        maxOutputTokens: maxTokens,
+      });
+      const res = await sendToSessionWithRetry(session, prompt, {});
+      const text = res?.content || '';
+      if (!text.trim()) throw new Error('empty content response');
+      if (modelName !== contentModel()) console.warn(`[Content] provider recovered on ${modelName}`);
+      return text;
+    } catch (error) {
+      failures.push(`${modelName}: ${error?.message || error}`);
+      console.warn(`[Content] ${modelName} failed — trying the next provider: ${error?.message || error}`);
+    }
+  }
+  throw new Error(`content generation: all providers failed (${failures.join(' | ')})`);
 }
 
 export default { generateSolText };

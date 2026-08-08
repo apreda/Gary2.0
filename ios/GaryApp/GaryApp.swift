@@ -10,21 +10,35 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        // Configure Firebase (guard prevents crash on double-configure in simulator)
-        if FirebaseApp.app() == nil {
-            FirebaseApp.configure()
-        }
-        
-        // Set messaging delegate
-        Messaging.messaging().delegate = self
-        
         // Set notification center delegate
         UNUserNotificationCenter.current().delegate = self
-        
-        // Request notification permissions
-        requestNotificationPermissions(application)
+
+        // Firebase Installations raises an Objective-C exception (not a Swift
+        // Error) when a redacted/malformed API key is bundled. That exception
+        // used to abort the app before its first frame. Validate the plist first:
+        // a bad local/Xcode Cloud secret may disable push, but it can never make
+        // Gary unlaunchable again.
+        if configureFirebaseIfValid() {
+            Messaging.messaging().delegate = self
+            requestNotificationPermissions(application)
+        }
         
         return true
+    }
+
+    private func configureFirebaseIfValid() -> Bool {
+        if FirebaseApp.app() != nil { return true }
+        guard let url = Bundle.main.url(forResource: "GoogleService-Info", withExtension: "plist"),
+              let data = try? Data(contentsOf: url),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let apiKey = plist["API_KEY"] as? String,
+              apiKey.count == 39,
+              apiKey.hasPrefix("A") else {
+            print("[Firebase] Invalid or redacted GoogleService-Info.plist; push messaging disabled for this build")
+            return false
+        }
+        FirebaseApp.configure()
+        return FirebaseApp.app() != nil
     }
     
     private func requestNotificationPermissions(_ application: UIApplication) {

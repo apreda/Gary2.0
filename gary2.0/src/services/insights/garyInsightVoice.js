@@ -14,7 +14,7 @@
  * GAME_PICK_MODEL (Sol) exactly as before.
  */
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
-import { contentModel } from './solText.js';
+import { contentModel, contentModelCascade } from './solText.js';
 
 // Lanes whose detail is already Gary's prose (sourced from a pick rationale or
 // written by their own Sol pass) — rewriting them would launder better copy.
@@ -74,17 +74,27 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
       facts: r.meta?.key_stats || undefined,
     }));
 
-    const session = await createGeminiSession({
-      modelName: contentModel(),
-      systemPrompt: systemPrompt(todayLong()),
-      tools: [],
-      thinkingLevel: 'high',
-    });
-    let res = await sendToSessionWithRetry(session, theAsk(items), {});
-    let reads = parseReads(res.content);
-    if (!reads) {
-      res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
-      reads = parseReads(res.content);
+    let reads = null;
+    for (const modelName of contentModelCascade()) {
+      try {
+        const session = await createGeminiSession({
+          modelName,
+          systemPrompt: systemPrompt(todayLong()),
+          tools: [],
+          thinkingLevel: 'high',
+        });
+        let res = await sendToSessionWithRetry(session, theAsk(items), {});
+        reads = parseReads(res.content);
+        if (!reads) {
+          res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+          reads = parseReads(res.content);
+        }
+        if (!reads) throw new Error('no valid reads JSON');
+        if (modelName !== contentModel()) console.warn(`[Gary voice] provider recovered on ${modelName}`);
+        break;
+      } catch (error) {
+        console.warn(`[Gary voice] ${modelName} failed — trying the next provider: ${error?.message || error}`);
+      }
     }
     if (!reads) continue; // this chunk ships with template details
 

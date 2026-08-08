@@ -45,7 +45,7 @@ enum SupabaseAPI {
     // MARK: - Configuration
 
     private static var baseURL: URL {
-        Secrets.supabaseURL.appendingPathComponent("/rest/v1")
+        Secrets.supabaseRESTOriginURL.appendingPathComponent("/rest/v1")
     }
     
     private static var headers: [String: String] {
@@ -356,6 +356,9 @@ enum SupabaseAPI {
     
     private static func makeRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
+        // No Gary screen should spin forever when the data origin is unhealthy.
+        // Callers keep their last-good snapshots or present an honest retry state.
+        request.timeoutInterval = 15
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         return request
     }
@@ -674,18 +677,67 @@ enum SupabaseAPI {
 
     /// The full day's slate — every game + opening lines (daily_slate,
     /// written at the 5am plan step). The board exists before picks do.
-    static func fetchDailySlate(date: String) async -> [DailySlateRow] {
+    struct DailySlateFetch {
+        let rows: [DailySlateRow]
+        let succeeded: Bool
+    }
+
+    private static let dailySlateCacheKey = "gary.dailySlate.lastGood"
+    private static let dailySlateCacheDateKey = "gary.dailySlate.lastGoodDate"
+
+    private static func cachedDailySlate(date: String) -> [DailySlateRow] {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: dailySlateCacheDateKey) == date,
+              let data = defaults.data(forKey: dailySlateCacheKey),
+              let rows = try? JSONDecoder().decode([DailySlateRow].self, from: data) else { return [] }
+        return rows
+    }
+
+    private static func storeDailySlate(_ rows: [DailySlateRow], date: String) {
+        guard !rows.isEmpty, let data = try? JSONEncoder().encode(rows) else { return }
+        let defaults = UserDefaults.standard
+        defaults.set(date, forKey: dailySlateCacheDateKey)
+        defaults.set(data, forKey: dailySlateCacheKey)
+    }
+
+    static func fetchDailySlate(date: String, forceRefresh: Bool = false) async -> [DailySlateRow] {
+        await fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh).rows
+    }
+
+    static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool = false) async -> DailySlateFetch {
         let url = buildURL(table: "daily_slate", query: [
             URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,bdl_game_id,venue,spread,ml_home,ml_away,total"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "commence_time.asc")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([DailySlateRow].self, from: data) else { return [] }
-        // Defense in depth: no World Cup games on the slate when the WC feature
-        // is off — keeps a WC fixture out of every slate list and placeholder lane.
-        return rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
+        var request = makeRequest(url: url)
+        request.timeoutInterval = 12
+        // `daily_slate` is populated after the day first becomes visible. An app
+        // opened before that write can otherwise keep an empty URL-cache response
+        // even after pull-to-refresh. Always revalidate this small, day-scoped feed;
+        // an explicit refresh additionally tells every intermediary not to reuse it.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        if forceRefresh {
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                print("[fetchDailySlate] HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
+                return DailySlateFetch(rows: cachedDailySlate(date: date), succeeded: false)
+            }
+            let rows = try JSONDecoder().decode([DailySlateRow].self, from: data)
+            // Defense in depth: no World Cup games on the slate when the WC feature
+            // is off — keeps a WC fixture out of every slate list and placeholder lane.
+            let visible = rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
+            storeDailySlate(visible, date: date)
+            return DailySlateFetch(rows: visible, succeeded: true)
+        } catch {
+            print("[fetchDailySlate] error \(date): \(error.localizedDescription)")
+            return DailySlateFetch(rows: cachedDailySlate(date: date), succeeded: false)
+        }
     }
 
     /// Tomorrow's look-ahead board (tomorrow_board) — the "TOMORROW" Home state.
