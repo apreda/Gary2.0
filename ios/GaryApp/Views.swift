@@ -7302,6 +7302,12 @@ struct PremiumPicksView: View {
             StatusBarScrim()
         }
         .task { await reload() }
+        .onChange(of: selectedTab) { tab in
+            // Hidden tabs are prewarmed at launch. If that background task was
+            // interrupted, entering Winners must make a fresh attempt instead
+            // of leaving the cancelled load's empty placeholder on screen.
+            if tab == 1 { Task { await reload() } }
+        }
         .onGaryTour { verb, arg in
             switch verb {
             case "winners":
@@ -8688,6 +8694,11 @@ struct PremiumPicksView: View {
         }
 
         let entitlements = await SupabaseAPI.fetchEntitlements()
+
+        // Never commit a cancelled preload as an empty Winners board. The
+        // existing board stays intact, and the selectedTab hook above retries
+        // as soon as Winners becomes the active destination.
+        guard !Task.isCancelled else { return }
 
         await MainActor.run {
             gameResultsMap = rMap

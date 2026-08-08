@@ -1229,6 +1229,11 @@ enum SupabaseAPI {
         let nflPicks = (try? await nflTask) ?? []
         let ncaabUpcoming = (try? await ncaabUpcomingTask) ?? []
 
+        // A SwiftUI preload can be cancelled while the user changes tabs. Do
+        // not turn that cancellation into a successful empty response and
+        // poison the shared 15-second cache with "no picks".
+        guard !Task.isCancelled else { throw CancellationError() }
+
         // Filter out NFL from daily picks (they come from weekly_nfl_picks)
         let nonNFLPicks = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" }
 
