@@ -450,10 +450,10 @@ struct GaryCenteredTabBar: View {
             // page, not dock. Transparent through the frame's upper third
             // now; the dissolve happens across the icon band itself.
             LinearGradient(stops: [
-                .init(color: Color(hex: "#0B0A09").opacity(0), location: 0),
-                .init(color: Color(hex: "#0B0A09").opacity(0), location: 0.30),
-                .init(color: Color(hex: "#0B0A09").opacity(0.55), location: 0.55),
-                .init(color: Color(hex: "#0B0A09").opacity(0.95), location: 0.78),
+                .init(color: Color(hex: "#0B0A09").opacity(0.04), location: 0),
+                .init(color: Color(hex: "#0B0A09").opacity(0.14), location: 0.26),
+                .init(color: Color(hex: "#0B0A09").opacity(0.68), location: 0.54),
+                .init(color: Color(hex: "#0B0A09").opacity(0.97), location: 0.78),
                 .init(color: Color(hex: "#0B0A09"), location: 1),
             ], startPoint: .top, endPoint: .bottom)
             .ignoresSafeArea(edges: .bottom)

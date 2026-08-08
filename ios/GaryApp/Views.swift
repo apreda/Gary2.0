@@ -7270,36 +7270,38 @@ struct PremiumPicksView: View {
         ZStack {
             LiquidGlassBackground(grainDensity: 0)
 
-            ScrollViewReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    // Toggle scrolls WITH the page (unpinned) — pinning forced an
-                    // opaque fill that could never match the gradient behind it.
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        header
+            GeometryReader { viewport in
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        // Toggle scrolls WITH the page (unpinned) — pinning forced an
+                        // opaque fill that could never match the gradient behind it.
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            header
 
-                        if loading {
-                            HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
-                                .padding(.top, 80)
-                        } else if isTodayComingSoon {
-                            comingSoonState
-                        } else if !hasContent {
-                            emptyState
-                        } else {
-                            // League jump bar retired (Jul 5 design review):
-                            // styled like the GAMES/PROPS tabs one line up, it
-                            // read as a second filter row and re-said what the
-                            // shelf headers already say. Deep links still
-                            // scroll via jumpToSport. (GAMES/PROPS now ride
-                            // the single header line above.)
-                            modeContent
-                                .padding(.top, 8)
-                                .padding(.bottom, 120)
+                            if loading {
+                                HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
+                                    .padding(.top, 80)
+                            } else if isTodayComingSoon {
+                                comingSoonState
+                            } else if !hasContent {
+                                emptyState
+                            } else {
+                                // League jump bar retired (Jul 5 design review):
+                                // styled like the GAMES/PROPS tabs one line up, it
+                                // read as a second filter row and re-said what the
+                                // shelf headers already say. Deep links still
+                                // scroll via jumpToSport. (GAMES/PROPS now ride
+                                // the single header line above.)
+                                modeContent(minHeight: max(0, viewport.size.height - 210))
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 120)
+                            }
                         }
                     }
+                    .refreshable { await reload() }
+                    .onChange(of: picksFocus.focusSport) { _ in jumpToFocusSport(proxy) }
+                    .onChange(of: loading) { _ in jumpToFocusSport(proxy) }
                 }
-                .refreshable { await reload() }
-                .onChange(of: picksFocus.focusSport) { _ in jumpToFocusSport(proxy) }
-                .onChange(of: loading) { _ in jumpToFocusSport(proxy) }
             }
             StatusBarScrim()
         }
@@ -7630,7 +7632,7 @@ struct PremiumPicksView: View {
             onLedger: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 } })
     }
 
-    @ViewBuilder private var modeContent: some View {
+    @ViewBuilder private func modeContent(minHeight: CGFloat) -> some View {
         // Tighter inter-shelf rhythm (was 22) — the shelf headers already give
         // each rail vertical breathing room, so 22 over-spaced the board.
         VStack(alignment: .leading, spacing: 16) {
@@ -7682,10 +7684,12 @@ struct PremiumPicksView: View {
                         .padding(.top, 6)
                 }
                 if Self.freeLaunch {
-                    plansComingCard
+                    freeLaunchFooter
                         .padding(.top, 6)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                } else {
+                    accountRow
                 }
-                accountRow
             } else {
                 Button { withAnimation { isPremium = false } } label: {
                     Text("✓ Premium active · tap to reset preview")
@@ -7694,30 +7698,65 @@ struct PremiumPicksView: View {
                 .frame(maxWidth: .infinity).padding(.top, 12)
             }
         }
+        .frame(minHeight: minHeight, alignment: .top)
     }
 
     /// Free-launch announcement, in the exact slot the storefront will occupy.
     /// NO date promised (founder, Jul 5: free "for a good while"). Informational
     /// only: no prices and no purchase path in-app (the App Store 3.1.1 fence
     /// stays up).
-    private var plansComingCard: some View {
+    private var freeLaunchFooter: some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "The Launch", sub: "")
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Every board is free right now.")
-                    .font(GaryFonts.text(15, .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
-                Text("Gary's full card — game picks and props — is open to everyone while we launch. Paid plans come later, and you'll see them here first.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineSpacing(2)
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Every board is free right now.")
+                        .font(GaryFonts.text(15, .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                    Text("Gary's full card — game picks and props — is open to everyone while we launch. Paid plans come later, and you'll see them here first.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineSpacing(2)
+                }
+
+                Spacer(minLength: 22)
+
+                HStack(spacing: 0) {
+                    launchAccessPoint("GAME PICKS", detail: "OPEN")
+                    launchAccessPoint("PLAYER PROPS", detail: "OPEN")
+                    launchAccessPoint("ALL SPORTS", detail: "INCLUDED")
+                }
+                .padding(.vertical, 14)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                }
+
+                Spacer(minLength: 16)
+                accountRow
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .quantPanel()
             .pageGutter()
         }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func launchAccessPoint(_ label: String, detail: String) -> some View {
+        VStack(spacing: 4) {
+            Text(label)
+                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
+                .foregroundStyle(.white.opacity(0.48))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(detail)
+                .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                .foregroundStyle(GaryColors.gold)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// The All-Access upsell in the storefront's own language — a section
