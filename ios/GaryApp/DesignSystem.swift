@@ -86,6 +86,10 @@ enum GaryColors {
     /// from HubPalette's muted editorial tones. One token, no more inline hexes.
     static let win = Color(hex: "#3FB950")
     static let loss = Color(hex: "#E5484D")
+    /// An active pick that is neither covering nor losing yet. Amber reads as
+    /// "in progress" without borrowing green/red result semantics or Gary's
+    /// brand gold used for prices and calls.
+    static let sweating = Color(hex: "#F0A53A")
     /// Subtle red-ish gold for LOST result tags — signals a loss without flooding
     /// the cards with bright red (user call, Jun 16). Gold-family, warmed toward red.
     static let lostTint = Color(hex: "#C77A3A")

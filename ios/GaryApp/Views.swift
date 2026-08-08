@@ -2004,6 +2004,14 @@ struct HomeView: View {
     /// A foreground app may remain open across the cutoff. Check cheaply once a
     /// minute so the new board loads at 6am ET without requiring a relaunch.
     private let slateRolloverTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    /// Picks, grades and recap rows can land while Home stays open. This pulse
+    /// refreshes only those rolling records while Home is the active tab; live
+    /// scores keep their own faster shared poller.
+    private let rollingHomeRefreshTimer = Timer.publish(every: 90, on: .main, in: .common).autoconnect()
+    @State private var rollingHomeRefreshInFlight = false
+    /// Identifies the keyed full load currently running. The nonce makes the
+    /// cancellation defer safe if a newer load starts before the old one exits.
+    @State private var fullHomeRefreshNonce: Int? = nil
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
@@ -2162,6 +2170,14 @@ struct HomeView: View {
             if verb == "today" { selectedPhase = todayClockPhase }
         }
         .task(id: homeNonce) {
+            let taskNonce = homeNonce
+            fullHomeRefreshNonce = taskNonce
+            defer {
+                if fullHomeRefreshNonce == taskNonce { fullHomeRefreshNonce = nil }
+            }
+            // Existing content stays painted during a silent reload. The loading
+            // placeholder is only for a true first load with nothing to show.
+            if !hasHomeContent { loading = true }
             #if DEBUG
             // Lets the screenshot tooling drive the switcher:
             //   simctl launch ... --args -previewPhase live
@@ -2547,38 +2563,11 @@ struct HomeView: View {
                     loading = true
                     let allPicks = try? await picksFetch
 
-                    // Filter to TODAY's games, visible until 6am ET the next day
-                    // This matches the GaryPicksView logic for consistency
-                    let todayOnlyPicks: [GaryPick]? = allPicks?.filter { pick in
-                        guard let commenceTime = pick.commence_time else { return true }
-
-                        guard let gameDate = parseISO8601(commenceTime) else {
-                            return true
-                        }
-
-                        // Get today's date range in EST
-                        var estCalendar = Calendar.current
-                        estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-                        let now = Date()
-                        let todayStart = estCalendar.startOfDay(for: now)
-
-                        // Calculate the next 6am ET cutoff for "today's" picks.
-                        guard let tomorrowEST = estCalendar.date(byAdding: .day, value: 1, to: todayStart),
-                              let cutoffTime = estCalendar.date(bySettingHour: SupabaseAPI.slateRolloverHourET, minute: 0, second: 0, of: tomorrowEST) else {
-                            return true
-                        }
-
-                        // Get the game's date in EST
-                        let gameDayEST = estCalendar.startOfDay(for: gameDate)
-
-                        // Show pick if:
-                        // 1. Game is today (in EST), OR
-                        // 2. We haven't passed the 6am ET cutoff yet (overnight viewing).
-                        let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
-                        let isBeforeCutoff = now < cutoffTime
-                        let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart)
-
-                        return isGameToday || (isBeforeCutoff && wasGameYesterday)
+                    // `date` is already the 6 a.m.-anchored slate key. Matching
+                    // commence dates to that key keeps the finished slate visible
+                    // overnight, then cleanly removes it when the key rolls at 6.
+                    let todayOnlyPicks = allPicks.map {
+                        Self.homeVisiblePicks($0, slateDate: date)
                     }
 
                     // Select Top Pick: manual override first, then highest confidence
@@ -2651,12 +2640,168 @@ struct HomeView: View {
             // Foreground → silently re-pull picks/results/recaps (no relaunch needed).
             if phase == .active { homeNonce &+= 1 }
         }
+        .onChange(of: selectedTab) { tab in
+            // Kept-alive tabs do not rerun `.task` when selected. Refresh the
+            // small rolling payload immediately when the user comes back Home.
+            guard tab == 0, scenePhase == .active else { return }
+            Task { await refreshRollingHomeContent() }
+        }
+        .onReceive(rollingHomeRefreshTimer) { _ in
+            guard selectedTab == 0, scenePhase == .active else { return }
+            Task { await refreshRollingHomeContent() }
+        }
         .onReceive(slateRolloverTimer) { _ in
             guard scenePhase == .active, !loadedSlateDate.isEmpty,
                   loadedSlateDate != SupabaseAPI.todayEST() else { return }
             // The betting day changed while Home remained alive. Reload the
             // slate, picks, live rows, and durable grades as one date-keyed set.
             homeNonce &+= 1
+        }
+    }
+
+    /// Refresh the pieces that genuinely change during a slate without rerunning
+    /// Home's full multi-section load. This keeps new picks, finished grades and
+    /// recap cards moving while avoiding the launch/navigation work that made the
+    /// app feel heavy. Empty responses never erase last-good content.
+    @MainActor
+    private func refreshRollingHomeContent() async {
+        guard !rollingHomeRefreshInFlight, fullHomeRefreshNonce == nil else { return }
+        rollingHomeRefreshInFlight = true
+        defer { rollingHomeRefreshInFlight = false }
+
+        let date = SupabaseAPI.todayEST()
+        async let picksFetch = try? SupabaseAPI.fetchAllPicks(date: date, forceRefresh: true)
+        async let propsFetch = try? SupabaseAPI.fetchPropPicks(date: date, forceRefresh: true)
+        async let gameResultsFetch = try? SupabaseAPI.fetchRecentGameResults(limit: 200)
+        async let propResultsFetch = try? SupabaseAPI.fetchRecentPropResults(limit: 200)
+        async let recapsTodayFetch = SupabaseAPI.fetchGameRecaps(date: date)
+        async let recapsGradedFetch = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
+
+        let fetchedPicks = await picksFetch ?? []
+        let fetchedProps = await propsFetch ?? []
+        let recentGames = await gameResultsFetch ?? []
+        let recentProps = await propResultsFetch ?? []
+        let recapsToday = await recapsTodayFetch
+        let recapsGraded = await recapsGradedFetch
+
+        // The API is keyed to the 6 a.m. slate date, but keep the same defensive
+        // commence-time filter as the full Home load so a misdated row cannot leak.
+        let freshPicks = Self.homeVisiblePicks(fetchedPicks, slateDate: date)
+        if !fetchedPicks.isEmpty || todayPicks.isEmpty {
+            todayPicks = freshPicks
+            if let manual = freshPicks.first(where: { $0.is_top_pick == true }) {
+                freePick = manual
+            } else {
+                freePick = freshPicks.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
+            }
+            picksByGameId = Dictionary(
+                freshPicks.compactMap { p in p.game_id.map { (String($0), p) } },
+                uniquingKeysWith: { first, _ in first })
+        }
+
+        let freshProps = Self.homeVisibleProps(fetchedProps, slateDate: date)
+        if !fetchedProps.isEmpty || freeProp == nil {
+            freeProp = freshProps.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
+        }
+        playsOnBoard = todayPicks.count + freshProps.count
+
+        if !recentGames.isEmpty {
+            scoreByMatchup = Dictionary(
+                recentGames.compactMap { row -> (String, String)? in
+                    guard let matchup = row.matchup?.lowercased(), let score = row.final_score,
+                          !matchup.isEmpty, !score.isEmpty else { return nil }
+                    return (matchup, score)
+                }, uniquingKeysWith: { first, _ in first })
+            sheetGameResults = recentGames.filter {
+                $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
+            }
+
+            let coreProps = recentProps.filter { !$0.isHRResult }
+            let night = Self.buildLastNight(games: recentGames, props: coreProps)
+            marquee = night.story
+            cashRows = night.cashes
+            worstBeat = night.beat
+            lastNightNet = night.graded > 0 ? night.net : nil
+            lastNightRecord = night.record
+            lastNightGraded = night.graded
+            bestCashOdds = night.bestOdds
+            form = Self.buildForm(games: recentGames)
+
+            let cycleStarted = slateGames.contains {
+                parseISO8601($0.commence_time ?? "").map { $0 <= Date() } ?? false
+            }
+            let cycleRows = recentGames.filter { $0.game_date == date }
+            let gamesNight = cycleStarted
+                ? Self.buildLastNight(games: cycleRows, props: [], includeToday: true)
+                : Self.buildLastNight(games: recentGames, props: [], includeToday: false)
+            gamesNightRecord = gamesNight.record
+            gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
+            gamesNightBest = gamesNight.bestOdds
+
+            let settledDays = recentGames
+                .filter { ["won", "lost", "push"].contains(($0.result ?? "").lowercased()) }
+                .compactMap(\.game_date)
+                + coreProps
+                    .filter { ["won", "lost", "push"].contains(($0.result ?? "").lowercased()) }
+                    .compactMap(\.game_date)
+            let recapDay = Set(settledDays).max()
+            let liveRows = liveScoresNow
+            gamesLiveNow = liveRows.filter(\.isLive).count
+            if cycleStarted {
+                var w = 0, l = 0, p = 0
+                for row in cycleRows {
+                    switch (row.result ?? "").lowercased() {
+                    case "won", "win", "w": w += 1
+                    case "lost", "loss", "l": l += 1
+                    case "push", "p": p += 1
+                    default: break
+                    }
+                }
+                yesterdayRecord = (w, l, p)
+                recordBoxLabel = liveRows.contains(where: \.isLive) ? "LIVE" : "TODAY"
+                recapLabel = recordBoxLabel
+            }
+            dailyForm = Self.buildDailyFormBySport(
+                games: recentGames, live: liveRows, slateDay: date, anchor: recapDay)
+        }
+
+        if !recapsToday.isEmpty {
+            nightRecaps = recapsToday
+        } else if nightRecaps.isEmpty, !recapsGraded.isEmpty {
+            nightRecaps = recapsGraded
+        }
+        HomeHeadlinesCache.save(headlineStories)
+    }
+
+    /// Same 6 a.m.-aware filtering rule as the full Home load, factored for the
+    /// rolling refresh so an overnight board stays visible until the cutoff.
+    private static func homeVisiblePicks(_ picks: [GaryPick], slateDate: String) -> [GaryPick] {
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let slateDay = formatter.date(from: slateDate) else { return picks }
+        return picks.filter { pick in
+            guard let iso = pick.commence_time, let gameDate = parseISO8601(iso) else { return true }
+            return calendar.isDate(gameDate, inSameDayAs: slateDay)
+        }
+    }
+
+    private static func homeVisibleProps(_ props: [PropPick], slateDate: String) -> [PropPick] {
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let slateStart = formatter.date(from: slateDate).map { calendar.startOfDay(for: $0) }
+            ?? calendar.startOfDay(for: Date())
+        return props.filter { prop in
+            guard !prop.isHRLane, let iso = prop.commence_time,
+                  let gameDate = parseISO8601(iso) else { return false }
+            return gameDate >= slateStart
         }
     }
 
@@ -3076,11 +3221,11 @@ struct HomeView: View {
                 } else {
                     // Gary has a call the score hasn't settled — level on the
                     // money, sitting on the number, or a total still cooking.
-                    // That's a SWEAT, and it wears neutral gray so green and
-                    // red keep the board's color to themselves. No call on the
-                    // game means nothing to sweat: the slot stays empty.
+                    // That's a SWEAT, and it wears amber so it is distinct from
+                    // covering green, losing red and the brand gold used for calls.
+                    // No call on the game means nothing to sweat: the slot stays empty.
                     statusText = calls.isEmpty ? "" : "SWEATING"
-                    statusColor = Color.white.opacity(0.62)
+                    statusColor = GaryColors.sweating
                 }
             } else if (ls?.isFinal ?? false) || !storedRows.isEmpty {
                 // A durable grade is just as authoritative as a live-score
@@ -5233,6 +5378,8 @@ struct HeadlineFlipCard: View {
     private static let W: CGFloat = 296
     private static let H: CGFloat = 138
 
+    private var leagueAccent: Color { Sport.from(league: story.league).accentColor }
+
     private var resultColor: Color {
         story.verdict == "PUSH" ? GaryColors.gold : (story.cashed ? GaryColors.win : GaryColors.loss)
     }
@@ -5284,10 +5431,16 @@ struct HeadlineFlipCard: View {
                 // pick answered by truncating to "CARDINALS…". An ellipsis is
                 // never acceptable — the glyph moved instead.
                 HStack(spacing: 6) {
-                    Text([story.league.uppercased(), story.date]
-                            .filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(GaryFonts.kicker(9)).tracking(1.6)
-                        .foregroundStyle(.white.opacity(0.34))
+                    if !story.league.isEmpty {
+                        Text(story.league.uppercased())
+                            .font(GaryFonts.kicker(9)).tracking(1.6)
+                            .foregroundStyle(leagueAccent)
+                    }
+                    if !story.date.isEmpty {
+                        Text(story.league.isEmpty ? story.date : "· \(story.date)")
+                            .font(GaryFonts.kicker(9)).tracking(1.6)
+                            .foregroundStyle(.white.opacity(0.42))
+                    }
                     Spacer(minLength: 4)
                     if !story.bullets.isEmpty {
                         Image(systemName: "arrow.left.arrow.right")
@@ -20268,7 +20421,13 @@ private struct PicksShowcaseLock: Codable {
 
 struct PicksCarouselView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("selectedTab") private var selectedTab: Int = 0
     @StateObject private var store = PropsSlateStore()
+    /// Newly published picks and durable grades should arrive without a pull or
+    /// relaunch. Only the visible Picks tab runs this refresh; live scores retain
+    /// their own faster shared cadence.
+    private let rollingPicksRefreshTimer = Timer.publish(every: 90, on: .main, in: .common).autoconnect()
+    @State private var rollingPicksRefreshInFlight = false
     /// Today vs Yesterday — the day dropdown (user call, Jun 17) replaces the old
     /// mixed matchup row + per-tab "YESTERDAY" tags. Today shows upcoming-first
     /// matchups; Yesterday shows that day's matchups + picks with CASHED/LOST tags.
@@ -20760,6 +20919,14 @@ struct PicksCarouselView: View {
             // !hasContent, so existing data stays put while fresh rows load underneath).
             if phase == .active { Task { await store.refresh() } }
         }
+        .onChange(of: selectedTab) { tab in
+            guard tab == 3, scenePhase == .active else { return }
+            Task { await refreshRollingPicks() }
+        }
+        .onReceive(rollingPicksRefreshTimer) { _ in
+            guard selectedTab == 3, scenePhase == .active else { return }
+            Task { await refreshRollingPicks() }
+        }
         .onGaryTour { verb, arg in
             switch verb {
             case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
@@ -20768,6 +20935,14 @@ struct PicksCarouselView: View {
             default: break
             }
         }
+    }
+
+    @MainActor
+    private func refreshRollingPicks() async {
+        guard !rollingPicksRefreshInFlight, !store.loading else { return }
+        rollingPicksRefreshInFlight = true
+        defer { rollingPicksRefreshInFlight = false }
+        await store.refresh()
     }
 
     /// A cheap Equatable digest of every input the memoized game set + edge index

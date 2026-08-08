@@ -514,9 +514,28 @@ async function writeRecap(args: {
   // (recapIsStale — Jul 10 2026 fix; game_recaps has no updated_at, so this result
   // comparison is the only signal), regenerate instead of trusting the stale copy.
   const existing = await sbGet("game_recaps",
-    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&select=id,result`);
+    `game_date=eq.${gameDate}&league=eq.${encodeURIComponent(league)}&matchup=eq.${encodeURIComponent(matchup)}&select=id,result,box`);
   const stale = existing.length > 0 && recapIsStale(existing[0].result, result);
-  if (existing.length && !stale) return "exists";
+  if (existing.length && !stale) {
+    // A transient batting-stats miss used to leave a permanent runs-only recap:
+    // idempotency returned here forever, so HOMERS never appeared even after
+    // the feed recovered. Retry only the deterministic box lane on later grader
+    // passes—no model call and no headline/recap rewrite.
+    if (league === "MLB" && !existing[0].box) {
+      const mlbStats = await recapFetchMlbStats(mlbGameId, statsCache);
+      const box = recapBuildBoxLine({
+        mlbStats, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam,
+        awayScore: vScore, homeScore: hScore,
+      });
+      if (box) {
+        await fetch(`${SUPABASE_URL}/rest/v1/game_recaps?id=eq.${existing[0].id}`, {
+          method: "PATCH", headers: { ...sbHeaders, Prefer: "return=minimal" },
+          body: JSON.stringify({ box }),
+        });
+      }
+    }
+    return "exists";
+  }
 
   const mlbStats = league === "MLB" ? await recapFetchMlbStats(mlbGameId, statsCache) : null;
   const propRows = await recapFetchPropRows(gameDate, propsCache);
