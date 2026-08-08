@@ -285,7 +285,7 @@ final class BillfoldSnapshotStore {
             let defaultDerivedState = BillfoldCompute.deriveState(
                 selectedTab: 0,
                 selectedSport: .all,
-                timeframe: "7d",
+                timeframe: "all",
                 sportTimeframe: "7d",
                 spreadSport: "NBA",
                 topdTimeframe: "7d",
@@ -12274,7 +12274,7 @@ struct BillfoldView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var lastRefresh: Date?
-    @State private var timeframe = "7d"
+    @State private var timeframe = "all"
     @State private var sportTimeframe = "7d"
     @State private var spreadSport = "NBA"
     @State private var topdTimeframe = "7d"
@@ -12657,7 +12657,7 @@ struct BillfoldView: View {
     private var usesDefaultSnapshotControls: Bool {
         selectedTab == 0 &&
         selectedSport == .all &&
-        timeframe == "7d" &&
+        timeframe == "all" &&
         sportTimeframe == "7d" &&
         spreadSport == "NBA" &&
         topdTimeframe == "7d"
@@ -20246,18 +20246,32 @@ struct PicksCarouselView: View {
         g.commence ?? .distantFuture
     }
     private var topProps: [PropPick] {
-        // The selected day's props only (dropdown): Today = fresh, Yesterday = settled.
-        let dayProps = filteredProps.filter {
-            pickDay == .today ? !store.isYesterdayProp($0) : store.isYesterdayProp($0)
+        // TODAY keeps yesterday's settled recap on the landing page until the
+        // first real pick for the new board posts. Matchup pages remain scoped
+        // to today's slate and continue to show PICKS INCOMING independently.
+        let dayProps: [PropPick]
+        if pickDay == .yesterday {
+            dayProps = filteredYesterdayProps
+        } else if !filteredTodayProps.isEmpty {
+            dayProps = filteredTodayProps
+        } else {
+            dayProps = filteredYesterdayProps
         }
         return Array(dayProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
     }
-    /// The selected day's top pick — today's (fresh) or yesterday's (stamped).
+    /// The selected day's top pick, with yesterday's settled recap held on the
+    /// TODAY landing page until a fresh current-board pick exists.
     private var topGamePick: (pick: GaryPick, isYesterday: Bool)? {
-        let source = pickDay == .today ? store.gamePicks : store.yesterdayGamePicks
-        let filtered = (sport == "ALL") ? source : source.filter { ($0.league ?? "").uppercased() == sport }
-        guard let p = filtered.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first else { return nil }
-        return (p, pickDay == .yesterday)
+        let fresh = sport == "ALL"
+            ? store.gamePicks
+            : store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
+        let previous = sport == "ALL"
+            ? store.yesterdayGamePicks
+            : store.yesterdayGamePicks.filter { ($0.league ?? "").uppercased() == sport }
+        let usesPrevious = pickDay == .yesterday || fresh.isEmpty
+        let source = usesPrevious ? previous : fresh
+        guard let pick = source.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first else { return nil }
+        return (pick, usesPrevious)
     }
 
     /// Current-day candidates used only when establishing the immutable landing
