@@ -1258,6 +1258,9 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
 // whole slate on the props-lane model (bridge, $0 marginal). Publishing is
 // all-or-nothing for every game whose two probable starters are posted: an
 // incomplete response is retried per game and never overwrites a good board.
+// If only one probable is official, the page still gets an honest one-arm
+// read plus an explicit unannounced-starter sentence instead of losing the
+// entire section until a club makes its decision.
 // The facts below are the take's ONLY world — same prevent-fabrication
 // posture as the desks (data in, nothing invented).
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1278,6 +1281,30 @@ function armsFactLine(st) {
   if (st.vs_opp?.gs) bits.push(`vs tonight's opponent this season: ${st.vs_opp.gs} GS, ${st.vs_opp.ip} IP, ${st.vs_opp.er} ER`);
   if (st.rest?.days != null) bits.push(`${st.rest.days} days' rest`);
   return `${name} (${st.team}): ${bits.join('; ') || 'no season data'}`;
+}
+
+/** Honest two-sentence Arms copy while exactly one probable is still TBA. */
+function partialArmsTake(st, missingTeam) {
+  const name = st.full_name || st.name || 'The announced starter';
+  let first;
+  if (st.l3?.gs && st.l3?.ip != null && st.l3?.er != null) {
+    first = `${name} has allowed ${st.l3.er} earned runs across ${st.l3.ip} innings `
+      + `in his last ${st.l3.gs} starts${st.l3.k != null ? `, with ${st.l3.k} strikeouts` : ''}`;
+    if (st.era != null) {
+      first += `, while carrying a ${st.era.toFixed(2)} ERA`
+        + `${st.xera != null ? ` against a ${st.xera.toFixed(2)} xERA` : ''}`;
+    }
+  } else if (st.last_outing?.ip != null) {
+    const lo = st.last_outing;
+    first = `${name} worked ${lo.ip} innings with ${lo.er ?? 0} earned runs`
+      + `${lo.k != null ? ` and ${lo.k} strikeouts` : ''} in his last start`;
+  } else if (st.era != null) {
+    first = `${name} brings a ${st.era.toFixed(2)} ERA`
+      + `${st.xera != null ? ` and ${st.xera.toFixed(2)} xERA` : ''}`;
+  } else {
+    first = `${name} is the only confirmed arm in this matchup so far`;
+  }
+  return `${first}. The ${missingTeam} have not announced their starter, so that half of the matchup remains unsettled.`;
 }
 
 const ARMS_VOICE_CONTRACT = `You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system.
@@ -1307,17 +1334,31 @@ async function attachArmsTakes(board, starters) {
     })[0];
   };
   const jobs = [];
+  let partialCount = 0;
   for (const r of board) {
     if (r.league !== 'MLB') continue;
-    const a = armsFactLine(starterFor(r, r.away_abbr));
-    const h = armsFactLine(starterFor(r, r.home_abbr));
-    // A take is required once both official probables exist. Before probable
-    // pitchers are posted there is not enough grounded material to demand one.
-    if (!a || !h) continue;
+    const awayStarter = starterFor(r, r.away_abbr);
+    const homeStarter = starterFor(r, r.home_abbr);
+    const a = armsFactLine(awayStarter);
+    const h = armsFactLine(homeStarter);
+    // With neither arm posted there is still no grounded pitcher story. With
+    // exactly one, publish the known arm and state the other club's status
+    // plainly; this is not the retired quality-starts fallback.
+    if (!a && !h) continue;
+    if (!a || !h) {
+      const known = awayStarter || homeStarter;
+      const missingTeam = a ? (r.home_team || r.home_abbr) : (r.away_team || r.away_abbr);
+      r.arms_take = partialArmsTake(known, missingTeam);
+      partialCount++;
+      continue;
+    }
     const matchup = `${r.away_abbr || r.away_team} @ ${r.home_abbr || r.home_team}`;
     jobs.push({ row: r, matchup, facts: [a, h].filter(Boolean).join('\n') });
   }
-  if (!jobs.length) return;
+  if (!jobs.length) {
+    if (partialCount) console.log(`[TomorrowBoard] arms takes attached: 0 paired + ${partialCount} partial`);
+    return;
+  }
 
   const requestTakes = async (pending) => {
     const userMessage = `${pending.map((j) => `## ${j.matchup}\n${j.facts}`).join('\n\n')}
@@ -1408,7 +1449,7 @@ One entry per game listed above.`;
   if (missed.length) {
     throw new Error(`arms takes incomplete for ${missed.map((j) => j.matchup).join(', ')}`);
   }
-  console.log(`[TomorrowBoard] arms takes attached: ${jobs.length}/${jobs.length}`);
+  console.log(`[TomorrowBoard] arms takes attached: ${jobs.length}/${jobs.length} paired + ${partialCount} partial`);
 }
 
 /**

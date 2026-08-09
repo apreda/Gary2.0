@@ -22680,12 +22680,14 @@ enum GameRail {
         .bullpenFatigue, .injury, .runningGame, .situational,
     ]
 
-    /// Can this edge be a rail row: right lane, short real value, and NOT a
-    /// signed price (odds are not a stat).
+    /// Can this edge be a rail row: right lane, compact real value, and NOT a
+    /// signed price (odds are not a stat). Values such as "16.7 IP" are still
+    /// compact enough for the numeral column; the old four-character cap hid
+    /// a game's only available bullpen section.
     static func isRailEdge(_ s: Signal) -> Bool {
         guard kinds.contains(s.kind), !s.headline.isEmpty else { return false }
         let v = s.value.trimmingCharacters(in: .whitespaces)
-        guard !v.isEmpty, v.count <= 4 else { return false }
+        guard !v.isEmpty, v.count <= 8 else { return false }
         return !(v.hasPrefix("+") || v.hasPrefix("-"))
     }
 

@@ -300,6 +300,11 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
     if (schedule.length > 0 || !fetchFailed) {
       // Plan built (or genuinely no games) — snapshot the public slate for the app.
       await writeDailySlateNonFatal(dateStr);
+      // Refresh TODAY's board at the 5 AM plan build too. The snapshot was
+      // first written the prior evening, before many MLB probable starters,
+      // series results and weather fields had landed; without this refresh a
+      // thin evening row stayed thin all day even though the sources improved.
+      if (schedule.length > 0) await writeTomorrowBoardNonFatal(dateStr);
       // Also pre-assemble TOMORROW's board (daily_slate only carries today).
       await writeTomorrowBoardNonFatal(addDaysISO(dateStr, 1));
       return schedule;
