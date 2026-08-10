@@ -12,6 +12,8 @@
  * string or null (null = the line simply doesn't print).
  */
 
+import { foldName } from '../../../../utils/nameUtils.js';
+
 const MONTH_NAMES = { 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct' };
 
 /** Baseball IP notation ("5.2" = 5⅔ innings) → outs. Null-safe. */
@@ -198,4 +200,63 @@ export function earlyCareerFlag({ name, label, careerGs, seasonGs }) {
     ? `All ${cg} of his career MLB starts have come this season.`
     : `${sg} of his ${cg} career MLB starts have come this season.`;
   return `${name} (${label}): ${lead} Season-long splits and rate stats accumulate from his first MLB starts onward.`;
+}
+
+/**
+ * TEAM-CHANGE FLAGS (Aug 10 2026 — replaces the raw-stats derivation that
+ * flagged EVERY starter as "first start for [club]" from Aug 6-9).
+ *
+ * Constraints this shape encodes:
+ *   - /mlb/v1/stats rows carry NO team ids — team_name (a display-name
+ *     string) is the only club attribution, so both sides of the club join
+ *     go through foldName.
+ *   - Rows must be the chrono wrapper's (regular-season, STATUS_FINAL) —
+ *     raw fetches include spring training and inflate start counts.
+ *   - Silence beats guessing: a start row with no team_name, or a home
+ *     check with any missing _game.homeId, mutes the claim it feeds
+ *     rather than bending it.
+ *
+ * rows: getMlbPlayerGameRowsChrono rows (games_started, team_name, _game.homeId)
+ * clubId: current club's BDL team id · clubNames: current club name variants
+ */
+export function teamChangeFlags({ name, label, season, clubId, clubNames, rows }) {
+  if (!name || !label || clubId == null || !Array.isArray(rows)) return [];
+  const clubKeys = new Set((clubNames || []).map(foldName).filter(Boolean));
+  if (clubKeys.size === 0) return [];
+
+  const starts = rows.filter((r) => Number(r?.games_started) > 0);
+  if (starts.length === 0) return [];
+
+  let current = 0, other = 0, unknown = 0, homeAtVenue = 0, homeUnknown = 0;
+  for (const r of starts) {
+    const key = foldName(r?.team_name);
+    if (!key) { unknown += 1; continue; }
+    if (!clubKeys.has(key)) { other += 1; continue; }
+    current += 1;
+    const homeId = r?._game?.homeId;
+    if (homeId == null) homeUnknown += 1;
+    else if (homeId === clubId) homeAtVenue += 1;
+  }
+
+  const flags = [];
+  const total = starts.length;
+  if (current === 0 && other > 0 && unknown === 0) {
+    flags.push(`${name} (${label}): first start for ${label} — all ${total} of his ${season} starts came with another club.`);
+  }
+  if (current > 0 && other > 0 && unknown === 0) {
+    const majorityNote = other > current
+      ? ' — most of the sample is NOT from the current team or ballpark.'
+      : '.';
+    flags.push(
+      `${name} (${label}): ${current}/${total} ${season} starts with ${label}, ${other} with prior team. ` +
+      `BDL season stats / home-away splits / ERA are aggregated across both teams${majorityNote}`
+    );
+  }
+  if (current > 0 && homeUnknown === 0 && homeAtVenue <= 1) {
+    flags.push(
+      `${name} (${label}): ${homeAtVenue} home start${homeAtVenue === 1 ? '' : 's'} at current team venue this season. ` +
+      `Any "home ERA" figure is built on essentially zero sample at this park.`
+    );
+  }
+  return flags;
 }

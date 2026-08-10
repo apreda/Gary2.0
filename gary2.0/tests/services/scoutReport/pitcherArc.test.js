@@ -116,3 +116,123 @@ describe('earlyCareerFlag', () => {
     expect(earlyCareerFlag({ name: 'N', label: 'home', careerGs: 4, seasonGs: 4 })).toBeNull();
   });
 });
+
+/**
+ * TEAM-CHANGE FLAGS (Aug 10 2026 — the universal "first start for club"
+ * fabrication). /mlb/v1/stats rows carry NO team ids — only team_name — and
+ * the raw fetch included spring rows, so from Aug 6-9 every starter on every
+ * desk was flagged as debuting for a new club (Wheeler "all 18 with another
+ * club", Scherzer "all 11" vs his real 8). These pins hold the rebuilt,
+ * chrono-row + team_name–joined derivation to: silence for stay-put arms,
+ * true flags for real movers, and silence over guessing when attribution
+ * is incomplete.
+ */
+import { teamChangeFlags } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+
+const startRow = (team_name, homeId, gs = 1) =>
+  ({ team_name, games_started: gs, _game: homeId == null ? {} : { homeId } });
+
+describe('teamChangeFlags', () => {
+  const TOR = { clubId: 29, clubNames: ['Toronto Blue Jays'] };
+
+  it('stays fully silent for a pitcher whose every start is with the current club (Bieber regression)', () => {
+    const rows = [
+      startRow('Toronto Blue Jays', 29), startRow('Toronto Blue Jays', 12),
+      startRow('Toronto Blue Jays', 29), startRow('Toronto Blue Jays', 7),
+      startRow('Toronto Blue Jays', 29), startRow('Toronto Blue Jays', 3),
+      startRow('Toronto Blue Jays', 29), startRow('Toronto Blue Jays', 15),
+      startRow('Toronto Blue Jays', 22),
+    ];
+    expect(teamChangeFlags({ name: 'Shane Bieber', label: 'Blue Jays', season: 2026, ...TOR, rows })).toEqual([]);
+  });
+
+  it('folds diacritics on both sides of the team-name join', () => {
+    const rows = [startRow('Torónto Blue Jays', 29), startRow('Toronto Blue Jays', 29)];
+    expect(teamChangeFlags({ name: 'S', label: 'Blue Jays', season: 2026, ...TOR, rows })).toEqual([]);
+  });
+
+  it('prints the true debut flag when every season start came with another club', () => {
+    const rows = Array.from({ length: 23 }, (_, i) => startRow('Miami Marlins', i % 2 ? 7 : 4));
+    const flags = teamChangeFlags({
+      name: 'Jesus Luzardo', label: 'Phillies', season: 2026,
+      clubId: 22, clubNames: ['Philadelphia Phillies'], rows,
+    });
+    expect(flags).toEqual([
+      'Jesus Luzardo (Phillies): first start for Phillies — all 23 of his 2026 starts came with another club.',
+    ]);
+  });
+
+  it('prints the two-club split flag for a real mid-season mover', () => {
+    const rows = [
+      ...Array.from({ length: 18 }, () => startRow('Miami Marlins', 7)),
+      startRow('Philadelphia Phillies', 22), startRow('Philadelphia Phillies', 22),
+    ];
+    const flags = teamChangeFlags({
+      name: 'J', label: 'Phillies', season: 2026,
+      clubId: 22, clubNames: ['Philadelphia Phillies'], rows,
+    });
+    expect(flags).toEqual([
+      'J (Phillies): 2/20 2026 starts with Phillies, 18 with prior team. BDL season stats / home-away splits / ERA are aggregated across both teams — most of the sample is NOT from the current team or ballpark.',
+    ]);
+  });
+
+  it('omits the "most of the sample" claim when the current club holds the majority', () => {
+    const rows = [
+      ...Array.from({ length: 14 }, () => startRow('Philadelphia Phillies', 22)),
+      ...Array.from({ length: 3 }, () => startRow('Miami Marlins', 7)),
+    ];
+    const [flag, ...rest] = teamChangeFlags({
+      name: 'J', label: 'Phillies', season: 2026,
+      clubId: 22, clubNames: ['Philadelphia Phillies'], rows,
+    });
+    expect(rest).toEqual([]);
+    expect(flag).toBe('J (Phillies): 14/17 2026 starts with Phillies, 3 with prior team. BDL season stats / home-away splits / ERA are aggregated across both teams.');
+  });
+
+  it('ignores relief rows — current-club relief work does not negate a first start', () => {
+    const rows = [
+      ...Array.from({ length: 10 }, () => startRow('Miami Marlins', 7)),
+      startRow('Boston Red Sox', 2, 0), startRow('Boston Red Sox', 8, 0),
+    ];
+    const flags = teamChangeFlags({
+      name: 'R', label: 'Red Sox', season: 2026,
+      clubId: 2, clubNames: ['Boston Red Sox'], rows,
+    });
+    expect(flags).toEqual([
+      'R (Red Sox): first start for Red Sox — all 10 of his 2026 starts came with another club.',
+    ]);
+  });
+
+  it('chooses silence over "another club" when any start row lacks a team name', () => {
+    const rows = [...Array.from({ length: 7 }, () => startRow('Miami Marlins', 7)), startRow(null, 7)];
+    expect(teamChangeFlags({
+      name: 'U', label: 'Phillies', season: 2026,
+      clubId: 22, clubNames: ['Philadelphia Phillies'], rows,
+    })).toEqual([]);
+  });
+
+  it('prints the thin-home-sample flag only when home attribution is complete', () => {
+    const oneHome = [
+      startRow('Philadelphia Phillies', 22),
+      ...Array.from({ length: 11 }, () => startRow('Philadelphia Phillies', 7)),
+    ];
+    expect(teamChangeFlags({
+      name: 'H', label: 'Phillies', season: 2026,
+      clubId: 22, clubNames: ['Philadelphia Phillies'], rows: oneHome,
+    })).toEqual([
+      'H (Phillies): 1 home start at current team venue this season. Any "home ERA" figure is built on essentially zero sample at this park.',
+    ]);
+    const missingHomeIds = oneHome.map((r, i) => (i === 3 ? startRow('Philadelphia Phillies', null) : r));
+    expect(teamChangeFlags({
+      name: 'H', label: 'Phillies', season: 2026,
+      clubId: 22, clubNames: ['Philadelphia Phillies'], rows: missingHomeIds,
+    })).toEqual([]);
+  });
+
+  it('is null-safe: no rows, no club names, no club id, no name → no flags', () => {
+    expect(teamChangeFlags({ name: 'X', label: 'L', season: 2026, clubId: 1, clubNames: ['A'], rows: [] })).toEqual([]);
+    expect(teamChangeFlags({ name: 'X', label: 'L', season: 2026, clubId: 1, clubNames: [], rows: [startRow('A', 1)] })).toEqual([]);
+    expect(teamChangeFlags({ name: 'X', label: 'L', season: 2026, clubId: null, clubNames: ['A'], rows: [startRow('A', 1)] })).toEqual([]);
+    expect(teamChangeFlags({ name: '', label: 'L', season: 2026, clubId: 1, clubNames: ['A'], rows: [startRow('A', 1)] })).toEqual([]);
+  });
+});

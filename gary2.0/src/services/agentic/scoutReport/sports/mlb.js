@@ -31,7 +31,7 @@ import {
   getPitcherMonthSplits,
   getPitcherCareerProfile,
 } from '../../../mlbStatsApiService.js';
-import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion } from './pitcherArc.js';
+import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
@@ -555,7 +555,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // them — he'll read the count and apply normal judgment.
   // ═══════════════════════════════════════════════════════════════════
   const smallSampleFlags = [];
-  await Promise.all([['home', homeTeam, homeTeamBdlId], ['away', awayTeam, awayTeamBdlId]].map(async ([side, label, currentTeamBdlId]) => {
+  await Promise.all([['home', homeTeam, homeTeamBdlId, homeBdlTeam], ['away', awayTeam, awayTeamBdlId, awayBdlTeam]].map(async ([side, label, currentTeamBdlId, bdlTeam]) => {
     const pitcher = probablePitchersData?.[side];
     const stats = pitcherStats?.[side];
     // ARC SAMPLE FLAGS (Aug 4 2026, the Bieber/Chandler autopsy): layoff
@@ -607,50 +607,26 @@ export async function buildMlbScoutReport(game, options = {}) {
     const pitcherId = stats?.player?.id;
     if (!pitcher?.fullName || !pitcherId) return;
 
-    let games;
+    // Chrono rows, not raw getMlbGameStats: /mlb/v1/stats rows are unordered,
+    // include spring training, and carry no team ids (team_name only) — the
+    // raw derivation here flagged EVERY starter as "first start for [club]"
+    // on all desks Aug 6-9 and inflated start counts with spring rows.
+    let rows;
     try {
-      games = await ballDontLieService.getMlbGameStats({ playerIds: [pitcherId], seasons: [season] });
+      rows = await ballDontLieService.getMlbPlayerGameRowsChrono(pitcherId, season);
     } catch (_) { return; }
-    if (!Array.isArray(games) || games.length === 0) return;
-
-    // Group starts by team_id to detect mid-season changes
-    const teamCounts = new Map();
-    let homeStartsAtCurrentVenue = 0;
-    for (const g of games) {
-      const tid = g.team?.id ?? g.team_id;
-      if (tid == null) continue;
-      teamCounts.set(tid, (teamCounts.get(tid) || 0) + 1);
-      // Detect home starts at current team venue (pitcher pitching at his own home park)
-      const isHome = (g.is_home === true) || (g.home_team_id != null && g.home_team_id === tid);
-      if (isHome && tid === currentTeamBdlId) homeStartsAtCurrentVenue += 1;
-    }
-
-    const totalStarts = games.length;
-    const currentTeamStarts = currentTeamBdlId != null ? (teamCounts.get(currentTeamBdlId) || 0) : 0;
-
-    // TONIGHT'S DEBUT (Aug 5 night, the Taillon class): every season start
-    // came with another club and tonight is his first for this one — the
-    // state the DFA/trade lore keys on, as a plain fact.
-    if (currentTeamBdlId != null && totalStarts > 0 && currentTeamStarts === 0) {
-      smallSampleFlags.push(
-        `${pitcher.fullName} (${label}): first start for ${label} — all ${totalStarts} of his ${season} starts came with another club.`
-      );
-    }
-    if (teamCounts.size >= 2 && currentTeamBdlId != null) {
-      const otherStarts = totalStarts - currentTeamStarts;
-      smallSampleFlags.push(
-        `${pitcher.fullName} (${label}): ${currentTeamStarts}/${totalStarts} ${season} starts with ${label}, ${otherStarts} with prior team. ` +
-        `BDL season stats / home-away splits / ERA are aggregated across both teams — most of the sample is NOT from the current team or ballpark.`
-      );
-    }
-
-    // Home-debut / tiny home sample at current venue
-    if (currentTeamBdlId != null && homeStartsAtCurrentVenue <= 1 && currentTeamStarts > 0) {
-      smallSampleFlags.push(
-        `${pitcher.fullName} (${label}): ${homeStartsAtCurrentVenue} home start${homeStartsAtCurrentVenue === 1 ? '' : 's'} at current team venue this season. ` +
-        `Any "home ERA" figure is built on essentially zero sample at this park.`
-      );
-    }
+    smallSampleFlags.push(...teamChangeFlags({
+      name: pitcher.fullName,
+      label,
+      season,
+      clubId: currentTeamBdlId,
+      clubNames: [
+        bdlTeam?.display_name,
+        bdlTeam?.full_name,
+        [bdlTeam?.location, bdlTeam?.name].filter(Boolean).join(' '),
+      ],
+      rows,
+    }));
   })).catch(() => {});
 
   const smallSampleFlagsSection = smallSampleFlags.length
