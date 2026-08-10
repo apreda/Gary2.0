@@ -293,20 +293,10 @@ export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
  * matchup — a finished set never wears the tag. Null-safe: no games, null.
  */
 export function computeMlbRecentSeriesForm(games, teamNick, maxSeries = 4, ongoingOppNick = null) {
-  const rows = (Array.isArray(games) ? games : [])
-    .filter(g => g?.teams?.home?.team?.name && g?.teams?.away?.team?.name);
-  if (!rows.length || !teamNick) return null;
+  const series = groupGamesIntoSeries(games, teamNick);
+  if (!series.length) return null;
   const word = String(teamNick).toLowerCase().split(' ').pop();
   const sideOf = (g) => ((g.teams.home.team.name || '').toLowerCase().endsWith(word) ? 'home' : 'away');
-  const series = [];
-  for (const g of rows) {
-    const side = sideOf(g);
-    const opp = side === 'home' ? g.teams.away.team.name : g.teams.home.team.name;
-    const home = side === 'home';
-    const last = series[series.length - 1];
-    if (last && last.opp === opp && last.home === home) last.games.push(g);
-    else series.push({ opp, home, games: [g] });
-  }
   const oppWord = ongoingOppNick ? String(ongoingOppNick).toLowerCase().split(' ').pop() : null;
   const recent = series.slice(-maxSeries);
   return recent.map((s, i) => {
@@ -325,4 +315,96 @@ export function computeMlbRecentSeriesForm(games, teamNick, maxSeries = 4, ongoi
       : s.opp.split(' ').pop();
     return `${s.home ? 'vs' : '@'} ${nick} ${w}-${l}${ongoing ? ' (ongoing)' : ''}`;
   }).join(' · ');
+}
+
+/** Shared series grouping: a club's games split into series runs (opponent
+ *  or venue change = new run). Used by the form line and the situational
+ *  layer so "a series" means the same thing everywhere. */
+export function groupGamesIntoSeries(games, teamNick) {
+  const rows = (Array.isArray(games) ? games : [])
+    .filter(g => g?.teams?.home?.team?.name && g?.teams?.away?.team?.name);
+  if (!rows.length || !teamNick) return [];
+  const word = String(teamNick).toLowerCase().split(' ').pop();
+  const sideOf = (g) => ((g.teams.home.team.name || '').toLowerCase().endsWith(word) ? 'home' : 'away');
+  const series = [];
+  for (const g of rows) {
+    const side = sideOf(g);
+    const opp = side === 'home' ? g.teams.away.team.name : g.teams.home.team.name;
+    const home = side === 'home';
+    const last = series[series.length - 1];
+    if (last && last.opp === opp && last.home === home) last.games.push(g);
+    else series.push({ opp, home, games: [g] });
+  }
+  return series;
+}
+
+const shortMonthDay = (iso) => {
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? String(iso).slice(0, 10)
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+};
+
+/**
+ * SEASON SERIES, GROUPED (founder, Aug 10: "Phillies won the series back in
+ * June" instead of nine raw dated lines — familiarity, not a mandate). The
+ * same meetings the season-series tally uses, grouped into series (venue
+ * flip or a >3-day gap = a new set), each tallied with its dates.
+ */
+export function computeMlbSeasonSeriesGroups(seasonIndex, homeBdlId, awayBdlId, homeTeam, awayTeam) {
+  if (!seasonIndex || typeof seasonIndex.entries !== 'function' || !homeBdlId || !awayBdlId) return null;
+  const meetings = [];
+  for (const [, g] of seasonIndex.entries()) {
+    const pair = (g.homeId === homeBdlId && g.awayId === awayBdlId) ||
+                 (g.homeId === awayBdlId && g.awayId === homeBdlId);
+    if (!pair) continue;
+    if (!/final/i.test(String(g.status || ''))) continue;
+    if (g.homeRuns == null || g.awayRuns == null) continue;
+    meetings.push(g);
+  }
+  if (!meetings.length) return null;
+  meetings.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const groups = [];
+  for (const g of meetings) {
+    const venue = g.homeId === homeBdlId ? 'home' : 'away';
+    const last = groups[groups.length - 1];
+    const gapDays = last
+      ? Math.round((new Date(`${toEtDate(g.date)}T12:00:00Z`) - new Date(`${toEtDate(last.games[last.games.length - 1].date)}T12:00:00Z`)) / 86400000)
+      : 99;
+    if (last && last.venue === venue && gapDays <= 3) last.games.push(g);
+    else groups.push({ venue, games: [g] });
+  }
+  return groups.map(gr => {
+    let hw = 0, aw = 0;
+    for (const g of gr.games) {
+      const hosted = g.homeId === homeBdlId;
+      const hr = hosted ? g.homeRuns : g.awayRuns;
+      const ar = hosted ? g.awayRuns : g.homeRuns;
+      if (hr > ar) hw++; else aw++;
+    }
+    const first = shortMonthDay(toEtDate(gr.games[0].date));
+    const last = shortMonthDay(toEtDate(gr.games[gr.games.length - 1].date));
+    const span = first === last ? first : `${first}–${last}`;
+    const result = hw === aw ? `split ${hw}-${aw}` : (hw > aw ? `${homeTeam} won ${hw}-${aw}` : `${awayTeam} won ${aw}-${hw}`);
+    return `${span} at ${gr.venue === 'home' ? homeTeam : awayTeam} — ${result}`;
+  });
+}
+
+/**
+ * SITUATIONALLY, GAME BY GAME (founder GO, Aug 10): per-game RISP, LOB,
+ * one-run flag, and pen events with the arm NAMED — "if the same guy
+ * fucked them 3 games out of 7," the name is on every line. Rows arrive
+ * from the official boxscore; a row with nothing to say prints nothing.
+ */
+export function situationalSeriesLine(label, rows) {
+  const parts = (rows || []).filter(Boolean).map(r => {
+    const bits = [];
+    if (r.risp) bits.push(`RISP ${r.risp}`);
+    if (r.lob != null) bits.push(`${r.lob} LOB`);
+    if (r.oneRun) bits.push('one-run game');
+    const pens = (r.penEvents || [])
+      .map(p => `${p.name}${p.note ? ` ${p.note}` : ''}${p.er ? ` ${p.er} ER` : ''}`);
+    if (pens.length) bits.push(`pen: ${pens.join(', ')}`);
+    return bits.length ? `${r.date}: ${bits.join(', ')}` : null;
+  }).filter(Boolean);
+  return parts.length ? `${label}: ${parts.join(' · ')}` : null;
 }

@@ -32,7 +32,7 @@ import {
 } from '../../../mlbStatsApiService.js';
 import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbRecentSeriesForm, toEtDate } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
@@ -780,6 +780,94 @@ export async function buildMlbScoutReport(game, options = {}) {
       }
     }
     return entries.join('\n\n');
+  })();
+
+  // SITUATIONAL BOXSCORE (founder GO, Aug 10 — "what actually happens in
+  // the games"): per-game team RISP, LOB, and the pen arms with decision
+  // notes, from the official boxscore. Finals are immutable → 7d cache.
+  const fetchGameSituational = async (gamePk) => {
+    if (!gamePk) return null;
+    return await getCachedOrFetch(`mlb_game_situ_${gamePk}`, async () => {
+      const resp = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`);
+      if (!resp.ok) return null;
+      const j = await resp.json();
+      const side = (s) => {
+        const t = j?.teams?.[s];
+        if (!t) return null;
+        let risp = null;
+        for (const blk of t.info || []) {
+          for (const f of blk.fieldList || []) {
+            if (f.label === 'Team RISP') risp = String(f.value || '').replace(/\.$/, '');
+          }
+        }
+        // pitchers[] is appearance order — everyone after the first arm is
+        // the pen (an opener's bulk guy lands here too; the note says what
+        // each appearance actually was).
+        const pen = (t.pitchers || []).slice(1).map((pid) => {
+          const p = t.players?.[`ID${pid}`];
+          const st = p?.stats?.pitching || {};
+          return {
+            name: String(p?.person?.fullName || '?').split(' ').pop(),
+            note: st.note || null,
+            er: st.earnedRuns ?? null,
+          };
+        });
+        return { name: t.team?.name || '', lob: t.teamStats?.batting?.leftOnBase ?? null, risp, pen };
+      };
+      return { away: side('away'), home: side('home') };
+    }, 7 * 24 * 60).catch(() => null);
+  };
+
+  // THIS SERIES + LAST SERIES, SITUATIONALLY (founder GO, Aug 10): the
+  // series grain baseball is played in, game by game, arms named. A game
+  // with no boxscore, or a club with no rows, simply prints nothing.
+  const situationalBlock = await (async () => {
+    try {
+      const fmtD = (iso) => {
+        const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
+        return Number.isNaN(d.getTime()) ? String(iso).slice(0, 10)
+          : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      };
+      const rowsFor = async (games, nick) => {
+        const word = nick.toLowerCase().split(' ').pop();
+        const out = [];
+        for (const g of (games || []).slice(-3)) {
+          if (!g?.gamePk) continue;
+          const box = await fetchGameSituational(g.gamePk);
+          if (!box) continue;
+          const us = (box.home?.name || '').toLowerCase().endsWith(word) ? box.home : box.away;
+          if (!us) continue;
+          const mySide = (g.teams?.home?.team?.name || '').toLowerCase().endsWith(word) ? 'home' : 'away';
+          const myRuns = g.teams?.[mySide]?.score;
+          const theirRuns = g.teams?.[mySide === 'home' ? 'away' : 'home']?.score;
+          const oneRun = myRuns != null && theirRuns != null && Math.abs(myRuns - theirRuns) === 1;
+          const penEvents = (us.pen || []).filter(p => p.note || (Number(p.er) || 0) > 0);
+          out.push({ date: fmtD(g.officialDate || g.gameDate), risp: us.risp, lob: us.lob, oneRun, penEvents });
+        }
+        return out;
+      };
+      const nickOf = (name) => String(name || '').split(' ').pop();
+      const lines = [];
+      for (const [games, nick, oppNick] of [[homeRecentGames, homeTeam, awayTeam], [awayRecentGames, awayTeam, homeTeam]]) {
+        const groups = groupGamesIntoSeries(games, nick);
+        const cur = groups[groups.length - 1] || null;
+        const prev = groups[groups.length - 2] || null;
+        const oppWord = oppNick.toLowerCase().split(' ').pop();
+        const curIsTonight = cur && cur.opp.toLowerCase().endsWith(oppWord);
+        if (curIsTonight) {
+          const l1 = situationalSeriesLine(`${nick}, this series`, await rowsFor(cur.games, nick));
+          if (l1) lines.push(l1);
+          if (prev) {
+            const l2 = situationalSeriesLine(`${nick}, last series (${prev.home ? 'vs' : '@'} ${nickOf(prev.opp)})`, await rowsFor(prev.games, nick));
+            if (l2) lines.push(l2);
+          }
+        } else if (cur) {
+          const l = situationalSeriesLine(`${nick}, last series (${cur.home ? 'vs' : '@'} ${nickOf(cur.opp)})`, await rowsFor(cur.games, nick));
+          if (l) lines.push(l);
+        }
+      }
+      return lines.join('\n');
+    } catch { return ''; }
   })();
 
   // RECENT FORM, SERIES-SHAPED (founder, Aug 10): windows cut at series
@@ -1585,6 +1673,10 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // Season head-to-head — computed from the cached season index, zero calls.
   const seasonSeries = computeMlbSeasonSeries(seasonIndex, homeTeamBdlId, awayTeamBdlId, homeTeam, awayTeam);
+  // Grouped by set (founder, Aug 10): "won the series back in June" beats
+  // nine raw dated lines — same meetings, series-shaped. Falls back to the
+  // raw dated list when grouping has nothing.
+  const seasonSeriesGroups = computeMlbSeasonSeriesGroups(seasonIndex, homeTeamBdlId, awayTeamBdlId, homeTeam, awayTeam);
 
   // (Historic head-to-head, prior 3 seasons — REMOVED, founder ruling
   // Aug 10: no prior-season numbers on the desk. The 2026 season series
@@ -1667,7 +1759,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     awayShape ? `${awayTeam}: ${awayShape.line}` : null,
   ].filter(Boolean).join('\n');
   const seasonSeriesBlock = seasonSeries
-    ? `\n${seasonSeries.line}\n${seasonSeries.results.map(r => `  ${r}`).join('\n')}`
+    ? `\n${seasonSeries.line}\n${(seasonSeriesGroups || seasonSeries.results).map(r => `  ${r}`).join('\n')}`
     : '';
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1848,7 +1940,7 @@ ${recentPerformanceSection || 'No recent performance data.'}
 
 
 ═══ SERIES STATE ═══
-${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}
+${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}${situationalBlock ? `\n\nSituationally, game by game (team RISP, runners left on, pen events):\n${situationalBlock}` : ''}
 
 ${recentSeriesBlock ? `Recent series:\n${recentSeriesBlock}\n\n` : ''}Recent results:
 ${recentResults}
