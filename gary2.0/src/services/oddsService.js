@@ -281,6 +281,49 @@ const computeWindow = (sport) => {
   return { windowStart, windowEnd, todayEstStr };
 };
 
+/**
+ * SLATE GUARD (founder GO, Aug 10 2026 — recurring ET-date class, 7th bite):
+ * BDL's dates[] param is UTC-day based, so yesterday's late games bleed into
+ * today's fetch while tonight's West-Coast games genuinely belong. Three
+ * rules, all fail-open toward keeping real games:
+ *   1. ET DATE: a row whose parseable start falls on the wrong ET date goes.
+ *      A bare date string is the feed's own date claim — compared directly.
+ *      No/unparseable start: the row STAYS (never drop a game on parse doubt).
+ *   2. STALE CORPSE: a game that started 6+ hours ago is not tonight's slate
+ *      no matter what the feed says (the frozen -10000 row).
+ *   3. DEDUPE: same feed id, or same matchup at the same start time, prints
+ *      once. Real doubleheaders differ by start time and both survive.
+ */
+export function filterSlateGames(games, dates, now = Date.now()) {
+  const seenIds = new Set();
+  const seenSlots = new Set();
+  const out = [];
+  for (const g of games || []) {
+    if (!g || g.id == null) continue;
+    if (seenIds.has(g.id)) continue;
+    seenIds.add(g.id);
+    const raw = g.commence_time != null ? String(g.commence_time) : '';
+    let etDate = null;
+    let startMs = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      etDate = raw;
+    } else if (raw) {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) {
+        etDate = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        startMs = d.getTime();
+      }
+    }
+    if (etDate && Array.isArray(dates) && dates.length && !dates.includes(etDate)) continue;
+    if (startMs != null && now - startMs > 6 * 60 * 60 * 1000) continue;
+    const slot = `${String(g.away_team || '').toLowerCase()}@${String(g.home_team || '').toLowerCase()}|${raw || g.id}`;
+    if (seenSlots.has(slot)) continue;
+    seenSlots.add(slot);
+    out.push(g);
+  }
+  return out;
+}
+
 export const oddsService = {
   // getCompletedGamesByDate removed — function was deleted in Round 10
 
@@ -370,15 +413,11 @@ export const oddsService = {
         return [];
       }
 
-      // Deduplicate games
-      const seen = new Set();
-      const unique = [];
-      for (const g of combined) {
-        if (!g || g.id == null) continue;
-        if (seen.has(g.id)) continue;
-        seen.add(g.id);
-        unique.push(g);
-      }
+      // ET-date + staleness + dedupe guard at the SOURCE (founder GO,
+      // Aug 10 — the frozen -10000 Astros@Padres corpse and duplicate
+      // matchup rows survived to the raw list; downstream nets caught them,
+      // but the ET-date law belongs here).
+      const unique = filterSlateGames(combined, dates);
 
       console.log(`[Odds Service] ${sport}: Found ${unique.length} games for today`)
 
