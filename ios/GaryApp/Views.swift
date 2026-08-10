@@ -22402,6 +22402,12 @@ fileprivate struct ScoutTrioData {
     let homeL10: String?
     let awayStreak: String?         // "W3"
     let homeStreak: String?
+    let awayHomeRunsL5: Int?
+    let homeHomeRunsL5: Int?
+    let awayBullpenERAL14: Double?
+    let homeBullpenERAL14: Double?
+    let awayRunDiffL10: Int?
+    let homeRunDiffL10: Int?
     let venue: String?
     let tempF: Int?
     let windMph: Int?
@@ -22458,6 +22464,11 @@ fileprivate struct ScoutTrioData {
         let fh = board?.form?.first { $0.abbr == hAb || matches($0.team, homeSide) }
         awayL10 = fa?.l10; homeL10 = fh?.l10
         awayStreak = fa?.streak; homeStreak = fh?.streak
+        let ra = board?.run_profile?.first { $0.abbr == aAb || matches($0.team, awaySide) }
+        let rh = board?.run_profile?.first { $0.abbr == hAb || matches($0.team, homeSide) }
+        awayHomeRunsL5 = ra?.home_runs_l5; homeHomeRunsL5 = rh?.home_runs_l5
+        awayBullpenERAL14 = ra?.bullpen_era_l14; homeBullpenERAL14 = rh?.bullpen_era_l14
+        awayRunDiffL10 = ra?.run_diff_l10; homeRunDiffL10 = rh?.run_diff_l10
 
         let w = board?.weather?.first {
             ($0.away_abbr == aAb && $0.home_abbr == hAb) || matches($0.matchup, matchup)
@@ -22741,41 +22752,6 @@ fileprivate struct GameH2HSection: View {
     }
 }
 
-/// What the game page's Big Numbers rail takes, and therefore what the intel
-/// list below it must NOT repeat. One definition, read by both (founder,
-/// Aug 6 — the two surfaces were each guessing and the page said things twice).
-enum GameRail {
-    /// The lanes the rail speaks. Deliberately excludes .hrThreat (the HR fun
-    /// lane — an odds value and a name-only headline), .h2h (its own ledger
-    /// section), .firstInning (NRFI came off the page) and .starterForm (THE
-    /// ARMS carries the pitcher in full: "all i didnt want there was more
-    /// pitcher data"). The hitter and team lanes stay.
-    static let kinds: Set<SignalKind> = [
-        .hot, .cold, .platoon, .streak, .teamRecord,
-        .bullpenFatigue, .injury, .runningGame, .situational,
-    ]
-
-    /// Can this edge be a rail row: right lane, compact real value, and NOT a
-    /// signed price (odds are not a stat). Values such as "16.7 IP" are still
-    /// compact enough for the numeral column; the old four-character cap hid
-    /// a game's only available bullpen section.
-    static func isRailEdge(_ s: Signal) -> Bool {
-        guard kinds.contains(s.kind), !s.headline.isEmpty else { return false }
-        let v = s.value.trimmingCharacters(in: .whitespaces)
-        guard !v.isEmpty, v.count <= 8 else { return false }
-        return !(v.hasPrefix("+") || v.hasPrefix("-"))
-    }
-
-    /// The three the rail will actually draw, in its own order.
-    static func chosenIDs(_ edges: [Signal]) -> Set<UUID> {
-        var out = Set<UUID>()
-        for s in edges where out.count < 3 {
-            if isRailEdge(s) { out.insert(s.id) }
-        }
-        return out
-    }
-}
-
 fileprivate extension String {
     /// "wind at 2 mph · total sits at 9" → "Wind at 2 mph · total sits at 9".
     /// Only the first character moves — the rest keeps whatever case the real
@@ -22786,11 +22762,12 @@ fileprivate extension String {
     }
 }
 
-/// THE BIG NUMBERS (mock MY 04) — one numeral per fact, the numeral as the
-/// headline; the pipeline's edges lead in gold, context rows follow in white.
+/// THE BIG NUMBERS — five fixed, grounded pregame facts: team HR power over
+/// five games, bullpen ERA over 14 days, run differential over 10 games,
+/// weather and the current series. No ranked-insight roulette: every game uses
+/// the same grammar and every rolling window stops before the slate date.
 fileprivate struct ScoutBigNumbersSection: View {
     let d: ScoutTrioData
-    let edges: [Signal]
 
     private struct Row: Identifiable {
         let id: String
@@ -22799,20 +22776,66 @@ fileprivate struct ScoutBigNumbersSection: View {
         let rest: String
     }
     private var rows: [Row] {
-        // THREE edges, then the weather and the series (founder, Aug 6) —
-        // those two moved UP here out of the Notebook, so the page says each
-        // fact once. Both carry a real numeral like every other row: the
-        // temperature and the series record.
-        var out: [Row] = []
-        for s in edges where out.count < 3 {
-            guard GameRail.isRailEdge(s) else { continue }
-            out.append(Row(id: "edge-\(s.id)",
-                           numeral: s.value.trimmingCharacters(in: .whitespaces),
-                           bold: s.headline, rest: ""))
-        }
+        var out = [homeRunsRow, bullpenRow, runDifferentialRow].compactMap { $0 }
         if let w = weatherRow { out.append(w) }
         if let sr = seriesRow { out.append(sr) }
         return out
+    }
+
+    private func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
+
+    /// The stronger five-game power side leads; the comparison remains in the
+    /// sentence so the number has matchup context instead of standing alone.
+    private var homeRunsRow: Row? {
+        guard let away = d.awayHomeRunsL5, let home = d.homeHomeRunsL5 else { return nil }
+        if away == home {
+            return Row(id: "hr-l5", numeral: "\(away) HR",
+                       bold: "Both teams have hit \(away) home runs over their last 5 games", rest: "")
+        }
+        let awayLeads = away > home
+        let leader = awayLeads ? d.awayName : d.homeName
+        let leaderValue = awayLeads ? away : home
+        let trailer = awayLeads ? d.homeName : d.awayName
+        let trailerValue = awayLeads ? home : away
+        return Row(id: "hr-l5", numeral: "\(leaderValue) HR",
+                   bold: "\(leader) lead \(trailer) \(leaderValue)–\(trailerValue) in homers over their last 5 games",
+                   rest: "")
+    }
+
+    /// Lower is better. Both ERAs print, but the cleaner bullpen owns the big
+    /// numeral so the matchup's relief advantage reads immediately.
+    private var bullpenRow: Row? {
+        guard let away = d.awayBullpenERAL14, let home = d.homeBullpenERAL14 else { return nil }
+        if abs(away - home) < 0.005 {
+            return Row(id: "bullpen-era-l14", numeral: String(format: "%.2f", away),
+                       bold: "Both bullpens own the same ERA over the last 14 days", rest: "")
+        }
+        let awayLeads = away < home
+        let leader = awayLeads ? d.awayName : d.homeName
+        let leaderValue = awayLeads ? away : home
+        let trailer = awayLeads ? d.homeName : d.awayName
+        let trailerValue = awayLeads ? home : away
+        return Row(id: "bullpen-era-l14", numeral: String(format: "%.2f", leaderValue),
+                   bold: "\(leader) have the lower bullpen ERA over the last 14 days",
+                   rest: " · \(trailer) \(String(format: "%.2f", trailerValue))")
+    }
+
+    /// The better last-10 scoring margin leads, including honest negative
+    /// values when both clubs have been outscored.
+    private var runDifferentialRow: Row? {
+        guard let away = d.awayRunDiffL10, let home = d.homeRunDiffL10 else { return nil }
+        if away == home {
+            return Row(id: "run-diff-l10", numeral: signed(away),
+                       bold: "Both teams share this run differential over their last 10 games", rest: "")
+        }
+        let awayLeads = away > home
+        let leader = awayLeads ? d.awayName : d.homeName
+        let leaderValue = awayLeads ? away : home
+        let trailer = awayLeads ? d.homeName : d.awayName
+        let trailerValue = awayLeads ? home : away
+        return Row(id: "run-diff-l10", numeral: signed(leaderValue),
+                   bold: "\(leader) have the better run differential over their last 10 games",
+                   rest: " · \(trailer) \(signed(trailerValue))")
     }
 
     /// "83°" + the wind and total beside it.
@@ -23038,7 +23061,7 @@ struct PicksGamePage: View {
             // opens straight with THE ARMS.
             ScoutArmsSection(d: trio)
             ScoutNotebookSection(d: trio)
-            ScoutBigNumbersSection(d: trio, edges: edges)
+            ScoutBigNumbersSection(d: trio)
             // The season series lives HERE and only here (founder, Aug 6).
             GameH2HSection(edges: edges)
             PlayerIntelSection(matchup: group.matchup)

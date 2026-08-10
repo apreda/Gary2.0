@@ -1945,6 +1945,11 @@ struct TomorrowRunProfile: Decodable {
     let rs_per_game: Double?
     let ra_per_game: Double?
     let home: Bool?
+    // Stable pregame windows for THE BIG NUMBERS. Every window ends before
+    // this board's slate date, so a card cannot change after users see it.
+    let home_runs_l5: Int?
+    let bullpen_era_l14: Double?
+    let run_diff_l10: Int?
 }
 
 // WEATHER — outdoor-MLB first-pitch forecast (grounded; roofed parks omitted).

@@ -864,6 +864,157 @@ function buildForm(mlbTeams, standings) {
   return mlb;
 }
 
+const RECENT_METRICS_DAYS = 14;
+const RECENT_METRICS_BATCH = 25;
+
+/** MLB/BDL innings use baseball thirds ("1.2" = five outs), not decimals. */
+function ipOuts(ip) {
+  const n = Number(ip);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  const whole = Math.trunc(n);
+  const thirds = Math.round((n - whole) * 10);
+  return thirds >= 0 && thirds <= 2 ? whole * 3 + thirds : 0;
+}
+
+/**
+ * Recent team facts for THE BIG NUMBERS.
+ *
+ * One season-index read supplies completed-game dates and scores. BDL box rows
+ * then ground the two facts scores alone cannot provide: team homers and the
+ * relief staff's earned runs/outs. The windows stop before `etDateStr`, so a
+ * morning card remains the same card all day as tonight's games go live.
+ *
+ * Returns a map keyed by MLB abbreviation. A metric is omitted unless its
+ * whole advertised window is present; partial API data never becomes a number.
+ */
+export async function buildRecentTeamMetrics(mlbTeams, etDateStr) {
+  const anchor = new Date(`${etDateStr}T12:00:00Z`);
+  if (Number.isNaN(anchor.getTime())) return new Map();
+  const shiftedDay = (days) => {
+    const d = new Date(anchor);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+  const start14Day = shiftedDay(-RECENT_METRICS_DAYS);
+  const earliestDay = shiftedDay(-50);
+
+  const [seasonIndex, bdlTeams] = await Promise.all([
+    bdl.getMlbSeasonGameIndex(SEASON),
+    bdl.getTeams('baseball_mlb'),
+  ]);
+  if (!seasonIndex?.size || !bdlTeams?.length) return new Map();
+
+  const bdlByAbbr = new Map(
+    bdlTeams
+      .filter((t) => t?.id != null && t?.abbreviation)
+      .map((t) => [String(t.abbreviation).toUpperCase(), t]),
+  );
+  // The odds/slate feed uses the franchise's current display codes while BDL
+  // retains MLB's legacy API codes for these two clubs.
+  const bdlAbbr = (abbr) => ({ AZ: 'ARI', ATH: 'OAK' }[String(abbr || '').toUpperCase()]
+    || String(abbr || '').toUpperCase());
+  const targets = mlbTeams
+    .map((t) => ({ slate: t, bdl: bdlByAbbr.get(bdlAbbr(t.abbr)) }))
+    .filter((t) => t.bdl?.id != null);
+  if (!targets.length) return new Map();
+
+  const gamesByTeam = new Map(targets.map((t) => [String(t.bdl.id), []]));
+  for (const [gameId, g] of seasonIndex) {
+    const played = Date.parse(g?.date || '');
+    if (!Number.isFinite(played)) continue;
+    // BDL timestamps are UTC; slate ownership is ET. A 10:10 PM ET West Coast
+    // final lands after midnight UTC but still belongs to the previous ET day.
+    const playedDay = getETDateStr(new Date(played));
+    if (playedDay >= etDateStr || playedDay < earliestDay) continue;
+    if (g?.status !== 'STATUS_FINAL' || g?.seasonType === 'spring_training' || g?.postseason) continue;
+    for (const [teamId, mine, theirs] of [
+      [g.homeId, g.homeRuns, g.awayRuns],
+      [g.awayId, g.awayRuns, g.homeRuns],
+    ]) {
+      const bucket = gamesByTeam.get(String(teamId));
+      if (!bucket || !Number.isFinite(Number(mine)) || !Number.isFinite(Number(theirs))) continue;
+      bucket.push({ id: gameId, played, playedDay, mine: Number(mine), theirs: Number(theirs) });
+    }
+  }
+  for (const games of gamesByTeam.values()) games.sort((a, b) => a.played - b.played);
+
+  const neededIds = new Set();
+  for (const games of gamesByTeam.values()) {
+    for (const g of games.slice(-5)) neededIds.add(g.id);
+    for (const g of games.filter((x) => x.playedDay >= start14Day)) neededIds.add(g.id);
+  }
+
+  // Keep each query comfortably below getMlbGameStats' 1,000-row safety cap.
+  // Three batches at a time is fast without bursting the upstream API.
+  const ids = [...neededIds];
+  const batches = [];
+  for (let i = 0; i < ids.length; i += RECENT_METRICS_BATCH) {
+    batches.push(ids.slice(i, i + RECENT_METRICS_BATCH));
+  }
+  const statRows = [];
+  for (let i = 0; i < batches.length; i += 3) {
+    const page = await Promise.all(
+      batches.slice(i, i + 3).map((gameIds) => bdl.getMlbGameStats({ gameIds })),
+    );
+    for (const rows of page) statRows.push(...(rows || []));
+  }
+  const statsByGame = new Map();
+  for (const r of statRows) {
+    if (!statsByGame.has(r.game_id)) statsByGame.set(r.game_id, []);
+    statsByGame.get(r.game_id).push(r);
+  }
+
+  const out = new Map();
+  for (const { slate, bdl: team } of targets) {
+    const games = gamesByTeam.get(String(team.id)) || [];
+    const teamKeys = new Set([
+      team.display_name, team.short_display_name, team.name,
+      team.location && team.name ? `${team.location} ${team.name}` : null,
+    ].filter(Boolean).map(nameKey));
+    const rowsFor = (gameId) => (statsByGame.get(gameId) || [])
+      .filter((r) => teamKeys.has(nameKey(r.team_name)));
+
+    const last5 = games.slice(-5);
+    const last10 = games.slice(-10);
+    const last14Days = games.filter((g) => g.playedDay >= start14Day);
+    const fiveCovered = last5.length === 5 && last5.every((g) =>
+      rowsFor(g.id).some((r) => r.at_bats != null));
+    const penCovered = last14Days.length > 0 && last14Days.every((g) =>
+      rowsFor(g.id).some((r) => ipOuts(r.ip) > 0));
+
+    let homeRunsL5 = null;
+    if (fiveCovered) {
+      homeRunsL5 = last5.reduce((sum, g) =>
+        sum + rowsFor(g.id).reduce((s, r) => s + (Number(r.hr) || 0), 0), 0);
+    }
+
+    let bullpenOuts = 0;
+    let bullpenEr = 0;
+    if (penCovered) {
+      for (const g of last14Days) {
+        for (const r of rowsFor(g.id)) {
+          if (Number(r.games_started) === 1) continue;
+          const outs = ipOuts(r.ip);
+          if (outs <= 0) continue;
+          bullpenOuts += outs;
+          bullpenEr += Number(r.er) || 0;
+        }
+      }
+    }
+
+    out.set(String(slate.abbr || '').toUpperCase(), {
+      home_runs_l5: homeRunsL5,
+      bullpen_era_l14: bullpenOuts > 0
+        ? Number(((bullpenEr * 27) / bullpenOuts).toFixed(2))
+        : null,
+      run_diff_l10: last10.length === 10
+        ? last10.reduce((sum, g) => sum + g.mine - g.theirs, 0)
+        : null,
+    });
+  }
+  return out;
+}
+
 /**
  * RUN PROFILE — the grounded, day-before scoring/run-prevention shape for each MLB
  * team (the honest stand-in for an "over/under trend": game_results stores no
@@ -872,24 +1023,28 @@ function buildForm(mlbTeams, standings) {
  * standings (runsScored / runsAllowed / runDifferential / wins+losses). GROUNDED:
  * a team is omitted when its run totals are absent.
  */
-function buildRunProfile(mlbTeams, standings) {
+function buildRunProfile(mlbTeams, standings, recentMetrics = new Map()) {
   const mlb = [];
   for (const t of mlbTeams) {
     const st = standings.get(t.id);
-    if (!st || st.runsScored == null || st.runsAllowed == null) continue; // grounded-only
-    const gp = (Number(st.wins) || 0) + (Number(st.losses) || 0);
+    const recent = recentMetrics.get(String(t.abbr || '').toUpperCase()) || {};
+    const hasSeason = st?.runsScored != null && st?.runsAllowed != null;
+    const hasRecent = Object.values(recent).some((v) => v != null);
+    if (!hasSeason && !hasRecent) continue; // grounded-only
+    const gp = hasSeason ? (Number(st.wins) || 0) + (Number(st.losses) || 0) : 0;
     const rsg = gp > 0 ? st.runsScored / gp : null; // runs scored / game
     const rag = gp > 0 ? st.runsAllowed / gp : null; // runs allowed / game
     mlb.push({
       league: 'MLB',
       team: t.team,
       abbr: t.abbr,
-      runs_scored: st.runsScored,
-      runs_allowed: st.runsAllowed,
-      run_diff: st.runDiff != null ? st.runDiff : (st.runsScored - st.runsAllowed),
+      runs_scored: hasSeason ? st.runsScored : null,
+      runs_allowed: hasSeason ? st.runsAllowed : null,
+      run_diff: hasSeason ? (st.runDiff != null ? st.runDiff : (st.runsScored - st.runsAllowed)) : null,
       rs_per_game: rsg != null ? Number(rsg.toFixed(2)) : null,
       ra_per_game: rag != null ? Number(rag.toFixed(2)) : null,
       home: t.home,
+      ...recent,
     });
   }
   return mlb;
@@ -1506,7 +1661,13 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   // (omit a team/game when its source data is absent; never fabricate).
   const mlbSlateTeams = slateTeamsMlb(slateRows, teamIndex, idByName);
   const form = buildForm(mlbSlateTeams, standings);
-  const run_profile = buildRunProfile(mlbSlateTeams, standings);
+  let recentMetrics = new Map();
+  try {
+    recentMetrics = await buildRecentTeamMetrics(mlbSlateTeams, etDateStr);
+  } catch (e) {
+    console.warn(`[TomorrowBoard] recent team metrics failed (honest-empty): ${e.message}`);
+  }
+  const run_profile = buildRunProfile(mlbSlateTeams, standings, recentMetrics);
   let weather = [];
   try {
     // getMlbSchedule is 2-hr cached (already read in buildStarters) → free here.
