@@ -24,7 +24,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // Payment link -> entitlement.
 const LINK_MAP: Record<string, { key: string; pass: string }> = {
-  // LIVE — monthly subscriptions + WC one-time ($9.99 since Jun 5 PM)
+  // LIVE — monthly subscriptions
   plink_1Tf2dILqUC52RoAIqzzuHrlK: { key: "MLB", pass: "monthly" },
   plink_1Tf2dJLqUC52RoAI7X7eTr4m: { key: "NBA", pass: "monthly" },
   plink_1Tf2dJLqUC52RoAI0LX8MIuy: { key: "NHL", pass: "monthly" },
@@ -32,12 +32,10 @@ const LINK_MAP: Record<string, { key: string; pass: string }> = {
   plink_1Tf2dLLqUC52RoAINXPAjtbY: { key: "NCAAF", pass: "monthly" },
   plink_1Tf2dLLqUC52RoAIufwGQEgq: { key: "NCAAB", pass: "monthly" },
   plink_1Tf2dNLqUC52RoAIgKbKkpbK: { key: "ALL", pass: "monthly" },   // $34.99/3-day — shipped build
-  plink_1Tf3upLqUC52RoAIHwpHv2jy: { key: "WC", pass: "tournament" },
-  plink_1Tf2dMLqUC52RoAIzi1QNq9Y: { key: "WC", pass: "tournament" }, // retired $14.99 link
   // LIVE — June 9 2026 flip: $29.99/mo + $179/yr, 7-day card-required trials
   plink_1TgbaKLqUC52RoAIvLEooj2r: { key: "ALL", pass: "monthly" },
   plink_1TgbaKLqUC52RoAINLm0QilG: { key: "ALL", pass: "annual" },
-  // TEST — monthly subscriptions + WC one-time ($9.99 since Jun 5 PM)
+  // TEST — monthly subscriptions
   plink_1Tf2JNLJVzRZvO5HTgHm6Nv9: { key: "MLB", pass: "monthly" },
   plink_1Tf2JQLJVzRZvO5HOqgKnyzy: { key: "NBA", pass: "monthly" },
   plink_1Tf2JSLJVzRZvO5HFuRqFaGd: { key: "NHL", pass: "monthly" },
@@ -45,8 +43,6 @@ const LINK_MAP: Record<string, { key: string; pass: string }> = {
   plink_1Tf2JqLJVzRZvO5HN4oNSrQ1: { key: "NCAAF", pass: "monthly" },
   plink_1Tf2JuLJVzRZvO5H3oNKGDI7: { key: "NCAAB", pass: "monthly" },
   plink_1Tf2LILJVzRZvO5HtecD92Si: { key: "ALL", pass: "monthly" },
-  plink_1Tf3w4LJVzRZvO5HuHtY0o8e: { key: "WC", pass: "tournament" },
-  plink_1Tf0K4LJVzRZvO5Hxz7EmaOE: { key: "WC", pass: "tournament" }, // retired $14.99 link
   // TEST — June 9 2026 flip: $29.99/mo + $179/yr, 7-day card-required trials
   plink_1TgbEsLJVzRZvO5HmNa1JmJM: { key: "ALL", pass: "monthly" },
   plink_1TgbEtLJVzRZvO5HUsg5w60B: { key: "ALL", pass: "annual" },

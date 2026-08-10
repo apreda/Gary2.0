@@ -379,7 +379,6 @@ struct SettingsSheetView: View {
 // deleted, not flagged off, per the founder's decisive pick.
 struct GaryCenteredTabBar: View {
     @Binding var selectedTab: Int
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private struct TabItem { let icon: String; let label: String; let index: Int }
     private let leftTabs: [TabItem] = [
@@ -488,13 +487,11 @@ struct GaryCenteredTabBar: View {
     // MARK: - Tap action
 
     private func tabAction(index: Int) {
-        if PerformanceMode.current.useExpensiveEffects && !reduceMotion {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-                selectedTab = index
-            }
-        } else {
-            selectedTab = index
-        }
+        guard selectedTab != index else { return }
+        // Keep the dock's own icon/color animation, but do not wrap the entire
+        // five-page ZStack in one spring transaction. Animating both the old
+        // and new heavy pages was the small pause users felt on every tab tap.
+        selectedTab = index
     }
 }
 

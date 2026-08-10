@@ -80,7 +80,13 @@ struct Connection: Decodable {
 
 /// Structured player-swap payload on beneficiary rows (kind == "swap"):
 /// the OUT player, why, and tonight's replacement with his slot + line.
-struct SwapMeta: Decodable {
+/// Immutable, reference-backed because a `Signal` exposes this same payload
+/// through several lane-specific accessors (`reg`, `h2h`, `weather`, etc.).
+/// Keeping this as a value type made every optional reserve the full payload
+/// inline, inflating each Signal by several KB and overflowing the iPhone's
+/// main-thread stack while SwiftUI assembled the Hub. Reference semantics are
+/// safe here: every field is `let` and decoded once.
+final class SwapMeta: Decodable {
     /// The computed facts behind Gary's read (Jul 27 voice pass moved the
     /// template sentence here) — the expanded card's "numbers behind it" line.
     let evidence: String?

@@ -41,7 +41,7 @@ struct AuthView: View {
                             .font(GaryFonts.mono(23))
                             .foregroundStyle(GaryColors.gold)
 
-                        Text(isSignUp ? "Create Your Account" : "Welcome Back")
+                        Text("Sign In or Create an Account")
                             .font(GaryFonts.text(14.5))
                             .foregroundStyle(.white.opacity(0.55))
                     }
@@ -110,7 +110,21 @@ struct AuthView: View {
                                 // web OAuth as the fallback until the iOS
                                 // client ships in GoogleService-Info.plist.
                                 if authManager.googleNativeClientID != nil {
-                                    Task { try? await authManager.signInWithGoogleNative() }
+                                    Task {
+                                        do {
+                                            try await authManager.signInWithGoogleNative()
+                                        } catch {
+                                            let nsError = error as NSError
+                                            // Google Sign-In's documented cancellation code is -5.
+                                            // Closing the account sheet is not an auth failure.
+                                            if nsError.code == -5 {
+                                                return
+                                            }
+                                            if authManager.errorMessage == nil {
+                                                authManager.errorMessage = "Google sign-in couldn't finish. Please try again."
+                                            }
+                                        }
+                                    }
                                 } else {
                                     handleOAuth(provider: .google)
                                 }
@@ -283,9 +297,25 @@ struct AuthView: View {
             url: oauthURL,
             callbackURLScheme: "com.gary.app"
         ) { callbackURL, error in
-            guard let url = callbackURL, error == nil else { return }
+            if let authError = error as? ASWebAuthenticationSessionError,
+               authError.code == .canceledLogin {
+                return
+            }
+            guard let url = callbackURL, error == nil else {
+                Task { @MainActor in
+                    authManager.errorMessage = "Sign-in couldn't open. Please try again."
+                }
+                return
+            }
             Task {
-                try? await authManager.handleOAuthCallback(url: url)
+                do {
+                    try await authManager.handleOAuthCallback(url: url)
+                } catch {
+                    print("[WebSignIn] callback failed: \(error.localizedDescription)")
+                    if authManager.errorMessage == nil {
+                        authManager.errorMessage = "Sign-in couldn't finish. Please try again."
+                    }
+                }
             }
         }
         session.presentationContextProvider = OAuthPresentationContext.shared

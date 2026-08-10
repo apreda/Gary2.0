@@ -159,7 +159,6 @@ enum GaryPricing {
     /// "$14.92/mo" — the annual card's effective-rate line (179 / 12).
     static let allAccessAnnualMonthly = "$14.92"
     static let single           = "$9.99"
-    static let worldCup         = "$14.99"
     static let twoSport         = "$17.99"
     static let threeSport       = "$24.99"
     static let trialDays        = 7          // ⚠️ Stripe trial setting must match

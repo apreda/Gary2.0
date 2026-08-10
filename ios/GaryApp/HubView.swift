@@ -822,10 +822,17 @@ struct HubView: View {
         .regression, .ballpark, .platoon, .h2h, .bullpenFatigue,
         .firstInning, .closerWatch, .runningGame, .parkWeather,
     ]
-    private var lead: Signal? {
-        ranked.first(where: { Self.leadInsightKinds.contains($0.kind) }) ?? ranked.first
+    /// Resolve the lead and remainder from one ranked snapshot. The previous
+    /// `bestOfBoard` filter called `lead` inside its closure, which rebuilt
+    /// `ranked` while an earlier ranked array was still on the SwiftUI render
+    /// stack. Besides doing the work once per row, that nested large Signal
+    /// copies deeply enough to exhaust the production iPhone thread stack.
+    private var frontPageSelection: (lead: Signal?, best: [Signal]) {
+        let rows = ranked
+        let lead = rows.first(where: { Self.leadInsightKinds.contains($0.kind) }) ?? rows.first
+        guard let lead else { return (nil, []) }
+        return (lead, rows.filter { $0.id != lead.id })
     }
-    private var bestOfBoard: [Signal] { ranked.filter { $0.id != lead?.id } }
 
     /// Tonight's slate for the selected league, from the 5am board snapshot.
     private var slateRows: [TomorrowBoardRow] {
@@ -1026,16 +1033,17 @@ struct HubView: View {
     // inline run plus its closures blew the type-checker's budget) ----
 
     @ViewBuilder private var frontPageBoards: some View {
-        if let lead {
+        let selection = frontPageSelection
+        if let lead = selection.lead {
             HubLeadStory(s: lead) { s in
                 openSignal(s)
             }
             .id("lead")
         }
-        if !bestOfBoard.isEmpty {
+        if !selection.best.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 HubHead(title: "The Best of the Board")
-                HubBestOf(signals: bestOfBoard) { s in
+                HubBestOf(signals: selection.best) { s in
                     openSignal(s)
                 }
             }
@@ -1391,7 +1399,8 @@ struct HubView: View {
     private var jumpItems: [(anchor: String, label: String)] {
         var out: [(String, String)] = []
         if !leagueSignals.isEmpty {
-            if lead != nil || !bestOfBoard.isEmpty { out.append(("lead", "The Best")) }
+            let selection = frontPageSelection
+            if selection.lead != nil || !selection.best.isEmpty { out.append(("lead", "The Best")) }
             if !items(.regression).isEmpty { out.append(("regression", "Regression")) }
             if sel == .wc, !items(.xgRegression).isEmpty { out.append(("xgboard", "xG")) }
         }

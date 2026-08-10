@@ -1,7 +1,9 @@
 import Foundation
 import SwiftUI
 import AuthenticationServices
+import CryptoKit
 import GoogleSignIn
+import Security
 
 // MARK: - Auth Manager
 
@@ -61,7 +63,7 @@ final class AuthManager: ObservableObject {
         // Try to get current user with stored token
         do {
             let user = try await fetchCurrentUser()
-            currentUser = user
+            remember(user)
             isAuthenticated = true
         } catch {
             // Token expired — try refresh
@@ -69,7 +71,7 @@ final class AuthManager: ObservableObject {
                 do {
                     try await refreshSession()
                     let user = try await fetchCurrentUser()
-                    currentUser = user
+                    remember(user)
                     isAuthenticated = true
                 } catch {
                     // Refresh failed — clear everything
@@ -117,7 +119,12 @@ final class AuthManager: ObservableObject {
             }
         } else {
             let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
-            let message = errorBody?.msg ?? errorBody?.error_description ?? "Sign up failed"
+            let diagnostic = errorBody?.msg ?? errorBody?.error_description ?? "HTTP \(http.statusCode)"
+            print("[EmailSignUp] Supabase rejected signup: \(diagnostic)")
+            let lower = diagnostic.lowercased()
+            let message = lower.contains("already") || lower.contains("registered")
+                ? "An account already exists for that email. Sign in instead."
+                : "We couldn't create that account. Check the email and password, then try again."
             errorMessage = message
             throw AuthError.serverError(message)
         }
@@ -152,7 +159,12 @@ final class AuthManager: ObservableObject {
             handleAuthResponse(session)
         } else {
             let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
-            let message = errorBody?.error_description ?? "Invalid email or password"
+            let diagnostic = errorBody?.error_description ?? errorBody?.msg ?? "HTTP \(http.statusCode)"
+            print("[EmailSignIn] Supabase rejected signin: \(diagnostic)")
+            let lower = diagnostic.lowercased()
+            let message = lower.contains("confirm")
+                ? "Confirm your email first, then sign in."
+                : "Email or password is incorrect."
             errorMessage = message
             throw AuthError.serverError(message)
         }
@@ -165,7 +177,9 @@ final class AuthManager: ObservableObject {
 
         guard let identityToken = credential.identityToken,
               let tokenString = String(data: identityToken, encoding: .utf8) else {
-            throw AuthError.serverError("Missing Apple identity token")
+            let message = "Apple sign-in couldn't finish. Please try again."
+            errorMessage = message
+            throw AuthError.serverError(message)
         }
 
         let url = try authURL("/auth/v1/token?grant_type=id_token")
@@ -202,7 +216,9 @@ final class AuthManager: ObservableObject {
             handleAuthResponse(session)
         } else {
             let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
-            let message = errorBody?.error_description ?? "Apple sign-in failed"
+            let diagnostic = errorBody?.error_description ?? errorBody?.msg ?? "HTTP \(http.statusCode)"
+            print("[AppleSignIn] Supabase token exchange failed: \(diagnostic)")
+            let message = "Apple sign-in couldn't finish. Please try again."
             errorMessage = message
             throw AuthError.serverError(message)
         }
@@ -228,17 +244,30 @@ final class AuthManager: ObservableObject {
     /// GoTrue — no browser round-trip, no passkey interstitial.
     func signInWithGoogleNative() async throws {
         errorMessage = nil
+        infoMessage = nil
         guard let clientID = googleNativeClientID else {
-            throw AuthError.serverError("Google native sign-in not configured")
+            let message = "Google sign-in isn't available right now. Please use Apple or email."
+            errorMessage = message
+            throw AuthError.serverError(message)
         }
         guard let root = Self.topViewController() else {
-            throw AuthError.serverError("No view controller to present from")
+            let message = "Google sign-in couldn't open. Please try again."
+            errorMessage = message
+            throw AuthError.serverError(message)
         }
 
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
-        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: root)
+        let nonce = try Self.makeGoogleNonce()
+        let result = try await GIDSignIn.sharedInstance.signIn(
+            withPresenting: root,
+            hint: nil,
+            additionalScopes: nil,
+            nonce: nonce.hashed
+        )
         guard let idToken = result.user.idToken?.tokenString else {
-            throw AuthError.serverError("Google returned no identity token")
+            let message = "Google sign-in couldn't finish. Please try again."
+            errorMessage = message
+            throw AuthError.serverError(message)
         }
 
         let url = try authURL("/auth/v1/token?grant_type=id_token")
@@ -246,20 +275,25 @@ final class AuthManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        // GoTrue law: "Passed nonce and nonce in id_token should either both
-        // exist or not." GoogleSignIn 8.0 exposes no nonce parameter yet
-        // mints a nonce claim into the token anyway — so the exchange failed
-        // for every Google user (live, Aug 6). Read the claim off the token
-        // and echo it back; both sides hold the same value on any SDK.
-        var tokenBody: [String: Any] = ["provider": "google", "id_token": idToken]
-        if let nonceClaim = Self.jwtClaim(idToken, "nonce") { tokenBody["nonce"] = nonceClaim }
+        // Google receives SHA-256(rawNonce) and places that digest in the ID
+        // token. Supabase receives rawNonce, hashes it server-side, and then
+        // compares the result. Echoing the JWT claim here would hash the digest
+        // a second time and produce the live "Nonces mismatch" failure.
+        let tokenBody: [String: Any] = [
+            "provider": "google",
+            "id_token": idToken,
+            "access_token": result.user.accessToken.tokenString,
+            "nonce": nonce.raw
+        ]
         request.httpBody = try JSONSerialization.data(withJSONObject: tokenBody)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw AuthError.networkError }
         guard http.statusCode == 200 else {
             let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
-            let message = errorBody?.error_description ?? errorBody?.msg ?? "Google sign-in failed"
+            let diagnostic = errorBody?.error_description ?? errorBody?.msg ?? "HTTP \(http.statusCode)"
+            print("[GoogleSignIn] Supabase token exchange failed: \(diagnostic)")
+            let message = "Google sign-in couldn't finish. Please try again."
             errorMessage = message
             throw AuthError.serverError(message)
         }
@@ -267,20 +301,24 @@ final class AuthManager: ObservableObject {
         let session = try JSONDecoder().decode(AuthResponse.self, from: data)
         handleAuthResponse(session)
         let user = try await fetchCurrentUser()
-        currentUser = user
+        remember(user)
         isAuthenticated = true
     }
 
-    /// Base64url-decode one JWT payload claim WITHOUT verification — echo
-    /// use only (verification is GoTrue's job, not the client's).
-    private static func jwtClaim(_ jwt: String, _ key: String) -> String? {
-        let parts = jwt.split(separator: ".")
-        guard parts.count >= 2 else { return nil }
-        var b64 = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        while b64.count % 4 != 0 { b64 += "=" }
-        guard let data = Data(base64Encoded: b64),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return obj[key] as? String
+    private static func makeGoogleNonce() throws -> (raw: String, hashed: String) {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            throw AuthError.serverError("Could not secure this Google sign-in attempt. Please try again.")
+        }
+
+        let raw = Data(bytes).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let hashed = SHA256.hash(data: Data(raw.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return (raw, hashed)
     }
 
     /// Frontmost view controller — the Google sheet's presentation anchor.
@@ -322,7 +360,9 @@ final class AuthManager: ObservableObject {
 
         // Parse fragment (Supabase returns tokens in URL fragment)
         guard let fragment = url.fragment else {
-            throw AuthError.serverError("No auth data in callback")
+            let message = "Sign-in couldn't finish. Please try again."
+            errorMessage = message
+            throw AuthError.serverError(message)
         }
 
         let params = fragment.components(separatedBy: "&").reduce(into: [String: String]()) { result, pair in
@@ -334,14 +374,18 @@ final class AuthManager: ObservableObject {
 
         guard let token = params["access_token"],
               let refresh = params["refresh_token"] else {
-            throw AuthError.serverError("Missing tokens in callback")
+            let diagnostic = params["error_description"] ?? params["error"] ?? "OAuth callback did not contain a session"
+            print("[WebSignIn] callback rejected: \(diagnostic)")
+            let message = "Sign-in couldn't finish. Please try again."
+            errorMessage = message
+            throw AuthError.serverError(message)
         }
 
         accessToken = token
         refreshToken = refresh
 
         let user = try await fetchCurrentUser()
-        currentUser = user
+        remember(user)
         isAuthenticated = true
     }
 
@@ -457,11 +501,18 @@ final class AuthManager: ObservableObject {
             refreshToken = refresh
         }
         if let user = response.user {
-            userId = user.id
-            userEmail = user.email ?? ""
-            currentUser = user
+            remember(user)
         }
         isAuthenticated = true
+    }
+
+    /// Auth identity is also the checkout/entitlement identity. Some OAuth
+    /// token responses omit the embedded user, so every later `/user` fetch
+    /// must refresh the same durable fields instead of updating only the UI.
+    private func remember(_ user: GaryUser) {
+        userId = user.id
+        userEmail = user.email ?? ""
+        currentUser = user
     }
 
     private func clearSession() {
