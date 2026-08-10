@@ -1565,7 +1565,9 @@ async function main() {
             statAuditWarnings: result._statAuditWarnings ?? null,
             // Which brain produced this pick — without it the DB can't distinguish
             // model eras (the Sol cutover review had to infer brains from timestamps).
-            model: GAME_PICK_MODEL,
+            // _modelUsed = the RESPONDER after any cascade; the configured
+            // primary is only the fallback for lanes that don't report one.
+            model: result._modelUsed ?? GAME_PICK_MODEL,
             // Which CONTRACT wording produced it — prompt-era hash (Jul 29);
             // joins against prompt_eras for pre-registered before/after reads.
             prompt_sha: result._promptSha ?? null,

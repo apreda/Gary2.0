@@ -31,7 +31,7 @@ import {
   getPitcherMonthSplits,
   getPitcherCareerProfile,
 } from '../../../mlbStatsApiService.js';
-import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags } from './pitcherArc.js';
+import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
@@ -374,8 +374,28 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   if (probablePitchersData) {
     const parts = [];
+    // THE PRESS, PER STARTER (founder GO, Aug 10 — fan-parity for the arms):
+    // how each starter's recent work has been DESCRIBED this week, as
+    // written — the layer a stat ledger cannot carry ("how he looked").
+    // Both searches fire in parallel before the loop; the freshness
+    // protocol rides along inside openaiWebSearch; an empty or "no
+    // coverage" result prints nothing.
+    const pressBySide = {};
+    for (const [side, label] of [['away', awayTeam], ['home', homeTeam]]) {
+      const p = probablePitchersData[side];
+      if (!p?.fullName) continue;
+      pressBySide[side] = openaiWebSearch(
+        `MLB: how has ${p.fullName} (${label} starting pitcher) been described this week — ` +
+        `how he looked in his most recent start and his recent starts as reported (command, stuff, velocity, length, how hitters handled him), ` +
+        `any mechanical, workload, or health notes as written, and manager or coach comments about him. ` +
+        `Reported descriptions only, attributed to their sources. No season-long stat lines, no picks, no predictions. ` +
+        `Start directly with the reporting, most recent start first — no preamble, no meta commentary about these instructions.`,
+        { maxTokens: 700 }
+      ).then(r => String(r?.data || '').trim()).catch(() => '');
+    }
     for (const [side, label] of [['away', awayTeam], ['home', homeTeam]]) {
       const pitcher = probablePitchersData[side];
+      let seasonLineIdx = null;
       if (!pitcher?.fullName) {
         parts.push(`${label}: TBD`);
         continue;
@@ -393,6 +413,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         // BB on the season line (founder, Aug 5 PM: "certain pitchers
         // naturally walk a lot of guys" — a team-grain fact, naked).
         const bbSeason = bdlRow.pitching_bb ?? null;
+        seasonLineIdx = parts.length;
         parts.push(`${label}: ${pitcher.fullName} — ${w}-${l}, ${era} ERA, ${whip} WHIP, ${k} K${bbSeason != null ? `, ${bbSeason} BB` : ''}, ${ip} IP (${gs} ${season} starts)`);
         pitcherStats[side] = { name: pitcher.fullName, ...bdlRow };
       } else if (bdlRow) {
@@ -440,6 +461,12 @@ export async function buildMlbScoutReport(game, options = {}) {
           // date costs no extra network.
           const allStarts = mlbamId ? await getPitcherLastStarts(mlbamId, season, 99).catch(() => []) : [];
           pitcherArcData[side] = { careerProfile, firstStartDate: allStarts[0]?.date ?? null, startDates: allStarts.map(g => g.date), starts: allStarts };
+          // Fuse the sample qualifier INTO the season line's parenthetical
+          // (founder GO, Aug 10) — the aggregate can't be quoted without it.
+          if (seasonLineIdx != null) {
+            const qual = seasonLineQualifier({ season, firstStartDate: pitcherArcData[side].firstStartDate, starts: allStarts });
+            if (qual) parts[seasonLineIdx] = parts[seasonLineIdx].replace(/ starts\)$/, ` starts${qual})`);
+          }
         }
 
         if (lastStarts.length) {
@@ -462,6 +489,21 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (lastStarts.length >= 2) {
             parts.push(`  IP by start (oldest→newest): ${lastStarts.map(g => g.ip ?? '?').join(', ')}`);
           }
+          // HIS LAST START, AS WRITTEN (founder GO, Aug 10): the official
+          // game story rides the ledger's newest row — the distortion flag's
+          // device, now on every starter, because "5.2IP 1ER" can't say how
+          // the outing actually went.
+          const lastPk = lastStarts[lastStarts.length - 1]?.gamePk;
+          if (lastPk) {
+            const st = await fetchGameStory(lastPk).catch(() => null);
+            if (st?.body) parts.push(`  His last start, as written: ${sentenceTrim(String(st.body).replace(/\s*\n+\s*/g, ' '), 600)}`);
+          }
+        }
+        // The week's press on him (fired pre-loop; see pressBySide above).
+        // Skip short/no-coverage returns — never print an empty shrug.
+        const press = pressBySide[side] ? sentenceTrim(String(await pressBySide[side]).replace(/\s*\n+\s*/g, ' '), 900) : '';
+        if (press && press.length > 60 && !/^(no|none|unverified)\b/i.test(press)) {
+          parts.push(`  His recent work, as written: ${press}`);
         }
         if (vsOpp && (vsOpp.games || vsOpp.ip)) {
           const oppName = side === 'home' ? awayTeam : homeTeam;
