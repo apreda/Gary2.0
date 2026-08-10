@@ -72,3 +72,16 @@ FIREBASE_PRIVATE_KEY
   ephemeral — read the host's own log stream instead.
 - The scheduler reads/writes Supabase (cloud) and the sports APIs (cloud), so
   nothing else needs to change to run it remotely.
+
+## Current local insight refresh schedule
+
+The installed `com.gary2.daily-insights` launch agent refreshes the Hub/Picks
+intelligence pipeline at **06:00, 07:15, 08:00, 11:00, 16:30, and 19:30 ET**.
+The 06:00 and 08:00 passes give the morning board two additional opportunities
+to collect probable pitchers, weather, schedule context, and generated reads.
+
+Scheduled insight writes are additive and first-write-wins for normal cards:
+later passes fill newly available lanes without replacing cards users already
+saw. Explicitly volatile streak facts may refresh, projected lineups may upgrade
+to confirmed, and live board facts such as weather, odds, and probable starters
+may update as their sources change.
