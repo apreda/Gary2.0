@@ -89,21 +89,23 @@ Take your bet. Output only:
 
 confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
-// THE RUN-LINE GAME (founder GO, Aug 6 2026): when either moneyline runs
-// past -200 pre-flight, the blind split would poison the margin question —
-// a sealed winner makes "do they cover?" a commitment check, not a fresh
-// read. These rare games (a game or two a slate at most) run un-blind with
-// ONLY the run line on the board: the ±1.5 is the question from the first
-// word, the dog's +1.5 a first-class answer, and the decision seals in one
-// shot with its read stored like any blind game's.
-export const buildRunLineAsk = (runLineBoard) => `${runLineBoard}
+// THE RUN-LINE GAME, rebuilt (founder GO, Aug 10 2026 — supersedes the
+// Aug 6 single-turn ask): the weekend's forced-RL lane laid -1.5 five of
+// seven times and the 30-day lay class sits 8-20 — the one lane where Gary
+// never formed a view of the GAME before facing a price. Now an RL game is
+// blind like every other game: turn 1 reads the game (no board anywhere),
+// and only the ticket turn reveals that the moneyline is off tonight's
+// board. The ticket must price a read that already exists — "the RL pick
+// has to still be in line with what gary actually thinks about the game."
+// No mechanics lecture (Jul 26 razor), no side framed, crossing allowed.
+export const buildRunLineTicketAsk = (winner, runLineBoard) => `Your winner is sealed: ${winner}.
 
-Tonight's question is the run line — the moneyline is off the board.
+${runLineBoard}
 
-Which run line is the better bet? Output only:
+The moneyline is off the board tonight — the run line is the only market. Take your bet. Output only:
 
 \`\`\`json
-{ "final_pick": "[Team] [+1.5 or -1.5] [exact odds]", "read": "why — a few sentences", "confidence_score": 0.XX }
+{ "final_pick": "[Team] [+1.5 or -1.5] [exact odds]", "confidence_score": 0.XX }
 \`\`\`
 
 confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
@@ -192,7 +194,7 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
 // readable when contract wording changes — eras join in SQL, never inferred
 // from timestamps again. Register new eras in the prompt_eras table.
 export const PROMPT_SHA = createHash('sha256')
-  .update(buildGarySystemPrompt('{date}') + THE_READ_ASK + buildTicketAsk('{winner}', '{board}') + buildRunLineAsk('{board}') + buildCardAsk('{pick}'))
+  .update(buildGarySystemPrompt('{date}') + THE_READ_ASK + buildTicketAsk('{winner}', '{board}') + buildRunLineTicketAsk('{winner}', '{board}') + buildCardAsk('{pick}'))
   .digest('hex')
   .slice(0, 12);
 
@@ -227,51 +229,45 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
   let ticket = null;
   const isRunLineTicket = (t) => /[+-]1\.5|run\s*line/i.test(String(t?.final_pick || ''));
 
-  if (runLineGame) {
-    // RUN-LINE GAME — one decision turn, un-blind by design: the ±1.5 was
-    // the question from the first word, so there is no winner to seal and
-    // no second ask to anchor. read_winner stays null (no winner call
-    // exists); the why is stored as the read.
-    let res1 = await sendToSessionWithRetry(session, firstMessage, {});
+  // TURN 1 — THE READ. The blind desk in (no lines anywhere), the winner
+  // out. No price exists yet, so no price can author this. RL games read
+  // blind exactly like every other game (founder GO, Aug 10) — the game
+  // question first, the market shape only at the ticket.
+  let res1 = await sendToSessionWithRetry(session, firstMessage, {});
+  bump(res1);
+  read = parseReadJson(res1.content);
+  if (!read) {
+    res1 = await sendToSessionWithRetry(session, 'Return your read JSON now.', {});
     bump(res1);
-    ticket = parseFinalJson(res1.content);
-    if (!ticket) {
-      res1 = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
-      bump(res1);
-      ticket = parseFinalJson(res1.content);
-      if (!ticket) { logCost(); return { error: 'parse: no run-line JSON after re-ask' }; }
-    }
+    read = parseReadJson(res1.content);
+    if (!read) { logCost(); return { error: 'parse: no read JSON after re-ask' }; }
+  }
+
+  // TURN 2 — THE TICKET. The lines arrive with the read already sealed.
+  // RL games get the RL-only board and the moneyline-off sentence.
+  const ticketAsk = runLineGame
+    ? buildRunLineTicketAsk(read.winner, boardText)
+    : buildTicketAsk(read.winner, boardText);
+  let res2 = await sendToSessionWithRetry(session, ticketAsk, {});
+  bump(res2);
+  ticket = parseFinalJson(res2.content);
+  if (!ticket) {
+    res2 = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+    bump(res2);
+    ticket = parseFinalJson(res2.content);
+    if (!ticket) { logCost(); return { error: 'parse: no ticket JSON after re-ask' }; }
+  }
+  if (runLineGame) {
+    // RL rail: the only market tonight is the ±1.5 — one corrective
+    // re-ask, then a contained no-pick.
     if (!isRunLineTicket(ticket)) {
-      res1 = await sendToSessionWithRetry(session, 'Tonight\'s question is the run line — the moneyline is off the board. Return your final JSON.', {});
-      bump(res1);
-      const rt = parseFinalJson(res1.content);
+      res2 = await sendToSessionWithRetry(session, 'The moneyline is off the board tonight — the run line is the only market. Return your final JSON.', {});
+      bump(res2);
+      const rt = parseFinalJson(res2.content);
       if (!rt || !isRunLineTicket(rt)) { logCost(); return { error: 'rails: run-line game produced a non-run-line ticket' }; }
       ticket = rt;
     }
-    read = { winner: null, read: ticket.read ?? null };
   } else {
-    // TURN 1 — THE READ. The blind desk in (no lines anywhere), the winner
-    // out. No price exists yet, so no price can author this.
-    let res1 = await sendToSessionWithRetry(session, firstMessage, {});
-    bump(res1);
-    read = parseReadJson(res1.content);
-    if (!read) {
-      res1 = await sendToSessionWithRetry(session, 'Return your read JSON now.', {});
-      bump(res1);
-      read = parseReadJson(res1.content);
-      if (!read) { logCost(); return { error: 'parse: no read JSON after re-ask' }; }
-    }
-
-    // TURN 2 — THE TICKET. The lines arrive with the read already sealed.
-    let res2 = await sendToSessionWithRetry(session, buildTicketAsk(read.winner, boardText), {});
-    bump(res2);
-    ticket = parseFinalJson(res2.content);
-    if (!ticket) {
-      res2 = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
-      bump(res2);
-      ticket = parseFinalJson(res2.content);
-      if (!ticket) { logCost(); return { error: 'parse: no ticket JSON after re-ask' }; }
-    }
     // Belt-and-suspenders cap (threshold -179, founder): a heavy-ML game
     // normally routes run-line pre-flight; the only way a past-cap ML can
     // reach this flow is the no-spread-on-board fallback. Never pay it.
@@ -338,13 +334,11 @@ export async function analyzeGameDesk(game, options = {}) {
   const { homeTeam, awayTeam } = desk.meta;
 
   const systemPrompt = buildGarySystemPrompt(todayLong());
-  // Pre-flight fork (founder GO, Aug 6): a run-line game skips the blind
-  // split — the ±1.5 is the question from the first word, no winner seal to
-  // anchor it. Every other game: the read turn sees the blind desk and THE
-  // LINES reach the session only in turn 2's ticket ask.
-  const firstMessage = desk.runLineGame
-    ? `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${buildRunLineAsk(desk.boardTextRunLine)}`
-    : `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${THE_READ_ASK}`;
+  // EVERY game reads blind (founder GO, Aug 10 — supersedes the Aug 6
+  // un-blind RL fork): the read turn sees the blind desk only. What the
+  // pre-flight fork still decides is which BOARD the ticket turn reveals —
+  // the full lines, or the RL-only board with the moneyline off.
+  const firstMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskTextBlind}\n\n${THE_READ_ASK}`;
 
   // NO LINES, NO TICKET (Aug 6 night — the Padres degenerate pick: the BDL
   // odds fetch came back empty, THE LINES said so, and the ticket turn
@@ -353,6 +347,11 @@ export async function analyzeGameDesk(game, options = {}) {
   // bet: contained no-pick, and the later tiers retry once the book posts.
   if (!desk.runLineGame && desk.meta.moneylineHome == null && desk.meta.moneylineAway == null) {
     return { error: 'no lines on the board — odds fetch empty; retry tier owns it' };
+  }
+  // Same law for the RL fork (Aug 10): a run-line game whose RL board came
+  // back empty cannot seal a bet — contained no-pick, retry tier owns it.
+  if (desk.runLineGame && !desk.boardTextRunLine) {
+    return { error: 'no run line on the board — odds fetch empty; retry tier owns it' };
   }
 
   const corpus = [{ content: desk.deskText }];
@@ -368,7 +367,7 @@ export async function analyzeGameDesk(game, options = {}) {
   for (let i = 0; i < cascade.length; i++) {
     const modelName = cascade[i];
     try {
-      pass = await runBrainPass(modelName, systemPrompt, firstMessage, desk.boardText, auditAll, desk.runLineGame);
+      pass = await runBrainPass(modelName, systemPrompt, firstMessage, desk.runLineGame ? desk.boardTextRunLine : desk.boardText, auditAll, desk.runLineGame);
       respondingModel = modelName;
       if (i > 0) console.warn(`   [Brain] FALLBACK brain produced this pass: ${modelName}`);
       break;

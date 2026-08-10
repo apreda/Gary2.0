@@ -212,38 +212,8 @@ export function computeMlbScheduleShape(seasonIndex, teamBdlId, todayEtDate, tod
   return { line: bits.join('; ') + '.' };
 }
 
-/**
- * HISTORIC HEAD-TO-HEAD BY SEASON — pure tally over raw BDL game rows
- * (Jul 22 2026, founder-approved: "the Brewers own the Reds" is fan
- * knowledge, but the desk serves only the season-by-season tallies — never
- * the conclusion). Regular season, final games only; seasons with no
- * meetings are omitted; null when nothing qualifies (e.g. new interleague
- * pairs).
- */
-export function computeMlbH2hBySeason(rows, homeBdlId, awayBdlId, homeTeam) {
-  if (!Array.isArray(rows) || !homeBdlId || !awayBdlId) return null;
-  const bySeason = new Map();
-  for (const g of rows) {
-    const hId = g?.home_team?.id;
-    const aId = g?.away_team?.id;
-    const pair = (hId === homeBdlId && aId === awayBdlId) || (hId === awayBdlId && aId === homeBdlId);
-    if (!pair) continue;
-    if (g.season_type !== 'regular') continue;
-    if (!/final/i.test(String(g.status || ''))) continue;
-    const hr = g.home_team_data?.runs;
-    const ar = g.away_team_data?.runs;
-    if (hr == null || ar == null || hr === ar) continue;
-    const tonightHomeWon = (hId === homeBdlId) ? hr > ar : ar > hr;
-    const t = bySeason.get(g.season) || { w: 0, l: 0 };
-    tonightHomeWon ? t.w++ : t.l++;
-    bySeason.set(g.season, t);
-  }
-  if (!bySeason.size) return null;
-  const parts = [...bySeason.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([yr, t]) => `${yr}: ${homeTeam} ${t.w}-${t.l}`);
-  return { line: `Head-to-head, prior seasons (regular season): ${parts.join(' | ')}` };
-}
+// (computeMlbH2hBySeason REMOVED — founder ruling, Aug 10 2026: no
+// prior-season numbers on the desk.)
 
 /**
  * SITUATIONAL RECORDS (Jul 26 2026, pickdesk situational layer) — how a team's
@@ -312,4 +282,47 @@ export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
     `${teamName} this season: after a loss ${fmt(afterLoss)} | after a loss by 5+ ${fmt(afterBlowoutLoss)} | after a win ${fmt(afterWin)} | in series finales ${fmt(seriesFinales)} | after an off day ${fmt(afterOffDay)}${runsLine}`,
   ];
   return { line: lines.join('\n'), records: { afterLoss, afterBlowoutLoss, afterWin, afterOffDay, seriesFinales } };
+}
+
+/**
+ * RECENT FORM, SERIES-SHAPED (founder, Aug 10 2026): "last 7 would likely be
+ * 1 game against 1 team, 3 against another and another 3 — Gary has to
+ * understand that context too." A club's recent games grouped into series
+ * runs (opponent+venue change = new series), each tallied with the opponent
+ * named. The newest run is tagged (ongoing) only when it is tonight's
+ * matchup — a finished set never wears the tag. Null-safe: no games, null.
+ */
+export function computeMlbRecentSeriesForm(games, teamNick, maxSeries = 4, ongoingOppNick = null) {
+  const rows = (Array.isArray(games) ? games : [])
+    .filter(g => g?.teams?.home?.team?.name && g?.teams?.away?.team?.name);
+  if (!rows.length || !teamNick) return null;
+  const word = String(teamNick).toLowerCase().split(' ').pop();
+  const sideOf = (g) => ((g.teams.home.team.name || '').toLowerCase().endsWith(word) ? 'home' : 'away');
+  const series = [];
+  for (const g of rows) {
+    const side = sideOf(g);
+    const opp = side === 'home' ? g.teams.away.team.name : g.teams.home.team.name;
+    const home = side === 'home';
+    const last = series[series.length - 1];
+    if (last && last.opp === opp && last.home === home) last.games.push(g);
+    else series.push({ opp, home, games: [g] });
+  }
+  const oppWord = ongoingOppNick ? String(ongoingOppNick).toLowerCase().split(' ').pop() : null;
+  const recent = series.slice(-maxSeries);
+  return recent.map((s, i) => {
+    let w = 0, l = 0;
+    for (const g of s.games) {
+      const side = sideOf(g);
+      const us = g.teams[side]?.score;
+      const them = g.teams[side === 'home' ? 'away' : 'home']?.score;
+      if (us == null || them == null) continue;
+      if (us > them) w += 1; else if (them > us) l += 1;
+    }
+    const ongoing = i === recent.length - 1 && oppWord && s.opp.toLowerCase().endsWith(oppWord);
+    // Nickname = last word, except the league's two-word nicknames.
+    const nick = /\b(Blue Jays|Red Sox|White Sox)$/.test(s.opp)
+      ? s.opp.match(/\b(Blue Jays|Red Sox|White Sox)$/)[1]
+      : s.opp.split(' ').pop();
+    return `${s.home ? 'vs' : '@'} ${nick} ${w}-${l}${ongoing ? ' (ongoing)' : ''}`;
+  }).join(' · ');
 }

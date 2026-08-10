@@ -501,8 +501,12 @@ export async function getMlbTransactions(teamId, startDate, endDate) {
   const cached = getCached(key);
   if (cached) return cached;
   const data = await apiFetch(`/transactions?teamId=${teamId}&startDate=${startDate}&endDate=${endDate}`);
+  // The feed repeats rows (a rehab assignment can print twice) — dedupe on
+  // date+description so the desk never shows the same move twice (Aug 10).
+  const seen = new Set();
   const rows = (data.transactions || [])
     .filter(t => t.description && !/minor league contract/i.test(t.description))
+    .filter(t => { const k = `${t.date}|${t.description}`; if (seen.has(k)) return false; seen.add(k); return true; })
     .map(t => ({ date: t.date, description: t.description }));
   setCache(key, rows);
   return rows;
@@ -532,6 +536,9 @@ export async function getPitcherLastStarts(personId, season, limit = 3) {
       isHome: !!g.isHome,
       ip: g.stat?.inningsPitched, h: g.stat?.hits, er: g.stat?.earnedRuns,
       k: g.stat?.strikeOuts, bb: g.stat?.baseOnBalls, hr: g.stat?.homeRuns,
+      // Pitch count (founder, Aug 10: "just innings doesn't tell the whole
+      // story") — null when the feed omits it, and the line simply skips it.
+      pitches: g.stat?.numberOfPitches ?? null,
       // Team result in his start (Jul 30, founder: "7-1 in his last 8" must
       // arrive as the ledger, not a headline) — null when the feed omits it.
       win: typeof g.isWin === 'boolean' ? g.isWin : null,

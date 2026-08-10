@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   outsFromIp, ipFromOuts, recentWindowLine, monthArcLine,
-  careerLine, longLayoffFlag, earlyCareerFlag,
+  longLayoffFlag, earlyCareerFlag,
 } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
 
 // Chandler's last 6 starts before Aug 3 (getPitcherLastStarts shape, oldest→newest)
@@ -27,7 +27,6 @@ const BIEBER_SEASONS = [
   { season: '2024', ip: '12.0', gs: 2 }, { season: '2025', ip: '40.1', gs: 7 },
   { season: '2026', ip: '37.0', gs: 8 },
 ];
-const BIEBER_CAREER = { era: '3.32', ip: '920.1', gs: 149, w: 69, l: 36 };
 
 describe('IP arithmetic', () => {
   it('converts baseball notation to outs and back', () => {
@@ -67,17 +66,6 @@ describe('monthArcLine', () => {
   it('stays silent for a one-month season (it IS the season line)', () => {
     expect(monthArcLine([{ month: 4, era: '3.00', ip: '20.0' }])).toBeNull();
     expect(monthArcLine([])).toBeNull();
-  });
-});
-
-describe('careerLine', () => {
-  it("prints Bieber's baseline — the fact that reframes his 5.74", () => {
-    expect(careerLine(BIEBER_CAREER, BIEBER_SEASONS))
-      .toBe('Career: 3.32 ERA, 920.1 IP, 149 starts, 69-36 (2018-2026)');
-  });
-  it('stays silent when career == this season (rookie)', () => {
-    expect(careerLine({ era: '4.49', ip: '110.1', gs: 21 }, [{ season: '2026', ip: '110.1', gs: 21 }])).toBeNull();
-    expect(careerLine(null, BIEBER_SEASONS)).toBeNull();
   });
 });
 

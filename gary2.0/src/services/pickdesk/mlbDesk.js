@@ -154,9 +154,29 @@ export function buildBoardSection(rows, homeTeam, awayTeam) {
  * asked after an allegiance exists defaults to yes); these rare games skip
  * the blind split and ask the real question organically.
  */
+/**
+ * The RL board must carry the actual RUN LINE — ±1.5 — never whatever
+ * spread the preferred book happens to list (Aug 10 live-fire catch:
+ * DraftKings posted Padres -2.5 (-426) as its spread row; Gary was told
+ * "the run line is the only market" while looking at a 2.5, refused to
+ * invent a ±1.5, and the rail contained the game to a no-pick). Walk the
+ * book preference for a ±1.5 row; no book posting ±1.5 → null, and the
+ * pre-flight fork falls back to the blind flow with the ML cap rail.
+ */
+export function chooseRunLineRow(rows) {
+  const usable = (rows || []).filter(r =>
+    Math.abs(Number(r.spread_home_value)) === 1.5 &&
+    r.spread_home_odds != null && r.spread_away_odds != null);
+  for (const v of BOOK_PREFERENCE) {
+    const hit = usable.find(r => (r.vendor || '').toLowerCase() === v);
+    if (hit) return hit;
+  }
+  return usable[0] || null;
+}
+
 export function buildRunLineBoardSection(rows, homeTeam, awayTeam) {
-  const book = chooseBook(rows);
-  if (!book || book.spread_home_value == null) return null;
+  const book = chooseRunLineRow(rows);
+  if (!book) return null;
   const label = BOOK_LABELS[(book.vendor || '').toLowerCase()] || book.vendor || 'Book';
   return `═══ THE LINES (${label}) ═══\n${awayTeam} ${fmtOdds(book.spread_away_value)} (${fmtOdds(book.spread_away_odds)}) | ${homeTeam} ${book.spread_home_value} (${fmtOdds(book.spread_home_odds)})`;
 }
@@ -192,7 +212,8 @@ const MATCHUP_SECTIONS = [
   // the PITCHER's platoon split stays in his SP block, and lineup recency
   // stays in LINEUP RECENT BATTING. No team-vs-hand source exists in BDL —
   // stated per the founder's rule rather than faked with a proxy.
-  ['MLB_LINEUP_VS_SP', `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`],
+  // (MLB_LINEUP_VS_SP REMOVED — founder ruling, Aug 10: career/prior-season
+  // numbers off the desk; lineup-vs-SP history was career-grain by nature.)
   ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
   ['MLB_CATCHER_DEFENSE', '═══ CATCHERS — the running game ═══'],
   // (MLB_BULLPEN season section REMOVED — founder, Aug 5 PM: "I don't need
@@ -376,6 +397,18 @@ export async function buildMlbDesk(game, options = {}) {
   const heavy = (o) => typeof o === 'number' && o < -179;
   const boardTextRunLine = buildRunLineBoardSection(oddsRows, homeTeam, awayTeam);
   const runLineGame = Boolean((heavy(metaNow.moneylineHome) || heavy(metaNow.moneylineAway)) && boardTextRunLine);
+  // RL games price the ticket off the SAME ±1.5 row the board shows — the
+  // preferred book's spread row can be an alternate line (the -2.5 catch).
+  if (runLineGame) {
+    const rlRow = chooseRunLineRow(oddsRows);
+    if (rlRow) {
+      metaNow.book = rlRow.vendor || metaNow.book;
+      metaNow.spreadHome = rlRow.spread_home_value ?? null;
+      metaNow.spreadAway = rlRow.spread_away_value ?? null;
+      metaNow.spreadHomeOdds = rlRow.spread_home_odds ?? null;
+      metaNow.spreadAwayOdds = rlRow.spread_away_odds ?? null;
+    }
+  }
 
 
   // ── THE THREE SHELVES (founder GO, Aug 5 eve) ──────────────────────────
@@ -396,7 +429,6 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ PROBABLE PITCHERS ═══',
     '═══ PITCHER SAMPLE CONTEXT ═══',
     '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
-    `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`,
     '═══ CONFIRMED LINEUPS ═══',
     '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
     '═══ INJURIES (BDL Structured) ═══',
@@ -404,6 +436,7 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ LAST NIGHT, AS WRITTEN ═══',
     '═══ THE PEN — high-leverage arms ═══',
     '═══ BULLPEN WORKLOAD (recent appearances) ═══',
+    '═══ ROSTER MOVES — LAST 14 DAYS ═══',
     '═══ CATCHERS — the running game ═══',
     '═══ THE PARK ═══',
     '═══ REST & SCHEDULE SITUATION ═══',
@@ -414,7 +447,6 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ TEAM DEFENSE ═══',
     '═══ RECENT FORM ═══',
     '═══ SERIES STATE ═══',
-    '═══ ROSTER MOVES — LAST 14 DAYS ═══',
     '═══ SCHEDULE SHAPE ═══',
   ];
   // RL-ONLY REORDER (founder GO, Aug 6 PM): run-line games read team-first —
@@ -429,10 +461,10 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ LAST NIGHT, AS WRITTEN ═══',
     '═══ THE PEN — high-leverage arms ═══',
     '═══ BULLPEN WORKLOAD (recent appearances) ═══',
+    '═══ ROSTER MOVES — LAST 14 DAYS ═══',
     '═══ CATCHERS — the running game ═══',
     '═══ PROBABLE PITCHERS ═══',
     '═══ PITCHER SAMPLE CONTEXT ═══',
-    `═══ LINEUP vs TONIGHT'S SP — career, team totals ═══`,
     '═══ THE PARK ═══',
     '═══ REST & SCHEDULE SITUATION ═══',
   ];

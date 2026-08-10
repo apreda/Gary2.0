@@ -72,29 +72,8 @@ export function monthArcLine(monthRows) {
   return `By month: ${parts.join(' · ')}`;
 }
 
-/**
- * The career baseline — who this pitcher has been, as a number, printed
- * under the season line it contextualizes.
- *   "Career: 3.32 ERA, 920.1 IP, 149 starts, 69-36 (2018-2026)"
- * Null when there is no career beyond this season (a rookie's career line
- * would just restate his season) or no career data at all.
- */
-export function careerLine(career, seasons) {
-  if (!career) return null;
-  const gs = Number(career.gs) || 0;
-  const years = (Array.isArray(seasons) ? seasons : [])
-    .map(s => Number(s.season)).filter(Number.isFinite);
-  if (!years.length || gs === 0) return null;
-  const first = Math.min(...years);
-  const last = Math.max(...years);
-  if (first === last) return null; // career == this season: nothing to add
-  const bits = [];
-  if (career.era != null && career.era !== '') bits.push(`${Number(career.era).toFixed(2)} ERA`);
-  if (career.ip != null) bits.push(`${career.ip} IP`);
-  bits.push(`${gs} starts`);
-  if (career.w != null && career.l != null) bits.push(`${career.w}-${career.l}`);
-  return `Career: ${bits.join(', ')} (${first}-${last})`;
-}
+// (careerLine REMOVED — founder ruling, Aug 10 2026: no career stats on
+// the desk. Who-a-pitcher-is arrives as written via the press layer.)
 
 /**
  * SAMPLE CONTEXT: long-layoff return. Fires when both recent prior seasons
