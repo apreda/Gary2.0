@@ -26,14 +26,13 @@ import {
   getPitcherPlatoonSplits,
   getMlbTransactions,
   getPitcherLastStarts,
-  getPitcherVsTeam,
   getPlayerSeasonStats,
   getPitcherMonthSplits,
   getPitcherCareerProfile,
 } from '../../../mlbStatsApiService.js';
-import { recentWindowLine, monthArcLine, careerLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier } from './pitcherArc.js';
+import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbH2hBySeason, toEtDate } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbScheduleShape, computeMlbRecentSeriesForm, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
@@ -387,11 +386,13 @@ export async function buildMlbScoutReport(game, options = {}) {
       pressBySide[side] = openaiWebSearch(
         `MLB: how has ${p.fullName} (${label} starting pitcher) been described this week — ` +
         `who he is in the club's plans as written (top prospect, established ace, journeyman filler, converted reliever — his pedigree and what's expected of him), ` +
-        `how he looked in his most recent start and his recent starts as reported (command, stuff, velocity, length, how hitters handled him), ` +
+        `how he looked in his most recent start and his recent starts as reported (command, stuff, velocity, how hitters handled him), ` +
         `any mechanical, workload, or health notes as written, and manager or coach comments about him. ` +
-        `Reported descriptions only, attributed to their sources. No season-long stat lines, no picks, no predictions. ` +
-        `Start directly with the reporting, most recent start first — no preamble, no meta commentary about these instructions.`,
-        { maxTokens: 700 }
+        `Do NOT relay box-score numbers (innings, runs, strikeouts, pitch counts) — the official line is already on file; bring only the descriptions, quotes, and evaluations around it. ` +
+        `Use beat reporters and major outlets (MLB.com, team beats, ESPN, The Athletic, SNY-class regionals); skip fan blogs and aggregators. ` +
+        `Reported descriptions only, attributed to their sources. No picks, no predictions. ` +
+        `Start directly with the reporting, most recent start first. Never narrate your process, mention these instructions, or write any preamble — the first words of your answer must already be reporting.`,
+        { maxTokens: 900 }
       ).then(r => String(r?.data || '').trim()).catch(() => '');
     }
     for (const [side, label] of [['away', awayTeam], ['home', homeTeam]]) {
@@ -435,26 +436,26 @@ export async function buildMlbScoutReport(game, options = {}) {
       // every pick so the brain never has to fill the gap from memory.
       try {
         const mlbamId = pitcher.id;
-        const oppMlbamId = side === 'home' ? awayTeamId : homeTeamId;
-        const [arsenal, platoon, contact, seasonPitching, lastStarts, vsOpp, monthSplits, careerProfile] = await Promise.all([
+        // (Career-vs-opponent fetch REMOVED — founder ruling, Aug 10: prior-
+        // season numbers off the desk.)
+        const [arsenal, platoon, contact, seasonPitching, lastStarts, monthSplits, careerProfile] = await Promise.all([
           getPitcherArsenal(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
           getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPlayerSeasonStats(mlbamId, season, 'pitching').catch(() => null) : Promise.resolve(null),
           mlbamId ? getPitcherLastStarts(mlbamId, season, 6).catch(() => []) : Promise.resolve([]),
-          mlbamId && oppMlbamId ? getPitcherVsTeam(mlbamId, oppMlbamId).catch(() => null) : Promise.resolve(null),
           mlbamId ? getPitcherMonthSplits(mlbamId, season).catch(() => []) : Promise.resolve([]),
           mlbamId ? getPitcherCareerProfile(mlbamId).catch(() => null) : Promise.resolve(null),
         ]);
 
         // THE ARC (Aug 4 2026, founder GO — the Bieber/Chandler autopsy):
-        // the season aggregate arrived pre-chewed while the trajectory sat as
-        // raw rows, so rationales quoted the aggregate. These lines print the
-        // career baseline and the season's own decomposition as equally
-        // quotable facts. Facts only — no trend words, no weighting.
+        // the season's own decomposition, as quotable as the aggregate.
+        // Career line REMOVED (founder ruling, Aug 10: no career stats or
+        // prior-season numbers on the desk — "keep him current"; who-a-
+        // pitcher-is now arrives as written via the press layer). The
+        // careerProfile fetch stays: the layoff/rookie TRIGGERS read it,
+        // they just print current-framed lines.
         {
-          const cl = careerLine(careerProfile?.career, careerProfile?.seasons);
-          if (cl) parts.push(`  ${cl}`);
           const ml = monthArcLine(monthSplits);
           if (ml) parts.push(`  ${ml}`);
           // Stash for the SAMPLE CONTEXT flags below. The full-season game
@@ -475,7 +476,7 @@ export async function buildMlbScoutReport(game, options = {}) {
           // founder: "team is 7-1 in his last 8" must arrive as the raw
           // ledger — dates, opponents, his line, who won — so the brain can
           // weigh WHY, not inherit a headline).
-          const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
+          const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.pitches ? ` ${g.pitches}p` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
           parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
           // The ledger's own arithmetic (Aug 4) — the recent window as a
           // number, as citable as the season figure above it.
@@ -497,26 +498,27 @@ export async function buildMlbScoutReport(game, options = {}) {
           const lastPk = lastStarts[lastStarts.length - 1]?.gamePk;
           if (lastPk) {
             const st = await fetchGameStory(lastPk).catch(() => null);
-            if (st?.body) parts.push(`  His last start, as written: ${sentenceTrim(String(st.body).replace(/\s*\n+\s*/g, ' '), 600)}`);
+            if (st?.body) parts.push(`  His last start, as written: ${sentenceTrim(String(st.body).replace(/\s*\n+\s*/g, ' '), 1200)}`);
           }
         }
         // The week's press on him (fired pre-loop; see pressBySide above).
+        // No editorial cap (founder, Aug 10: "doesn't make sense to cut off
+        // context") — the 4000 bound is a runaway guard, not a trim.
         // Skip short/no-coverage returns — never print an empty shrug.
-        const press = pressBySide[side] ? sentenceTrim(String(await pressBySide[side]).replace(/\s*\n+\s*/g, ' '), 900) : '';
+        // Meta-leak strip (Aug 10 smoke catch: "Let me write it up per the
+        // instructions" reached a desk line): when the searcher narrates
+        // before its first real section marker, start at the marker.
+        let pressRaw = pressBySide[side] ? String(await pressBySide[side]) : '';
+        const metaLead = pressRaw.slice(0, 600);
+        if (/\b(per the instructions|compile the report|let me write|these instructions)\b/i.test(metaLead)) {
+          const marker = pressRaw.search(/\*\*|^##\s/m);
+          if (marker > 0) pressRaw = pressRaw.slice(marker);
+        }
+        pressRaw = pressRaw.replace(/^##\s*Reporting\s*/i, '');
+        const press = pressRaw ? sentenceTrim(pressRaw.replace(/\s*\n+\s*/g, ' '), 4000) : '';
         if (press && press.length > 60 && !/^(no|none|unverified)\b/i.test(press)) {
           parts.push(`  His recent work, as written: ${press}`);
         }
-        if (vsOpp && (vsOpp.games || vsOpp.ip)) {
-          const oppName = side === 'home' ? awayTeam : homeTeam;
-          const vbits = [];
-          if (vsOpp.starts != null) vbits.push(`${vsOpp.starts} starts`);
-          else if (vsOpp.games != null) vbits.push(`${vsOpp.games} games`);
-          if (vsOpp.ip != null) vbits.push(`${vsOpp.ip} IP`);
-          if (vsOpp.era != null) vbits.push(`${vsOpp.era} ERA`);
-          if (vsOpp.avgAgainst != null) vbits.push(`${vsOpp.avgAgainst} BA against`);
-          if (vbits.length) parts.push(`  Career vs ${oppName}: ${vbits.join(', ')}`);
-        }
-
         // TONIGHT'S-VENUE split (Jul 31 — the Lowder autopsy: the Hub
         // headlined his 3.09-at-home while the desk priced the 5.61 season
         // number; Gary must never be blind to a split we publish). Same
@@ -770,15 +772,25 @@ export async function buildMlbScoutReport(game, options = {}) {
     const entries = [];
     if (homeLast && awayLast && homeLast.gamePk === awayLast.gamePk) {
       const story = wireStoryByPk.get(homeLast.gamePk);
-      if (story) entries.push(`These two, ${String(homeLast.officialDate || homeLast.gameDate || '').slice(0, 10)} — ${story.headline}\n${sentenceTrim(story.body, 700)}`);
+      if (story) entries.push(`These two, ${String(homeLast.officialDate || homeLast.gameDate || '').slice(0, 10)} — ${story.headline}\n${sentenceTrim(story.body, 1200)}`);
     } else {
       for (const [g, nick] of [[awayLast, awayTeam], [homeLast, homeTeam]]) {
         const story = g && wireStoryByPk.get(g.gamePk);
-        if (story) entries.push(`${wireLabel(g, nick)} — ${story.headline}\n${sentenceTrim(story.body, 700)}`);
+        if (story) entries.push(`${wireLabel(g, nick)} — ${story.headline}\n${sentenceTrim(story.body, 1200)}`);
       }
     }
     return entries.join('\n\n');
   })();
+
+  // RECENT FORM, SERIES-SHAPED (founder, Aug 10): windows cut at series
+  // boundaries with the opponent named — a flat "last 7" silently spans
+  // three different clubs, and Gary has to see that context.
+  const recentSeriesBlock = [
+    [homeRecentGames, homeTeam], [awayRecentGames, awayTeam],
+  ].map(([games, nick]) => {
+    const line = computeMlbRecentSeriesForm(games, nick, 4, nick === homeTeam ? awayTeam : homeTeam);
+    return line ? `${nick}: ${line}` : null;
+  }).filter(Boolean).join('\n');
 
   // THE TAPE prefetch: scoring flows for the recent games shown below —
   // one cached single-game fetch each (curated scoring_summary field).
@@ -1574,14 +1586,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Season head-to-head — computed from the cached season index, zero calls.
   const seasonSeries = computeMlbSeasonSeries(seasonIndex, homeTeamBdlId, awayTeamBdlId, homeTeam, awayTeam);
 
-  // Historic head-to-head, prior 3 seasons — season-by-season tallies only,
-  // never a characterization (the Reds-Brewers lesson).
-  let historicH2h = null;
-  try {
-    const priorSeasons = [season - 3, season - 2, season - 1];
-    const priorRows = await ballDontLieService.getMlbTeamGamesForSeasons(homeTeamBdlId, priorSeasons);
-    historicH2h = computeMlbH2hBySeason(priorRows, homeTeamBdlId, awayTeamBdlId, homeTeam);
-  } catch { /* omit on failure */ }
+  // (Historic head-to-head, prior 3 seasons — REMOVED, founder ruling
+  // Aug 10: no prior-season numbers on the desk. The 2026 season series
+  // stays; last year's rosters aren't tonight's teams.)
 
   // SITUATION FLAGS (founder GO, Aug 5 night): the detectable states behind
   // betting lore — "first games without the everyday star", "just activated",
@@ -1659,9 +1666,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     homeShape ? `${homeTeam}: ${homeShape.line}` : null,
     awayShape ? `${awayTeam}: ${awayShape.line}` : null,
   ].filter(Boolean).join('\n');
-  const seasonSeriesBlock = (seasonSeries
+  const seasonSeriesBlock = seasonSeries
     ? `\n${seasonSeries.line}\n${seasonSeries.results.map(r => `  ${r}`).join('\n')}`
-    : '') + (historicH2h ? `\n${historicH2h.line}` : '');
+    : '';
 
   // ═══════════════════════════════════════════════════════════════════
   // TEAM SEASON STATS — FORMAT COMPARISON SECTION
@@ -1843,7 +1850,7 @@ ${recentPerformanceSection || 'No recent performance data.'}
 ═══ SERIES STATE ═══
 ${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}
 
-Recent results:
+${recentSeriesBlock ? `Recent series:\n${recentSeriesBlock}\n\n` : ''}Recent results:
 ${recentResults}
 
 Last game (inning detail):

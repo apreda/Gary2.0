@@ -39,3 +39,26 @@ describe('stakesLine — division clause', () => {
     expect(stakesLine(bare, 'White Sox')).toBe('White Sox: 61-56, streak 2, L10 5-5');
   });
 });
+
+/**
+ * RL BOARD ROW pins (Aug 10 live-fire catch): the RL board must be ±1.5 —
+ * a preferred book listing an alternate spread (-2.5) walks down the book
+ * order, and no ±1.5 anywhere → null (blind-flow fallback owns the game).
+ */
+import { chooseRunLineRow, buildRunLineBoardSection } from '../../../src/services/pickdesk/mlbDesk.js';
+
+describe('chooseRunLineRow', () => {
+  const row = (vendor, sh, sho, sao) => ({ vendor, spread_home_value: sh, spread_away_value: -sh, spread_home_odds: sho, spread_away_odds: sao });
+
+  it('skips a preferred book posting an alternate line and takes the next book at ±1.5', () => {
+    const rows = [row('draftkings', -2.5, -426, 293), row('fanduel', -1.5, -148, 122)];
+    expect(chooseRunLineRow(rows)?.vendor).toBe('fanduel');
+    expect(buildRunLineBoardSection(rows, 'Padres', 'Astros')).toContain('-1.5 (-148)');
+    expect(buildRunLineBoardSection(rows, 'Padres', 'Astros')).not.toContain('2.5');
+  });
+
+  it('returns null when no book posts ±1.5 — the blind-flow fallback owns the game', () => {
+    expect(chooseRunLineRow([row('draftkings', -2.5, -426, 293)])).toBeNull();
+    expect(buildRunLineBoardSection([row('draftkings', -2.5, -426, 293)], 'H', 'A')).toBeNull();
+  });
+});
