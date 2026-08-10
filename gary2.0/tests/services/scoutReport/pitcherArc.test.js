@@ -82,15 +82,15 @@ describe('careerLine', () => {
 });
 
 describe('longLayoffFlag', () => {
-  it('fires for Bieber: two tiny seasons after an established workload', () => {
+  it('fires for Bieber current-framed: the trigger reads the layoff, the line never recites past years (founder, Aug 10)', () => {
     const flag = longLayoffFlag({
       name: 'Shane Bieber', label: 'away',
       seasons: BIEBER_SEASONS, season: 2026, firstStartDate: '2026-06-23',
     });
-    expect(flag).toContain('Shane Bieber (away)');
-    expect(flag).toContain('12.0 IP in 2024 and 40.1 IP in 2025');
-    expect(flag).toContain('Jun 23');
-    expect(flag).toContain('2026 season-long numbers span only the starts since');
+    expect(flag).toBe('Shane Bieber (away): first 2026 start came Jun 23 — season-long numbers span only the starts since.');
+  });
+  it('stays silent when the layoff shape fires but no first-start date exists to anchor the current season', () => {
+    expect(longLayoffFlag({ name: 'S', label: 'away', seasons: BIEBER_SEASONS, season: 2026, firstStartDate: null })).toBeNull();
   });
   it('does not fire for a continuously established starter', () => {
     const steady = BIEBER_SEASONS.map(s => ({ ...s, ip: '180.0' }));
