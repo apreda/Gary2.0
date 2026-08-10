@@ -185,6 +185,25 @@ function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
   });
 }
 const { supabase } = await import('../src/supabaseClient.js');
+const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
+
+// WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
+// graded ledger, fetched once per run. A failed fetch scores every pick
+// from the neutral base — never blocks storage.
+let _winnersClassRates = null;
+async function getWinnersClassRates() {
+  if (_winnersClassRates) return _winnersClassRates;
+  try {
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const { data } = await supabase.from('game_results')
+      .select('pick_text, result')
+      .eq('league', 'MLB')
+      .gte('game_date', since)
+      .limit(1000);
+    _winnersClassRates = classWinRates(data || []);
+  } catch { _winnersClassRates = {}; }
+  return _winnersClassRates;
+}
 // Graceful shutdown handler — log and exit cleanly on SIGTERM/SIGINT
 // Picks stored before the signal are already safe in Supabase (incremental storage)
 process.on('SIGTERM', () => {
@@ -1543,6 +1562,12 @@ async function main() {
             // conviction Gary never stated, and the ledger read it as real).
             // The loud warn below is the founder-ordered alert for that case.
             confidence: result.confidence ?? null,
+            // WINNERS SCORE v1 (founder GO, Aug 10): ledger-empirical rank
+            // for the Winners-page slot chooser — the pick's class 30d win
+            // rate plus a small confidence tiebreak. App sorts by it;
+            // null = unrankable pick text.
+            winners_class: classOf(finalPickText),
+            winners_score: winnersScore(finalPickText, result.confidence ?? null, await getWinnersClassRates()),
             // THE BLIND SPLIT (Aug 5): the sealed pre-lines read — the winner
             // Gary named before any price reached the session, and his why.
             // Null on non-desk lanes; the ledger reads ticket-vs-read crossings.
