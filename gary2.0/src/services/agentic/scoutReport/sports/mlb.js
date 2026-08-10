@@ -757,6 +757,28 @@ export async function buildMlbScoutReport(game, options = {}) {
     return [line(homeTeam, h), line(awayTeam, a)].filter(Boolean).join('\n') || 'No game stories available.';
   })();
 
+  // LAST NIGHT, AS WRITTEN (founder GO, Aug 10): each club's most recent
+  // final's official story rides IN TONIGHT with the decision inputs — the
+  // weekend receipt was a 12-inning war both pens paid for that lived only
+  // at the desk's tail, where 45 straight reads never quoted from. The full
+  // week stays in THE WIRE; this is the one-game cut, up front. A shared
+  // game ("These two") prints once. Fail-open: no story, no line.
+  const lastNightSection = (() => {
+    const homeLast = homeWireGames[homeWireGames.length - 1] || null;
+    const awayLast = awayWireGames[awayWireGames.length - 1] || null;
+    const entries = [];
+    if (homeLast && awayLast && homeLast.gamePk === awayLast.gamePk) {
+      const story = wireStoryByPk.get(homeLast.gamePk);
+      if (story) entries.push(`These two, ${String(homeLast.officialDate || homeLast.gameDate || '').slice(0, 10)} — ${story.headline}\n${sentenceTrim(story.body, 700)}`);
+    } else {
+      for (const [g, nick] of [[awayLast, awayTeam], [homeLast, homeTeam]]) {
+        const story = g && wireStoryByPk.get(g.gamePk);
+        if (story) entries.push(`${wireLabel(g, nick)} — ${story.headline}\n${sentenceTrim(story.body, 700)}`);
+      }
+    }
+    return entries.join('\n\n');
+  })();
+
   // THE TAPE prefetch: scoring flows for the recent games shown below —
   // one cached single-game fetch each (curated scoring_summary field).
   // A failed fetch just omits that game's flow line.
@@ -1829,7 +1851,7 @@ ${lastGameSection}
 ═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══
 ${wireSection}
 
-${situationFlagsSection ? `═══ SITUATION FLAGS ═══\n${situationFlagsSection}\n\n` : ''}═══ ROSTER MOVES — LAST 14 DAYS ═══
+${situationFlagsSection ? `═══ SITUATION FLAGS ═══\n${situationFlagsSection}\n\n` : ''}${lastNightSection ? `═══ LAST NIGHT, AS WRITTEN ═══\n${lastNightSection}\n\n` : ''}═══ ROSTER MOVES — LAST 14 DAYS ═══
 ${rosterMovesSection}
 
 ═══ SCHEDULE SHAPE ═══

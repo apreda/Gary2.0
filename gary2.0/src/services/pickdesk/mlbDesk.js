@@ -50,12 +50,26 @@ function findRow(standings, teamName) {
 export function stakesLine(standings, teamName) {
   const t = findRow(standings, teamName);
   if (!t) return `${teamName}: standings unavailable.`;
-  // Division position / GB / seed / one-run record REMOVED (founder rulings,
-  // Aug 5 PM): season-position trajectory and record-species numbers are not
-  // tonight's question. The stakes are the club, its record, and its shape.
+  // Seed / one-run record stay REMOVED (founder rulings, Aug 5 PM).
+  // Division position + GB RESTORED (founder GO, Aug 10 — the CWS receipt:
+  // the first-place club Gary faded three straight days read as just
+  // another record because the desk couldn't say "1st"). One factual
+  // clause, fail-open when the fields are short.
   const bits = [`${t.wins || 0}-${t.losses || 0}`];
   if (t.streak != null && t.streak !== '') bits.push(`streak ${t.streak}`);
   if (t.last_ten_games) bits.push(`L10 ${t.last_ten_games}`);
+  const div = (standings || [])
+    .filter((r) => r?.division_name && r.division_name === t.division_name && r.division_games_behind != null)
+    .sort((a, b) => a.division_games_behind - b.division_games_behind);
+  const rank = div.indexOf(t) + 1;
+  if (rank > 0 && div.length >= 2 && t.division_short_name) {
+    const ord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
+    const fmt = (n) => String(Number(n));
+    const clause = rank === 1
+      ? `1st ${t.division_short_name} (+${fmt(div[1].division_games_behind)})`
+      : `${ord(rank)} ${t.division_short_name} (−${fmt(t.division_games_behind)})`;
+    bits.push(clause);
+  }
   return `${teamName}: ${bits.join(', ')}`;
 }
 
@@ -387,6 +401,7 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
     '═══ INJURIES (BDL Structured) ═══',
     '═══ SITUATION FLAGS ═══',
+    '═══ LAST NIGHT, AS WRITTEN ═══',
     '═══ THE PEN — high-leverage arms ═══',
     '═══ BULLPEN WORKLOAD (recent appearances) ═══',
     '═══ CATCHERS — the running game ═══',
@@ -411,6 +426,7 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
     '═══ INJURIES (BDL Structured) ═══',
     '═══ SITUATION FLAGS ═══',
+    '═══ LAST NIGHT, AS WRITTEN ═══',
     '═══ THE PEN — high-leverage arms ═══',
     '═══ BULLPEN WORKLOAD (recent appearances) ═══',
     '═══ CATCHERS — the running game ═══',

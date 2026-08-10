@@ -113,21 +113,12 @@ export function longLayoffFlag({ name, label, seasons, season, firstStartDate })
   if (!recent.length || !earlier.length) return null;
   if (Math.max(...recent.map(s => s.outs)) >= 60 * 3) return null;   // recent seasons not tiny
   if (Math.max(...earlier.map(s => s.outs)) < 100 * 3) return null;  // never established before
-  const recentBits = recent
-    .sort((a, b) => a.season - b.season)
-    .map(s => `${s.ip} IP in ${s.season}`).join(' and ');
-  const estOuts = earlier.map(s => s.outs);
-  const estIp = `${ipFromOuts(Math.min(...estOuts))}-${ipFromOuts(Math.max(...estOuts))}`;
-  const estYears = `${Math.min(...earlier.map(s => s.season))}-${Math.max(...earlier.map(s => s.season))}`;
-  let line = `${name} (${label}): threw ${recentBits} after ${estIp} IP seasons ${estYears}.`;
-  if (firstStartDate) {
-    const d = new Date(`${firstStartDate}T12:00:00Z`);
-    const md = Number.isNaN(d.getTime()) ? firstStartDate
-      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-    line += ` His first ${season} start came ${md}.`;
-  }
-  line += ` ${season} season-long numbers span only the starts since.`;
-  return line;
+  // CURRENT-FRAMED OUTPUT (founder, Aug 10: "why show past years?"). The
+  // prior-season IP shape above still decides WHEN this fires — but the
+  // line itself states only the current-season fact; the why-he-was-gone
+  // arrives as reported through the press layer, the fan's way.
+  if (!firstStartDate) return null;
+  return `${name} (${label}): first ${season} start came ${shortDate(firstStartDate)} — season-long numbers span only the starts since.`;
 }
 
 /**
