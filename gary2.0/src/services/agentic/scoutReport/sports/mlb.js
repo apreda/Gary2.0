@@ -1925,10 +1925,10 @@ ${lineupRecentBattingSection}
 ${oddsSection}
 
 
-═══ TEAM SEASON STATS (BDL) ═══
+═══ TEAM SEASON STATS ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
 
-═══ BASEBALL SAVANT xSTATS${xStatsSeason !== season ? ` (${xStatsSeason} season)` : ''} ═══
+Expected, per Savant xStats${xStatsSeason !== season ? ` (${xStatsSeason} season)` : ''}:
 ${xStatsSection || 'No xStats data available.'}
 
 ═══ INJURIES (BDL Structured) ═══
