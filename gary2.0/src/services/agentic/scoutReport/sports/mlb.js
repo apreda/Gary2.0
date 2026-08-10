@@ -386,6 +386,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (!p?.fullName) continue;
       pressBySide[side] = openaiWebSearch(
         `MLB: how has ${p.fullName} (${label} starting pitcher) been described this week — ` +
+        `who he is in the club's plans as written (top prospect, established ace, journeyman filler, converted reliever — his pedigree and what's expected of him), ` +
         `how he looked in his most recent start and his recent starts as reported (command, stuff, velocity, length, how hitters handled him), ` +
         `any mechanical, workload, or health notes as written, and manager or coach comments about him. ` +
         `Reported descriptions only, attributed to their sources. No season-long stat lines, no picks, no predictions. ` +
