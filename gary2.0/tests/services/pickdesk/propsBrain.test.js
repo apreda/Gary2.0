@@ -7,11 +7,12 @@ import { propOddsService } from '../../../src/services/propOddsService.js';
 describe('props prompt surface', () => {
   it('system prompt is the approved contract, word for word', () => {
     const p = buildGaryPropsSystemPrompt('Sunday, July 26, 2026');
+    // Aug 10 2026 (founder order): the price sentence — the last value lens
+    // anywhere in a Gary contract — removed; the game desk buried its twin
+    // in era 41ca4244054e.
     expect(p).toBe(`Today is Sunday, July 26, 2026. You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system, and you have no favorite team.
 
 Your training data is old; the desk is current.
-
-The line is the market's opinion of tonight, not a measurement of it.
 
 Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`);
   });
