@@ -15,7 +15,7 @@ import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
-import { getPitcherXStats, getBatterXStats, getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
+import { getBatterXStats, getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import {
   getTeamRoster,
   getMlbRecentGames,
@@ -175,7 +175,9 @@ export async function buildMlbScoutReport(game, options = {}) {
       `late injuries or scratches, lineup or rotation changes, and weather. ` +
       `Name the specific players involved in any injury or roster note — a report without names is not usable. ` +
       `Report only concrete, same-day facts. If there is no breaking news, say so briefly.`,
-      { maxTokens: groundingOpts.maxTokens }
+      // Hard news is a 24-hour window (founder, Aug 10) — storylines and
+      // press keep the wider one.
+      { maxTokens: groundingOpts.maxTokens, freshnessHours: 24 }
     ).then(r => r?.data || '').catch(() => ''),
     // Lineups: BDL API first (pre-game, includes handedness + probable pitchers);
     // the MLB Stats API boxscore fills any side BDL leaves short, downstream.
@@ -236,11 +238,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Always use current season — stale prior-year data is misleading.
   // ═══════════════════════════════════════════════════════════════════
   const xStatsSeason = season;
-  const [pitcherXStats, batterXStats] = await Promise.all([
-    getPitcherXStats(xStatsSeason).catch(() => []),
+  const [batterXStats] = await Promise.all([
     getBatterXStats(xStatsSeason).catch(() => []),
   ]);
-  console.log(`[Scout Report] Savant xStats: ${pitcherXStats.length} pitchers, ${batterXStats.length} batters (${xStatsSeason} season)`);
+  console.log(`[Scout Report] Savant xStats: ${batterXStats.length} batters (${xStatsSeason} season)`);
 
   // ═══════════════════════════════════════════════════════════════════
   // LAST 4 GAME BOX SCORES (BDL per-game stats for L1-L4 recaps)
@@ -1827,23 +1828,14 @@ export async function buildMlbScoutReport(game, options = {}) {
 
     const lines = [];
 
-    // Probable pitcher xStats
-    const awaySPName = pitcherStats.away?.name || probablePitchersData?.away?.fullName;
-    const homeSPName = pitcherStats.home?.name || probablePitchersData?.home?.fullName;
-    const awaySPx = findXStats(pitcherXStats,awaySPName);
-    const homeSPx = findXStats(pitcherXStats,homeSPName);
-    // X-STATS DEMOTED (founder ruling, Aug 10, after the estimator research:
-    // xERA loses to SIERA predictively, K-BB% beats them all, and it's
-    // noisy under ~50 BBE — the weekend's losing reads leaned on it against
-    // veterans in form). The pairing stays as the descriptive check it is —
-    // actual beside expected WITH its sample — and the opp-wOBA/xBA/xSLG
-    // echo chamber comes off the desk.
-    const paTag = (x) => (x?.pa ? ` (${x.pa} PA)` : '');
-    if (awaySPx || homeSPx) {
-      lines.push('Starting Pitchers:');
-      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} | xERA ${awaySPx.xera}${paTag(awaySPx)}`);
-      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} | xERA ${homeSPx.xera}${paTag(homeSPx)}`);
-    }
+    // xERA REMOVED ENTIRELY (founder ruling, Aug 10 — "we need to not be
+    // using stats we ourselves don't believe in": it loses to SIERA
+    // predictively, K-BB% beats them all, and the model clung to it in
+    // losing reads). No pitcher expected-stats line at all; K, BB, results
+    // and the arc carry the pitcher. Batter xwOBA stays — with a 100 PA
+    // floor, because under that the number is noise and Gary should simply
+    // never see it (his call: strip, don't caveat).
+    const XWOBA_MIN_PA = 100;
 
     // Key batter xStats (top 3 per team from roster if available)
     for (const [teamName, roster] of [[homeTeam, homeRoster], [awayTeam, awayRoster]]) {
@@ -1851,8 +1843,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       const xLines = [];
       for (const h of hitters) {
         const x = findXStats(batterXStats,h.name);
-        if (x) {
-          xLines.push(`  ${h.name}: BA ${x.ba} | SLG ${x.slg} | xwOBA ${x.est_woba}${paTag(x)}`);
+        if (x && Number(x.pa) >= XWOBA_MIN_PA) {
+          xLines.push(`  ${h.name}: BA ${x.ba} | SLG ${x.slg} | xwOBA ${x.est_woba} (${x.pa} PA)`);
         }
       }
       if (xLines.length > 0) {
