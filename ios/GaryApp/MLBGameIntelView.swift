@@ -161,14 +161,13 @@ struct MLBGameIntelView: View {
     /// MORE INTEL carries this game's remaining reads — the same lanes the
     /// Today page lists, minus anything already said on this page (founder,
     /// Aug 6: "this is where the insight should have gone where they are
-    /// relevant to that games players teams"). Excluded: the three the Big
-    /// Numbers rail drew (shared GameRail selection, so the two surfaces
-    /// can't disagree), the season series (its own section), the HR fun lane,
-    /// the retired NRFI dots, and the park/weather now living in the rail.
+    /// relevant to that games players teams"). Big Numbers now owns fixed team
+    /// metrics rather than consuming insight cards, so ranked matchup reads
+    /// remain available here. Excluded: the season series (its own section),
+    /// the HR fun lane, the retired NRFI dots, and park/weather (its own row).
     private var otherEdges: [Signal] {
-        let railIDs = GameRail.chosenIDs(edges)
         let dropped: Set<SignalKind> = [.h2h, .firstInning, .hrThreat, .parkWeather, .ballpark]
-        return edges.filter { !railIDs.contains($0.id) && !dropped.contains($0.kind) }
+        return edges.filter { !dropped.contains($0.kind) }
     }
 
     private func playerEdges(_ name: String) -> [Signal] {
