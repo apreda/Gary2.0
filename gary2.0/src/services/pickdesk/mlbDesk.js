@@ -5,7 +5,8 @@
  * One desk, one read: the brain gets no tools, so this desk is Gary's entire
  * evidence for the night. Section order IS the design (three shelves,
  * founder GO Aug 5 2026):
- *   TONIGHT   — the decision inputs: arms, lineups, pens, park, rest.
+ *   TONIGHT   — the decision inputs, team-first (Aug 10): lineups, state,
+ *               news, pens — then the arms, park, rest.
  *   THE CLUBS — identity and shape: stakes, season/x stats, form, series.
  *   THE WEEK  — the world's news + the week as written (official stories).
  *   THE BOARD (prices) exists only in the ticket turn — the read is blind.
@@ -373,7 +374,15 @@ export async function buildMlbDesk(game, options = {}) {
   // carried moneyline and run line through the shelf.
   const { rest: shelfBase } = extractSection(shelfWithOdds, '═══ BETTING CONTEXT ═══');
   const worldBody = news ? news.replace(NEWS_HEADER, '').trim() : 'No same-day news.';
-  const world = `═══ THE WORLD ═══\n${worldBody}`;
+  // WORLD SPLIT (founder GO, Aug 10): a same-day scratch is a DECISION
+  // INPUT — breaking news rides in TONIGHT; the storylines narrative stays
+  // week color at the tail.
+  const STORY_MARK = '— THE STORYLINES —';
+  const storyIdx = worldBody.indexOf(STORY_MARK);
+  const breakingBody = (storyIdx >= 0 ? worldBody.slice(0, storyIdx) : worldBody).trim() || 'No same-day news.';
+  const storyBody = storyIdx >= 0 ? worldBody.slice(storyIdx + STORY_MARK.length).trim() : '';
+  const breaking = `═══ TODAY'S BREAKING NEWS ═══\n${breakingBody}`;
+  const world = storyBody ? `═══ THE WORLD — STORYLINES ═══\n${storyBody}` : '';
 
   let shelf = insertAfterHeader(shelfBase, INJURIES_HEADER, INJURY_LEGEND);
   // The matchup lab slots ahead of the lineups; if the marker ever drifts,
@@ -425,10 +434,11 @@ export async function buildMlbDesk(game, options = {}) {
     return section;
   };
   let shelfRest = shelf;
+  // TEAM-FIRST ORDER (founder GO, Aug 10 — the order-bias lever): the blind
+  // flow now reads like the RL lane has since Aug 6 — who's playing and what
+  // shape they're in, the pens, THEN the starters. Same sections, same
+  // words. Pitch types stay in the blind flow (only the RL lane cut them).
   const TONIGHT_SECTIONS = [
-    '═══ PROBABLE PITCHERS ═══',
-    '═══ PITCHER SAMPLE CONTEXT ═══',
-    '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
     '═══ CONFIRMED LINEUPS ═══',
     '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
     '═══ INJURIES (BDL Structured) ═══',
@@ -438,21 +448,22 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ BULLPEN WORKLOAD (recent appearances) ═══',
     '═══ ROSTER MOVES — LAST 14 DAYS ═══',
     '═══ CATCHERS — the running game ═══',
+    '═══ PROBABLE PITCHERS ═══',
+    '═══ PITCHER SAMPLE CONTEXT ═══',
+    '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
     '═══ THE PARK ═══',
     '═══ REST & SCHEDULE SITUATION ═══',
   ];
   const CLUBS_SECTIONS = [
-    '═══ TEAM SEASON STATS (BDL) ═══',
-    '═══ BASEBALL SAVANT xSTATS',
+    '═══ TEAM SEASON STATS ═══',
     '═══ TEAM DEFENSE ═══',
     '═══ RECENT FORM ═══',
     '═══ SERIES STATE ═══',
     '═══ SCHEDULE SHAPE ═══',
   ];
-  // RL-ONLY REORDER (founder GO, Aug 6 PM): run-line games read team-first —
-  // who's playing and what shape they're in, pens, THEN the starters. The
-  // blind flow keeps the exact order that's winning; only the lane that
-  // misfired gets the surgery. Same sections, same words, different order.
+  // RL REORDER (founder GO, Aug 6 PM — and since Aug 10 the blind flow
+  // reads team-first too; see above). The RL list still differs in one way:
+  // pitch types stay cut here (founder, Aug 6 eve).
   const TONIGHT_SECTIONS_RL = [
     '═══ CONFIRMED LINEUPS ═══',
     '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
@@ -468,7 +479,12 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ THE PARK ═══',
     '═══ REST & SCHEDULE SITUATION ═══',
   ];
-  const tonightBlock = (runLineGame ? TONIGHT_SECTIONS_RL : TONIGHT_SECTIONS).map(takeSection).filter(Boolean).join('\n\n');
+  let tonightBlock = (runLineGame ? TONIGHT_SECTIONS_RL : TONIGHT_SECTIONS).map(takeSection).filter(Boolean).join('\n\n');
+  {
+    const target = ['═══ LAST NIGHT, AS WRITTEN ═══', '═══ THE PEN — high-leverage arms ═══', '═══ PROBABLE PITCHERS ═══']
+      .find(h => tonightBlock.includes(h));
+    tonightBlock = target ? tonightBlock.replace(target, `${breaking}\n\n${target}`) : `${tonightBlock}\n\n${breaking}`;
+  }
   // PITCH TYPES CUT from run-line desks (founder GO, Aug 6 eve — "just to
   // see what effect that has"): the whole per-pitch category — rates,
   // arsenal, velocity — extracted and DISCARDED, because the fail-open
