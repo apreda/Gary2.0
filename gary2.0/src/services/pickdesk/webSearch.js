@@ -13,9 +13,38 @@
  * re-runs the query through geminiGroundingSearch (same return contract,
  * its own freshness protocol). OpenAI stays the preferred provider.
  */
+import { createHash } from 'crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
 import { geminiGroundingSearch } from '../agentic/scoutReport/shared/grounding.js';
 import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
+
+// SEARCH CACHE (founder GO, Aug 10): the props tiers re-build the desk per
+// window, so the same four questions about the same game were re-searched
+// ~150×/day. DISK-backed because the scheduler spawns a fresh node per
+// window — an in-memory cache would die between the game desk and the
+// props desk. Successful, non-empty results only; 45-minute TTL keeps
+// same-day news honest; any fs error just falls through to a live search.
+const SEARCH_CACHE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../.cache/websearch');
+const SEARCH_CACHE_TTL_MS = 45 * 60 * 1000;
+
+function searchCacheGet(key) {
+  try {
+    const { at, value } = JSON.parse(readFileSync(join(SEARCH_CACHE_DIR, `${key}.json`), 'utf8'));
+    if (Date.now() - at > SEARCH_CACHE_TTL_MS) return null;
+    console.log(`[Web Search] cache hit (${Math.round((Date.now() - at) / 60000)}m old)`);
+    return value;
+  } catch { return null; }
+}
+
+function searchCachePut(key, value) {
+  try {
+    mkdirSync(SEARCH_CACHE_DIR, { recursive: true });
+    writeFileSync(join(SEARCH_CACHE_DIR, `${key}.json`), JSON.stringify({ at: Date.now(), value }));
+  } catch { /* cache is best-effort — never block a search result */ }
+}
 
 const WEB_SEARCH_MODEL = 'gpt-5.6-sol';
 const TIMEOUT_MS = 90000;
@@ -68,13 +97,23 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your tra
  * text (empty string on any failure).
  */
 export async function openaiWebSearch(query, options = {}) {
+  const cacheKey = createHash('sha256')
+    .update(`${query}|${options.freshnessHours || 48}`)
+    .digest('hex')
+    .slice(0, 24);
+  const cached = searchCacheGet(cacheKey);
+  if (cached) return cached;
+  const cachePut = (result) => {
+    if (result?.success && String(result?.data || '').trim()) searchCachePut(cacheKey, result);
+    return result;
+  };
   // SUBSCRIPTION BRIDGE (founder, Jul 29): with GARY_GROUNDING_VIA_CLAUDE=1,
   // grounding runs on the Claude subscription first (WebSearch tool only,
   // Sonnet by default — its own weekly bucket), $0 marginal. The OpenAI →
   // Gemini chain below stays as the fallback if the bridge search fails.
   if (process.env.GARY_GROUNDING_VIA_CLAUDE === '1') {
     const viaClaude = await claudeCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
-    if (viaClaude.success) return viaClaude;
+    if (viaClaude.success) return cachePut(viaClaude);
     console.warn('[Web Search] claude-cli grounding empty/failed — trying API providers');
   }
 
@@ -129,13 +168,13 @@ export async function openaiWebSearch(query, options = {}) {
       if (cut > text.length * 0.5) text = text.slice(0, cut + 1);
     }
     console.log(`[Web Search] ${WEB_SEARCH_MODEL} returned ${text.length} chars`);
-    return { success: text.length > 0, data: text, raw: data };
+    return cachePut({ success: text.length > 0, data: text, raw: data });
   } catch (e) {
     const msg = String(e.message || '');
     if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
       console.warn(`[Web Search] OpenAI quota/429 — falling back to Gemini grounding`);
       try {
-        return await geminiGroundingSearch(query, options);
+        return cachePut(await geminiGroundingSearch(query, options));
       } catch (g) {
         console.warn(`[Web Search] Gemini grounding fallback also failed: ${g.message}`);
         return { success: false, data: '', raw: null, error: g.message };
