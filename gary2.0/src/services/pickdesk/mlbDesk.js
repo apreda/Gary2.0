@@ -461,38 +461,14 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ SERIES STATE ═══',
     '═══ SCHEDULE SHAPE ═══',
   ];
-  // RL REORDER (founder GO, Aug 6 PM — and since Aug 10 the blind flow
-  // reads team-first too; see above). The RL list still differs in one way:
-  // pitch types stay cut here (founder, Aug 6 eve).
-  const TONIGHT_SECTIONS_RL = [
-    '═══ CONFIRMED LINEUPS ═══',
-    '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
-    '═══ INJURIES (BDL Structured) ═══',
-    '═══ SITUATION FLAGS ═══',
-    '═══ LAST NIGHT, AS WRITTEN ═══',
-    '═══ THE PEN — high-leverage arms ═══',
-    '═══ BULLPEN WORKLOAD (recent appearances) ═══',
-    '═══ ROSTER MOVES — LAST 14 DAYS ═══',
-    '═══ CATCHERS — the running game ═══',
-    '═══ PROBABLE PITCHERS ═══',
-    '═══ PITCHER SAMPLE CONTEXT ═══',
-    '═══ THE PARK ═══',
-    '═══ REST & SCHEDULE SITUATION ═══',
-  ];
-  let tonightBlock = (runLineGame ? TONIGHT_SECTIONS_RL : TONIGHT_SECTIONS).map(takeSection).filter(Boolean).join('\n\n');
+  // (RL-only list + pitch-types cut REMOVED — founder, Aug 10: "RL clearly
+  // didn't do better without it." One TONIGHT order for every lane.)
+  let tonightBlock = TONIGHT_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
   {
     const target = ['═══ LAST NIGHT, AS WRITTEN ═══', '═══ THE PEN — high-leverage arms ═══', '═══ PROBABLE PITCHERS ═══']
       .find(h => tonightBlock.includes(h));
     tonightBlock = target ? tonightBlock.replace(target, `${breaking}\n\n${target}`) : `${tonightBlock}\n\n${breaking}`;
   }
-  // PITCH TYPES CUT from run-line desks (founder GO, Aug 6 eve — "just to
-  // see what effect that has"): the whole per-pitch category — rates,
-  // arsenal, velocity — extracted and DISCARDED, because the fail-open
-  // design would otherwise resurface an un-taken section in the preamble.
-  // Whole-or-gone doctrine: never curated down, fully cut. Blind desks and
-  // the props lane keep the category untouched; the RL starter picture is
-  // results-shaped (season line, career, months, the arc, the flags).
-  if (runLineGame) takeSection('═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══');
   const clubsBlock = CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
   const wireBlock = takeSection('═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══');
   const shelfBanner = (t) => `━━━━━━━━━━━━━━━ ${t} ━━━━━━━━━━━━━━━`;

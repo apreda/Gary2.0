@@ -20,11 +20,11 @@ import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/cla
 const WEB_SEARCH_MODEL = 'gpt-5.6-sol';
 const TIMEOUT_MS = 90000;
 
-function freshnessPrompt(query) {
+function freshnessPrompt(query, freshnessHours = 48) {
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
   const todayISO = today.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const staleCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const staleCutoff = new Date(Date.now() - freshnessHours * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const seasonContext = describeSportsCalendar(today);
 
   return `<date_anchor>
@@ -42,7 +42,7 @@ function freshnessPrompt(query) {
 
   FRESHNESS RULES:
   1. Run web search for this query - DO NOT skip the search
-  2. ONLY use search results from the past 48 hours. Anything older is stale and must be ignored.
+  2. ONLY use search results from the past ${freshnessHours} hours. Anything older is stale and must be ignored.
   3. If a search result is dated prior to ${staleCutoff}, DO NOT use it for current analysis
   4. EVIDENCE SUPREMACY: Surrender intuition to search results. Search results ARE the facts.
   5. NEVER state statistical facts (records, streaks, error counts, win streaks) from articles — these go stale within hours. Only use narrative context (storylines, matchup previews, injury news) from search.
@@ -73,7 +73,7 @@ export async function openaiWebSearch(query, options = {}) {
   // Sonnet by default — its own weekly bucket), $0 marginal. The OpenAI →
   // Gemini chain below stays as the fallback if the bridge search fails.
   if (process.env.GARY_GROUNDING_VIA_CLAUDE === '1') {
-    const viaClaude = await claudeCliWebSearch(freshnessPrompt(query), options);
+    const viaClaude = await claudeCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
     if (viaClaude.success) return viaClaude;
     console.warn('[Web Search] claude-cli grounding empty/failed — trying API providers');
   }
@@ -83,7 +83,7 @@ export async function openaiWebSearch(query, options = {}) {
 
   const body = {
     model: options.model || WEB_SEARCH_MODEL,
-    input: freshnessPrompt(query),
+    input: freshnessPrompt(query, options.freshnessHours),
     tools: [{ type: 'web_search' }],
     reasoning: { effort: 'low' },
     max_output_tokens: options.maxTokens || 2000,
