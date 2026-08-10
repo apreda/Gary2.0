@@ -364,10 +364,12 @@ export async function analyzeGameDesk(game, options = {}) {
 
   const cascade = [GAME_PICK_MODEL, ...DESK_FALLBACK_MODELS];
   let pass = null;
+  let respondingModel = null;
   for (let i = 0; i < cascade.length; i++) {
     const modelName = cascade[i];
     try {
       pass = await runBrainPass(modelName, systemPrompt, firstMessage, desk.boardText, auditAll, desk.runLineGame);
+      respondingModel = modelName;
       if (i > 0) console.warn(`   [Brain] FALLBACK brain produced this pass: ${modelName}`);
       break;
     } catch (err) {
@@ -404,5 +406,9 @@ export async function analyzeGameDesk(game, options = {}) {
     _statAuditWarnings: warnings,
     _usage: usage,
     _promptSha: PROMPT_SHA,
+    // The brain that actually answered (post-cascade) — the stored `model`
+    // column must record the responder, never the configured primary
+    // (Aug 10 2026: a cascaded slate would otherwise stamp as Opus).
+    _modelUsed: respondingModel,
   };
 }

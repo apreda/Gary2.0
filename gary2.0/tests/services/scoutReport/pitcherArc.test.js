@@ -236,3 +236,47 @@ describe('teamChangeFlags', () => {
     expect(teamChangeFlags({ name: '', label: 'L', season: 2026, clubId: 1, clubNames: ['A'], rows: [startRow('A', 1)] })).toEqual([]);
   });
 });
+
+/**
+ * INLINE SEASON QUALIFIER (Aug 10 2026, founder GO — autopsy fix #3).
+ * The season aggregate kept getting quoted bare while its context sat two
+ * lines below (Bieber: "5.11 ERA... 7.43 xERA" with the TJ arc, month arc
+ * and distortion exclusion unquoted). The qualifier rides INSIDE the season
+ * line's parenthetical so the aggregate can't be lifted without it.
+ * Current-season facts only — no prior-year recitation (founder, Aug 10).
+ */
+import { seasonLineQualifier } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+
+const CLEAN = (date) => ({ date, opponent: 'Tampa Bay Rays', isHome: true, ip: '6.0', er: 1 });
+const DISASTER = { date: '2026-07-04', opponent: 'Seattle Mariners', isHome: false, ip: '2.0', er: 8 };
+
+describe('seasonLineQualifier', () => {
+  it('prints late first start + distortion exclusion for the Bieber shape', () => {
+    const starts = [CLEAN('2026-06-23'), CLEAN('2026-06-29'), DISASTER, CLEAN('2026-07-10')];
+    expect(seasonLineQualifier({ season: 2026, firstStartDate: '2026-06-23', starts }))
+      .toBe('; first start Jun 23; 1.50 outside Jul 4 @ Seattle Mariners');
+  });
+
+  it('stays empty for a full-season starter with no distorting start', () => {
+    const starts = [CLEAN('2026-03-28'), CLEAN('2026-04-03'), CLEAN('2026-04-09'), CLEAN('2026-04-15')];
+    expect(seasonLineQualifier({ season: 2026, firstStartDate: '2026-03-28', starts })).toBe('');
+  });
+
+  it('prints the late first start alone when the sample is clean', () => {
+    const starts = [CLEAN('2026-06-23'), CLEAN('2026-06-29'), CLEAN('2026-07-05'), CLEAN('2026-07-11')];
+    expect(seasonLineQualifier({ season: 2026, firstStartDate: '2026-06-23', starts }))
+      .toBe('; first start Jun 23');
+  });
+
+  it('prints the distortion exclusion alone for a full-season arm', () => {
+    const starts = [CLEAN('2026-03-28'), CLEAN('2026-04-03'), DISASTER, CLEAN('2026-07-10')];
+    expect(seasonLineQualifier({ season: 2026, firstStartDate: '2026-03-28', starts }))
+      .toBe('; 1.50 outside Jul 4 @ Seattle Mariners');
+  });
+
+  it('is null-safe: no first-start date, thin or missing starts → empty', () => {
+    expect(seasonLineQualifier({ season: 2026, firstStartDate: null, starts: [] })).toBe('');
+    expect(seasonLineQualifier({ season: 2026, firstStartDate: '2026-06-23', starts: null })).toBe('; first start Jun 23');
+    expect(seasonLineQualifier({})).toBe('');
+  });
+});

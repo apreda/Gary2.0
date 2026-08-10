@@ -174,15 +174,40 @@ export function midSeasonGapFlag({ name, label, startDates, season }) {
     if (days > gapDays) { gapDays = days; gapFrom = dates[i - 1]; gapTo = dates[i]; }
   }
   if (gapDays < 21) return null;
-  const fmt = (iso) => {
-    const d = new Date(`${iso}T12:00:00Z`);
-    return Number.isNaN(d.getTime()) ? iso
-      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  };
   const since = dates.filter(d => d >= gapTo).length;
-  return `${name} (${label}): ${gapDays}-day gap between starts ${fmt(gapFrom)} → ${fmt(gapTo)}; ` +
-    `${since} start${since === 1 ? '' : 's'} since ${fmt(gapTo)}. ` +
+  return `${name} (${label}): ${gapDays}-day gap between starts ${shortDate(gapFrom)} → ${shortDate(gapTo)}; ` +
+    `${since} start${since === 1 ? '' : 's'} since ${shortDate(gapTo)}. ` +
     `${season} season-long numbers span both sides of the gap.`;
+}
+
+/** "2026-06-23" → "Jun 23" (UTC-noon anchored; unparseable input passes through). */
+function shortDate(iso) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? String(iso)
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+/**
+ * INLINE SEASON QUALIFIER (Aug 10 2026, founder GO — "fuse the qualifier
+ * into the line so the aggregate can't be quoted without its context").
+ * Rides inside the season line's "(N starts)" parenthetical. Two clauses,
+ * both current-season facts only — no prior-year recitation:
+ *   - a first start after May 1 (return, call-up, conversion — the season
+ *     number spans a partial season either way);
+ *   - the one-start ERA distortion exclusion, when it fires.
+ * Returns "; ..." for direct append, or '' when nothing applies.
+ */
+export function seasonLineQualifier({ season, firstStartDate, starts } = {}) {
+  const bits = [];
+  if (firstStartDate && season && String(firstStartDate) > `${season}-05-01`) {
+    bits.push(`first start ${shortDate(firstStartDate)}`);
+  }
+  const dist = singleStartDistortion(starts);
+  if (dist) {
+    const g = dist.worst;
+    bits.push(`${dist.without.toFixed(2)} outside ${shortDate(g.date)} ${g.isHome ? 'vs' : '@'} ${g.opponent}`);
+  }
+  return bits.length ? `; ${bits.join('; ')}` : '';
 }
 
 /**
