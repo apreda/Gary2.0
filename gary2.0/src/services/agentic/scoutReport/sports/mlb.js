@@ -1832,10 +1832,17 @@ export async function buildMlbScoutReport(game, options = {}) {
     const homeSPName = pitcherStats.home?.name || probablePitchersData?.home?.fullName;
     const awaySPx = findXStats(pitcherXStats,awaySPName);
     const homeSPx = findXStats(pitcherXStats,homeSPName);
+    // X-STATS DEMOTED (founder ruling, Aug 10, after the estimator research:
+    // xERA loses to SIERA predictively, K-BB% beats them all, and it's
+    // noisy under ~50 BBE — the weekend's losing reads leaned on it against
+    // veterans in form). The pairing stays as the descriptive check it is —
+    // actual beside expected WITH its sample — and the opp-wOBA/xBA/xSLG
+    // echo chamber comes off the desk.
+    const paTag = (x) => (x?.pa ? ` (${x.pa} PA)` : '');
     if (awaySPx || homeSPx) {
       lines.push('Starting Pitchers:');
-      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} | xERA ${awaySPx.xera} | opp wOBA ${awaySPx.woba} | opp xwOBA ${awaySPx.est_woba}`);
-      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} | xERA ${homeSPx.xera} | opp wOBA ${homeSPx.woba} | opp xwOBA ${homeSPx.est_woba}`);
+      if (awaySPx) lines.push(`  ${awaySPName}: ERA ${awaySPx.era} | xERA ${awaySPx.xera}${paTag(awaySPx)}`);
+      if (homeSPx) lines.push(`  ${homeSPName}: ERA ${homeSPx.era} | xERA ${homeSPx.xera}${paTag(homeSPx)}`);
     }
 
     // Key batter xStats (top 3 per team from roster if available)
@@ -1845,7 +1852,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       for (const h of hitters) {
         const x = findXStats(batterXStats,h.name);
         if (x) {
-          xLines.push(`  ${h.name}: BA ${x.ba} | xBA ${x.est_ba} | SLG ${x.slg} | xSLG ${x.est_slg} | wOBA ${x.woba} | xwOBA ${x.est_woba}`);
+          xLines.push(`  ${h.name}: BA ${x.ba} | SLG ${x.slg} | xwOBA ${x.est_woba}${paTag(x)}`);
         }
       }
       if (xLines.length > 0) {

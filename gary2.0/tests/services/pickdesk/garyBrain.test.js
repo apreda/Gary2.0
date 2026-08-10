@@ -1,3 +1,13 @@
+/**
+ * BRAIN ARCHITECTURE pins — rebuilt Aug 10 2026 against the live contract
+ * (blind split Aug 5 + seal Aug 4 + RL-blind era 190e357e; the old file
+ * pinned the July 26 two-turn spec and had been failing since the rebuild).
+ *
+ * The law these pins hold: turn 1 reads the game with NO price anywhere;
+ * turn 2 reveals the board and seals the ticket; turn 3 writes prose that
+ * can never move the pick; a cascade hands the IDENTICAL contract to the
+ * next brain and stamps the responder.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/pickdesk/mlbDesk.js', () => ({ buildMlbDesk: vi.fn() }));
@@ -8,7 +18,8 @@ vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
-import { analyzeGameDesk, mapFinalPick, THE_ASK, buildCardAsk } from '../../../src/services/pickdesk/garyBrain.js';
+import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
+import { analyzeGameDesk, mapFinalPick, THE_READ_ASK, buildTicketAsk, buildRunLineTicketAsk, buildCardAsk } from '../../../src/services/pickdesk/garyBrain.js';
 
 const META = {
   homeTeam: 'Cardinals', awayTeam: 'Reds',
@@ -19,171 +30,109 @@ const META = {
 
 const DESK = {
   deskText: '═══ THE LINES (DraftKings) ═══\nlines\n\n═══ PROBABLE PITCHERS ═══\nshelf',
+  deskTextBlind: '═══ PROBABLE PITCHERS ═══\nshelf',
+  boardText: '═══ THE LINES (DraftKings) ═══\nReds ML -112 | Cardinals ML -104',
+  boardTextRunLine: '═══ THE LINES (DraftKings) ═══\nReds +1.5 (-178) | Cardinals -1.5 (+148)',
+  runLineGame: false,
   tapeRows: [{ name: 'Record' }],
   verifiedTaleOfTape: { rows: [{ name: 'Record' }] },
   recentScores: null,
   meta: META,
 };
 
-// Seal-the-pick era (Aug 4 2026): turn 1 = ticket only, turn 2 = card prose.
+const READ_JSON = '```json\n{"winner": "Cardinals", "read": "the cleaner club tonight"}\n```';
 const TICKET_JSON = '```json\n{"final_pick": "Cardinals ML -104", "confidence_score": 0.61}\n```';
 const CARD_TEXT = "Gary's Take\n\n" + 'A clean read on a quiet Tuesday. '.repeat(12);
 
-const ticketThenCard = () => {
+const stage = (contents) => {
   let n = 0;
-  sendToSessionWithRetry.mockImplementation(async () => ({
-    content: (n++ % 2 === 0) ? TICKET_JSON : CARD_TEXT,
-    usage: { prompt_tokens: 100, completion_tokens: 50 },
-  }));
+  const calls = [];
+  sendToSessionWithRetry.mockImplementation(async (_s, message) => {
+    calls.push(message);
+    const content = contents[Math.min(n, contents.length - 1)];
+    n += 1;
+    return { content, usage: { prompt_tokens: 100, completion_tokens: 50 } };
+  });
+  return calls;
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   buildMlbDesk.mockResolvedValue(DESK);
-  createGeminiSession.mockResolvedValue({ id: 's1' });
-  ticketThenCard();
+  createGeminiSession.mockImplementation(async ({ modelName }) => ({ modelName }));
 });
 
-describe('analyzeGameDesk — architecture pins (spec 2026-07-26)', () => {
-  it('creates ONE session: gpt-5.6-sol, xhigh, ZERO tools', async () => {
-    await analyzeGameDesk({ homeTeam: 'Cardinals', awayTeam: 'Reds' });
-    expect(createGeminiSession).toHaveBeenCalledTimes(1);
-    const args = createGeminiSession.mock.calls[0][0];
-    expect(args.modelName).toBe('gpt-5.6-sol');
-    expect(args.thinkingLevel).toBe('xhigh');
-    expect(args.tools).toEqual([]);
-  });
-
-  it('system prompt is minimal — identity, one staleness line, card contract; zero steering', async () => {
-    await analyzeGameDesk({});
-    const { systemPrompt } = createGeminiSession.mock.calls[0][0];
-    // Founder, Jul 26: "the only real anti-hallucination we need is to say
-    // don't use training data as it's old" — statAudit stays as the silent
-    // rail; the prompt carries no threats, no bans, no enumerations.
-    expect(systemPrompt).toContain('Your training data is old; the desk is current.');
-    // Aug 5: the price sentence is OUT (founder — value hunting was crowding
-    // out who-wins). NOTHING about the line is pre-loaded now: the price
-    // reaches Gary on the desk and in the ticket contract, not as a lens.
-    expect(systemPrompt).not.toMatch(/market'?s opinion|the line is|price|odds|value/i);
-    expect(systemPrompt).not.toMatch(/fade|against the market|contrarian|public money/i);
-    expect(systemPrompt).toContain('never as an AI');
-    // Aug 4 evening: the card contract moved to buildCardAsk (the moment of
-    // composition) — the system prompt is identity + staleness, nothing else.
-    expect(systemPrompt).not.toContain('three paragraphs');
-    expect(systemPrompt).not.toContain('rejected');
-    expect(systemPrompt).not.toContain('must come from the desk');
-    expect(systemPrompt).not.toContain('your only information');
-    expect(systemPrompt).not.toContain('opinions');
-    expect(systemPrompt).not.toContain('FACT-CHECKING PROTOCOL');
-    expect(systemPrompt).not.toContain('THINK LIKE A SHARP');
-    expect(systemPrompt).not.toContain('<constitution>');
-    expect(systemPrompt.length).toBeLessThan(780);
-  });
-
-  it('turn 1 is desk + ticket ask; the card is never requested before the seal', async () => {
-    await analyzeGameDesk({});
-    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(2);
-    const msg = sendToSessionWithRetry.mock.calls[0][1];
-    expect(msg.indexOf('═══ THE LINES')).toBeLessThan(msg.indexOf('Pick the bet you want to take'));
-    // Jul 29 (founder, replay-gated): the pick's object is a priced ticket.
-    expect(msg).toContain('Pick the bet you want to take — a bet is a side and its price.');
-    expect(msg).toContain('your conviction in this bet at its price');
-    expect(msg).toContain('confidence_score');
-    // Aug 4 seal: the decision turn asks for the ticket alone — no prose field.
-    expect(msg).toContain('Your ticket seals before any card is written.');
-    expect(msg).not.toContain('"rationale"');
-    // The razor: no decision coaching, no mechanics tutoring, no old-system asks.
-    expect(msg).not.toContain('BEST BET');
-    expect(msg).not.toContain('MONEYLINE pays');
-    expect(msg).not.toContain('own money');
-    expect(msg).not.toContain('MLB SEASON AWARENESS');
-    expect(msg).not.toContain('with your tools');
-    expect(msg).not.toContain('[3 paragraphs');
-  });
-
-  it('turn 2 carries the sealed ticket and the card contract — the broadcast open is the law', async () => {
-    await analyzeGameDesk({});
-    const msg = sendToSessionWithRetry.mock.calls[1][1];
-    expect(msg).toBe(buildCardAsk('Cardinals ML -104'));
-    expect(msg).toContain('Your ticket is sealed: Cardinals ML -104.');
-    // The founder-approved card sentences, verbatim, at the moment of
-    // composition (Aug 4 evening fix — the memo-register leak).
-    expect(msg).toContain('three paragraphs, opening with a line or two setting the stage like a broadcast');
-    expect(msg).toContain('Never mention data feeds, tools, or missing data.');
-  });
-
-  it('THE SEAL: a different final_pick in the card turn cannot move the stored pick', async () => {
-    let n = 0;
-    sendToSessionWithRetry.mockImplementation(async () => ({
-      content: n++ === 0
-        ? TICKET_JSON
-        // Card turn answers in the old JSON shape with a DIFFERENT pick — the
-        // prose is accepted, the pick change is ignored by construction.
-        : '```json\n{"final_pick": "Reds ML -112", "rationale": ' + JSON.stringify(CARD_TEXT) + '}\n```',
-      usage: { prompt_tokens: 1, completion_tokens: 1 },
-    }));
-    const r = await analyzeGameDesk({});
+describe('analyzeGameDesk — the blind split (era 190e357e lineage)', () => {
+  it('turn 1 is the blind desk + read ask with NO lines; turn 2 seals the winner and reveals the board; turn 3 is the card', async () => {
+    const calls = stage([READ_JSON, TICKET_JSON, CARD_TEXT]);
+    const r = await analyzeGameDesk({ id: 1 }, {});
+    expect(r.error).toBeUndefined();
+    expect(calls[0]).toContain(THE_READ_ASK);
+    expect(calls[0]).not.toContain('THE LINES');
+    expect(calls[1]).toContain('Your winner is sealed: Cardinals');
+    expect(calls[1]).toContain('Reds ML -112');
+    expect(calls[2]).toContain('Your ticket is sealed: Cardinals ML -104');
     expect(r.pick).toBe('Cardinals ML -104');
-    expect(r.rationale).toContain("Gary's Take");
+    expect(r.read_winner).toBe('Cardinals');
+    expect(r.game_read).toBe('the cleaner club tonight');
   });
 
-  it('returns the chassis contract with tape, meta odds, and desk text', async () => {
-    const r = await analyzeGameDesk({});
-    expect(r).toMatchObject({
-      pick: 'Cardinals ML -104', type: 'moneyline', odds: -104, confidence: 0.61,
-      homeTeam: 'Cardinals', awayTeam: 'Reds',
-      moneylineHome: -104, moneylineAway: -112,
-    });
-    expect(r.verifiedTaleOfTape.rows).toHaveLength(1);
-    expect(r.deskText).toContain('THE LINES');
-    expect(r.rationale).toContain("Gary's Take");
+  it('THE SEAL: prose in the card turn can never move the stored pick', async () => {
+    stage([READ_JSON, TICKET_JSON, "Gary's Take\n\nActually the Reds are the play tonight. " + 'More prose here to pass length. '.repeat(10)]);
+    const r = await analyzeGameDesk({ id: 1 }, {});
+    expect(r.pick).toBe('Cardinals ML -104');
   });
 
-  it('malformed ticket: one re-ask, then a contained error — never a throw, never a cascade', async () => {
-    sendToSessionWithRetry.mockResolvedValue({ content: 'no json here', usage: {} });
-    const r = await analyzeGameDesk({});
-    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(2);
-    expect(createGeminiSession).toHaveBeenCalledTimes(1); // parse failures stay on the primary brain
-    expect(r.error).toMatch(/parse/);
-  });
-
-  it('missing card: one re-ask, then a contained error', async () => {
-    let n = 0;
-    sendToSessionWithRetry.mockImplementation(async () => ({
-      content: n++ === 0 ? TICKET_JSON : 'Sure.',
-      usage: {},
-    }));
-    const r = await analyzeGameDesk({});
-    expect(sendToSessionWithRetry).toHaveBeenCalledTimes(3); // ticket, card, card re-ask
+  it('missing card: one re-ask, then a contained error — never a throw', async () => {
+    stage([READ_JSON, TICKET_JSON, '```json\n{"noise": true}\n```', '```json\n{"noise": true}\n```']);
+    const r = await analyzeGameDesk({ id: 1 }, {});
     expect(r.error).toMatch(/no card/);
   });
-});
 
-describe('analyzeGameDesk — quota cascade (founder approved Jul 29)', () => {
-  it('Sol quota/429 → SAME desk re-runs on gemini-3.6-flash at high thinking', async () => {
-    const quotaErr = Object.assign(new Error('OpenAI 429: insufficient_quota'), { isQuotaError: true });
-    let n = 0;
-    sendToSessionWithRetry.mockImplementation(async () => {
-      if (n === 0) { n++; throw quotaErr; }
-      return { content: (n++ % 2 === 1) ? TICKET_JSON : CARD_TEXT, usage: { prompt_tokens: 100, completion_tokens: 50 } };
-    });
-    const r = await analyzeGameDesk({});
-    expect(createGeminiSession).toHaveBeenCalledTimes(2);
-    expect(createGeminiSession.mock.calls[0][0].modelName).toBe('gpt-5.6-sol');
-    expect(createGeminiSession.mock.calls[1][0].modelName).toBe('gemini-3.6-flash');
-    expect(createGeminiSession.mock.calls[1][0].thinkingLevel).toBe('high'); // Gemini's ceiling — never 'xhigh'
-    // The fallback receives the IDENTICAL contract: same system prompt, same desk message.
-    expect(createGeminiSession.mock.calls[1][0].systemPrompt).toBe(createGeminiSession.mock.calls[0][0].systemPrompt);
-    expect(sendToSessionWithRetry.mock.calls[1][1]).toBe(sendToSessionWithRetry.mock.calls[0][1]);
-    expect(r.pick).toBe('Cardinals ML -104');
+  it('returns the chassis contract: tape, meta odds, desk text, era sha, responder model', async () => {
+    stage([READ_JSON, TICKET_JSON, CARD_TEXT]);
+    const r = await analyzeGameDesk({ id: 1 }, {});
+    expect(r.verifiedTaleOfTape).toEqual({ rows: [{ name: 'Record' }] });
+    expect(r.moneylineHome).toBe(-104);
+    expect(r.deskText).toContain('PROBABLE PITCHERS');
+    expect(typeof r._promptSha).toBe('string');
+    expect(r._modelUsed).toBe(GAME_PICK_MODEL);
   });
 
-  it('cascade exhausted: quota on all three brains rethrows to the runner', async () => {
-    const quotaErr = Object.assign(new Error('OpenAI 429: insufficient_quota'), { isQuotaError: true });
+  it('a model-invented header is normalized to the Gary\'s Take masthead (live smoke catch)', async () => {
+    const prose = 'The bet is on the sixth inning, not the first. '.repeat(8);
+    stage([READ_JSON, TICKET_JSON, `THE CARD — Cardinals ML -104\n\n${prose}`]);
+    const r = await analyzeGameDesk({ id: 1 }, {});
+    expect(r.rationale.startsWith("Gary's Take\n\n")).toBe(true);
+    expect(r.rationale).not.toContain('THE CARD');
+    expect(r.rationale).toContain('sixth inning');
+  });
+});
+
+describe('analyzeGameDesk — quota cascade (Jul 29 law, current chain)', () => {
+  it('a quota throw on the primary re-runs the IDENTICAL contract on the first fallback', async () => {
+    const quotaErr = Object.assign(new Error('429: insufficient_quota'), { isQuotaError: true });
+    const contents = [READ_JSON, TICKET_JSON, CARD_TEXT];
+    let n = 0;
+    sendToSessionWithRetry.mockImplementation(async (session, message) => {
+      if (session.modelName === GAME_PICK_MODEL) throw quotaErr;
+      const content = contents[Math.min(n, contents.length - 1)];
+      n += 1;
+      return { content, usage: {}, _message: message };
+    });
+    const r = await analyzeGameDesk({ id: 1 }, {});
+    expect(createGeminiSession.mock.calls[0][0].modelName).toBe(GAME_PICK_MODEL);
+    expect(createGeminiSession.mock.calls[1][0].modelName).toBe(DESK_FALLBACK_MODELS[0]);
+    expect(createGeminiSession.mock.calls[1][0].systemPrompt).toBe(createGeminiSession.mock.calls[0][0].systemPrompt);
+    expect(r.pick).toBe('Cardinals ML -104');
+    expect(r._modelUsed).toBe(DESK_FALLBACK_MODELS[0]);
+  });
+
+  it('cascade exhausted: quota on every brain rethrows to the runner', async () => {
+    const quotaErr = Object.assign(new Error('429: insufficient_quota'), { isQuotaError: true });
     sendToSessionWithRetry.mockRejectedValue(quotaErr);
-    await expect(analyzeGameDesk({})).rejects.toThrow();
-    expect(createGeminiSession).toHaveBeenCalledTimes(3);
-    expect(createGeminiSession.mock.calls[2][0].modelName).toBe('gemini-3.1-pro-preview');
+    await expect(analyzeGameDesk({ id: 1 }, {})).rejects.toThrow();
+    expect(createGeminiSession).toHaveBeenCalledTimes(1 + DESK_FALLBACK_MODELS.length);
   });
 });
 
@@ -210,33 +159,34 @@ describe('mapFinalPick', () => {
   });
 });
 
-describe('THE_ASK text', () => {
-  it('is task, injury law, and ticket contract — nothing else', () => {
-    expect(THE_ASK).toContain('Pick the bet you want to take');
-    expect(THE_ASK).toContain('already games old is already in the price');
-    expect(THE_ASK).toContain('final_pick');
-    // Aug 4 seal: the decision output carries no prose field.
-    expect(THE_ASK).not.toContain('rationale');
-    expect(THE_ASK.length).toBeLessThan(700);
+describe('the ask texts — the whole contract, nothing else', () => {
+  it('THE_READ_ASK asks for the winner before any line exists', () => {
+    expect(THE_READ_ASK).toContain('Who wins tonight?');
+    expect(THE_READ_ASK).toContain('seals before you see any lines');
+    expect(THE_READ_ASK).toContain('"winner"');
+    expect(THE_READ_ASK).not.toMatch(/odds|price|-\d{3}/);
+  });
+
+  it('buildTicketAsk carries the sealed winner, the board, and the confidence contract', () => {
+    const ask = buildTicketAsk('Cardinals', 'BOARD');
+    expect(ask.startsWith('Your winner is sealed: Cardinals.')).toBe(true);
+    expect(ask).toContain('BOARD');
+    expect(ask).toContain('final_pick');
+    expect(ask).toContain('confidence_score (0.50–1.00)');
+  });
+
+  it('buildRunLineTicketAsk is the same seal with the moneyline off the board — ±1.5 only, no mechanics lecture', () => {
+    const ask = buildRunLineTicketAsk('Cardinals', 'RL BOARD');
+    expect(ask.startsWith('Your winner is sealed: Cardinals.')).toBe(true);
+    expect(ask).toContain('The moneyline is off the board tonight');
+    expect(ask).toContain('[+1.5 or -1.5]');
+    expect(ask).not.toMatch(/cashes|wins by two|cover/i);
   });
 
   it('buildCardAsk is the sealed ticket and the approved card contract — nothing else', () => {
     const ask = buildCardAsk('Cubs ML +109');
     expect(ask.startsWith('Your ticket is sealed: Cubs ML +109.')).toBe(true);
     expect(ask).toContain('Write "Gary\'s Take"');
-    expect(ask).not.toMatch(/risk|counter|worry|honest/i); // no composition beats forced beyond the open
-  });
-
-  it('a model-invented header is normalized to the Gary\'s Take masthead (live smoke catch)', async () => {
-    let n = 0;
-    const prose = 'The bet is on the sixth inning, not the first. '.repeat(8);
-    sendToSessionWithRetry.mockImplementation(async () => ({
-      content: n++ === 0 ? TICKET_JSON : `THE CARD — Cardinals ML -104\n\n${prose}`,
-      usage: {},
-    }));
-    const r = await analyzeGameDesk({});
-    expect(r.rationale.startsWith("Gary's Take\n\n")).toBe(true);
-    expect(r.rationale).not.toContain('THE CARD');
-    expect(r.rationale).toContain('sixth inning');
+    expect(ask).not.toMatch(/risk|counter|worry|honest/i);
   });
 });

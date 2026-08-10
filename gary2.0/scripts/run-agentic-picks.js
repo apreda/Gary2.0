@@ -186,6 +186,7 @@ function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
 }
 const { supabase } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
+const { judgeWinnersCase } = await import('../src/services/pickdesk/winnersJudge.js');
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
 // graded ledger, fetched once per run. A failed fetch scores every pick
@@ -1553,6 +1554,19 @@ async function main() {
               })
             : 'TBD';
 
+          // WINNERS JUDGE v2 (founder GO, Aug 10): a separate brain scores
+          // the sealed case against its own desk — the Winners-page rank.
+          // Selection only; fail-soft null can never delay a stored pick.
+          const winnersJudge = result.deskText
+            ? await judgeWinnersCase({
+                finalPick: finalPickText,
+                readWinner: result.read_winner ?? null,
+                gameRead: result.game_read ?? null,
+                rationale: result.rationale ?? null,
+                deskText: result.deskText,
+              }).catch(() => null)
+            : null;
+
           const cleanPick = {
             pick: finalPickText,
             type: result.type,
@@ -1568,6 +1582,9 @@ async function main() {
             // null = unrankable pick text.
             winners_class: classOf(finalPickText),
             winners_score: winnersScore(finalPickText, result.confidence ?? null, await getWinnersClassRates()),
+            // v2 judge object {score, case_strength, coherence, specificity,
+            // basis, model} — the Winners rank; class/score above = reference.
+            winners_judge: winnersJudge,
             // THE BLIND SPLIT (Aug 5): the sealed pre-lines read — the winner
             // Gary named before any price reached the session, and his why.
             // Null on non-desk lanes; the ledger reads ticket-vs-read crossings.
