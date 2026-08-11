@@ -31,6 +31,7 @@ const SEARCH_CACHE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../..
 const SEARCH_CACHE_TTL_MS = 45 * 60 * 1000;
 
 function searchCacheGet(key) {
+  if (process.env.GARY_SEARCH_CACHE_OFF === '1') return null;
   try {
     const { at, value } = JSON.parse(readFileSync(join(SEARCH_CACHE_DIR, `${key}.json`), 'utf8'));
     if (Date.now() - at > SEARCH_CACHE_TTL_MS) return null;
@@ -40,6 +41,7 @@ function searchCacheGet(key) {
 }
 
 function searchCachePut(key, value) {
+  if (process.env.GARY_SEARCH_CACHE_OFF === '1') return;
   try {
     mkdirSync(SEARCH_CACHE_DIR, { recursive: true });
     writeFileSync(join(SEARCH_CACHE_DIR, `${key}.json`), JSON.stringify({ at: Date.now(), value }));

@@ -1,3 +1,7 @@
+// The disk search cache would short-circuit these request-shape pins
+// (its own first successful run poisons the next) — off for tests.
+process.env.GARY_SEARCH_CACHE_OFF = '1';
+
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { openaiWebSearch } from '../../../src/services/pickdesk/webSearch.js';
 
