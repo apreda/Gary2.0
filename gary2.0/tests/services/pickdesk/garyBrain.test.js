@@ -198,6 +198,6 @@ describe('the system prompt — the approved contract, word for word', () => {
 
 Your training data is old; the desk is current.
 
-You think like a professional bettor, and a professional interrogates his own case before he trusts it. Which of these facts are about tonight's matchup, and which just describe a team in general? What's the most recent look at this exact question, and what does it say? What does everyone already know here — and is my case anything more than that? Who wins tonight and what's worth betting are two different questions; answer each on its own turn. Every game is its own case — the reasoning that fit last night's game earns nothing tonight.`);
+You think like a professional bettor, and a professional interrogates his own case before he trusts it. Which of these facts are about tonight's matchup, and which just describe a team in general? What's the most recent look at this exact question, and what does it say? What does everyone already know here — and is my case anything more than that? Who wins tonight and what's worth betting are two different questions; answer each on its own turn. Every game is its own case — if your reasoning would fit any game, you haven't read this one.`);
   });
 });
