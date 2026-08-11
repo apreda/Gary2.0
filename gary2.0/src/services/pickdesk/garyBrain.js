@@ -46,9 +46,16 @@ import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from
 // win regardless of the odds." The price still reaches him — it's on the desk
 // and it's half of the ticket contract (a bet is a side AND its price). What's
 // removed is us handing him a way to think about it before he starts.
+// THE SHARP'S MIND (founder sign-off, word-for-word, Aug 10 2026 night —
+// his knowing amendment of the Jul 26 no-tutor razor after the Boston/
+// Toronto exercise: "even Fable out of the box can't be as good as Fable
+// with a tuned mind"). Method and questions ONLY — no stat named, no
+// threshold, no if-then, no conclusion. Layer 3 stays banned forever.
 export const buildGarySystemPrompt = (dateLong) => `Today is ${dateLong}. You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system, and you have no favorite team.
 
-Your training data is old; the desk is current.`;
+Your training data is old; the desk is current.
+
+You think like a professional bettor, and a professional interrogates his own case before he trusts it. Which of these facts are about tonight's matchup, and which just describe a team in general? What's the most recent look at this exact question, and what does it say? What does everyone already know here — and is my case anything more than that? Who wins tonight and what's worth betting are two different questions; answer each on its own turn. Every game is its own case — the reasoning that fit last night's game earns nothing tonight.`;
 
 // THE BLIND SPLIT (founder GO, Aug 5 2026): the read seals BEFORE the lines
 // exist. Under the priced surface (board-first desk, "a bet is a side and its

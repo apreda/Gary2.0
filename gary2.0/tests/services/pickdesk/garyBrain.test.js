@@ -19,7 +19,7 @@ vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
-import { analyzeGameDesk, mapFinalPick, THE_READ_ASK, buildTicketAsk, buildRunLineTicketAsk, buildCardAsk } from '../../../src/services/pickdesk/garyBrain.js';
+import { analyzeGameDesk, mapFinalPick, THE_READ_ASK, buildTicketAsk, buildRunLineTicketAsk, buildCardAsk, buildGarySystemPrompt } from '../../../src/services/pickdesk/garyBrain.js';
 
 const META = {
   homeTeam: 'Cardinals', awayTeam: 'Reds',
@@ -188,5 +188,16 @@ describe('the ask texts — the whole contract, nothing else', () => {
     expect(ask.startsWith('Your ticket is sealed: Cubs ML +109.')).toBe(true);
     expect(ask).toContain('Write "Gary\'s Take"');
     expect(ask).not.toMatch(/risk|counter|worry|honest/i);
+  });
+});
+
+describe('the system prompt — the approved contract, word for word', () => {
+  it('is identity + staleness + the Sharp\'s Mind (founder sign-off, Aug 10 2026) — nothing else', () => {
+    const p = buildGarySystemPrompt('Monday, August 10, 2026');
+    expect(p).toBe(`Today is Monday, August 10, 2026. You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system, and you have no favorite team.
+
+Your training data is old; the desk is current.
+
+You think like a professional bettor, and a professional interrogates his own case before he trusts it. Which of these facts are about tonight's matchup, and which just describe a team in general? What's the most recent look at this exact question, and what does it say? What does everyone already know here — and is my case anything more than that? Who wins tonight and what's worth betting are two different questions; answer each on its own turn. Every game is its own case — the reasoning that fit last night's game earns nothing tonight.`);
   });
 });
