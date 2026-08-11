@@ -255,3 +255,32 @@ export function teamChangeFlags({ name, label, season, clubId, clubNames, rows }
   }
   return flags;
 }
+
+/**
+ * MATCHUP RECENCY (founder GO, Aug 10 night — the Gray/Toronto exercise):
+ * a starter's most recent start against TONIGHT'S opponent, surfaced as
+ * its own line when it happened inside the last 30 days. The fact was
+ * already in the ledger the night it mattered and got read past — this
+ * makes it load-bearing. Not a weighting: a buried fact un-buried, for
+ * every game, silently absent when there's nothing.
+ */
+export function matchupRecencyLine({ oppNick, starts, today, withinDays = 30 }) {
+  if (!oppNick || !Array.isArray(starts) || !starts.length) return null;
+  const word = String(oppNick).toLowerCase();
+  const row = [...starts].reverse().find(g => String(g?.opponent || '').toLowerCase().endsWith(word));
+  if (!row?.date) return null;
+  const todayMs = new Date(`${String(today || '').slice(0, 10)}T12:00:00Z`).getTime();
+  const rowMs = new Date(`${String(row.date).slice(0, 10)}T12:00:00Z`).getTime();
+  if (!Number.isFinite(todayMs) || !Number.isFinite(rowMs)) return null;
+  const days = Math.round((todayMs - rowMs) / 86400000);
+  if (days < 0 || days > withinDays) return null;
+  const d = new Date(`${String(row.date).slice(0, 10)}T12:00:00Z`)
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const bits = [`${row.ip}IP`, `${row.h}H`, `${row.er}ER`];
+  if (row.k) bits.push(`${row.k}K`);
+  if (row.bb) bits.push(`${row.bb}BB`);
+  if (row.hr) bits.push(`${row.hr}HR`);
+  if (row.pitches) bits.push(`${row.pitches}p`);
+  const result = row.win == null ? '' : row.win ? ' (team W)' : ' (team L)';
+  return `Most recent look vs ${oppNick} (${d}, ${days}d ago): ${bits.join(' ')}${result}`;
+}

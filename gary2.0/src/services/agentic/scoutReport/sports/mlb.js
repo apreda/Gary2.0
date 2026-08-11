@@ -30,7 +30,7 @@ import {
   getPitcherMonthSplits,
   getPitcherCareerProfile,
 } from '../../../mlbStatsApiService.js';
-import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier } from './pitcherArc.js';
+import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
@@ -483,6 +483,15 @@ export async function buildMlbScoutReport(game, options = {}) {
           // number, as citable as the season figure above it.
           const rw = recentWindowLine(lastStarts, 3);
           if (rw) parts.push(`  ${rw}`);
+          // MATCHUP RECENCY (founder GO, Aug 10 night): his latest start
+          // against TONIGHT'S opponent, un-buried — full-season ledger, not
+          // just the visible six.
+          const mrl = matchupRecencyLine({
+            oppNick: side === 'home' ? awayTeam : homeTeam,
+            starts: pitcherArcData[side]?.starts || lastStarts,
+            today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+          });
+          if (mrl) parts.push(`  ${mrl}`);
           const decided = lastStarts.filter((g) => g.win != null);
           if (decided.length >= 3) {
             const w = decided.filter((g) => g.win).length;

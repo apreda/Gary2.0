@@ -268,3 +268,28 @@ describe('seasonLineQualifier', () => {
     expect(seasonLineQualifier({})).toBe('');
   });
 });
+
+/**
+ * MATCHUP RECENCY pins (Aug 10 night — the Gray/Toronto exercise: Jul 25
+ * sat in the ledger, tagged, and got read past).
+ */
+import { matchupRecencyLine } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+
+describe('matchupRecencyLine', () => {
+  const GRAY = [
+    { date: '2026-07-04', opponent: 'Los Angeles Angels', ip: '6.0', h: 4, er: 1, k: 7, bb: 2, hr: 1, win: true },
+    { date: '2026-07-25', opponent: 'Toronto Blue Jays', ip: '5.0', h: 10, er: 5, k: 3, hr: 1, win: false },
+    { date: '2026-08-05', opponent: 'Chicago White Sox', ip: '6.0', h: 3, er: 0, k: 8, bb: 2, win: true },
+  ];
+
+  it('surfaces the most recent look at tonight\'s opponent with its age', () => {
+    expect(matchupRecencyLine({ oppNick: 'Blue Jays', starts: GRAY, today: '2026-08-10' }))
+      .toBe('Most recent look vs Blue Jays (Jul 25, 16d ago): 5.0IP 10H 5ER 3K 1HR (team L)');
+  });
+
+  it('stays silent past the month, for never-faced opponents, and on empty ledgers', () => {
+    expect(matchupRecencyLine({ oppNick: 'Blue Jays', starts: GRAY, today: '2026-09-30' })).toBeNull();
+    expect(matchupRecencyLine({ oppNick: 'Marlins', starts: GRAY, today: '2026-08-10' })).toBeNull();
+    expect(matchupRecencyLine({ oppNick: 'Blue Jays', starts: [], today: '2026-08-10' })).toBeNull();
+  });
+});
