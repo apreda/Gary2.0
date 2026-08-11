@@ -871,17 +871,8 @@ function pitcherXStats(xrow) {
   const pa = num(xrow.pa);
   if (pa == null || pa < MIN_SAVANT_PA) return [];
   const out = [];
-  // ERA vs xERA — for run prevention, LOWER actual than expected = overperforming.
-  const era = num(xrow.era);
-  const xera = num(xrow.xera);
-  if (era != null && xera != null) {
-    out.push({
-      label: 'ERA vs xERA',
-      actual: round(era, 2).toFixed(2),
-      expected: round(xera, 2).toFixed(2),
-      verdict: lowerIsBetterVerdict(era, xera, 0.30),
-    });
-  }
+  // (ERA-vs-xERA row REMOVED — founder ruling, Aug 10 2026: xERA is off
+  // every surface, app-wide. The desk lost it the same day.)
   pushXStat(out, 'Opp AVG vs xBA', num(xrow.ba), num(xrow.est_ba), XBA_VERDICT_GAP, true);
   return out;
 }
@@ -960,13 +951,7 @@ function pitcherStrengthsWeaknesses(ctx) {
     }
   }
 
-  // xstats.
-  for (const x of xstats) {
-    if (x.label === 'ERA vs xERA') {
-      if (x.verdict === 'underperforming') strengths.push(`Better than his ERA shows — ${x.expected} xERA vs ${x.actual} ERA`);
-      else if (x.verdict === 'overperforming') weaknesses.push(`Outrunning his contact — ${x.actual} ERA on a ${x.expected} xERA`);
-    }
-  }
+  // (xERA strength/weakness sentences REMOVED — founder ruling, Aug 10.)
 
   // Form vs nothing absolute — just flag a strong/weak recent ERA window.
   if (form?.value) {

@@ -266,7 +266,7 @@ function indexPitcherEraByName(pitcherX) {
     const era = Number(r?.era);
     if (!Number.isFinite(era)) continue;
     const xeraNum = Number(r?.xera);
-    const rec = { era, xera: Number.isFinite(xeraNum) ? xeraNum : null };
+    const rec = { era, xera: null }; // xERA OFF app-wide (Aug 10)
     const last = r?.last_name || '';
     const first = r?.first_name || '';
     if (last) {
@@ -309,7 +309,7 @@ function computeLeagueAvgEra(pitcherX) {
   }
   return {
     league_avg_era: eraPa > 0 ? Number((eraW / eraPa).toFixed(2)) : null,
-    league_avg_xera: xeraPa > 0 ? Number((xeraW / xeraPa).toFixed(2)) : null,
+    league_avg_xera: null, // xERA OFF app-wide (founder ruling, Aug 10)
   };
 }
 
@@ -407,7 +407,9 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
         const home = side === 'home';
         const stats = statsForName(name, eraByName);
         const era = stats?.era ?? null;
-        const xera = stats?.xera ?? null;
+        // xERA OFF app-wide (founder ruling, Aug 10) — the field stays in
+        // the payload as null so no iOS build is required to go dark.
+        const xera = null;
         const detail = era != null ? `${abbr} ${era.toFixed(2)}` : abbr;
         starters.push({
           league: 'MLB',
