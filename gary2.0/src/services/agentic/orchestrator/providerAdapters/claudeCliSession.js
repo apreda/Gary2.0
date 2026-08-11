@@ -34,6 +34,10 @@ const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,No
 const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const effortFor = (modelName, thinkingLevel) => {
   if (String(modelName).includes('sonnet')) return 'max';
+  // Fable at its ceiling (founder, Aug 10 night: "Fable in Max so that way
+  // we can fully rule out the model" — data/context now complete, so a miss
+  // can't hide behind the desk or the effort dial).
+  if (String(modelName).includes('fable')) return 'max';
   return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'xhigh';
 };
 
