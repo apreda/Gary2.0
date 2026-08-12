@@ -1,5 +1,6 @@
 import { Disclosure } from '@/components/Disclosure';
 import { ScoutRead } from '@/components/ScoutRead';
+import { PropTailFadeRow } from '@/components/book/TailFadeRow';
 import { isOverCall, oddsText, propCall, parseScoutSections } from '@/lib/gary/format';
 import type { PropPick } from '@/lib/gary/types';
 
@@ -75,6 +76,9 @@ export function PropRow({ prop }: { prop: PropPick }) {
           <ScoutRead text={read} tone="tight" />
         </Disclosure>
       )}
+
+      {/* Renders only inside a BookDayProvider — board pages opt in. */}
+      <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time} />
     </div>
   );
 }

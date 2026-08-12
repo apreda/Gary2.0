@@ -3,6 +3,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
 import { GameRow, Slab } from '@/components/board/GameRow';
+import { GameTile } from '@/components/board/GameTile';
+import { BoardGrid } from '@/components/board/BoardGrid';
+import { BookDayProvider } from '@/components/book/BookDay';
 import { ReceiptLine } from '@/components/ReceiptLine';
 import { UnderlineTabs } from '@/components/UnderlineTabs';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
@@ -100,7 +103,7 @@ export default async function PicksPage() {
   ];
 
   return (
-    <main className="mx-auto max-w-5xl px-5 pb-20 pt-12">
+    <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
       {picks.length > 0 && <JsonLd data={itemList} />}
       <PageMasthead
         title="Today's picks"
@@ -125,45 +128,55 @@ export default async function PicksPage() {
       )}
 
       {board.length > 0 && (
-        <section className="mt-11">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The board</h2>
-            <span className="tnum font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
-              {board.length} games · {posted} posted
-            </span>
-          </div>
-          <StitchRule tone="faint" className="mt-4" />
-
-          {leagues.length > 1 ? (
-            leagues.map(code => (
-              <div key={code} className="mt-8">
-                <div className="flex items-center gap-2">
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: sportByCode(code)?.accent ?? '#666' }}
-                  />
-                  <h3 className="font-mono text-[12px] font-bold uppercase tracking-[0.07em] text-hi">
-                    {sportByCode(code)?.longName ?? code}
-                  </h3>
-                </div>
-                <div className="mt-4 space-y-4">
-                  {board
-                    .filter(g => g.league === code)
-                    .map(g => (
-                      <GameRow key={g.key} game={g} now={now} />
-                    ))}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="mt-6 space-y-4">
-              {board.map(g => (
-                <GameRow key={g.key} game={g} now={now} />
-              ))}
+        <BookDayProvider date={date}>
+          <section className="mt-11">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The board</h2>
+              <span className="tnum font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
+                {board.length} games · {posted} posted
+              </span>
             </div>
-          )}
-        </section>
+            <StitchRule tone="faint" className="mt-4" />
+
+            {leagues.length > 1 ? (
+              leagues.map(code => (
+                <div key={code} className="mt-8">
+                  <div className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: sportByCode(code)?.accent ?? '#666' }}
+                    />
+                    <h3 className="font-mono text-[12px] font-bold uppercase tracking-[0.07em] text-hi">
+                      {sportByCode(code)?.longName ?? code}
+                    </h3>
+                  </div>
+                  <div className="mt-4">
+                    <BoardGrid
+                      items={board
+                        .filter(g => g.league === code)
+                        .map(g => ({
+                          key: g.key,
+                          tile: <GameTile game={g} now={now} />,
+                          panel: <GameRow game={g} now={now} />,
+                        }))}
+                    />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="mt-6">
+                <BoardGrid
+                  items={board.map(g => ({
+                    key: g.key,
+                    tile: <GameTile game={g} now={now} />,
+                    panel: <GameRow game={g} now={now} />,
+                  }))}
+                />
+              </div>
+            )}
+          </section>
+        </BookDayProvider>
       )}
 
       {board.length === 0 && (

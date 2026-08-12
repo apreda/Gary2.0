@@ -1,0 +1,210 @@
+import { daysAgoEST } from '@/lib/gary/dates';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YOUR BOOK — shared model + pure math (web port of iOS UserBookView.swift).
+//
+// One system, three entry points: a TAIL, a FADE, and a manually logged
+// outside bet are the same `user_bets` row with a different kind. Tail/fade
+// go through server RPCs that resolve odds + lock time and refuse post-lock
+// writes — the record is unfakeable. Two ledgers, never mixed: WITH GARY
+// (system-graded tails/fades) and YOUR PLAYS (self-graded, labeled).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UserBet {
+  id: string;
+  kind: string;                 // tail | fade | manual
+  pick_type: string | null;     // game | prop
+  game_date: string;
+  league: string | null;
+  pick_text: string;
+  matchup: string | null;
+  player_name: string | null;
+  prop_type: string | null;
+  description: string | null;
+  odds_american: number | null;
+  odds_estimated: boolean | null;
+  stake_units: number;
+  gary_confidence: number | null;
+  streak_pick: boolean | null;
+  status: string;               // pending | won | lost | push | void
+  units_net: number | null;
+  lock_at: string | null;
+  placed_at: string | null;
+  graded_by: string | null;
+}
+
+/** Tails/fades are system-graded — the unfakeable ledger. */
+export const isVerified = (b: UserBet) => b.kind === 'tail' || b.kind === 'fade';
+export const isSettled = (b: UserBet) => b.status !== 'pending';
+
+export interface BookRecord {
+  wins: number;
+  losses: number;
+  pushes: number;
+  units: number;
+  /** Win% of decided (pushes excluded), rounded. Null with nothing decided. */
+  pct: number | null;
+}
+
+export function bookRecord(rows: UserBet[]): BookRecord {
+  let wins = 0, losses = 0, pushes = 0, units = 0;
+  for (const b of rows) {
+    if (b.status === 'won') wins++;
+    else if (b.status === 'lost') losses++;
+    else if (b.status === 'push') pushes++;
+    units += b.units_net ?? 0;
+  }
+  const decided = wins + losses;
+  return { wins, losses, pushes, units, pct: decided > 0 ? Math.round((wins / decided) * 100) : null };
+}
+
+// ── Tracker windows + filters (the YOU page's chips) ────────────────────────
+
+export type Timeframe = '7d' | '30d' | 'season' | 'all';
+export type Source = 'all' | 'tail' | 'fade' | 'manual';
+
+/** First day of the current record era — matches the iOS season floor. */
+export const SEASON_START = '2026-03-01';
+
+/** Inclusive ISO floor for a timeframe, or null for no floor. */
+export function windowSince(tf: Timeframe, now: Date = new Date()): string | null {
+  if (tf === '7d') return daysAgoEST(7, now);
+  if (tf === '30d') return daysAgoEST(30, now);
+  if (tf === 'season') return SEASON_START;
+  return null;
+}
+
+export function filterBets(rows: UserBet[], tf: Timeframe, source: Source, now: Date = new Date()): UserBet[] {
+  const since = windowSince(tf, now);
+  return rows.filter(b => {
+    if (since && b.game_date < since) return false;
+    if (source !== 'all' && b.kind !== source) return false;
+    return true;
+  });
+}
+
+// ── Tracker stats (WIN% / ROI / AVG ODDS / BEST DAY) ────────────────────────
+// ROI and win% here are the user's OWN money math — never Gary-side language.
+
+export interface TrackerStats {
+  winPct: number | null;
+  roiPct: number | null;
+  avgOdds: number | null;
+  bestDay: { date: string; units: number } | null;
+}
+
+export function trackerStats(rows: UserBet[]): TrackerStats {
+  const settled = rows.filter(isSettled);
+  const decided = settled.filter(b => b.status === 'won' || b.status === 'lost');
+  const wins = decided.filter(b => b.status === 'won').length;
+
+  const staked = decided.reduce((s, b) => s + b.stake_units, 0);
+  const net = settled.reduce((s, b) => s + (b.units_net ?? 0), 0);
+
+  const withOdds = settled.filter(b => b.odds_american != null);
+  const avgOdds = withOdds.length > 0
+    ? Math.round(withOdds.reduce((s, b) => s + (b.odds_american ?? 0), 0) / withOdds.length)
+    : null;
+
+  const byDay = new Map<string, number>();
+  for (const b of settled) {
+    byDay.set(b.game_date, (byDay.get(b.game_date) ?? 0) + (b.units_net ?? 0));
+  }
+  let bestDay: { date: string; units: number } | null = null;
+  for (const [date, units] of byDay) {
+    if (!bestDay || units > bestDay.units) bestDay = { date, units: Math.round(units * 100) / 100 };
+  }
+
+  return {
+    winPct: decided.length > 0 ? Math.round((wins / decided.length) * 100) : null,
+    roiPct: staked > 0 ? Math.round((net / staked) * 100) : null,
+    avgOdds,
+    bestDay,
+  };
+}
+
+/** Cumulative net over settled bets, day by day, oldest first — THE RIDE. */
+export function cumulativeSeries(rows: UserBet[]): { date: string; units: number }[] {
+  const byDay = new Map<string, number>();
+  for (const b of rows.filter(isSettled)) {
+    byDay.set(b.game_date, (byDay.get(b.game_date) ?? 0) + (b.units_net ?? 0));
+  }
+  const days = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  let running = 0;
+  return days.map(([date, net]) => {
+    running += net;
+    return { date, units: Math.round(running * 100) / 100 };
+  });
+}
+
+export interface LedgerDay {
+  date: string;
+  net: number;
+  rows: UserBet[];
+}
+
+/** Settled slips grouped by day, newest day first — THE LEDGER. */
+export function groupLedgerDays(rows: UserBet[]): LedgerDay[] {
+  const byDay = new Map<string, UserBet[]>();
+  for (const b of rows.filter(isSettled)) {
+    byDay.set(b.game_date, [...(byDay.get(b.game_date) ?? []), b]);
+  }
+  return [...byDay.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, dayRows]) => ({
+      date,
+      net: Math.round(dayRows.reduce((s, r) => s + (r.units_net ?? 0), 0) * 100) / 100,
+      rows: dayRows,
+    }));
+}
+
+/**
+ * Manual settle math, mirroring the server's: a win pays at the row's odds
+ * (assumed -110 when none was entered), a loss is -stake, a push is zero.
+ */
+export function manualUnits(status: string, stake: number, odds: number | null): number {
+  const price = odds ?? -110;
+  if (status === 'won') {
+    return Math.round(stake * (price > 0 ? price / 100 : 100 / Math.abs(price)) * 100) / 100;
+  }
+  if (status === 'lost') return -stake;
+  return 0;
+}
+
+// ── Money display (founder, Jul 26: "don't do units, do money") ─────────────
+// Stakes/results STORE as units; the DISPLAY is dollars once the user says
+// what a unit is worth. Until then, units show.
+
+function dollars(v: number): string {
+  const r = Math.round(v * 100) / 100;
+  return Number.isInteger(r) ? `$${r}` : `$${r.toFixed(2)}`;
+}
+
+/** A stake: "$25" once the unit is set, else "1.0u". */
+export function fmtStake(units: number, unitDollars: number): string {
+  return unitDollars > 0 ? dollars(units * unitDollars) : `${units.toFixed(1)}u`;
+}
+
+/** A net result: "+$63" / "-$25", else "+0.63u" / "-1.00u". */
+export function fmtNet(units: number, unitDollars: number): string {
+  if (unitDollars > 0) {
+    const d = units * unitDollars;
+    return (d >= 0 ? '+' : '-') + dollars(Math.abs(d));
+  }
+  return `${units >= 0 ? '+' : ''}${units.toFixed(2)}u`;
+}
+
+/** Ledger totals, one decimal in unit mode: "+$140" / "+1.4u". */
+export function fmtNetTotal(units: number, unitDollars: number): string {
+  if (unitDollars > 0) {
+    const d = units * unitDollars;
+    return (d >= 0 ? '+' : '-') + dollars(Math.abs(d));
+  }
+  return `${units >= 0 ? '+' : ''}${units.toFixed(1)}u`;
+}
+
+/** American odds as slip text: "+135" / "-110". */
+export function fmtOdds(odds: number | null): string | null {
+  if (odds == null) return null;
+  return odds > 0 ? `+${odds}` : `${odds}`;
+}

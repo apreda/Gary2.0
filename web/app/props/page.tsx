@@ -5,6 +5,7 @@ import { ScoutRead } from '@/components/ScoutRead';
 import { ReceiptLine } from '@/components/ReceiptLine';
 import { Slab } from '@/components/board/GameRow';
 import { KeyStats, PropCall, PropRow } from '@/components/board/PropRow';
+import { BookDayProvider } from '@/components/book/BookDay';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { fetchTodayPropPicks, splitHrThreats, selectTopProps } from '@/lib/gary/picks';
 import { computePropsRecord, fetchPropResultsForDate } from '@/lib/gary/results';
@@ -164,11 +165,13 @@ export default async function PropsPage() {
             </span>
           </div>
           <StitchRule tone="faint" className="mt-4" />
-          <div className="mt-6 space-y-4">
-            {games.map(([matchup, items]) => (
-              <GamePropPanel key={matchup} matchup={matchup} props={items} />
-            ))}
-          </div>
+          <BookDayProvider date={date}>
+            <div className="mt-6 space-y-4">
+              {games.map(([matchup, items]) => (
+                <GamePropPanel key={matchup} matchup={matchup} props={items} />
+              ))}
+            </div>
+          </BookDayProvider>
         </section>
       )}
 

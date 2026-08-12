@@ -10,6 +10,7 @@ const LINKS = [
   { href: '/props', label: 'Props' },
   { href: '/results', label: 'Results' },
   { href: '/hub', label: 'Hub' },
+  { href: '/you', label: 'Your Book' },
   { href: '/how-it-works', label: 'How It Works' },
   { href: '/pricing', label: 'Pricing' },
 ];

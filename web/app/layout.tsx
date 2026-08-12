@@ -21,6 +21,11 @@ export const metadata: Metadata = {
   description:
     'Gary AI covers the full slate — NBA, NFL, NHL, MLB, NCAAB, NCAAF, and the 2026 World Cup — with free daily picks, written rationale, and a public track record. Free on iOS.',
   itunes: { appId: '6751238914' },
+  // Home-screen install path. iOS reads these on "Add to Home Screen" and opens
+  // the site without browser chrome — the web's answer to the App Store gate on
+  // 2.23. The manifest itself lives in app/manifest.ts.
+  appleWebApp: { capable: true, title: 'Gary', statusBarStyle: 'black-translucent' },
+  icons: { apple: '/icons/apple-touch-icon.png' },
   openGraph: { siteName: 'Gary AI', type: 'website' },
   alternates: { types: { 'application/rss+xml': '/feed.xml' } },
 };

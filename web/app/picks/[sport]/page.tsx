@@ -3,6 +3,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { GameRow } from '@/components/board/GameRow';
+import { GameTile } from '@/components/board/GameTile';
+import { BoardGrid } from '@/components/board/BoardGrid';
+import { BookDayProvider } from '@/components/book/BookDay';
 import { UnderlineTabs } from '@/components/UnderlineTabs';
 import { PageMasthead } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
@@ -78,7 +81,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
     : null;
 
   return (
-    <main className="mx-auto max-w-5xl px-5 pb-20 pt-12">
+    <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
       {picks && picks.length > 0 && (
         <JsonLd data={{
           '@context': 'https://schema.org', '@type': 'ItemList',
@@ -141,9 +144,17 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           </p>
         </div>
       ) : (
-        <div className="mt-8 space-y-4">
-          {board.map(g => <GameRow key={g.key} game={g} now={now} />)}
-        </div>
+        <BookDayProvider date={date}>
+          <div className="mt-8">
+            <BoardGrid
+              items={board.map(g => ({
+                key: g.key,
+                tile: <GameTile game={g} now={now} />,
+                panel: <GameRow game={g} now={now} />,
+              }))}
+            />
+          </div>
+        </BookDayProvider>
       )}
     </main>
   );
