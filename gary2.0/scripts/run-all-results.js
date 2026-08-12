@@ -1114,6 +1114,28 @@ async function main(targetDate = getTargetDate()) {
     console.warn(`  ⚠️ Streaks failed (non-fatal): ${e.message}`);
   }
 
+  // ERA-DRIFT GUARD (Aug 12 2026): read back the eras stamped on today's
+  // stored picks and verify every one came from a pick run recorded in THIS
+  // folder's ledger (logs/era-runs.log). A stamp no local run produced means
+  // another writer — another clone, Railway, a stale process — is making
+  // production picks; that exact failure ran unnoticed Jul 29 – Aug 12. Loud
+  // WARN lines in the scheduler-log style, never fatal to grading.
+  try {
+    const { checkEraDrift, PROJECT_DIR } = await import('./lib/eraTruth.js');
+    const problems = [];
+    const { data: dpRow } = await supabase.from('daily_picks').select('picks').eq('date', targetDate).maybeSingle();
+    problems.push(...checkEraDrift('game', targetDate, (dpRow?.picks || []).map(p => p?.prompt_sha)));
+    const { data: ppRow } = await supabase.from('prop_picks').select('picks').eq('date', targetDate).maybeSingle();
+    problems.push(...checkEraDrift('props', targetDate, (ppRow?.picks || []).map(p => p?.prompt_sha)));
+    if (problems.length) {
+      for (const p of problems) console.warn(`🚨 ERA DRIFT: ${p}`);
+    } else {
+      console.log(`🧬 Era check ${targetDate}: all stored pick eras trace to runs from ${PROJECT_DIR}`);
+    }
+  } catch (e) {
+    console.warn(`  ⚠️ Era-drift check failed (non-fatal): ${e.message}`);
+  }
+
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);

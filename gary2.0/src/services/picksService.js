@@ -279,6 +279,12 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         // why; the era's whole audit trail rides on them.
         read_winner: pick.read_winner ?? null,
         game_read: pick.game_read ?? null,
+        // WINNERS rank fields (Aug 12: the whitelist ate these on the judge's
+        // first live run — THIRD time this trap fires; see prompt_sha and
+        // read_winner notes above). v1 class/score + v2 judge object.
+        winners_class: pick.winners_class ?? null,
+        winners_score: pick.winners_score ?? null,
+        winners_judge: pick.winners_judge ?? null,
         // Which brain produced this pick — fields absent from this object never reach the DB.
         model: pick.model || null
       };
@@ -360,6 +366,12 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       // picks stored readless). Same trap as the sha above, third occurrence.
       read_winner: pick.read_winner ?? null,
       game_read: pick.game_read ?? null,
+      // WINNERS rank fields (Aug 12: whitelist ate these on the judge's first
+      // live run — and THIS branch is the one agentic picks actually take.
+      // Fourth occurrence of the whitelist trap; see the notes above.
+      winners_class: pick.winners_class ?? null,
+      winners_score: pick.winners_score ?? null,
+      winners_judge: pick.winners_judge ?? null,
       // Which brain produced this pick — fields absent from this object never reach the DB.
       model: pick.model || null
     };

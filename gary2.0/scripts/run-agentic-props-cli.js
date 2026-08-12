@@ -12,7 +12,16 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { getPropsConstitution, applyPropsPerGameConstraint, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
-const { analyzeMlbPropsDesk } = await import('../src/services/pickdesk/propsBrain.js');
+const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/propsBrain.js');
+
+// ERA LIVE — fresh process, module cache == disk truth. Ledger append feeds
+// the grading-side drift check (see scripts/lib/eraTruth.js). Fail-open.
+try {
+  const { recordEraRun, gitStamp, PROJECT_DIR } = await import('./lib/eraTruth.js');
+  const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  console.log(`🧬 ERA LIVE: props ${PROPS_PROMPT_SHA} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
+  recordEraRun('props', etToday, PROPS_PROMPT_SHA);
+} catch (e) { console.log(`🧬 ERA LIVE: (unavailable — ${e.message})`); }
 
 const defaultArgv = process.argv.slice(2);
 

@@ -25,7 +25,18 @@ const { ballDontLieService } = await import('../src/services/ballDontLieService.
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { translateRationalePlain } = await import('../src/services/agentic/plainRationale.js');
 const { GAME_PICK_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
-const { analyzeGameDesk } = await import('../src/services/pickdesk/garyBrain.js');
+const { analyzeGameDesk, PROMPT_SHA } = await import('../src/services/pickdesk/garyBrain.js');
+
+// ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
+// line + a ledger append make every pick run auditable by folder/commit/era,
+// and the grading-side drift check (checkEraDrift) verifies that every era
+// stamped in the database came from a run recorded here. Fail-open.
+try {
+  const { recordEraRun, gitStamp, PROJECT_DIR } = await import('./lib/eraTruth.js');
+  const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  console.log(`🧬 ERA LIVE: game ${PROMPT_SHA} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
+  recordEraRun('game', etToday, PROMPT_SHA);
+} catch (e) { console.log(`🧬 ERA LIVE: (unavailable — ${e.message})`); }
 
 // Map verifiedTaleOfTape tokens to iOS StatValues property names.
 // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.;

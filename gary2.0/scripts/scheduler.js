@@ -635,6 +635,15 @@ async function main() {
     const dirty = execSync('git status --porcelain', { cwd: PROJECT_DIR }).toString().trim() ? ' (+uncommitted changes)' : '';
     log(`🔖 Running commit: ${sha}${dirty} — restart the scheduler after pulling/committing to pick up code changes`);
   } catch { log('🔖 Running commit: (unavailable — not a git checkout)'); }
+  // ERA LIVE — the folder this daemon launches picks from, and the prompt eras
+  // a fresh run from it will stamp. Jul 29 – Aug 12 2026 the daemon ran a
+  // SECOND clone of the repo and two weeks of shipped work never picked; this
+  // line makes "which code is production" a matter of reading the log.
+  try {
+    const { diskEras } = await import('./lib/eraTruth.js');
+    const eras = diskEras();
+    log(`🧬 ERA LIVE: game ${eras.game} · props ${eras.props} @ ${PROJECT_DIR}`);
+  } catch (e) { log(`🧬 ERA LIVE: (unavailable — ${e.message})`); }
   log(`Lead time: ${LEAD_TIME_MINUTES} min before each game`);
   log(`Sports: ${SPORTS.map(s => s.label).join(', ')}`);
 
