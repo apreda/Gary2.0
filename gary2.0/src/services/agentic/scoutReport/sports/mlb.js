@@ -33,7 +33,7 @@ import {
   getScoringFlowAttributed,
 } from '../../../mlbStatsApiService.js';
 import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine, homeRoadLine } from './pitcherArc.js';
-import { foldName } from '../../../../utils/nameUtils.js';
+import { foldName, lastNameOf } from '../../../../utils/nameUtils.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
@@ -2022,15 +2022,19 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ═══════════════════════════════════════════════════════════════════
   let xStatsSection = '';
   {
+    // Folded on BOTH sides, suffix-aware: the old matcher took
+    // `name.split(' ').pop()` as the surname, so every Jr./Sr./III bat missed
+    // its Savant row and vanished from the desk without a trace.
     const findXStats = (data, name) => {
       if (!name || !data.length) return null;
-      const lastName = name.split(' ').pop()?.toLowerCase();
-      const firstName = name.split(' ')[0]?.toLowerCase();
+      const lastName = lastNameOf(name);
+      const firstName = foldName(name).split(' ')[0] || '';
+      if (!lastName) return null;
       return data.find(p => {
-        const pLast = (p.last_name || '').toLowerCase();
-        const pFirst = (p.first_name || '').toLowerCase();
-        return pLast === lastName && (pFirst.startsWith(firstName?.substring(0, 3)) || firstName?.startsWith(pFirst.substring(0, 3)));
-      }) || data.find(p => (p.last_name || '').toLowerCase() === lastName) || null;
+        const pLast = lastNameOf(p.last_name);
+        const pFirst = foldName(p.first_name);
+        return pLast === lastName && (pFirst.startsWith(firstName.substring(0, 3)) || firstName.startsWith(pFirst.substring(0, 3)));
+      }) || data.find(p => lastNameOf(p.last_name) === lastName) || null;
     };
 
     const lines = [];
@@ -2044,18 +2048,40 @@ export async function buildMlbScoutReport(game, options = {}) {
     // never see it (his call: strip, don't caveat).
     const XWOBA_MIN_PA = 100;
 
-    // Key batter xStats (top 3 per team from roster if available)
-    for (const [teamName, roster] of [[homeTeam, homeRoster], [awayTeam, awayRoster]]) {
-      const hitters = (roster || []).filter(p => p.positionType !== 'Pitcher').slice(0, 4);
+    // KEY HITTERS, fixed (founder GO, Aug 13 2026). This was
+    // `roster.filter(not pitcher).slice(0, 4)` — the first four names in BDL
+    // roster order, which is alphabetical by first name. So every desk ever
+    // built labeled Amed Rosario / Austin Wells / Ben Rice the Yankees' key
+    // hitters while Trent Grisham (15 HR, two of them the night before) never
+    // appeared, and Seattle's read Brendan Donovan / Cal Raleigh / Cole Young
+    // / Colt Emerson with Julio Rodríguez and Randy Arozarena missing. The
+    // bats that matter are the ones in tonight's box: walk the posted lineup
+    // in batting order, and fall back to the most-used bats (by PA, not by
+    // alphabet) when no lineup is up yet. The 100-PA floor still applies.
+    const xStatRowFor = (name) => {
+      const x = findXStats(batterXStats, name);
+      return x && Number(x.pa) >= XWOBA_MIN_PA ? x : null;
+    };
+    for (const [teamName, roster, lineupData] of [
+      [homeTeam, homeRoster, homeData],
+      [awayTeam, awayRoster, awayData],
+    ]) {
+      const posted = (lineupData?.batters || []).filter(b => b?.name);
+      const lineupPosted = posted.length >= 9;
+      const entries = lineupPosted
+        ? posted.map(b => ({ name: b.name, tag: b.battingOrder != null ? `${b.battingOrder}. ` : '' }))
+        : (roster || [])
+            .filter(p => p.positionType !== 'Pitcher')
+            .map(p => ({ name: p.name, tag: '', pa: Number(xStatRowFor(p.name)?.pa) || 0 }))
+            .sort((a, b) => b.pa - a.pa)
+            .slice(0, 6);
       const xLines = [];
-      for (const h of hitters) {
-        const x = findXStats(batterXStats,h.name);
-        if (x && Number(x.pa) >= XWOBA_MIN_PA) {
-          xLines.push(`  ${h.name}: BA ${x.ba} | SLG ${x.slg} | xwOBA ${x.est_woba} (${x.pa} PA)`);
-        }
+      for (const e of entries) {
+        const x = xStatRowFor(e.name);
+        if (x) xLines.push(`  ${e.tag}${e.name}: BA ${x.ba} | SLG ${x.slg} | xwOBA ${x.est_woba} (${x.pa} PA)`);
       }
       if (xLines.length > 0) {
-        lines.push(`${teamName} Key Hitters:`);
+        lines.push(`${teamName} ${lineupPosted ? "— today's lineup:" : '— most-used bats:'}`);
         lines.push(...xLines);
       }
     }

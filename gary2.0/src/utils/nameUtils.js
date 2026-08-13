@@ -13,3 +13,17 @@ export const foldName = (s) => String(s || '')
   .replace(/[.\-'’]/g, '')
   .replace(/\s+/g, ' ')
   .trim();
+
+/**
+ * The surname alone, generational suffix stripped (Aug 13 2026). Joining on
+ * `name.split(' ').pop()` takes "Jr." as the last name, so "Jazz Chisholm Jr."
+ * never matched a feed carrying last_name "Chisholm" — an everyday bat dropped
+ * out of the desk's xStats silently. Any cross-source join that keys on a
+ * surname folds through this, never through a bare `.pop()`.
+ */
+const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v']);
+export const lastNameOf = (s) => {
+  const parts = foldName(s).split(' ').filter(Boolean);
+  while (parts.length > 1 && NAME_SUFFIXES.has(parts[parts.length - 1])) parts.pop();
+  return parts[parts.length - 1] || '';
+};
