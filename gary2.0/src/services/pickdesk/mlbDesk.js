@@ -59,6 +59,11 @@ export function stakesLine(standings, teamName) {
   const bits = [`${t.wins || 0}-${t.losses || 0}`];
   if (t.streak != null && t.streak !== '') bits.push(`streak ${t.streak}`);
   if (t.last_ten_games) bits.push(`L10 ${t.last_ten_games}`);
+  // TEAM HOME/ROAD + EXTRAS (founder GO, Aug 12 — the team-level twin of the
+  // Baz venue gap): the standings feed always carried these; now they print.
+  if (t.home_wins != null && t.home_losses != null) bits.push(`home ${t.home_wins}-${t.home_losses}`);
+  if (t.road_wins != null && t.road_losses != null) bits.push(`road ${t.road_wins}-${t.road_losses}`);
+  if (t.ot_wins != null && t.ot_losses != null && (t.ot_wins > 0 || t.ot_losses > 0)) bits.push(`extras ${t.ot_wins}-${t.ot_losses}`);
   const div = (standings || [])
     .filter((r) => r?.division_name && r.division_name === t.division_name && r.division_games_behind != null)
     .sort((a, b) => a.division_games_behind - b.division_games_behind);
@@ -72,6 +77,50 @@ export function stakesLine(standings, teamName) {
     bits.push(clause);
   }
   return `${teamName}: ${bits.join(', ')}`;
+}
+
+// FULL STANDINGS RESTORED (founder ruling, Aug 12 — supersedes the Aug 5
+// removal: "absolutely no reason why Gary wouldn't have the league
+// standings... any fan of any sport would be able to see the standings").
+// Awareness surface: the two clubs' division tables plus each involved
+// league's wild-card picture. Bare records and games-back — no conclusions.
+export function standingsSection(standings, homeTeam, awayTeam) {
+  const t1 = findRow(standings, homeTeam);
+  const t2 = findRow(standings, awayTeam);
+  if (!t1 && !t2) return '';
+  const lines = [];
+  const divNames = [...new Set([t1?.division_name, t2?.division_name].filter(Boolean))];
+  for (const dn of divNames) {
+    const rows = (standings || [])
+      .filter((r) => r?.division_name === dn)
+      .sort((a, b) => (a.division_games_behind ?? 99) - (b.division_games_behind ?? 99));
+    if (!rows.length) continue;
+    lines.push(`${rows[0].division_short_name || dn}:`);
+    rows.forEach((r, i) => {
+      const gb = r.division_games_behind;
+      lines.push(`  ${i + 1}. ${r.team?.display_name || r.team_name} ${r.wins}-${r.losses}${gb == null || Number(gb) === 0 ? '' : ` (${Number(gb)} GB)`}`);
+    });
+  }
+  for (const ln of [...new Set([t1?.league_name, t2?.league_name].filter(Boolean))]) {
+    const inLeague = (standings || []).filter((r) => r?.league_name === ln);
+    const leaders = new Set();
+    for (const dn of [...new Set(inLeague.map((r) => r.division_name).filter(Boolean))]) {
+      const top = inLeague.filter((r) => r.division_name === dn)
+        .sort((a, b) => (a.division_games_behind ?? 99) - (b.division_games_behind ?? 99))[0];
+      if (top?.team?.id != null) leaders.add(top.team.id);
+    }
+    const field = inLeague.filter((r) => !leaders.has(r.team?.id))
+      .sort((a, b) => (b.win_percent ?? 0) - (a.win_percent ?? 0));
+    if (field.length < 3) continue;
+    const third = field[2];
+    const short = ln === 'American League' ? 'AL' : ln === 'National League' ? 'NL' : ln;
+    lines.push(`${short} Wild Card (top 3 in):`);
+    field.slice(0, 6).forEach((r, i) => {
+      const back = ((third.wins - r.wins) + (r.losses - third.losses)) / 2;
+      lines.push(`  ${i + 1}. ${r.team?.display_name || r.team_name} ${r.wins}-${r.losses}${i <= 2 ? '' : ` (${back} back)`}`);
+    });
+  }
+  return lines.length ? lines.join('\n') : '';
 }
 
 // (MORNING BOARD line + fetcher DELETED — founder, Aug 4 night: the
@@ -361,11 +410,13 @@ export async function buildMlbDesk(game, options = {}) {
   // buckets are arbitrary for teams; L3/L5/L10, streak, and run shape carry
   // recency at the right grain. The PITCHER month arc stays — its job is
   // decomposing the season aggregate beside it, not calendar prediction.)
+  const standingsBlock = standingsSection(standings, homeTeam, awayTeam);
   const stakes = `═══ THE STAKES ═══\n` +
     `${stakesLine(standings, homeTeam)}\n` +
     `${stakesLine(standings, awayTeam)}\n` +
     `${deadlineLine()}` +
-    (sampleNote ? `\n${sampleNote}` : '');
+    (sampleNote ? `\n${sampleNote}` : '') +
+    (standingsBlock ? `\n\n${standingsBlock}` : '');
 
   const { section: news, rest: shelfWithOdds } = extractSection(scoutText, NEWS_HEADER);
   // BLIND SPLIT (Aug 5): the scout report's own odds block is dropped from the
@@ -434,54 +485,57 @@ export async function buildMlbDesk(game, options = {}) {
     return section;
   };
   let shelfRest = shelf;
-  // TEAM-FIRST ORDER (founder GO, Aug 10 — the order-bias lever): the blind
-  // flow now reads like the RL lane has since Aug 6 — who's playing and what
-  // shape they're in, the pens, THEN the starters. Same sections, same
-  // words. Pitch types stay in the blind flow (only the RL lane cut them).
-  const TONIGHT_SECTIONS = [
+  // SUBJECT SHELVES (founder GO, Aug 13 — the anchoring lever: "reorder that
+  // so Gary isn't so anchored" to the starters): the clubs and the matchup
+  // are read in full BEFORE any arm appears; pitching arrives late, unified —
+  // starters, pens, and the battery as one subject, "the whole 9 right
+  // there." Supersedes the Aug 10 team-first order within one shelf.
+  const CLUBS_SECTIONS = [
     '═══ CONFIRMED LINEUPS ═══',
     '═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══',
     '═══ INJURIES (BDL Structured) ═══',
     '═══ SITUATION FLAGS ═══',
-    '═══ LAST NIGHT, AS WRITTEN ═══',
-    '═══ THE PEN — high-leverage arms ═══',
-    '═══ BULLPEN WORKLOAD (recent appearances) ═══',
     '═══ ROSTER MOVES — LAST 14 DAYS ═══',
-    '═══ CATCHERS — the running game ═══',
-    '═══ PROBABLE PITCHERS ═══',
-    '═══ PITCHER SAMPLE CONTEXT ═══',
-    '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
-    '═══ THE PARK ═══',
-    '═══ REST & SCHEDULE SITUATION ═══',
-  ];
-  const CLUBS_SECTIONS = [
+    '═══ LAST NIGHT, AS WRITTEN ═══',
     '═══ TEAM SEASON STATS ═══',
     '═══ TEAM DEFENSE ═══',
     '═══ RECENT FORM ═══',
+  ];
+  const MATCHUP_SECTIONS = [
     '═══ SERIES STATE ═══',
+    '═══ THE PARK ═══',
+    '═══ REST & SCHEDULE SITUATION ═══',
     '═══ SCHEDULE SHAPE ═══',
   ];
-  // (RL-only list + pitch-types cut REMOVED — founder, Aug 10: "RL clearly
-  // didn't do better without it." One TONIGHT order for every lane.)
-  let tonightBlock = TONIGHT_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
-  {
-    const target = ['═══ LAST NIGHT, AS WRITTEN ═══', '═══ THE PEN — high-leverage arms ═══', '═══ PROBABLE PITCHERS ═══']
-      .find(h => tonightBlock.includes(h));
-    tonightBlock = target ? tonightBlock.replace(target, `${breaking}\n\n${target}`) : `${tonightBlock}\n\n${breaking}`;
-  }
-  const clubsBlock = CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
-  const wireBlock = takeSection('═══ THE WIRE — THE WEEK AS WRITTEN (official game stories) ═══');
+  const PITCHING_SECTIONS = [
+    '═══ PROBABLE PITCHERS ═══',
+    '═══ PITCHER SAMPLE CONTEXT ═══',
+    '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
+    '═══ THE PEN — high-leverage arms ═══',
+    '═══ BULLPEN WORKLOAD (recent appearances) ═══',
+    '═══ CATCHERS — the running game ═══',
+  ];
+  // Breaking news pins to the very top of the first shelf — a same-day
+  // scratch is a decision input wherever the shelves land.
+  const clubsBlock = `${breaking}\n\n${CLUBS_SECTIONS.map(takeSection).filter(Boolean).join('\n\n')}`;
+  const matchupBlock = MATCHUP_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
+  const pitchingBlock = PITCHING_SECTIONS.map(takeSection).filter(Boolean).join('\n\n');
+  // (THE WIRE shelf block REMOVED — founder GO, Aug 12: "the stories should
+  // exist where they go." Game stories now ride their own game entries in
+  // RECENT FORM, the series stories live in SERIES STATE, and last night's
+  // stays in TONIGHT — the scout report no longer emits a WIRE section.)
   const shelfBanner = (t) => `━━━━━━━━━━━━━━━ ${t} ━━━━━━━━━━━━━━━`;
   const deskTextBlind = [
     shelfRest.trim(),
-    shelfBanner('TONIGHT'),
-    tonightBlock,
     shelfBanner('THE CLUBS'),
-    stakes,
     clubsBlock,
+    shelfBanner('THE MATCHUP'),
+    stakes,
+    matchupBlock,
+    shelfBanner('THE PITCHING'),
+    pitchingBlock,
     shelfBanner('THE WEEK'),
     world,
-    wireBlock || '',
   ].filter(Boolean).join('\n\n');
   // The snapshot carries the board Gary actually saw: run-line games never
   // show him a moneyline, so the stored desk must not either.

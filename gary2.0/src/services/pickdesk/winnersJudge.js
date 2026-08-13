@@ -39,8 +39,7 @@ ${deskText}
 ${finalPick}
 
 ## THE PRE-LINES READ
-Winner: ${readWinner ?? '—'}
-${gameRead ?? ''}
+${readWinner ? `Winner: ${readWinner}\n` : ''}${gameRead ?? ''}
 
 ## THE PUBLISHED CARD
 ${rationale ?? ''}

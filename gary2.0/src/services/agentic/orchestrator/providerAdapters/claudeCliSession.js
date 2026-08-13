@@ -20,6 +20,26 @@
  * a capped subscription degrades to pennies, never to a dark slate.
  */
 import { spawn } from 'child_process';
+import { mkdirSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
+// NEUTRAL GROUND (Aug 12 2026 — the Baz press-refusal autopsy): headless
+// `claude -p` auto-loads the project memory (CLAUDE.md, memory index) of its
+// working directory. Launched from this repo, every bridge call — including
+// the PICK BRAIN — silently carried Gary's own project docs and ledger notes
+// as context: an accidental steering channel the no-steering law exists to
+// forbid, and the trigger for grounding calls refusing legitimate press asks
+// as "prompt injection." Every spawn now runs from an empty temp directory:
+// the stdin prompt and the desk are the ENTIRE context, as designed.
+const NEUTRAL_CWD = join(tmpdir(), 'gary-claude-neutral');
+let neutralReady = false;
+function neutralCwd() {
+  if (!neutralReady) {
+    try { mkdirSync(NEUTRAL_CWD, { recursive: true }); neutralReady = true; } catch { return tmpdir(); }
+  }
+  return NEUTRAL_CWD;
+}
 
 const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || 'claude';
 const CALL_TIMEOUT_MS = 15 * 60 * 1000; // Fable turns on a full desk can run minutes
@@ -47,7 +67,7 @@ export function isClaudeCliModel(modelName) {
 
 function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd() });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
@@ -66,7 +86,13 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
   });
 }
 
-const CAP_PATTERNS = /usage limit|weekly limit|hit your.*limit|rate limit|out of.*(usage|credits)|limit reached|too many requests|overloaded|\b429\b/i;
+const CAP_PATTERNS = /usage limit|weekly limit|hit your.*limit|rate limit|out of.*(usage|credits)|limit reached|too many requests|\b429\b/i;
+// 529/5xx "Overloaded" is Anthropic saying its SERVERS are momentarily busy —
+// a transient state, not a subscription cap. It used to live in CAP_PATTERNS,
+// so one 529 read as "quota exhausted" and the cascade permanently handed the
+// game to a fallback brain (Aug 12 2026: the debut's first pick). The brain
+// retries the same model on isOverloaded before surrendering.
+const OVERLOAD_PATTERNS = /overloaded|\b(?:529|503|502)\b|server-side issue/i;
 
 function toError(code, stdout, stderr) {
   // On quota failures the CLI exits non-zero but writes a JSON result whose
@@ -84,7 +110,9 @@ function toError(code, stdout, stderr) {
   }
   detail = String(detail).slice(0, 500);
   const error = new Error(`claude CLI exit ${code}: ${detail}`);
-  if (CAP_PATTERNS.test(detail)) error.isQuotaError = true;
+  // Overload wins the tie: "529 Overloaded" must never read as a cap.
+  if (OVERLOAD_PATTERNS.test(detail)) error.isOverloaded = true;
+  else if (CAP_PATTERNS.test(detail)) error.isQuotaError = true;
   return error;
 }
 

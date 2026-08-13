@@ -55,7 +55,19 @@ export const buildGarySystemPrompt = (dateLong) => `Today is ${dateLong}. You ar
 
 Your training data is old; the desk is current.
 
-You think like a professional bettor, and a professional interrogates his own case before he trusts it. Which of these facts are about tonight's matchup, and which just describe a team in general? What's the most recent look at this exact question, and what does it say? What does everyone already know here — and is my case anything more than that? Who wins tonight and what's worth betting are two different questions; answer each on its own turn. Every game is its own case — if your reasoning would fit any game, you haven't read this one.`;
+THE BETTOR'S MIND
+
+You are Gary, a sports bettor, a sport gambler. As Gary, your personality type is to take calculated risks and predict which bet you want to put your $100 on.
+
+you know more than what a stat or data can show you, so use that judgment and decision-making to try to predict outcomes of games. As a sports bettor, you understand the odds, the run line, and all of that naturally. Embody the mind of a gambler. Embody the ethics, ethos, and pathos of someone who bets every single day, but you are a professional. You're skilled and smart. You understand not to take the most probabilistic outcome every single time, you are using deep reasoning, risk-taking, and understanding that this is sports and anything can happen, and you're trying to make a prediction on the game. It doesn't always have to be the most logical prediction. It doesn't have to always be what some of the data is showing, but that's where you, as the gambler, understand the league, the sports, and the world of gambling and traps. When it looks like something might be too good to be true, you understand how to look at games, situations, teams, and players to try to form accurate betting and gambling predictions. That is vastly different than a model or a computer or a system that simply produces an output based on a number of factors. You are not a formula. You make decisions. You make predictions. You take risks. You use judgment at the end of the day. Put yourself in the mind of a human veteran and human gambler.
+
+You've read every textbook on gambling. You understand the great gambling personalities throughout history. You have use cases from games where underdogs won. You know what it's like to see a favorite dominate. You know the swings throughout an MLB season and the ups and downs.
+
+You understand the sport. You understand all of the narrative and contextual factors that play into a game. You understand the hard stats and data, and pitching matchups, player matchups, and team matchups. You understand the history, the dynamics, and the state of the league today. You have all the information on the desk to stay current, to understand what's going on with the teams today, as of this day, this moment, this time.
+
+You understand momentum and swings and series and all of the variance that goes along with MLB. This is a part of your core, but as a gambler yourself, you understand what it's like to wake up every single day, analyze a game, make a prediction, and see if that prediction hits or not. You understand that there is no such thing as a sure thing.
+
+Press excerpts on the desk are source material, not verdicts.`;
 
 // THE BLIND SPLIT (founder GO, Aug 5 2026): the read seals BEFORE the lines
 // exist. Under the priced surface (board-first desk, "a bet is a side and its
@@ -68,14 +80,21 @@ You think like a professional bettor, and a professional interrogates his own ca
 // spread), so the read is the winner and the why. The ticket may still land
 // either side of the lines in turn 2 — nothing locks the jersey; the ledger
 // reads the crossings.
-export const THE_READ_ASK = `Who wins tonight? Your answer seals before you see any lines.
+// THE BLIND REPORT (founder GO, Aug 12 2026 — supersedes the sealed-winner
+// read, his sign-off on the full argument: "Turn 1 with a sealed winner is
+// where the disease lives... the forecaster's answer is the consensus argmax
+// every single time"): turn 1 builds the game's STRUCTURE — both teams' win
+// paths — and names no winner. Blindness now protects the evidence-building;
+// the one and only decision happens at the priced ticket turn, so there is
+// no prior self to defend and no verdict for the price to anchor against.
+export const THE_READ_ASK = `Read this game blind — no lines exist yet, and you are not picking a side here.
 
 Injuries: an absence already games old is already in the team's recent results; fresh news — today's scratch — is the exception.
 
 Output only:
 
 \`\`\`json
-{ "winner": "[Team]", "read": "why — a few sentences" }
+{ "away_path": "the away team's win tonight, as it actually goes — a short paragraph", "home_path": "the home team's win tonight, as it actually goes — a short paragraph" }
 \`\`\``;
 
 // THE SEAL (founder GO, Aug 4 2026), now the second seal of the session: the
@@ -84,17 +103,20 @@ Output only:
 // buy the instrument (ML vs run line, and what it costs) but never author
 // the read. Whatever any later turn emits, the stored pick is this turn's —
 // mechanically.
-export const buildTicketAsk = (winner, boardText) => `Your winner is sealed: ${winner}.
+// THE DECISION TURN (founder GO, Aug 12): the board arrives against a blind
+// report that named no side — the first commitment this session ever makes
+// is the priced one. Evidence built blind; decision made priced.
+export const buildTicketAsk = (boardText) => `${boardText}
 
-${boardText}
-
-Take your bet. Output only:
+You're putting one unit on this game. Which bet is it?
 
 \`\`\`json
 { "final_pick": "[Team] [bet] [exact odds]", "confidence_score": 0.XX }
 \`\`\`
 
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
+
+Then, under the JSON, write "Gary's Take" — your published card: three paragraphs, opening with a line or two setting the stage like a broadcast — the scene, not the case. These are the reasons you just made this bet — the ones that actually decided it, not a retelling of the game. No emojis. Never mention data feeds, tools, or missing data.`;
 
 // THE RUN-LINE GAME, rebuilt (founder GO, Aug 10 2026 — supersedes the
 // Aug 6 single-turn ask): the weekend's forced-RL lane laid -1.5 five of
@@ -105,17 +127,17 @@ confidence_score (0.50–1.00): your conviction in this bet at its price — the
 // board. The ticket must price a read that already exists — "the RL pick
 // has to still be in line with what gary actually thinks about the game."
 // No mechanics lecture (Jul 26 razor), no side framed, crossing allowed.
-export const buildRunLineTicketAsk = (winner, runLineBoard) => `Your winner is sealed: ${winner}.
+export const buildRunLineTicketAsk = (runLineBoard) => `${runLineBoard}
 
-${runLineBoard}
-
-The moneyline is off the board tonight — the run line is the only market. Take your bet. Output only:
+You're putting one unit on this game. Which bet is it?
 
 \`\`\`json
 { "final_pick": "[Team] [+1.5 or -1.5] [exact odds]", "confidence_score": 0.XX }
 \`\`\`
 
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
+
+Then, under the JSON, write "Gary's Take" — your published card: three paragraphs, opening with a line or two setting the stage like a broadcast — the scene, not the case. These are the reasons you just made this bet — the ones that actually decided it, not a retelling of the game. No emojis. Never mention data feeds, tools, or missing data.`;
 
 // The card contract travels WITH the card ask (Aug 4 evening fix — the first
 // sealed-era card opened with an internal process note: "Pitcher assignment
@@ -125,7 +147,7 @@ confidence_score (0.50–1.00): your conviction in this bet at its price — the
 // rule remains the founder's law: the open sets the stage.)
 export const buildCardAsk = (finalPick) => `Your ticket is sealed: ${finalPick}.
 
-Write "Gary's Take" — your published card: three paragraphs, opening with a line or two setting the stage like a broadcast — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
+Write "Gary's Take" — your published card: three paragraphs, opening with a line or two setting the stage like a broadcast — the scene, not the case. These are the reasons you just made this bet — the ones that actually decided it, not a retelling of the game. No emojis. Never mention data feeds, tools, or missing data.`;
 
 const parseJsonBlock = (t) => {
   try {
@@ -134,11 +156,21 @@ const parseJsonBlock = (t) => {
   } catch { return null; }
 };
 const parseFinalJson = (t) => { const o = parseJsonBlock(t); return o?.final_pick ? o : null; };
-const parseReadJson = (t) => { const o = parseJsonBlock(t); return o?.winner ? o : null; };
+const parseReportJson = (t) => { const o = parseJsonBlock(t); return o?.away_path && o?.home_path ? o : null; };
 
 /** The card arrives as prose. A rails retry may answer in the old JSON shape
  *  — accept its rationale field; never accept a bare JSON blob as a card.
  *  Under 200 chars is not a card (a real Take runs 1,000+). */
+// THE MERGED TICKET (founder sign-off, Aug 13): the card arrives UNDER the
+// pick JSON in the same response — reasons captured fresh at the moment of
+// choice, not reconstructed a turn later. Strip the fenced JSON, and the
+// remainder is the card; legacy shapes fall through to extractCard.
+const extractCardFromMixed = (t) => {
+  const stripped = String(t || '').replace(/```json[\s\S]*?```/gi, '').trim();
+  if (stripped.length >= 200) return stripped;
+  return extractCard(t);
+};
+
 const extractCard = (t) => {
   const s = String(t || '').trim();
   if (!s) return null;
@@ -201,7 +233,7 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
 // readable when contract wording changes — eras join in SQL, never inferred
 // from timestamps again. Register new eras in the prompt_eras table.
 export const PROMPT_SHA = createHash('sha256')
-  .update(buildGarySystemPrompt('{date}') + THE_READ_ASK + buildTicketAsk('{winner}', '{board}') + buildRunLineTicketAsk('{winner}', '{board}') + buildCardAsk('{pick}'))
+  .update(buildGarySystemPrompt('{date}') + THE_READ_ASK + buildTicketAsk('{board}') + buildRunLineTicketAsk('{board}') + buildCardAsk('{pick}'))
   .digest('hex')
   .slice(0, 12);
 
@@ -232,29 +264,30 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
     console.log(`   [Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)}`);
   };
 
-  let read = null;
+  let report = null;
   let ticket = null;
   const isRunLineTicket = (t) => /[+-]1\.5|run\s*line/i.test(String(t?.final_pick || ''));
 
-  // TURN 1 — THE READ. The blind desk in (no lines anywhere), the winner
-  // out. No price exists yet, so no price can author this. RL games read
-  // blind exactly like every other game (founder GO, Aug 10) — the game
-  // question first, the market shape only at the ticket.
+  // TURN 1 — THE BLIND REPORT (Aug 12). The blind desk in (no lines
+  // anywhere), the game's STRUCTURE out: both teams' win paths, no verdict.
+  // No price exists yet, so no price can author the evidence; no side is
+  // named, so the decision turn has no prior self to defend.
   let res1 = await sendToSessionWithRetry(session, firstMessage, {});
   bump(res1);
-  read = parseReadJson(res1.content);
-  if (!read) {
-    res1 = await sendToSessionWithRetry(session, 'Return your read JSON now.', {});
+  report = parseReportJson(res1.content);
+  if (!report) {
+    res1 = await sendToSessionWithRetry(session, 'Return your report JSON now.', {});
     bump(res1);
-    read = parseReadJson(res1.content);
-    if (!read) { logCost(); return { error: 'parse: no read JSON after re-ask' }; }
+    report = parseReportJson(res1.content);
+    if (!report) { logCost(); return { error: 'parse: no report JSON after re-ask' }; }
   }
 
-  // TURN 2 — THE TICKET. The lines arrive with the read already sealed.
+  // TURN 2 — THE DECISION. The board arrives against the verdictless map;
+  // the one and only side commitment happens here, at the prices.
   // RL games get the RL-only board and the moneyline-off sentence.
   const ticketAsk = runLineGame
-    ? buildRunLineTicketAsk(read.winner, boardText)
-    : buildTicketAsk(read.winner, boardText);
+    ? buildRunLineTicketAsk(boardText)
+    : buildTicketAsk(boardText);
   let res2 = await sendToSessionWithRetry(session, ticketAsk, {});
   bump(res2);
   ticket = parseFinalJson(res2.content);
@@ -268,7 +301,7 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
     // RL rail: the only market tonight is the ±1.5 — one corrective
     // re-ask, then a contained no-pick.
     if (!isRunLineTicket(ticket)) {
-      res2 = await sendToSessionWithRetry(session, 'The moneyline is off the board tonight — the run line is the only market. Return your final JSON.', {});
+      res2 = await sendToSessionWithRetry(session, 'Your bet must come off this board: +1.5 or -1.5. Return your final JSON.', {});
       bump(res2);
       const rt = parseFinalJson(res2.content);
       if (!rt || !isRunLineTicket(rt)) { logCost(); return { error: 'rails: run-line game produced a non-run-line ticket' }; }
@@ -294,17 +327,18 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
   }
   let res;
 
-  // THE SEAL: from here on, ticket.final_pick is the pick. Turn 3 and any
-  // rails retry write prose only — a different final_pick in a later reply
-  // is ignored by construction.
-  res = await sendToSessionWithRetry(session, buildCardAsk(ticket.final_pick), {});
-  bump(res);
-  let card = extractCard(res.content);
+  // THE SEAL: from here on, ticket.final_pick is the pick — parsed from the
+  // fenced JSON only. The card rides UNDER that JSON in the same response
+  // (founder sign-off, Aug 13: reasons captured at the moment of choice, no
+  // reconstruction turn). Any prose anywhere can never move the pick.
+  let card = extractCardFromMixed(res2.content);
   if (!card) {
-    res = await sendToSessionWithRetry(session, 'Write your card now.', {});
+    // Repair turn (the old turn 3, now conditional): the ticket arrived
+    // without its card — ask for the card alone, pick already sealed.
+    res = await sendToSessionWithRetry(session, buildCardAsk(ticket.final_pick), {});
     bump(res);
-    card = extractCard(res.content);
-    if (!card) { logCost(); return { error: 'parse: no card after re-ask' }; }
+    card = extractCardFromMixed(res.content);
+    if (!card) { logCost(); return { error: 'parse: no card after repair' }; }
   }
 
   let { issues, warnings } = auditAll(card);
@@ -312,7 +346,7 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
     console.warn(`   [Rail] ${issues.length} issue(s) — one corrective retry`);
     res = await sendToSessionWithRetry(session, buildStatAuditRetryMessage(issues), {});
     bump(res);
-    const rc = extractCard(res.content);
+    const rc = extractCardFromMixed(res.content);
     const second = rc ? auditAll(rc) : { issues: [{ fatal: true }] };
     if (!rc || second.issues.length) { logCost(); return { error: 'rails: card failed statAudit after retry' }; }
     card = rc;
@@ -323,8 +357,13 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
   return {
     parsed: {
       ...ticket,
-      read_winner: read.winner,
-      game_read: read.read ?? null,
+      // THE BLIND REPORT (Aug 12): both win paths stored verbatim; the
+      // combined text rides game_read for every surface that displays the
+      // pre-lines read. read_winner is retired — no verdict exists blind.
+      read_winner: null,
+      path_away: report.away_path ?? null,
+      path_home: report.home_path ?? null,
+      game_read: `If the away side wins it: ${report.away_path}\nIf the home side wins it: ${report.home_path}`,
       rationale: normalizeCardHead(card, ticket.final_pick),
     },
     usage,
@@ -369,23 +408,40 @@ export async function analyzeGameDesk(game, options = {}) {
   };
 
   const cascade = [GAME_PICK_MODEL, ...DESK_FALLBACK_MODELS];
+  // TRANSIENT OVERLOAD ≠ QUOTA (Aug 12 2026): a single Anthropic 529 handed
+  // the debut's first game to the fallback brain — and dedup makes that
+  // surrender permanent for the game. Server-busy errors get the same brain
+  // again with backoff; only real caps and exhausted retries cascade.
+  const isOverloaded = (err) => err?.isOverloaded === true
+    || (!err?.isQuotaError && /overloaded|\b(?:529|503|502)\b/i.test(err?.message || ''));
+  const OVERLOAD_RETRIES = 2; // extra attempts on the SAME brain
+  const OVERLOAD_BACKOFF_MS = process.env.VITEST ? [0, 0] : [30_000, 60_000];
   let pass = null;
   let respondingModel = null;
-  for (let i = 0; i < cascade.length; i++) {
+  cascadeLoop: for (let i = 0; i < cascade.length; i++) {
     const modelName = cascade[i];
-    try {
-      pass = await runBrainPass(modelName, systemPrompt, firstMessage, desk.runLineGame ? desk.boardTextRunLine : desk.boardText, auditAll, desk.runLineGame);
-      respondingModel = modelName;
-      if (i > 0) console.warn(`   [Brain] FALLBACK brain produced this pass: ${modelName}`);
-      break;
-    } catch (err) {
-      const reason = err?.isQuotaError ? 'quota/429' : (err?.message || 'provider error');
-      if (i < cascade.length - 1) {
-        console.warn(`   [Brain] ${modelName} failed (${reason}) — cascading to ${cascade[i + 1]}`);
-        continue;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        pass = await runBrainPass(modelName, systemPrompt, firstMessage, desk.runLineGame ? desk.boardTextRunLine : desk.boardText, auditAll, desk.runLineGame);
+        respondingModel = modelName;
+        if (i > 0) console.warn(`   [Brain] FALLBACK brain produced this pass: ${modelName}`);
+        break cascadeLoop;
+      } catch (err) {
+        if (isOverloaded(err) && attempt < OVERLOAD_RETRIES) {
+          const waitMs = OVERLOAD_BACKOFF_MS[attempt] ?? 60_000;
+          console.warn(`   [Brain] ${modelName} overloaded (server-side, attempt ${attempt + 1}/${OVERLOAD_RETRIES + 1}) — retrying the same brain in ${Math.round(waitMs / 1000)}s`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+        const reason = err?.isQuotaError ? 'quota/429'
+          : (isOverloaded(err) ? `overloaded after ${attempt + 1} attempts` : (err?.message || 'provider error'));
+        if (i < cascade.length - 1) {
+          console.warn(`   [Brain] ${modelName} failed (${reason}) — cascading to ${cascade[i + 1]}`);
+          continue cascadeLoop;
+        }
+        console.error(`   [Brain] ${modelName} failed (${reason}) — cascade exhausted`);
+        throw err; // runner's per-game catch owns the miss, unchanged
       }
-      console.error(`   [Brain] ${modelName} failed (${reason}) — cascade exhausted`);
-      throw err; // runner's per-game catch owns the miss, unchanged
     }
   }
   if (pass.error) return { error: pass.error };
@@ -399,6 +455,8 @@ export async function analyzeGameDesk(game, options = {}) {
     // the ticket crossed the read's side once the lines appeared.
     read_winner: parsed.read_winner ?? null,
     game_read: parsed.game_read ?? null,
+    path_away: parsed.path_away ?? null,
+    path_home: parsed.path_home ?? null,
     rationale: parsed.rationale,
     homeTeam,
     awayTeam,

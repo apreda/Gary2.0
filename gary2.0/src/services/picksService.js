@@ -269,8 +269,8 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         // World Cup side/total tag — set by run-agentic-picks; carry it through so
         // the two WC plays per match stay distinguishable (was being dropped → null).
         pick_category: pick.pick_category ?? null,
-        // Plain-language fan rendering of the audited rationale (was being dropped → null).
-        rationale_plain: pick.rationale_plain || null,
+        // (rationale_plain REMOVED — founder ruling, Aug 12: one organic
+        // rationale, no middleman. Historical rows keep their stored field.)
         // Contract-era hash (Jul 30: the whitelist here silently ate the Jul 29
         // stamp — every era read joins on this; never drop it again).
         prompt_sha: pick.prompt_sha || null,
@@ -279,6 +279,10 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         // why; the era's whole audit trail rides on them.
         read_winner: pick.read_winner ?? null,
         game_read: pick.game_read ?? null,
+        // THE BLIND REPORT (Aug 12): both win paths — added to the whitelist
+        // in the same change that created them.
+        path_away: pick.path_away ?? null,
+        path_home: pick.path_home ?? null,
         // WINNERS rank fields (Aug 12: the whitelist ate these on the judge's
         // first live run — THIRD time this trap fires; see prompt_sha and
         // read_winner notes above). v1 class/score + v2 judge object.
@@ -355,8 +359,8 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       sportsbook_odds: pick.sportsbook_odds || null,
       // World Cup side/total tag — carry it through (was being dropped → null).
       pick_category: pick.pick_category ?? null,
-      // Plain-language fan rendering of the audited rationale (was being dropped → null).
-      rationale_plain: pick.rationale_plain || null,
+      // (rationale_plain REMOVED — founder ruling, Aug 12: one organic
+      // rationale, no middleman.)
       // Contract-era hash — THIS is the branch agentic picks actually flow
       // through (cleanPick has no rawGeminiOutput); the Jul 30 morning fix
       // only reached the other branch, so stamps kept dropping here.
@@ -366,6 +370,10 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       // picks stored readless). Same trap as the sha above, third occurrence.
       read_winner: pick.read_winner ?? null,
       game_read: pick.game_read ?? null,
+      // THE BLIND REPORT (Aug 12): both win paths — THIS branch is the one
+      // agentic picks actually take.
+      path_away: pick.path_away ?? null,
+      path_home: pick.path_home ?? null,
       // WINNERS rank fields (Aug 12: whitelist ate these on the judge's first
       // live run — and THIS branch is the one agentic picks actually take.
       // Fourth occurrence of the whitelist trap; see the notes above.

@@ -23,7 +23,6 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
-const { translateRationalePlain } = await import('../src/services/agentic/plainRationale.js');
 const { GAME_PICK_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { analyzeGameDesk, PROMPT_SHA } = await import('../src/services/pickdesk/garyBrain.js');
 
@@ -1601,6 +1600,9 @@ async function main() {
             // Null on non-desk lanes; the ledger reads ticket-vs-read crossings.
             read_winner: result.read_winner ?? null,
             game_read: result.game_read ?? null,
+            // THE BLIND REPORT (Aug 12): both win paths ride every pick.
+            path_away: result.path_away ?? null,
+            path_home: result.path_home ?? null,
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
             // UI display fields
@@ -1692,13 +1694,9 @@ async function main() {
             continue;
           }
 
-          // Plain-language layer (founder GO Jul 22): the fan rendering of the
-          // SAME audited rationale — re-register only, never new claims, never
-          // blocks the pick (25s cap; field simply absent on failure).
-          try {
-            const plain = await translateRationalePlain(cleanPick.rationale);
-            if (plain) cleanPick.rationale_plain = plain;
-          } catch { /* pick ships without it */ }
+          // (Plain-language re-register REMOVED — founder ruling, Aug 12:
+          // "Gary makes the pick. He writes the rationale... I never
+          // authorized a middleman." One organic rationale, nothing else.)
 
           // Founder-ordered alert (Jul 30): a missing confidence must be LOUD,
           // never silently papered over — ⚠️ lines surface in scheduler logs.

@@ -54,6 +54,62 @@ export function recentWindowLine(starts, n = 3) {
 }
 
 /**
+ * The season decomposed by venue (founder GO, Aug 12 — the Baz miss: his
+ * 4-11 rode a road half the desk never printed, while the other starter's
+ * home split arrived by press luck). Every ledger row already carries
+ * isHome; this is the two halves as bare arithmetic, team record included.
+ *   "Home/Road: 12 home starts — 2.51 ERA, team 8-4 · 11 road — 5.09 ERA, team 3-8"
+ * Rows: full-season getPitcherLastStarts ledger (oldest→newest). Null when
+ * the season has fewer than 2 starts or every start is on one side AND that
+ * side is the season line already (single-venue seasons still print, they
+ * ARE the story). Sides with zero starts are simply omitted.
+ */
+export function homeRoadLine(starts) {
+  if (!Array.isArray(starts) || starts.length < 2) return null;
+  const MALFORMED = Symbol('malformed');
+  const eraOf = (rows) => {
+    let outs = 0, er = 0;
+    for (const g of rows) {
+      const o = outsFromIp(g.ip);
+      if (o == null) return null;
+      outs += o;
+      er += Number(g.er) || 0;
+    }
+    return outs === 0 ? null : ((er * 27) / outs).toFixed(2);
+  };
+  const half = (rows, label) => {
+    if (!rows.length) return null; // a side with no starts is simply omitted
+    const era = eraOf(rows);
+    if (era == null) return MALFORMED; // one bad row poisons the WHOLE line —
+    // printing only the clean side would read as "all his starts are there"
+    const decided = rows.filter((g) => g.win != null);
+    const w = decided.filter((g) => g.win).length;
+    const rec = decided.length ? `, team ${w}-${decided.length - w}` : '';
+    // THE AGGREGATE'S OWN CONTEXT (founder, Aug 12: "no naked numbers" — a
+    // split without when/who is half a fact): the half's recent window and
+    // its most recent start, so "3.82 road" arrives with which roads, when.
+    let recent = '';
+    if (rows.length >= 4) {
+      const last3era = eraOf(rows.slice(-3));
+      if (last3era != null) recent += `, last 3 ${label}: ${last3era}`;
+    }
+    const latest = rows[rows.length - 1];
+    if (latest?.date && latest?.opponent) {
+      recent += ` (most recent ${latest.date} ${label === 'home' ? 'vs' : '@'} ${latest.opponent})`;
+    }
+    return `${rows.length} ${label} start${rows.length === 1 ? '' : 's'} — ${era} ERA${rec}${recent}`;
+  };
+  const halves = [
+    half(starts.filter((g) => g.isHome === true), 'home'),
+    half(starts.filter((g) => g.isHome === false), 'road'),
+  ];
+  if (halves.includes(MALFORMED)) return null;
+  const segs = halves.filter(Boolean);
+  if (!segs.length) return null;
+  return `Home/Road: ${segs.join(' · ')}`;
+}
+
+/**
  * The season decomposed by month — the season aggregate's own components,
  * printed beside it so April and August stop averaging into one figure.
  *   "By month: Jun 6.00 (9.0 IP) · Jul 5.64 (22.1 IP)"

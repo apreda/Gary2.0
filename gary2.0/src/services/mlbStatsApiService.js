@@ -260,6 +260,44 @@ export async function getPitcherPlatoonSplits(playerId, season) {
  * passedBall, catcherERA. Returns the raw splits array ([{ stat, position }])
  * or [] when none.
  */
+/**
+ * TEAM season hitting splits vs LHP / vs RHP (founder GO, Aug 12): the
+ * team-level platoon picture — "how does this lineup hit tonight's kind of
+ * arm" — was invisible while the pitcher's own platoon line printed. Same
+ * statSplits machinery as getPitcherPlatoonSplits.
+ */
+export async function getTeamVsHandSplits(teamId, season) {
+  const year = season || new Date().getFullYear();
+  const key = `team_vshand_${teamId}_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  const data = await apiFetch(
+    `/teams/${teamId}/stats?stats=statSplits&group=hitting&sitCodes=vl,vr&season=${year}`
+  );
+  const result = { vsLeft: null, vsRight: null };
+  for (const block of (data.stats || [])) {
+    for (const split of (block.splits || [])) {
+      const st = split.stat || {};
+      const line = {
+        avg: st.avg ?? null,
+        obp: st.obp ?? null,
+        slg: st.slg ?? null,
+        ops: st.ops ?? null,
+        hr: st.homeRuns ?? null,
+        so: st.strikeOuts ?? null,
+        bb: st.baseOnBalls ?? null,
+        pa: st.plateAppearances ?? null,
+      };
+      if (split.split?.code === 'vl') result.vsLeft = line;
+      if (split.split?.code === 'vr') result.vsRight = line;
+    }
+  }
+  const final = (result.vsLeft || result.vsRight) ? result : null;
+  setCache(key, final);
+  return final;
+}
+
 export async function getPlayerFieldingStats(playerId, season) {
   const year = season || new Date().getFullYear();
   const key = `player_fielding_${playerId}_${year}`;
@@ -306,6 +344,71 @@ export async function getGameBoxScore(gamePk) {
 export async function getGameLineScore(gamePk) {
   const data = await apiFetch(`/game/${gamePk}/linescore`);
   return data;
+}
+
+/**
+ * SCORING FLOW WITH ATTRIBUTION (founder GO, Aug 12: "Alonso homered to left
+ * center — off of who? In what inning?"): every scoring play from the
+ * official play-by-play with the pitcher who allowed it. Finals are
+ * immutable → cached. Returns lines like
+ *   "[T1] Pete Alonso homers (26) on a fly ball to left center field.
+ *    Gunnar Henderson scores. — off Ober (2-0)"
+ */
+export async function getScoringFlowAttributed(gamePk) {
+  const key = `scoring_flow_attr_${gamePk}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/game/${gamePk}/playByPlay`);
+  const all = data?.allPlays || [];
+  const idxs = Array.isArray(data?.scoringPlays) ? data.scoringPlays : [];
+  const lines = [];
+  for (const i of idxs) {
+    const p = all[i];
+    if (!p?.result) continue;
+    const half = String(p.about?.halfInning || '').startsWith('t') ? 'T' : 'B';
+    const inning = p.about?.inning ?? '?';
+    const desc = String(p.result.description || '').trim().replace(/\s+/g, ' ');
+    const pitcher = p.matchup?.pitcher?.fullName;
+    const off = pitcher ? ` — off ${String(pitcher).split(' ').pop()}` : '';
+    lines.push(`[${half}${inning}] ${desc}${off} (${p.result.awayScore}-${p.result.homeScore})`);
+  }
+  setCache(key, lines);
+  return lines;
+}
+
+/**
+ * PEN ENTRY CONTEXT (founder GO, Aug 12 — the bullpen's missing story):
+ * for each pitcher in a final game, the situation he ENTERED into — inning,
+ * half, and the score before his first pitch. Keyed by MLBAM pitcher id.
+ */
+export async function getPitcherEntryContext(gamePk) {
+  const key = `pitcher_entry_ctx_v2_${gamePk}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/game/${gamePk}/playByPlay`);
+  const all = data?.allPlays || [];
+  const ctx = new Map();
+  let prevAway = 0;
+  let prevHome = 0;
+  for (const p of all) {
+    const pid = p?.matchup?.pitcher?.id;
+    if (pid == null) continue;
+    if (!ctx.has(pid)) {
+      const half = String(p.about?.halfInning || '').startsWith('t') ? 'T' : 'B';
+      ctx.set(pid, { inning: p.about?.inning ?? null, half, awayScore: prevAway, homeScore: prevHome, maxOn: 0 });
+    }
+    // THE JAM (V2, same day): base state after each plate appearance of the
+    // stint — the traffic his next pitch was thrown into. "1.0 IP, 0 ER"
+    // cannot say whether he cruised or escaped the bases loaded; this can.
+    const m = p.matchup || {};
+    const on = (m.postOnFirst ? 1 : 0) + (m.postOnSecond ? 1 : 0) + (m.postOnThird ? 1 : 0);
+    const entry = ctx.get(pid);
+    if (on > entry.maxOn) entry.maxOn = on;
+    if (p?.result?.awayScore != null) prevAway = p.result.awayScore;
+    if (p?.result?.homeScore != null) prevHome = p.result.homeScore;
+  }
+  setCache(key, ctx);
+  return ctx;
 }
 
 export async function getGameFeed(gamePk) {

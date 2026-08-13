@@ -502,20 +502,39 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   // subscription provider, then the metered Gemini fallbacks. De-duplicate so
   // an override can never retry the same exhausted model under another slot.
   const cascade = [...new Set([GEMINI_PROPS_MODEL, ...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])];
+  // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
+  // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
+  // not a cap), and the brain that actually answered stamps every pick — a
+  // props cascade was invisible in the ledger before this.
+  const isOverloaded = (err) => err?.isOverloaded === true
+    || (!err?.isQuotaError && /overloaded|\b(?:529|503|502)\b/i.test(err?.message || ''));
+  const OVERLOAD_RETRIES = 2;
+  const OVERLOAD_BACKOFF_MS = process.env.VITEST ? [0, 0] : [30_000, 60_000];
   let pass = null;
-  for (let i = 0; i < cascade.length; i++) {
-    try {
-      pass = await runPropsPass(cascade[i]);
-      if (i > 0) console.warn(`   [Props Brain] FALLBACK brain produced this pass: ${cascade[i]}`);
-      break;
-    } catch (err) {
-      const reason = err?.isQuotaError ? 'quota/429' : (err?.message || 'provider error');
-      if (i < cascade.length - 1) {
-        console.warn(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascading to ${cascade[i + 1]}`);
-        continue;
+  let respondingModel = null;
+  cascadeLoop: for (let i = 0; i < cascade.length; i++) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        pass = await runPropsPass(cascade[i]);
+        respondingModel = cascade[i];
+        if (i > 0) console.warn(`   [Props Brain] FALLBACK brain produced this pass: ${cascade[i]}`);
+        break cascadeLoop;
+      } catch (err) {
+        if (isOverloaded(err) && attempt < OVERLOAD_RETRIES) {
+          const waitMs = OVERLOAD_BACKOFF_MS[attempt] ?? 60_000;
+          console.warn(`   [Props Brain] ${cascade[i]} overloaded (server-side, attempt ${attempt + 1}/${OVERLOAD_RETRIES + 1}) — retrying the same brain in ${Math.round(waitMs / 1000)}s`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+        const reason = err?.isQuotaError ? 'quota/429'
+          : (isOverloaded(err) ? `overloaded after ${attempt + 1} attempts` : (err?.message || 'provider error'));
+        if (i < cascade.length - 1) {
+          console.warn(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascading to ${cascade[i + 1]}`);
+          continue cascadeLoop;
+        }
+        console.error(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascade exhausted`);
+        throw err; // props CLI's per-game catch owns the miss, unchanged
       }
-      console.error(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascade exhausted`);
-      throw err; // props CLI's per-game catch owns the miss, unchanged
     }
   }
   if (pass.error) return { error: pass.error, picks: [], validatedPlayers: board.players };
@@ -531,6 +550,9 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
     prompt_sha: PROPS_PROMPT_SHA,
+    // Which brain produced this pick — the responder, never the config
+    // (Aug 12; same truth-stamp as the game lane's Aug 10 fix).
+    model: respondingModel,
     // HR SPLIT (founder GO, Aug 4): HR picks are the fun lane — they live in
     // HR Threats and the Billfold fun tracker, and NEVER count in Gary's
     // prop record, balance, or metrics. Same definition as prop_lane_ledger's

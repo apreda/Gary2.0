@@ -77,28 +77,33 @@ describe('buildMlbDesk — the three shelves, blind', () => {
     expect(meta.moneylineHome).toBe(-105);
   });
 
-  it('shelf order: TONIGHT → THE CLUBS → THE WEEK, with TONIGHT reading team-first (lineups before the starters)', async () => {
+  it('shelf order (founder GO, Aug 13 — the anchoring lever): THE CLUBS → THE MATCHUP → THE PITCHING → THE WEEK; no arm appears before both clubs and the matchup are read', async () => {
     const { deskTextBlind } = await buildMlbDesk(game);
-    const tonight = deskTextBlind.indexOf('━━━ TONIGHT ━━━'.replace(/━━━/g, '━━━━━━━━━━━━━━━'));
     const clubs = deskTextBlind.indexOf('THE CLUBS ━');
+    const matchup = deskTextBlind.indexOf('THE MATCHUP ━');
+    const pitching = deskTextBlind.indexOf('THE PITCHING ━');
     const week = deskTextBlind.indexOf('THE WEEK ━');
-    expect(tonight).toBeGreaterThan(-1);
-    expect(clubs).toBeGreaterThan(tonight);
-    expect(week).toBeGreaterThan(clubs);
+    expect(clubs).toBeGreaterThan(-1);
+    expect(matchup).toBeGreaterThan(clubs);
+    expect(pitching).toBeGreaterThan(matchup);
+    expect(week).toBeGreaterThan(pitching);
     const lineups = deskTextBlind.indexOf('═══ CONFIRMED LINEUPS ═══');
     const starters = deskTextBlind.indexOf('═══ PROBABLE PITCHERS ═══');
-    expect(lineups).toBeGreaterThan(tonight);
-    expect(starters).toBeGreaterThan(lineups);
+    const pen = deskTextBlind.indexOf('═══ THE PEN — high-leverage arms ═══');
+    expect(lineups).toBeGreaterThan(clubs);
+    expect(lineups).toBeLessThan(matchup);
+    expect(starters).toBeGreaterThan(pitching);
+    expect(pen).toBeGreaterThan(starters); // the whole 9, unified and late
   });
 
-  it('the world split: breaking news rides in TONIGHT; the storylines stay in THE WEEK', async () => {
+  it('the world split: breaking news pins to the top of THE CLUBS; the storylines stay in THE WEEK', async () => {
     const { deskTextBlind } = await buildMlbDesk(game);
     const news = deskTextBlind.indexOf(`═══ TODAY'S BREAKING NEWS ═══\nfresh news here`);
-    const clubs = deskTextBlind.indexOf('THE CLUBS ━');
+    const matchup = deskTextBlind.indexOf('THE MATCHUP ━');
     const stories = deskTextBlind.indexOf('═══ THE WORLD — STORYLINES ═══');
     expect(news).toBeGreaterThan(-1);
-    expect(news).toBeLessThan(clubs);
-    expect(stories).toBeGreaterThan(clubs);
+    expect(news).toBeLessThan(matchup);
+    expect(stories).toBeGreaterThan(matchup);
     expect(deskTextBlind.slice(stories)).toContain('week narrative here');
   });
 

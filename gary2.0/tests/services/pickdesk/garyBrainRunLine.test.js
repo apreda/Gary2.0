@@ -36,10 +36,10 @@ const RL_DESK = {
   },
 };
 
-const READ_JSON = '```json\n{"winner": "Cardinals", "read": "the deeper club and the better arm tonight"}\n```';
-const RL_TICKET = '```json\n{"final_pick": "Reds +1.5 -178", "confidence_score": 0.58}\n```';
-const ML_TICKET = '```json\n{"final_pick": "Cardinals ML -210", "confidence_score": 0.60}\n```';
+const READ_JSON = '```json\n{"away_path": "the Reds win it early off the starter", "home_path": "the Cardinals win it behind the deeper arm"}\n```';
 const CARD_TEXT = "Gary's Take\n\n" + 'A clean read on a quiet Tuesday. '.repeat(12);
+const RL_TICKET = '```json\n{"final_pick": "Reds +1.5 -178", "confidence_score": 0.58}\n```' + '\n\n' + CARD_TEXT;
+const ML_TICKET = '```json\n{"final_pick": "Cardinals ML -210", "confidence_score": 0.60}\n```' + '\n\n' + CARD_TEXT;
 
 const stage = (contents) => {
   let n = 0;
@@ -59,34 +59,32 @@ beforeEach(() => {
   createGeminiSession.mockImplementation(async ({ modelName }) => ({ modelName }));
 });
 
-describe('analyzeGameDesk — run-line games read blind (era 190e357e)', () => {
-  it('turn 1 is the blind read ask with NO board; the ticket turn carries the RL-only board; read_winner stores', async () => {
-    const calls = stage([READ_JSON, RL_TICKET, CARD_TEXT]);
+describe('analyzeGameDesk — run-line games read blind (Aug 12 contract)', () => {
+  it('turn 1 is the blind report ask with NO board and NO verdict; the decision turn carries the RL-only board; both paths store', async () => {
+    const calls = stage([READ_JSON, RL_TICKET]);
     const result = await analyzeGameDesk({ id: 1 }, {});
     expect(result.error).toBeUndefined();
     expect(calls[0]).toContain(THE_READ_ASK);
     expect(calls[0]).not.toContain('THE LINES');
-    expect(calls[1]).toContain('Your winner is sealed: Cardinals');
-    expect(calls[1]).toContain('The moneyline is off the board tonight');
+    expect(calls[1]).not.toContain('sealed');
     expect(calls[1]).toContain('Reds +1.5 (-178)');
     expect(calls[1]).not.toContain('must never reach an RL session');
-    expect(result.read_winner).toBe('Cardinals');
-    expect(result.game_read).toBe('the deeper club and the better arm tonight');
+    expect(result.read_winner).toBeNull();
+    expect(result.path_home).toBe('the Cardinals win it behind the deeper arm');
     expect(result.pick).toContain('+1.5');
   });
 
-  it('a crossed ticket is legal by construction — the +1.5 against his own read winner stores as-is', async () => {
-    stage([READ_JSON, RL_TICKET, CARD_TEXT]);
+  it('either side of the run line is legal by construction — the +1.5 ticket stores as-is', async () => {
+    stage([READ_JSON, RL_TICKET]);
     const result = await analyzeGameDesk({ id: 1 }, {});
-    expect(result.read_winner).toBe('Cardinals');
     expect(result.pick).toContain('Reds +1.5');
   });
 
   it('a non-RL ticket gets ONE corrective re-ask, then the RL ticket is accepted', async () => {
-    const calls = stage([READ_JSON, ML_TICKET, RL_TICKET, CARD_TEXT]);
+    const calls = stage([READ_JSON, ML_TICKET, RL_TICKET]);
     const result = await analyzeGameDesk({ id: 1 }, {});
     expect(result.error).toBeUndefined();
-    expect(calls[2]).toContain('the run line is the only market');
+    expect(calls[2]).toContain('+1.5 or -1.5');
     expect(result.pick).toContain('+1.5');
   });
 

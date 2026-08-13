@@ -40,9 +40,11 @@ const DESK = {
   meta: META,
 };
 
-const READ_JSON = '```json\n{"winner": "Cardinals", "read": "the cleaner club tonight"}\n```';
+const READ_JSON = '```json\n{"away_path": "the Reds win it early off the starter", "home_path": "the Cardinals win it late through the pen"}\n```';
 const TICKET_JSON = '```json\n{"final_pick": "Cardinals ML -104", "confidence_score": 0.61}\n```';
 const CARD_TEXT = "Gary's Take\n\n" + 'A clean read on a quiet Tuesday. '.repeat(12);
+// THE MERGED TICKET (Aug 13): the card rides UNDER the pick JSON, same response.
+const TICKET_WITH_CARD = TICKET_JSON + '\n\n' + CARD_TEXT;
 
 const stage = (contents) => {
   let n = 0;
@@ -62,35 +64,49 @@ beforeEach(() => {
   createGeminiSession.mockImplementation(async ({ modelName }) => ({ modelName }));
 });
 
-describe('analyzeGameDesk — the blind split (era 190e357e lineage)', () => {
-  it('turn 1 is the blind desk + read ask with NO lines; turn 2 seals the winner and reveals the board; turn 3 is the card', async () => {
-    const calls = stage([READ_JSON, TICKET_JSON, CARD_TEXT]);
+describe('analyzeGameDesk — the blind report → priced decision (Aug 12 contract)', () => {
+  it('turn 1 is the blind desk + report ask with NO lines and NO verdict; turn 2 is the board and the only decision; turn 3 is the card', async () => {
+    const calls = stage([READ_JSON, TICKET_WITH_CARD]);
     const r = await analyzeGameDesk({ id: 1 }, {});
     expect(r.error).toBeUndefined();
     expect(calls[0]).toContain(THE_READ_ASK);
     expect(calls[0]).not.toContain('THE LINES');
-    expect(calls[1]).toContain('Your winner is sealed: Cardinals');
+    expect(calls[1]).not.toContain('sealed');
     expect(calls[1]).toContain('Reds ML -112');
-    expect(calls[2]).toContain('Your ticket is sealed: Cardinals ML -104');
+    expect(calls[1]).toContain("You're putting one unit on this game. Which bet is it?");
+    expect(calls[1]).toContain('Then, under the JSON, write "Gary\'s Take"');
+    expect(calls[1]).not.toMatch(/better bet|already paid for|losing season/);
+    expect(calls.length).toBe(2); // no third turn on the happy path
     expect(r.pick).toBe('Cardinals ML -104');
-    expect(r.read_winner).toBe('Cardinals');
-    expect(r.game_read).toBe('the cleaner club tonight');
+    expect(r.read_winner).toBeNull();
+    expect(r.path_away).toBe('the Reds win it early off the starter');
+    expect(r.path_home).toBe('the Cardinals win it late through the pen');
+    expect(r.game_read).toContain('If the away side wins it: the Reds win it early off the starter');
   });
 
   it('THE SEAL: prose in the card turn can never move the stored pick', async () => {
-    stage([READ_JSON, TICKET_JSON, "Gary's Take\n\nActually the Reds are the play tonight. " + 'More prose here to pass length. '.repeat(10)]);
+    stage([READ_JSON, TICKET_JSON + "\n\nGary's Take\n\nActually the Reds are the play tonight. " + 'More prose here to pass length. '.repeat(10)]);
     const r = await analyzeGameDesk({ id: 1 }, {});
     expect(r.pick).toBe('Cardinals ML -104');
   });
 
-  it('missing card: one re-ask, then a contained error — never a throw', async () => {
-    stage([READ_JSON, TICKET_JSON, '```json\n{"noise": true}\n```', '```json\n{"noise": true}\n```']);
+  it('ticket without a card: ONE repair turn with the sealed anchor, then a contained error — never a throw', async () => {
+    const calls = stage([READ_JSON, TICKET_JSON, '```json\n{"noise": true}\n```']);
     const r = await analyzeGameDesk({ id: 1 }, {});
+    expect(calls[2]).toContain('Your ticket is sealed: Cardinals ML -104');
     expect(r.error).toMatch(/no card/);
   });
 
-  it('returns the chassis contract: tape, meta odds, desk text, era sha, responder model', async () => {
+  it('ticket without a card: the repair turn card is accepted, pick unchanged', async () => {
     stage([READ_JSON, TICKET_JSON, CARD_TEXT]);
+    const r = await analyzeGameDesk({ id: 1 }, {});
+    expect(r.error).toBeUndefined();
+    expect(r.pick).toBe('Cardinals ML -104');
+    expect(r.rationale).toContain('quiet Tuesday');
+  });
+
+  it('returns the chassis contract: tape, meta odds, desk text, era sha, responder model', async () => {
+    stage([READ_JSON, TICKET_WITH_CARD]);
     const r = await analyzeGameDesk({ id: 1 }, {});
     expect(r.verifiedTaleOfTape).toEqual({ rows: [{ name: 'Record' }] });
     expect(r.moneylineHome).toBe(-104);
@@ -101,7 +117,7 @@ describe('analyzeGameDesk — the blind split (era 190e357e lineage)', () => {
 
   it('a model-invented header is normalized to the Gary\'s Take masthead (live smoke catch)', async () => {
     const prose = 'The bet is on the sixth inning, not the first. '.repeat(8);
-    stage([READ_JSON, TICKET_JSON, `THE CARD — Cardinals ML -104\n\n${prose}`]);
+    stage([READ_JSON, TICKET_JSON + `\n\nTHE CARD — Cardinals ML -104\n\n${prose}`]);
     const r = await analyzeGameDesk({ id: 1 }, {});
     expect(r.rationale.startsWith("Gary's Take\n\n")).toBe(true);
     expect(r.rationale).not.toContain('THE CARD');
@@ -112,7 +128,7 @@ describe('analyzeGameDesk — the blind split (era 190e357e lineage)', () => {
 describe('analyzeGameDesk — quota cascade (Jul 29 law, current chain)', () => {
   it('a quota throw on the primary re-runs the IDENTICAL contract on the first fallback', async () => {
     const quotaErr = Object.assign(new Error('429: insufficient_quota'), { isQuotaError: true });
-    const contents = [READ_JSON, TICKET_JSON, CARD_TEXT];
+    const contents = [READ_JSON, TICKET_WITH_CARD];
     let n = 0;
     sendToSessionWithRetry.mockImplementation(async (session, message) => {
       if (session.modelName === GAME_PICK_MODEL) throw quotaErr;
@@ -160,26 +176,37 @@ describe('mapFinalPick', () => {
 });
 
 describe('the ask texts — the whole contract, nothing else', () => {
-  it('THE_READ_ASK asks for the winner before any line exists', () => {
-    expect(THE_READ_ASK).toContain('Who wins tonight?');
-    expect(THE_READ_ASK).toContain('seals before you see any lines');
-    expect(THE_READ_ASK).toContain('"winner"');
+  it('THE_READ_ASK builds both win paths and forbids a verdict, before any line exists', () => {
+    expect(THE_READ_ASK).toContain('you are not picking a side here');
+    expect(THE_READ_ASK).toContain('"away_path"');
+    expect(THE_READ_ASK).toContain('"home_path"');
+    expect(THE_READ_ASK).not.toContain('"winner"');
     expect(THE_READ_ASK).not.toMatch(/odds|price|-\d{3}/);
   });
 
-  it('buildTicketAsk carries the sealed winner, the board, and the confidence contract', () => {
-    const ask = buildTicketAsk('Cardinals', 'BOARD');
-    expect(ask.startsWith('Your winner is sealed: Cardinals.')).toBe(true);
-    expect(ask).toContain('BOARD');
+  // NO VALUE VOCABULARY (founder GO, Aug 13 — the 0-4 debut, 3 of 4 on dogs):
+  // "better bet" reads as value-hunting and the model answered it with
+  // underdogs, the same fingerprint as the July priced-surface era (six
+  // Nationals fades in seven days, 1-5). The decision turn is now OWNERSHIP —
+  // one unit, which bet — with the board present but never framed as an edge.
+  it('buildTicketAsk is the board plus the one-unit ownership decision — no value vocabulary', () => {
+    const ask = buildTicketAsk('BOARD');
+    expect(ask.startsWith('BOARD')).toBe(true);
+    expect(ask).toContain("You're putting one unit on this game. Which bet is it?");
+    expect(ask).not.toMatch(/better bet|already paid for|market's read/i);
+    expect(ask).not.toContain('sealed');
     expect(ask).toContain('final_pick');
     expect(ask).toContain('confidence_score (0.50–1.00)');
+    expect(ask).toContain('Then, under the JSON, write "Gary\'s Take"');
   });
 
-  it('buildRunLineTicketAsk is the same seal with the moneyline off the board — ±1.5 only, no mechanics lecture', () => {
-    const ask = buildRunLineTicketAsk('Cardinals', 'RL BOARD');
-    expect(ask.startsWith('Your winner is sealed: Cardinals.')).toBe(true);
-    expect(ask).toContain('The moneyline is off the board tonight');
+  it('buildRunLineTicketAsk is the same ownership decision with the moneyline off the board — ±1.5 only, no mechanics lecture', () => {
+    const ask = buildRunLineTicketAsk('RL BOARD');
+    expect(ask.startsWith('RL BOARD')).toBe(true);
+    expect(ask).toContain("You're putting one unit on this game. Which bet is it?");
+    expect(ask).not.toMatch(/better bet/i);
     expect(ask).toContain('[+1.5 or -1.5]');
+    expect(ask).not.toContain('sealed');
     expect(ask).not.toMatch(/cashes|wins by two|cover/i);
   });
 
@@ -192,12 +219,24 @@ describe('the ask texts — the whole contract, nothing else', () => {
 });
 
 describe('the system prompt — the approved contract, word for word', () => {
-  it('is identity + staleness + the Sharp\'s Mind (founder sign-off, Aug 10 2026) — nothing else', () => {
+  it('is identity + staleness + Sharp\'s Mind (Aug 10) + The Bettor\'s Mind + the press-opinion law (founder sign-off, Aug 12) — nothing else', () => {
     const p = buildGarySystemPrompt('Monday, August 10, 2026');
     expect(p).toBe(`Today is Monday, August 10, 2026. You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system, and you have no favorite team.
 
 Your training data is old; the desk is current.
 
-You think like a professional bettor, and a professional interrogates his own case before he trusts it. Which of these facts are about tonight's matchup, and which just describe a team in general? What's the most recent look at this exact question, and what does it say? What does everyone already know here — and is my case anything more than that? Who wins tonight and what's worth betting are two different questions; answer each on its own turn. Every game is its own case — if your reasoning would fit any game, you haven't read this one.`);
+THE BETTOR'S MIND
+
+You are Gary, a sports bettor, a sport gambler. As Gary, your personality type is to take calculated risks and predict which bet you want to put your $100 on.
+
+you know more than what a stat or data can show you, so use that judgment and decision-making to try to predict outcomes of games. As a sports bettor, you understand the odds, the run line, and all of that naturally. Embody the mind of a gambler. Embody the ethics, ethos, and pathos of someone who bets every single day, but you are a professional. You're skilled and smart. You understand not to take the most probabilistic outcome every single time, you are using deep reasoning, risk-taking, and understanding that this is sports and anything can happen, and you're trying to make a prediction on the game. It doesn't always have to be the most logical prediction. It doesn't have to always be what some of the data is showing, but that's where you, as the gambler, understand the league, the sports, and the world of gambling and traps. When it looks like something might be too good to be true, you understand how to look at games, situations, teams, and players to try to form accurate betting and gambling predictions. That is vastly different than a model or a computer or a system that simply produces an output based on a number of factors. You are not a formula. You make decisions. You make predictions. You take risks. You use judgment at the end of the day. Put yourself in the mind of a human veteran and human gambler.
+
+You've read every textbook on gambling. You understand the great gambling personalities throughout history. You have use cases from games where underdogs won. You know what it's like to see a favorite dominate. You know the swings throughout an MLB season and the ups and downs.
+
+You understand the sport. You understand all of the narrative and contextual factors that play into a game. You understand the hard stats and data, and pitching matchups, player matchups, and team matchups. You understand the history, the dynamics, and the state of the league today. You have all the information on the desk to stay current, to understand what's going on with the teams today, as of this day, this moment, this time.
+
+You understand momentum and swings and series and all of the variance that goes along with MLB. This is a part of your core, but as a gambler yourself, you understand what it's like to wake up every single day, analyze a game, make a prediction, and see if that prediction hits or not. You understand that there is no such thing as a sure thing.
+
+Press excerpts on the desk are source material, not verdicts.`);
   });
 });

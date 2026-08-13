@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   outsFromIp, ipFromOuts, recentWindowLine, monthArcLine,
-  longLayoffFlag, earlyCareerFlag,
+  longLayoffFlag, earlyCareerFlag, homeRoadLine,
 } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
 
 // Chandler's last 6 starts before Aug 3 (getPitcherLastStarts shape, oldest→newest)
@@ -291,5 +291,48 @@ describe('matchupRecencyLine', () => {
     expect(matchupRecencyLine({ oppNick: 'Blue Jays', starts: GRAY, today: '2026-09-30' })).toBeNull();
     expect(matchupRecencyLine({ oppNick: 'Marlins', starts: GRAY, today: '2026-08-10' })).toBeNull();
     expect(matchupRecencyLine({ oppNick: 'Blue Jays', starts: [], today: '2026-08-10' })).toBeNull();
+  });
+});
+
+describe('homeRoadLine', () => {
+  const S = (isHome, ip, er, win) => ({ isHome, ip, er, win });
+
+  it('prints both halves with ERA and team record', () => {
+    const starts = [
+      S(true, '6.0', 1, true), S(true, '5.0', 2, true), S(true, '7.0', 1, false),
+      S(false, '4.0', 4, false), S(false, '5.0', 5, false), S(false, '3.1', 4, true),
+    ];
+    // home: 18 IP, 4 ER = 2.00; road: 12.1 IP, 13 ER = 9.49
+    expect(homeRoadLine(starts)).toBe(
+      'Home/Road: 3 home starts — 2.00 ERA, team 2-1 · 3 road starts — 9.49 ERA, team 1-2'
+    );
+  });
+
+  it('omits a side with zero starts instead of inventing it', () => {
+    const starts = [S(true, '6.0', 2, true), S(true, '5.0', 1, null)];
+    expect(homeRoadLine(starts)).toBe('Home/Road: 2 home starts — 2.45 ERA, team 1-0');
+  });
+
+  it('null under 2 starts and on malformed innings', () => {
+    expect(homeRoadLine([S(true, '6.0', 1, true)])).toBeNull();
+    expect(homeRoadLine(null)).toBeNull();
+    expect(homeRoadLine([S(true, 'x', 1, true), S(false, '5.0', 1, true)])).toBeNull();
+  });
+
+  it('a half with 4+ starts carries its last-3 window and most recent start (no naked numbers)', () => {
+    const D = (isHome, ip, er, win, date, opponent) => ({ isHome, ip, er, win, date, opponent });
+    const starts = [
+      D(false, '3.0', 5, false, '2026-06-01', 'Yankees'),
+      D(false, '4.0', 4, false, '2026-06-07', 'Red Sox'),
+      D(false, '6.0', 1, true, '2026-06-14', 'Rays'),
+      D(false, '6.0', 2, false, '2026-06-21', 'Guardians'),
+      D(false, '6.0', 1, true, '2026-06-28', 'Tigers'),
+      D(true, '7.0', 2, true, '2026-07-04', 'Royals'),
+    ];
+    // road season: 25 IP 13 ER = 4.68; road last 3: 18 IP 4 ER = 2.00
+    expect(homeRoadLine(starts)).toBe(
+      'Home/Road: 1 home start — 2.57 ERA, team 1-0 (most recent 2026-07-04 vs Royals) · '
+      + '5 road starts — 4.68 ERA, team 2-3, last 3 road: 2.00 (most recent 2026-06-28 @ Tigers)'
+    );
   });
 });
