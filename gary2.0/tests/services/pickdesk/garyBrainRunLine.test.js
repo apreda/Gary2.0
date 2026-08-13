@@ -3,9 +3,9 @@
  * the Aug 6 un-blind single-turn ask). The weekend's forced-RL lane laid
  * -1.5 five of seven and the 30-day lay class sat 8-20; the redesign makes
  * an RL game blind like every other game — the read seals with no board,
- * and only the ticket turn reveals the moneyline is off. These pins hold:
- * the read happens first and stores, the ticket is rail-bound to ±1.5, and
- * a non-RL ticket gets exactly one corrective re-ask.
+ * and the ticket turn prices the ±1.5 board. These pins hold: the read
+ * happens first and stores, the ticket is rail-bound to ±1.5, and a non-RL
+ * ticket gets exactly one corrective re-ask.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -17,7 +17,7 @@ vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
-import { analyzeGameDesk, THE_READ_ASK } from '../../../src/services/pickdesk/garyBrain.js';
+import { analyzeGameDesk, THE_READ_ASK, buildTicketAsk, buildRunLineTicketAsk } from '../../../src/services/pickdesk/garyBrain.js';
 
 const RL_DESK = {
   deskText: '═══ PROBABLE PITCHERS ═══\nshelf',
@@ -92,5 +92,37 @@ describe('analyzeGameDesk — run-line games read blind (Aug 12 contract)', () =
     stage([READ_JSON, ML_TICKET, ML_TICKET]);
     const result = await analyzeGameDesk({ id: 1 }, {});
     expect(result.error).toContain('non-run-line ticket');
+  });
+});
+
+/**
+ * PARITY LAW (founder, Aug 13 2026): "lets go ahead and make sure the RL part
+ * is the same as ML but only difference is the bet options... literally the
+ * only difference." The RL ask must be word-for-word the ML ask apart from the
+ * ±1.5 shape in the final_pick JSON. This pin fails the moment an edit lands on
+ * one ask and not the other — the asks are edited as a pair, always.
+ */
+describe('ML ⇄ RL ask parity — the bet options are the ONLY difference', () => {
+  const BOARD = '═══ THE LINES (DraftKings) ═══\nboard';
+  const stripBetOptions = (s) =>
+    s.replace(/\{ "final_pick": "[^"]*", "confidence_score": 0\.XX \}/, '{BET_OPTIONS}');
+
+  it('is byte-identical once the bet-options line is normalized', () => {
+    expect(stripBetOptions(buildRunLineTicketAsk(BOARD)))
+      .toBe(stripBetOptions(buildTicketAsk(BOARD)));
+  });
+
+  it('differs in exactly one line, and that line is the bet options', () => {
+    const ml = buildTicketAsk(BOARD).split('\n');
+    const rl = buildRunLineTicketAsk(BOARD).split('\n');
+    expect(rl.length).toBe(ml.length);
+    const differing = ml.map((line, i) => (line === rl[i] ? null : i)).filter((i) => i !== null);
+    expect(differing).toHaveLength(1);
+    expect(ml[differing[0]]).toContain('final_pick');
+    expect(rl[differing[0]]).toContain('[+1.5 or -1.5]');
+  });
+
+  it('says nothing ABOUT the moneyline — an RL game simply never sees one', () => {
+    expect(buildRunLineTicketAsk(BOARD)).not.toMatch(/moneyline|money line/i);
   });
 });

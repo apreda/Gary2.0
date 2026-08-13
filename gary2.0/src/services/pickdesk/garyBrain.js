@@ -123,10 +123,17 @@ Then, under the JSON, write "Gary's Take" — your published card: three paragra
 // seven times and the 30-day lay class sits 8-20 — the one lane where Gary
 // never formed a view of the GAME before facing a price. Now an RL game is
 // blind like every other game: turn 1 reads the game (no board anywhere),
-// and only the ticket turn reveals that the moneyline is off tonight's
-// board. The ticket must price a read that already exists — "the RL pick
-// has to still be in line with what gary actually thinks about the game."
+// and the ticket turn prices a read that already exists — "the RL pick has
+// to still be in line with what gary actually thinks about the game."
 // No mechanics lecture (Jul 26 razor), no side framed, crossing allowed.
+//
+// PARITY LAW (founder, Aug 13 2026): "literally the only difference" between
+// this ask and buildTicketAsk is the bet options — the ±1.5 shape in the JSON
+// instead of the open [bet] shape. Every other word is the same, deliberately.
+// The board differs the same single way (buildRunLineBoardSection omits the
+// moneyline row). Nothing is said ABOUT the moneyline; an RL game simply never
+// sees one. Keep the two asks byte-identical apart from that JSON line — any
+// edit to one is an edit to both.
 export const buildRunLineTicketAsk = (runLineBoard) => `${runLineBoard}
 
 You're putting one unit on this game. Which bet is it?
@@ -284,7 +291,8 @@ async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, au
 
   // TURN 2 — THE DECISION. The board arrives against the verdictless map;
   // the one and only side commitment happens here, at the prices.
-  // RL games get the RL-only board and the moneyline-off sentence.
+  // RL games get the RL-only board; the ask itself is word-for-word the same
+  // apart from the bet options (see the parity law on buildRunLineTicketAsk).
   const ticketAsk = runLineGame
     ? buildRunLineTicketAsk(boardText)
     : buildTicketAsk(boardText);
