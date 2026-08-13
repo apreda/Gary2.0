@@ -73,7 +73,8 @@ describe('analyzeGameDesk — the blind report → priced decision (Aug 12 contr
     expect(calls[0]).not.toContain('THE LINES');
     expect(calls[1]).not.toContain('sealed');
     expect(calls[1]).toContain('Reds ML -112');
-    expect(calls[1]).toContain("You're putting one unit on this game. Which bet is it?");
+    expect(calls[1]).toContain('Which bet is it?');
+    expect(calls[1]).not.toMatch(/one unit|\$100/i); // stake never declared — it invites a payout comparison
     expect(calls[1]).toContain('Then, under the JSON, write "Gary\'s Take"');
     expect(calls[1]).not.toMatch(/better bet|already paid for|losing season/);
     expect(calls.length).toBe(2); // no third turn on the happy path
@@ -187,12 +188,17 @@ describe('the ask texts — the whole contract, nothing else', () => {
   // NO VALUE VOCABULARY (founder GO, Aug 13 — the 0-4 debut, 3 of 4 on dogs):
   // "better bet" reads as value-hunting and the model answered it with
   // underdogs, the same fingerprint as the July priced-surface era (six
-  // Nationals fades in seven days, 1-5). The decision turn is now OWNERSHIP —
-  // one unit, which bet — with the board present but never framed as an edge.
-  it('buildTicketAsk is the board plus the one-unit ownership decision — no value vocabulary', () => {
+  // Nationals fades in seven days, 1-5). The decision turn is now the bare
+  // question — which bet — with the board present but never framed as an edge.
+  // The stake went too (founder, Aug 13: "not even sure we need this line...
+  // its more for clean up"): "one unit" was echoing verbatim into published
+  // cards ("One unit on the Nationals at +136") and a declared flat stake
+  // invites the payout comparison that translates value-talk into dogs.
+  it('buildTicketAsk is the board plus the bare decision — no value vocabulary, no stake', () => {
     const ask = buildTicketAsk('BOARD');
     expect(ask.startsWith('BOARD')).toBe(true);
-    expect(ask).toContain("You're putting one unit on this game. Which bet is it?");
+    expect(ask).toContain('Which bet is it?');
+    expect(ask).not.toMatch(/one unit|\$100/i);
     expect(ask).not.toMatch(/better bet|already paid for|market's read/i);
     expect(ask).not.toContain('sealed');
     expect(ask).toContain('final_pick');
@@ -200,10 +206,11 @@ describe('the ask texts — the whole contract, nothing else', () => {
     expect(ask).toContain('Then, under the JSON, write "Gary\'s Take"');
   });
 
-  it('buildRunLineTicketAsk is the same ownership decision with the moneyline off the board — ±1.5 only, no mechanics lecture', () => {
+  it('buildRunLineTicketAsk is the same bare decision with the moneyline off the board — ±1.5 only, no mechanics lecture', () => {
     const ask = buildRunLineTicketAsk('RL BOARD');
     expect(ask.startsWith('RL BOARD')).toBe(true);
-    expect(ask).toContain("You're putting one unit on this game. Which bet is it?");
+    expect(ask).toContain('Which bet is it?');
+    expect(ask).not.toMatch(/one unit|\$100/i);
     expect(ask).not.toMatch(/better bet/i);
     expect(ask).toContain('[+1.5 or -1.5]');
     expect(ask).not.toContain('sealed');

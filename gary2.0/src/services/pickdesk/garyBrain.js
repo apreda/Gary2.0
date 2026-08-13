@@ -108,7 +108,7 @@ Output only:
 // is the priced one. Evidence built blind; decision made priced.
 export const buildTicketAsk = (boardText) => `${boardText}
 
-You're putting one unit on this game. Which bet is it?
+Which bet is it?
 
 \`\`\`json
 { "final_pick": "[Team] [bet] [exact odds]", "confidence_score": 0.XX }
@@ -136,7 +136,7 @@ Then, under the JSON, write "Gary's Take" — your published card: three paragra
 // edit to one is an edit to both.
 export const buildRunLineTicketAsk = (runLineBoard) => `${runLineBoard}
 
-You're putting one unit on this game. Which bet is it?
+Which bet is it?
 
 \`\`\`json
 { "final_pick": "[Team] [+1.5 or -1.5] [exact odds]", "confidence_score": 0.XX }
