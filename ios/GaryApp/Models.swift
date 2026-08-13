@@ -518,6 +518,11 @@ struct GaryPick: Identifiable, Codable {
     // Fan re-register of the same audited rationale (stored since Jul 24 2026);
     // nil on older picks — the card back hides the register toggle when absent.
     var rationale_plain: String? = nil
+    // Turn-1 blind decision record (stored since the Aug 5 blind split) —
+    // written before Gary ever sees the lines, so it is priceless by
+    // construction. The STORE-SAFE BRIDGE shows this as the reasoning text;
+    // nil on pre-Aug-5 rows (display falls back to scrubbed rationale).
+    var game_read: String? = nil
     let league: String?
     let confidence: Double?
     let time: String?
@@ -664,6 +669,7 @@ struct GaryPick: Identifiable, Codable {
             pick: dict["pick"] as? String,
             rationale: dict["rationale"] as? String,
             rationale_plain: dict["rationale_plain"] as? String,
+            game_read: dict["game_read"] as? String,
             league: dict["league"] as? String,
             confidence: (dict["confidence"] as? NSNumber)?.doubleValue,
             time: dict["time"] as? String,
@@ -1409,6 +1415,31 @@ struct PlayerInjury: Codable {
             status: dict["status"] as? String,
             description: dict["description"] as? String
         )
+    }
+}
+
+// STORE-SAFE BRIDGE: shared side+line translation for every prop surface —
+// "Over 1.5" → "2+", "Under 1.5" → "1 or fewer". Nil when not applicable
+// (yes/no props, no line, or bridge off) — callers fall through to market
+// notation. One helper so the card, table, slip, and chip can't drift.
+extension PropPick {
+    var bridgeCallText: String? {
+        guard AppFlags.storeSafe else { return nil }
+        let side = (bet ?? "").lowercased()
+        let v: Double? = {
+            if let l = line?.trimmingCharacters(in: .whitespaces), let d = Double(l) { return d }
+            if let p = prop, let r = p.range(of: "[0-9]+(\\.[0-9]+)?$", options: .regularExpression) {
+                return Double(p[r])
+            }
+            return nil
+        }()
+        guard let v else { return nil }
+        if side.contains("over") { return "\(Int(v.rounded(.down)) + 1)+" }
+        if side.contains("under") {
+            let n = v == v.rounded(.down) ? Int(v) : Int(v.rounded(.down))
+            return "\(n) or fewer"
+        }
+        return nil
     }
 }
 

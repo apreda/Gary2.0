@@ -1785,7 +1785,7 @@ struct PickInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     private let rows: [(head: String, body: String)] = [
         ("THE DROP", "Gary posts picks about 90 minutes before each game, once lineups are in."),
-        ("THE GRADE", "Every pick is graded the next morning — CASHED when it wins, LOST when it doesn't. Nothing gets deleted."),
+        ("THE GRADE", "Every pick is graded the next morning — \(AppFlags.wonStamp) when it wins, LOST when it doesn't. Nothing gets deleted."),
         ("THE MONEY", "Results are scored flat: $100 on every pick. A +$87 stamp means a $100 bet at the posted odds paid $87 in profit."),
         ("THE ODDS", "Prices shown are DraftKings unless a different book is named on the pick. Lines move — check your book before you bet."),
         ("THE CARD", "Winners is Gary's sealed best-of-the-board each day — games and props."),
@@ -1878,12 +1878,13 @@ struct DailyRecapOverlay: View {
 
                 HStack(spacing: 0) {
                     recapCell(recordText, "GAME PICKS", .white.opacity(0.92))
-                    if let net {
+                    // STORE-SAFE BRIDGE: record only — no cash cells.
+                    if let net, !AppFlags.storeSafe {
                         recapDivider
                         recapCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
                                   net >= 0 ? GaryColors.win : GaryColors.loss)
                     }
-                    if let bestOdds, bestOdds > 0 {
+                    if let bestOdds, bestOdds > 0, !AppFlags.storeSafe {
                         recapDivider
                         recapCell("+\(Int(bestOdds))", "BEST CASH", GaryColors.gold)
                     }
@@ -2856,9 +2857,9 @@ struct HomeView: View {
             let mu = r.matchup ?? ""
             return HomeMarqueeHero.Story(
                 league: r.league ?? "", headline: r.headline ?? "", sub: "",
-                receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
+                receiptLead: cashed ? (AppFlags.storeSafe ? "Gary Won ·" : "Gary Cashed ·") : "Gary Had ·",
                 receiptPick: Formatters.arrowizeOverUnder(split.0).uppercased(),
-                verdict: cashed ? "CASHED" : (r.result == "push" ? "PUSH" : "LOST"),
+                verdict: cashed ? AppFlags.wonStamp : (r.result == "push" ? "PUSH" : "LOST"),
                 cashed: cashed, recap: r.recap, bullets: r.bullets ?? [],
                 matchup: mu,
                 odds: split.1,
@@ -3181,7 +3182,9 @@ struct HomeView: View {
             // Aug 3): the game's lines sit where the pick will go, so the gold
             // call visibly REPLACES the market when it posts.
             var pendingLine: String? = nil
-            if calls.isEmpty {
+            // STORE-SAFE BRIDGE: no market placeholder — before the pick posts
+            // the row is simply the matchup and first pitch.
+            if calls.isEmpty, !AppFlags.storeSafe {
                 var bits: [String] = []
                 if let mlA = g.ml_away, let mlH = g.ml_home {
                     let fa = mlA > 0 ? "+\(Int(mlA))" : "\(Int(mlA))"
@@ -3254,7 +3257,7 @@ struct HomeView: View {
                 let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
                 let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
                 let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
-                if cashed > 0 && lost == 0 { statusText = "✓ CASHED"; statusColor = GaryColors.win }
+                if cashed > 0 && lost == 0 { statusText = AppFlags.storeSafe ? "✓ WON" : "✓ CASHED"; statusColor = GaryColors.win }
                 else if lost > 0 && cashed == 0 { statusText = "✗ LOST"; statusColor = GaryColors.loss }
                 else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
                 else if pushed > 0 { statusText = "PUSH"; statusColor = GaryColors.gold }
@@ -3369,7 +3372,7 @@ struct HomeView: View {
             if let ls, ls.isFinal {
                 let cashed = verdicts.filter { $0 == .covering }.count
                 let lost = verdicts.filter { $0 == .trailing }.count
-                if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
+                if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
                 else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
                 else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
                 else { result = ("FINAL", Color.white.opacity(0.7)) }
@@ -3387,7 +3390,7 @@ struct HomeView: View {
                 let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
                 let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
                 let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
-                if cashed > 0 && lost == 0 { result = ("✓ CASHED", GaryColors.win) }
+                if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
                 else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
                 else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
                 else if pushed > 0 { result = ("PUSH", GaryColors.gold) }
@@ -3917,20 +3920,29 @@ struct HomeView: View {
                 scoreCell(Self.recordLine(gamesNightRecord.w, gamesNightRecord.l, gamesNightRecord.p),
                           recapLabel, .white.opacity(0.92))
                 Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                // Nothing graded yet reads as a flat $0, not a blank: the day
-                // starts even and the number moves from there.
-                let net = gamesNightNet ?? 0
-                scoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
-                          gamesNightNet == nil ? .white.opacity(0.92)
-                                               : (net >= 0 ? GaryColors.win : GaryColors.loss))
-                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
-                // Best cash has no honest zero — before a winner lands there
-                // simply isn't a biggest one yet, so the slot holds its place
-                // with a dash rather than claiming +0.
-                if let best = gamesNightBest, best > 0 {
-                    scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
+                if AppFlags.storeSafe {
+                    // STORE-SAFE BRIDGE: accuracy, not money — win% beside the
+                    // record, and no cash cells (founder, Aug 11: "W-L + win%
+                    // only"). The dash holds until something grades.
+                    let settled = gamesNightRecord.w + gamesNightRecord.l
+                    scoreCell(settled > 0 ? "\(Int((Double(gamesNightRecord.w) / Double(settled) * 100).rounded()))%" : "—",
+                              "WIN RATE", .white.opacity(0.92))
                 } else {
-                    scoreCell("—", "BEST CASH", .white.opacity(0.35))
+                    // Nothing graded yet reads as a flat $0, not a blank: the day
+                    // starts even and the number moves from there.
+                    let net = gamesNightNet ?? 0
+                    scoreCell(Formatters.flatStakeDollars(net), "NET · $100/PICK",
+                              gamesNightNet == nil ? .white.opacity(0.92)
+                                                   : (net >= 0 ? GaryColors.win : GaryColors.loss))
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                    // Best cash has no honest zero — before a winner lands there
+                    // simply isn't a biggest one yet, so the slot holds its place
+                    // with a dash rather than claiming +0.
+                    if let best = gamesNightBest, best > 0 {
+                        scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
+                    } else {
+                        scoreCell("—", "BEST CASH", .white.opacity(0.35))
+                    }
                 }
             }
             .pageGutter()
@@ -4314,9 +4326,10 @@ struct HomeView: View {
             league: r.effectiveLeague ?? "",
             headline: Self.gameHeadline(r, cashed: cashed),
             sub: Self.gameSubLine(r),
-            receiptLead: cashed ? "Gary Cashed ·" : "Gary Had ·",
+            receiptLead: cashed ? (AppFlags.storeSafe ? "Gary Won ·" : "Gary Cashed ·") : "Gary Had ·",
             receiptPick: Formatters.arrowizeOverUnder(pickLine).uppercased(),
-            verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "LOST",
+            // STORE-SAFE BRIDGE: no odds in the verdict stamp.
+            verdict: cashed ? (AppFlags.storeSafe ? AppFlags.wonStamp : (o > 0 ? "CASHED +\(Int(o))" : "CASHED")) : "LOST",
             cashed: cashed)
         return (story, r, Array(cashes.prefix(3)), rollCashes, beat, net, graded, bestOdds, record)
     }
@@ -4995,7 +5008,8 @@ struct HomeMarqueeTracker: View {
     private var settledLine: String? {
         let done = entries.filter { $0.isFinal }
         guard !done.isEmpty else { return nil }
-        let cashed = done.filter { $0.result?.0.contains("CASHED") == true }.count
+        // Matches both stamps — "CASHED" (full era) and "WON" (store-safe bridge).
+        let cashed = done.filter { ($0.result?.0).map { $0.contains("CASHED") || $0.contains("WON") } == true }.count
         let lost = done.filter { $0.result?.0.contains("LOST") == true }.count
         return "\(cashed)–\(lost) in the big ones"
     }
@@ -5181,7 +5195,8 @@ struct HomeMarqueeTracker: View {
                         }
                         // The rest of the board — total and run line — rides
                         // as one dim market row whether or not a pick posted.
-                        let market = [sides?.total, sides?.runLine].compactMap { $0 }.joined(separator: " · ")
+                        // STORE-SAFE BRIDGE: the market row IS market data — off.
+                        let market = AppFlags.storeSafe ? "" : [sides?.total, sides?.runLine].compactMap { $0 }.joined(separator: " · ")
                         if !market.isEmpty {
                             Text(market.uppercased())
                                 .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
@@ -5258,7 +5273,8 @@ struct HomeMarqueeTracker: View {
                 .font(GaryFonts.display(34))
                 .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
                 .lineLimit(1).minimumScaleFactor(0.6)
-            if let price {
+            // STORE-SAFE BRIDGE: club names only on the wire — no prices.
+            if let price, !AppFlags.storeSafe {
                 Text(price)
                     .font(GaryFonts.display(21))
                     .foregroundStyle(home ? GaryColors.warmWhite.opacity(0.9) : .white.opacity(0.5))
@@ -6698,9 +6714,13 @@ struct HomeGarysForm: View {
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 8)
-                        Text(String(format: "%+.1fu", model.net))
-                            .font(GaryFonts.mono(15, bold: true))
-                            .foregroundStyle(model.net >= 0 ? win : loss)
+                        // STORE-SAFE BRIDGE: the story sentence stands alone —
+                        // no unit tally beside it.
+                        if !AppFlags.storeSafe {
+                            Text(String(format: "%+.1fu", model.net))
+                                .font(GaryFonts.mono(15, bold: true))
+                                .foregroundStyle(model.net >= 0 ? win : loss)
+                        }
                     }
                     .padding(.horizontal, 14).padding(.top, 13).padding(.bottom, 11)
 
@@ -10266,7 +10286,12 @@ struct GaryPropsView: View {
         let odds = Formatters.americanOdds(prop.odds)
         var parts: [String] = []
         if !type.isEmpty { parts.append(type) }
-        if !bet.isEmpty { parts.append(line.isEmpty ? bet : "\(bet) \(line)") }
+        // STORE-SAFE BRIDGE: "2+" / "1 or fewer" instead of "OVER 1.5".
+        if let b = prop.bridgeCallText {
+            parts.append(b.uppercased())
+        } else if !bet.isEmpty {
+            parts.append(line.isEmpty ? bet : "\(bet) \(line)")
+        }
         if !odds.isEmpty { parts.append(odds) }
         return parts.joined(separator: "  ·  ")
     }
@@ -10275,6 +10300,11 @@ struct GaryPropsView: View {
     private func betToken(_ prop: PropPick) -> String {
         let bet = (prop.bet ?? "").lowercased()
         let line = formattedLine(prop.line)
+        // STORE-SAFE BRIDGE: dense-table tokens without market notation —
+        // "2+" for overs, "≤ N" for unders.
+        if AppFlags.storeSafe, let b = prop.bridgeCallText {
+            return b.hasSuffix("or fewer") ? "≤ \(b.replacingOccurrences(of: " or fewer", with: ""))" : b
+        }
         switch bet {
         case "over":  return line.isEmpty ? "OVER" : "O \(line)"
         case "under": return line.isEmpty ? "UNDER" : "U \(line)"
@@ -10289,7 +10319,7 @@ struct GaryPropsView: View {
     }
 
     private func oneLineTake(_ prop: PropPick) -> String? {
-        guard let a = prop.analysis?.trimmingCharacters(in: .whitespacesAndNewlines), !a.isEmpty else { return nil }
+        guard let a = prop.analysis.map({ AppFlags.bridgeProse($0) })?.trimmingCharacters(in: .whitespacesAndNewlines), !a.isEmpty else { return nil }
         if let dot = a.firstIndex(where: { ".!?".contains($0) }) {
             let s = String(a[...dot]).trimmingCharacters(in: .whitespaces)
             if s.count > 12 { return s }
@@ -11665,7 +11695,8 @@ struct TomorrowView {
 
         /// "MIL -145 · O/U 7.5" — favourite (more-negative ML) + total.
         private func bigGameMarket(_ g: TomorrowBigGame) -> String? {
-            guard let row = bigGameBoardRow(g) else { return nil }
+            // STORE-SAFE BRIDGE: no market line under the big games.
+            guard !AppFlags.storeSafe, let row = bigGameBoardRow(g) else { return nil }
             var parts: [String] = []
             if let mh = row.ml_home, let ma = row.ml_away {
                 let homeFav = mh <= ma
@@ -11717,9 +11748,12 @@ struct TomorrowView {
             HStack(spacing: 0) {
                 Text("TIME").frame(width: 48, alignment: .leading)
                 Text("MATCHUP").frame(maxWidth: .infinity, alignment: .leading)
-                Text("SPR").frame(width: 46, alignment: .trailing)
-                Text("O/U").frame(width: 42, alignment: .trailing)
-                Text("ML").frame(width: 46, alignment: .trailing)
+                // STORE-SAFE BRIDGE: schedule only — no market columns.
+                if !AppFlags.storeSafe {
+                    Text("SPR").frame(width: 46, alignment: .trailing)
+                    Text("O/U").frame(width: 42, alignment: .trailing)
+                    Text("ML").frame(width: 46, alignment: .trailing)
+                }
             }
             .font(GaryFonts.mono(10))
             .foregroundStyle(.white.opacity(0.62))
@@ -11748,15 +11782,18 @@ struct TomorrowView {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text(Self.lineStr(row.spread, signed: true))
-                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
-                    .frame(width: 46, alignment: .trailing)
-                Text(Self.lineStr(row.total))
-                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
-                    .frame(width: 42, alignment: .trailing)
-                Text(Self.mlStr(row.ml_home))
-                    .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.62))
-                    .frame(width: 46, alignment: .trailing)
+                // STORE-SAFE BRIDGE: schedule only — no market columns.
+                if !AppFlags.storeSafe {
+                    Text(Self.lineStr(row.spread, signed: true))
+                        .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 46, alignment: .trailing)
+                    Text(Self.lineStr(row.total))
+                        .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 42, alignment: .trailing)
+                    Text(Self.mlStr(row.ml_home))
+                        .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.62))
+                        .frame(width: 46, alignment: .trailing)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -12769,6 +12806,9 @@ struct BillfoldView: View {
     /// which the hypothetical framing is there to defuse.)
     @AppStorage("showDollarResults") private var showDollarResults = true
     private func signedDollars(_ value: Double) -> String {
+        // STORE-SAFE BRIDGE: no dollars, no units — money strings vanish and
+        // the record/percent cells carry the page (founder, Aug 11).
+        if AppFlags.storeSafe { return "" }
         guard showDollarResults else {
             return String(format: "%+.1fu", value / 100)
         }
@@ -12927,7 +12967,12 @@ struct BillfoldView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 26) {
                             balanceBlock
-                            performanceChart
+                            // STORE-SAFE BRIDGE: the equity curve is a money
+                            // chart ($100/bet flat-stake) — the whole block
+                            // rides the flag; record + win% carry the page.
+                            if !AppFlags.storeSafe {
+                                performanceChart
+                            }
                             recentCarousel
                             dailyLedger
                             performanceLedger
@@ -13313,7 +13358,7 @@ struct BillfoldView: View {
 
     private var balanceBlock: some View {
         VStack(spacing: 7) {
-            Text((showDollarResults ? "NET BALANCE" : "NET UNITS") + (selectedTab == 0 ? " \u{00B7} PICKS" : " \u{00B7} PROPS"))
+            Text((AppFlags.storeSafe ? "THE RECORD" : (showDollarResults ? "NET BALANCE" : "NET UNITS")) + (selectedTab == 0 ? " \u{00B7} PICKS" : " \u{00B7} PROPS"))
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(1)
                 .foregroundStyle(brass.opacity(0.85))
@@ -13329,17 +13374,31 @@ struct BillfoldView: View {
 
             VStack(spacing: 5) {
                 HStack(spacing: 9) {
-                    Text(String(format: "ROI %+.1f%%", journal.roiPct))
-                        .font(.system(size: 14, weight: .bold).monospacedDigit())
-                        .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
-                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                    // STORE-SAFE BRIDGE: record + win% only — ROI and units
+                    // are bankroll language.
+                    if !AppFlags.storeSafe {
+                        Text(String(format: "ROI %+.1f%%", journal.roiPct))
+                            .font(.system(size: 14, weight: .bold).monospacedDigit())
+                            .foregroundStyle(journal.roiPct >= 0 ? emerald : crimson)
+                        Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                    }
                     Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
                         .font(.system(size: 13, weight: .semibold, design: .default))
                         .foregroundStyle(paper.opacity(0.85))
-                    Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
-                    Text(String(format: "%+.1fu", netUnits))
-                        .font(GaryFonts.mono(12, bold: true))
-                        .foregroundStyle(paper.opacity(0.75))
+                    if AppFlags.storeSafe {
+                        let settled = record.wins + record.losses
+                        if settled > 0 {
+                            Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                            Text("\(Int((Double(record.wins) / Double(settled) * 100).rounded()))%")
+                                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                                .foregroundStyle(paper.opacity(0.85))
+                        }
+                    } else {
+                        Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
+                        Text(String(format: "%+.1fu", netUnits))
+                            .font(GaryFonts.mono(12, bold: true))
+                            .foregroundStyle(paper.opacity(0.75))
+                    }
                 }
 
                 HStack(spacing: 9) {
@@ -13927,11 +13986,14 @@ struct BillfoldView: View {
             HStack {
                 ledgerEyebrow("DAILY LEDGER")
                 Spacer()
-                Text(journal.maxDrawdownUnits > 0
-                     ? "MAX DD \(signedDollars(-journal.maxDrawdownUnits * 100))"
-                     : "MAX DD —")
-                    .font(GaryFonts.mono(9, bold: true))
-                    .foregroundStyle(journal.maxDrawdownUnits > 0 ? negativeColor.opacity(0.85) : ink.opacity(0.45))
+                // STORE-SAFE BRIDGE: drawdown is a bankroll stat — off.
+                if !AppFlags.storeSafe {
+                    Text(journal.maxDrawdownUnits > 0
+                         ? "MAX DD \(signedDollars(-journal.maxDrawdownUnits * 100))"
+                         : "MAX DD —")
+                        .font(GaryFonts.mono(9, bold: true))
+                        .foregroundStyle(journal.maxDrawdownUnits > 0 ? negativeColor.opacity(0.85) : ink.opacity(0.45))
+                }
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
@@ -13975,7 +14037,7 @@ struct BillfoldView: View {
                 HStack(spacing: 4) {
                     Text("DAY").frame(maxWidth: .infinity, alignment: .leading)
                     Text("RECORD").frame(width: 60, alignment: .trailing)
-                    Text("NET").frame(width: 64, alignment: .trailing)
+                    Text(AppFlags.storeSafe ? "" : "NET").frame(width: AppFlags.storeSafe ? 0 : 64, alignment: .trailing)
                 }
                 .font(.system(size: 8, weight: .bold))
                 .tracking(0.5)
@@ -14062,7 +14124,7 @@ struct BillfoldView: View {
                         Text("SPORT").frame(maxWidth: .infinity, alignment: .leading)
                         Text("GP").frame(width: 36, alignment: .trailing)
                         Text("WIN%").frame(width: 48, alignment: .trailing)
-                        Text("NET").frame(width: 64, alignment: .trailing)
+                        Text(AppFlags.storeSafe ? "" : "NET").frame(width: AppFlags.storeSafe ? 0 : 64, alignment: .trailing)
                     }
                     .font(.system(size: 8, weight: .bold))
                     .tracking(0.5)
@@ -15738,7 +15800,7 @@ struct CompactPickRow: View {
         guard let v = displayResult else { return line }
         // The gold bar's corner already carries the big struck check on a win —
         // its footer says CASHED without repeating the mark.
-        let word = v == "won" ? (premiumFinish ? "CASHED" : "✓ CASHED") : (v == "push" ? "PUSH" : "LOST")
+        let word = v == "won" ? (premiumFinish ? AppFlags.wonStamp : "✓ \(AppFlags.wonStamp)") : (v == "push" ? "PUSH" : "LOST")
         if line.hasPrefix("FINAL · ") { return word + " · " + line.dropFirst("FINAL · ".count) }
         if line == "FINAL" { return word }
         return line
@@ -15924,7 +15986,8 @@ struct CompactPickRow: View {
     ]
 
     private var bestBookName: String? {
-        guard let books = pick.sportsbook_odds, let first = books.first, let name = first.book, !name.isEmpty else { return nil }
+        // STORE-SAFE BRIDGE: never name a sportsbook.
+        guard !AppFlags.storeSafe, let books = pick.sportsbook_odds, let first = books.first, let name = first.book, !name.isEmpty else { return nil }
         return Self.bookDisplayNames[name.lowercased()] ?? name.prefix(1).uppercased() + name.dropFirst()
     }
 
@@ -16961,7 +17024,7 @@ struct ShareCardView: View {
     private var tier: String? { pick.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
-        case "won":  return ("CASHED", GaryColors.gold)
+        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
         case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
@@ -17013,7 +17076,7 @@ struct ShareCardView: View {
                 Spacer(minLength: 0)
 
                 HStack {
-                    Text("betwithgary.ai")
+                    Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
                         .font(GaryFonts.mono(12.5))
                         .foregroundStyle(.white.opacity(0.55))
                     Spacer()
@@ -17163,7 +17226,7 @@ struct SharePropCardView: View {
     private var tier: String? { prop.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
-        case "won":  return ("CASHED", GaryColors.gold)
+        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
         case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
@@ -17203,7 +17266,7 @@ struct SharePropCardView: View {
                 Spacer(minLength: 0)
 
                 HStack {
-                    Text("betwithgary.ai")
+                    Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
                         .font(GaryFonts.mono(12.5))
                         .foregroundStyle(.white.opacity(0.55))
                     Spacer()
@@ -17330,7 +17393,7 @@ struct HeadlineShareCardView: View {
     private var tier: String? { pick.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
-        case "won":  return ("CASHED", GaryColors.gold)
+        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
         case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
@@ -17454,7 +17517,7 @@ struct HeadlineShareCardView: View {
                 .padding(.vertical, 18)
 
             HStack {
-                Text("betwithgary.ai")
+                Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
                     .font(GaryFonts.mono(12.5))
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Spacer()
@@ -17486,7 +17549,7 @@ struct HeadlineSharePropCardView: View {
     private var tier: String? { prop.confidence.map { convictionTier(min(max($0, 0), 1)) } }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
-        case "won":  return ("CASHED", GaryColors.gold)
+        case "won":  return (AppFlags.wonStamp, GaryColors.gold)
         case "lost": return ("LOST", GaryColors.gold)
         default:     return nil
         }
@@ -17577,7 +17640,7 @@ struct HeadlineSharePropCardView: View {
                 .padding(.vertical, 18)
 
             HStack {
-                Text("betwithgary.ai")
+                Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
                     .font(GaryFonts.mono(12.5))
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Spacer()
@@ -17893,28 +17956,24 @@ struct PickCardBack: View {
     var gameResult: String? = nil
 
     private var takeText: String? {
-        if var t = pick.rationale_plain?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
-            for h in ["gary's take", "garys take", "gary's take:"] where t.lowercased().hasPrefix(h) {
-                t = String(t.dropFirst(h.count))
-                    .trimmingCharacters(in: CharacterSet(charactersIn: ":").union(.whitespacesAndNewlines))
-                break
-            }
-            if let dot = t.firstIndex(of: "."), t.distance(from: t.startIndex, to: dot) <= 64 {
-                let first = String(t[..<dot])
-                let looksLikeMatchup = first.contains(" at ") || first.contains(" @ ")
-                let hasClockDigit = first.range(of: #"\d"#, options: .regularExpression) != nil
-                if looksLikeMatchup && hasClockDigit {
-                    t = String(t[t.index(after: dot)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-            }
-            if !t.isEmpty { return t }
+        // STORE-SAFE BRIDGE: prefer the blind read — written before Gary saw
+        // the lines, so it never contained a price. Fallback text still runs
+        // through bridgeProse (a no-op outside the bridge).
+        if AppFlags.storeSafe,
+           let read = pick.game_read?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !read.isEmpty {
+            return AppFlags.bridgeProse(read)
         }
+        // rationale_plain tier REMOVED (founder ruling, Aug 12: "Gary makes
+        // the pick. He writes the rationale. That's what goes on the back of
+        // the pick card." One organic rationale — no translated middleman,
+        // not even for the historical rows that still carry the field.)
         let parts = splitTake(pick.rationale)
         let joined = [parts.take, parts.rest]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
-        return joined.isEmpty ? nil : joined
+        return joined.isEmpty ? nil : AppFlags.bridgeProse(joined)
     }
 
     var body: some View {
@@ -18043,14 +18102,20 @@ struct PickDetailPopup: View {
     }
 
     private var narrative: String {
+        // STORE-SAFE BRIDGE: blind read first, scrub whatever renders.
+        if AppFlags.storeSafe,
+           let read = pick.game_read?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !read.isEmpty {
+            return AppFlags.bridgeProse(read)
+        }
         guard let rationale = pick.rationale else { return "" }
         if let range = rationale.range(of: "Gary's Take", options: .caseInsensitive) {
-            return String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return AppFlags.bridgeProse(String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines))
         }
         if let range = rationale.range(of: "\n\n", options: .backwards) {
-            return String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return AppFlags.bridgeProse(String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines))
         }
-        return rationale
+        return AppFlags.bridgeProse(rationale)
     }
 
     var body: some View {
@@ -18101,7 +18166,9 @@ struct PickDetailPopup: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 14) {
                         // Sportsbook Odds — at top
-                        if let odds = pick.sportsbook_odds, !odds.isEmpty {
+                        // STORE-SAFE BRIDGE: the multi-book board is betting
+                        // content — the whole section rides the flag.
+                        if !AppFlags.storeSafe, let odds = pick.sportsbook_odds, !odds.isEmpty {
                             VStack(spacing: 8) {
                                 Button {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -18594,13 +18661,19 @@ struct PropCardSlate: View {
         return 1
     }
 
-    private var betLabel: String { (prop.bet ?? "").uppercased() }
+    private var betLabel: String {
+        // STORE-SAFE BRIDGE: the translated call ("2+") carries the chip alone.
+        prop.bridgeCallText?.uppercased() ?? (prop.bet ?? "").uppercased()
+    }
     private var betColor: Color {
         let b = prop.bet?.lowercased() ?? ""
         return (b == "over" || b == "yes") ? Color(hex: "#22C55E") : Color(hex: "#EF4444")
     }
 
     private var lineValue: String {
+        // STORE-SAFE BRIDGE: betLabel already carries the translated call
+        // ("2+") — a bare market line beside it would re-introduce notation.
+        if AppFlags.storeSafe, prop.bridgeCallText != nil { return "" }
         if let l = prop.line, !l.isEmpty { return l }
         if let m = (prop.prop ?? "").range(of: #"[\d.]+$"#, options: .regularExpression) {
             return String((prop.prop ?? "")[m])
@@ -18616,6 +18689,8 @@ struct PropCardSlate: View {
     }
 
     private var oddsDisplay: String {
+        // STORE-SAFE BRIDGE: no prices (local twin of Formatters.americanOdds).
+        if AppFlags.storeSafe { return "" }
         guard let raw = prop.odds, !raw.isEmpty else { return "" }
         if raw.hasPrefix("-") || raw.hasPrefix("+") { return raw }
         if let n = Int(raw), n > 0 { return "+\(n)" }
@@ -21975,7 +22050,7 @@ struct GameScoutSection: View {
                 && ($0.headline ?? "").lowercased().contains(key)
         }
         if let inj = mine.first(where: { $0.kind == "injury" }) { return inj.headline }
-        return mine.first(where: { ($0.kind == "line_move" || $0.kind == "pace") && $0.date == today })?.headline
+        return mine.first(where: { (($0.kind == "line_move" && !AppFlags.storeSafe) || $0.kind == "pace") && $0.date == today })?.headline
     }
 
     private var footer: String? {
@@ -22408,7 +22483,7 @@ fileprivate struct ScoutTrioData {
             guard !k.isEmpty else { return nil }
             let mine = wire.filter { ($0.league ?? "").uppercased() == lg && ($0.headline ?? "").lowercased().contains(k) }
             if let inj = mine.first(where: { $0.kind == "injury" }) { return inj.headline }
-            return mine.first(where: { ($0.kind == "line_move" || $0.kind == "pace") && $0.date == today })?.headline
+            return mine.first(where: { (($0.kind == "line_move" && !AppFlags.storeSafe) || $0.kind == "pace") && $0.date == today })?.headline
         }
         var lines: [String] = []
         for h in [news(awayName), news(homeName)].compactMap({ $0 }) where !lines.contains(h) { lines.append(h) }
@@ -22947,7 +23022,10 @@ struct PicksGamePage: View {
             // All-Star specials swap the team-game scout/intel for the event's
             // own "lineup": the contest field (founder, Jul 13 — the page works
             // like any other game day, the field IS the lineup view).
-            if entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
+            // STORE-SAFE BRIDGE: the Derby contest board prints "R1 O/U …
+            // +250" lines — the whole special rides the flag (seasonal
+            // surface, dormant outside All-Star week anyway).
+            if !AppFlags.storeSafe, entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 DerbyContestSection()
             } else {
             // The Scout Trio (founder, Jul 22): the three approved mocks
@@ -23293,6 +23371,10 @@ extension PropPick {
         if let last = words.last, Double(last) != nil { words.removeLast() }
         var name = words.joined(separator: " ").uppercased()
         name = CompactPropRow.marketAbbrevShared[name] ?? name
+        // STORE-SAFE BRIDGE: "2+ TOTAL BASES" instead of "TOTAL BASES OVER 1.5".
+        if let b = bridgeCallText {
+            return [b.uppercased(), name].filter { !$0.isEmpty }.joined(separator: " ")
+        }
         var call = (bet ?? "").uppercased()
         if let raw = line?.trimmingCharacters(in: .whitespaces), !raw.isEmpty {
             let lineText = Double(raw).map { $0.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%g", $0) : String(format: "%.1f", $0) } ?? raw
@@ -23312,7 +23394,7 @@ struct PropSlipBack: View {
     var gameResult: String? = nil
 
     private var takeText: String? {
-        guard let raw = prop.analysis?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let raw = prop.analysis.map({ AppFlags.bridgeProse($0) })?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty else { return nil }
         let cleaned = cleanPropAnalysis(raw).trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? nil : cleaned
@@ -24173,7 +24255,7 @@ struct CompactPropRow: View {
     }
     private func verdictFooterLine(_ line: String) -> String {
         guard let v = resolvedResult else { return line }
-        let word = v == "won" ? "✓ CASHED" : (v == "push" ? "PUSH" : "LOST")
+        let word = v == "won" ? "✓ \(AppFlags.wonStamp)" : (v == "push" ? "PUSH" : "LOST")
         if line.hasPrefix("FINAL · ") { return word + " · " + line.dropFirst("FINAL · ".count) }
         if line == "FINAL" { return word }
         return line
@@ -24256,6 +24338,8 @@ struct CompactPropRow: View {
     /// The pick chip's call text — side + line (e.g. "OVER 1.5"). Mirrors the
     /// gold card's abbreviated pick (compactPick), silver instead of gold.
     private var compactCall: String {
+        // STORE-SAFE BRIDGE: chip reads "2+" / "1 OR FEWER", never "OVER 1.5".
+        if let b = prop.bridgeCallText { return b.uppercased() }
         let side = (prop.bet ?? "").uppercased()
         if let lineText = formattedLineText {
             return side.isEmpty ? lineText : "\(side) \(lineText)"
@@ -25847,6 +25931,9 @@ enum Formatters {
     }
     
     static func americanOdds(_ odds: String?) -> String {
+        // STORE-SAFE BRIDGE: no prices anywhere — every prop/odds text render
+        // uses this formatter, so emptying it here blanks them all.
+        if AppFlags.storeSafe { return "" }
         guard let s = odds, !s.isEmpty else { return "" }
         if s.hasPrefix("+") || s.hasPrefix("-") { return s }
         if let n = Int(s) { return n > 0 ? "+\(n)" : "\(n)" }
@@ -26072,6 +26159,14 @@ enum Formatters {
             }
         }
         
+        // STORE-SAFE BRIDGE: translate market notation to plain English and
+        // drop the odds entirely — every game-pick display site flows through
+        // here, so this one hook covers them all (see AppFlags.storeSafe).
+        if AppFlags.storeSafe {
+            pickPart = AppFlags.bridgePickText(pickPart)
+            oddsPart = ""
+        }
+
         // First shorten city names, then truncate if still too long
         let shortenedPick = shortenTeamNamesInPick(pickPart)
         let truncatedPick = truncatePickText(shortenedPick)

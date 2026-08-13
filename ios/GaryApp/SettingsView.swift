@@ -163,12 +163,17 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var aboutRows: some View {
+        // STORE-SAFE BRIDGE: the changelog narrates the betting-era feature
+        // history ("Sportsbook Odds Comparison", "live betting lines") — the
+        // whole surface rides the flag rather than scrubbing 30 versions.
+        if !AppFlags.storeSafe {
         NavigationLink(destination: ChangelogView()) {
             SettingsRowLabel(title: "What's New", icon: "sparkles", trailingIcon: "chevron.right")
         }
         Divider()
             .background(Color.white.opacity(0.07))
             .padding(.horizontal, 16)
+        }
         Button {
             showHowGaryWorks = true
         } label: {
@@ -186,6 +191,9 @@ struct SettingsView: View {
 
     private var displayRows: some View {
         VStack(spacing: 0) {
+            // STORE-SAFE BRIDGE: the money-display controls disappear with the
+            // money displays themselves (dollars toggle + unit size).
+            if !AppFlags.storeSafe {
             HStack(spacing: 14) {
                 SettingsRowIcon(icon: "dollarsign.circle.fill")
                 VStack(alignment: .leading, spacing: 2) {
@@ -229,6 +237,7 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
+            }
         }
     }
 

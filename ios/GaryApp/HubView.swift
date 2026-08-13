@@ -865,19 +865,24 @@ struct HubView: View {
         // founder-picked shapes (mocks H6 + N10). The storyboard's other
         // kinds (injury swaps, running game, park weather) fall through to
         // the More Edges overflow net, so nothing vanishes.
+        // STORE-SAFE BRIDGE: NRFI is a bet market (No Run First Inning) —
+        // the lane drops in bridge; everything else stands.
+        let beats: [Beat]
         if Self.hrThreatsLive {
-            return [
+            beats = [
                 Beat(anchor: "hr", title: "Home Run Threats", kinds: [.hrThreat]),
                 Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .batterVsArm]),
                 Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
                 Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
             ]
+        } else {
+            beats = [
+                Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .hrThreat, .batterVsArm]),
+                Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
+                Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
+            ]
         }
-        return [
-            Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .hrThreat, .batterVsArm]),
-            Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
-            Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
-        ]
+        return AppFlags.storeSafe ? beats.filter { $0.anchor != "nrfi" } : beats
     }
     /// Founder, Jul 22: "green light it but don't run it tonight — first run
     /// tomorrow." String compare works on ISO dates.
@@ -1702,7 +1707,8 @@ fileprivate struct HubSlateStrip: View {
                     Text(TomorrowView.etTime(r.commence_time, withZone: false, meridiem: true))
                         .font(HubFont.data(9.5, .medium))
                         .foregroundStyle(marquee ? GaryColors.gold : .white.opacity(0.55))
-                    if let t = r.total {
+                    // STORE-SAFE BRIDGE: the strip is a schedule — no totals.
+                    if let t = r.total, !AppFlags.storeSafe {
                         Text("O/U \(HubFmt.stat(t))")
                             .font(HubFont.data(9.5, .medium))
                             .foregroundStyle(.white.opacity(0.55))
@@ -4173,7 +4179,7 @@ fileprivate struct HubEdgeOverlay: View {
                     HubKicker(text: signal.kind.chip, size: 10.5)
                     Spacer()
                     if let r = signal.result {
-                        Text(r == "hit" ? "CASHED" : r == "push" ? "PUSH" : "LOST")
+                        Text(r == "hit" ? AppFlags.wonStamp : r == "push" ? "PUSH" : "LOST")
                             .font(HubFont.data(10.5))
                             .foregroundStyle(r == "hit" ? GaryColors.win : r == "push" ? GaryColors.gold : GaryColors.loss)
                     }

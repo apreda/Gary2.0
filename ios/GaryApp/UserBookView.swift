@@ -14,7 +14,10 @@ import SwiftUI
 extension AppFlags {
     /// Master switch for the whole Your Book surface (tail/fade row, Billfold
     /// section, quick-log). One-line kill, same pattern as the 2.19 flags.
-    static let userBookEnabled = true
+    /// STORE-SAFE BRIDGE: wager tracking is betting content — the entire
+    /// surface rides the bridge and returns automatically when `storeSafe`
+    /// flips off (the pre-bridge value was a plain `true`).
+    static var userBookEnabled: Bool { !storeSafe }
 }
 
 struct UserBet: Codable, Identifiable {
@@ -1656,7 +1659,7 @@ struct RideShareCardView: View {
                     .font(GaryFonts.mono(10)).tracking(0.5)
                     .foregroundStyle(.white.opacity(0.45))
                 Spacer()
-                Text("betwithgary.ai")
+                Text(AppFlags.storeSafe ? "GARY AI" : "betwithgary.ai")
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
             }
