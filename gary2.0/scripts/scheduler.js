@@ -370,11 +370,111 @@ function runScript(scriptPath, args = []) {
 // ═══════════════════════════════════════════════════════════════════════════
 // EXECUTE: Process the full schedule
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// MLB START-TIME DRIFT GUARD
+// ═══════════════════════════════════════════════════════════════════════════
+// The morning slate freezes trigger times from BDL's schedule, but first
+// pitches MOVE (Aug 13 2026: Reds @ White Sox went 2:10 → 1:10 ET after the
+// plan was built, turning our T-90 into a real T-30 — the pick landed with 21
+// minutes to spare). Every 10 minutes, re-check today's un-started MLB games
+// against MLB's official schedule API; if a game now starts EARLIER than
+// planned and we're already inside its true lead window, fire its pick + props
+// runs immediately instead of waiting on triggers anchored to the stale time.
+// Games moved LATER just log — the stale triggers fire early and the retry
+// tiers cover the lineup gate. Double-fires are safe by construction:
+// run-agentic's already-has-pick dedup and the store-guard both no-op repeats.
+
+const DRIFT_CHECK_INTERVAL_MS = 10 * 60 * 1000;
+const DRIFT_MIN_DELTA_MS = 5 * 60 * 1000;
+let activeDriftTimer = null; // singleton — a supervise() in-process restart must not stack timers
+
+async function fetchOfficialMlbStarts(etDateStr) {
+  const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${etDateStr}`);
+  if (!res.ok) throw new Error(`statsapi HTTP ${res.status}`);
+  const data = await res.json();
+  const games = [];
+  for (const day of data.dates || []) {
+    for (const g of day.games || []) {
+      const start = new Date(g.gameDate);
+      if (Number.isNaN(start.getTime())) continue;
+      games.push({ home: g.teams?.home?.team?.name || '', away: g.teams?.away?.team?.name || '', start });
+    }
+  }
+  return games;
+}
+
+// BDL names are short ("White Sox"); statsapi names are full ("Chicago White
+// Sox") — containment matching, both sides required. Doubleheaders produce two
+// candidates: take the one closest to our recorded start.
+function matchOfficialGame(officialGames, entry) {
+  const home = entry.homeTeam.toLowerCase();
+  const away = entry.awayTeam.toLowerCase();
+  const candidates = officialGames.filter(
+    (g) => g.home.toLowerCase().includes(home) && g.away.toLowerCase().includes(away)
+  );
+  if (candidates.length === 0) return null;
+  candidates.sort(
+    (a, b) => Math.abs(a.start - entry.startTime) - Math.abs(b.start - entry.startTime)
+  );
+  return candidates[0];
+}
+
+function startMlbDriftGuard(schedule) {
+  if (activeDriftTimer) { clearInterval(activeDriftTimer); activeDriftTimer = null; }
+  const mlbPrimaries = schedule.filter((e) => e.sport.key === 'baseball_mlb' && e.tier === 1);
+  if (mlbPrimaries.length === 0) return;
+  const fired = new Set();
+  let checking = false;
+  const fmtET = (d) => d.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+
+  activeDriftTimer = setInterval(async () => {
+    if (checking) return;
+    checking = true;
+    try {
+      const now = Date.now();
+      const pending = mlbPrimaries.filter((e) => !fired.has(e.gameId) && e.startTime.getTime() > now - 60 * 60 * 1000);
+      if (pending.length === 0) return;
+      const official = await fetchOfficialMlbStarts(getTodayETDateStr());
+      for (const entry of pending) {
+        const match = matchOfficialGame(official, entry);
+        if (!match) continue;
+        const deltaMs = match.start.getTime() - entry.startTime.getTime();
+        if (Math.abs(deltaMs) < DRIFT_MIN_DELTA_MS) continue;
+        log(`🕐 START-TIME DRIFT: ${entry.matchup} — planned ${fmtET(entry.startTime)} ET, official now ${fmtET(match.start)} ET (${Math.round(deltaMs / 60000)} min)`);
+        if (deltaMs >= 0) continue; // moved later — stale triggers fire early; retry tiers cover the gate
+        const trueStart = match.start.getTime();
+        if (now >= trueStart) continue; // already underway — the pick lane won't take a started game
+        if (now < trueStart - LEAD_TIME_MINUTES * 60 * 1000) continue; // true window not open yet; next tick re-checks
+        fired.add(entry.gameId);
+        log(`⚡ DRIFT FIRE: ${entry.matchup} moved up ${Math.round(-deltaMs / 60000)} min — running picks now, ${Math.round((trueStart - now) / 60000)} min to first pitch (id ${entry.gameId})`);
+        try {
+          await runScript('scripts/run-agentic-picks.js', [entry.sport.flag, '--game-id', String(entry.gameId)]);
+        } catch (e) {
+          log(`  ❌ Drift-fired game picks failed: ${entry.matchup}: ${e.message}`);
+        }
+        if (entry.sport.propsScript) {
+          try {
+            await runScript(`scripts/${entry.sport.propsScript}`, ['--game-id', String(entry.gameId)]);
+          } catch (e) {
+            log(`  ❌ Drift-fired props failed: ${entry.matchup}: ${e.message}`);
+          }
+        }
+      }
+    } catch (e) {
+      log(`⚠️ Drift guard check failed (non-fatal, next tick retries): ${e.message}`);
+    } finally {
+      checking = false;
+    }
+  }, DRIFT_CHECK_INTERVAL_MS);
+  log(`🕐 Drift guard armed: re-checking ${mlbPrimaries.length} MLB start time(s) vs statsapi every ${DRIFT_CHECK_INTERVAL_MS / 60000} min`);
+}
+
 async function executeSchedule(schedule) {
   if (schedule.length === 0) {
     log('No games scheduled — nothing to run.');
     return;
   }
+  startMlbDriftGuard(schedule);
 
   // Group games that start within 15 min of each other (run them as a batch)
   // This avoids scheduling 8 NBA games individually when they all start at 7 PM.
@@ -523,6 +623,8 @@ async function executeSchedule(schedule) {
       }
     }
   }
+
+  if (activeDriftTimer) { clearInterval(activeDriftTimer); activeDriftTimer = null; }
 
   log('\n🏁 All games complete for today.');
 
