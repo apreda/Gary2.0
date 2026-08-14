@@ -71,7 +71,10 @@ Key mechanics:
   beneath (NRFI/YRFI lean + 1st-inning market, scoring pace L10) so they
   always fill; row 5 is ALWAYS THE LINE (open vs now off ml_open_* stamped by
   the day's first board write; unmoved lines say "hasn't moved" with the
-  favorite's price). The pen-workload row was CUT (founder). Streak rows never
+  favorite's price). SAME-BOOK LAW: every snapshot carries ml_book/ml_open_book;
+  if the odds vendor priority walks to a different book between writes, the
+  open RESTAMPS from the new book — an open→now pair is always one book against
+  itself, never cross-book "movement". No paid odds-history API needed. The pen-workload row was CUT (founder). Streak rows never
   show a right-side value chip anywhere (headline already says it). Backend
   fields ride `tomorrow_board.run_profile` + per-row `nrfi`/`vs_hand`/
   `ml_open_*`, built by `src/services/tomorrowService.js`, published by

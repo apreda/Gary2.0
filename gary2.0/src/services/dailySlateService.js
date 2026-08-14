@@ -108,6 +108,7 @@ export async function buildLeagueRows(sport, etDateStr) {
       // attachment) tell doubleheader games apart without string games.
       bdl_game_id: g.bdl_game_id ?? g.id ?? null,
       venue: null, // BDL games+odds shape carries no venue
+      line_vendor: g.line_vendor ?? null,
       ...sanitizeLines(sport.league, {
         spread: toNum(g.spread_home),
         ml_home: toNum(g.moneyline_home),

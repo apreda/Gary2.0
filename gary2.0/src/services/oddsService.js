@@ -176,7 +176,12 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam, sport) => {
     spread_home: null, spread_away: null,
     spread_home_odds: null, spread_away_odds: null,
     moneyline_home: null, moneyline_away: null,
-    total: null, total_over_odds: null, total_under_odds: null
+    total: null, total_over_odds: null, total_under_odds: null,
+    // Which book actually supplied these numbers. The priority walk below can
+    // legitimately switch vendors between fetches (FanDuel down at noon ->
+    // DraftKings), and any open-vs-now comparison MUST know that happened —
+    // two books' prices are not a line move (founder, Aug 14).
+    line_vendor: null
   };
 
   if (!bookmakers || !bookmakers.length) return emptyResult;
@@ -207,6 +212,7 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam, sport) => {
   let bestMismatch = null;
   for (const bookmaker of orderedBookmakers) {
     const odds = extractFromBookmaker(bookmaker, homeTeam, awayTeam);
+    odds.line_vendor = (bookmaker.key || bookmaker.title || '').toLowerCase() || null;
     if (validateSpreadMLDirection(odds, bookmaker.key || bookmaker.title, sport)) {
       return odds;
     }
@@ -465,6 +471,9 @@ export const oddsService = {
           total: game.total ?? extractedOdds.total ?? bdlTotal,
           total_over_odds: game.total_over_odds ?? extractedOdds.total_over_odds ?? bdlTotalOver,
           total_under_odds: game.total_under_odds ?? extractedOdds.total_under_odds ?? bdlTotalUnder,
+          // The book that actually supplied the flat numbers — the same-book
+          // law for open-vs-now comparisons rides on this surviving the flatten.
+          line_vendor: game.line_vendor ?? extractedOdds.line_vendor ?? null,
         };
       });
 

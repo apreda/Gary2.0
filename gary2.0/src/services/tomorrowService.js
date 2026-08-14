@@ -1500,6 +1500,7 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
     ml_home: row.ml_home ?? null,
     ml_away: row.ml_away ?? null,
     total: row.total ?? null,
+    ml_book: row.line_vendor ?? null,
     is_marquee: marqueeKeys.has(`${row.league}|${row.away_team}|${row.home_team}`),
     // PARK FACTOR (founder pick, Aug 14 2026 — replaces the weather-led row on
     // THE BIG NUMBERS; the wind/total fold into its sentence). Percentage, not
@@ -1778,8 +1779,24 @@ async function attachRailExtras(board, etDateStr, { existingBoard, idByName, sup
     if (r.league !== 'MLB') continue;
     try {
       const prior = r.bdl_game_id != null ? priorById.get(String(r.bdl_game_id)) : null;
-      r.ml_open_home = prior?.ml_open_home ?? prior?.ml_home ?? r.ml_home ?? null;
-      r.ml_open_away = prior?.ml_open_away ?? prior?.ml_away ?? r.ml_away ?? null;
+      // SAME-BOOK LAW (founder, Aug 14: "we cant use seperate sportsbooks and
+      // be like the line moved when its two different sportsbooks lines"). The
+      // vendor rides every snapshot; if today's numbers come from a DIFFERENT
+      // book than the stamped open (FanDuel blipped, priority walked on), the
+      // open RESTAMPS from the new book and the comparison restarts — an
+      // open→now pair is always one book against itself.
+      const openBook = prior?.ml_open_book ?? prior?.ml_book ?? null;
+      const sameBook = openBook == null || r.ml_book == null || openBook === r.ml_book;
+      if (sameBook) {
+        r.ml_open_home = prior?.ml_open_home ?? prior?.ml_home ?? r.ml_home ?? null;
+        r.ml_open_away = prior?.ml_open_away ?? prior?.ml_away ?? r.ml_away ?? null;
+        r.ml_open_book = openBook ?? r.ml_book ?? null;
+      } else {
+        console.warn(`[TomorrowBoard] ${r.away_abbr}@${r.home_abbr}: line book switched ${openBook} -> ${r.ml_book} — restamping open (no cross-book "movement")`);
+        r.ml_open_home = r.ml_home ?? null;
+        r.ml_open_away = r.ml_away ?? null;
+        r.ml_open_book = r.ml_book ?? null;
+      }
 
       const market = r.bdl_game_id != null
         ? await bdl.getMlbFirstInningRunsMarket(r.bdl_game_id).catch(() => null)
