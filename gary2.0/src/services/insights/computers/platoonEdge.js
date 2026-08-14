@@ -47,6 +47,7 @@ import {
   scoreFromEdge, getBreakdownSplit, pickVariant, clampScore, round, pct3, ordinal,
 } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
+import { makeLineupReader } from '../lineupSource.js';
 
 const MIN_SPLIT_AB = 40;        // require a real platoon-side sample
 const MIN_OFFSIDE_AB = 25;      // off-side must also be real or the gap is noise
@@ -85,12 +86,13 @@ const DETAIL_VARIANTS = [
 ];
 
 export async function computePlatoonEdge(ctx) {
-  const { games, season, bdl, helpers } = ctx;
+  const { games, season, bdl, helpers, date } = ctx;
+  const lineupsFor = makeLineupReader({ bdl, date });
   const rows = [];
   let examined = 0;
   for (const game of games) {
     try {
-      const result = await platoonForGame(game, { season, bdl, gameLabel: helpers.gameLabel });
+      const result = await platoonForGame(game, { season, bdl, gameLabel: helpers.gameLabel, lineupsFor });
       examined += result.examined;
       rows.push(...result.rows);
     } catch (err) {
@@ -107,12 +109,13 @@ export async function computePlatoonEdge(ctx) {
   return rows;
 }
 
-async function platoonForGame(game, { season, bdl, gameLabel }) {
+async function platoonForGame(game, { season, bdl, gameLabel, lineupsFor }) {
   const gameId = game?.id;
   if (gameId == null) return { examined: 0, rows: [] };
   const label = gameLabel(game);
 
-  const lineups = await bdl.getMlbLineups(gameId);
+  // Posted BDL sheet first, the day's projected nine as the floor.
+  const lineups = await lineupsFor(gameId);
   if (!lineups || typeof lineups !== 'object') return { examined: 0, rows: [] };
 
   const homeAbbr = game?.home_team?.abbreviation;

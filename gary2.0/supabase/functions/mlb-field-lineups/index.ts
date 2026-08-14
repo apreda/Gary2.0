@@ -52,11 +52,24 @@ const bdlProbable = (p: any) => p?.name ? { name: p.name, hand: handOf(p.batsThr
 const foldPitcherName = (s: string) => String(s || "")
   .normalize("NFD").replace(/[̀-ͯ]/g, "")
   .toLowerCase().replace(/[.\-'’]/g, "").replace(/\s+/g, " ").trim();
+// The same merge also rescues the THROWING HAND. `?hydrate=probablePitcher`
+// returns the arm's id and name but no pitchHand, so `hand` has been shipping
+// empty on every projected lineup since the fallback was built — and
+// platoonEdge bails outright on an unknown opposing hand ("examined 0" all
+// morning, no platoon rows for the Picks rail). BDL's sheet carries batsThrows
+// for the probable even while its batting order is still empty, so when the two
+// sources name the same arm we take BOTH the id and the hand from it. A posted
+// statsapi hand (should one ever appear) still wins.
 function withBdlId(prob: { name: string; hand: string; playerId: string } | null, bdlSide: any) {
   if (!prob) return null;
   const bdlPitcher = bdlSide?.pitcher;
   const sameArm = bdlPitcher?.name && foldPitcherName(bdlPitcher.name) === foldPitcherName(prob.name);
-  return { ...prob, playerId: sameArm ? String(bdlPitcher.playerId ?? "") : "" };
+  if (!sameArm) return { ...prob, playerId: "" };
+  return {
+    ...prob,
+    playerId: String(bdlPitcher.playerId ?? ""),
+    hand: prob.hand || handOf(bdlPitcher.batsThrows),
+  };
 }
 
 const sbHeaders = {

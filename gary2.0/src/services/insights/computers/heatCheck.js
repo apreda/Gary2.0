@@ -56,7 +56,8 @@ const MAX_PER_GAME = 2;            // keep at most N hottest bats per game
 const RELEVANCE_SCALE = 200;       // 0.120 weighted edge -> ~+24 over base
 
 export async function computeHeatCheck(ctx) {
-  const { games, season, bdl, helpers } = ctx;
+  const { games, season, bdl, helpers, date } = ctx;
+  const lineupsFor = makeLineupReader({ bdl, date });
   const rows = [];
   const stats = { examined: 0, emitted: 0 };
 
@@ -64,7 +65,7 @@ export async function computeHeatCheck(ctx) {
   for (const game of games) {
     try {
       const gameRows = await heatCheckForGame(
-        game, { season, bdl, gameLabel: helpers.gameLabel, stats },
+        game, { season, bdl, gameLabel: helpers.gameLabel, stats, lineupsFor },
       );
       rows.push(...gameRows);
     } catch (err) {
@@ -83,14 +84,15 @@ export async function computeHeatCheck(ctx) {
   return rows;
 }
 
-async function heatCheckForGame(game, { season, bdl, gameLabel, stats }) {
+async function heatCheckForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) {
   const gameId = game?.id;
   if (gameId == null) return [];
 
   const label = gameLabel(game);
 
-  // getMlbLineups(gameId): BDL game id, object keyed by team abbreviation.
-  const lineups = await bdl.getMlbLineups(gameId);
+  // Posted BDL sheet first, the day's projected nine as the floor — before
+  // ~11am BDL returns zero batters and this lane used to emit nothing.
+  const lineups = await lineupsFor(gameId);
   if (!lineups || typeof lineups !== 'object') return [];
 
   // Map team abbr -> BDL team id so we can pull season stats per side.

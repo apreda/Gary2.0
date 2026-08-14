@@ -38,6 +38,7 @@
 //     stats (ba/est_ba/slg/est_slg/woba/est_woba ; era/xera for pitchers)
 
 import axios from 'axios';
+import { loadProjectedFieldLineups, usableLineup } from './lineupSource.js';
 import {
   nameKey, pct3, round, parseBatsThrows,
   num, asArray, dedupeCap, formatOdds, marketRank,
@@ -1294,95 +1295,7 @@ async function memoLineups(bdl, memo, gameId, projectedByGameId) {
   return v;
 }
 
-/** A lineup object is usable when at least one side has a batting order posted. */
-function usableLineup(lineups) {
-  if (!lineups || typeof lineups !== 'object') return false;
-  return Object.values(lineups).some((side) => Array.isArray(side?.batters) && side.batters.length > 0);
-}
 
-/**
- * Load the day's projected MLB lineups from mlb_field_lineups and adapt each
- * game's payload into the getMlbLineups() shape ({ [abbr]: { teamName, pitcher,
- * batters[] } }) keyed by game_id. Reads BOTH projected and confirmed rows — a
- * confirmed field-lineup row is an equally-good fallback if BDL's live sheet
- * blips — but the live BDL sheet is always preferred when present (memoLineups).
- *
- * Field-lineup fielder shape: { playerId, name, pos, order, bats, ... } and the
- * team's pitcher: { name, hand, playerId }. We rebuild batsThrows from bats/hand
- * so parseBatsThrows downstream still resolves the hitter's bats and the pitcher's
- * throwing hand. NON-FATAL: any failure returns an empty map (confirmed-only build).
- */
-async function loadProjectedFieldLineups(date) {
-  const map = new Map();
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.log('[playerInsightCards] no Supabase config — projected-lineup fallback disabled.');
-    return map;
-  }
-  let rows = [];
-  try {
-    const resp = await axios.get(
-      `${SUPABASE_URL}/rest/v1/mlb_field_lineups`,
-      {
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-        params: { date: `eq.${date}`, select: 'game_id,home_team,away_team,status,payload' },
-        timeout: 15000,
-      },
-    );
-    rows = Array.isArray(resp.data) ? resp.data : [];
-  } catch (err) {
-    console.warn(`[playerInsightCards] mlb_field_lineups fetch failed: ${err?.message || err}`);
-    return map;
-  }
-  for (const row of rows) {
-    const gameId = row?.game_id != null ? String(row.game_id) : null;
-    if (!gameId) continue;
-    const lineups = adaptFieldLineupPayload(row);
-    if (usableLineup(lineups)) map.set(gameId, lineups);
-  }
-  console.log(`[playerInsightCards] projected-lineup fallback ready for ${map.size} game(s) on ${date}.`);
-  return map;
-}
-
-/** Reassemble a "bats_throws"-style string from the field-lineup bats + facing-pitcher hand. */
-function batsThrowsFrom(bats, throws) {
-  const b = bats ? String(bats).trim().toUpperCase()[0] : '';
-  const t = throws ? String(throws).trim().toUpperCase()[0] : '';
-  if (!b && !t) return '';
-  return `${b}/${t}`;
-}
-
-/** mlb_field_lineups payload ({ home, away } w/ fielders + pitcher) -> getMlbLineups() shape. */
-function adaptFieldLineupPayload(row) {
-  const payload = row?.payload;
-  if (!payload || typeof payload !== 'object') return null;
-  const out = {};
-  for (const [side, abbr] of [['home', row?.home_team], ['away', row?.away_team]]) {
-    const t = payload[side];
-    if (!t || !Array.isArray(t.fielders) || t.fielders.length === 0) continue;
-    const key = abbr || t.team || side;
-    out[key] = {
-      teamName: t.team || abbr || null,
-      pitcher: t.pitcher && t.pitcher.playerId != null && t.pitcher.playerId !== ''
-        ? {
-            name: t.pitcher.name,
-            position: 'P',
-            batsThrows: batsThrowsFrom('', t.pitcher.hand),
-            playerId: t.pitcher.playerId,
-          }
-        : null,
-      batters: t.fielders
-        .filter((b) => b?.playerId != null && b.playerId !== '')
-        .map((b) => ({
-          name: b.name,
-          position: b.pos,
-          battingOrder: b.order,
-          batsThrows: batsThrowsFrom(b.bats, ''),
-          playerId: b.playerId,
-        })),
-    };
-  }
-  return Object.keys(out).length ? out : null;
-}
 
 async function memoProps(bdl, memo, gameId) {
   const key = String(gameId);

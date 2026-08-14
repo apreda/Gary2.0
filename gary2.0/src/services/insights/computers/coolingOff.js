@@ -28,6 +28,7 @@ import {
   getBreakdownSplit, splitNameForPitcherFacing, parseBatsThrows,
 } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
+import { makeLineupReader } from '../lineupSource.js';
 
 const MIN_RECENT_PA = 25;     // require a real recent PA sample
 const MIN_RECENT_AB = 22;     // lower floor when only at_bats is available
@@ -39,13 +40,14 @@ const MAX_PER_GAME = 2;
 const RELEVANCE_SCALE = 200;
 
 export async function computeCoolingOff(ctx) {
-  const { games, season, bdl, helpers } = ctx;
+  const { games, season, bdl, helpers, date } = ctx;
+  const lineupsFor = makeLineupReader({ bdl, date });
   const rows = [];
   const stats = { examined: 0, emitted: 0 };
   for (const game of games) {
     try {
       rows.push(...(await coldForGame(
-        game, { season, bdl, gameLabel: helpers.gameLabel, stats },
+        game, { season, bdl, gameLabel: helpers.gameLabel, stats, lineupsFor },
       )));
     } catch (err) {
       console.error('[coolingOff] game error:', err?.message || err);
@@ -62,12 +64,13 @@ export async function computeCoolingOff(ctx) {
   return rows;
 }
 
-async function coldForGame(game, { season, bdl, gameLabel, stats }) {
+async function coldForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) {
   const gameId = game?.id;
   if (gameId == null) return [];
   const label = gameLabel(game);
 
-  const lineups = await bdl.getMlbLineups(gameId);
+  // Posted BDL sheet first, the day's projected nine as the floor.
+  const lineups = await lineupsFor(gameId);
   if (!lineups || typeof lineups !== 'object') return [];
 
   const homeAbbr = game?.home_team?.abbreviation;
