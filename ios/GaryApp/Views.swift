@@ -22422,8 +22422,6 @@ fileprivate struct ScoutTrioData {
     let homeStreakL: String?
     let awayStreakLongest: Bool
     let homeStreakLongest: Bool
-    let awayPenOuts: Int?
-    let homePenOuts: Int?
     let awayRunsPgL10: Double?
     let homeRunsPgL10: Double?
     let venue: String?
@@ -22490,7 +22488,6 @@ fileprivate struct ScoutTrioData {
         vsHandAway = row?.vs_hand?.away; vsHandHome = row?.vs_hand?.home
         awayStreakL = ra?.streak_l; homeStreakL = rh?.streak_l
         awayStreakLongest = ra?.streak_longest ?? false; homeStreakLongest = rh?.streak_longest ?? false
-        awayPenOuts = ra?.pen_outs_l3; homePenOuts = rh?.pen_outs_l3
         awayRunsPgL10 = ra?.runs_pg_l10; homeRunsPgL10 = rh?.runs_pg_l10
 
         let w = board?.weather?.first {
@@ -22774,8 +22771,14 @@ fileprivate struct ScoutBigNumbersSection: View {
     // renders five rows and a loud game leads with its loudest facts.
     private var rows: [Row] {
         var out = [homeRunsRow, bullpenRow].compactMap { $0 }
-        let ladder = [lineMoveRow, streakRow, vsHandRow, nrfiRow, penWorkloadRow, scoringPaceRow].compactMap { $0 }
-        out.append(contentsOf: ladder.prefix(3))
+        // Slots 3-4: the loudest qualifying reads, floors beneath so they
+        // always fill. Slot 5: THE LINE, always (founder, Aug 14: "where is
+        // line movement? that is the fifth one") — moved or not, the market
+        // row closes the rail whenever lines are posted.
+        let ladder = [streakRow, vsHandRow, nrfiRow, scoringPaceRow].compactMap { $0 }
+        let line = lineMoveRow
+        out.append(contentsOf: ladder.prefix(line != nil ? 2 : 3))
+        if let line { out.append(line) }
         return out
     }
 
@@ -22784,20 +22787,30 @@ fileprivate struct ScoutBigNumbersSection: View {
         return n > 0 ? "+\(n)" : "\(n)"
     }
 
-    /// Open → now, one book, display only (never on Gary's desk). Qualifies at
-    /// a 15-point american move; the side the market came TOWARD leads.
+    /// THE LINE — open → now, one book, display only (never on Gary's desk).
+    /// Always renders once lines are posted: a real move shows the arrow and
+    /// the side the market came toward; an unmoved line says so honestly with
+    /// the favorite's price as the numeral.
     private var lineMoveRow: Row? {
         var best: (name: String, open: Double, cur: Double, delta: Double)? = nil
         for (open, cur, name) in [(d.mlOpenAway, d.mlAway, d.awayName),
                                   (d.mlOpenHome, d.mlHome, d.homeName)] {
-            guard let open, let cur, open != cur else { continue }
+            guard let open, let cur else { continue }
             let delta = open - cur          // positive = price shortened = money came in
-            if delta >= 15, delta > (best?.delta ?? 0) { best = (name, open, cur, delta) }
+            if delta >= 1, delta > (best?.delta ?? 0) { best = (name, open, cur, delta) }
         }
-        guard let b = best else { return nil }
-        return Row(id: "line-move",
-                   numeral: "\(Self.american(b.open))→\(Self.american(b.cur))",
-                   bold: "The market has come toward the \(b.name) since open", rest: "")
+        if let b = best {
+            return Row(id: "line-move",
+                       numeral: "\(Self.american(b.open))→\(Self.american(b.cur))",
+                       bold: "The market has come toward the \(b.name) since open", rest: "")
+        }
+        // No move — show the favorite holding its number.
+        guard let ha = d.mlAway, let hh = d.mlHome else { return nil }
+        let homeFav = hh <= ha
+        let name = homeFav ? d.homeName : d.awayName
+        let price = homeFav ? hh : ha
+        return Row(id: "line-move", numeral: Self.american(price),
+                   bold: "The line hasn't moved — \(name) opened here and hold", rest: "")
     }
 
     /// W5/L5 or longer, either club; the league-longest tag rides when true.
@@ -22865,20 +22878,6 @@ fileprivate struct ScoutBigNumbersSection: View {
                    rest: " · \(trail.0) \(String(format: "%.1f", trail.1))")
     }
 
-    /// FLOOR — who has actually been pitching. Relief innings across each
-    /// club's last three games; the heavier pen leads.
-    private var penWorkloadRow: Row? {
-        guard let a = d.awayPenOuts, let h = d.homePenOuts else { return nil }
-        let ip = { (outs: Int) in "\(outs / 3)\(outs % 3 == 0 ? "" : ".\(outs % 3)")" }
-        let awayHeavier = a >= h
-        let leadName = awayHeavier ? d.awayName : d.homeName
-        let leadOuts = awayHeavier ? a : h
-        let trailName = awayHeavier ? d.homeName : d.awayName
-        let trailOuts = awayHeavier ? h : a
-        return Row(id: "pen-l3", numeral: "\(ip(leadOuts)) IP",
-                   bold: "\(leadName) pen has worked \(ip(leadOuts)) innings over the last three days",
-                   rest: " · \(trailName) \(ip(trailOuts))")
-    }
 
 
     /// The stronger five-game power side leads; the comparison remains in the
@@ -24078,7 +24077,10 @@ struct SignalRow: View {
                         // little 2-bar block read as ambiguous).
                     }
                     Spacer(minLength: 6)
-                    if !s.value.isEmpty {
+                    // Streak values never render — the headline already says
+                    // "won 9 straight" and a W9 beside it is the same fact
+                    // twice (founder, Aug 14).
+                    if !s.value.isEmpty, s.kind != .streak {
                         if s.value.contains(where: { $0.isNumber }) {
                             Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(hubValueTint(s))
                         } else {

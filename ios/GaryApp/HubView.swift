@@ -360,6 +360,11 @@ fileprivate extension Signal {
     /// beside "13.7 IP") — those rows read cleaner with the headline alone.
     var valueEchoesHeadline: Bool {
         guard !value.isEmpty else { return true }
+        // A streak value is ALWAYS an echo — "TB have won 9 straight" beside a
+        // green W9 says the same thing twice (founder, Aug 14). The literal
+        // check below can't catch it because the headline never contains the
+        // "W9" token itself.
+        if kind == .streak { return true }
         if headline.contains(value) { return true }
         if let lead = value.split(separator: " ").first,
            lead.contains(where: { $0.isNumber }),

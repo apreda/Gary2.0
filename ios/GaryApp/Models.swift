@@ -1984,7 +1984,6 @@ struct TomorrowRunProfile: Decodable {
     let first_inning_scored_l10: Int?
     let streak_l: String?            // live streak, "W9" / "L4"
     let streak_longest: Bool?        // longest live streak in baseball (its sign)
-    let pen_outs_l3: Int?            // relief outs across the last 3 team games
     let runs_pg_l10: Double?         // runs scored per game, exact last 10
 }
 

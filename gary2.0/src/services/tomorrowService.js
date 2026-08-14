@@ -1108,19 +1108,6 @@ export async function buildRecentTeamMetrics(mlbTeams, etDateStr) {
       runs_pg_l10: last10.length === 10
         ? Number((last10.reduce((sum, g) => sum + g.mine, 0) / 10).toFixed(1))
         : null,
-      pen_outs_l3: (() => {
-        const last3 = games.slice(-3);
-        if (last3.length < 3) return null;
-        if (!last3.every((g) => rowsFor(g.id).some((r) => ipOuts(r.ip) > 0))) return null;
-        let outs = 0;
-        for (const g of last3) {
-          for (const r of rowsFor(g.id)) {
-            if (Number(r.games_started) === 1) continue;
-            outs += ipOuts(r.ip);
-          }
-        }
-        return outs;
-      })(),
     });
   }
   return out;
