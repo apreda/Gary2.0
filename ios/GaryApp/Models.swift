@@ -1814,7 +1814,15 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     let ml_away: Double?
     let total: Double?
     let is_marquee: Bool?            // gold star + tinted row
-    let park: TomorrowPark?          // tonight's venue factor (BIG NUMBERS row)
+    let park: TomorrowPark?          // tonight's venue factor
+    // Rail ladder inputs (Aug 14): day-opening moneylines (stamped by the
+    // day's first board write, carried through refreshes), the posted
+    // 1st-inning-runs market, and each lineup's OPS vs the opposing
+    // probable's hand.
+    let ml_open_home: Double?
+    let ml_open_away: Double?
+    let nrfi: TomorrowNRFI?
+    let vs_hand: TomorrowVsHand?
     /// Season series between the clubs (scout lane, Jul 7) — record from
     /// tonight's AWAY side's perspective, the leader's venue split, and the
     /// last three meetings. nil until the clubs have met this season.
@@ -1826,6 +1834,22 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
 }
 
 // SEASON SERIES — this season's finished meetings between tonight's clubs.
+struct TomorrowNRFI: Decodable {
+    let over: Int?                   // american odds, YRFI side (over 0.5)
+    let under: Int?                  // american odds, NRFI side (under 0.5)
+    let vendor: String?
+}
+
+struct TomorrowVsHand: Decodable {
+    let away: TomorrowVsHandSide?
+    let home: TomorrowVsHandSide?
+}
+struct TomorrowVsHandSide: Decodable {
+    let faces: String?               // opposing probable's hand: "L" | "R"
+    let ops_vs: Double?              // this lineup's season OPS vs that hand
+    let ops_other: Double?           // ...and vs the other hand (gap check)
+}
+
 struct TomorrowPark: Decodable {
     let name: String?                // "Wrigley Field"
     let pct: Int?                    // runs factor vs league, signed percent (+3, -12, 0)
@@ -1958,6 +1982,10 @@ struct TomorrowRunProfile: Decodable {
     let bullpen_era_l14: Double?
     let run_diff_l10: Int?
     let first_inning_scored_l10: Int?
+    let streak_l: String?            // live streak, "W9" / "L4"
+    let streak_longest: Bool?        // longest live streak in baseball (its sign)
+    let pen_outs_l3: Int?            // relief outs across the last 3 team games
+    let runs_pg_l10: Double?         // runs scored per game, exact last 10
 }
 
 // WEATHER — outdoor-MLB first-pitch forecast (grounded; roofed parks omitted).

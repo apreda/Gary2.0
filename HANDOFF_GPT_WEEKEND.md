@@ -65,12 +65,16 @@ Key mechanics:
 - Suite: `npx vitest run` → **288/288. It must stay green.** Three of those
   tests pin the ML/RL ask parity and the ask wording — if a prompt edit is
   approved, update the pins in the same change.
-- Big Numbers rail (iOS Picks page): fixed five rows — HR L5, bullpen ERA
-  L14, first-inning L10 (new Aug 14), park factor % (new Aug 14), current
-  series (0-0 when a new series opens; the 2-day gap rule in `seriesRow`).
-  Backend fields ride `tomorrow_board.run_profile` + `board[].park`, built by
+- Big Numbers rail (iOS Picks page): rows 1-2 fixed (HR L5, bullpen ERA L14);
+  rows 3-5 fill from a priority LADDER — line move (open vs now, ml_open_* on
+  board rows, stamped by the day's first write), significant streak (W5/L5+,
+  league-longest tag), stark vs-hand split — with three always-available
+  floors beneath (NRFI/YRFI lean + 1st-inning market, pen workload L3 days,
+  scoring pace L10). Backend fields ride `tomorrow_board.run_profile` +
+  per-row `park`/`nrfi`/`vs_hand`/`ml_open_*`, built by
   `src/services/tomorrowService.js`, published by
-  `scripts/run-tomorrow-board.js --date YYYY-MM-DD`.
+  `scripts/run-tomorrow-board.js --date YYYY-MM-DD`. THE HEAD-TO-HEAD section
+  below the rail owns all series history.
 - Tweets: every game posts (30/day cap), each thread gets ONE reply —
   "Gary's Prop Bets" list + link-in-bio handoff (`social-auto-post`, deployed).
   Recap tweet is ledger-only, no commentary lead.

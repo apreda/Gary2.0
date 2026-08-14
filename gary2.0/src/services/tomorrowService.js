@@ -73,6 +73,7 @@ import {
   getMlbStandings,
   getMlbTeams,
   getPitcherLastStarts,
+  getTeamVsHandSplits,
 } from './mlbStatsApiService.js';
 import { getPitcherXStats } from './baseballSavantService.js';
 import { findParkData } from './agentic/tools/statRouters/mlbFetchers.js';
@@ -976,6 +977,40 @@ export async function buildRecentTeamMetrics(mlbTeams, etDateStr) {
     }
   }
 
+  // LIVE STREAKS, LEAGUE-WIDE (founder GO, Aug 14 2026 — the rail's streak row
+  // carries "longest live streak in baseball", which needs every club, not just
+  // tonight's slate). One in-memory pass over the season index.
+  const allByTeam = new Map(); // teamId -> [{played, won}] chronological
+  for (const [, g] of seasonIndex) {
+    const played = Date.parse(g?.date || '');
+    if (!Number.isFinite(played)) continue;
+    const playedDay = getETDateStr(new Date(played));
+    if (playedDay >= etDateStr) continue;
+    if (g?.status !== 'STATUS_FINAL' || g?.seasonType === 'spring_training' || g?.postseason) continue;
+    const h = Number(g.homeRuns); const a = Number(g.awayRuns);
+    if (!Number.isFinite(h) || !Number.isFinite(a) || h === a) continue;
+    for (const [teamId, won] of [[g.homeId, h > a], [g.awayId, a > h]]) {
+      const b = allByTeam.get(String(teamId)) || [];
+      b.push({ played, won });
+      allByTeam.set(String(teamId), b);
+    }
+  }
+  const streakById = new Map(); // teamId -> signed length (+win / -loss)
+  let longestW = 0; let longestL = 0;
+  for (const [teamId, gs] of allByTeam) {
+    gs.sort((x, y) => x.played - y.played);
+    let n = 0;
+    for (let i = gs.length - 1; i >= 0; i -= 1) {
+      if (i === gs.length - 1) n = gs[i].won ? 1 : -1;
+      else if (gs[i].won && n > 0) n += 1;
+      else if (!gs[i].won && n < 0) n -= 1;
+      else break;
+    }
+    streakById.set(teamId, n);
+    if (n > longestW) longestW = n;
+    if (-n > longestL) longestL = -n;
+  }
+
   const neededIds = new Set();
   for (const games of gamesByTeam.values()) {
     for (const g of games.slice(-5)) neededIds.add(g.id);
@@ -1054,6 +1089,37 @@ export async function buildRecentTeamMetrics(mlbTeams, etDateStr) {
           if (rows.length === 10) return rows.filter((r) => r.scored).length;
         }
         return null;
+      })(),
+      // Rail ladder inputs (founder GO, Aug 14): the live streak (with the
+      // league-longest tag) and the pen's workload over the last three games.
+      streak_l: (() => {
+        const n = streakById.get(String(team.id)) || 0;
+        if (n === 0) return null;
+        return n > 0 ? `W${n}` : `L${-n}`;
+      })(),
+      streak_longest: (() => {
+        const n = streakById.get(String(team.id)) || 0;
+        if (n >= 2 && n === longestW) return true;
+        if (n <= -2 && -n === longestL) return true;
+        return false;
+      })(),
+      // Floor #3 for the rail: runs per game over the exact last ten (both
+      // clubs always have this by August — the guaranteed fifth row).
+      runs_pg_l10: last10.length === 10
+        ? Number((last10.reduce((sum, g) => sum + g.mine, 0) / 10).toFixed(1))
+        : null,
+      pen_outs_l3: (() => {
+        const last3 = games.slice(-3);
+        if (last3.length < 3) return null;
+        if (!last3.every((g) => rowsFor(g.id).some((r) => ipOuts(r.ip) > 0))) return null;
+        let outs = 0;
+        for (const g of last3) {
+          for (const r of rowsFor(g.id)) {
+            if (Number(r.games_started) === 1) continue;
+            outs += ipOuts(r.ip);
+          }
+        }
+        return outs;
       })(),
     });
   }
@@ -1664,6 +1730,95 @@ One entry per game listed above.`;
 }
 
 /**
+ * RAIL LADDER EXTRAS (founder GO, Aug 14 2026) — the per-game inputs for THE
+ * BIG NUMBERS' conditional rows, attached to each MLB board row:
+ *
+ *   ml_open_home / ml_open_away — the day's OPENING moneylines. The first
+ *     board write of the day stamps them from its own lines; every later
+ *     refresh carries the stamp forward untouched, so open-vs-now is a real
+ *     comparison on one book, never a recomputation ("the math has to work").
+ *     Rows written before this feature existed adopt their earliest known
+ *     line on the next refresh.
+ *   nrfi — the posted 1st-inning-runs market (over/under 0.5, one vendor).
+ *   vs_hand — each lineup's season OPS split against the OPPOSING probable's
+ *     throwing hand (hand from the statsapi schedule hydrate; splits from the
+ *     statsapi statSplits endpoint). Omitted when the probable or his hand
+ *     isn't posted — never guessed.
+ *
+ * Fail-open per game: any miss leaves that field null and the rail's floor
+ * rows carry the slot.
+ */
+async function attachRailExtras(board, etDateStr, { existingBoard, idByName, supabaseUrl, adminKey }) {
+  const priorById = new Map();
+  for (const b of existingBoard || []) {
+    if (b?.bdl_game_id != null) priorById.set(String(b.bdl_game_id), b);
+  }
+  // Probable hands come from mlb_field_lineups — the schedule's probablePitcher
+  // hydrate carries no pitchHand (probed live Aug 14), while the field-lineup
+  // payloads have carried a verified hand for every game since the same-day
+  // BDL-merge fix in the edge function. One query, keyed by BDL game id.
+  const handsByGameId = new Map();
+  try {
+    const { data } = await axios.get(`${supabaseUrl}/rest/v1/mlb_field_lineups`, {
+      params: { date: `eq.${etDateStr}`, select: 'game_id,payload' },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+      timeout: 15000,
+    });
+    for (const row of data || []) {
+      if (row?.game_id == null) continue;
+      handsByGameId.set(String(row.game_id), {
+        home: row?.payload?.home?.pitcher?.hand || null,
+        away: row?.payload?.away?.pitcher?.hand || null,
+      });
+    }
+  } catch { /* hands just won't resolve */ }
+  const handFor = (row, side) => {
+    const h = row.bdl_game_id != null ? handsByGameId.get(String(row.bdl_game_id)) : null;
+    const code = h?.[side];
+    return code === 'L' || code === 'R' ? code : null;
+  };
+  const splitsCache = new Map();
+  const splitsFor = async (teamName) => {
+    const id = idByName.get(nameKey(teamName || ''));
+    if (id == null) return null;
+    if (!splitsCache.has(id)) {
+      splitsCache.set(id, await getTeamVsHandSplits(id, SEASON).catch(() => null));
+    }
+    return splitsCache.get(id);
+  };
+
+  for (const r of board) {
+    if (r.league !== 'MLB') continue;
+    try {
+      const prior = r.bdl_game_id != null ? priorById.get(String(r.bdl_game_id)) : null;
+      r.ml_open_home = prior?.ml_open_home ?? prior?.ml_home ?? r.ml_home ?? null;
+      r.ml_open_away = prior?.ml_open_away ?? prior?.ml_away ?? r.ml_away ?? null;
+
+      const market = r.bdl_game_id != null
+        ? await bdl.getMlbFirstInningRunsMarket(r.bdl_game_id).catch(() => null)
+        : null;
+      r.nrfi = market ? { over: market.overOdds ?? null, under: market.underOdds ?? null, vendor: market.vendor ?? null } : null;
+
+      const homeHand = handFor(r, 'home');
+      const awayHand = handFor(r, 'away');
+      const sideRead = async (teamName, oppHand) => {
+        if (!oppHand) return null;
+        const sp = await splitsFor(teamName);
+        if (!sp) return null;
+        const vs = oppHand === 'L' ? sp.vsLeft : sp.vsRight;
+        const other = oppHand === 'L' ? sp.vsRight : sp.vsLeft;
+        const num = (x) => (x?.ops != null && Number.isFinite(Number(x.ops)) ? Number(x.ops) : null);
+        if (num(vs) == null) return null;
+        return { faces: oppHand, ops_vs: num(vs), ops_other: num(other) };
+      };
+      const away = await sideRead(r.away_team, homeHand);
+      const home = await sideRead(r.home_team, awayHand);
+      r.vs_hand = away || home ? { away, home } : null;
+    } catch { /* fail-open: this game keeps nulls */ }
+  }
+}
+
+/**
  * Assemble + persist tomorrow's board snapshot. Idempotent upsert on (date) —
  * re-runs (e.g. the evening line refresh) overwrite in place so overnight-posted
  * lines flip "—" to real numbers before users wake.
@@ -1771,6 +1926,22 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     await attachSeriesToBoard(board);
   } catch (e) {
     console.warn(`[TomorrowBoard] season series failed (honest-empty): ${e.message}`);
+  }
+  // Rail ladder extras — needs the PRIOR snapshot so opening lines survive
+  // every later refresh of the same date.
+  try {
+    let existingBoard = [];
+    try {
+      const { data } = await axios.get(`${supabaseUrl}/rest/v1/${table}`, {
+        params: { date: `eq.${etDateStr}`, select: 'board' },
+        headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+        timeout: 15000,
+      });
+      existingBoard = data?.[0]?.board || [];
+    } catch { /* first write of the day */ }
+    await attachRailExtras(board, etDateStr, { existingBoard, idByName, supabaseUrl, adminKey });
+  } catch (e) {
+    console.warn(`[TomorrowBoard] rail extras failed (honest-empty): ${e.message}`);
   }
   // THE ARMS IN GARY'S VOICE (Aug 4) — two sentences per game on the two
   // posted starters. This intentionally throws before the upsert if generation

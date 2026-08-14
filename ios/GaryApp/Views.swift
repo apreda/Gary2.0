@@ -22410,17 +22410,28 @@ fileprivate struct ScoutTrioData {
     let homeRunDiffL10: Int?
     let awayFirstInnL10: Int?
     let homeFirstInnL10: Int?
-    let park: TomorrowPark?
+    // Rail ladder (Aug 14): lines open→now, streaks, vs-hand, NRFI market, pen work.
+    let mlHome: Double?
+    let mlAway: Double?
+    let mlOpenHome: Double?
+    let mlOpenAway: Double?
+    let nrfi: TomorrowNRFI?
+    let vsHandAway: TomorrowVsHandSide?
+    let vsHandHome: TomorrowVsHandSide?
+    let awayStreakL: String?
+    let homeStreakL: String?
+    let awayStreakLongest: Bool
+    let homeStreakLongest: Bool
+    let awayPenOuts: Int?
+    let homePenOuts: Int?
+    let awayRunsPgL10: Double?
+    let homeRunsPgL10: Double?
     let venue: String?
+    let seriesLine: String?         // split_line — feeds tonightLine's band only
     let tempF: Int?
     let windMph: Int?
     let weatherNote: String?
     let total: Double?
-    let seriesLine: String?         // split_line
-    let lastMeeting: (d: String, line: String)?
-    /// Every stored meeting, NEWEST FIRST (the board's own order), each with
-    /// its own venue — the rail reads the current series off the head of it.
-    let seriesMeetings: [TomorrowMeeting]
     let wireLines: [String]
     /// THE ARMS IN GARY'S VOICE (Aug 4) — the board's two sentences on the
     /// game's two starters. nil = the assembled template prose renders.
@@ -22473,7 +22484,14 @@ fileprivate struct ScoutTrioData {
         awayBullpenERAL14 = ra?.bullpen_era_l14; homeBullpenERAL14 = rh?.bullpen_era_l14
         awayRunDiffL10 = ra?.run_diff_l10; homeRunDiffL10 = rh?.run_diff_l10
         awayFirstInnL10 = ra?.first_inning_scored_l10; homeFirstInnL10 = rh?.first_inning_scored_l10
-        park = row?.park
+        mlHome = row?.ml_home; mlAway = row?.ml_away
+        mlOpenHome = row?.ml_open_home; mlOpenAway = row?.ml_open_away
+        nrfi = row?.nrfi
+        vsHandAway = row?.vs_hand?.away; vsHandHome = row?.vs_hand?.home
+        awayStreakL = ra?.streak_l; homeStreakL = rh?.streak_l
+        awayStreakLongest = ra?.streak_longest ?? false; homeStreakLongest = rh?.streak_longest ?? false
+        awayPenOuts = ra?.pen_outs_l3; homePenOuts = rh?.pen_outs_l3
+        awayRunsPgL10 = ra?.runs_pg_l10; homeRunsPgL10 = rh?.runs_pg_l10
 
         let w = board?.weather?.first {
             ($0.away_abbr == aAb && $0.home_abbr == hAb) || matches($0.matchup, matchup)
@@ -22482,14 +22500,7 @@ fileprivate struct ScoutTrioData {
         tempF = w?.temp_f; windMph = w?.wind_mph; weatherNote = w?.note
         total = row?.total
         seriesLine = row?.series?.split_line
-        seriesMeetings = row?.series?.meetings ?? []
         armsTake = row?.arms_take
-        // .first, not .last — the board stores meetings NEWEST FIRST, so the
-        // old .last was showing the OLDEST meeting as "last meeting" (that's
-        // why a May game kept printing as the most recent one).
-        if let m = row?.series?.meetings?.first, let d = m.d, let line = m.line {
-            lastMeeting = (d, line)
-        } else { lastMeeting = nil }
 
         // The wire, one line per team: injury first, else today's move (the
         // same selection GameScoutSection used).
@@ -22671,30 +22682,6 @@ fileprivate struct ScoutNotebookSection: View {
         return parts.dropFirst().reduce(parts[0]) { $0 + Text(". ").foregroundColor(ScoutMock.warm.opacity(0.88)) + $1 }
             + Text(".").foregroundColor(ScoutMock.warm.opacity(0.88))
     }
-    private var seriesProse: Text? {
-        guard let s = d.seriesLine, !s.isEmpty else { return nil }
-        var t = Text("Series ").foregroundColor(ScoutMock.warm.opacity(0.88))
-            + Text(s).bold().foregroundColor(ScoutMock.warm)
-        if let m = d.lastMeeting {
-            t = t + Text(" — last meeting \(m.d): ").foregroundColor(ScoutMock.warm.opacity(0.88))
-                + Text(m.line).bold().foregroundColor(ScoutMock.warm)
-        }
-        return t + Text(".").foregroundColor(ScoutMock.warm.opacity(0.88))
-    }
-    private var seriesData: String? {
-        var bits: [String] = []
-        if let l = d.awayL10 {
-            var s = "\(d.awayName) \(l) last ten"
-            if let st = d.awayStreak { s += " · \(st)" }
-            bits.append(s)
-        }
-        if let l = d.homeL10 {
-            var s = "\(d.homeName) \(l)"
-            if let st = d.homeStreak { s += " · \(st)" }
-            bits.append(s)
-        }
-        return bits.isEmpty ? nil : bits.joined(separator: " — ")
-    }
 
     @ViewBuilder private func chapter(_ title: String, prose: Text, data: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -22780,11 +22767,117 @@ fileprivate struct ScoutBigNumbersSection: View {
         let bold: String
         let rest: String
     }
+    // THE LADDER (founder GO, Aug 14 2026). Rows 1-2 are fixed (HR L5, pen ERA
+    // L14). Rows 3-5 fill from a ranked list of conditional reads — line move,
+    // significant streak, live vs-hand split — with two always-available floor
+    // rows (NRFI lean, pen workload) beneath them, so a quiet game still
+    // renders five rows and a loud game leads with its loudest facts.
     private var rows: [Row] {
-        var out = [homeRunsRow, bullpenRow, firstInningRow].compactMap { $0 }
-        if let w = parkRow { out.append(w) }
-        if let sr = seriesRow { out.append(sr) }
+        var out = [homeRunsRow, bullpenRow].compactMap { $0 }
+        let ladder = [lineMoveRow, streakRow, vsHandRow, nrfiRow, penWorkloadRow, scoringPaceRow].compactMap { $0 }
+        out.append(contentsOf: ladder.prefix(3))
         return out
+    }
+
+    private static func american(_ v: Double) -> String {
+        let n = Int(v.rounded())
+        return n > 0 ? "+\(n)" : "\(n)"
+    }
+
+    /// Open → now, one book, display only (never on Gary's desk). Qualifies at
+    /// a 15-point american move; the side the market came TOWARD leads.
+    private var lineMoveRow: Row? {
+        var best: (name: String, open: Double, cur: Double, delta: Double)? = nil
+        for (open, cur, name) in [(d.mlOpenAway, d.mlAway, d.awayName),
+                                  (d.mlOpenHome, d.mlHome, d.homeName)] {
+            guard let open, let cur, open != cur else { continue }
+            let delta = open - cur          // positive = price shortened = money came in
+            if delta >= 15, delta > (best?.delta ?? 0) { best = (name, open, cur, delta) }
+        }
+        guard let b = best else { return nil }
+        return Row(id: "line-move",
+                   numeral: "\(Self.american(b.open))→\(Self.american(b.cur))",
+                   bold: "The market has come toward the \(b.name) since open", rest: "")
+    }
+
+    /// W5/L5 or longer, either club; the league-longest tag rides when true.
+    private var streakRow: Row? {
+        var best: (name: String, streak: String, len: Int, won: Bool, longest: Bool)? = nil
+        for (st, name, longest) in [(d.awayStreakL, d.awayName, d.awayStreakLongest),
+                                    (d.homeStreakL, d.homeName, d.homeStreakLongest)] {
+            guard let st, st.count >= 2, let len = Int(st.dropFirst()), len >= 5 else { continue }
+            if len > (best?.len ?? 0) { best = (name, st, len, st.hasPrefix("W"), longest) }
+        }
+        guard let b = best else { return nil }
+        var text = "\(b.name) have \(b.won ? "won" : "lost") \(b.len) straight"
+        if b.longest { text += " — the longest live \(b.won ? "winning" : "losing") streak in baseball" }
+        return Row(id: "streak", numeral: b.streak, bold: text, rest: "")
+    }
+
+    /// A lineup's season OPS against the hand it actually draws tonight.
+    /// Qualifies when the number is stark: facing-hand OPS ≤ .680, or an
+    /// 80-point gap between hands. The weaker side is the subject.
+    private var vsHandRow: Row? {
+        var best: (name: String, side: TomorrowVsHandSide, ops: Double)? = nil
+        for (side, name) in [(d.vsHandAway, d.awayName), (d.vsHandHome, d.homeName)] {
+            guard let side, let ops = side.ops_vs, side.faces != nil else { continue }
+            let gap = (side.ops_other ?? ops) - ops
+            guard ops <= 0.680 || gap >= 0.080 else { continue }
+            if best == nil || ops < best!.ops { best = (name, side, ops) }
+        }
+        guard let b = best, let hand = b.side.faces else { return nil }
+        let handWord = hand == "L" ? "lefties" : "righties"
+        let article = hand == "L" ? "a lefty" : "a righty"
+        let opsStr = String(format: "%.3f", b.ops).replacingOccurrences(of: "0.", with: ".")
+        return Row(id: "vs-hand", numeral: opsStr,
+                   bold: "\(b.name) hit \(opsStr) OPS against \(handWord) — and they draw \(article) tonight",
+                   rest: "")
+    }
+
+    /// FLOOR — the 1st-inning lean. The posted 0.5-run market names the lean
+    /// when a book has one (under = NRFI); the ten-game counts are the
+    /// evidence either way, and they decide the label when no market is up.
+    private var nrfiRow: Row? {
+        guard let a = d.awayFirstInnL10, let h = d.homeFirstInnL10 else { return nil }
+        var label: String
+        var oddsBit = ""
+        if let under = d.nrfi?.under, let over = d.nrfi?.over {
+            label = under <= over ? "NRFI" : "YRFI"
+            let price = label == "NRFI" ? under : over
+            oddsBit = " — \(label) \(Self.american(Double(price)))"
+        } else {
+            label = (a + h) <= 8 ? "NRFI" : "YRFI"
+        }
+        return Row(id: "nrfi", numeral: label,
+                   bold: "First innings: \(d.awayName) \(a)/10 · \(d.homeName) \(h)/10 scoring in the 1st",
+                   rest: oddsBit)
+    }
+
+    /// FLOOR — the last guaranteed row: each club's scoring pace over its
+    /// exact last ten. The hotter offense leads.
+    private var scoringPaceRow: Row? {
+        guard let a = d.awayRunsPgL10, let h = d.homeRunsPgL10 else { return nil }
+        let awayLeads = a >= h
+        let lead = awayLeads ? (d.awayName, a) : (d.homeName, h)
+        let trail = awayLeads ? (d.homeName, h) : (d.awayName, a)
+        return Row(id: "pace-l10", numeral: String(format: "%.1f", lead.1),
+                   bold: "\(lead.0) score \(String(format: "%.1f", lead.1)) runs a game over their last ten",
+                   rest: " · \(trail.0) \(String(format: "%.1f", trail.1))")
+    }
+
+    /// FLOOR — who has actually been pitching. Relief innings across each
+    /// club's last three games; the heavier pen leads.
+    private var penWorkloadRow: Row? {
+        guard let a = d.awayPenOuts, let h = d.homePenOuts else { return nil }
+        let ip = { (outs: Int) in "\(outs / 3)\(outs % 3 == 0 ? "" : ".\(outs % 3)")" }
+        let awayHeavier = a >= h
+        let leadName = awayHeavier ? d.awayName : d.homeName
+        let leadOuts = awayHeavier ? a : h
+        let trailName = awayHeavier ? d.homeName : d.awayName
+        let trailOuts = awayHeavier ? h : a
+        return Row(id: "pen-l3", numeral: "\(ip(leadOuts)) IP",
+                   bold: "\(leadName) pen has worked \(ip(leadOuts)) innings over the last three days",
+                   rest: " · \(trailName) \(ip(trailOuts))")
     }
 
 
@@ -22824,53 +22917,7 @@ fileprivate struct ScoutBigNumbersSection: View {
                    rest: " · \(trailer) \(String(format: "%.2f", trailerValue))")
     }
 
-    /// FIRST-INNING SHAPE, L10 (founder pick, Aug 14 2026 — replaced the run
-    /// differential row, whose numeral was abstract and read degenerate when
-    /// both clubs shared it). How often each lineup has scored in the 1st over
-    /// its last ten; the livelier first inning owns the numeral.
-    private var firstInningRow: Row? {
-        guard let away = d.awayFirstInnL10, let home = d.homeFirstInnL10 else { return nil }
-        if away == home {
-            return Row(id: "first-inn-l10", numeral: "\(away)/10",
-                       bold: "Both lineups have scored in \(away) of their last 10 first innings", rest: "")
-        }
-        let awayLeads = away > home
-        let leader = awayLeads ? d.awayName : d.homeName
-        let leaderValue = awayLeads ? away : home
-        let trailer = awayLeads ? d.homeName : d.awayName
-        let trailerValue = awayLeads ? home : away
-        return Row(id: "first-inn-l10", numeral: "\(leaderValue)/10",
-                   bold: "\(leader) have scored in \(leaderValue) of their last 10 first innings",
-                   rest: " · \(trailer) \(trailerValue)/10")
-    }
 
-    /// PARK FACTOR (founder pick, Aug 14 2026 — replaced the temperature-led
-    /// weather row; percentage numeral per his call, "+3%" never "1.03"). The
-    /// wind and the total fold into the sentence, so the weather a bettor
-    /// actually acts on survives inside the venue read.
-    private var parkRow: Row? {
-        guard let park = d.park, let pct = park.pct else { return nil }
-        let name = (park.name ?? d.venue ?? "This park")
-            .replacingOccurrences(of: " Field", with: "").replacingOccurrences(of: " Park", with: "")
-            .replacingOccurrences(of: " Stadium", with: "")
-        var phrase: String
-        if pct > 0 { phrase = "\(name) plays \(pct)% over league for runs" }
-        else if pct < 0 { phrase = "\(name) plays \(-pct)% under league for runs" }
-        else { phrase = "\(name) plays league average for runs" }
-        if park.type == "variable" { phrase += " (wind-dependent)" }
-        var bits: [String] = []
-        if let w = d.windMph { bits.append("wind \(w) mph") }
-        if let note = d.weatherNote, !note.isEmpty { bits.append(note) }
-        if let t = d.tempF { bits.append("\(t)°") }
-        if let total = d.total {
-            let shown = total == total.rounded() ? String(format: "%.0f", total)
-                                                 : String(format: "%.1f", total)
-            bits.append("total sits at \(shown)")
-        }
-        let numeral = pct > 0 ? "+\(pct)%" : pct < 0 ? "\(pct)%" : "0%"
-        return Row(id: "park", numeral: numeral,
-                   bold: phrase, rest: bits.isEmpty ? "" : " — \(bits.joined(separator: " · "))")
-    }
 
     /// THIS series only — the set they're playing right now (founder, Aug 6:
     /// "for the SEries its ONLY tHIS series they are currently playing not the
@@ -22878,55 +22925,6 @@ fileprivate struct ScoutBigNumbersSection: View {
     /// own venue, so the current set is the trailing run sharing the most
     /// recent one; anything before the venue changed was a different trip and
     /// belongs to the head-to-head ledger, not here.
-    private var seriesRow: Row? {
-        let all = d.seriesMeetings          // newest first
-        guard let latest = all.first, let venue = latest.venue, !venue.isEmpty else { return nil }
-        // ONLY the series being played RIGHT NOW (founder, Aug 14: "that should
-        // only be this series they are playing not past series earlier in the
-        // year — the h2h will show that"). The venue-run walk below assumed the
-        // newest stored meeting belongs to tonight's set, so on day one of a
-        // NEW series the row replayed the PREVIOUS series ("2-1 Cubs lead this
-        // series at Busch — JUL 30" on an Aug 14 game at Wrigley). Series games
-        // are never more than two days apart; a newest meeting older than that
-        // is last trip's, and tonight opens a fresh set at 0-0.
-        if let lastDate = Self.meetingDate(latest.d), let gap = Calendar.current.dateComponents([.day], from: lastDate, to: Date()).day, gap > 2 {
-            return Row(id: "series", numeral: "0-0", bold: "New series — first meeting is tonight", rest: "")
-        }
-        var current: [TomorrowMeeting] = []
-        for m in all {
-            guard m.venue == venue else { break }
-            current.append(m)
-        }
-        guard !current.isEmpty else { return nil }
-        // `won` is stored as "away"/"home" relative to TONIGHT'S sides, so it
-        // reads straight without re-deriving who hosted.
-        let homeWins = current.filter { $0.won == "home" }.count
-        let awayWins = current.count - homeWins
-        let numeral = "\(max(homeWins, awayWins))-\(min(homeWins, awayWins))"
-        var text: String
-        if homeWins == awayWins {
-            text = "Series even \(venue)"
-        } else {
-            text = "\(homeWins > awayWins ? d.homeName : d.awayName) lead this series \(venue)"
-        }
-        if let last = current.first, let line = last.line, let day = last.d {
-            text += " — \(day): \(line)"
-        }
-        return Row(id: "series", numeral: numeral, bold: text, rest: "")
-    }
-
-    /// "JUL 30" (the board's meeting-date shorthand) → a Date in the current
-    /// season year. Unparseable input returns nil and the caller fails open to
-    /// the old behavior rather than guessing.
-    private static func meetingDate(_ s: String?) -> Date? {
-        guard let s, !s.isEmpty else { return nil }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "MMM d yyyy"
-        let year = Calendar.current.component(.year, from: Date())
-        return f.date(from: "\(s.capitalized) \(year)")
-    }
 
     var body: some View {
         let built = rows
