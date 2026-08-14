@@ -599,40 +599,16 @@ async function runRecapMode(today: string, dryRun: boolean) {
       .map((p) => `- ${p.pick_text} ${marker(p.result)}`);
     return `${league}: ${rec.won}-${rec.lost}\n${lines.join("\n")}`;
   });
-  // MORNING TAPE (rebuilt Aug 5 2026). The file header has claimed since Jul 5 that this post is "ONE
-  // Gary-voiced morning-tape post: record in prose + one real result detail, mood-ladder register", with the
-  // plain per-sport list as the FALLBACK when the LLM fails. That was never true in code: runRecapMode had no
-  // LLM call at all, so the fallback list was the only thing that ever shipped — opening on a bare date stamp,
-  // closing on a generic CTA and a hashtag. It is the worst-performing recurring format on the account
-  // (212 avg impressions vs 548 for picks), and hashtags suppress reach on X besides.
+  // MORNING TAPE — THE LEDGER ONLY (founder, Aug 14 2026: "on these tweets we dont at all need to have
+  // that part of commentary at the top at all"). An LLM-written opening line led this post from Aug 5;
+  // it is gone. The record speaks for itself, and a paragraph of mood on top of a results table is exactly
+  // the editorial one-liner the founder has cut everywhere else it appeared.
   //
-  // The founder's reasons for keeping this post are brand reasons, and they are good ones: full transparency
-  // on wins AND losses, visible proof Gary picks every single game, and a pull into the app for the full card.
-  // So the LEDGER stays exactly as complete as it was — every pick, every result, nothing hidden on a bad day.
-  // What changes is that a human-sounding line now leads it, so the honesty is the hook instead of a date.
-  // The win/loss markers stay: in a results ledger they are scannable structure, not hype decoration.
-  const totals = graded.reduce((a, r) => (r.result === "won" ? { ...a, w: a.w + 1 } : r.result === "lost" ? { ...a, l: a.l + 1 } : a), { w: 0, l: 0 });
-  const mood = moodFor(totals.w, totals.l);
-  let lead = "";
-  try {
-    const out = parseJsonBlock(await callLLM(VOICE_RULES, `Write the opening line of Gary's morning results post. Return ONLY JSON: {"lead": "..."}.
-
-Yesterday (${ordinalDate(y)}) Gary went ${totals.w}-${totals.l}. Register for this record: ${MOODS[mood]}.
-The full ledger is printed directly beneath your line, so do NOT list picks, records, or repeat the date.
-
-LEAD: one or two sentences owning yesterday honestly. If it was a losing day, say so plainly with zero spin
-and zero excuses. If it was a winning day, do not gloat. Reference ONE concrete thing that actually happened
-below. Under roughly 180 characters. No link, no call to action, no hashtag.
-
-RESULTS:
-${graded.map((r) => `${r.pick_text}: ${r.result}`).join("\n")}`));
-    lead = clean(out.lead);
-  } catch (e) {
-    console.error("recap lead failed, falling back to the plain ledger: " + String(e));
-  }
-  // Same guard class as the pick hook: a well-formed but empty LLM response must not ship a headless post.
-  const header = lead.length >= 15 ? `${lead}\n\n${ordinalDate(y)}:` : `${ordinalDate(y)}:`;
-  const text = `${header}\n\n${sections.join("\n\n")}\n\nEvery game, every day. The full card is in the app.`;
+  // The post's brand job is unchanged and is why it exists: full transparency on wins AND losses, visible
+  // proof Gary picks every single game, and a pull into the app for the full card. So the LEDGER stays
+  // exactly as complete as it was — every pick, every result, nothing hidden on a bad day. The win/loss
+  // markers stay too: in a results table they are scannable structure, not hype decoration.
+  const text = `${ordinalDate(y)}:\n\n${sections.join("\n\n")}\n\nEvery game, every day. The full card is in the app.`;
 
   if (dryRun) return { posted: false, dry_run: true, text };
 
