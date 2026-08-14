@@ -18108,11 +18108,18 @@ struct PickDetailPopup: View {
            !read.isEmpty {
             return AppFlags.bridgeProse(read)
         }
-        guard let rationale = pick.rationale else { return "" }
+        guard let rationale = pick.rationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty else { return "" }
+        // The backend now stores prose only — normalizeCardHead strips every
+        // leading masthead/ticket-header line before storage, never re-adds
+        // one (Aug 14 2026: storage holding zero-or-more copies of "Gary's
+        // Take" was the doubled-header bug). This branch still catches a
+        // leading label on any ROW WRITTEN BEFORE that fix. The "\n\n
+        // backwards" fallback below it is gone: with no header ever stored
+        // going forward, that branch would fire on EVERY card and return
+        // only the text after its LAST blank line — silently truncating a
+        // normal multi-paragraph Take down to its closing paragraph. Never
+        // trim shown content; a header-less rationale renders whole.
         if let range = rationale.range(of: "Gary's Take", options: .caseInsensitive) {
-            return AppFlags.bridgeProse(String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        if let range = rationale.range(of: "\n\n", options: .backwards) {
             return AppFlags.bridgeProse(String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines))
         }
         return AppFlags.bridgeProse(rationale)

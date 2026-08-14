@@ -116,11 +116,11 @@ describe('analyzeGameDesk — the blind report → priced decision (Aug 12 contr
     expect(r._modelUsed).toBe(GAME_PICK_MODEL);
   });
 
-  it('a model-invented header is normalized to the Gary\'s Take masthead (live smoke catch)', async () => {
+  it('model-invented headers are removed because the UI owns the Gary\'s Take masthead', async () => {
     const prose = 'The bet is on the sixth inning, not the first. '.repeat(8);
-    stage([READ_JSON, TICKET_JSON + `\n\nTHE CARD — Cardinals ML -104\n\n${prose}`]);
+    stage([READ_JSON, TICKET_JSON + `\n\nGary's Take\n\nGary's Take\n\nTHE CARD — Cardinals ML -104\n\n${prose}`]);
     const r = await analyzeGameDesk({ id: 1 }, {});
-    expect(r.rationale.startsWith("Gary's Take\n\n")).toBe(true);
+    expect(r.rationale).not.toContain("Gary's Take");
     expect(r.rationale).not.toContain('THE CARD');
     expect(r.rationale).toContain('sixth inning');
   });

@@ -192,21 +192,21 @@ const extractCard = (t) => {
   return s.length >= 200 ? s : null;
 };
 
-/** Cards publish under the "Gary's Take" masthead (display contract, owned in
- *  code — never re-litigated in the prompt). Strip a model-invented header
- *  line that names the sealed ticket (smoke, Aug 4: "THE CARD — Orioles ML
- *  -150"), then ensure the masthead. */
+/** The UI owns the visible "Gary's Take" masthead, so storage holds prose only.
+ *  Strip every leading masthead or model-invented sealed-ticket header without
+ *  changing the prompt or the model's actual card copy. */
 const normalizeCardHead = (card, finalPick) => {
   let s = String(card).trim();
-  // A markdown-dressed masthead ("## Gary's Take", "**Gary's Take**" — live
-  // catch, Aug 4 regen) normalizes to the plain one; cards are plain text.
-  s = s.replace(/^[#*\s]*gary'?s take[*\s]*$/im, "Gary's Take").trim();
-  if (/^gary'?s take\b/i.test(s)) return s;
-  const nl = s.indexOf('\n');
-  const first = (nl === -1 ? s : s.slice(0, nl)).trim();
-  const isHeader = /^the card\b/i.test(first) || (finalPick && first.includes(finalPick));
-  if (isHeader && nl !== -1) s = s.slice(nl + 1).trim();
-  return `Gary's Take\n\n${s}`;
+  const mastheadLine = /^[#*\s]*gary'?s take[*\s]*$/i;
+  // Bounded because a valid card body cannot consist only of headings.
+  for (let i = 0; i < 5; i += 1) {
+    const nl = s.indexOf('\n');
+    const first = (nl === -1 ? s : s.slice(0, nl)).trim();
+    const isTicketHeader = /^the card\b/i.test(first) || (finalPick && first.includes(finalPick));
+    if (!mastheadLine.test(first) && !isTicketHeader) break;
+    s = (nl === -1 ? '' : s.slice(nl + 1)).trim();
+  }
+  return s;
 };
 
 /** Map the brain's final_pick text onto the chassis contract fields. */
