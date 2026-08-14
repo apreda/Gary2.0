@@ -19,9 +19,14 @@
 import { makeRow, TONES, scoreFromEdge } from '../shared.js';
 import { attachLaneReads } from '../laneReads.js';
 
-const MIN_GAMES = 4;        // a real H2H sample (division rivals have plenty by June)
+// EVERY GAME WITH HISTORY GETS ITS LEDGER (founder, Aug 14 2026: "it should
+// show the last times these teams played this season simple"). The old
+// lopsided-only gate (>=4 meetings and a 3-game gap) made the Picks page's
+// H2H section appear and disappear day to day — a 4-3 series is still the
+// last times these teams played. The GAP still drives relevance_score, so a
+// lopsided series ranks hotter; it just no longer decides existence.
+const MIN_GAMES = 1;        // any decided meeting this season = a ledger
 const MEETINGS_KEPT = 8;      // meetings stored on the row for the card's ledger
-const SURFACE_DIFF = 3;     // |wins - losses| over the series to be an angle
 // One row per GAME now, not a slate-wide feed item (founder, Aug 6: the
 // series renders only under its own matchup), so the cap just has to clear a
 // full slate — an 8-row cap silently dropped qualifying games like PIT @ MIL,
@@ -80,10 +85,9 @@ export async function computeHeadToHead(ctx) {
     }
     const awayWins = h2h.length - homeWins;       // no ties (decided() filtered them)
     const diff = Math.abs(homeWins - awayWins);
-    if (diff < SURFACE_DIFF) continue;
 
-    // The dominant side leads the series.
-    const homeDominant = homeWins > awayWins;
+    // The leading side fronts the row; a tied series fronts today's home team.
+    const homeDominant = homeWins >= awayWins;
     const dom = homeDominant ? home : away;
     const sub = homeDominant ? away : home;
     const domWins = Math.max(homeWins, awayWins);
@@ -100,11 +104,16 @@ export async function computeHeadToHead(ctx) {
 
     const domName = dom.name || dom.abbr || 'The team';
     const subName = sub.name || sub.abbr || 'the opponent';
-    const headline = `${domName} are ${record} vs ${subName} this season`;
+    const tied = diff === 0;
+    const headline = tied
+      ? `${domName} and ${subName} are square at ${record} this season`
+      : `${domName} are ${record} vs ${subName} this season`;
     const lastClause = domWonLast
       ? `${dom.abbr} won the last meeting ${lastScore}`
       : `${sub.abbr} took the last meeting ${lastScore} — a revenge spot`;
-    const detail = `${domName} lead the season series ${record} over ${subName}. ${lastClause}.`;
+    const detail = tied
+      ? `The season series sits ${record}. ${lastClause}.`
+      : `${domName} lead the season series ${record} over ${subName}. ${lastClause}.`;
 
     candidates.push(makeRow({
       category: 'headToHead',

@@ -59,12 +59,14 @@ const POST_HOURS_START = 8;   // ET hour the poster starts considering picks
 const POST_HOURS_END = 23;    // ...and stops (inclusive)
 const LEAD_MAX_MIN = 120;     // don't post more than 2h before first pitch (keeps the take timely)
 const LEAD_MIN_MIN = 5;       // HARD DEADLINE: must be >= 5 min before first pitch, otherwise never post
-const MAX_POSTS_PER_RUN = 3;  // burst guard; the 115-min-wide window always contains >=1 run, even hourly
-const PICKS_PER_DAY = 5;
-// Slots held back per day-part so a clustered afternoon can never eat the whole day (founder, Aug 5 2026:
-// "there are still people up on the West Coast, and we still want to get to them"). Reservations only bind
-// when games actually exist later — an all-afternoon getaway day still posts a full slate. See window.ts.
-const SLOT_RESERVE: Record<Slot, number> = { morning: 0, afternoon: 1, evening: 2, late: 1 };
+// EVERY GAME POSTS (founder, Aug 14 2026: "until football season lets post every game of the day").
+// The 5/day cap and the day-part reservations existed to ration a scarce cap across the day; with the
+// whole slate posting, rationing is off. The lead window is unchanged — each game still posts in its own
+// 2h pre-game window, so the slate spreads itself across the day naturally. Burst guard sized for a
+// six-game 6:40 ET cluster to clear in a single run.
+const MAX_POSTS_PER_RUN = 8;
+const PICKS_PER_DAY = 30;
+const SLOT_RESERVE: Record<Slot, number> = { morning: 0, afternoon: 0, evening: 0, late: 0 };
 const RECAP_HOUR = 10;
 // In-thread handoff (replaces the old buried App Store link CTA). No URL on purpose: the install path lives in the bio +
 // pinned post, which out-convert an in-thread link, and a link in-thread suppresses reach. Rotated by post-of-day so the
@@ -274,11 +276,92 @@ STYLE: specific player names and real numbers. Lead with the single strongest, m
 RECURRING VOCABULARY (Gary's own bits; use AT MOST one per post and only where it fits naturally, never forced): his results ledger is always "the tape" ("It's on the tape", "Check the tape"). Closers he actually uses: "That's the play." (stamping a pick), "Never sweated it." (a win never in doubt), "Cashed. Next." (routine win), "I'll wear that one." (owning a loss), "Money back, nothing learned." (push), "The number's the number." (the stat is the argument), "Paid like it should've." (plus-money win), "Same read, next game." (loss, process was right).
 Always return ONLY valid JSON as instructed.`;
 
+// ── THE PROPS REPLY (founder, Aug 14 2026) ────────────────────────────────────
+// Under every game tweet: "Gary's Prop Bets", the bare list for THAT game — no
+// commentary, no reasons — HR threats included, then the classic app handoff.
+// All of it in the one reply.
+
+const PROP_LABELS: Record<string, string> = {
+  home_runs: "to homer",             // phrased, not "over 0.5 home runs"
+  total_bases: "total bases",
+  hits: "hits",
+  hits_runs_rbis: "H+R+RBI",
+  rbi: "RBI",
+  rbis: "RBI",
+  runs: "runs",
+  walks: "walks",
+  stolen_bases: "stolen bases",
+  pitcher_strikeouts: "strikeouts",
+  pitcher_outs: "outs recorded",
+  pitcher_earned_runs: "earned runs",
+  pitcher_walks: "walks allowed",
+  pitcher_hits_allowed: "hits allowed",
+};
+
+function fmtSignedOdds(o: unknown): string {
+  const n = parseInt(String(o ?? ""), 10);
+  if (!Number.isFinite(n)) return "";
+  return n > 0 ? `+${n}` : String(n);
+}
+
+function propLine(p: any): string {
+  const type = String(p?.prop ?? "").split(" ")[0];
+  const odds = fmtSignedOdds(p?.odds);
+  const oddsStr = odds ? ` (${odds})` : "";
+  if (type === "home_runs") return `- ${p.player} ${PROP_LABELS.home_runs}${oddsStr}`;
+  const label = PROP_LABELS[type] ?? type.replace(/_/g, " ");
+  const bet = String(p?.bet ?? "").toUpperCase();
+  return `- ${p.player} ${bet} ${p.line} ${label}${oddsStr}`;
+}
+
+// This game's props: CORE lanes first, HR threats after, deduped by player+prop.
+// Matchup strings match the picks' own "Away @ Home" shorthand; on a doubleheader
+// both use commence_time to keep game 1's props off game 2's thread.
+function propsForGame(dayProps: any[], matchup: string, commence: string | undefined): any[] {
+  let mine = dayProps.filter((p) => String(p?.matchup ?? "") === matchup);
+  if (commence && mine.some((p) => p?.commence_time)) {
+    const target = new Date(commence).getTime();
+    mine = mine.filter((p) => !p?.commence_time || Math.abs(new Date(p.commence_time).getTime() - target) < 90 * 60_000);
+  }
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const p of [...mine.filter((x) => x?.lane !== "HR"), ...mine.filter((x) => x?.lane === "HR")]) {
+    const key = `${p?.player}|${p?.prop}|${p?.bet}`;
+    if (!p?.player || seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+function buildPropsReply(gameProps: any[], handoff: string): string | null {
+  if (!gameProps.length) return null;
+  const header = "Gary's Prop Bets";
+  const footer = `\n\n${handoff}`;
+  let lines: string[] = [];
+  for (const p of gameProps) {
+    const candidate = [...lines, propLine(p)];
+    const text = `${header}\n\n${candidate.join("\n")}${footer}`;
+    if (text.length > 270) break;   // hard 280 limit, small margin
+    lines = candidate;
+  }
+  if (!lines.length) return null;
+  return `${header}\n\n${lines.join("\n")}${footer}`;
+}
+
 async function runPickMode(today: string, nowMs: number, dryRun: boolean, preview = false) {
   const { data: dpRows, error: dpErr } = await sb.from("daily_picks").select("picks").eq("date", today);
   if (dpErr) throw dpErr;
   const picks: any[] = dpRows?.[0]?.picks ?? [];
   if (!picks.length) return { posted: false, reason: "no picks loaded yet" };
+
+  // The day's props, fetched once — each game thread's reply lists ITS OWN props
+  // (founder, Aug 14). A fetch failure costs the replies, never the pick tweets.
+  let dayProps: any[] = [];
+  try {
+    const { data: ppRows } = await sb.from("prop_picks").select("picks").eq("date", today);
+    dayProps = ppRows?.[0]?.picks ?? [];
+  } catch (e) { console.error("props fetch for replies failed (pick tweets unaffected): " + String(e)); }
 
   const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format").eq("post_date", today);
   if (logErr) throw logErr;
@@ -387,16 +470,20 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
       throw new Error(`Empty hook content from LLM for "${chosen.pick}" — angle="${angle}" edge="${edge}", refusing to post`);
     }
     const hook = `${angle}\n\n${pickLine}\n\n${edge}`;
-    // Handoff reply on the DAY'S FIRST thread only (Jul 5 2026): a "link in bio" reply on every thread reads
-    // generic-capper (the big personality accounts never do it) and /get clicks showed it converts ~0. One
-    // deliberate handoff a day; the bio + pinned arc carry the install path the rest of the time.
-    const handoff = threadsSoFar === 0 ? APP_HANDOFF[new Date().getDate() % APP_HANDOFF.length] : null;
+    // THE PROPS REPLY (founder, Aug 14 2026 — supersedes the Jul 5 first-thread-only handoff): every game
+    // thread gets ONE reply — "Gary's Prop Bets", the bare list for THIS game (HR threats included, no
+    // commentary), then the classic app handoff. A game with no props falls back to the old rule: the
+    // day's first thread alone carries the handoff line.
+    const matchupKey = `${chosen.awayTeam} @ ${chosen.homeTeam}`;
+    const handoffLine = APP_HANDOFF[new Date().getDate() % APP_HANDOFF.length];
+    const propsReply = buildPropsReply(propsForGame(dayProps, matchupKey, chosen.commence_time), handoffLine);
+    const handoff = propsReply ?? (threadsSoFar === 0 ? handoffLine : null);
 
     // Jul 7 (founder): the top-pick CARD tweet is retired — all 5 daily picks post as the standard text
     // thread. isTopPick still shapes the language (conviction carries in the words, never a badge).
     if (dryRun) {
       threadsSoFar++;
-      results.push({ posted: false, dry_run: true, pick: chosen.pick, is_top_pick: isTopPick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), hook, handoff });
+      results.push({ posted: false, dry_run: true, pick: chosen.pick, is_top_pick: isTopPick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), hook, props_reply: propsReply, handoff: propsReply ? null : handoff });
       continue;
     }
 
