@@ -38,6 +38,27 @@ const batsOf = (bt?: string) => (bt || "").split("/")[0]?.trim() || "";
 // expects. Used as the projected pitcher source when the MLB Stats API schedule is down.
 const bdlProbable = (p: any) => p?.name ? { name: p.name, hand: handOf(p.batsThrows), playerId: String(p.playerId ?? "") } : null;
 
+// ONE ID SPACE PER PAYLOAD (Aug 14 2026). Every fielder in this payload carries
+// a BDL player id, but the projected pitcher was taking `p.id` straight off the
+// MLB Stats API schedule — an MLBAM id (571927) sitting next to BDL ids (92,
+// 208). Downstream, playerInsightCards fed that MLBAM id to BDL's player APIs,
+// resolved nothing, and built ZERO pitcher cards every morning the projected
+// fallback was in play: no LAST OUTING, no LAST 3, no LAST 5 OUTINGS on the
+// whole slate. The Stats API stays the authority on WHO is starting (it is
+// today's real probable, not last turn's); the id comes from BDL's own sheet
+// when both name the same arm. If they disagree, ship the name with an EMPTY
+// id — a missing id degrades gracefully, a foreign-namespace id silently
+// resolves to the wrong player or to nothing at all.
+const foldPitcherName = (s: string) => String(s || "")
+  .normalize("NFD").replace(/[̀-ͯ]/g, "")
+  .toLowerCase().replace(/[.\-'’]/g, "").replace(/\s+/g, " ").trim();
+function withBdlId(prob: { name: string; hand: string; playerId: string } | null, bdlSide: any) {
+  if (!prob) return null;
+  const bdlPitcher = bdlSide?.pitcher;
+  const sameArm = bdlPitcher?.name && foldPitcherName(bdlPitcher.name) === foldPitcherName(prob.name);
+  return { ...prob, playerId: sameArm ? String(bdlPitcher.playerId ?? "") : "" };
+}
+
 const sbHeaders = {
   apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json",
 };
@@ -281,8 +302,13 @@ Deno.serve(async (req) => {
         // with today's REAL probable starters. When the MLB Stats API schedule was
         // unavailable, fall back to BDL's probable arm (from getMlbLineups) for the slot.
         status = "projected";
-        const homeProb = probables.home || (lineups?.[homeAbbr]?.pitcher ? bdlProbable(lineups[homeAbbr].pitcher) : null);
-        const awayProb = probables.away || (lineups?.[awayAbbr]?.pitcher ? bdlProbable(lineups[awayAbbr].pitcher) : null);
+        // The Stats API probable names the arm; its id is MLBAM, so re-key it to
+        // BDL's id off BDL's own sheet (see withBdlId). The BDL-sourced branch is
+        // already in BDL's id space and needs no re-keying.
+        const homeProb = withBdlId(probables.home, lineups?.[homeAbbr])
+          || (lineups?.[homeAbbr]?.pitcher ? bdlProbable(lineups[homeAbbr].pitcher) : null);
+        const awayProb = withBdlId(probables.away, lineups?.[awayAbbr])
+          || (lineups?.[awayAbbr]?.pitcher ? bdlProbable(lineups[awayAbbr].pitcher) : null);
         payload = {
           home: projTeam(homeAbbr, homeProb, awayProb),
           away: projTeam(awayAbbr, awayProb, homeProb),
