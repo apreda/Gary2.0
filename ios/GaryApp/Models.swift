@@ -1814,6 +1814,7 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     let ml_away: Double?
     let total: Double?
     let is_marquee: Bool?            // gold star + tinted row
+    let park: TomorrowPark?          // tonight's venue factor (BIG NUMBERS row)
     /// Season series between the clubs (scout lane, Jul 7) — record from
     /// tonight's AWAY side's perspective, the leader's venue split, and the
     /// last three meetings. nil until the clubs have met this season.
@@ -1825,6 +1826,12 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
 }
 
 // SEASON SERIES — this season's finished meetings between tonight's clubs.
+struct TomorrowPark: Decodable {
+    let name: String?                // "Wrigley Field"
+    let pct: Int?                    // runs factor vs league, signed percent (+3, -12, 0)
+    let type: String?                // "hitter" | "pitcher" | "neutral" | "variable"
+}
+
 struct TomorrowSeries: Decodable {
     let away_w: Int?
     let home_w: Int?
@@ -1950,6 +1957,7 @@ struct TomorrowRunProfile: Decodable {
     let home_runs_l5: Int?
     let bullpen_era_l14: Double?
     let run_diff_l10: Int?
+    let first_inning_scored_l10: Int?
 }
 
 // WEATHER — outdoor-MLB first-pitch forecast (grounded; roofed parks omitted).

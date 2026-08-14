@@ -22408,6 +22408,9 @@ fileprivate struct ScoutTrioData {
     let homeBullpenERAL14: Double?
     let awayRunDiffL10: Int?
     let homeRunDiffL10: Int?
+    let awayFirstInnL10: Int?
+    let homeFirstInnL10: Int?
+    let park: TomorrowPark?
     let venue: String?
     let tempF: Int?
     let windMph: Int?
@@ -22469,6 +22472,8 @@ fileprivate struct ScoutTrioData {
         awayHomeRunsL5 = ra?.home_runs_l5; homeHomeRunsL5 = rh?.home_runs_l5
         awayBullpenERAL14 = ra?.bullpen_era_l14; homeBullpenERAL14 = rh?.bullpen_era_l14
         awayRunDiffL10 = ra?.run_diff_l10; homeRunDiffL10 = rh?.run_diff_l10
+        awayFirstInnL10 = ra?.first_inning_scored_l10; homeFirstInnL10 = rh?.first_inning_scored_l10
+        park = row?.park
 
         let w = board?.weather?.first {
             ($0.away_abbr == aAb && $0.home_abbr == hAb) || matches($0.matchup, matchup)
@@ -22776,13 +22781,12 @@ fileprivate struct ScoutBigNumbersSection: View {
         let rest: String
     }
     private var rows: [Row] {
-        var out = [homeRunsRow, bullpenRow, runDifferentialRow].compactMap { $0 }
-        if let w = weatherRow { out.append(w) }
+        var out = [homeRunsRow, bullpenRow, firstInningRow].compactMap { $0 }
+        if let w = parkRow { out.append(w) }
         if let sr = seriesRow { out.append(sr) }
         return out
     }
 
-    private func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
 
     /// The stronger five-game power side leads; the comparison remains in the
     /// sentence so the number has matchup context instead of standing alone.
@@ -22820,38 +22824,52 @@ fileprivate struct ScoutBigNumbersSection: View {
                    rest: " · \(trailer) \(String(format: "%.2f", trailerValue))")
     }
 
-    /// The better last-10 scoring margin leads, including honest negative
-    /// values when both clubs have been outscored.
-    private var runDifferentialRow: Row? {
-        guard let away = d.awayRunDiffL10, let home = d.homeRunDiffL10 else { return nil }
+    /// FIRST-INNING SHAPE, L10 (founder pick, Aug 14 2026 — replaced the run
+    /// differential row, whose numeral was abstract and read degenerate when
+    /// both clubs shared it). How often each lineup has scored in the 1st over
+    /// its last ten; the livelier first inning owns the numeral.
+    private var firstInningRow: Row? {
+        guard let away = d.awayFirstInnL10, let home = d.homeFirstInnL10 else { return nil }
         if away == home {
-            return Row(id: "run-diff-l10", numeral: signed(away),
-                       bold: "Both teams share this run differential over their last 10 games", rest: "")
+            return Row(id: "first-inn-l10", numeral: "\(away)/10",
+                       bold: "Both lineups have scored in \(away) of their last 10 first innings", rest: "")
         }
         let awayLeads = away > home
         let leader = awayLeads ? d.awayName : d.homeName
         let leaderValue = awayLeads ? away : home
         let trailer = awayLeads ? d.homeName : d.awayName
         let trailerValue = awayLeads ? home : away
-        return Row(id: "run-diff-l10", numeral: signed(leaderValue),
-                   bold: "\(leader) have the better run differential over their last 10 games",
-                   rest: " · \(trailer) \(signed(trailerValue))")
+        return Row(id: "first-inn-l10", numeral: "\(leaderValue)/10",
+                   bold: "\(leader) have scored in \(leaderValue) of their last 10 first innings",
+                   rest: " · \(trailer) \(trailerValue)/10")
     }
 
-    /// "83°" + the wind and total beside it.
-    private var weatherRow: Row? {
-        guard let t = d.tempF else { return nil }
+    /// PARK FACTOR (founder pick, Aug 14 2026 — replaced the temperature-led
+    /// weather row; percentage numeral per his call, "+3%" never "1.03"). The
+    /// wind and the total fold into the sentence, so the weather a bettor
+    /// actually acts on survives inside the venue read.
+    private var parkRow: Row? {
+        guard let park = d.park, let pct = park.pct else { return nil }
+        let name = (park.name ?? d.venue ?? "This park")
+            .replacingOccurrences(of: " Field", with: "").replacingOccurrences(of: " Park", with: "")
+            .replacingOccurrences(of: " Stadium", with: "")
+        var phrase: String
+        if pct > 0 { phrase = "\(name) plays \(pct)% over league for runs" }
+        else if pct < 0 { phrase = "\(name) plays \(-pct)% under league for runs" }
+        else { phrase = "\(name) plays league average for runs" }
+        if park.type == "variable" { phrase += " (wind-dependent)" }
         var bits: [String] = []
-        if let w = d.windMph { bits.append("wind at \(w) mph") }
+        if let w = d.windMph { bits.append("wind \(w) mph") }
         if let note = d.weatherNote, !note.isEmpty { bits.append(note) }
+        if let t = d.tempF { bits.append("\(t)°") }
         if let total = d.total {
             let shown = total == total.rounded() ? String(format: "%.0f", total)
                                                  : String(format: "%.1f", total)
             bits.append("total sits at \(shown)")
         }
-        guard !bits.isEmpty else { return nil }
-        return Row(id: "weather", numeral: "\(t)°",
-                   bold: bits.joined(separator: " · ").capitalizedFirst, rest: "")
+        let numeral = pct > 0 ? "+\(pct)%" : pct < 0 ? "\(pct)%" : "0%"
+        return Row(id: "park", numeral: numeral,
+                   bold: phrase, rest: bits.isEmpty ? "" : " — \(bits.joined(separator: " · "))")
     }
 
     /// THIS series only — the set they're playing right now (founder, Aug 6:
@@ -22863,6 +22881,17 @@ fileprivate struct ScoutBigNumbersSection: View {
     private var seriesRow: Row? {
         let all = d.seriesMeetings          // newest first
         guard let latest = all.first, let venue = latest.venue, !venue.isEmpty else { return nil }
+        // ONLY the series being played RIGHT NOW (founder, Aug 14: "that should
+        // only be this series they are playing not past series earlier in the
+        // year — the h2h will show that"). The venue-run walk below assumed the
+        // newest stored meeting belongs to tonight's set, so on day one of a
+        // NEW series the row replayed the PREVIOUS series ("2-1 Cubs lead this
+        // series at Busch — JUL 30" on an Aug 14 game at Wrigley). Series games
+        // are never more than two days apart; a newest meeting older than that
+        // is last trip's, and tonight opens a fresh set at 0-0.
+        if let lastDate = Self.meetingDate(latest.d), let gap = Calendar.current.dateComponents([.day], from: lastDate, to: Date()).day, gap > 2 {
+            return Row(id: "series", numeral: "0-0", bold: "New series — first meeting is tonight", rest: "")
+        }
         var current: [TomorrowMeeting] = []
         for m in all {
             guard m.venue == venue else { break }
@@ -22884,6 +22913,19 @@ fileprivate struct ScoutBigNumbersSection: View {
             text += " — \(day): \(line)"
         }
         return Row(id: "series", numeral: numeral, bold: text, rest: "")
+    }
+
+    /// "JUL 30" (the board's meeting-date shorthand) → a Date in the current
+    /// season year. Unparseable input returns nil and the caller fails open to
+    /// the old behavior rather than guessing.
+    private static func meetingDate(_ s: String?) -> Date? {
+        guard let s, !s.isEmpty else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        f.dateFormat = "MMM d yyyy"
+        let year = Calendar.current.component(.year, from: Date())
+        return f.date(from: "\(s.capitalized) \(year)")
     }
 
     var body: some View {

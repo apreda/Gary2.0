@@ -75,6 +75,7 @@ import {
   getPitcherLastStarts,
 } from './mlbStatsApiService.js';
 import { getPitcherXStats } from './baseballSavantService.js';
+import { findParkData } from './agentic/tools/statRouters/mlbFetchers.js';
 import { ballDontLieService as bdl } from './ballDontLieService.js';
 import {
   DESK_FALLBACK_MODELS,
@@ -938,6 +939,43 @@ export async function buildRecentTeamMetrics(mlbTeams, etDateStr) {
   }
   for (const games of gamesByTeam.values()) games.sort((a, b) => a.played - b.played);
 
+  // FIRST-INNING SCORED, LAST 10 (founder pick, Aug 14 2026 — replaces the run
+  // differential row on THE BIG NUMBERS). BDL's season index carries no
+  // per-inning lines, so this walks recent ET days over the MLB Stats API
+  // schedule (linescore-hydrated, the firstInning insights lane's proven
+  // source) and counts, per club, how many of its last ten finals had a
+  // first-inning run. Same discipline as the other windows: exactly ten
+  // linescored finals or the field is omitted — never a silently short sample.
+  const firstInnByTeamKey = new Map(); // nameKey(club) -> [{day, scored}] newest first
+  {
+    const targetKeys = new Set();
+    for (const { bdl: team } of targets) {
+      for (const n of [team.display_name, team.short_display_name, team.name,
+        team.location && team.name ? `${team.location} ${team.name}` : null]) {
+        if (n) targetKeys.add(nameKey(n));
+      }
+    }
+    const needMore = () => [...targetKeys].some((k) => (firstInnByTeamKey.get(k) || []).length < 10);
+    for (let back = 1; back <= 24 && needMore(); back += 1) {
+      const day = shiftedDay(-back);
+      let sched = [];
+      try { sched = (await getMlbSchedule(day)) || []; } catch { continue; }
+      for (const g of sched) {
+        const stateOk = ['F', 'O'].includes(g?.status?.codedGameState || '');
+        const first = g?.linescore?.innings?.[0];
+        if (!stateOk || first == null) continue;
+        for (const [side, runs] of [['home', first?.home?.runs], ['away', first?.away?.runs]]) {
+          if (runs == null) continue;
+          const key = nameKey(g?.teams?.[side]?.team?.name || '');
+          if (!targetKeys.has(key)) continue;
+          const bucket = firstInnByTeamKey.get(key) || [];
+          if (bucket.length < 10) bucket.push({ day, scored: Number(runs) > 0 });
+          firstInnByTeamKey.set(key, bucket);
+        }
+      }
+    }
+  }
+
   const neededIds = new Set();
   for (const games of gamesByTeam.values()) {
     for (const g of games.slice(-5)) neededIds.add(g.id);
@@ -1010,6 +1048,13 @@ export async function buildRecentTeamMetrics(mlbTeams, etDateStr) {
       run_diff_l10: last10.length === 10
         ? last10.reduce((sum, g) => sum + g.mine - g.theirs, 0)
         : null,
+      first_inning_scored_l10: (() => {
+        for (const k of teamKeys) {
+          const rows = firstInnByTeamKey.get(k) || [];
+          if (rows.length === 10) return rows.filter((r) => r.scored).length;
+        }
+        return null;
+      })(),
     });
   }
   return out;
@@ -1403,6 +1448,15 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
     ml_away: row.ml_away ?? null,
     total: row.total ?? null,
     is_marquee: marqueeKeys.has(`${row.league}|${row.away_team}|${row.home_team}`),
+    // PARK FACTOR (founder pick, Aug 14 2026 — replaces the weather-led row on
+    // THE BIG NUMBERS; the wind/total fold into its sentence). Percentage, not
+    // the raw factor, per his call: 1.03 ships as +3.
+    park: (() => {
+      if (row.league !== 'MLB') return null;
+      const pd = findParkData(row.venue, row.home_team);
+      if (!pd || !Number.isFinite(Number(pd.factor))) return null;
+      return { name: pd.park, pct: Math.round((Number(pd.factor) - 1) * 100), type: pd.type ?? null };
+    })(),
   };
 }
 

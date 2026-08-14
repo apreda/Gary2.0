@@ -94,8 +94,10 @@ const MLB_PARK_DATA = {
   'Oakland Coliseum': { type: 'pitcher', factor: 0.93, notes: 'HISTORICAL — Athletics relocated to Sutter Health Park for 2025-2027.', teams: [] },
 };
 
-// Helper: find park data by venue name or home team name
-function findParkData(venueName, homeTeamName) {
+// Helper: find park data by venue name or home team name. Exported Aug 14
+// 2026 for the board's park-factor row (THE BIG NUMBERS) — one curated table,
+// no second copy.
+export function findParkData(venueName, homeTeamName) {
   // Try exact venue name match first
   if (venueName && MLB_PARK_DATA[venueName]) return { park: venueName, ...MLB_PARK_DATA[venueName] };
   // Try partial venue name match
