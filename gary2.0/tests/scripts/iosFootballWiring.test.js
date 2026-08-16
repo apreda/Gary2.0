@@ -68,6 +68,11 @@ describe('Live Props touchdown routing', () => {
 });
 
 describe('THE SWEAT terminal states', () => {
+  it('decodes numeric or string football season types without dropping proof rows', () => {
+    expect(models).toContain('let season_type: InsightMetaValue?');
+    expect(models).not.toContain('let season_type: String?');
+  });
+
   it('renders pushes as terminal without counting them as misses', () => {
     expect(footballIntel).toContain('"push", "final_held"');
     expect(footballIntel).toContain('let decided = signals.count - pushes');

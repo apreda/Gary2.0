@@ -145,7 +145,9 @@ final class SwapMeta: Decodable {
     // Football state modules. `baseline` / `live_value` deliberately accept
     // either numeric or formatted scalar values; every other field is stable.
     let pick_id: String?
-    let season_type: String?
+    // Providers/storage have emitted both `1` and `"1"`. Keep this flexible so
+    // one provenance scalar cannot make an otherwise valid proof row vanish.
+    let season_type: InsightMetaValue?
     let factor_code: String?
     let baseline: InsightMetaValue?
     let live_value: InsightMetaValue?
