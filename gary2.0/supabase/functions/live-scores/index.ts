@@ -26,6 +26,7 @@
 import {
   addUtcDateDays,
   footballBdlRequest,
+  liveScoreSlateDate,
   normalizeFootballGames,
 } from "../_shared/liveScoreFootball.js";
 import {
@@ -49,16 +50,6 @@ const num = (v: unknown): number | null => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-
-function estDate(): string {
-  // YYYY-MM-DD in America/New_York.
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
 
 // A game's true ET SLATE date from its start datetime. BDL dates by UTC instant,
 // so a 9:38pm ET game (= next UTC day) is returned by BOTH days' `dates:[]`
@@ -249,7 +240,9 @@ Deno.serve(async () => {
       status: 500, headers: { "Content-Type": "application/json" },
     });
   }
-  const date = estDate();
+  // Use the same 6 AM ET slate clock as the app and local poller so cloud
+  // refreshes keep late MLB and overnight NCAAF games alive through settlement.
+  const date = liveScoreSlateDate(new Date());
   const stored = await storedScoreRows(date);
   const now = new Date().toISOString();
   const nowMs = Date.parse(now);

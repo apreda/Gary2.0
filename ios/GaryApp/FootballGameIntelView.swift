@@ -86,10 +86,11 @@ struct FootballGameIntelView: View {
     }
 
     private var sweatSignals: [Signal] {
-        Array(edges.filter {
+        let renderable = edges.filter {
             belongsToExactGame($0)
                 && FootballProofContract.isRenderableSweat($0, includeWatch: true)
-        }.prefix(4))
+        }
+        return Array(FootballProofContract.finalScopedSweat(renderable).prefix(4))
     }
 
     var body: some View {

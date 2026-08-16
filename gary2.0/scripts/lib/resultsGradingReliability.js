@@ -1,5 +1,110 @@
 const clean = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 
+const finiteNumber = (value) => {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const cleanText = (value) => {
+  const text = String(value ?? '').trim();
+  return text || null;
+};
+
+/** nfl_results.confidence is an integer percentage in the deployed schema. */
+export function nflResultConfidence(value) {
+  const confidence = finiteNumber(value);
+  if (confidence == null || confidence < 0 || confidence > 100) return null;
+  return confidence <= 1
+    ? Math.round(confidence * 100)
+    : Math.round(confidence);
+}
+
+/**
+ * Build the canonical nfl_results write shape from the weekly ledger row, its
+ * stored pick, and the exact provider final. The weekly row owns season/week;
+ * the immutable pick owns teams/confidence; `homeScore`/`awayScore` are already
+ * aligned to those stored teams by the grader's exact-game matcher.
+ *
+ * Both inserts and idempotent updates use this helper so a previously sparse
+ * result row self-repairs without changing its identity or graded result.
+ */
+export function buildNflResultWritePayload({
+  mode = 'insert',
+  weeklyRow = {},
+  pick = {},
+  nflPickId = null,
+  gameDate = null,
+  gameId = null,
+  result = null,
+  homeScore = null,
+  awayScore = null,
+  isWinnersPick = false,
+  updatedAt = null,
+} = {}) {
+  const season = finiteNumber(weeklyRow?.season ?? pick?.season);
+  const weekNumber = finiteNumber(weeklyRow?.week_number ?? pick?.week_number ?? pick?.week);
+  const confidence = nflResultConfidence(pick?.confidence);
+  const normalizedHomeScore = finiteNumber(homeScore);
+  const normalizedAwayScore = finiteNumber(awayScore);
+  const homeTeam = cleanText(pick?.homeTeam ?? pick?.home_team);
+  const awayTeam = cleanText(pick?.awayTeam ?? pick?.away_team);
+  const normalizedGameId = cleanText(gameId);
+
+  const shared = {
+    result,
+    final_score: normalizedAwayScore != null && normalizedHomeScore != null
+      ? `${normalizedAwayScore}-${normalizedHomeScore}`
+      : null,
+    season,
+    week_number: weekNumber,
+    confidence,
+    home_team: homeTeam,
+    away_team: awayTeam,
+    home_score: normalizedHomeScore,
+    away_score: normalizedAwayScore,
+    is_winners_pick: isWinnersPick,
+    ...(normalizedGameId ? { game_id: normalizedGameId } : {}),
+  };
+
+  if (mode === 'update') {
+    return {
+      ...shared,
+      updated_at: updatedAt || new Date().toISOString(),
+    };
+  }
+
+  return {
+    nfl_pick_id: nflPickId,
+    game_date: gameDate,
+    pick_text: pick?.pick ?? null,
+    matchup: homeTeam && awayTeam ? `${awayTeam} @ ${homeTeam}` : null,
+    ...shared,
+  };
+}
+
+/**
+ * Return only provider lanes that have stored props in this run. `MLB HR`
+ * shares MLB data sources. An explicit settlement filter is an intersection,
+ * so a football-only pass can never open MLB/NBA/NHL and a normal MLB-only pass
+ * can never probe off-season or unauthorized sources.
+ */
+export function requiredPropSourceSports(storedPicks = [], allowedSports = null) {
+  const allowed = allowedSports == null
+    ? null
+    : new Set([...allowedSports].map((sport) => String(sport).trim().toUpperCase()));
+  const required = new Set();
+
+  for (const pick of storedPicks || []) {
+    const storedSport = String(pick?.sport ?? '').trim().toUpperCase();
+    const sourceSport = storedSport === 'MLB HR' ? 'MLB' : storedSport;
+    if (!sourceSport || (allowed && !allowed.has(sourceSport))) continue;
+    required.add(sourceSport);
+  }
+
+  return required;
+}
+
 /**
  * Grade a point-spread selection once the picked side has been resolved.
  * Football books legitimately post half-point pick'em lines (+0.5/-0.5),

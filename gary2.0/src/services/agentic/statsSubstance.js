@@ -52,15 +52,40 @@ export function countRealVerifiedTaleRows(verifiedTaleOfTape) {
   }).length;
 }
 
+function hasPlayedGameEvidence(verifiedTaleOfTape) {
+  const rows = verifiedTaleOfTape?.rows;
+  if (!Array.isArray(rows)) return false;
+
+  return rows.some((row) => {
+    const token = String(row?.token || '').toUpperCase();
+    if (META_TOKENS.has(token) || token === 'KEY_INJURIES') return false;
+    return ['home', 'away'].some((side) => {
+      const raw = row?.[side] && typeof row[side] === 'object' && 'value' in row[side]
+        ? row[side].value
+        : row?.[side];
+      if (!isRealStatValue(raw)) return false;
+      const numeric = Number(raw);
+      // NCAAF's opener placeholder is numeric and all-zero. Keep a legitimate
+      // zero only when another performance value (or a played-game form such
+      // as `1-0`) proves this is not that placeholder.
+      return Number.isFinite(numeric) ? numeric > 0 : true;
+    });
+  });
+}
+
 /**
- * An all-N/A NFL scout must be rebuilt rather than reused for three hours.
- * Other sports retain their existing cache behavior unchanged.
+ * An all-N/A football scout must be rebuilt rather than reused for three
+ * hours. This matters at both the NFL preseason and the NCAAF season opener,
+ * where a transient failure of the labeled prior-season baseline would
+ * otherwise poison every later scheduler tier.
  */
 export function shouldReuseScoutReport(scoutReport, sport) {
   const normalized = String(sport || '').toUpperCase();
   const isNfl = normalized === 'NFL' || normalized === 'AMERICANFOOTBALL_NFL';
-  if (!isNfl) return true;
-  return countRealVerifiedTaleRows(scoutReport?.verifiedTaleOfTape) > 0;
+  const isNcaaf = normalized === 'NCAAF' || normalized === 'AMERICANFOOTBALL_NCAAF';
+  if (!isNfl && !isNcaaf) return true;
+  if (countRealVerifiedTaleRows(scoutReport?.verifiedTaleOfTape) === 0) return false;
+  return !isNcaaf || hasPlayedGameEvidence(scoutReport?.verifiedTaleOfTape);
 }
 
 export default { countRealStats, countRealVerifiedTaleRows, shouldReuseScoutReport };

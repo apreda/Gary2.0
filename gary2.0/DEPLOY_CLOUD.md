@@ -85,3 +85,23 @@ later passes fill newly available lanes without replacing cards users already
 saw. Explicitly volatile streak facts may refresh, projected lineups may upgrade
 to confirmed, and live board facts such as weather, odds, and probable starters
 may update as their sources change.
+
+## Production ownership — extend, do not duplicate
+
+Gary has one primary local lifecycle. New sports must be added to these owners
+instead of introducing a parallel scheduled workflow:
+
+- `com.gary.scheduler` is the sole primary generator for MLB, NFL, and NCAAF
+  game picks and props.
+- `com.gary2.live-scores` owns the two-minute live-score loop and immediate
+  final-result/proof handoff.
+- `com.gary2.daily-results` is the retained catch-up grader and prior-slate
+  football-proof pass.
+- `com.gary2.daily-insights` builds Hub, Wire, and board data for every enabled
+  league.
+
+Sport-specific GitHub Actions are manual emergency/backfill tools only. Do not
+add a cron for a new sport when one of the owners above already performs that
+job. The Railway scheduler must remain stopped while `com.gary.scheduler` is
+active; moving the primary to another host requires an explicit one-owner
+cutover, not overlapping writers.

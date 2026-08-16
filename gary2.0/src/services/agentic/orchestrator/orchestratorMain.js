@@ -96,12 +96,12 @@ export async function analyzeGame(game, sport, options = {}) {
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
       scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
-      // Cache for props to reuse. Never persist an all-N/A NFL tape: a transient
-      // BDL throttle must not poison every retry for the next three hours.
+      // Cache for props to reuse. Never persist an all-N/A football tape: a
+      // transient BDL throttle must not poison every retry for three hours.
       if (shouldReuseScoutReport(scoutReportData, sport)) {
         saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData);
       } else {
-        console.warn(`[Orchestrator] NFL scout has zero verified performance stats; not caching ${awayTeam} @ ${homeTeam}`);
+        console.warn(`[Orchestrator] Football scout has zero verified performance stats; not caching ${awayTeam} @ ${homeTeam}`);
       }
     }
 

@@ -23,20 +23,13 @@ import '../src/loadEnv.js';
 
 import axios from 'axios';
 import { spawn } from 'node:child_process';
-import {
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getESTDate } from '../src/utils/dateUtils.js';
 import { etDateStr } from '../src/services/insights/shared.js';
 import {
   footballBdlRequest,
+  liveScoreSlateDate,
   normalizeFootballGames,
 } from '../supabase/functions/_shared/liveScoreFootball.js';
 import {
@@ -44,6 +37,11 @@ import {
   resolveLiveScoreSourceGate,
   selectLiveScoreSources,
 } from '../supabase/functions/_shared/liveScoreSourceGate.js';
+import {
+  pendingGradeFiles,
+  queueExactGradeRequest,
+} from './lib/liveGradeQueue.js';
+import { loadIncompleteFinalFootballGames } from './lib/footballFinalReconciliation.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
 // MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
@@ -56,14 +54,17 @@ const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/live_scores` : null;
 const DAILY_SLATE_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_slate` : null;
 const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
-const GRADE_QUEUE_DIR = '/tmp/gary-live-grade-queue';
 const LIVE_MAINTENANCE_LOCK = '/tmp/gary-live-maintenance.lock';
 const FOOTBALL_PROOF_INTERVAL_MS = 15 * 60 * 1000;
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const dateIdx = args.indexOf('--date');
-const targetDate = dateIdx !== -1 ? args[dateIdx + 1] : getESTDate();
+// The app's slate stays on the prior date until 6:00 AM ET. This matters for
+// late MLB games and confirmed NCAAF kickoffs after midnight: choosing the new
+// wall-clock date here would stop polling them and the stale-row purge below
+// would erase their live/final frame before settlement saw it.
+const targetDate = dateIdx !== -1 ? args[dateIdx + 1] : liveScoreSlateDate(new Date());
 
 if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate || '')) {
   console.error(`❌ Invalid date "${targetDate}".`);
@@ -303,34 +304,6 @@ async function liveScoreSourceGate(date, supportedLeagues) {
   }
 }
 
-function pendingGradeFiles() {
-  mkdirSync(GRADE_QUEUE_DIR, { recursive: true });
-  for (const name of readdirSync(GRADE_QUEUE_DIR).filter((value) => /^\..+\.tmp$/.test(value))) {
-    const tempPath = join(GRADE_QUEUE_DIR, name);
-    const request = JSON.parse(readFileSync(tempPath, 'utf8'));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(request?.date || ''))
-        || !Array.isArray(request?.leagues)) {
-      throw new Error(`Malformed pending live-grade temp request: ${name}`);
-    }
-    const finalName = `${name.slice(1, -4)}.json`;
-    renameSync(tempPath, join(GRADE_QUEUE_DIR, finalName));
-  }
-  return readdirSync(GRADE_QUEUE_DIR)
-    .filter((name) => name.endsWith('.json') || name.includes('.work-'));
-}
-
-function queueGrading(date, finalizedLeagues = []) {
-  const leagues = [...new Set(finalizedLeagues
-    .map((league) => String(league || '').toUpperCase())
-    .filter(Boolean))];
-  mkdirSync(GRADE_QUEUE_DIR, { recursive: true });
-  const identity = `${date}-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
-  const tempPath = join(GRADE_QUEUE_DIR, `.${identity}.tmp`);
-  const finalPath = join(GRADE_QUEUE_DIR, `${identity}.json`);
-  writeFileSync(tempPath, JSON.stringify({ date, leagues }));
-  renameSync(tempPath, finalPath);
-}
-
 function launchLockedWorker(workerArgs, label) {
   const child = spawn('/usr/bin/lockf', [
     '-s',
@@ -477,7 +450,7 @@ async function run() {
   const live = stamped.filter((r) => r.status === 'live').length;
   const final = stamped.filter((r) => r.status === 'final').length;
 
-  // Persist the grading request BEFORE writing the final score frame. The
+  // Persist grading requests BEFORE writing the final score frame. The
   // database upsert and local launchd queue cannot share one transaction; this
   // ordering makes the queue the durable side of that boundary. If this
   // process stops after queueing but before the upsert, the request remains and
@@ -489,10 +462,68 @@ async function run() {
         && !prevFinalIds.has(`${r.league}:${r.game_id}`),
     )
     : [];
-  if (!dryRun && newlyFinal.length > 0) {
-    const labels = newlyFinal.map((r) => `${r.away_abbr ?? '?'}@${r.home_abbr ?? '?'}`).join(', ');
-    console.log(`[live-grade] ${newlyFinal.length} game(s) just went FINAL: ${labels}`);
-    queueGrading(targetDate, newlyFinal.map((row) => row.league));
+  if (!dryRun) {
+    // Preserve the established edge-triggered behavior for MLB/NBA/NHL. The
+    // football lane below is deliberately level-triggered, so a faster cloud
+    // score writer cannot consume the only scheduled -> final edge.
+    const newlyFinalNonFootball = newlyFinal.filter(
+      (row) => row.league !== 'NFL' && row.league !== 'NCAAF',
+    );
+    if (newlyFinalNonFootball.length > 0) {
+      const labels = newlyFinalNonFootball
+        .map((r) => `${r.away_abbr ?? '?'}@${r.home_abbr ?? '?'}`)
+        .join(', ');
+      console.log(`[live-grade] ${newlyFinalNonFootball.length} game(s) just went FINAL: ${labels}`);
+      queueExactGradeRequest({
+        date: targetDate,
+        games: newlyFinalNonFootball,
+        reason: 'local-final-transition',
+      });
+    }
+
+    const finalFootball = stamped.filter(
+      (row) => row.date === targetDate
+        && row.status === 'final'
+        && (row.league === 'NFL' || row.league === 'NCAAF'),
+    );
+    if (finalFootball.length > 0) {
+      let incomplete;
+      try {
+        incomplete = await loadIncompleteFinalFootballGames({
+          date: targetDate,
+          finalGames: finalFootball,
+          supabaseUrl,
+          key: adminKey,
+          client: axios,
+        });
+      } catch (error) {
+        // Coverage state is fail-closed. Queue every exact final rather than
+        // treating an unreadable result/proof table as proof of completion.
+        console.warn(`[live-grade] football settlement read failed; queueing exact finals: ${error.message}`);
+        incomplete = finalFootball.map((row) => ({
+          date: targetDate,
+          league: row.league,
+          game_id: row.game_id,
+          missing: ['coverage_read'],
+        }));
+      }
+      const queued = queueExactGradeRequest({
+        date: targetDate,
+        games: incomplete,
+        reason: 'football-final-reconciliation',
+      });
+      if (queued.queued.length > 0) {
+        const labels = queued.queued.map((game) => `${game.league}:${game.game_id}`).join(', ');
+        const missing = incomplete
+          .filter((game) => queued.queued.some((candidate) =>
+            candidate.league === game.league && candidate.game_id === game.game_id))
+          .flatMap((game) => game.missing || []);
+        console.log(
+          `[live-grade] queued ${queued.queued.length} incomplete football final(s): ${labels}`
+            + `${missing.length ? ` (${[...new Set(missing)].join(', ')})` : ''}`,
+        );
+      }
+    }
   }
 
   if (dryRun) {

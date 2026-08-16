@@ -3,9 +3,10 @@
 // Cloud grade-on-final for GAME picks (props are a separate next layer — they
 // need box-score stat extraction). Runs on pg_cron alongside live-scores so
 // Gary's game picks settle 24/7, no laptop. For each FINAL game it grades the
-// pick (MLB ML/total/spread) and writes to game_results — dedup'd by (pick_text,
-// game_date): a wrong early grade self-corrects on the next run (UPDATE), an
-// ungraded one inserts, an already-correct one is a no-op.
+// pick (MLB ML/total/spread) and writes to game_results using the same exact
+// provider-game identity as the local grader. A wrong early grade self-corrects
+// on the next run (UPDATE), an ungraded one inserts, and an already-correct one
+// is a no-op.
 //
 // Right after a game grades, it ALSO generates + writes the betting RECAP
 // (game_recaps) that feeds Home's headline carousel — so the headline lands the
@@ -29,7 +30,18 @@
 // Side-detection (which team a pick is on) + gradeGame live in the pure,
 // unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
 // graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
-import { gameOnlyHeadline, gradeGame, headlineNeedsRepair, recapIsStale } from "./grading.ts";
+import {
+  gameOnlyHeadline,
+  gradeGame,
+  headlineNeedsRepair,
+  recapIsStale,
+  resultNumber,
+} from "./grading.ts";
+import {
+  matchedStoredGameId,
+  normalizedResultSport,
+  storedExactGameId,
+} from "./resultIdentity.ts";
 import { settleUserBetsForDates } from "./userbets.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -49,7 +61,7 @@ function estDate(offset = 0): string {
     timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(d);
 }
-const num = (v: unknown): number | null => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+const num = resultNumber;
 
 function isFinalStatus(raw: unknown): boolean {
   return String(raw ?? "").toUpperCase().includes("FINAL");
@@ -96,14 +108,38 @@ function mlbGameMatches(g: any, homeTeam: string, awayTeam: string): boolean {
 
 // ── game_results dedup write (re-grade on exist) ─────────────────────────────
 async function writeResult(row: any): Promise<"insert" | "update" | "noop" | "fail"> {
-  const existing = await sbGet("game_results",
-    `pick_text=eq.${encodeURIComponent(row.pick_text)}&game_date=eq.${row.game_date}&select=id,result,final_score`);
+  if (!row.game_id || !row.league) return "fail";
+
+  // New rows use the exact deployed identity. Only if no exact row exists do
+  // we look for one pre-contract NULL-game row to adopt in place. This keeps
+  // same-day rematches and doubleheaders independent while repairing history
+  // without ever creating a second result.
+  const fields = "id,result,final_score,game_id,league";
+  let existing = await sbGet("game_results",
+    `game_date=eq.${row.game_date}` +
+    `&league=ilike.${encodeURIComponent(row.league)}` +
+    `&game_id=eq.${encodeURIComponent(row.game_id)}` +
+    `&matchup=ilike.${encodeURIComponent(row.matchup)}` +
+    `&pick_text=ilike.${encodeURIComponent(row.pick_text)}` +
+    `&select=${fields}`);
+  if (!existing.length) {
+    existing = await sbGet("game_results",
+      `game_date=eq.${row.game_date}` +
+      `&league=ilike.${encodeURIComponent(row.league)}` +
+      `&game_id=is.null` +
+      `&matchup=ilike.${encodeURIComponent(row.matchup)}` +
+      `&pick_text=ilike.${encodeURIComponent(row.pick_text)}` +
+      `&select=${fields}&order=created_at.asc&limit=1`);
+  }
   if (existing.length) {
     const e = existing[0];
-    if (e.result === row.result && e.final_score === row.final_score) return "noop";
+    const identityCurrent = String(e.game_id ?? "") === row.game_id
+      && String(e.league ?? "") === row.league;
+    if (identityCurrent && e.result === row.result && e.final_score === row.final_score) return "noop";
     const res = await fetch(`${SUPABASE_URL}/rest/v1/game_results?id=eq.${e.id}`, {
       method: "PATCH", headers: { ...sbHeaders, Prefer: "return=minimal" },
       body: JSON.stringify({ result: row.result, final_score: row.final_score,
+        game_id: row.game_id, league: row.league,
         is_winners_pick: row.is_winners_pick, updated_at: new Date().toISOString() }),
     });
     return res.ok ? "update" : "fail";
@@ -596,7 +632,7 @@ Deno.serve(async (req) => {
   // adjacent-day series games). Default: today + yesterday (late finals).
   const dateParam = new URL(req.url).searchParams.get("date");
   const dates = /^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "") ? [dateParam!] : [estDate(0), estDate(-1)];
-  const stats = { insert: 0, update: 0, noop: 0, fail: 0, skipped: 0,
+  const stats = { insert: 0, update: 0, noop: 0, fail: 0, skipped: 0, invalidIdentity: 0,
     recap: 0, recap_regenerated: 0, recap_exists: 0, recap_fail: 0 };
   // Per-run evidence caches shared across recaps (BDL box score + prop_results).
   const statsCache = new Map<string, any[]>();
@@ -681,19 +717,30 @@ Deno.serve(async (req) => {
       winnerKeys.has(`${String(p.league ?? "").toUpperCase()}|${p.pick}|${p.awayTeam} @ ${p.homeTeam}`);
 
     for (const pick of picks) {
-      const league = String(pick.league ?? "").toUpperCase();
+      const league = normalizedResultSport(pick.league) ?? "";
       let result: string | null = null, vScore: number | null = null, hScore: number | null = null;
       let mlbGameId: number | null = null;
 
       if (league === "MLB") {
+        const storedGameId = storedExactGameId(pick);
+        if (!storedGameId) {
+          stats.invalidIdentity++;
+          console.warn(`[grade-results] MLB ${pick.awayTeam} @ ${pick.homeTeam} left pending: stored pick is missing an exact game id`);
+          continue;
+        }
         const g = mlbGames.find((x: any) => {
           // Scope to THIS pick's ET date so a repeated matchup on an adjacent day
-          // (Padres@Cubs today vs last night) can't cross-match and grade the pick
-          // against the wrong game.
+          // (Padres@Cubs today vs last night) cannot cross-match. Exact id also
+          // disambiguates both halves of a same-day doubleheader.
           if (!x.date || etDateOf(x.date) !== date) return false;
-          return mlbGameMatches(x, pick.homeTeam, pick.awayTeam);
+          return String(x.id) === storedGameId;
         });
         if (!g || !isFinalStatus(g.status)) { stats.skipped++; continue; }
+        if (!mlbGameMatches(g, pick.homeTeam, pick.awayTeam)) {
+          stats.invalidIdentity++;
+          console.warn(`[grade-results] MLB game ${storedGameId} left pending: stored teams do not match the provider game`);
+          continue;
+        }
         hScore = num(g.home_team_data?.runs); vScore = num(g.away_team_data?.runs);
         if (hScore == null || vScore == null) { stats.skipped++; continue; }
         mlbGameId = num(g.id);
@@ -701,8 +748,16 @@ Deno.serve(async (req) => {
       } else { stats.skipped++; continue; } // other leagues: not handled in the cloud grader yet
 
       if (result == null || hScore == null || vScore == null) { stats.skipped++; continue; }
+      let exactGameId: string;
+      try {
+        exactGameId = matchedStoredGameId(pick, mlbGameId);
+      } catch (error) {
+        stats.invalidIdentity++;
+        console.warn(`[grade-results] ${league} ${pick.awayTeam} @ ${pick.homeTeam} left pending: ${(error as Error).message}`);
+        continue;
+      }
       const outcome = await writeResult({
-        pick_id: rowId, game_date: date, league, result,
+        pick_id: rowId, game_date: date, league, game_id: exactGameId, result,
         final_score: `${vScore}-${hScore}`, pick_text: pick.pick,
         matchup: `${pick.awayTeam} @ ${pick.homeTeam}`, is_winners_pick: isWinner(pick),
       });

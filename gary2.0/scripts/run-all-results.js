@@ -24,10 +24,11 @@ import {
   findExactNcaafStatRow,
   ncaafActualFromStatRow,
 } from '../src/services/ncaafPropStats.js';
-import { resolveNcaafKickoff } from '../src/services/ncaafGamePolicy.js';
+import { ncaafSlateDateForKickoff } from '../src/services/ncaafGamePolicy.js';
 import {
   assertFootballSettlementCoverage,
   buildFootballSettlementOutcome,
+  buildNflResultWritePayload,
   gradeGameSpread,
   gradePropResult,
   isFinalGameStatus,
@@ -37,6 +38,7 @@ import {
   pickGameId as storedPickGameId,
   propGameId,
   propResultIdentity,
+  requiredPropSourceSports,
   statsForGame,
 } from './lib/resultsGradingReliability.js';
 import {
@@ -206,9 +208,9 @@ async function bdlFetch(path, params = '') {
   const attempts = RUN_OPTIONS.footballSettlements ? 2 : 1;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      // The frequent cloud pass shares a five-starts/minute BDL account with
-      // the live-score function. Keep this process to three evenly spaced
-      // starts/minute and give a collision-throttled request one gated retry.
+      // The narrow manual football backstop shares a five-starts/minute BDL
+      // account with the live-score function. Keep this process to three evenly
+      // spaced starts/minute and give a collision-throttled request one retry.
       // The historical full/nightly mode is intentionally unchanged.
       if (RUN_OPTIONS.footballSettlements) {
         await waitForBdlRequestSlot(`football-results ${path}`);
@@ -295,10 +297,7 @@ async function fetchNCAAFGames(date) {
   const unique = [...new Map(
     games.filter((game) => game?.id != null).map((game) => [String(game.id), game]),
   ).values()];
-  const exactEtSlate = unique.filter((game) => {
-    const kickoff = resolveNcaafKickoff(game);
-    return kickoff.scheduledDate === date;
-  });
+  const exactEtSlate = unique.filter((game) => ncaafSlateDateForKickoff(game) === date);
   cache.games.set(key, exactEtSlate);
   return exactEtSlate;
 }
@@ -1068,7 +1067,12 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
         // Strip any time component — game_results.game_date is a DATE column and existing
         // rows are stored as YYYY-MM-DD. Passing a full ISO datetime works in Postgres
         // (it truncates) but produces inconsistent date strings in iOS lookups.
-        const normalized = normalizeToETDate(matchedGame) || gameDate;
+        // A confirmed NCAAF kickoff before 6 AM ET belongs to the prior Gary
+        // slate everywhere (picks, live scores, proof, results, and iOS). Store
+        // that slate key rather than its wall-clock calendar date.
+        const normalized = league === 'NCAAF'
+          ? ncaafSlateDateForKickoff(matchedGame)
+          : normalizeToETDate(matchedGame);
         gameDate = typeof normalized === 'string' ? normalized.slice(0, 10) : normalized;
       }
 
@@ -1123,13 +1127,18 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
             : false;
         const isWinnersPick = winnerKeys.has(winnerKey(pick));
         const insertPayload = league === 'NFL'
-          ? {
-              nfl_pick_id: perPickId, game_date: gameDate, result: res,
-              final_score: `${vs}-${hs}`, pick_text: pick.pick,
-              matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
-              is_winners_pick: isWinnersPick,
-              ...(exactGameIdentity && resolvedGameId ? { game_id: resolvedGameId } : {}),
-            }
+          ? buildNflResultWritePayload({
+              mode: 'insert',
+              weeklyRow: row,
+              pick,
+              nflPickId: perPickId,
+              gameDate,
+              gameId: exactGameIdentity ? resolvedGameId : null,
+              result: res,
+              homeScore: hs,
+              awayScore: vs,
+              isWinnersPick,
+            })
           : {
               pick_id: perPickId, game_date: gameDate, league, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
@@ -1167,15 +1176,26 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
           // grader's re-grade fix (the Jun 18 Soto-HR bug). For an already-correct
           // row the update writes the same values — a harmless no-op.
           alreadyExists = true;
-          const updatePayload = {
-            result: res,
-            final_score: `${vs}-${hs}`,
-            is_winners_pick: isWinnersPick,
-            updated_at: new Date().toISOString(),
-            ...(exactGameIdentity && resolvedGameId
-              ? { game_id: resolvedGameId }
-              : {}),
-          };
+          const updatePayload = league === 'NFL'
+            ? buildNflResultWritePayload({
+                mode: 'update',
+                weeklyRow: row,
+                pick,
+                gameId: exactGameIdentity ? resolvedGameId : null,
+                result: res,
+                homeScore: hs,
+                awayScore: vs,
+                isWinnersPick,
+              })
+            : {
+                result: res,
+                final_score: `${vs}-${hs}`,
+                is_winners_pick: isWinnersPick,
+                updated_at: new Date().toISOString(),
+                ...(exactGameIdentity && resolvedGameId
+                  ? { game_id: resolvedGameId }
+                  : {}),
+              };
           const { error: updErr } = await supabase
             .from(targetTable)
             .update(updatePayload)
@@ -1348,32 +1368,37 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
   if (rowsError) throw new Error(`Could not read prop_picks for ${date}/${nextStr}: ${rowsError.message}`);
   const stats = emptySettlementStats();
   if (!rows?.length) return stats;
-  if (allowedSports && !rows.some((row) => propsForRow(row).some((pick) => sportAllowed(pick?.sport, allowedSports)))) {
+  const storedProps = rows.flatMap(propsForRow);
+  const sourceSports = requiredPropSourceSports(storedProps, allowedSports);
+  if (allowedSports && sourceSports.size === 0) {
     console.log(`  ⏭️  No ${[...allowedSports].join('/')} props stored for this window.`);
     return stats;
   }
   const referencedNFLGameIds = new Set();
   const referencedNCAAFGameIds = new Set();
-  for (const row of rows) {
-    for (const pick of propsForRow(row)) {
-      const gameId = propGameId(pick);
-      if (!gameId) continue;
-      const sport = String(pick?.sport ?? '').trim().toUpperCase();
-      if (sport === 'NFL') referencedNFLGameIds.add(gameId);
-      if (sport === 'NCAAF') referencedNCAAFGameIds.add(gameId);
-    }
+  for (const pick of storedProps) {
+    const gameId = propGameId(pick);
+    if (!gameId) continue;
+    const sport = String(pick?.sport ?? '').trim().toUpperCase();
+    if (sport === 'NFL') referencedNFLGameIds.add(gameId);
+    if (sport === 'NCAAF') referencedNCAAFGameIds.add(gameId);
   }
   const exactPropIdentity = await supportsExactPropResultIdentity();
 
   const dates = [date, nextStr];
-  const wants = (sport) => sportAllowed(sport, allowedSports);
+  // A normal full run opens only the provider lanes represented by stored
+  // props. The explicit football settlement filter remains an intersection,
+  // so it cannot call an unrelated source even when the same date row is mixed.
+  const wants = (sport) => sourceSports.has(String(sport).trim().toUpperCase());
   const nbaBox = wants('NBA') ? (await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat() : [];
   const nhlBox = wants('NHL') ? (await Promise.all(dates.map(d => fetchBoxScores('NHL', d)))).flat() : [];
   const nflGames = wants('NFL') ? (await Promise.all(dates.map(d => fetchGames('NFL', d)))).flat() : [];
   const ncaafGames = wants('NCAAF') ? (await Promise.all(dates.map(d => fetchNCAAFGames(d)))).flat() : [];
   // MLB: no box_scores endpoint — fetch games then stats by game_ids (same pattern as NFL)
   const mlbGames = wants('MLB') ? (await Promise.all(dates.map(d => fetchGames('MLB', d)))).flat() : [];
-  const mlbStats = await fetchMLBStats([...new Set(mlbGames.map(g => g.id).filter(Boolean))]);
+  const mlbStats = wants('MLB')
+    ? await fetchMLBStats([...new Set(mlbGames.map(g => g.id).filter(Boolean))])
+    : [];
   // FINALITY GATE source (props): the set of MLB games that are FINAL. A prop whose game
   // isn't final must NOT be graded — an in-progress/unstarted game returns 0/partial stats
   // and settles the player prematurely (today's live game graded "0 TB -> LOST" before first
@@ -1383,12 +1408,16 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
   const ncaafFinalIds = new Set(ncaafGames.filter(g => isFinalGameStatus(g.status)).map(g => String(g.id)));
   // Only fetch NFL player stats for games proven final, then keep the source-id
   // stamp so each prop reads its own game's stat line.
-  const nflStats = await fetchNFLStats(
-    nflGames.filter((game) => nflFinalIds.has(String(game.id)) && referencedNFLGameIds.has(String(game.id))),
-  );
-  const ncaafStats = await fetchNCAAFStats(
-    [...ncaafFinalIds].filter((gameId) => referencedNCAAFGameIds.has(gameId)),
-  );
+  const nflStats = wants('NFL')
+    ? await fetchNFLStats(
+        nflGames.filter((game) => nflFinalIds.has(String(game.id)) && referencedNFLGameIds.has(String(game.id))),
+      )
+    : [];
+  const ncaafStats = wants('NCAAF')
+    ? await fetchNCAAFStats(
+        [...ncaafFinalIds].filter((gameId) => referencedNCAAFGameIds.has(gameId)),
+      )
+    : [];
 
   console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats, NCAAF=${ncaafStats.length} player stats`);
 
@@ -1588,14 +1617,14 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
 }
 
 /**
- * Small cloud-safe settlement pass used by the frequent GitHub workflow.
+ * Narrow cloud-safe settlement pass used only by the manual GitHub backstop.
  *
  * It deliberately reuses the exact same provider identity, finality, grading,
  * dedup, and write paths as the full nightly job, but only opens the two
  * football lanes. Editorial work (recaps/fact checks), MLB/NBA/NHL fetches,
  * night highlights, streaks, and era auditing remain on the existing full
- * cadence. This makes football result badges laptop-independent without
- * turning a 15-minute settlement poll into a broad production rewrite.
+ * cadence. The normal owner remains the established local results lifecycle;
+ * this mode exists for an explicitly requested emergency/backfill run.
  */
 async function mainFootballSettlements(targetDate) {
   console.log(`\n🏈 FOOTBALL SETTLEMENT DATE: ${targetDate}`);
@@ -1691,8 +1720,8 @@ async function main(targetDate = getTargetDate()) {
 }
 
 // The full grade+recap run remains TODAY then YESTERDAY (ET), so the Home
-// marquee rolls to today's finished games same-day. The frequent football-only
-// settlement lane deliberately reverses that default: yesterday's late finals
+// marquee rolls to today's finished games same-day. The manual football-only
+// backstop deliberately reverses that default: yesterday's late finals
 // are attempted first, and a failure on either date cannot skip the other.
 // Every path is idempotent per date.
 async function run() {

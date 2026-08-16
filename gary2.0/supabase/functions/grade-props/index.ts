@@ -15,8 +15,9 @@
 //      with the finality gate this is safe (a final stat won't change) and makes
 //      steady-state nearly free.
 //
-// Writes to prop_results, dedup'd by (player_name, prop_type, game_date) — same
-// shape the laptop writes, so the two graders agree and the dedup is idempotent.
+// Writes to prop_results using the same exact game/sport/player/market/side/line
+// identity as the laptop grader, so the two established lanes stay idempotent
+// even on doubleheaders or alternate lines.
 //
 // prop_type stored to match existing rows: first token of the prop string
 // ("home_runs", "total_bases", "hits_runs_rbis").
@@ -24,6 +25,12 @@
 import { settleUserBet, patchUserBet } from "../grade-results/userbets.ts";
 import { updateUserStreak } from "../grade-results/streaks.ts";
 import { notifySettles, type UserSettleBatch } from "../grade-results/push.ts";
+import { gradePropResult } from "./grading.ts";
+import {
+  normalizedResultSport,
+  propResultIdentityKey,
+  storedExactGameId,
+} from "../grade-results/resultIdentity.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -72,16 +79,6 @@ async function bdlGet(path: string, params: Record<string, string | string[]>): 
     cursor = String(next);
   }
   return all;
-}
-
-// ── grading core (ported from run-all-results.js) ────────────────────────────
-function gradeProp(actual: number | null, line: number, bet: string): string | null {
-  if (actual === null) return null;
-  const b = (bet || "").toLowerCase();
-  if (b === "over" || b === "yes" || b === "anytime") {
-    return (actual > line || (b === "anytime" && actual >= 1)) ? "won" : "lost";
-  }
-  return actual < line ? "won" : "lost";
 }
 
 // MLB: `token` is the first word of the prop ("home_runs", "total_bases", ...).
@@ -153,16 +150,47 @@ function playerMatchesMlb(pickName: string, pl: any): boolean {
 
 // ── prop_results dedup write ─────────────────────────────────────────────────
 async function writeProp(row: any): Promise<"insert" | "update" | "noop" | "fail"> {
-  const ex = await sbGet("prop_results",
-    `player_name=eq.${encodeURIComponent(row.player_name)}&prop_type=eq.${encodeURIComponent(row.prop_type)}` +
-    `&game_date=eq.${row.game_date}&select=id,result,actual_value`);
+  if (!row.game_id || !row.sport) return "fail";
+
+  // Prefer the full deployed identity. If this exact result does not exist,
+  // adopt one matching pre-contract NULL-game/NULL-sport row in place. The
+  // legacy lookup includes every dimension its schema can represent so a
+  // doubleheader, alternate line, or opposite side cannot be collapsed.
+  const fields = "id,result,actual_value,game_id,sport";
+  let ex = await sbGet("prop_results",
+    `game_date=eq.${row.game_date}` +
+    `&sport=ilike.${encodeURIComponent(row.sport)}` +
+    `&game_id=eq.${encodeURIComponent(row.game_id)}` +
+    `&player_name=ilike.${encodeURIComponent(row.player_name)}` +
+    `&prop_type=ilike.${encodeURIComponent(row.prop_type)}` +
+    `&bet=ilike.${encodeURIComponent(row.bet)}` +
+    `&line_value=eq.${row.line_value}` +
+    `&select=${fields}&limit=1`);
+  if (!ex.length) {
+    const matchup = row.matchup == null
+      ? "matchup=is.null"
+      : `matchup=eq.${encodeURIComponent(row.matchup)}`;
+    ex = await sbGet("prop_results",
+      `prop_pick_id=eq.${row.prop_pick_id}` +
+      `&game_date=eq.${row.game_date}` +
+      `&game_id=is.null&sport=is.null` +
+      `&player_name=ilike.${encodeURIComponent(row.player_name)}` +
+      `&prop_type=ilike.${encodeURIComponent(row.prop_type)}` +
+      `&bet=ilike.${encodeURIComponent(row.bet)}` +
+      `&line_value=eq.${row.line_value}` +
+      `&${matchup}&select=${fields}&order=created_at.asc&limit=1`);
+  }
   if (ex.length) {
     const e = ex[0];
-    if (e.result === row.result && Number(e.actual_value) === Number(row.actual_value)) return "noop";
+    const identityCurrent = String(e.game_id ?? "") === row.game_id
+      && String(e.sport ?? "") === row.sport;
+    if (identityCurrent && e.result === row.result
+      && Number(e.actual_value) === Number(row.actual_value)) return "noop";
     const r = await fetch(`${SUPABASE_URL}/rest/v1/prop_results?id=eq.${e.id}`, {
       method: "PATCH", headers: { ...sbHeaders, Prefer: "return=minimal" },
       body: JSON.stringify({ actual_value: row.actual_value, result: row.result,
-        pick_text: row.pick_text, odds: row.odds, updated_at: new Date().toISOString() }),
+        pick_text: row.pick_text, odds: row.odds, game_id: row.game_id, sport: row.sport,
+        updated_at: new Date().toISOString() }),
     });
     return r.ok ? "update" : "fail";
   }
@@ -189,29 +217,49 @@ Deno.serve(async (req) => {
   const dates = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
     ? [dateParam]
     : [estDate(0), estDate(-1)];
-  const stats = { insert: 0, update: 0, noop: 0, fail: 0, skippedGraded: 0, skippedNotFinal: 0, skippedOther: 0, skippedNoStat: 0, dnpPush: 0 };
+  const stats = { insert: 0, update: 0, noop: 0, fail: 0, invalidIdentity: 0,
+    skippedGraded: 0, skippedNotFinal: 0, skippedOther: 0, skippedNoStat: 0, dnpPush: 0 };
 
   // 1. read all prop picks for the window, flatten with parent row id + date
   const pickRows = await sbGet("prop_picks", `date=in.(${dates.join(",")})&select=id,date,picks`);
-  type Flat = { parentId: string; date: string; p: any; sport: string; propType: string; key: string };
+  type Flat = {
+    parentId: string; date: string; p: any; sport: string; gameId: string;
+    propType: string; key: string;
+  };
   const flat: Flat[] = [];
   for (const r of pickRows) {
     for (const p of (r.picks ?? [])) {
-      const sport = String(p.sport ?? "").toUpperCase();
+      const sport = normalizedResultSport(p.sport) ?? "";
+      const gameId = storedExactGameId(p);
       const propRaw = String(p.prop ?? p.prop_type ?? "").trim();
       const player = String(p.player ?? p.player_name ?? "");
       if (!propRaw || !player) continue;
+      // This Edge function grades only MLB lanes. Every current MLB pick is
+      // exact-game stamped; a legacy/id-less row stays pending for the local
+      // repair path instead of creating another NULL-identity result.
+      if (!gameId) { stats.invalidIdentity++; continue; }
       const propType = propRaw.split(/\s+/)[0];
-      flat.push({ parentId: r.id, date: r.date, p, sport, propType,
-        key: `${player}|${propType}|${r.date}` });
+      const key = propResultIdentityKey({
+        gameDate: r.date, sport, gameId, playerName: player, propType,
+        bet: p.bet, line: p.line ?? p.line_value,
+      });
+      if (!key) { stats.invalidIdentity++; continue; }
+      flat.push({ parentId: r.id, date: r.date, p, sport, gameId, propType, key });
     }
   }
 
   // 2. skip anything already settled (result not null) — before any BDL call
-  const settled = await sbGet("prop_results", `game_date=in.(${dates.join(",")})&select=player_name,prop_type,game_date,result`);
+  const settled = await sbGet("prop_results", `game_date=in.(${dates.join(",")})` +
+    `&select=player_name,prop_type,game_date,result,game_id,sport,bet,line_value`);
   const gradedKeys = new Set(settled.filter((r) => r.result != null)
-    .map((r) => `${r.player_name}|${r.prop_type}|${r.game_date}`));
-  const todo = flat.filter((f) => { if (!force && gradedKeys.has(f.key)) { stats.skippedGraded++; return false; } return true; });
+    .map((r) => propResultIdentityKey({
+      gameDate: r.game_date, sport: r.sport, gameId: r.game_id,
+      playerName: r.player_name, propType: r.prop_type, bet: r.bet, line: r.line_value,
+    })).filter((key): key is string => key != null));
+  const todo = flat.filter((f) => {
+    if (!force && gradedKeys.has(f.key)) { stats.skippedGraded++; return false; }
+    return true;
+  });
 
   const mlb = todo.filter((f) => f.sport.startsWith("MLB"));
   todo.forEach((f) => { if (!f.sport.startsWith("MLB")) stats.skippedOther++; });
@@ -238,7 +286,7 @@ Deno.serve(async (req) => {
 
     const byGame: Record<string, Flat[]> = {};
     for (const f of mlb) {
-      const gid = String(f.p.game_id ?? "");
+      const gid = f.gameId;
       if (!finalById.get(gid)) { stats.skippedNotFinal++; continue; }
       // DATE GUARD: a pick whose game_id points at an ADJACENT day's game (the
       // BDL midnight-UTC artifact that mis-attributed generation-side ids) must
@@ -270,7 +318,7 @@ Deno.serve(async (req) => {
         const actual = mlbStat(f.propType, row);
         if (actual == null) { stats.skippedNoStat++; continue; }
         const line = parseFloat(f.p.line);
-        const result = gradeProp(actual, line, String(f.p.bet ?? "over"));
+        const result = gradePropResult(actual, line, String(f.p.bet ?? ""));
         if (result == null) { stats.skippedNoStat++; continue; }
         writes.push(buildRow(f, actual, result, line));
       }
@@ -334,7 +382,8 @@ Deno.serve(async (req) => {
 function buildRow(f: any, actual: number | null, result: string, line: number) {
   const p = f.p;
   return {
-    prop_pick_id: f.parentId, game_date: f.date, player_name: String(p.player ?? p.player_name ?? ""),
+    prop_pick_id: f.parentId, game_date: f.date, game_id: f.gameId, sport: f.sport,
+    player_name: String(p.player ?? p.player_name ?? ""),
     prop_type: f.propType, line_value: Number.isFinite(line) ? line : null, actual_value: actual,
     result, pick_text: `${p.player} ${p.bet} ${p.line} ${f.propType}`,
     matchup: p.matchup ?? null, bet: p.bet ?? null, odds: p.odds != null ? String(p.odds) : null,

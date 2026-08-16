@@ -87,8 +87,26 @@ describe('THE SWEAT terminal states', () => {
     expect(footballIntel).toContain('let finalStates: Set<String> = ["held", "missed", "push"]');
     expect(footballIntel).toContain('let pushes = normalizedStates.filter { $0 == "push" }.count');
     expect(footballIntel).toContain('if pushes > 0 { parts.append("\\(pushes) PUSH") }');
+    expect(footballHub).toContain('self == .held || self == .missed || self == .push');
     expect(footballHub).toContain('case "push": return .push');
     expect(footballHub).not.toContain('final_push');
+  });
+
+  it('lets a terminal THE_NUMBER ticket suppress stale nonterminal factors for its exact game', () => {
+    const sweatScope = footballHub.slice(
+      footballHub.indexOf('static func finalScopedSweat'),
+      footballHub.indexOf('static func isRenderableMarketRange'),
+    );
+    const gameSweat = footballIntel.slice(
+      footballIntel.indexOf('private var sweatSignals'),
+      footballIntel.indexOf('var body: some View'),
+    );
+
+    expect(sweatScope).toContain('== "THE_NUMBER"');
+    expect(sweatScope).toContain('sweatState(signal)?.isFinal == true');
+    expect(sweatScope).toContain('return signals.filter { sweatState($0)?.isFinal == true }');
+    expect(gameSweat).toContain('belongsToExactGame($0)');
+    expect(gameSweat).toContain('FootballProofContract.finalScopedSweat(renderable)');
   });
 
   it('uses the canonical backend factor code instead of prose for proof identity', () => {
@@ -267,9 +285,59 @@ describe('Home MLB/NFL board parity', () => {
     expect(views).toContain('games.firstIndex { Self.gameIdentityKey($0.matchup, $0.commence) == target }');
   });
 
+  it('switches an NCAAF Picks desk to Home\'s MLB target before reading scoped games', () => {
+    const consumeFocus = views.slice(
+      views.indexOf('private func consumeFocus()'),
+      views.indexOf('@ViewBuilder private var content', views.indexOf('private func consumeFocus()')),
+    );
+    const leagueSwitch = consumeFocus.indexOf('sport = targetLeague');
+    const scopedGamesRead = consumeFocus.indexOf('guard !games.isEmpty else { return }');
+
+    expect(consumeFocus).toContain('let targetLeague = focusLeague');
+    expect(consumeFocus).toContain('sports.contains(targetLeague)');
+    expect(leagueSwitch).toBeGreaterThan(-1);
+    expect(leagueSwitch).toBeLessThan(scopedGamesRead);
+    expect(consumeFocus).not.toContain('DispatchQueue.main.async');
+    expect(consumeFocus).toContain('store.gamePicks.first');
+    expect(consumeFocus).toContain('$0.game_id == gameID');
+    expect(consumeFocus).toContain('games.firstIndex { bdlGameId(for: $0) == gameID }');
+    expect(views).toMatch(/\.onChange\(of: sport\)[\s\S]{0,220}?consumeFocus\(\)/);
+    expect(views).toMatch(/\.onChange\(of: dataSignature\)[\s\S]{0,220}?consumeFocus\(\)/);
+  });
+
+  it('exposes the Picks league masthead and exactly one dock tab as accessible controls', () => {
+    const sharedHeader = views.slice(
+      views.indexOf('struct GaryPageHeader'),
+      views.indexOf('extension GaryPageHeader'),
+    );
+    const picksMasthead = views.slice(
+      views.indexOf('private var masthead: some View'),
+      views.indexOf('private func slateGameCount', views.indexOf('private var masthead: some View')),
+    );
+    const sideTab = contentView.slice(
+      contentView.indexOf('private func sideTab'),
+      contentView.indexOf('private var centerHub'),
+    );
+    const centerHub = contentView.slice(
+      contentView.indexOf('private var centerHub'),
+      contentView.indexOf('private func tabAction'),
+    );
+
+    expect(sharedHeader).toContain('Button(action: titleAction)');
+    expect(picksMasthead).toContain('titleAction: { if !sports.isEmpty { presentLeagueWords() } }');
+    expect(picksMasthead).toContain('titleAccessibilityLabel: "Switch league, \\(sport) selected"');
+    expect(picksMasthead).not.toContain('.onTapGesture');
+    expect(sideTab).toContain('.accessibilityElement(children: .ignore)');
+    expect(sideTab).toContain('.accessibilityRemoveTraits(.isSelected)');
+    expect(sideTab).toContain('.accessibilityAddTraits(active ? .isSelected : [])');
+    expect(centerHub).toContain('.accessibilityRemoveTraits(.isSelected)');
+    expect(centerHub).toContain('.accessibilityAddTraits(active ? .isSelected : [])');
+  });
+
   it('treats malformed pick payloads as schema failures instead of empty boards', () => {
     expect(models).toContain('Expected a pick array or a stringified pick array');
-    expect(supabaseApi).toContain('return try JSONDecoder().decode([GaryPick].self, from: data)');
+    expect(supabaseApi).toContain('let normalized = try normalizeStoredGamePickPayload(data)');
+    expect(supabaseApi).toContain('return try JSONDecoder().decode([GaryPick].self, from: normalized)');
     expect(supabaseApi).toContain('Invalid stringified pick payload');
     expect(models).not.toContain('self = .string("[]")');
     expect(models).toContain('var hasValidStoredPayload: Bool');

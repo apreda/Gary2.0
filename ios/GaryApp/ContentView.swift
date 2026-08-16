@@ -498,9 +498,11 @@ struct GaryCenteredTabBar: View {
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: active)
+            .accessibilityElement(children: .ignore)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(tab.label.capitalized) tab")
+        .accessibilityRemoveTraits(.isSelected)
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
@@ -524,9 +526,11 @@ struct GaryCenteredTabBar: View {
                     .foregroundStyle(GaryColors.gold.opacity(active ? 1 : 0.85))
             }
             .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("The Hub")
+        .accessibilityRemoveTraits(.isSelected)
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 

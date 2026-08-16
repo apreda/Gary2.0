@@ -1767,6 +1767,64 @@ enum SupabaseAPI {
     
     // MARK: - Parsing Helpers
     
+    /// The pick writers have historically serialized betting numbers in either
+    /// JSON representation: `1.5` or `"1.5"`, and book prices as `-110` or
+    /// `"-110"`. Those are the same domain values (GaryPick.from(dict:) has
+    /// always accepted both), but synthesized Codable rejects the whole day's
+    /// array on the first representation change. Canonicalize only those known
+    /// number/string fields, then return to the strict model decoder so an
+    /// unrelated schema defect still fails the source closed.
+    private static func normalizeStoredGamePickPayload(_ data: Data) throws -> Data {
+        guard var rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw DecodingError.typeMismatch(
+                [[String: Any]].self,
+                .init(codingPath: [], debugDescription: "Stored picks payload is not an object array")
+            )
+        }
+
+        func canonicalAmericanOdds(_ raw: Any?) -> Any? {
+            guard let raw else { return nil }
+            if raw is NSNull { return raw }
+            if let number = raw as? NSNumber, !(raw is Bool) {
+                let text = number.stringValue
+                return number.doubleValue > 0 ? "+\(text)" : text
+            }
+            if let text = raw as? String {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let value = Double(trimmed) else { return raw }
+                return value > 0 && !trimmed.hasPrefix("+") ? "+\(trimmed)" : trimmed
+            }
+            // Leave an unsupported shape untouched. The strict GaryPick decode
+            // below will reject it instead of laundering a schema defect.
+            return raw
+        }
+
+        for index in rows.indices {
+            for key in ["spread", "moneylineHome", "moneylineAway"] {
+                if let text = rows[index][key] as? String,
+                   let value = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    rows[index][key] = value
+                }
+            }
+
+            guard var books = rows[index]["sportsbook_odds"] as? [[String: Any]] else { continue }
+            for bookIndex in books.indices {
+                if let text = books[bookIndex]["spread"] as? String,
+                   let value = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    books[bookIndex]["spread"] = value
+                }
+                for key in ["spread_odds", "ml"] {
+                    if let canonical = canonicalAmericanOdds(books[bookIndex][key]) {
+                        books[bookIndex][key] = canonical
+                    }
+                }
+            }
+            rows[index]["sportsbook_odds"] = books
+        }
+
+        return try JSONSerialization.data(withJSONObject: rows)
+    }
+
     static func parsePicksRow(_ picks: PicksValue<GaryPick>?) throws -> [GaryPick] {
         guard let picks = picks else {
             throw DecodingError.valueNotFound(
@@ -1775,13 +1833,20 @@ enum SupabaseAPI {
             )
         }
         
-        if let arr = picks.asArray { return arr }
-        if let str = picks.asString, !str.isEmpty, let data = str.data(using: .utf8) {
-            return try JSONDecoder().decode([GaryPick].self, from: data)
+        let data: Data
+        if let arr = picks.asArray {
+            // Do not let a direct JSON-array response bypass the same canonical
+            // betting-number contract used by the normal `picks::text` path.
+            data = try JSONEncoder().encode(arr)
+        } else if let str = picks.asString, !str.isEmpty, let stringData = str.data(using: .utf8) {
+            data = stringData
+        } else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "Invalid stringified pick payload")
+            )
         }
-        throw DecodingError.dataCorrupted(
-            DecodingError.Context(codingPath: [], debugDescription: "Invalid stringified pick payload")
-        )
+        let normalized = try normalizeStoredGamePickPayload(data)
+        return try JSONDecoder().decode([GaryPick].self, from: normalized)
     }
 
     private static func validateStoredGamePicks(_ picks: [GaryPick], source: String) throws {

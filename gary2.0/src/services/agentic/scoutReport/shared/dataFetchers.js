@@ -32,6 +32,13 @@ const NFL_TAPE_PERFORMANCE_FIELDS = [
   'net_passing_yards_per_game'
 ];
 
+const NCAAF_TAPE_PERFORMANCE_FIELDS = [
+  'passing_yards_per_game',
+  'rushing_yards_per_game',
+  'opp_passing_yards',
+  'opp_rushing_yards'
+];
+
 function exactFootballSeasonStatsRow(rows, teamId) {
   if (!Array.isArray(rows)) return rows || null;
   const exactRows = rows.filter((row) =>
@@ -46,6 +53,22 @@ export function hasSubstantiveNflSeasonStats(row) {
     const value = row[field];
     return value !== null && value !== undefined && value !== '' &&
       String(value).trim().toUpperCase() !== 'N/A';
+  });
+}
+
+export function hasSubstantiveNcaafSeasonStats(row) {
+  if (!row || Array.isArray(row)) return false;
+  return NCAAF_TAPE_PERFORMANCE_FIELDS.some((field) => {
+    const value = row[field];
+    if (value === null || value === undefined || value === '') return false;
+    if (String(value).trim().toUpperCase() === 'N/A') return false;
+
+    // BDL can expose an opening-week placeholder row whose performance fields
+    // are all zero. That is not played-game evidence and must not suppress the
+    // labeled prior-season baseline. Once a game has been played, at least one
+    // of these yardage fields will be positive.
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric > 0 : false;
   });
 }
 
@@ -77,6 +100,8 @@ export async function fetchTeamProfile(teamName, sport) {
     // exact team row has no usable performance fields (for example before Week
     // 1 data has landed).
     const isNfl = bdlSport === 'americanfootball_nfl';
+    const isNcaaf = bdlSport === 'americanfootball_ncaaf';
+    const isFootball = isNfl || isNcaaf;
     const priorSeason = currentSeason - 1;
     let seasonStatsSeason = isNfl && isNflAugustPreseason() ? priorSeason : currentSeason;
     let seasonStats = await ballDontLieService.getTeamSeasonStats(bdlSport, {
@@ -89,9 +114,9 @@ export async function fetchTeamProfile(teamName, sport) {
     // requested team before Tale of the Tape reads the stat fields; leaving an
     // NFL response as an array made every verified row render N/A and tripped
     // the no-stats hard gate after Gary had completed a real investigation.
-    if ((isNfl || bdlSport === 'americanfootball_ncaaf') && Array.isArray(seasonStats)) {
+    if (isFootball && Array.isArray(seasonStats)) {
       seasonStats = exactFootballSeasonStatsRow(seasonStats, team.id);
-      if (bdlSport === 'americanfootball_ncaaf' && seasonStats) {
+      if (isNcaaf && seasonStats) {
         console.log(`[Scout Report] NCAAF ${teamName} season stats:`,
           `Pass YPG=${seasonStats.passing_yards_per_game ?? 'N/A'}, ` +
           `Rush YPG=${seasonStats.rushing_yards_per_game ?? 'N/A'}`);
@@ -113,17 +138,50 @@ export async function fetchTeamProfile(teamName, sport) {
       }
     }
 
-    const seasonStatsScope = isNfl
-      ? (seasonStatsSeason === priorSeason ? 'prior_completed_regular_season' : 'current_regular_season')
+    // NCAAF opens in August before BDL has a current-season aggregate row.
+    // Keep current-season data authoritative whenever it is substantive; only
+    // then fall back to the exact prior completed season as an explicitly
+    // labeled baseline. This preserves the no-stats hard gate when neither
+    // season has verified performance data.
+    if (isNcaaf && seasonStatsSeason === currentSeason && !hasSubstantiveNcaafSeasonStats(seasonStats)) {
+      const priorRows = await ballDontLieService.getTeamSeasonStats(bdlSport, {
+        teamId: team.id,
+        season: priorSeason,
+        postseason: false
+      });
+      const priorStats = exactFootballSeasonStatsRow(priorRows, team.id);
+      if (hasSubstantiveNcaafSeasonStats(priorStats)) {
+        seasonStats = priorStats;
+        seasonStatsSeason = priorSeason;
+      } else {
+        // The current-season endpoint can expose an all-zero opening-week
+        // placeholder before any game has been played. If the exact prior
+        // season is also unavailable, surface no performance data so the
+        // downstream hard gate retries instead of treating placeholder zeros
+        // as an analyzed matchup and caching them for three hours.
+        seasonStats = null;
+        seasonStatsSeason = null;
+      }
+    }
+
+    const seasonStatsScope = isFootball && seasonStatsSeason != null
+      ? (seasonStatsSeason === priorSeason
+          ? (isNfl ? 'prior_completed_regular_season' : 'prior_completed_season')
+          : (isNfl ? 'current_regular_season' : 'current_season'))
       : null;
-    const seasonStatsLabel = isNfl
-      ? (seasonStatsScope === 'prior_completed_regular_season'
-          ? `${seasonStatsSeason} prior completed regular-season baseline (not current-season form)`
-          : `${seasonStatsSeason} current regular season`)
+    const seasonStatsLabel = isFootball && seasonStatsSeason != null
+      ? (seasonStatsSeason === priorSeason
+          ? (isNfl
+              ? `${seasonStatsSeason} prior completed regular-season baseline (not current-season form)`
+              : `${seasonStatsSeason} prior completed season baseline (not current-season form)`)
+          : `${seasonStatsSeason} current${isNfl ? ' regular' : ''} season`)
       : null;
 
     if (isNfl && hasSubstantiveNflSeasonStats(seasonStats)) {
       console.log(`[Scout Report] NFL ${teamName} performance baseline: ${seasonStatsSeason} (${seasonStatsScope})`);
+    }
+    if (isNcaaf && hasSubstantiveNcaafSeasonStats(seasonStats)) {
+      console.log(`[Scout Report] NCAAF ${teamName} performance baseline: ${seasonStatsSeason} (${seasonStatsScope})`);
     }
     
     // Fetch standings - NCAAB and NCAAF require conference_id from the team data

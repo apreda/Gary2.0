@@ -1,5 +1,6 @@
 import {
   NCAAF_KICKOFF_STATUS,
+  ncaafSlateDateForInstant,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from './ncaafKickoff.js';
@@ -9,6 +10,17 @@ import {
 } from './nflKickoff.js';
 
 const ET_TIME_ZONE = 'America/New_York';
+
+/**
+ * Gary's active scoreboard day rolls at 6:00 AM ET, matching the iOS app.
+ * Keeping this beside the shared football date normalizer gives the local and
+ * Edge pollers one DST-safe contract instead of two midnight-based clocks.
+ */
+export function liveScoreSlateDate(value = new Date()) {
+  const date = ncaafSlateDateForInstant(value);
+  if (!date) throw new Error(`Invalid live-score clock: ${String(value)}`);
+  return date;
+}
 
 /** Return YYYY-MM-DD in America/New_York for an ISO game start. */
 export function footballEtDate(iso) {
@@ -55,7 +67,10 @@ function statusToken(raw) {
   return String(raw ?? '')
     .trim()
     .toLowerCase()
-    .replace(/[_-]+/g, ' ')
+    // Provider final states include both `Final OT` and `Final/OT`. Treat the
+    // slash as the same harmless separator as `_`/`-` so an overtime final
+    // reaches the shared final path instead of failing the whole source.
+    .replace(/[_\/-]+/g, ' ')
     .replace(/\s+/g, ' ');
 }
 
@@ -70,7 +85,10 @@ export function normalizeFootballStatus(raw, { startAt = null, nowMs = Date.now(
   if (['final', 'final ot', 'complete', 'completed', 'closed', 'post', 'game over'].includes(token)
       || token.startsWith('final ')) return 'final';
   if (['in', 'live', 'in progress', 'inprogress', 'ongoing', 'halftime', 'half time'].includes(token)
-      || /^(q[1-4]|ot\d*|\d+(st|nd|rd|th) (quarter|qtr))\b/.test(token)) return 'live';
+      || /^(q[1-4]|ot\d*|\d+(st|nd|rd|th) (quarter|qtr))\b/.test(token)
+      // BDL's NFL live payload can put both the clock and ordinal quarter in
+      // `status` (for example `6:37 - 1st`). `statusToken` removes the dash.
+      || /^\d{1,2}:\d{2}\s+(1st|2nd|3rd|4th)(?:\s+(?:quarter|qtr))?$/.test(token)) return 'live';
   if (['pre', 'scheduled', 'not started', 'pregame', 'pre game', 'tbd', 'tba',
     'postponed', 'delayed', 'suspended', 'cancelled', 'canceled'].includes(token)) return 'scheduled';
 
@@ -121,6 +139,11 @@ export function footballDetail(game, status) {
 
   const rawStatus = statusToken(game?.status);
   if (rawStatus === 'halftime' || rawStatus === 'half time') return 'HALF';
+  const embeddedClock = /^(\d{1,2}:\d{2})\s+(1st|2nd|3rd|4th)(?:\s+(?:quarter|qtr))?$/.exec(rawStatus);
+  if (embeddedClock) {
+    const quarter = { '1st': 1, '2nd': 2, '3rd': 3, '4th': 4 }[embeddedClock[2]];
+    return `Q${quarter} ${embeddedClock[1]}`;
+  }
 
   const label = periodLabel(inferredFootballPeriod(game));
   const clock = cleanClock(game?.time ?? game?.clock ?? game?.clock_display);

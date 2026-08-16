@@ -19,6 +19,11 @@ import {
 } from '../../../src/services/agentic/scoutReport/sports/nfl.js';
 import { fetchTeamProfile } from '../../../src/services/agentic/scoutReport/shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../../../src/services/agentic/scoutReport/shared/taleOfTape.js';
+import {
+  countRealStats,
+  countRealVerifiedTaleRows,
+  shouldReuseScoutReport,
+} from '../../../src/services/agentic/statsSubstance.js';
 import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
 
 const home = { id: 11, name: 'Home', full_name: 'Home Team' };
@@ -147,19 +152,131 @@ describe('football BDL request reuse', () => {
     expect(profile.seasonStatsScope).toBe('current_regular_season');
   });
 
-  it('does not add prior-season fallback behavior to NCAAF profiles', async () => {
+  it('uses an exact prior completed NCAAF season when the opener row is empty', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-15T16:00:00Z'));
     const ncaafTeam = { id: 44, name: 'Tigers', full_name: 'Example Tigers' };
     vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([ncaafTeam]);
-    const getSeasonStats = vi.spyOn(ballDontLieService, 'getTeamSeasonStats').mockResolvedValue([]);
+    const getSeasonStats = vi.spyOn(ballDontLieService, 'getTeamSeasonStats')
+      .mockResolvedValueOnce([{
+        team: { id: 44 },
+        passing_yards_per_game: 0,
+        rushing_yards_per_game: 0,
+        opp_passing_yards: 0,
+        opp_rushing_yards: 0,
+      }])
+      .mockResolvedValueOnce([
+        { team: { id: 99 }, passing_yards_per_game: 999.9 },
+        {
+          team: { id: 44 },
+          wins: 9,
+          losses: 4,
+          passing_yards_per_game: 261.2,
+          rushing_yards_per_game: 174.8,
+          opp_passing_yards: 2380,
+          opp_rushing_yards: 1520,
+        },
+      ]);
+    vi.spyOn(ballDontLieService, 'getStandingsGeneric').mockResolvedValue([]);
+
+    const profile = await fetchTeamProfile('Example Tigers', 'NCAAF');
+
+    expect(getSeasonStats.mock.calls.map(([, options]) => options.season)).toEqual([2026, 2025]);
+    expect(profile.seasonStats).toMatchObject({
+      team: { id: 44 },
+      passing_yards_per_game: 261.2,
+      rushing_yards_per_game: 174.8,
+    });
+    expect(profile.seasonStatsSeason).toBe(2025);
+    expect(profile.seasonStatsScope).toBe('prior_completed_season');
+    expect(profile.seasonStatsLabel).toBe('2025 prior completed season baseline (not current-season form)');
+    expect(profile.record).toBe('9-4');
+    expect(profile.recordSeason).toBe(2025);
+  });
+
+  it('keeps an exact healthy current-season NCAAF row authoritative', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-12T16:00:00Z'));
+    const ncaafTeam = { id: 44, name: 'Tigers', full_name: 'Example Tigers' };
+    vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([ncaafTeam]);
+    const getSeasonStats = vi.spyOn(ballDontLieService, 'getTeamSeasonStats').mockResolvedValue([
+      { team: { id: 99 }, passing_yards_per_game: 999.9 },
+      {
+        team: { id: 44 },
+        wins: 2,
+        losses: 0,
+        passing_yards_per_game: 248.5,
+        rushing_yards_per_game: 166.0,
+        opp_passing_yards: 390,
+        opp_rushing_yards: 212,
+      },
+    ]);
     vi.spyOn(ballDontLieService, 'getStandingsGeneric').mockResolvedValue([]);
 
     const profile = await fetchTeamProfile('Example Tigers', 'NCAAF');
 
     expect(getSeasonStats).toHaveBeenCalledTimes(1);
     expect(getSeasonStats.mock.calls[0][1].season).toBe(2026);
+    expect(profile.seasonStats).toMatchObject({
+      team: { id: 44 },
+      passing_yards_per_game: 248.5,
+      rushing_yards_per_game: 166.0,
+    });
     expect(profile.seasonStatsSeason).toBe(2026);
+    expect(profile.seasonStatsScope).toBe('current_season');
+    expect(profile.seasonStatsLabel).toBe('2026 current season');
+  });
+
+  it('fails closed when both the NCAAF opener row and prior baseline lack played-game evidence', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-15T16:00:00Z'));
+    const ncaafTeam = { id: 44, name: 'Tigers', full_name: 'Example Tigers' };
+    vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([ncaafTeam]);
+    const getSeasonStats = vi.spyOn(ballDontLieService, 'getTeamSeasonStats')
+      .mockResolvedValueOnce([{
+        team: { id: 44 },
+        passing_yards_per_game: 0,
+        rushing_yards_per_game: 0,
+        opp_passing_yards: 0,
+        opp_rushing_yards: 0,
+      }])
+      .mockResolvedValueOnce([]);
+    vi.spyOn(ballDontLieService, 'getStandingsGeneric').mockResolvedValue([]);
+
+    const profile = await fetchTeamProfile('Example Tigers', 'NCAAF');
+
+    expect(getSeasonStats.mock.calls.map(([, options]) => options.season)).toEqual([2026, 2025]);
+    expect(profile.seasonStats).toBeNull();
+    expect(profile.seasonStatsSeason).toBeNull();
+    expect(profile.seasonStatsScope).toBeNull();
+    expect(profile.seasonStatsLabel).toBeNull();
+
+    const tape = buildVerifiedTaleOfTape(
+      'Home College',
+      'Away College',
+      profile,
+      profile,
+      'NCAAF',
+    );
+    const performanceRows = tape.rows.filter((row) => [
+      'PASS_YDS_GM',
+      'RUSH_YDS_GM',
+      'TOTAL_YPG',
+      'OPP_PASSING_YARDS',
+      'OPP_RUSHING_YARDS',
+    ].includes(row.token));
+    expect(performanceRows.every((row) =>
+      row.home.value === 'N/A' && row.away.value === 'N/A'
+    )).toBe(true);
+    expect(countRealVerifiedTaleRows(tape)).toBe(0);
+    expect(shouldReuseScoutReport({ verifiedTaleOfTape: tape }, 'NCAAF')).toBe(false);
+
+    const storedShape = performanceRows.map((row) => ({
+      token: row.token,
+      home: { [row.token.toLowerCase()]: row.home.value },
+      away: { [row.token.toLowerCase()]: row.away.value },
+    }));
+    expect(countRealStats(storedShape)).toBe(0);
   });
 
   it('places prior-season NFL provenance in the verified tape and labels the visible baseline', () => {
@@ -232,6 +349,47 @@ describe('football BDL request reuse', () => {
     expect(tape.rows.map((row) => row.token)).not.toEqual(expect.arrayContaining([
       'TOTAL_YDS_GM', 'OPP_PASS_YDS', 'OPP_RUSH_YDS',
     ]));
+  });
+
+  it('labels every NCAAF prior-season performance row and carries provenance', () => {
+    const stats = {
+      passing_yards_per_game: 260.5,
+      rushing_yards_per_game: 180.2,
+      opp_passing_yards: 2200,
+      opp_rushing_yards: 1300,
+    };
+    const priorProfile = (record) => ({
+      record,
+      seasonStats: stats,
+      seasonStatsSeason: 2025,
+      seasonStatsScope: 'prior_completed_season',
+      seasonStatsLabel: '2025 prior completed season baseline (not current-season form)',
+    });
+
+    const tape = buildVerifiedTaleOfTape(
+      'Home College',
+      'Away College',
+      priorProfile('9-3'),
+      priorProfile('8-4'),
+      'NCAAF',
+    );
+
+    expect(tape.rows.slice(2, 7).map((row) => row.name)).toEqual([
+      'Pass Yds/Gm · 2025 baseline',
+      'Rush Yds/Gm · 2025 baseline',
+      'Total Yds/Gm · 2025 baseline',
+      'Opp Pass Yds · 2025 baseline',
+      'Opp Rush Yds · 2025 baseline',
+    ]);
+    expect(tape.rows.slice(2, 7).every((row) =>
+      row.statProvenance?.home?.scope === 'prior_completed_season'
+    )).toBe(true);
+    expect(tape.text).toContain('NCAAF PERFORMANCE BASELINE SOURCE');
+    expect(tape.text).toContain('2025 prior completed season baseline (not current-season form)');
+    expect(tape.provenance.home).toMatchObject({
+      season: 2025,
+      scope: 'prior_completed_season',
+    });
   });
 
   it('batches all NFL prop-player game logs into one BDL request and caches each summary', async () => {

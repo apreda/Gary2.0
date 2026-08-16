@@ -49,6 +49,11 @@ struct GaryPageHeader<Trailing: View>: View {
     /// Optional tappable replacement for the plain `accent` date — Winners uses it for
     /// the date dropdown. Defaults nil so Home/Picks keep their static date unchanged.
     var accentMenu: AnyView? = nil
+    /// Optional action for the wordmark itself. Picks uses this for its league
+    /// switcher so VoiceOver gets a real Button while the shared header's
+    /// geometry and independent profile control remain unchanged.
+    var titleAction: (() -> Void)? = nil
+    var titleAccessibilityLabel: String? = nil
     /// Rule under the header: gold hairline everywhere; Billfold passes its
     /// brass stitch — the wallet's one signature survives on the template.
     var rule: AnyView? = nil
@@ -62,11 +67,13 @@ struct GaryPageHeader<Trailing: View>: View {
                     .frame(width: 26, height: 26)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 Group {
-                    if let goldPart {
-                        Text("\(title.uppercased()) ").foregroundColor(GaryColors.warmWhite)
-                            + Text(goldPart.uppercased()).foregroundColor(GaryColors.gold)
+                    if let titleAction {
+                        Button(action: titleAction) { wordmark }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(Text(titleAccessibilityLabel ?? title))
+                            .accessibilityHint("Opens league switcher")
                     } else {
-                        Text(title.uppercased()).foregroundColor(GaryColors.warmWhite)
+                        wordmark
                     }
                 }
                 .font(GaryFonts.display(24))
@@ -102,6 +109,14 @@ struct GaryPageHeader<Trailing: View>: View {
             .pageGutter()
         }
         .padding(.top, 10)
+    }
+
+    private var wordmark: Text {
+        if let goldPart {
+            return Text("\(title.uppercased()) ").foregroundColor(GaryColors.warmWhite)
+                + Text(goldPart.uppercased()).foregroundColor(GaryColors.gold)
+        }
+        return Text(title.uppercased()).foregroundColor(GaryColors.warmWhite)
     }
 
     /// "Wednesday, June 4" — the standard header accent.
@@ -2003,6 +2018,12 @@ struct HomeView: View {
     /// went stale until a full relaunch (user call, Jun 17). `loading` isn't wired to a
     /// spinner here, so the re-fetch updates the page silently underneath.
     @State private var homeNonce = 0
+    /// Launch already owns one complete keyed load. SwiftUI can report the
+    /// scene becoming active after that task has started; treating that initial
+    /// activation as a foreground return cancels the first request wave and can
+    /// strand Home half-hydrated. Real foreground returns refresh normally once
+    /// the initial load has finished (successfully or with an honest error).
+    @State private var hasCompletedInitialHomeLoad = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var animateIn = false
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
@@ -2241,6 +2262,7 @@ struct HomeView: View {
             fullHomeRefreshNonce = taskNonce
             defer {
                 if fullHomeRefreshNonce == taskNonce { fullHomeRefreshNonce = nil }
+                if !Task.isCancelled { hasCompletedInitialHomeLoad = true }
             }
             // Existing content stays painted during a silent reload. The loading
             // placeholder is only for a true first load with nothing to show.
@@ -2758,8 +2780,11 @@ struct HomeView: View {
             }
         }
         .onChange(of: scenePhase) { phase in
-            // Foreground → silently re-pull picks/results/recaps (no relaunch needed).
-            if phase == .active { homeNonce &+= 1 }
+            // Launch already has a full keyed load in flight. Only a later
+            // foreground return should start another one; otherwise the first
+            // activation cancels the receipt/slate request wave mid-hydration.
+            guard phase == .active, hasCompletedInitialHomeLoad else { return }
+            homeNonce &+= 1
         }
         .onChange(of: selectedTab) { tab in
             // Kept-alive tabs do not rerun `.task` when selected. Refresh the
@@ -21808,13 +21833,30 @@ struct PicksCarouselView: View {
             // its own snapshot that could disagree with the cards.
             liveCache.startIfNeeded()
         }
-        .onChange(of: sport) { _ in page = 0; gamesMemo = []; rebuildMemo(); lockShowcaseIfNeeded() }
-        .onChange(of: pickDay) { _ in page = 0; gamesMemo = []; rebuildMemo(); lockShowcaseIfNeeded() }
+        .onChange(of: sport) { _ in
+            page = 0
+            gamesMemo = []
+            rebuildMemo()
+            lockShowcaseIfNeeded()
+            consumeFocus()
+        }
+        .onChange(of: pickDay) { _ in
+            page = 0
+            gamesMemo = []
+            rebuildMemo()
+            lockShowcaseIfNeeded()
+            consumeFocus()
+        }
         .onChange(of: connLoaded) { _ in rebuildMemo() }
         // The store's picks/props/slate settle asynchronously after each load — a
         // count signature fires rebuildMemo() once they land (and after a refresh),
         // so the memo tracks the data without recomputing on every live-score tick.
-        .onChange(of: dataSignature) { _ in rebuildMemo(); snapSportIfAllHidden(); lockShowcaseIfNeeded() }
+        .onChange(of: dataSignature) { _ in
+            rebuildMemo()
+            snapSportIfAllHidden()
+            lockShowcaseIfNeeded()
+            consumeFocus()
+        }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
         .onChange(of: store.loading) { loading in if !loading { consumeFocus() } }
         .onChange(of: scenePhase) { phase in
@@ -21865,45 +21907,68 @@ struct PicksCarouselView: View {
         guard let focus = focusState.focusGame else { return }
         let focusLeague = focusState.focusLeague
         let focusGameID = focusState.focusGameID
-        // Deep links from the Hub land on TODAY's board (where the game lives).
-        pickDay = .today
-        guard !games.isEmpty else { return }
-        focusState.clearGameFocus()
-        let apply = {
-            let exactSlate = focusGameID.flatMap { gameID in
-                store.slate.first {
-                    $0.bdl_game_id == gameID
-                        && (focusLeague == nil || ($0.league ?? "").uppercased() == focusLeague)
-                }
-            }
-            let exactKey = exactSlate.map {
-                Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
-                                     $0.commence_time.flatMap(parseISO8601))
-            }
-            let idx = exactKey.flatMap { target in
-                games.firstIndex { Self.gameIdentityKey($0.matchup, $0.commence) == target }
-            } ?? games.firstIndex(where: { abbrGameMatches(focus, matchup: $0.matchup) })
-            if let idx {
-                withAnimation(.easeInOut(duration: 0.25)) { page = idx + 1 }
+        let exactSlate = focusGameID.flatMap { gameID in
+            store.slate.first {
+                $0.bdl_game_id == gameID
+                    && (focusLeague == nil || ($0.league ?? "").uppercased() == focusLeague)
             }
         }
-        if sport != "ALL" && AppFlags.picksAllTab {
-            // Widen the filter first; apply after the sport-change page reset.
-            sport = "ALL"
-            DispatchQueue.main.async { apply() }
-        } else if !AppFlags.picksAllTab {
-            // ALL is hidden: jump the filter to the focused game's own league
-            // (slate first, then today's picks), then land on its page.
-            let lg = store.slate.first { abbrGameMatches(focus, matchup: "\($0.away_team ?? "") @ \($0.home_team ?? "")") }?.league?.uppercased()
-                ?? store.gamePicks.first { abbrGameMatches(focus, matchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")") }?.league?.uppercased()
-            if let lg, sports.contains(lg), sport != lg {
-                sport = lg
-                DispatchQueue.main.async { apply() }
-            } else {
-                apply()
+        let exactPick = focusGameID.flatMap { gameID in
+            store.gamePicks.first {
+                $0.game_id == gameID
+                    && (focusLeague == nil || ($0.league ?? "").uppercased() == focusLeague)
             }
-        } else {
-            apply()
+        }
+        let targetLeague = focusLeague
+            ?? exactSlate?.league?.uppercased()
+            ?? exactPick?.league?.uppercased()
+            ?? store.slate.first {
+                abbrGameMatches(focus, matchup: "\($0.away_team ?? "") @ \($0.home_team ?? "")")
+            }?.league?.uppercased()
+            ?? store.gamePicks.first {
+                abbrGameMatches(focus, matchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")")
+            }?.league?.uppercased()
+
+        // Change the day and league before consulting the scoped `games` memo.
+        // The request stays pending across either state transition; the next
+        // runloop consumes it after onChange rebuilds the correct desk.
+        if pickDay != .today {
+            pickDay = .today
+            return
+        }
+        if AppFlags.picksAllTab, sport != "ALL" {
+            sport = "ALL"
+            return
+        }
+        if !AppFlags.picksAllTab, let targetLeague {
+            // Do not consume a typed target against the wrong desk while its
+            // league is still loading into the unscoped source set.
+            guard sports.contains(targetLeague) else { return }
+            if sport != targetLeague {
+                sport = targetLeague
+                return
+            }
+        }
+
+        guard !games.isEmpty else { return }
+        let exactKey = exactSlate.map {
+            Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
+                                 $0.commence_time.flatMap(parseISO8601))
+        } ?? exactPick.map {
+            Self.gameIdentityKey("\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")",
+                                 $0.commence_time.flatMap(parseISO8601))
+        }
+        let idx = focusGameID.flatMap { gameID in
+            games.firstIndex { bdlGameId(for: $0) == gameID }
+        } ?? exactKey.flatMap { target in
+            games.firstIndex { Self.gameIdentityKey($0.matchup, $0.commence) == target }
+        } ?? games.firstIndex(where: { abbrGameMatches(focus, matchup: $0.matchup) })
+
+        // Data exists for the selected desk, so this is a completed match
+        // attempt whether or not a legacy fuzzy target could be resolved.
+        focusState.clearGameFocus()
+        if let idx {
+            withAnimation(.easeInOut(duration: 0.25)) { page = idx + 1 }
         }
     }
 
@@ -22015,7 +22080,11 @@ struct PicksCarouselView: View {
             // MLB PICKS as the switcher (founder, Aug 6): the league moved
             // into the wordmark — tap the title to change sport — and the
             // separate trigger row below retired, buying back its height.
-            GaryPageHeader(title: sport.isEmpty ? "The" : sport, goldPart: "Picks ▾", trailing: {
+            GaryPageHeader(title: sport.isEmpty ? "The" : sport,
+                           goldPart: "Picks ▾",
+                           titleAction: { if !sports.isEmpty { presentLeagueWords() } },
+                           titleAccessibilityLabel: "Switch league, \(sport) selected",
+                           trailing: {
                 if let r = record7 {
                     let pct = Int((Double(r.w) / Double(max(r.w + r.l, 1)) * 100).rounded())
                     HStack(spacing: 5) {
@@ -22038,8 +22107,6 @@ struct PicksCarouselView: View {
             // MLB" readout as much as a switcher, and today it's the only way
             // to see the feature at all before football/basketball are live.
         }
-        .contentShape(Rectangle())
-        .onTapGesture { if !sports.isEmpty { presentLeagueWords() } }
     }
 
     /// Tonight's slate count for a sport tab — the overlay's superscript.

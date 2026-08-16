@@ -3,19 +3,133 @@ import { readFileSync } from 'node:fs';
 import {
   assertFootballSettlementCoverage,
   buildFootballSettlementOutcome,
+  buildNflResultWritePayload,
   canonicalNFLPropType,
   footballSettlementCoverageFailures,
   gradeGameSpread,
   gradePropResult,
   isFinalGameStatus,
   nflActualFromStatRow,
+  nflResultConfidence,
   nflSeasonTypeForGame,
   normalizeStoredPropType,
   pickGameId,
   propGameId,
   propResultIdentity,
+  requiredPropSourceSports,
   statsForGame,
 } from '../../scripts/lib/resultsGradingReliability.js';
+
+describe('NFL result persistence mapping', () => {
+  const weeklyRow = {
+    id: 'weekly-row-uuid',
+    week_start: '2026-08-11',
+    week_number: 2,
+    season: 2026,
+  };
+  const preseasonPick = {
+    bdl_game_id: 1393562,
+    season: 2025,
+    week: 1,
+    season_type: 1,
+    league: 'NFL',
+    homeTeam: 'Baltimore Ravens',
+    awayTeam: 'Philadelphia Eagles',
+    pick: 'Baltimore Ravens +4 -110',
+    confidence: 0.62,
+  };
+
+  it('maps a 2026 preseason result from the canonical weekly row and exact final', () => {
+    expect(buildNflResultWritePayload({
+      mode: 'insert',
+      weeklyRow,
+      pick: preseasonPick,
+      nflPickId: weeklyRow.id,
+      gameDate: '2026-08-15',
+      gameId: 1393562,
+      result: 'won',
+      homeScore: '24',
+      awayScore: 7,
+      isWinnersPick: true,
+    })).toEqual({
+      nfl_pick_id: 'weekly-row-uuid',
+      game_date: '2026-08-15',
+      pick_text: 'Baltimore Ravens +4 -110',
+      matchup: 'Philadelphia Eagles @ Baltimore Ravens',
+      result: 'won',
+      final_score: '7-24',
+      season: 2026,
+      week_number: 2,
+      confidence: 62,
+      home_team: 'Baltimore Ravens',
+      away_team: 'Philadelphia Eagles',
+      home_score: 24,
+      away_score: 7,
+      is_winners_pick: true,
+      game_id: '1393562',
+    });
+  });
+
+  it('repairs the same metadata on the idempotent update path without changing the grade', () => {
+    const payload = buildNflResultWritePayload({
+      mode: 'update',
+      weeklyRow,
+      pick: preseasonPick,
+      gameId: '1393562',
+      result: 'won',
+      homeScore: 24,
+      awayScore: 7,
+      isWinnersPick: true,
+      updatedAt: '2026-08-16T21:00:00.000Z',
+    });
+
+    expect(payload).toEqual({
+      result: 'won',
+      final_score: '7-24',
+      season: 2026,
+      week_number: 2,
+      confidence: 62,
+      home_team: 'Baltimore Ravens',
+      away_team: 'Philadelphia Eagles',
+      home_score: 24,
+      away_score: 7,
+      is_winners_pick: true,
+      game_id: '1393562',
+      updated_at: '2026-08-16T21:00:00.000Z',
+    });
+    expect(payload).not.toHaveProperty('nfl_pick_id');
+    expect(payload).not.toHaveProperty('game_date');
+  });
+
+  it('writes the deployed integer percentage without double-scaling old percent values', () => {
+    expect(nflResultConfidence(0)).toBe(0);
+    expect(nflResultConfidence(0.624)).toBe(62);
+    expect(nflResultConfidence(1)).toBe(100);
+    expect(nflResultConfidence(72)).toBe(72);
+    expect(nflResultConfidence('83')).toBe(83);
+    expect(nflResultConfidence(-1)).toBeNull();
+    expect(nflResultConfidence(101)).toBeNull();
+  });
+});
+
+describe('stored prop provider source scope', () => {
+  it('normalizes MLB HR into MLB and does not open unrelated providers', () => {
+    expect([...requiredPropSourceSports([
+      { sport: 'MLB', game_id: '1' },
+      { sport: 'MLB HR', game_id: '2' },
+    ])]).toEqual(['MLB']);
+  });
+
+  it('intersects stored sports with an explicit football settlement filter', () => {
+    const allowed = new Set(['NFL', 'NCAAF']);
+    expect([...requiredPropSourceSports([
+      { sport: 'MLB', game_id: '1' },
+      { sport: 'NFL', game_id: '2' },
+      { sport: 'NBA', game_id: '3' },
+    ], allowed)]).toEqual(['NFL']);
+    expect(requiredPropSourceSports([{ sport: 'MLB' }], allowed).size).toBe(0);
+  });
+});
 
 describe('stored prop market normalization', () => {
   it.each([
@@ -248,6 +362,15 @@ describe('run-all-results wiring', () => {
     'utf8',
   );
 
+  it('opens only provider lanes represented by the stored prop sports', () => {
+    expect(runner).toContain('const storedProps = rows.flatMap(propsForRow)');
+    expect(runner).toContain('const sourceSports = requiredPropSourceSports(storedProps, allowedSports)');
+    expect(runner).toContain("const wants = (sport) => sourceSports.has");
+    expect(runner).toContain("const mlbStats = wants('MLB')");
+    expect(runner).toContain("const nflStats = wants('NFL')");
+    expect(runner).toContain("const ncaafStats = wants('NCAAF')");
+  });
+
   it('requires a final NFL game and scopes stats to its exact id', () => {
     expect(runner).toContain("params.append('dates[]', date)");
     expect(runner).toContain("for (const seasonType of [1, 2, 3]) params.append('season_type[]'");
@@ -273,7 +396,7 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain("const ncaafFinalIds = new Set(ncaafGames.filter(g => isFinalGameStatus(g.status))");
     expect(runner).toContain('for (const providerDate of [date, nextUtcDate])');
     expect(runner).toContain('`dates[]=${providerDate}&per_page=100${cursorParam}`');
-    expect(runner).toContain('const kickoff = resolveNcaafKickoff(game)');
+    expect(runner).toContain('ncaafSlateDateForKickoff(game) === date');
     expect(runner).toContain("timeZone: 'America/New_York'");
     expect(runner).toContain("dataSport === 'NCAAF' && gameId == null");
     expect(runner).toContain("dataSport === 'NCAAF' && !ncaafFinalIds.has(gameId)");
@@ -290,6 +413,7 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain("['NFL', 'NCAAF'].includes(league) && pickGameId == null");
     expect(runner).toContain("['NFL', 'NCAAF'].includes(league) && !finalStatus");
     expect(runner).toContain("league !== 'NCAAF'");
+    expect(runner).toContain("? ncaafSlateDateForKickoff(matchedGame)");
   });
 
   it('persists exact NCAAF game-result identity when the migration is available', () => {

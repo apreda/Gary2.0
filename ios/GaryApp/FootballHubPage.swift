@@ -13,7 +13,7 @@ enum FootballProofContract {
         case push = "PUSH"
 
         var isLiveOrFinal: Bool { self != .watch }
-        var isFinal: Bool { self == .held || self == .missed }
+        var isFinal: Bool { self == .held || self == .missed || self == .push }
     }
 
     private static let factors: Set<String> = [
@@ -154,6 +154,19 @@ enum FootballProofContract {
             else { return false }
         }
         return true
+    }
+
+    /// The caller supplies rows for one exact provider game. Once the audited
+    /// ticket factor (THE_NUMBER) reaches a terminal state, older live snapshots
+    /// cannot sit beside it or turn the section summary back into WATCH. Keep
+    /// only explicit terminal states; no factor outcome is inferred here.
+    static func finalScopedSweat(_ signals: [Signal]) -> [Signal] {
+        let ticketIsTerminal = signals.contains { signal in
+            text(signal.sweat?.factor_code)?.uppercased() == "THE_NUMBER"
+                && sweatState(signal)?.isFinal == true
+        }
+        guard ticketIsTerminal else { return signals }
+        return signals.filter { sweatState($0)?.isFinal == true }
     }
 
     static func isRenderableMarketRange(

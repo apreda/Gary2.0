@@ -3,8 +3,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  gameOnlyHeadline, headlineNeedsRepair, pickSide, gradeGame, recapIsStale,
+  gameOnlyHeadline, headlineNeedsRepair, pickSide, gradeGame, recapIsStale, resultNumber,
 } from "./grading.ts";
+
+test("provider result numbers preserve real zero but reject missing score evidence", () => {
+  assert.equal(resultNumber(0), 0);
+  assert.equal(resultNumber("0"), 0);
+  assert.equal(resultNumber(" 12 "), 12);
+  assert.equal(resultNumber(null), null);
+  assert.equal(resultNumber(undefined), null);
+  assert.equal(resultNumber(""), null);
+  assert.equal(resultNumber("   "), null);
+  assert.equal(resultNumber("not-a-score"), null);
+});
 
 // ── The regression this module exists for ────────────────────────────────────
 // Boston Red Sox (away) beat Chicago White Sox (home) 5-0 on 2026-07-08. daily_picks

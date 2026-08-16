@@ -18,6 +18,14 @@ const proofWorker = readFileSync(
   new URL('../../scripts/run-live-football-proof.js', import.meta.url),
   'utf8',
 );
+const edgeLiveScores = readFileSync(
+  new URL('../../supabase/functions/live-scores/index.ts', import.meta.url),
+  'utf8',
+);
+const liveGradeQueue = readFileSync(
+  new URL('../../scripts/lib/liveGradeQueue.js', import.meta.url),
+  'utf8',
+);
 
 describe('football proof refresh runner', () => {
   it('uses immutable stored picks and refreshes only the two proof categories', () => {
@@ -44,14 +52,17 @@ describe('football proof refresh runner', () => {
     expect(liveScorePoller).toContain('const FOOTBALL_PROOF_INTERVAL_MS = 15 * 60 * 1000');
     expect(liveScorePoller).toContain('function launchFootballProofIfDue(date, rows)');
     expect(liveScorePoller).toContain("'scripts/run-live-football-proof.js'");
-    expect(liveScorePoller).toContain('queueGrading(targetDate, newlyFinal.map((row) => row.league))');
-    expect(liveScorePoller.indexOf('queueGrading(targetDate, newlyFinal.map((row) => row.league))'))
+    expect(liveScorePoller).toContain('loadIncompleteFinalFootballGames');
+    expect(liveScorePoller).toContain("reason: 'football-final-reconciliation'");
+    expect(liveScorePoller.indexOf("reason: 'football-final-reconciliation'"))
       .toBeLessThan(liveScorePoller.indexOf("url: `${REST_URL}?on_conflict=date,league,game_id`"));
     expect(liveScorePoller).toContain('launchPendingGrading()');
     expect(liveScorePoller).toContain("'scripts/run-live-finalization.js'");
     expect(finalizationWorker).toContain("await runNodeScript('scripts/run-all-results.js', [date])");
+    expect(finalizationWorker).toContain("await runNodeScript('scripts/run-live-football-proof.js'");
     expect(finalizationWorker).toContain("await runNodeScript('run-grade-insights.js', ['--date', date])");
-    expect(liveScorePoller).toContain('renameSync(tempPath, finalPath)');
+    expect(liveGradeQueue).toContain('renameSync(tempPath, finalPath)');
+    expect(liveGradeQueue).toContain("name.endsWith('.json') || name.includes('.work-')");
     expect(finalizationWorker).toContain('function claimPendingRequests()');
     expect(finalizationWorker).toContain('renameSync(original, work)');
     expect(finalizationWorker).toContain('for (const item of claimed) unlinkSync(item.work)');
@@ -67,6 +78,12 @@ describe('football proof refresh runner', () => {
     expect(liveScorePoller).not.toContain("stdio: 'ignore'");
   });
 
+  it('keeps local and cloud live scores on the app\'s shared 6 AM slate clock', () => {
+    expect(liveScorePoller).toContain('liveScoreSlateDate(new Date())');
+    expect(edgeLiveScores).toContain('liveScoreSlateDate(new Date())');
+    expect(edgeLiveScores).not.toContain('function estDate()');
+  });
+
   it('keeps the GitHub workflow as a manual emergency/backfill path', () => {
     expect(workflow).not.toMatch(/^\s*schedule:/m);
     expect(workflow).toMatch(/^on:\n\s+workflow_dispatch:/m);
@@ -76,5 +93,7 @@ describe('football proof refresh runner', () => {
     expect(workflow).toContain('dates=("$(date -d yesterday +%F)" "$(date +%F)")');
     expect(workflow).toContain('node run-football-proof.js --date "$proof_date"');
     expect(workflow).toContain('proof_failed=1');
+    expect(workflow).toContain('grade_failed=1');
+    expect(workflow).toContain('if (( grade_failed != 0 )); then exit 4; fi');
   });
 });

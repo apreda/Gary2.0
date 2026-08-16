@@ -5,6 +5,7 @@
 import axios from 'axios';
 import { makeRow, TONES, etDateStr } from '../shared.js';
 import { footballSeasonForDate } from '../footballData.js';
+import { ncaafSlateDateForKickoff } from '../../ncaafGamePolicy.js';
 
 const FOOTBALL = new Set(['nfl', 'ncaaf']);
 const SPORT_KEY = Object.freeze({
@@ -107,6 +108,12 @@ function flattenPicks(value, table, rowIndex) {
 function exactGameId(value) {
   const id = value?.bdl_game_id ?? value?.game_id ?? value?.gameId;
   return id == null ? null : String(id);
+}
+
+function proofSlateDate(league, commence) {
+  return league === 'ncaaf'
+    ? ncaafSlateDateForKickoff(commence)
+    : etDateStr(commence);
 }
 
 function gameTeams(game) {
@@ -389,7 +396,7 @@ export function buildTheSweatRows({ league, date, games, picks, liveScores, team
     const game = gameId ? gameById.get(gameId) : null;
     if (!gameId || !game) continue;
     const commence = pick?.commence_time ?? game?.date;
-    if (commence && etDateStr(commence) !== date) continue;
+    if (commence && proofSlateDate(leagueKey, commence) !== date) continue;
     const score = scoreById.get(gameId) ?? null;
     const status = normalizedStatus(score, game);
     if (!status) continue;

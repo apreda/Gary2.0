@@ -4,6 +4,7 @@ import {
   footballBdlRequest,
   footballDetail,
   footballEtDate,
+  liveScoreSlateDate,
   normalizeFootballGame,
   normalizeFootballGames,
   normalizeFootballStatus,
@@ -38,6 +39,11 @@ function ncaafGame(overrides = {}) {
 }
 
 describe('football live-score date handling', () => {
+  it('keeps the active scoreboard on the prior slate through 5:59:59 AM ET', () => {
+    expect(liveScoreSlateDate('2026-09-06T09:59:59Z')).toBe('2026-09-05');
+    expect(liveScoreSlateDate('2026-09-06T10:00:00Z')).toBe('2026-09-06');
+  });
+
   it('adds calendar days without host-time-zone drift', () => {
     expect(addUtcDateDays('2026-08-31')).toBe('2026-09-01');
     expect(addUtcDateDays('2028-02-28')).toBe('2028-02-29');
@@ -105,6 +111,24 @@ describe('football live-score date handling', () => {
     });
     expect(rollover).toBeNull();
   });
+
+  it('keeps an overnight NCAAF final on the prior slate for reconciliation', () => {
+    const final = normalizeFootballGame(ncaafGame({
+      date: '2026-09-06T05:59:59.000Z',
+      status: 'post',
+      home_score: 31,
+      away_score: 28,
+    }), {
+      league: 'NCAAF', targetDate: '2026-09-05', nowMs: Date.parse('2026-09-06T06:30:00Z'),
+    });
+
+    expect(final.row).toMatchObject({
+      _etDate: '2026-09-05',
+      game_id: '457157',
+      status: 'final',
+      detail: 'FINAL',
+    });
+  });
 });
 
 describe('football live-score status and detail', () => {
@@ -133,6 +157,37 @@ describe('football live-score status and detail', () => {
     expect(normalized.row).toMatchObject({
       status: 'final', detail: 'FINAL', away_abbr: 'NE', home_abbr: 'WAS',
       away_score: 20, home_score: 27,
+    });
+  });
+
+  it('normalizes provider slash-delimited overtime finals for local and Edge pollers', () => {
+    expect(normalizeFootballStatus('Final/OT', {
+      startAt: '2026-08-15T23:00:00.000Z',
+      nowMs: NOW,
+    })).toBe('final');
+
+    const normalized = normalizeFootballGame(nflGame({
+      status: 'Final/OT', home_team_score: 27, visitor_team_score: 24,
+    }), { league: 'NFL', targetDate: '2026-08-15', nowMs: NOW });
+
+    expect(normalized.row).toMatchObject({
+      status: 'final',
+      detail: 'FINAL',
+      away_score: 24,
+      home_score: 27,
+    });
+  });
+
+  it('normalizes BDL clock-quarter NFL status into a live row and detail', () => {
+    const normalized = normalizeFootballGame(nflGame({
+      status: '6:37 - 1st', home_team_score: 7, visitor_team_score: 10,
+    }), { league: 'NFL', targetDate: '2026-08-15', nowMs: NOW });
+
+    expect(normalized.row).toMatchObject({
+      status: 'live',
+      detail: 'Q1 6:37',
+      away_score: 10,
+      home_score: 7,
     });
   });
 

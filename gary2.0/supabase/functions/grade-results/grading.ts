@@ -17,6 +17,13 @@
 
 export type Side = "home" | "away" | null;
 
+/** Provider numeric evidence; null/blank values remain missing, never zero. */
+export function resultNumber(value: unknown): number | null {
+  if (value == null || String(value).trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // Home's headline card tells the story of the GAME. The recap body may explain
 // Gary's bet, but odds/cover/cash language in the headline makes the card read
 // like a receipt instead of a sports headline. Prompts are not enforcement, so

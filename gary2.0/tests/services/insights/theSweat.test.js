@@ -157,6 +157,48 @@ describe('THE SWEAT football proof', () => {
     expect(states).toEqual({ THE_NUMBER: 'HELD', RUSH_EDGE: 'HELD', AIR_EDGE: 'MISSED' });
   });
 
+  it('keeps an overnight NCAAF final on its prior 6 AM slate and emits THE NUMBER', () => {
+    const overnightGame = {
+      id: 457157,
+      date: '2026-09-06T05:30:00.000Z',
+      visitor_team: { full_name: 'UCLA Bruins', abbreviation: 'UCLA' },
+      home_team: { full_name: 'Hawaii Rainbow Warriors', abbreviation: 'HAW' },
+    };
+    const overnightPick = {
+      pick_id: 'agentic-americanfootball_ncaaf-457157',
+      bdl_game_id: 457157,
+      league: 'NCAAF',
+      pick: 'Hawaii Rainbow Warriors +3 -110',
+      type: 'spread',
+      spread: 3,
+      homeTeam: 'Hawaii Rainbow Warriors',
+      awayTeam: 'UCLA Bruins',
+      commence_time: overnightGame.date,
+    };
+
+    const rows = buildTheSweatRows({
+      league: 'NCAAF',
+      date: '2026-09-05',
+      games: [overnightGame],
+      picks: [overnightPick],
+      liveScores: [{
+        game_id: '457157', status: 'final', home_score: 31, away_score: 28,
+        updated_at: '2026-09-06T09:10:00.000Z',
+      }],
+      teamStats: [],
+      nowMs: Date.parse('2026-09-06T09:10:00.000Z'),
+    });
+
+    expect(rows.find((row) => row.meta.factor_code === 'THE_NUMBER')).toMatchObject({
+      value: 'HAW 31–28',
+      meta: {
+        pick_id: overnightPick.pick_id,
+        state: 'HELD',
+        market_type: 'spread',
+      },
+    });
+  });
+
   it('omits unresolved live identities so storage can preserve last-good proof', () => {
     const rows = buildTheSweatRows({
       league: 'NFL',

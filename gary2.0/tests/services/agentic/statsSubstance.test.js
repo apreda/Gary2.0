@@ -47,7 +47,7 @@ describe('countRealStats — no-stats hard-fail gate', () => {
   });
 });
 
-describe('NFL verified-tape scout cache policy', () => {
+describe('football verified-tape scout cache policy', () => {
   const tape = (rows) => ({ verifiedTaleOfTape: { rows } });
 
   it('refuses an NFL scout whose only populated rows are metadata', () => {
@@ -69,6 +69,32 @@ describe('NFL verified-tape scout cache policy', () => {
 
     expect(countRealVerifiedTaleRows(scout.verifiedTaleOfTape)).toBe(1);
     expect(shouldReuseScoutReport(scout, 'NFL')).toBe(true);
+  });
+
+  it('refuses an all-missing NCAAF opener scout so a later tier can rebuild it', () => {
+    const scout = tape([
+      { token: 'RECORD', home: { value: 'N/A' }, away: { value: 'N/A' } },
+      { token: 'PASS_YDS_GM', home: { value: 'N/A' }, away: { value: 'N/A' } },
+      { token: 'RUSH_YDS_GM', home: { value: 'N/A' }, away: { value: 'N/A' } },
+      { token: 'KEY_INJURIES', home: { value: 'None' }, away: { value: 'None' } },
+    ]);
+
+    expect(countRealVerifiedTaleRows(scout.verifiedTaleOfTape)).toBe(0);
+    expect(shouldReuseScoutReport(scout, 'americanfootball_ncaaf')).toBe(false);
+  });
+
+  it('refuses an old all-zero NCAAF opener cache but keeps zeros beside played-game evidence', () => {
+    const placeholder = tape([
+      { token: 'PASS_YDS_GM', home: { value: '0.0' }, away: { value: 0 } },
+      { token: 'RUSH_YDS_GM', home: { value: 0 }, away: { value: '0.0' } },
+    ]);
+    expect(shouldReuseScoutReport(placeholder, 'NCAAF')).toBe(false);
+
+    const played = tape([
+      { token: 'PASS_YDS_GM', home: { value: '248.5' }, away: { value: 0 } },
+      { token: 'RUSH_YDS_GM', home: { value: 0 }, away: { value: '166.0' } },
+    ]);
+    expect(shouldReuseScoutReport(played, 'americanfootball_ncaaf')).toBe(true);
   });
 
   it('does not change non-NFL cache reuse behavior', () => {
