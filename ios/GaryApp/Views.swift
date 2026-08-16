@@ -25151,17 +25151,14 @@ struct CompactPropRow: View {
     private func d3Dim(_ lostOpacity: Double) -> Double { 1 }
     /// Premium type scale — everything on the metal reads ~15% larger (gold parity).
     private var pf: CGFloat { premiumFinish ? 1.15 : 1 }
-    /// Prop hero cap — matches the free game card (both lines run long and
-    /// self-scale, so the cap mostly sets the ceiling for short names).
-    /// EXACT same constant as the game card's heroFontSize, both finishes
-    /// (founder law, Jul 4 — "the only thing different should be the pick
-    /// itself"). Any extra length is handled ONLY by minimumScaleFactor, never
-    /// a different base size — that's what was drifting the two cards' hero
-    /// block height, and with it every pinned-to-bottom part beneath it.
-    private var propHeroSize: CGFloat { premiumFinish ? 65 : 52 }
+    /// One shared prop-headline geometry on Picks and Winners. The premium
+    /// finish keeps its 15% lift on the smaller supporting labels through `pf`,
+    /// but the two long player/market lines stay at the Picks card's 52pt base.
+    /// Scaling this hero twice crowded the call and line out of the fixed card.
+    private var propHeroSize: CGFloat { 52 }
     // Optical spacing (Jul 3 spacing pass) — see CompactPickRow.heroTopPad.
-    private var heroTopPad: CGFloat { 12 - 0.22 * propHeroSize * pf }
-    private var metaTopPad: CGFloat { 12 - 0.25 * propHeroSize * pf }
+    private var heroTopPad: CGFloat { 12 - 0.22 * propHeroSize }
+    private var metaTopPad: CGFloat { 12 - 0.25 * propHeroSize }
     private var eyebrowTint: Color { premiumFinish ? SilverBar.inkSoft : GaryColors.gold }
     private var heroTint: Color { premiumFinish ? SilverBar.inkHero : .white }
     private var propLeagueTint: Color { premiumFinish ? SilverBar.inkStrong : (isMLBProp ? GaryColors.mlbGrass : accentColor) }
@@ -25455,10 +25452,10 @@ struct CompactPropRow: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
                         Text(line)
-                            .font(GaryFonts.display(propHeroSize * pf))
+                            .font(GaryFonts.display(propHeroSize))
                             .lineLimit(1)
                             .minimumScaleFactor(0.4)
-                            .frame(height: propHeroSize * pf * 0.86, alignment: .leading)
+                            .frame(height: propHeroSize * 0.86, alignment: .leading)
                     }
                 }
                     .foregroundStyle(heroTint)
