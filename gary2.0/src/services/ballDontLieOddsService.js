@@ -675,13 +675,25 @@ export const ballDontLieOddsService = {
     }
 
     // Fetch games and deduplicate by game ID
-    const rawGames = (await Promise.all(
+    const gamePages = await Promise.all(
       fetchDates.map(d => {
         const params = { dates: [d], per_page: 100 };
         if (sportKey === 'americanfootball_nfl') params.season_type = [1, 2, 3];
         return ballDontLieService.getGames(sportKey, params, 10);
       })
-    )).flat();
+    );
+    if (gamePages.some(page => !Array.isArray(page))) {
+      throw new Error(`${sportKey} games source returned a non-array slate`);
+    }
+    const rawGames = gamePages.flat();
+
+    // NBA can legitimately have an empty offseason slate. Once its primary
+    // games response has decoded successfully to an explicit empty array,
+    // there are no game ids or lines to enrich. Do not let an unavailable odds
+    // entitlement turn that healthy empty slate into a source failure.
+    if (sportKey === 'basketball_nba' && rawGames.length === 0) {
+      return [];
+    }
     const seenIds = new Set();
     const games = rawGames.filter(g => {
       if (!g?.id || seenIds.has(g.id)) return false;
