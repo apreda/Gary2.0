@@ -7,6 +7,7 @@ import {
   readSharedFootballCache,
   writeSharedFootballCache,
 } from './bdlSharedFootballCache.js';
+import { decodeBdlRows, decodeBdlSdkItem, decodeBdlSdkRows } from './bdlResponse.js';
 
 // Set cache TTL (5 minutes for playoff data)
 const TTL_MINUTES = 5;
@@ -624,9 +625,8 @@ const ballDontLieService = {
     try {
       // Normalize sport key (e.g. 'basketball_nba' -> 'nba').
       // Jul 6 2026 audit: an unmapped sport used to silently default to 'nba' —
-      // soccer odds requests hit the NBA endpoint (401 → WC picks stored
-      // sportsbook_odds: null; a success would have attached NBA prices to a
-      // soccer match). Unmapped sports now bail loudly with no network call.
+      // soccer odds requests hit the NBA endpoint. Unsupported routing is a
+      // configuration failure, not a legitimate empty market.
       let sportKey = null;
       const s = String(sport).toLowerCase();
       if (s.includes('nfl')) sportKey = 'nfl';
@@ -636,8 +636,7 @@ const ballDontLieService = {
       else if (s.includes('ncaab')) sportKey = 'ncaab';
       else if (s.includes('nba')) sportKey = 'nba';
       if (!sportKey) {
-        console.warn(`[Ball Don't Lie] getOddsV2: no odds endpoint mapped for sport "${sport}" — returning [] (never defaulting to another sport's route)`);
-        return [];
+        throw new Error(`[Ball Don't Lie] getOddsV2: no odds endpoint mapped for sport "${sport}"`);
       }
 
       const norm = {};
@@ -652,12 +651,13 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         // Helper to fetch ALL pages if pagination is present
         const fetchAllPages = async (baseUrl, baseParams) => {
-          let allRows = [];
+          const allRows = [];
           let nextCursor = baseParams.cursor || undefined;
           let pageCount = 0;
           const maxPages = 10; // Safety limit
+          const seenCursors = new Set();
 
-          do {
+          for (;;) {
             const currentParams = { ...baseParams };
             if (nextCursor) currentParams.cursor = nextCursor;
             // Ensure we ask for max per page to minimize requests
@@ -666,26 +666,26 @@ const ballDontLieService = {
             const qs = buildQuery(currentParams); 
             const fullUrl = `${baseUrl}${qs}`;
             
-            try {
-              console.log(`[Ball Don't Lie] GET ${fullUrl} (Page ${pageCount + 1})`);
-              const resp = await bdlHttp.get(fullUrl, {
-                headers: { Authorization: API_KEY }
-              });
-              
-              const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-              allRows = allRows.concat(rows);
-              
-              // Check for next cursor
-              nextCursor = resp?.data?.meta?.next_cursor;
-              pageCount++;
-            } catch (err) {
-              console.warn(`[Ball Don't Lie] Error fetching page ${pageCount + 1}: ${err.message}`);
-              if (pageCount === 0) throw err; // Throw if first page fails
-              break; // Stop on error for subsequent pages
-            }
-          } while (nextCursor && pageCount < maxPages);
+            console.log(`[Ball Don't Lie] GET ${fullUrl} (Page ${pageCount + 1})`);
+            const resp = await bdlHttp.get(fullUrl, {
+              headers: { Authorization: API_KEY }
+            });
+            const rows = decodeBdlRows(resp?.data, `${sportKey} odds page ${pageCount + 1}`);
+            allRows.push(...rows);
 
-          return allRows;
+            const cursor = resp?.data?.meta?.next_cursor ?? null;
+            pageCount += 1;
+            if (cursor == null) return allRows;
+            const cursorKey = String(cursor);
+            if (seenCursors.has(cursorKey)) {
+              throw new Error(`${sportKey} odds pagination repeated cursor ${cursorKey}`);
+            }
+            seenCursors.add(cursorKey);
+            if (pageCount >= maxPages) {
+              throw new Error(`${sportKey} odds pagination exceeded ${maxPages} pages`);
+            }
+            nextCursor = cursor;
+          }
         };
 
         if (sportKey === 'nba') {
@@ -715,7 +715,7 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] getOdds error (${sport}):`, e?.response?.status || e?.message);
-      return [];
+      throw e;
     }
   },
 
@@ -3229,7 +3229,7 @@ const ballDontLieService = {
         const sport = this._getSportClient(sportKey);
         if (sport?.getGame) {
           const response = await sport.getGame(normalizedId);
-          const game = response?.data?.data ?? response?.data ?? null;
+          const game = decodeBdlSdkItem(response, `${sportKey} exact game ${gameId}`);
           return _normalizeGame(sportKey, game);
         }
 
@@ -3252,8 +3252,11 @@ const ballDontLieService = {
           const body = await response.text().catch(() => '');
           throw new Error(`HTTP ${response.status} ${body}`);
         }
-        const json = await response.json().catch(() => ({}));
-        return _normalizeGame(sportKey, json?.data ?? null);
+        const json = await response.json();
+        if (!json || typeof json !== 'object' || !Object.hasOwn(json, 'data')) {
+          throw new Error(`${sportKey} exact game ${gameId}: invalid response shape`);
+        }
+        return _normalizeGame(sportKey, json.data ?? null);
       }, ttlMinutes);
     } catch (error) {
       console.error(`[Ball Don't Lie] ${sportKey} getGame(${gameId}) error:`, error.message);
@@ -3278,9 +3281,7 @@ const ballDontLieService = {
         const fetchPage = async (pageParams) => {
           if (sport?.getGames) {
             const resp = await sport.getGames(pageParams);
-            const rows = Array.isArray(resp?.data)
-              ? resp.data
-              : (Array.isArray(resp?.data?.data) ? resp.data.data : []);
+            const rows = decodeBdlSdkRows(resp, `${sportKey} games page`);
             return {
               rows,
               nextCursor: resp?.meta?.next_cursor ?? resp?.data?.meta?.next_cursor ?? null,
@@ -3296,9 +3297,9 @@ const ballDontLieService = {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
           }
-          const json = await resp.json().catch(() => ({}));
+          const json = await resp.json();
           return {
-            rows: Array.isArray(json?.data) ? json.data : [],
+            rows: decodeBdlRows(json, `${sportKey} games page`),
             nextCursor: json?.meta?.next_cursor ?? null,
           };
         };

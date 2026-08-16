@@ -99,8 +99,10 @@ enum GaryColors {
     /// pure Color.white over the warm black page reads as a cool blue-grey cast.
     static let warmWhite = Color(hex: "#F6F1E7")
 
-    // NFL Green (same as prop picks)
-    static let nflAccent = Color(hex: "#22C55E")
+    // NFL cobalt — an accessibility-lifted blue rooted in the league's shield
+    // identity. Green belongs to MLB/positive-result semantics in Gary, while
+    // red already carries NCAAF and loss meaning.
+    static let nflAccent = Color(hex: "#2C7EDB")
 
     // MLB label/eyebrow accent — a SOLID light grass green (user call, Jun 26):
     // the old green→dirt-brown→white field gradient was retired for a clean,

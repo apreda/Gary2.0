@@ -3,6 +3,10 @@ import {
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from './ncaafKickoff.js';
+import {
+  NFL_KICKOFF_STATUS,
+  resolveNflKickoff,
+} from './nflKickoff.js';
 
 const ET_TIME_ZONE = 'America/New_York';
 
@@ -143,18 +147,19 @@ export function normalizeFootballGame(game, { league, targetDate, nowMs = Date.n
     throw new Error(`${normalizedLeague} game is missing an id`);
   }
 
-  const ncaafKickoff = normalizedLeague === 'NCAAF'
-    ? resolveNcaafKickoff(game)
-    : null;
-  const startAt = ncaafKickoff?.iso
-    ?? (normalizedLeague === 'NFL' && typeof game.date === 'string' ? game.date : null);
+  const ncaafKickoff = normalizedLeague === 'NCAAF' ? resolveNcaafKickoff(game) : null;
+  const nflKickoff = normalizedLeague === 'NFL' ? resolveNflKickoff(game) : null;
+  const kickoff = ncaafKickoff ?? nflKickoff;
+  const startAt = kickoff?.iso ?? null;
   const etDate = normalizedLeague === 'NCAAF'
     ? ncaafSlateDateForKickoff(game)
-    : footballEtDate(startAt);
+    : nflKickoff?.scheduledDate;
   if (!etDate) throw new Error(`${normalizedLeague} game ${game.id} has an invalid date`);
   if (etDate !== targetDate) return null;
 
-  const status = ncaafKickoff?.status === NCAAF_KICKOFF_STATUS.DATE_ONLY
+  const isDateOnly = ncaafKickoff?.status === NCAAF_KICKOFF_STATUS.DATE_ONLY
+    || nflKickoff?.status === NFL_KICKOFF_STATUS.DATE_ONLY;
+  const status = isDateOnly
     && !String(game.status ?? '').trim()
     ? 'scheduled'
     : normalizeFootballStatus(game.status, { startAt, nowMs });

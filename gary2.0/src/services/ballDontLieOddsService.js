@@ -5,12 +5,17 @@
 import axios from 'axios';
 import { ballDontLieService, getApiKey, BALLDONTLIE_API_BASE_URL } from './ballDontLieService.js';
 import { waitForBdlRequestSlot } from './bdlRequestGate.js';
+import { decodeBdlRows } from './bdlResponse.js';
 import {
   classifyNcaafFbsGames,
   NCAAF_KICKOFF_STATUS,
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from './ncaafGamePolicy.js';
+import {
+  NFL_KICKOFF_STATUS,
+  resolveNflKickoff,
+} from './nflGamePolicy.js';
 
 const BDL_NFL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/odds`;
 const BDL_NHL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/odds`;
@@ -79,13 +84,8 @@ function nflBookmakersForGame(game, oddsRows) {
 
 function normalizeExactNflGame(game, oddsRows) {
   if (!game) return null;
-  let commenceTime = game.datetime || game.start_time_utc || game.date || null;
-  let estimatedTime = false;
-  if (typeof commenceTime === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(commenceTime)) {
-    commenceTime = `${commenceTime}T20:00:00.000Z`;
-    estimatedTime = true;
-  }
-  if (!commenceTime) return null;
+  const kickoff = resolveNflKickoff(game);
+  if (!kickoff.scheduledDate) return null;
 
   return {
     id: game.id,
@@ -98,8 +98,10 @@ function normalizeExactNflGame(game, oddsRows) {
     away_team: mapTeamName(game.visitor_team || game.away_team),
     home_team_id: game.home_team?.id ?? game.home_team_id ?? null,
     away_team_id: (game.visitor_team || game.away_team)?.id ?? game.visitor_team_id ?? game.away_team_id ?? null,
-    commence_time: commenceTime,
-    estimated_time: estimatedTime,
+    commence_time: kickoff.status === NFL_KICKOFF_STATUS.CONFIRMED ? kickoff.iso : null,
+    scheduled_date: kickoff.scheduledDate,
+    kickoff_status: kickoff.status,
+    estimated_time: kickoff.estimated,
     venue: game.venue || null,
     bookmakers: nflBookmakersForGame(game, oddsRows),
   };
@@ -139,17 +141,12 @@ async function fetchNflOddsBySeasonWeek(season, week) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key for odds');
   if (!season || week == null) return [];
-  try {
-    await waitForBdlRequestSlot(`nfl:v1:odds:${season}:${week}`);
-    const resp = await axios.get(BDL_NFL_ODDS_V1, {
-      params: { season, week, per_page: 100 },
-      headers: { Authorization: apiKey }
-    });
-    return Array.isArray(resp?.data?.data) ? resp.data.data : [];
-  } catch (e) {
-    console.warn('[BallDonLieOdds] NFL season/week odds fetch failed:', e?.response?.data || e?.message || e);
-    return [];
-  }
+  await waitForBdlRequestSlot(`nfl:v1:odds:${season}:${week}`);
+  const resp = await axios.get(BDL_NFL_ODDS_V1, {
+    params: { season, week, per_page: 100 },
+    headers: { Authorization: apiKey }
+  });
+  return decodeBdlRows(resp?.data, `NFL ${season} week ${week} odds`);
 }
 
 async function fetchAllNcaafOdds(params, label, apiKey) {
@@ -165,7 +162,7 @@ async function fetchAllNcaafOdds(params, label, apiKey) {
       params: pageParams,
       headers: { Authorization: apiKey },
     });
-    rows.push(...(Array.isArray(response?.data?.data) ? response.data.data : []));
+    rows.push(...decodeBdlRows(response?.data, `${label} page ${pageCount + 1}`));
     pageCount += 1;
 
     const nextCursor = response?.data?.meta?.next_cursor ?? null;
@@ -272,9 +269,17 @@ export const ballDontLieOddsService = {
         { dates: utcDates, per_page: 100 },
         10,
       );
+      if (!Array.isArray(rawGames)) {
+        throw new Error('NCAAF games source returned a non-array slate');
+      }
+      const missingProviderIds = rawGames.filter((game) => game?.id == null);
+      if (missingProviderIds.length > 0) {
+        throw new Error(
+          `NCAAF games source returned ${missingProviderIds.length} row(s) without a provider game id; refusing a partial slate`,
+        );
+      }
       const seenGameIds = new Set();
-      const uniqueGames = (rawGames || []).filter((game) => {
-        if (game?.id == null) return false;
+      const uniqueGames = rawGames.filter((game) => {
         const gameKey = String(game.id);
         if (seenGameIds.has(gameKey)) return false;
         seenGameIds.add(gameKey);
@@ -301,15 +306,23 @@ export const ballDontLieOddsService = {
       if (classified.rejected.length > 0) {
         console.log(`[BDL NCAAF] Excluded ${classified.rejected.length} non-FBS matchup(s)`);
       }
+      const missingScheduledDates = classified.accepted.filter(
+        (game) => !resolveNcaafKickoff(game).scheduledDate,
+      );
+      if (missingScheduledDates.length > 0) {
+        throw new Error(
+          `NCAAF accepted FBS slate has ${missingScheduledDates.length} game(s) without a provider scheduled date; refusing a partial slate`,
+        );
+      }
       const kickoffByGame = new Map();
       const games = classified.accepted.filter((game) => {
         const kickoff = resolveNcaafKickoff(game);
-        if (!kickoff.scheduledDate) return false;
         kickoffByGame.set(String(game.id), kickoff);
         return ncaafSlateDateForKickoff(game) === dateStr;
       });
       const ids = (games || []).map(g => g.id).filter(id => id != null);
       let oddsRows = [];
+      let primaryOddsError = null;
       // Try by game_ids first to align games to odds precisely
       if (ids.length > 0) {
         try {
@@ -329,11 +342,13 @@ export const ballDontLieOddsService = {
           // recover the complete odds feed; a partial result would silently
           // make late-slate games look like they have no market.
           oddsRows = [];
+          primaryOddsError = e;
         }
       }
       // Fallback: fetch by unique (season, week) pairs present in games
       if ((!Array.isArray(oddsRows) || oddsRows.length === 0) && Array.isArray(games)) {
         const seenPairs = new Set();
+        let fallbackAttempted = false;
         for (const g of games) {
           const season = g?.season;
           const week = g?.week;
@@ -341,19 +356,17 @@ export const ballDontLieOddsService = {
           const key = `${season}-${week}`;
           if (seenPairs.has(key)) continue;
           seenPairs.add(key);
-          try {
-            const rows = await fetchAllNcaafOdds(
-              { season, week, per_page: 100 },
-              `ncaaf:v1:odds:${season}:${week}`,
-              apiKey,
-            );
-            if (rows.length) {
-              oddsRows = (oddsRows || []).concat(rows);
-            }
-          } catch (e) {
-            console.warn('[BallDonLieOdds][NCAAF] season/week v1 odds fetch failed:', e?.response?.data || e?.message || e);
+          fallbackAttempted = true;
+          const rows = await fetchAllNcaafOdds(
+            { season, week, per_page: 100 },
+            `ncaaf:v1:odds:${season}:${week}`,
+            apiKey,
+          );
+          if (rows.length) {
+            oddsRows = (oddsRows || []).concat(rows);
           }
         }
+        if (primaryOddsError && !fallbackAttempted) throw primaryOddsError;
         oddsRows = dedupeNcaafOddsRows(oddsRows);
       }
       // Index odds by game
@@ -451,36 +464,31 @@ export const ballDontLieOddsService = {
       console.log(`[NCAAB] Combined: ${gamesToday?.length || 0} from ${dateStr} + ${gamesTomorrow?.length || 0} from ${tomorrowStr} = ${games.length} unique games`);
 
       const ids = (games || []).map(g => g.id).filter(Boolean);
-      let oddsRows = [];
-      try {
-        // Use paginated getOddsV2 (auto-paginates via cursor, up to 10 pages)
-        const [rowsToday, rowsTomorrow] = await Promise.all([
-          ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 }, 'basketball_ncaab'),
-          ballDontLieService.getOddsV2({ dates: [tomorrowStr], per_page: 100 }, 'basketball_ncaab')
-        ]);
-        oddsRows = [...(rowsToday || []), ...(rowsTomorrow || [])];
-        console.log(`[NCAAB] Odds: ${rowsToday?.length || 0} from ${dateStr} + ${rowsTomorrow?.length || 0} from ${tomorrowStr} (paginated)`);
-      } catch (e) {
-        console.warn('[BallDonLieOdds][NCAAB] date-based v1 odds fetch failed:', e?.response?.data || e?.message || e);
-      }
+      // Use paginated getOddsV2 (auto-paginates via cursor, up to 10 pages).
+      // Both provider days are one ET-slate contract: either both decode or the
+      // caller retries the league instead of publishing a partial board.
+      const [rowsToday, rowsTomorrow] = await Promise.all([
+        ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 }, 'basketball_ncaab'),
+        ballDontLieService.getOddsV2({ dates: [tomorrowStr], per_page: 100 }, 'basketball_ncaab')
+      ]);
+      let oddsRows = [...rowsToday, ...rowsTomorrow];
+      console.log(`[NCAAB] Odds: ${rowsToday.length} from ${dateStr} + ${rowsTomorrow.length} from ${tomorrowStr} (paginated)`);
       // Fallback: fetch by game_ids for games still missing odds
       if (ids.length > 0) {
         const coveredGameIds = new Set(oddsRows.map(r => r.game_id));
         const missingIds = ids.filter(id => !coveredGameIds.has(id));
         if (missingIds.length > 0) {
           console.log(`[NCAAB] ${missingIds.length} games missing odds after date fetch — fetching by game_ids...`);
-          try {
-            // Fetch in batches of 100
-            for (let i = 0; i < missingIds.length; i += 100) {
-              const batch = missingIds.slice(i, i + 100);
-              const byIds = await ballDontLieService.getOddsV2({ game_ids: batch, per_page: 100 }, 'basketball_ncaab');
-              if (Array.isArray(byIds) && byIds.length) {
-                oddsRows = oddsRows.concat(byIds);
-                console.log(`[NCAAB] Recovered odds for ${byIds.length} rows via game_ids fallback (batch ${Math.floor(i / 100) + 1})`);
-              }
+          // Fetch in batches of 100. A failed recovery batch invalidates the
+          // enrichment rather than making its games indistinguishable from a
+          // real no-market response.
+          for (let i = 0; i < missingIds.length; i += 100) {
+            const batch = missingIds.slice(i, i + 100);
+            const byIds = await ballDontLieService.getOddsV2({ game_ids: batch, per_page: 100 }, 'basketball_ncaab');
+            if (byIds.length) {
+              oddsRows = oddsRows.concat(byIds);
+              console.log(`[NCAAB] Recovered odds for ${byIds.length} rows via game_ids fallback (batch ${Math.floor(i / 100) + 1})`);
             }
-          } catch (e) {
-            console.warn('[BallDonLieOdds][NCAAB] game_ids v1 odds fetch failed:', e?.response?.data || e?.message || e);
           }
         }
       }
@@ -562,19 +570,10 @@ export const ballDontLieOddsService = {
       console.log(`[NHL] Fetching games for BOTH ${dateStr} AND ${tomorrowStr} (UTC) to capture all EST games`);
 
       // Fetch games for both dates
-      let gamesToday = [];
-      let gamesTomorrow = [];
-      try {
-        [gamesToday, gamesTomorrow] = await Promise.all([
-          ballDontLieService.getGames('icehockey_nhl', { dates: [dateStr], per_page: 100 }, 10),
-          ballDontLieService.getGames('icehockey_nhl', { dates: [tomorrowStr], per_page: 100 }, 10)
-        ]);
-      } catch (e) {
-        console.warn(`[NHL] Games fetch failed, trying individual dates:`, e?.message || e);
-        // Fallback: try individually
-        try { gamesToday = await ballDontLieService.getGames('icehockey_nhl', { dates: [dateStr], per_page: 100 }, 10) || []; } catch { gamesToday = []; }
-        try { gamesTomorrow = await ballDontLieService.getGames('icehockey_nhl', { dates: [tomorrowStr], per_page: 100 }, 10) || []; } catch { gamesTomorrow = []; }
-      }
+      const [gamesToday, gamesTomorrow] = await Promise.all([
+        ballDontLieService.getGames('icehockey_nhl', { dates: [dateStr], per_page: 100 }, 10),
+        ballDontLieService.getGames('icehockey_nhl', { dates: [tomorrowStr], per_page: 100 }, 10)
+      ]);
 
       // Combine and deduplicate by game ID
       const allGamesMap = new Map();
@@ -587,26 +586,21 @@ export const ballDontLieOddsService = {
       console.log(`[NHL] Combined: ${gamesToday?.length || 0} from ${dateStr} + ${gamesTomorrow?.length || 0} from ${tomorrowStr} = ${games.length} unique games`);
 
       const ids = (games || []).map(g => g.id).filter(Boolean);
-      let oddsRows = [];
-      try {
-        // Fetch odds for both dates
-        const [respToday, respTomorrow] = await Promise.all([
-          axios.get(BDL_NHL_ODDS_V1, {
-            params: { 'dates[]': [dateStr], per_page: 100 },
-            headers: { Authorization: apiKey }
-          }),
-          axios.get(BDL_NHL_ODDS_V1, {
-            params: { 'dates[]': [tomorrowStr], per_page: 100 },
-            headers: { Authorization: apiKey }
-          })
-        ]);
-        const rowsToday = Array.isArray(respToday?.data?.data) ? respToday.data.data : [];
-        const rowsTomorrow = Array.isArray(respTomorrow?.data?.data) ? respTomorrow.data.data : [];
-        oddsRows = [...rowsToday, ...rowsTomorrow];
-        console.log(`[NHL] Odds: ${rowsToday.length} from ${dateStr} + ${rowsTomorrow.length} from ${tomorrowStr}`);
-      } catch (e) {
-        console.warn('[BallDonLieOdds][NHL] date-based v1 odds fetch failed:', e?.response?.data || e?.message || e);
-      }
+      // Fetch odds for both dates as one complete ET-slate contract.
+      const [respToday, respTomorrow] = await Promise.all([
+        axios.get(BDL_NHL_ODDS_V1, {
+          params: { 'dates[]': [dateStr], per_page: 100 },
+          headers: { Authorization: apiKey }
+        }),
+        axios.get(BDL_NHL_ODDS_V1, {
+          params: { 'dates[]': [tomorrowStr], per_page: 100 },
+          headers: { Authorization: apiKey }
+        })
+      ]);
+      const rowsToday = decodeBdlRows(respToday?.data, `NHL odds ${dateStr}`);
+      const rowsTomorrow = decodeBdlRows(respTomorrow?.data, `NHL odds ${tomorrowStr}`);
+      const oddsRows = [...rowsToday, ...rowsTomorrow];
+      console.log(`[NHL] Odds: ${rowsToday.length} from ${dateStr} + ${rowsTomorrow.length} from ${tomorrowStr}`);
 
       // Index odds by game
       const byGame = oddsRows.reduce((acc, r) => {
@@ -685,7 +679,7 @@ export const ballDontLieOddsService = {
       fetchDates.map(d => {
         const params = { dates: [d], per_page: 100 };
         if (sportKey === 'americanfootball_nfl') params.season_type = [1, 2, 3];
-        return ballDontLieService.getGames(sportKey, params, 10).catch(() => []);
+        return ballDontLieService.getGames(sportKey, params, 10);
       })
     )).flat();
     const seenIds = new Set();
@@ -700,7 +694,7 @@ export const ballDontLieOddsService = {
     let odds = [];
     if (sportKey !== 'americanfootball_nfl') {
       odds = (await Promise.all(
-        fetchDates.map(d => ballDontLieService.getOddsV2({ dates: [d], per_page: 100 }, sportKey).catch(() => []))
+        fetchDates.map(d => ballDontLieService.getOddsV2({ dates: [d], per_page: 100 }, sportKey))
       )).flat();
     }
 
@@ -748,41 +742,38 @@ export const ballDontLieOddsService = {
         }
       } catch (e) {
         console.warn('[BallDonLieOdds][NBA] v2 odds by game_ids fallback failed:', e?.response?.data || e?.message || e);
+        throw e;
       }
     }
 
     // NFL: if date-based odds are sparse, fall back to querying by game_ids (covers season/week cases)
     if (sportKey === 'americanfootball_nfl') {
-      try {
-        const uniqueGameIds = (games || []).map(g => g?.id).filter(id => id != null);
-        const hasVendors = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
-        if (uniqueGameIds.length && !hasVendors) {
-          const byIds = await ballDontLieService.getOddsV2({ game_ids: uniqueGameIds, per_page: 100 }, 'nfl');
-          if (Array.isArray(byIds) && byIds.length) {
-            odds = byIds;
-          }
+      const uniqueGameIds = (games || []).map(g => g?.id).filter(id => id != null);
+      const hasVendors = Array.isArray(odds) && odds.some(r => uniqueGameIds.includes(r?.game_id));
+      if (uniqueGameIds.length && !hasVendors) {
+        const byIds = await ballDontLieService.getOddsV2({ game_ids: uniqueGameIds, per_page: 100 }, 'nfl');
+        if (byIds.length) {
+          odds = byIds;
         }
-        if (!Array.isArray(odds) || odds.length === 0) {
-          const seasonWeekPairs = [];
-          for (const g of games || []) {
-            const season = g?.season;
-            const week = g?.week;
-            if (season && week != null) {
-              const key = `${season}-${week}`;
-              if (!seasonWeekPairs.find(p => p.key === key)) {
-                seasonWeekPairs.push({ key, season, week });
-              }
-            }
-          }
-          for (const pair of seasonWeekPairs) {
-            const seasonWeekOdds = await fetchNflOddsBySeasonWeek(pair.season, pair.week);
-            if (Array.isArray(seasonWeekOdds) && seasonWeekOdds.length) {
-              odds = (odds || []).concat(seasonWeekOdds);
+      }
+      if (!Array.isArray(odds) || odds.length === 0) {
+        const seasonWeekPairs = [];
+        for (const g of games || []) {
+          const season = g?.season;
+          const week = g?.week;
+          if (season && week != null) {
+            const key = `${season}-${week}`;
+            if (!seasonWeekPairs.find(p => p.key === key)) {
+              seasonWeekPairs.push({ key, season, week });
             }
           }
         }
-      } catch (e) {
-        console.warn('[OddsService][NFL] Fallback by game_ids failed:', e?.message || e);
+        for (const pair of seasonWeekPairs) {
+          const seasonWeekOdds = await fetchNflOddsBySeasonWeek(pair.season, pair.week);
+          if (seasonWeekOdds.length) {
+            odds = (odds || []).concat(seasonWeekOdds);
+          }
+        }
       }
     }
 
@@ -809,22 +800,18 @@ export const ballDontLieOddsService = {
           return sh !== null || sa !== null;
         });
         if (!hasMlInRows && !hasSpreadInRows) {
-          try {
-            const season = g?.season;
-            const week = g?.week;
-            if (season && week != null) {
-              const v1Rows = await fetchNflOddsBySeasonWeek(season, week);
-              const forGame = (v1Rows || []).filter(r => r?.game_id === g.id);
-              if (forGame.length) {
-                const existing = gameIdToVendors.get(g.id) || [];
-                gameIdToVendors.set(g.id, existing.concat(forGame));
-                console.log(`[BallDonLieOdds][NFL] v1 fallback merged for game ${g.id} (${(g.visitor_team?.name || g.away_team?.name || '')} @ ${(g.home_team?.name || '')})`);
-              } else {
-                console.warn(`[BallDonLieOdds][NFL] v1 fallback returned no rows for game ${g.id} (season ${season}, week ${week})`);
-              }
+          const season = g?.season;
+          const week = g?.week;
+          if (season && week != null) {
+            const v1Rows = await fetchNflOddsBySeasonWeek(season, week);
+            const forGame = v1Rows.filter(r => r?.game_id === g.id);
+            if (forGame.length) {
+              const existing = gameIdToVendors.get(g.id) || [];
+              gameIdToVendors.set(g.id, existing.concat(forGame));
+              console.log(`[BallDonLieOdds][NFL] v1 fallback merged for game ${g.id} (${(g.visitor_team?.name || g.away_team?.name || '')} @ ${(g.home_team?.name || '')})`);
+            } else {
+              console.warn(`[BallDonLieOdds][NFL] v1 fallback returned no rows for game ${g.id} (season ${season}, week ${week})`);
             }
-          } catch (e) {
-            console.warn('[BallDonLieOdds][NFL] per-game v1 fallback failed:', e?.message || e);
           }
         }
       }
@@ -889,38 +876,27 @@ export const ballDontLieOddsService = {
       const awayTeamName = mapTeamName(g.visitor_team || g.away_team);
       const homeTeamName = mapTeamName(g.home_team);
 
-      // Use proper datetime fields for accurate timezone handling
-      // BDL returns for NFL: date="2026-01-25T20:00:00.000Z" (ISO with actual game time!)
-      // But datetime/start_time_utc are often undefined, and status is human-readable
-      // Priority: date (if ISO) > datetime > start_time_utc > fallback
+      // Resolve every NFL provider time through the shared precision contract.
+      // An ISO value is exact; a bare provider date stays TIME TBD.
 
       // DEBUG: Log what BDL returns for NFL games
       if (sportKey === 'americanfootball_nfl') {
         console.log(`[BDL Odds] NFL Game ${g.id}: date=${g.date}, datetime=${g.datetime}, status=${g.status}, start_time_utc=${g.start_time_utc}`);
       }
 
-      let commenceTime = g.datetime || g.start_time_utc;
+      const nflKickoff = sportKey === 'americanfootball_nfl'
+        ? resolveNflKickoff(g)
+        : null;
+      const commenceTime = nflKickoff
+        ? (nflKickoff.status === NFL_KICKOFF_STATUS.CONFIRMED ? nflKickoff.iso : null)
+        : (g.datetime || g.start_time_utc || (g.date?.includes?.('T') ? g.date : null));
+      const estimated_time = nflKickoff?.estimated ?? false;
 
-      // NFL FIX: BDL returns the actual game time in g.date as an ISO string (e.g., "2026-01-25T20:00:00.000Z")
-      // Check if g.date contains 'T' indicating it's an ISO datetime, not just a date
-      if (!commenceTime && g.date && g.date.includes('T')) {
-        commenceTime = g.date;
-        console.log(`[BDL Odds] Using g.date as ISO datetime: ${commenceTime}`);
+      if (nflKickoff?.status === NFL_KICKOFF_STATUS.DATE_ONLY) {
+        console.log(`[BDL Odds] NFL Game ${g.id}: TIME TBD on ${nflKickoff.scheduledDate}`);
       }
 
-      // Fallback: If date is just YYYY-MM-DD format, add reasonable game time
-      let estimated_time = false;
-      if (!commenceTime && g.date) {
-        if (!g.date.includes('T')) {
-          const dateParts = g.date.split('-');
-          const gameDate = new Date(Date.UTC(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), 20, 0, 0));
-          commenceTime = gameDate.toISOString();
-          estimated_time = true;
-          console.log(`[BDL Odds] Estimated time for game ${g.id}: ${g.date} -> ${commenceTime}`);
-        }
-      }
-
-      if (!commenceTime) {
+      if (!commenceTime && !nflKickoff?.scheduledDate) {
         console.warn(`[BDL Odds] Game ${g.id} (${awayTeamName} @ ${homeTeamName}) has no date/time — skipping`);
         return null;
       }
@@ -939,6 +915,10 @@ export const ballDontLieOddsService = {
         home_team: homeTeamName,
         away_team: awayTeamName,
         commence_time: commenceTime,
+        ...(nflKickoff ? {
+          scheduled_date: nflKickoff.scheduledDate,
+          kickoff_status: nflKickoff.status,
+        } : {}),
         estimated_time,
         venue: g.venue || null,
         bookmakers

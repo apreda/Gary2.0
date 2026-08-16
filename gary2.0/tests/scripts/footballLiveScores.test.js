@@ -80,6 +80,19 @@ describe('football live-score date handling', () => {
     expect(normalized.row.status).toBe('scheduled');
   });
 
+  it('keeps a date-only NFL game on its provider slate without inventing a start instant', () => {
+    const normalized = normalizeFootballGame(nflGame({
+      date: '2026-09-13',
+      status: 'TBA',
+    }), {
+      league: 'NFL', targetDate: '2026-09-13', nowMs: NOW,
+    });
+    expect(normalized.startAt).toBeNull();
+    expect(normalized.row._etDate).toBe('2026-09-13');
+    expect(normalized.row.status).toBe('scheduled');
+    expect(normalized.row.detail).toBeNull();
+  });
+
   it('keeps a confirmed NCAAF overnight game on the prior slate until 6 AM ET', () => {
     const overnight = normalizeFootballGame(ncaafGame({ date: '2026-09-06T05:30:00.000Z' }), {
       league: 'NCAAF', targetDate: '2026-09-05', nowMs: NOW,

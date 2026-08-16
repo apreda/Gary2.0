@@ -23,7 +23,13 @@ enum PicksValue<T: Decodable>: Decodable {
         } else if let str = try? container.decode(String.self) {
             self = .string(str)
         } else {
-            self = .string("[]")
+            throw DecodingError.typeMismatch(
+                PicksValue<T>.self,
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Expected a pick array or a stringified pick array"
+                )
+            )
         }
     }
     
@@ -142,6 +148,11 @@ final class SwapMeta: Decodable {
     /// template sentence here) — the expanded card's "numbers behind it" line.
     let evidence: String?
     let kind: String?
+    let version: Int?
+    /// Structured proof rows repeat the provider game id inside `meta`. The
+    /// outer connection id and this sealed payload id must agree before any
+    /// market receipt is allowed to render.
+    let game_id: String?
     // Football state modules. `baseline` / `live_value` deliberately accept
     // either numeric or formatted scalar values; every other field is stable.
     let pick_id: String?
@@ -172,11 +183,13 @@ final class SwapMeta: Decodable {
     let pick_team: String?
     let pick_label: String?
     let published_at: String?
+    let published_at_source: String?
     let kickoff: String?
     let market_state: String?
     let published: FootballMarketSnapshot?
     let current: FootballMarketSnapshot?
     let movement: FootballMarketMovement?
+    let as_of_source: String?
     // Exact multi-book football market range (`market_range`). This is a
     // sportsbook disagreement receipt, never a proxy for public or sharp bets.
     let source: String?
@@ -541,6 +554,45 @@ struct DailySlateRow: Codable {
     var kickoffTimeLabel: String? {
         kickoff_status == "date_only" ? "TIME TBD" : nil
     }
+
+    /// Supabase decoding is intentionally tolerant at the field level for old
+    /// rows, so validate the minimum schedule contract before treating a row as
+    /// a successful slate payload. An all-optional `{}` must never become a
+    /// blank game or poison the same-date last-good cache.
+    var hasValidStoredPayload: Bool {
+        func text(_ value: String?) -> String? {
+            guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty else { return nil }
+            return value
+        }
+        func instant(_ value: String?) -> Date? {
+            guard let value = text(value) else { return nil }
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let parsed = fractional.date(from: value) { return parsed }
+            return ISO8601DateFormatter().date(from: value)
+        }
+
+        guard let league = text(league)?.uppercased(),
+              text(away_team) != nil,
+              text(home_team) != nil else { return false }
+
+        if league == "NFL" || league == "NCAAF" {
+            guard bdl_game_id != nil else { return false }
+            switch text(kickoff_status)?.lowercased() {
+            case "confirmed":
+                return instant(commence_time) != nil
+            case "date_only":
+                guard commence_time == nil,
+                      let day = text(scheduled_date) else { return false }
+                return day.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+            default:
+                return false
+            }
+        }
+
+        return instant(commence_time) != nil
+    }
 }
 
 // MARK: - Game Recap (the night's stories, betting perspective — game_recaps)
@@ -712,6 +764,21 @@ struct GaryPick: Identifiable, Codable {
             league ?? "?", game_id.map { String($0) } ?? "", commence_time ?? "",
             awayTeam ?? "?", homeTeam ?? "?", type ?? "?", pick ?? "?",
         ].joined(separator: "|")
+    }
+
+    /// A stored pick row is useful only when it can identify both the play and
+    /// its game. This semantic gate complements Codable's type checking: every
+    /// field is optional for historical compatibility, so `{}` otherwise
+    /// decodes successfully and looks like an authoritative empty desk later.
+    var hasValidStoredPayload: Bool {
+        func hasText(_ value: String?) -> Bool {
+            !(value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }
+        return hasText(pick)
+            && hasText(league)
+            && hasText(awayTeam)
+            && hasText(homeTeam)
+            && (hasText(pick_id) || game_id != nil)
     }
 
     /// Compact tournament context line for World Cup pick cards (e.g. "Group A · Group Stage", "Round of 16").
@@ -1638,6 +1705,21 @@ struct PropPick: Identifiable, Codable {
             bet ?? "", odds ?? "", tdCategory ?? "",
         ].joined(separator: "|")
     }
+
+    /// Required semantic identity for a persisted prop. Historical optional
+    /// fields remain decodable, but a blank/malformed object cannot be accepted
+    /// as a real pick or cached as a successful response.
+    var hasValidStoredPayload: Bool {
+        func hasText(_ value: String?) -> Bool {
+            !(value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }
+        return hasText(effectiveLeague)
+            && hasText(prop)
+            && hasText(bet)
+            && hasText(odds)
+            && (hasText(player) || hasText(team))
+            && (game_id != nil || hasText(matchup))
+    }
     
     /// Whether this is a TD scorer pick
     var isTDPick: Bool {
@@ -1722,6 +1804,7 @@ struct PropPick: Identifiable, Codable {
 // MARK: - Billfold (Results) Models
 
 struct GameResult: Decodable {
+    let game_id: String?
     let game_date: String?
     let league: String?
     let matchup: String?
@@ -1731,11 +1814,12 @@ struct GameResult: Decodable {
     let final_score: String?
 
     enum CodingKeys: String, CodingKey {
-        case game_date, league, matchup, pick_text, result, odds, final_score
+        case game_id, game_date, league, matchup, pick_text, result, odds, final_score
     }
 
     /// Memberwise initializer for creating from NFLResult
-    init(game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?) {
+    init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?) {
+        self.game_id = game_id
         self.game_date = game_date
         self.league = league
         self.matchup = matchup
@@ -1782,6 +1866,7 @@ struct GameResult: Decodable {
 }
 
 struct NFLResult: Decodable {
+    let game_id: String?
     let game_date: String?
     let week_number: Int?
     let season: Int?
@@ -1795,13 +1880,14 @@ struct NFLResult: Decodable {
     let pick_type: String?
     
     enum CodingKeys: String, CodingKey {
-        case game_date, week_number, season, matchup, pick_text, result, odds, final_score
+        case game_id, game_date, week_number, season, matchup, pick_text, result, odds, final_score
         case home_team, away_team, pick_type
     }
     
     /// Convert to GameResult for unified display
     func toGameResult() -> GameResult {
         GameResult(
+            game_id: game_id,
             game_date: game_date,
             league: "NFL",
             matchup: matchup ?? "\(away_team ?? "") @ \(home_team ?? "")",
@@ -2069,6 +2155,7 @@ struct TomorrowBigGame: Decodable {
     let standing: String?
     let context: String?            // "AL East · Cole vs Crochet"
     let commence_time: String?      // for the right-aligned time "7:10"
+    let bdl_game_id: Int?           // exact provider identity for Home joins
     // Probable starters (MLB only) — last names; "Undecided" when unposted.
     // WC big games leave these nil → no pitcher line rendered.
     let awayPitcher: String?

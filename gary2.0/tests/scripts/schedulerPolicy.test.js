@@ -18,6 +18,7 @@ import {
   pendingEntriesForChildBudget,
   pendingEntriesForDecisionLane,
   partitionNcaafKickoffReadiness,
+  partitionNflKickoffReadiness,
   partitionStartedEntries,
   reanchorGameSchedule,
   runIndependentDecisionLanes,
@@ -66,7 +67,33 @@ describe('scheduler reliability policy', () => {
     expect(schedulerSource).toContain('confirmed games stay scheduled; unresolved ids retry independently');
     expect(schedulerSource).toContain('retrying this exact id without scheduling a deadline');
     expect(schedulerSource).toContain('gameIds: retry.gameIds');
-    expect(schedulerSource).toContain('exactNcaafGameIds.length > 0 ? 0 : 10');
+    expect(schedulerSource).toContain('exactFootballGameIds.length > 0 ? 0 : 10');
+  });
+
+  it('never schedules an NFL deadline from a provider calendar date', () => {
+    const result = partitionNflKickoffReadiness([
+      { id: 20, date: '2026-09-13T17:00:00Z' },
+      { id: 21, date: '2026-09-13' },
+      { id: 22 },
+      { id: 23, date: '2026-09-14T17:00:00Z' },
+      { id: 24, date: '2026-09-14T00:20:00Z' }, // 8:20 PM ET, Sep 13
+    ], '2026-09-13');
+
+    expect(result.confirmed.map(({ raw }) => raw.id)).toEqual([20, 24]);
+    expect(result.confirmed.map(({ startTime }) => startTime.toISOString())).toEqual([
+      '2026-09-13T17:00:00.000Z',
+      '2026-09-14T00:20:00.000Z',
+    ]);
+    expect(result.retryGameIds).toEqual(['21', '22']);
+    expect(result.pending.every(({ kickoff }) => kickoff.iso === null)).toBe(true);
+    expect(result.outsideDate.map(({ id }) => id)).toEqual([23]);
+    expect(result.retryAll).toBe(false);
+
+    expect(schedulerSource).toContain('partitionNflKickoffReadiness(targetDateGames, etDateStr)');
+    expect(schedulerSource).toContain('supportsExactKickoffRetry && exactFootballGameIds.length > 0');
+    expect(schedulerSource).toContain('retrying this exact id without scheduling a deadline');
+    expect(schedulerSource).toContain("if (sportKey === 'americanfootball_nfl') return resolveNflKickoff(game).iso");
+    expect(schedulerSource).not.toContain("if (sportKey === 'americanfootball_nfl') return game.date");
   });
 
   it('keeps NCAAF retries on the prior slate through 5:59 ET and rolls at 6:00', () => {

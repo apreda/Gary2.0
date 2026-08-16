@@ -7,6 +7,8 @@ const supabaseApi = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift
 const footballIntel = readFileSync(new URL('../../../ios/GaryApp/FootballGameIntelView.swift', import.meta.url), 'utf8');
 const footballHub = readFileSync(new URL('../../../ios/GaryApp/FootballHubPage.swift', import.meta.url), 'utf8');
 const hubView = readFileSync(new URL('../../../ios/GaryApp/HubView.swift', import.meta.url), 'utf8');
+const designSystem = readFileSync(new URL('../../../ios/GaryApp/DesignSystem.swift', import.meta.url), 'utf8');
+const contentView = readFileSync(new URL('../../../ios/GaryApp/ContentView.swift', import.meta.url), 'utf8');
 
 describe('iOS football pick decoding', () => {
   it('keeps market fields when the app uses the manual dictionary parser', () => {
@@ -82,18 +84,16 @@ describe('THE SWEAT terminal states', () => {
   });
 
   it('renders pushes as terminal without counting them as misses', () => {
-    expect(footballIntel).toContain('"held", "missed", "failed", "push"');
-    expect(footballIntel).toContain('"final_held", "final_missed", "final_flipped", "final_push"');
-    expect(footballIntel).toContain('$0 == "push" || $0 == "final_push"');
+    expect(footballIntel).toContain('let finalStates: Set<String> = ["held", "missed", "push"]');
+    expect(footballIntel).toContain('let pushes = normalizedStates.filter { $0 == "push" }.count');
     expect(footballIntel).toContain('if pushes > 0 { parts.append("\\(pushes) PUSH") }');
-    expect(footballIntel).toContain('case "push", "final_push": return "PUSH"');
+    expect(footballHub).toContain('case "push": return .push');
+    expect(footballHub).not.toContain('final_push');
   });
 
-  it('shows the concise product headline before the backend identity token', () => {
-    expect(footballIntel).toContain('if !headline.isEmpty { return headline.uppercased() }');
-    expect(footballIntel.indexOf('if !headline.isEmpty')).toBeLessThan(
-      footballIntel.indexOf('signal.sweat?.factor_code'),
-    );
+  it('uses the canonical backend factor code instead of prose for proof identity', () => {
+    expect(footballIntel).toContain('signal.sweat?.factor_code?');
+    expect(footballIntel).not.toContain('if !headline.isEmpty { return headline.uppercased() }');
   });
 });
 
@@ -180,21 +180,21 @@ describe('Football Picks overview', () => {
     expect(views).toContain('let sourceFailures = Set(todaySnapshot.failures.map(\\.failureKey))');
     expect(views).toContain('let mergedToday = mergeGamePickSnapshot(');
     expect(views).toContain('Text("BOARD DATA UNAVAILABLE · PULL TO RETRY")');
-    expect(supabaseApi).toContain('"One or more pick sources failed"');
-    expect(supabaseApi).toContain('guard failures == 0 else');
+    expect(supabaseApi).toContain('throw SourceReadFailure(');
+    expect(supabaseApi).toContain('sourceErrors.allSatisfy(isTransientExternalFailure)');
   });
 
   it('keeps Winners shelves isolated when one sport source fails', () => {
     expect(views).toContain('private func fetchIsolatedGamePickSources(');
     expect(views).toContain('async let dailyTask = SupabaseAPI.fetchDailyPicks(date: date)');
     expect(views).toContain('async let nflTask = SupabaseAPI.fetchWeeklyNFLPicks(for: date)');
-    expect(views).toContain('snapshot.failures.contains(.daily) && league != "NFL"');
-    expect(views).toContain('snapshot.failures.contains(.nfl) && league == "NFL"');
-    expect(views).toContain('snapshot.failures.contains(.ncaabFuture) && league == "NCAAB"');
+    expect(views).toContain('snapshot.transientExternalFailures.contains(.daily) && league != "NFL"');
+    expect(views).toContain('snapshot.transientExternalFailures.contains(.nfl) && league == "NFL"');
+    expect(views).toContain('snapshot.transientExternalFailures.contains(.ncaabFuture) && league == "NCAAB"');
     expect(views).toContain('retaining: previousGameShelves.filter { !$0.settled }.flatMap(\\.picks)');
     expect(views).toContain('retaining: previousGameShelves.filter(\\.settled).flatMap(\\.picks)');
-    expect(views).toContain('todayProps = previousPropShelves.filter { !$0.settled }.flatMap(\\.props)');
-    expect(views).toContain('yProps = previousPropShelves.filter(\\.settled).flatMap(\\.props)');
+    expect(views).toContain('? previousPropShelves.filter { !$0.settled }.flatMap(\\.props)');
+    expect(views).toContain('? previousPropShelves.filter(\\.settled).flatMap(\\.props)');
     expect(views).toContain('boardDataFailed = !todaySnapshot.failures.isEmpty');
     expect(views).not.toContain('async let todayGameF = SupabaseAPI.fetchAllPicks(date: today)');
   });
@@ -227,6 +227,88 @@ describe('Football Picks overview', () => {
   });
 });
 
+describe('Home MLB/NFL board parity', () => {
+  it('uses one canonical tabbed panel and changes only the selected sport accent', () => {
+    const homeSheet = views.slice(
+      views.indexOf('@ViewBuilder private var homeSheet'),
+      views.indexOf('// MARK: Tonight extras'),
+    );
+    const rowBody = views.slice(
+      views.indexOf('struct HomeSheetRowView: View'),
+      views.indexOf('/// THE WINNERS STUB'),
+    );
+
+    expect(homeSheet).toContain('ForEach(HomeBoardLeague.allCases');
+    expect(homeSheet).toContain('homeSheetPanel(rows.filter { $0.league == selected.rawValue }');
+    expect(homeSheet).toContain('.stroke(selected.sport.accentColor.opacity(0.85), lineWidth: 1)');
+    expect(homeSheet.match(/homeSheetPanel\(/g)).toHaveLength(2); // declaration + one render
+    expect(homeSheet).not.toContain('ForEach(leagues');
+    expect(rowBody).not.toContain('row.league ==');
+    expect(views).toContain('if verb == "homeboard", let league = HomeBoardLeague(rawValue: arg.uppercased())');
+  });
+
+  it('joins picks and results by exact provider game id before legacy names', () => {
+    expect(models).toContain('let game_id: String?');
+    expect(views).toContain('if let gameID, let pickID = pick.game_id');
+    expect(views).toContain('return gameID == pickID');
+    expect(views).toContain('$0.game_id == String(gameID)');
+    expect(views).toContain('if gameID != nil, row.game_id != nil { return false }');
+    expect(models).toContain('let bdl_game_id: Int?           // exact provider identity for Home joins');
+    expect(views).toContain('gameID: big.bdl_game_id');
+  });
+
+  it('scopes live rows and Home navigation by league plus exact provider id', () => {
+    expect(views).toMatch(/\$0\.game_id == String\(gameID\)[\s\S]*?\$0\.league \?\? ""\)\.uppercased\(\) == league/);
+    expect(views).toContain('PicksFocusState.shared.focus(game: r.matchupFull');
+    expect(views).toContain('gameID: r.gameID');
+    expect(contentView).toContain('@Published var focusLeague: String? = nil');
+    expect(contentView).toContain('@Published var focusGameID: Int? = nil');
+    expect(views).toContain('$0.bdl_game_id == gameID');
+    expect(views).toContain('games.firstIndex { Self.gameIdentityKey($0.matchup, $0.commence) == target }');
+  });
+
+  it('treats malformed pick payloads as schema failures instead of empty boards', () => {
+    expect(models).toContain('Expected a pick array or a stringified pick array');
+    expect(supabaseApi).toContain('return try JSONDecoder().decode([GaryPick].self, from: data)');
+    expect(supabaseApi).toContain('Invalid stringified pick payload');
+    expect(models).not.toContain('self = .string("[]")');
+    expect(models).toContain('var hasValidStoredPayload: Bool');
+    expect(supabaseApi).toContain('try validateStoredGamePicks(decoded');
+    expect(supabaseApi).toContain('decodePropPickDictionaries(');
+    expect(supabaseApi).toContain('element \\(index) must be an object');
+    expect(supabaseApi).toContain('is present but picks is null or missing');
+    expect(supabaseApi).toContain('allPicks.append(pick)');
+    expect(supabaseApi).not.toContain('compactMap { PropPick.from');
+  });
+
+  it('shows truthful date-only kickoff copy and reads the canonical board source directly', () => {
+    expect(views).toContain('var statusText = g.kickoffTimeLabel');
+    expect(supabaseApi).toContain('return await fetchTomorrowBoard(date: date)');
+    const todayBoardLoader = supabaseApi.slice(
+      supabaseApi.indexOf('static func fetchTodayBoard'),
+      supabaseApi.indexOf('/// The night\'s betting recaps'),
+    );
+    expect(todayBoardLoader).not.toContain('table: "today_board"');
+    expect(todayBoardLoader).not.toContain('FALLBACK');
+  });
+
+  it('uses last-good slate data only for external transient failures', () => {
+    expect(supabaseApi).toContain('let isTransient = code == 429 || (500...599).contains(code)');
+    expect(supabaseApi).toContain('let isTransient = isTransientExternalFailure(error)');
+    expect(supabaseApi).toContain('rows: isTransient ? cachedDailySlate(date: date) : []');
+    expect(views).toContain('if slateResult.succeeded {');
+    expect(views).toContain('} else if slateResult.transientExternalFailure {');
+    expect(views).toContain('slate = []');
+  });
+
+  it('uses one accessible cobalt token for NFL identity surfaces', () => {
+    expect(designSystem).toContain('static let nflAccent = Color(hex: "#2C7EDB")');
+    expect(views).toContain('case .nflTDs: return GaryColors.nflAccent');
+    expect(supabaseApi).toContain('case "NFL": return GaryColors.nflAccent');
+    expect(views).toContain('case .nfl, .nflTDs: return (Color(hex: "#1F65B3"), Color(hex: "#103D73"))');
+  });
+});
+
 describe('Gary\'s Number receipt identity', () => {
   it('keeps the selected side visible and labels only pre-kick market phases', () => {
     expect(footballHub).toContain('private var selection: String?');
@@ -237,6 +319,21 @@ describe('Gary\'s Number receipt identity', () => {
     expect(footballHub).toContain('"LAST PREGAME"');
     expect(footballIntel).toContain('"LAST PREGAME"');
     expect(footballHub).not.toContain('"LAST SEEN"');
+  });
+
+  it('requires exact structured provenance and never parses receipt prose', () => {
+    expect(footballHub).toContain('static func isRenderableAfterGary(');
+    expect(footballHub).toContain('outerGameID == sealedGameID');
+    expect(footballHub).toContain('text(meta.published_at_source)?.lowercased() == "pick"');
+    expect(footballHub).toContain('publishedAt <= observedAt');
+    expect(footballHub).toContain('observedAt < kickoff');
+    expect(footballIntel).toContain('FootballProofContract.isRenderableAfterGary($0, exactGameID: exactGameID)');
+    const receipt = footballHub.slice(
+      footballHub.indexOf('private struct FootballHubReceiptRow'),
+      footballHub.indexOf('private struct FootballHubMarketPoint'),
+    );
+    expect(receipt).not.toContain('components(separatedBy: "→")');
+    expect(receipt).not.toContain('signal.value');
   });
 });
 

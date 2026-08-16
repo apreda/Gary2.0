@@ -9,22 +9,20 @@ import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
 
-// Normalize a team name for fuzzy matching (lowercase, strip punctuation, collapse whitespace)
+// Normalize provider and game team names before an EXACT identity comparison.
+// Never infer home/away from array order, a shared mascot, or a substring: an
+// unmatched market is safer as null than attached to the wrong side.
 const normalizeForMatch = (name) => {
   if (!name) return '';
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
-// Check if two team names match (exact first, then fuzzy includes-based fallback)
+// Check if two team names have the same normalized identity.
 const teamNamesMatch = (outcomeName, targetName) => {
   if (!outcomeName || !targetName) return false;
-  if (outcomeName === targetName) return true;
   const normOutcome = normalizeForMatch(outcomeName);
   const normTarget = normalizeForMatch(targetName);
-  if (normOutcome === normTarget) return true;
-  // Substring match: one contains the other (handles "Auburn" vs "Auburn Tigers", etc.)
-  if (normOutcome.includes(normTarget) || normTarget.includes(normOutcome)) return true;
-  return false;
+  return normOutcome.length > 0 && normOutcome === normTarget;
 };
 
 // Extract odds from a single bookmaker's markets
@@ -55,32 +53,6 @@ const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
         result.spread_away_odds = outcome.price ?? null;
       }
     }
-    // Fallback: try mascot-name matching (last word) for spreads
-    if (result.spread_home === null || result.spread_away === null) {
-      const homeLast = normalizeForMatch(homeTeam).split(' ').pop();
-      const awayLast = normalizeForMatch(awayTeam).split(' ').pop();
-      for (const outcome of spreadsMarket.outcomes) {
-        const outcomeLast = normalizeForMatch(outcome.name).split(' ').pop();
-        if (result.spread_home === null && outcomeLast === homeLast) {
-          result.spread_home = outcome.point;
-          result.spread_home_odds = outcome.price ?? null;
-        } else if (result.spread_away === null && outcomeLast === awayLast) {
-          result.spread_away = outcome.point;
-          result.spread_away_odds = outcome.price ?? null;
-        }
-      }
-    }
-    // Last resort: positional fallback
-    if (result.spread_home === null && result.spread_away === null && spreadsMarket.outcomes.length === 2) {
-      const [first, second] = spreadsMarket.outcomes;
-      if (typeof first.point === 'number' && typeof second.point === 'number') {
-        console.warn(`[Odds] ⚠️ Positional fallback used for spreads: ${homeTeam} vs ${awayTeam} — name matching failed for outcomes: ${spreadsMarket.outcomes.map(o => o.name).join(', ')}`);
-        result.spread_home = first.point;
-        result.spread_home_odds = first.price ?? null;
-        result.spread_away = second.point;
-        result.spread_away_odds = second.price ?? null;
-      }
-    }
   }
 
   // Extract moneyline (h2h)
@@ -91,28 +63,6 @@ const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
         result.moneyline_home = outcome.price;
       } else if (teamNamesMatch(outcome.name, awayTeam)) {
         result.moneyline_away = outcome.price;
-      }
-    }
-    // Fallback: try mascot-name matching (last word) before positional assignment
-    if (result.moneyline_home === null || result.moneyline_away === null) {
-      const homeLast = normalizeForMatch(homeTeam).split(' ').pop();
-      const awayLast = normalizeForMatch(awayTeam).split(' ').pop();
-      for (const outcome of h2hMarket.outcomes) {
-        const outcomeLast = normalizeForMatch(outcome.name).split(' ').pop();
-        if (result.moneyline_home === null && outcomeLast === homeLast) {
-          result.moneyline_home = outcome.price;
-        } else if (result.moneyline_away === null && outcomeLast === awayLast) {
-          result.moneyline_away = outcome.price;
-        }
-      }
-    }
-    // Last resort: positional fallback (BDL typically home first, away second)
-    if (result.moneyline_home === null && result.moneyline_away === null && h2hMarket.outcomes.length === 2) {
-      const [first, second] = h2hMarket.outcomes;
-      if (typeof first.price === 'number' && typeof second.price === 'number') {
-        console.warn(`[Odds] ⚠️ Positional fallback used for ML: ${homeTeam} vs ${awayTeam} — name matching failed for outcomes: ${h2hMarket.outcomes.map(o => o.name).join(', ')}`);
-        result.moneyline_home = first.price;
-        result.moneyline_away = second.price;
       }
     }
   }
@@ -209,21 +159,18 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam, sport) => {
     return emptyResult;
   }
 
-  // Try vendors in order — use the first one where spread/ML agree
-  let bestMismatch = null;
+  // Try vendors in order — use the first one where spread/ML agree.
+  // A direction mismatch is rejected, never recycled as a "best" fallback.
   for (const bookmaker of orderedBookmakers) {
     const odds = extractFromBookmaker(bookmaker, homeTeam, awayTeam);
     odds.line_vendor = (bookmaker.key || bookmaker.title || '').toLowerCase() || null;
     if (validateSpreadMLDirection(odds, bookmaker.key || bookmaker.title, sport)) {
       return odds;
     }
-    // Track first mismatch as fallback
-    if (!bestMismatch) bestMismatch = odds;
   }
 
-  // ALL vendors had spread/ML mismatch — use first vendor with warning
-  console.warn(`[Odds Service] ALL ${orderedBookmakers.length} vendors have spread/ML mismatch for ${homeTeam} vs ${awayTeam} — using first vendor as fallback`);
-  return bestMismatch || emptyResult;
+  console.warn(`[Odds Service] ALL ${orderedBookmakers.length} vendors have spread/ML mismatch for ${homeTeam} vs ${awayTeam} — market fields left null`);
+  return emptyResult;
 };
 
 // NOTE: fetchUpcomingOddsFallback and fetchOddsFromOddsApiByDate removed
@@ -398,13 +345,13 @@ export const oddsService = {
         } else {
           const perDay = await Promise.all(
             dates.map(async (d) => {
-              let dayGames = [];
-              try {
-                // PRIMARY SOURCE: Ball Don't Lie
-                console.log(`[Odds Service] ${sport}: Attempting Primary Source (BDL) for ${d}`);
-                dayGames = await ballDontLieOddsService.getGamesWithOddsForSport(sport, d);
-              } catch (err) {
-                console.warn(`[Odds Service] ${sport}: Failed fetching odds for ${d}:`, err?.message || err);
+              // PRIMARY SOURCE: Ball Don't Lie. A failed day rejects the whole
+              // requested window; returning the other days would publish and
+              // cache a partial slate as if it were complete.
+              console.log(`[Odds Service] ${sport}: Attempting Primary Source (BDL) for ${d}`);
+              const dayGames = await ballDontLieOddsService.getGamesWithOddsForSport(sport, d);
+              if (!Array.isArray(dayGames)) {
+                throw new Error(`[Odds Service] ${sport}: BDL returned a non-array slate for ${d}`);
               }
 
               // Note: If BDL returns games without odds, we still keep them.
@@ -423,13 +370,14 @@ export const oddsService = {
                 }
               }
 
-              return Array.isArray(dayGames) ? dayGames : [];
+              return dayGames;
             })
           );
           combined = perDay.flat();
         }
       } catch (e) {
         console.error(`[Odds Service] BallDontLieOdds adapter error for ${sport}:`, e?.message || e);
+        throw e;
       }
 
       if (!Array.isArray(combined) || combined.length === 0) {

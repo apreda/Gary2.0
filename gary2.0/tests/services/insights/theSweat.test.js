@@ -67,6 +67,7 @@ describe('THE SWEAT football proof', () => {
       games: [game],
       picks: [pick],
       liveScores: [{ game_id: '1393562', status: 'scheduled', updated_at: '2026-08-15T22:30:00Z' }],
+      teamStats: [],
       nowMs: Date.parse('2026-08-15T22:30:00Z'),
     });
 
@@ -169,6 +170,35 @@ describe('THE SWEAT football proof', () => {
     expect(rows).toEqual([]);
   });
 
+  it('never infers LIVE from a past kickoff or an unknown status', () => {
+    const rows = buildTheSweatRows({
+      league: 'NFL',
+      date: '2026-08-15',
+      games: [{ ...game, status: 'Q2 08:12' }],
+      picks: [pick],
+      liveScores: [{ game_id: '1393562', status: 'in progress', home_score: 7, away_score: 3 }],
+      teamStats: [],
+      nowMs: Date.parse('2026-08-16T00:00:00Z'),
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it('throws on malformed proof arrays and noncanonical stored score states', async () => {
+    expect(() => buildTheSweatRows({
+      league: 'NFL', date: '2026-08-15', games: [game], picks: [pick],
+      liveScores: [], teamStats: null,
+    })).toThrow('THE SWEAT teamStats must be an array');
+
+    await expect(computeTheSweat({
+      league: 'NFL', date: '2026-08-15', games: [game],
+      proofData: {
+        picks: [pick],
+        liveScores: [{ game_id: '1393562', status: 'in progress' }],
+        teamStats: [],
+      },
+    })).rejects.toThrow('canonical scheduled/live/final status');
+  });
+
   it('fails closed when there is no exact stored pick', async () => {
     let statCalls = 0;
     const rows = await computeTheSweat({
@@ -194,6 +224,42 @@ describe('THE SWEAT football proof', () => {
       client: { get: async (_url, options) => { calls.push(options.params); return { data: [] }; } },
     });
     expect(calls[0].season).toBe('eq.2026');
+  });
+
+  it('throws on missing storage config instead of reporting no proof', async () => {
+    await expect(loadStoredFootballPicks({
+      league: 'NFL',
+      date: '2026-08-15',
+      season: 2026,
+      supabaseUrl: '',
+      key: '',
+      client: { get: async () => ({ data: [] }) },
+    })).rejects.toThrow('Supabase configuration missing for football proof');
+  });
+
+  it('keeps a valid empty response distinct from malformed stored picks', async () => {
+    const request = {
+      league: 'NFL',
+      date: '2026-08-15',
+      season: 2026,
+      supabaseUrl: 'https://example.invalid',
+      key: 'test',
+    };
+
+    await expect(loadStoredFootballPicks({
+      ...request,
+      client: { get: async () => ({ data: [] }) },
+    })).resolves.toEqual([]);
+
+    await expect(loadStoredFootballPicks({
+      ...request,
+      client: { get: async () => ({ data: [{ picks: '{bad-json' }] }) },
+    })).rejects.toThrow('Malformed weekly_nfl_picks.picks JSON');
+
+    await expect(loadStoredFootballPicks({
+      ...request,
+      client: { get: async () => ({ data: [{ picks: 'null' }] }) },
+    })).rejects.toThrow('expected an array');
   });
 
   it('recovers a final score after the prior-day live row is pruned', async () => {

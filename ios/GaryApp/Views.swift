@@ -459,42 +459,6 @@ private enum BillfoldCompute {
             .sorted { $0.netUnits > $1.netUnits }
     }
 
-    static func topPickCandidates(from rows: [DailyPicksRow]) -> [BillfoldTopPickCandidate] {
-        rows.compactMap { row in
-            let picks = SupabaseAPI.parsePicksRow(row.picks)
-            let gamePicks = picks.filter { ($0.type ?? "game") != "prop" }
-            guard !gamePicks.isEmpty else { return nil }
-
-            let topPick: GaryPick?
-            if let manual = gamePicks.first(where: { $0.is_top_pick == true }) {
-                topPick = manual
-            } else {
-                topPick = gamePicks.max(by: { ($0.confidence ?? 0) < ($1.confidence ?? 0) })
-            }
-
-            guard let pickText = topPick?.pick, !pickText.isEmpty else { return nil }
-            return BillfoldTopPickCandidate(date: row.date, pickText: pickText)
-        }
-    }
-
-    /// Pick text+date -> Gary's stated confidence, from the raw daily-picks
-    /// rows the snapshot already downloads. Two key styles per pick: the
-    /// exact "date|pick" used by the Top-Pick grader, plus a normalized
-    /// odds-stripped variant for results whose pick_text drops the price.
-    static func confidenceIndex(from rows: [DailyPicksRow]) -> [String: Double] {
-        var index: [String: Double] = [:]
-        for row in rows {
-            for pick in SupabaseAPI.parsePicksRow(row.picks) {
-                guard let text = pick.pick, !text.isEmpty,
-                      let rawConf = pick.confidence, rawConf > 0 else { continue }
-                let conf = rawConf > 1 ? rawConf / 100 : rawConf
-                index["\(row.date)|\(text)"] = conf
-                index[normalizedPickKey(date: row.date, pick: text)] = conf
-            }
-        }
-        return index
-    }
-
     static func topPickCandidates(from metadata: [BillfoldPickMetadata]) -> [BillfoldTopPickCandidate] {
         Dictionary(grouping: metadata, by: \.date).compactMap { date, picks in
             let topPick = picks.first(where: \.isTopPick)
@@ -1963,6 +1927,10 @@ private enum GamePickSource: Hashable {
 private struct GamePickSourceSnapshot {
     let picks: [GaryPick]
     let failures: Set<GamePickSource>
+    /// Subset eligible for same-date last-good preservation. Schema, auth and
+    /// configuration failures remain in `failures` for the retry banner but do
+    /// not retain an old pick as if the primary were healthy.
+    let transientExternalFailures: Set<GamePickSource>
 }
 
 private func fetchIsolatedGamePickSources(
@@ -1979,10 +1947,20 @@ private func fetchIsolatedGamePickSources(
     var nfl: [GaryPick] = []
     var future: [GaryPick] = []
     var failures: Set<GamePickSource> = []
-    do { daily = try await dailyTask } catch { failures.insert(.daily) }
-    do { nfl = try await nflTask } catch { failures.insert(.nfl) }
+    var transientExternalFailures: Set<GamePickSource> = []
+    do { daily = try await dailyTask } catch {
+        failures.insert(.daily)
+        if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.daily) }
+    }
+    do { nfl = try await nflTask } catch {
+        failures.insert(.nfl)
+        if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.nfl) }
+    }
     if includeUpcomingNcaab {
-        do { future = try await futureTask } catch { failures.insert(.ncaabFuture) }
+        do { future = try await futureTask } catch {
+            failures.insert(.ncaabFuture)
+            if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.ncaabFuture) }
+        }
     }
 
     // weekly_nfl_picks is canonical for NFL. The future NCAAB response may
@@ -1990,7 +1968,11 @@ private func fetchIsolatedGamePickSources(
     let combined = daily.filter { ($0.league ?? "").uppercased() != "NFL" } + nfl + future
     var seen: Set<String> = []
     let unique = combined.filter { seen.insert($0.id).inserted }
-    return GamePickSourceSnapshot(picks: unique, failures: failures)
+    return GamePickSourceSnapshot(
+        picks: unique,
+        failures: failures,
+        transientExternalFailures: transientExternalFailures
+    )
 }
 
 private func mergeGamePickSnapshot(
@@ -1999,9 +1981,9 @@ private func mergeGamePickSnapshot(
 ) -> [GaryPick] {
     let retained = previous.filter { pick in
         let league = (pick.league ?? "OTHER").uppercased()
-        return (snapshot.failures.contains(.daily) && league != "NFL")
-            || (snapshot.failures.contains(.nfl) && league == "NFL")
-            || (snapshot.failures.contains(.ncaabFuture) && league == "NCAAB")
+        return (snapshot.transientExternalFailures.contains(.daily) && league != "NFL")
+            || (snapshot.transientExternalFailures.contains(.nfl) && league == "NFL")
+            || (snapshot.transientExternalFailures.contains(.ncaabFuture) && league == "NCAAB")
     }
     var seen: Set<String> = []
     return (snapshot.picks + retained).filter { seen.insert($0.id).inserted }
@@ -2060,6 +2042,9 @@ struct HomeView: View {
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
     @State private var slateGames: [DailySlateRow] = []
+    /// One physical Home board, switched between the two active pro-football /
+    /// baseball desks. Rows keep the canonical MLB geometry in both tabs.
+    @State private var selectedHomeBoardLeague: HomeBoardLeague = .mlb
     /// Date key actually backing `slateGames`. Keeping it beside the payload
     /// avoids mixing yesterday's rows with today's results during the 6am reload.
     @State private var loadedSlateDate = ""
@@ -2067,6 +2052,10 @@ struct HomeView: View {
     /// tracker and can shed/duplicate rows after FINAL; these records keep each
     /// CASHED/LOST stamp pinned until the slate rolls the following morning.
     @State private var sheetGameResults: [GameResult] = []
+    /// Same-session last-good result payloads are emergency transport buffers.
+    /// Successful empty responses replace them; schema/auth failures never use them.
+    @State private var recentGameResultsLastGood: [GameResult] = []
+    @State private var recentPropResultsLastGood: [PropResult] = []
     /// A foreground app may remain open across the cutoff. Check cheaply once a
     /// minute so the new board loads at 6am ET without requiring a relaunch.
     private let slateRolloverTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -2224,7 +2213,7 @@ struct HomeView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
-        .onGaryTour { verb, _ in
+        .onGaryTour { verb, arg in
             // The recap modal isn't a presented VC, so the generic "dismiss"
             // can't reach it — close it here (same ledger write as a real tap).
             if verb == "dismiss", showDailyRecap {
@@ -2234,6 +2223,9 @@ struct HomeView: View {
             // Day switcher for the screenshot tooling.
             if verb == "tomorrow" { selectedPhase = .tomorrow }
             if verb == "today" { selectedPhase = todayClockPhase }
+            if verb == "homeboard", let league = HomeBoardLeague(rawValue: arg.uppercased()) {
+                selectedHomeBoardLeague = league
+            }
         }
         .task(id: homeNonce) {
             let taskNonce = homeNonce
@@ -2330,8 +2322,24 @@ struct HomeView: View {
                     }
                     sevenDayForm = (try? await formFetch) ?? []
 
-                    let recentGameResults = (try? await gameResultsFetch) ?? []
-                    let recentPropResults = (try? await propResultsFetch) ?? []
+                    let recentGameResults: [GameResult]
+                    do {
+                        let fresh = try await gameResultsFetch
+                        recentGameResultsLastGood = fresh
+                        recentGameResults = fresh
+                    } catch {
+                        recentGameResults = SupabaseAPI.isTransientExternalFailure(error)
+                            ? recentGameResultsLastGood : []
+                    }
+                    let recentPropResults: [PropResult]
+                    do {
+                        let fresh = try await propResultsFetch
+                        recentPropResultsLastGood = fresh
+                        recentPropResults = fresh
+                    } catch {
+                        recentPropResults = SupabaseAPI.isTransientExternalFailure(error)
+                            ? recentPropResultsLastGood : []
+                    }
 
                     // Fallback: if the separate 7-day fetch came back empty, build the
                     // form from the reliable recentGameResults (the board's data, which
@@ -2626,7 +2634,8 @@ struct HomeView: View {
                             yesterdayTopPickResult = nil
                             yesterdayTopPickScore = nil
                         }
-                        if let yProps = try? await yPropsFetch, !yProps.isEmpty {
+                        do {
+                            let yProps = try await yPropsFetch
                             // HR fun-lane calls never front Home's prop slot.
                             let top = yProps.filter { !$0.isHRLane }
                                 .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
@@ -2637,6 +2646,15 @@ struct HomeView: View {
                                     let n = ($0.player_name ?? "").lowercased()
                                     return !n.isEmpty && (n == matchKey || n.contains(matchKey) || matchKey.contains(n))
                                 })?.result
+                            } else {
+                                yesterdayTopPropResult = nil
+                            }
+                        } catch {
+                            // Same-day last-good is an emergency transport policy,
+                            // never a way to hide malformed/auth/config payloads.
+                            if !SupabaseAPI.isTransientExternalFailure(error) {
+                                yesterdayTopProp = nil
+                                yesterdayTopPropResult = nil
                             }
                         }
                     }
@@ -2673,7 +2691,8 @@ struct HomeView: View {
                     // yesterday's GRADED prop (with Cash/No Cash) only when there's
                     // no fresh pick at all — never a stale prop without a result.
                     var propCount = 0
-                    if let allProps = try? await propPicksFetch, !allProps.isEmpty {
+                    do {
+                        let allProps = try await propPicksFetch
                         var estCal = Calendar.current
                         estCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
                         let slateFormatter = DateFormatter()
@@ -2687,10 +2706,10 @@ struct HomeView: View {
                             guard let iso = p.commence_time, let gd = parseISO8601(iso) else { return false }
                             return gd >= todayStart   // game is today or later (not a past game)
                         }
-                        if let top = freshProps.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first {
-                            freeProp = top
-                            propCount = freshProps.count
-                        }
+                        freeProp = freshProps.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first
+                        propCount = freshProps.count
+                    } catch {
+                        if !SupabaseAPI.isTransientExternalFailure(error) { freeProp = nil }
                     }
                     playsOnBoard = todayOnlyPicks.count + propCount
                     // (Parked All-Star preview now lives inside fetchDailyPicks —
@@ -2760,9 +2779,9 @@ struct HomeView: View {
             date: date,
             includeUpcomingNcaab: true
         )
-        async let propsFetch = try? SupabaseAPI.fetchPropPicks(date: date, forceRefresh: true)
-        async let gameResultsFetch = try? SupabaseAPI.fetchRecentGameResults(limit: 200)
-        async let propResultsFetch = try? SupabaseAPI.fetchRecentPropResults(limit: 200)
+        async let propsFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: true)
+        async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
+        async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200)
         async let recapsTodayFetch = SupabaseAPI.fetchGameRecaps(date: date)
         async let recapsGradedFetch = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
 
@@ -2771,9 +2790,27 @@ struct HomeView: View {
             pickSnapshot,
             retaining: previousPicks
         )
-        let fetchedProps = await propsFetch ?? []
-        let recentGames = await gameResultsFetch ?? []
-        let recentProps = await propResultsFetch ?? []
+        var fetchedProps: [PropPick] = []
+        var propsError: Error? = nil
+        do { fetchedProps = try await propsFetch } catch { propsError = error }
+        let recentGames: [GameResult]
+        do {
+            let fresh = try await gameResultsFetch
+            recentGameResultsLastGood = fresh
+            recentGames = fresh
+        } catch {
+            recentGames = SupabaseAPI.isTransientExternalFailure(error)
+                ? recentGameResultsLastGood : []
+        }
+        let recentProps: [PropResult]
+        do {
+            let fresh = try await propResultsFetch
+            recentPropResultsLastGood = fresh
+            recentProps = fresh
+        } catch {
+            recentProps = SupabaseAPI.isTransientExternalFailure(error)
+                ? recentPropResultsLastGood : []
+        }
         let recapsToday = await recapsTodayFetch
         let recapsGraded = await recapsGradedFetch
 
@@ -2791,10 +2828,14 @@ struct HomeView: View {
             uniquingKeysWith: { first, _ in first })
 
         let freshProps = Self.homeVisibleProps(fetchedProps, slateDate: date)
-        if !fetchedProps.isEmpty || freeProp == nil {
+        if propsError == nil {
             freeProp = freshProps.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
+        } else if let propsError, !SupabaseAPI.isTransientExternalFailure(propsError) {
+            freeProp = nil
         }
-        playsOnBoard = todayPicks.count + freshProps.count
+        if propsError == nil || !freshProps.isEmpty {
+            playsOnBoard = todayPicks.count + freshProps.count
+        }
 
         if !recentGames.isEmpty {
             scoreByMatchup = Dictionary(
@@ -3022,7 +3063,7 @@ struct HomeView: View {
             HomeMarqueeTracker(entries: marqueeEntries,
                                tomorrowTease: marqueeTomorrowTease,
                                onOpenGame: { m in
-                                   PicksFocusState.shared.focusGame = m
+                                   PicksFocusState.shared.focus(game: m)
                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
                                })
                 .opacity(animateIn ? 1 : 0)
@@ -3126,6 +3167,7 @@ struct HomeView: View {
     struct HomeSheetRow: Identifiable {
         enum Zone { case settled, live, upcoming }
         let id: String
+        let gameID: Int?
         let zone: Zone
         let league: String
         let matchupFull: String
@@ -3145,27 +3187,45 @@ struct HomeView: View {
         var hitLines: [String] = []
     }
 
+    private enum HomeBoardLeague: String, CaseIterable, Hashable {
+        case mlb = "MLB"
+        case nfl = "NFL"
+
+        var sport: Sport { self == .mlb ? .mlb : .nfl }
+    }
+
     /// Freshest live/final row for a slate game (the cache once it has polled,
     /// the one-shot fetch before that). Exact game id wins for doubleheaders.
     /// When the poller carries both a stale scheduled row and a final row, the
     /// scheduled row only wins before first pitch; after first pitch FINAL is
     /// authoritative. The old unconditional scheduled-first rule caused the
     /// finished board to regress to `STARTED` overnight.
-    private func sheetLive(_ full: String, gameID: Int? = nil, commence: String? = nil) -> LiveScore? {
+    private func sheetLive(_ full: String, league: String, gameID: Int? = nil,
+                           commence: String? = nil) -> LiveScore? {
+        let league = league.uppercased()
         let matches: [LiveScore]
         if let gameID {
             // Exact provider identity must not depend on a league-specific
             // abbreviation dictionary. That dictionary never covered every
             // NCAAF school and previously made an exact football row invisible.
-            let exact = liveScoresNow.filter { $0.game_id == String(gameID) }
+            let exact = liveScoresNow.filter {
+                $0.game_id == String(gameID) && ($0.league ?? "").uppercased() == league
+            }
             // At the 6am roll the cache can briefly contain yesterday's same-team
             // series game. Never fall back from today's id to a different id;
             // id-less legacy rows remain eligible for older feeds.
             matches = exact.isEmpty
-                ? liveScoresNow.filter { $0.game_id == nil && abbrGameMatches($0.abbrGame, matchup: full) }
+                ? liveScoresNow.filter {
+                    $0.game_id == nil
+                        && ($0.league ?? "").uppercased() == league
+                        && abbrGameMatches($0.abbrGame, matchup: full)
+                }
                 : exact
         } else {
-            matches = liveScoresNow.filter { abbrGameMatches($0.abbrGame, matchup: full) }
+            matches = liveScoresNow.filter {
+                ($0.league ?? "").uppercased() == league
+                    && abbrGameMatches($0.abbrGame, matchup: full)
+            }
         }
 
         // Unknown start keeps the historical behavior; callers with a real slate
@@ -3187,12 +3247,23 @@ struct HomeView: View {
     /// Durable game-result rows belonging to this slate matchup. Results can
     /// store either full team names or abbreviations, so match both directions
     /// through the same league keyword maps used by the live board.
-    private func sheetResults(for full: String, away: String, home: String, league: String) -> [GameResult] {
+    private func sheetResults(for full: String, away: String, home: String,
+                              league: String, gameID: Int?) -> [GameResult] {
+        if let gameID {
+            let exact = sheetGameResults.filter {
+                $0.game_id == String(gameID) && ($0.league ?? "").uppercased() == league
+            }
+            if !exact.isEmpty { return exact }
+        }
         let abbr = "\(Self.teamAbbrev(away, league: league)) @ \(Self.teamAbbrev(home, league: league))"
         let fullKey = full.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
         let abbrKey = abbr.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
 
         return sheetGameResults.filter { row in
+            // An exact result belonging to another game must never be adopted by
+            // the legacy matchup path. Only genuinely id-less history falls back.
+            if gameID != nil, row.game_id != nil { return false }
+            guard (row.league ?? "").uppercased() == league else { return false }
             guard let matchup = row.matchup, !matchup.isEmpty else { return false }
             let resultKey = matchup.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
             return resultKey == fullKey
@@ -3200,6 +3271,24 @@ struct HomeView: View {
                 || abbrGameMatches(matchup, matchup: full)
                 || abbrGameMatches(abbr, matchup: matchup)
         }
+    }
+
+    /// Exact provider identity is the normal join. Team names are retained only
+    /// for legacy stored picks that predate game_id persistence.
+    private static func homeBoardPick(_ pick: GaryPick, league: String?, gameID: Int?,
+                                      away: String?, home: String?) -> Bool {
+        let league = (league ?? "").uppercased()
+        guard (pick.league ?? "").uppercased() == league else { return false }
+        if let gameID, let pickID = pick.game_id {
+            return gameID == pickID
+        }
+        return (pick.awayTeam ?? "").caseInsensitiveCompare(away ?? "") == .orderedSame
+            && (pick.homeTeam ?? "").caseInsensitiveCompare(home ?? "") == .orderedSame
+    }
+
+    private static func homeBoardPick(_ pick: GaryPick, matches game: DailySlateRow) -> Bool {
+        homeBoardPick(pick, league: game.league, gameID: game.bdl_game_id,
+                      away: game.away_team, home: game.home_team)
     }
 
     /// A stored grade for this exact play. The pick signature strips only the
@@ -3247,30 +3336,30 @@ struct HomeView: View {
     private var sheetRows: [HomeSheetRow] {
         let games = slateGames
         guard !games.isEmpty else { return [] }
-        let bigKey = bigOneModel.map { "\($0.awayTeam ?? "")@\($0.homeTeam ?? "")" }
         var out: [HomeSheetRow] = []
         for (i, g) in games.enumerated() {
             let away = g.away_team ?? "", home = g.home_team ?? ""
             guard !away.isEmpty, !home.isEmpty else { continue }
             let full = "\(away) @ \(home)"
-            let calls = todayPicks.filter { p in
-                (p.awayTeam ?? "").caseInsensitiveCompare(away) == .orderedSame
-                    && (p.homeTeam ?? "").caseInsensitiveCompare(home) == .orderedSame
-            }
+            let lgUpper = (g.league ?? "").uppercased()
+            let calls = todayPicks.filter { Self.homeBoardPick($0, matches: g) }
             // All-Star specials: the sheet says the board EXISTS, never what's
             // on it (founder's no-reveal rule) — picks live on the Picks tab.
             let hasSpecials = calls.contains { ($0.type ?? "") == "special" }
             let callLine: String? = calls.isEmpty ? nil
                 : hasSpecials ? "GARY'S BOARD — \(calls.count) PICKS · PICKS TAB"
                 : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  ")
-            let ls = sheetLive(full, gameID: g.bdl_game_id, commence: g.commence_time)
-            let storedRows = sheetResults(for: full, away: away, home: home, league: (g.league ?? "").uppercased())
+            let ls = sheetLive(full, league: lgUpper, gameID: g.bdl_game_id,
+                               commence: g.commence_time)
+            let storedRows = sheetResults(for: full, away: away, home: home,
+                                          league: (g.league ?? "").uppercased(),
+                                          gameID: g.bdl_game_id)
             var zone: HomeSheetRow.Zone = .upcoming
             // Abbreviations, not names (founder, Jul 27): "SEA @ TEX" reads
             // cleaner on the queue and matches the live scorebug rows.
-            let lgUpper = (g.league ?? "").uppercased()
             var title = "\(Self.teamAbbrev(away, league: lgUpper)) @ \(Self.teamAbbrev(home, league: lgUpper))"
-            var statusText = TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true).uppercased()
+            var statusText = g.kickoffTimeLabel
+                ?? TomorrowView.etTime(g.commence_time, withZone: false, meridiem: true).uppercased()
             var statusColor = Color.white.opacity(0.62)
             // Before Gary's call lands, the pick slot holds the MARKET (founder,
             // Aug 3): the game's lines sit where the pick will go, so the gold
@@ -3386,7 +3475,8 @@ struct HomeView: View {
             // never show the stale morning number where the score now speaks.
             if zone != .upcoming { pendingLine = nil }
             out.append(HomeSheetRow(
-                id: "sheet-\(i)-\(full)",
+                id: "sheet-\((g.league ?? "").uppercased())-\(g.bdl_game_id.map(String.init) ?? "legacy-\(i)-\(full)")",
+                gameID: g.bdl_game_id,
                 zone: zone,
                 league: (g.league ?? "").uppercased(),
                 matchupFull: full,
@@ -3396,7 +3486,7 @@ struct HomeView: View {
                 clockText: clockText,
                 statusText: statusText,
                 statusColor: statusColor,
-                bigOne: bigKey == "\(away)@\(home)",
+                bigOne: bigOneModel.map { Self.homeBoardPick($0, matches: g) } ?? false,
                 commence: g.commence_time ?? "",
                 hitLines: hitLines
             ))
@@ -3448,9 +3538,9 @@ struct HomeView: View {
             let sides = matchup.components(separatedBy: " @ ")
             let away = sides[0], home = sides.count > 1 ? sides[1] : ""
             let title = "\(Self.shortTeam(away)) @ \(Self.shortTeam(home))"
-            let calls = todayPicks.filter { p in
-                (p.awayTeam ?? "").caseInsensitiveCompare(away) == .orderedSame
-                    && (p.homeTeam ?? "").caseInsensitiveCompare(home) == .orderedSame
+            let calls = todayPicks.filter {
+                Self.homeBoardPick($0, league: big.league, gameID: big.bdl_game_id,
+                                   away: away, home: home)
             }
             let pickLine: String? = calls.isEmpty ? nil : calls
                 .map { Self.homePickLabel($0.pick) }
@@ -3458,12 +3548,14 @@ struct HomeView: View {
             // No "PICK ~x:xx" line on the countdown hero (founder, Jul 27) —
             // the container tightens by exactly that row until the pick lands.
             let pendingLine: String? = nil
-            let ls = sheetLive(matchup, commence: big.commence_time)
+            let ls = sheetLive(matchup, league: big.league ?? "", gameID: big.bdl_game_id,
+                               commence: big.commence_time)
             let storedRows = sheetResults(
                 for: matchup,
                 away: away,
                 home: home,
-                league: (big.league ?? "").uppercased()
+                league: (big.league ?? "").uppercased(),
+                gameID: big.bdl_game_id
             )
             let verdicts = calls.map { p in ls.map { HomeLiveVerdict.evaluate(pick: p, live: $0) } ?? .neutral }
             var result: (String, Color)? = nil
@@ -3575,7 +3667,8 @@ struct HomeView: View {
                 pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
                 pendingLine: nil,
                 oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
-                live: sheetLive(matchup, gameID: br.bdl_game_id, commence: br.commence_time),
+                live: sheetLive(matchup, league: br.league ?? "", gameID: br.bdl_game_id,
+                                commence: br.commence_time),
                 verdict: nil,
                 result: nil,
                 railWorthy: false
@@ -3650,35 +3743,58 @@ struct HomeView: View {
         // board into their own section — "it should all stay in the board
         // view"): every game holds its slate slot all day; the row itself
         // rolls scheduled time → live verdict → the stamp in place.
-        let rows = sheetRows.sorted { $0.commence < $1.commence }
-        let anyLive = rows.contains { $0.zone == .live }
+        let rows = sheetRows
+            .filter { $0.league == HomeBoardLeague.mlb.rawValue || $0.league == HomeBoardLeague.nfl.rawValue }
+            .sorted { $0.commence < $1.commence }
+        let available = Set(rows.compactMap { HomeBoardLeague(rawValue: $0.league) })
+        let selected = available.contains(selectedHomeBoardLeague)
+            ? selectedHomeBoardLeague
+            : (available.contains(.mlb) ? .mlb : .nfl)
 
         if !rows.isEmpty {
             // The countdown/marquee-to-board boundary is neutral chrome. A
             // green rule read like a graded win and changed color mid-slate.
             HomeSectionRule(tint: GaryColors.warmWhite)
-            let leagues = Array(Set(rows.map(\.league))).sorted { a, b in
-                let ea = rows.filter { $0.league == a }.map(\.commence).min() ?? ""
-                let eb = rows.filter { $0.league == b }.map(\.commence).min() ?? ""
-                return ea < eb
-            }
-            ForEach(leagues, id: \.self) { lg in
-                if leagues.count > 1 {
-                    Text(lg)
-                        .font(.system(size: 12.5, weight: .bold).monospacedDigit()).tracking(1.4)
-                        .foregroundStyle(lg == "MLB" ? GaryColors.mlbGrass : lg == "WC" ? Color(hex: "#3FB6A8") : GaryColors.gold)
-                        .pageGutter()
-                }
-                homeSheetPanel(rows.filter { $0.league == lg }, liveGlow: anyLive)
-            }
+            homeSheetPanel(rows.filter { $0.league == selected.rawValue },
+                           selected: selected,
+                           available: available)
         }
     }
 
-    private func homeSheetPanel(_ rows: [HomeSheetRow], liveGlow: Bool = false) -> some View {
+    private func homeSheetPanel(_ rows: [HomeSheetRow], selected: HomeBoardLeague,
+                                available: Set<HomeBoardLeague>) -> some View {
         VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(HomeBoardLeague.allCases, id: \.self) { league in
+                    let enabled = available.contains(league)
+                    Button {
+                        selectedHomeBoardLeague = league
+                    } label: {
+                        Text(league.rawValue)
+                            .font(.system(size: 12.5, weight: .bold).monospacedDigit())
+                            .tracking(1.4)
+                            .foregroundStyle(league == selected
+                                ? league.sport.accentColor
+                                : Color.white.opacity(enabled ? 0.56 : 0.24))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .overlay(alignment: .bottom) {
+                                if league == selected {
+                                    Rectangle().fill(league.sport.accentColor).frame(height: 2)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!enabled)
+                    .accessibilityAddTraits(league == selected ? .isSelected : [])
+                }
+            }
+            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
-                    PicksFocusState.shared.focusGame = r.matchupFull
+                    PicksFocusState.shared.focus(game: r.matchupFull,
+                                                 league: r.league,
+                                                 gameID: r.gameID)
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
                 } label: {
                     HomeSheetRowView(row: r)
@@ -3693,11 +3809,10 @@ struct HomeView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(GaryColors.panelFill)
-                // GOLD outline (founder, Aug 6: "the outline around The Board
-                // shold be Gold") — the board wears Gary's color now, whether
-                // or not games are live.
+                // The component stays identical between tabs; only the selected
+                // sport's identity colors the single board outline.
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(GaryColors.gold.opacity(0.45), lineWidth: 1))
+                    .stroke(selected.sport.accentColor.opacity(0.85), lineWidth: 1))
         )
         .pageGutter()
     }
@@ -6929,8 +7044,8 @@ enum Sport: String, CaseIterable {
         switch self {
         case .all: return GaryColors.gold
         case .nba: return Color(hex: "#3B82F6")      // Blue
-        case .nfl: return GaryColors.nflAccent        // Green
-        case .nflTDs: return Color(hex: "#22C55E")   // Green
+        case .nfl: return GaryColors.nflAccent        // NFL cobalt
+        case .nflTDs: return GaryColors.nflAccent     // Same NFL identity
         case .nhl: return Color(hex: "#00A3E0")      // Ice Blue
         case .ncaab: return Color(hex: "#F97316")    // Orange
         case .ncaaf: return Color(hex: "#DC2626")    // Red
@@ -6938,7 +7053,7 @@ enum Sport: String, CaseIterable {
         case .mlb: return Color(hex: "#63D17E")      // Clean light green (the MLB label colour)
         case .mlbHR: return Color(hex: "#2D5A27")    // Outfield grass green (same as MLB)
         case .wnba: return Color(hex: "#F97316")     // Orange
-        case .worldCup: return Color(hex: "#14B8A6") // World Cup teal — greens belong to NFL/MLB
+        case .worldCup: return Color(hex: "#14B8A6") // World Cup teal — field green belongs to MLB
         }
     }
     
@@ -8837,12 +8952,18 @@ struct PremiumPicksView: View {
         )
         var results: [GameResult] = []
         var resultsFailed = false
-        do { results = try await resultsF } catch { resultsFailed = true }
+        var resultsTransientFailure = false
+        do { results = try await resultsF } catch {
+            resultsFailed = true
+            resultsTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
+        }
         var todayProps: [PropPick] = []
         var todayPropsFailed = false
         do { todayProps = try await todayPropsF } catch {
             todayPropsFailed = true
-            todayProps = previousPropShelves.filter { !$0.settled }.flatMap(\.props)
+            todayProps = SupabaseAPI.isTransientExternalFailure(error)
+                ? previousPropShelves.filter { !$0.settled }.flatMap(\.props)
+                : []
         }
         // Leagues with a GAME on today's slate = in-season. Off-season sports
         // (NBA/NHL once their season ends) have no game today, so we skip their
@@ -8854,9 +8975,9 @@ struct PremiumPicksView: View {
             .mapValues(\.count)
 
         // Yesterday's result map for settled (last-result) shelves.
-        var rMap: [String: String] = resultsFailed ? previousGameResults : [:]
-        var sMap: [String: String] = resultsFailed ? previousGameScores : [:]
-        var mMap: [String: String] = resultsFailed ? previousMatchupScores : [:]
+        var rMap: [String: String] = resultsTransientFailure ? previousGameResults : [:]
+        var sMap: [String: String] = resultsTransientFailure ? previousGameScores : [:]
+        var mMap: [String: String] = resultsTransientFailure ? previousMatchupScores : [:]
         for r in results.filter({ $0.game_date == yesterday }) {
             guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
             let key = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
@@ -8952,15 +9073,21 @@ struct PremiumPicksView: View {
         var yesterdayPropsFailed = false
         do { yProps = try await yPropsF } catch {
             yesterdayPropsFailed = true
-            yProps = previousPropShelves.filter(\.settled).flatMap(\.props)
+            yProps = SupabaseAPI.isTransientExternalFailure(error)
+                ? previousPropShelves.filter(\.settled).flatMap(\.props)
+                : []
         }
         var recentPropResults: [PropResult] = []
         var propResultsFailed = false
-        do { recentPropResults = try await recentPropResultsF } catch { propResultsFailed = true }
+        var propResultsTransientFailure = false
+        do { recentPropResults = try await recentPropResultsF } catch {
+            propResultsFailed = true
+            propResultsTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
+        }
         // Exact prop identity and NOT yesterday-only: on a day-game slate props
         // grade mid-afternoon. Date + player + type + line + matchup keeps a
         // same-player alternate market from borrowing another prop's outcome.
-        var pMap: [String: String] = propResultsFailed ? previousPropResults : [:]
+        var pMap: [String: String] = propResultsTransientFailure ? previousPropResults : [:]
         for r in recentPropResults {
             guard let key = winnerPropResultKey(for: r),
                   let result = r.result, !result.isEmpty else { continue }
@@ -10150,6 +10277,7 @@ struct GaryPicksView: View {
         // Use a timeout to prevent infinite loading
         var picks: [GaryPick] = []
         var didFail = false
+        var transientFailure = false
         do {
             let arr = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh)
@@ -10157,22 +10285,26 @@ struct GaryPicksView: View {
             picks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
         } catch {
             didFail = true
+            transientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         // Determine which sports have fresh picks today
         let freshSports = Set(picks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+        let effectiveFreshSports = transientFailure ? sportsWithFreshPicks : freshSports
 
         // Always fetch yesterday's picks + results for sports without fresh picks today
         var yPicks: [GaryPick] = []
         var resultsMap: [String: String] = [:]
         var hasYesterday = false
+        var yesterdayFailed = false
+        var yesterdayTransientFailure = false
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
             let fetched = try await yesterdayFetch
             let filtered = fetched.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
 
             // Only keep yesterday picks for sports that DON'T have fresh picks today
-            let yesterdaySportsNeeded = filtered.filter { !freshSports.contains(($0.league ?? "").uppercased()) }
+            let yesterdaySportsNeeded = filtered.filter { !effectiveFreshSports.contains(($0.league ?? "").uppercased()) }
             if !yesterdaySportsNeeded.isEmpty {
                 yPicks = yesterdaySportsNeeded
                 hasYesterday = true
@@ -10187,15 +10319,20 @@ struct GaryPicksView: View {
                 }
             }
         } catch {
-            // Yesterday fetch failed — just show today's picks
+            yesterdayFailed = true
+            yesterdayTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         await MainActor.run {
-            allPicks = picks
-            yesterdayPicks = yPicks
-            sportsWithFreshPicks = freshSports
-            showingYesterdayResults = hasYesterday
-            yesterdayResultsMap = resultsMap
+            if !didFail || !transientFailure {
+                allPicks = picks
+                sportsWithFreshPicks = freshSports
+            }
+            if !yesterdayFailed || !yesterdayTransientFailure {
+                yesterdayPicks = yPicks
+                showingYesterdayResults = hasYesterday
+                yesterdayResultsMap = resultsMap
+            }
             fetchFailed = didFail && picks.isEmpty && yPicks.isEmpty
             loading = false
             if !didFail { lastUpdated = Date() }
@@ -11346,12 +11483,14 @@ struct GaryPropsView: View {
         // Use a timeout to prevent infinite loading
         var props: [PropPick] = []
         var didFail = false
+        var transientFailure = false
         do {
             props = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
         } catch {
             didFail = true
+            transientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         // Fetch today's prop results to stamp W/L on completed props
@@ -11374,18 +11513,21 @@ struct GaryPropsView: View {
 
         // Determine which sports have fresh props today
         let freshSports = Set(props.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
+        let effectiveFreshSports = transientFailure ? sportsWithFreshProps : freshSports
 
         // Fetch yesterday's props + results for sports without fresh props today
         var yProps: [PropPick] = []
         var yMap: [String: String] = [:]
         var hasYesterday = false
+        var yesterdayFailed = false
+        var yesterdayTransientFailure = false
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
             let fetched = try await withTimeout(seconds: 20) {
                 try await SupabaseAPI.fetchPropPicks(date: yesterday, forceRefresh: forceRefresh)
             }
 
-            let yesterdaySportsNeeded = fetched.filter { !freshSports.contains(($0.effectiveLeague ?? "").uppercased()) }
+            let yesterdaySportsNeeded = fetched.filter { !effectiveFreshSports.contains(($0.effectiveLeague ?? "").uppercased()) }
             if !yesterdaySportsNeeded.isEmpty {
                 yProps = yesterdaySportsNeeded
                 hasYesterday = true
@@ -11403,18 +11545,23 @@ struct GaryPropsView: View {
                 }
             }
         } catch {
-            // Yesterday fetch failed — just show today's props
+            yesterdayFailed = true
+            yesterdayTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         await MainActor.run {
             // HR fun-lane picks never render on the props board — they belong
             // to the Hub's Home Run Threats lane (Billfold tracks their tally).
-            allProps = props.filter { !$0.isHRLane }
+            if !didFail || !transientFailure {
+                allProps = props.filter { !$0.isHRLane }
+                sportsWithFreshProps = freshSports
+            }
             propResultsMap = todayMap
-            yesterdayProps = yProps.filter { !$0.isHRLane }
-            yesterdayResultsMap = yMap
-            sportsWithFreshProps = freshSports
-            showingYesterdayResults = hasYesterday
+            if !yesterdayFailed || !yesterdayTransientFailure {
+                yesterdayProps = yProps.filter { !$0.isHRLane }
+                yesterdayResultsMap = yMap
+                showingYesterdayResults = hasYesterday
+            }
             fetchFailed = didFail && props.isEmpty && yProps.isEmpty
             loading = false
             if !didFail { lastUpdated = Date() }
@@ -17003,7 +17150,7 @@ func shareFieldColors(for sport: Sport) -> (top: Color, bottom: Color) {
     case .nba, .wnba:   return (Color(hex: "#3B82F6"), Color(hex: "#1E50C8"))
     case .ncaab:        return (Color(hex: "#EA6A12"), Color(hex: "#B54A08"))
     case .nhl:          return (Color(hex: "#0795C9"), Color(hex: "#045E84"))
-    case .nfl, .nflTDs: return (Color(hex: "#1E9E4F"), Color(hex: "#136B36"))
+    case .nfl, .nflTDs: return (Color(hex: "#1F65B3"), Color(hex: "#103D73"))
     case .ncaaf:        return (Color(hex: "#CD2828"), Color(hex: "#8E1B1B"))
     case .epl:          return (Color(hex: "#8B5CF6"), Color(hex: "#6128D9"))
     case .worldCup:     return (Color(hex: "#14B8A6"), Color(hex: "#0D7568"))
@@ -19760,12 +19907,14 @@ final class PropsSlateStore: ObservableObject {
 
         var props: [PropPick] = []
         var didFail = false
+        var transientFailure = false
         do {
             props = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
         } catch {
             didFail = true
+            transientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         // Keep only FRESH props (game today or upcoming). A game that already
@@ -19791,12 +19940,14 @@ final class PropsSlateStore: ObservableObject {
         let allResults = (try? await SupabaseAPI.fetchPropResults(since: SupabaseAPI.yesterdayEST(), forceRefresh: forceRefresh)) ?? []
 
         let freshSports = Set(props.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
+        let effectiveFreshSports = transientFailure ? sportsWithFreshProps : freshSports
 
         var yProps: [PropPick] = []
         var yPropsAll: [PropPick] = []
         var yMap: [String: String] = [:]
         var hasYesterday = false
         var yFetchOK = false   // true = yesterday fetch SUCCEEDED (even if empty); false = threw
+        var yTransientFailure = false
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
             let fetched = try await withTimeout(seconds: 20) {
@@ -19807,7 +19958,7 @@ final class PropsSlateStore: ObservableObject {
             // Props surface may still offer its NFL-TDs lens, while the Picks
             // page now shows every NFL play together under the NFL tab.
             yPropsAll = fetched   // UNGATED — for the explicit Yesterday view
-            let yesterdaySportsNeeded = fetched.filter { !freshSports.contains(($0.effectiveLeague ?? "").uppercased()) }
+            let yesterdaySportsNeeded = fetched.filter { !effectiveFreshSports.contains(($0.effectiveLeague ?? "").uppercased()) }
             if !yesterdaySportsNeeded.isEmpty {
                 yProps = yesterdaySportsNeeded
                 hasYesterday = true
@@ -19823,7 +19974,7 @@ final class PropsSlateStore: ObservableObject {
                 }
             }
         } catch {
-            // Yesterday fetch failed — just show today's props
+            yTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         // TODAY's graded props — same keying as resultForProp, so the Today board
@@ -19839,25 +19990,24 @@ final class PropsSlateStore: ObservableObject {
             tPropMap[makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)] = outcome.lowercased()
         }
 
-        // Keep-last-good: a refresh that returns nothing (a failed or transient
-        // fetch) must NEVER wipe a populated board — that was the #16 refresh bug
-        // (today's picks vanished on pull-to-refresh). Commit each half only when it
-        // actually has data, or when there's nothing to lose.
-        if !props.isEmpty || allProps.isEmpty {
+        // A successful empty is authoritative and clears the board. Only a
+        // whitelisted external transient may retain same-date last-good; schema,
+        // auth and configuration failures fail closed and expose the retry state.
+        if !didFail || !transientFailure {
             allProps = props
             sportsWithFreshProps = freshSports
         }
         // Reset the fallback whenever the yesterday fetch SUCCEEDED (yFetchOK) — even
         // when it now returns nothing needed (today covers every sport). Guarding on
         // !yProps.isEmpty alone latched showingYesterdayResults ON, so settled yesterday
-        // props lingered on the Today board after today filled in. Only a THROWN fetch
-        // keeps last-good.
-        if yFetchOK || yesterdayProps.isEmpty {
+        // props lingered on the Today board after today filled in. Only a typed
+        // transient external failure keeps last-good.
+        if yFetchOK || !yTransientFailure {
             yesterdayProps = yProps
             yesterdayResultsMap = yMap
             showingYesterdayResults = hasYesterday
         }
-        if yFetchOK || yesterdayPropsAll.isEmpty {
+        if yFetchOK || !yTransientFailure {
             yesterdayPropsAll = yPropsAll
         }
         if !tPropMap.isEmpty || todayPropResults.isEmpty { todayPropResults = tPropMap }
@@ -19895,7 +20045,20 @@ final class PropsSlateStore: ObservableObject {
         // intel) before Gary's picks post.
         let slateResult = await slateFetch
         let freshSlate = slateResult.rows
-        if !freshSlate.isEmpty || slate.isEmpty { slate = freshSlate }   // keep-last-good
+        if slateResult.succeeded {
+            // Explicit [] means the source verified a dark slate (or every game
+            // was removed). Never retain a previous same-date board here.
+            slate = freshSlate
+        } else if slateResult.transientExternalFailure {
+            // Prefer the persisted same-date cache when available; otherwise the
+            // current in-memory same-date slate is already the last-good copy.
+            if !freshSlate.isEmpty { slate = freshSlate }
+        } else {
+            // Internal auth/config/schema failures are not emergencies and must
+            // not be disguised by an old board. The explicit unavailable state
+            // makes the broken primary visible and retryable.
+            slate = []
+        }
         slateUnavailable = !slateResult.succeeded && slate.isEmpty
         let freshSports = Set(mergedToday.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
 
@@ -21666,12 +21829,27 @@ struct PicksCarouselView: View {
     /// match attempt has been made.
     private func consumeFocus() {
         guard let focus = focusState.focusGame else { return }
+        let focusLeague = focusState.focusLeague
+        let focusGameID = focusState.focusGameID
         // Deep links from the Hub land on TODAY's board (where the game lives).
         pickDay = .today
         guard !games.isEmpty else { return }
-        focusState.focusGame = nil
+        focusState.clearGameFocus()
         let apply = {
-            if let idx = games.firstIndex(where: { abbrGameMatches(focus, matchup: $0.matchup) }) {
+            let exactSlate = focusGameID.flatMap { gameID in
+                store.slate.first {
+                    $0.bdl_game_id == gameID
+                        && (focusLeague == nil || ($0.league ?? "").uppercased() == focusLeague)
+                }
+            }
+            let exactKey = exactSlate.map {
+                Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
+                                     $0.commence_time.flatMap(parseISO8601))
+            }
+            let idx = exactKey.flatMap { target in
+                games.firstIndex { Self.gameIdentityKey($0.matchup, $0.commence) == target }
+            } ?? games.firstIndex(where: { abbrGameMatches(focus, matchup: $0.matchup) })
+            if let idx {
                 withAnimation(.easeInOut(duration: 0.25)) { page = idx + 1 }
             }
         }

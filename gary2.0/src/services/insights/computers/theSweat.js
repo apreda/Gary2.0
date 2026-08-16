@@ -65,21 +65,43 @@ function clean(value) {
   return text;
 }
 
+function validInstant(value) {
+  if (!clean(value)) return null;
+  const instant = new Date(value);
+  return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
+}
+
 function normalize(value) {
   return String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function flattenPicks(value) {
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
+function requireObjectArray(value, label) {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${label} must be an array`);
+  }
+  for (const [index, item] of value.entries()) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new TypeError(`${label}[${index}] must be an object`);
     }
   }
-  return [];
+  return value;
+}
+
+function flattenPicks(value, table, rowIndex) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    let parsed;
+    try {
+      parsed = JSON.parse(value);
+    } catch (error) {
+      throw new Error(
+        `Malformed ${table}.picks JSON at row ${rowIndex}: ${error.message}`,
+        { cause: error },
+      );
+    }
+    if (Array.isArray(parsed)) return parsed;
+  }
+  throw new TypeError(`Malformed ${table}.picks at row ${rowIndex}: expected an array`);
 }
 
 function exactGameId(value) {
@@ -152,14 +174,12 @@ function marketForPick(pick) {
   return line == null ? null : { type: 'spread', line };
 }
 
-function normalizedStatus(score, game, nowMs) {
-  const stored = String(score?.status ?? '').toLowerCase();
-  if (stored === 'live' || stored === 'final' || stored === 'scheduled') return stored;
-  const raw = String(game?.status_state ?? game?.status ?? '').toLowerCase();
-  if (raw.includes('final')) return 'final';
-  if (raw.includes('progress') || raw.includes('q1') || raw.includes('q2') || raw.includes('q3') || raw.includes('q4')) return 'live';
-  const start = Date.parse(game?.date ?? game?.commence_time ?? '');
-  return Number.isFinite(start) && start <= nowMs ? 'live' : 'scheduled';
+function normalizedStatus(score, game) {
+  for (const value of [score?.status, game?.status_state, game?.status]) {
+    const state = String(value ?? '').trim().toLowerCase();
+    if (state === 'scheduled' || state === 'live' || state === 'final') return state;
+  }
+  return null;
 }
 
 function scorePair(score, game) {
@@ -353,24 +373,35 @@ function matchup(game, pick) {
   return `${away} @ ${home}`;
 }
 
-export function buildTheSweatRows({ league, date, games = [], picks = [], liveScores = [], teamStats = [], nowMs = Date.now() } = {}) {
+export function buildTheSweatRows({ league, date, games, picks, liveScores, teamStats, nowMs = Date.now() } = {}) {
   const leagueKey = String(league ?? '').toLowerCase();
   if (!FOOTBALL.has(leagueKey)) return [];
-  const gameById = new Map(games.map((game) => [String(game?.id), game]));
-  const scoreById = new Map(liveScores.map((score) => [String(score?.game_id ?? score?.gameId), score]));
+  const gameRows = requireObjectArray(games, 'THE SWEAT games');
+  const pickRows = requireObjectArray(picks, 'THE SWEAT picks');
+  const scoreRows = requireObjectArray(liveScores, 'THE SWEAT liveScores');
+  const statRows = requireObjectArray(teamStats, 'THE SWEAT teamStats');
+  const gameById = new Map(gameRows.map((game) => [String(game?.id), game]));
+  const scoreById = new Map(scoreRows.map((score) => [String(score?.game_id ?? score?.gameId), score]));
   const output = [];
 
-  for (const pick of picks) {
+  for (const pick of pickRows) {
     const gameId = exactGameId(pick);
     const game = gameId ? gameById.get(gameId) : null;
     if (!gameId || !game) continue;
     const commence = pick?.commence_time ?? game?.date;
     if (commence && etDateStr(commence) !== date) continue;
     const score = scoreById.get(gameId) ?? null;
-    const status = normalizedStatus(score, game, nowMs);
+    const status = normalizedStatus(score, game);
+    if (!status) continue;
+    // A provider can lag at kickoff and continue reporting "scheduled" after
+    // play should have begun. That is not trustworthy pregame proof: emitting
+    // WATCH would overwrite a last verified live/final receipt. Omit the row
+    // until an exact live/final state arrives.
+    const commenceMs = Date.parse(String(commence ?? ''));
+    if (status === 'scheduled' && Number.isFinite(commenceMs) && commenceMs <= nowMs) continue;
     const asOf = score?.updated_at ?? new Date(nowMs).toISOString();
     const seasonType = seasonTypeFor(game, leagueKey);
-    const statsRows = liveStatRows(teamStats, gameId);
+    const statsRows = liveStatRows(statRows, gameId);
     const factors = [numberFactor({ pick, game, score, status, seasonType, asOf })]
       .concat(FACTORS.map((definition) => evidenceFactor({
         definition, pick, game, statsRows, status, seasonType, asOf,
@@ -435,7 +466,22 @@ async function restRows(path, params, options) {
     params,
     headers: { apikey: key, Authorization: `Bearer ${key}` },
   });
-  return Array.isArray(data) ? data : [];
+  if (!Array.isArray(data)) {
+    throw new TypeError(`Malformed ${path} response: expected an array`);
+  }
+  return data;
+}
+
+function picksFromRows(rows, table) {
+  return rows.flatMap((row, rowIndex) => {
+    const picks = flattenPicks(row?.picks, table, rowIndex);
+    for (const pick of picks) {
+      if (!pick || typeof pick !== 'object' || Array.isArray(pick)) {
+        throw new TypeError(`Malformed ${table}.picks entry at row ${rowIndex}`);
+      }
+    }
+    return picks;
+  });
 }
 
 export async function loadStoredFootballPicks({ league, date, season, ...options }) {
@@ -444,7 +490,9 @@ export async function loadStoredFootballPicks({ league, date, season, ...options
     const resolvedSeason = Number.isInteger(Number(season))
       ? Number(season)
       : footballSeasonForDate(date);
-    if (!Number.isInteger(resolvedSeason)) return [];
+    if (!Number.isInteger(resolvedSeason)) {
+      throw new TypeError('Invalid NFL date/season for football proof');
+    }
     const rows = await restRows('weekly_nfl_picks', {
       season: `eq.${resolvedSeason}`,
       week_start: `lte.${date}`,
@@ -452,19 +500,22 @@ export async function loadStoredFootballPicks({ league, date, season, ...options
       order: 'week_start.desc',
       limit: 3,
     }, options);
-    return rows.flatMap((row) => flattenPicks(row?.picks)).filter((pick) => {
+    return picksFromRows(rows, 'weekly_nfl_picks').filter((pick) => {
       const commence = pick?.commence_time;
       return String(pick?.league ?? '').toUpperCase() === 'NFL'
         && (!commence || etDateStr(commence) === date);
     });
   }
   if (leagueKey === 'ncaaf') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date ?? ''))) {
+      throw new TypeError('Invalid NCAAF date for football proof');
+    }
     const rows = await restRows('daily_picks', {
       date: `eq.${date}`,
       select: 'picks',
       limit: 1,
     }, options);
-    return rows.flatMap((row) => flattenPicks(row?.picks)).filter((pick) =>
+    return picksFromRows(rows, 'daily_picks').filter((pick) =>
       ['NCAAF', 'AMERICANFOOTBALLNCAAF'].includes(normalize(pick?.league ?? pick?.sport).toUpperCase())
     );
   }
@@ -517,26 +568,66 @@ export async function loadFootballSettledScores({ league, date, ...options }) {
 
 export async function computeTheSweat(ctx) {
   const league = String(ctx?.league ?? '').toLowerCase();
-  if (!FOOTBALL.has(league) || !Array.isArray(ctx?.games) || ctx.games.length === 0) return [];
-  const picks = ctx?.proofData?.picks ?? await loadStoredFootballPicks({
+  if (!FOOTBALL.has(league)) return [];
+  const games = requireObjectArray(ctx?.games, 'THE SWEAT games');
+  if (games.length === 0) return [];
+  if (games.some((game) => game?.id == null)) {
+    throw new TypeError('THE SWEAT every game requires an exact provider id');
+  }
+
+  const proofData = ctx?.proofData;
+  if (proofData != null && (typeof proofData !== 'object' || Array.isArray(proofData))) {
+    throw new TypeError('THE SWEAT proofData must be an object');
+  }
+  const hasInjectedPicks = Object.prototype.hasOwnProperty.call(proofData ?? {}, 'picks');
+  const loadedPicks = hasInjectedPicks ? proofData.picks : await loadStoredFootballPicks({
     league,
     date: ctx.date,
     season: ctx.season,
   });
+  const picks = requireObjectArray(loadedPicks, 'THE SWEAT picks');
   if (!picks.length) return [];
-  const liveScores = ctx?.proofData?.liveScores ?? await loadFootballLiveScores({ league, date: ctx.date });
-  const activeIds = new Set(liveScores
-    .filter((row) => ['live', 'final'].includes(String(row?.status).toLowerCase()))
-    .map((row) => String(row?.game_id)));
-  const activeGameIds = ctx.games.map((game) => game?.id).filter((id) => activeIds.has(String(id)));
-  let teamStats = ctx?.proofData?.teamStats ?? [];
-  if (!ctx?.proofData?.teamStats && activeGameIds.length) {
-    teamStats = await ctx.bdl.getTeamStats(SPORT_KEY[league], { game_ids: activeGameIds, per_page: 100 }, 1);
+  for (const pick of picks) {
+    if (!clean(pick?.pick_id) || exactGameId(pick) == null) {
+      throw new TypeError('THE SWEAT every stored pick requires pick_id and exact game_id');
+    }
   }
+
+  const hasInjectedScores = Object.prototype.hasOwnProperty.call(proofData ?? {}, 'liveScores');
+  const loadedScores = hasInjectedScores
+    ? proofData.liveScores
+    : await loadFootballLiveScores({ league, date: ctx.date });
+  const liveScores = requireObjectArray(loadedScores, 'THE SWEAT liveScores');
+  for (const row of liveScores) {
+    const gameId = row?.game_id ?? row?.gameId;
+    if (gameId == null || normalizedStatus(row, null) == null
+        || (row?.updated_at != null && !validInstant(row.updated_at))) {
+      throw new TypeError(
+        'THE SWEAT liveScores require game_id, canonical scheduled/live/final status, and a valid optional updated_at',
+      );
+    }
+  }
+  const activeIds = new Set(liveScores
+    .filter((row) => ['live', 'final'].includes(normalizedStatus(row, null)))
+    .map((row) => String(row?.game_id ?? row?.gameId)));
+  const activeGameIds = games.map((game) => game?.id).filter((id) => activeIds.has(String(id)));
+  const hasInjectedStats = Object.prototype.hasOwnProperty.call(proofData ?? {}, 'teamStats');
+  let loadedStats = hasInjectedStats ? proofData.teamStats : [];
+  if (!hasInjectedStats && activeGameIds.length) {
+    if (typeof ctx?.bdl?.getTeamStats !== 'function') {
+      throw new Error('BDL team-stats configuration missing for THE SWEAT proof');
+    }
+    loadedStats = await ctx.bdl.getTeamStats(
+      SPORT_KEY[league],
+      { game_ids: activeGameIds, per_page: 100 },
+      1,
+    );
+  }
+  const teamStats = requireObjectArray(loadedStats, 'THE SWEAT teamStats');
   return buildTheSweatRows({
     league,
     date: ctx.date,
-    games: ctx.games,
+    games,
     picks,
     liveScores,
     teamStats,

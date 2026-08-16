@@ -36,6 +36,7 @@ import {
   pendingNcaafKickoffRefreshEntries,
   pendingEntriesForChildBudget,
   partitionNcaafKickoffReadiness,
+  partitionNflKickoffReadiness,
   partitionStartedEntries,
   reanchorGameSchedule,
   runIndependentDecisionLanes,
@@ -45,6 +46,7 @@ import {
   scheduleEntryKey,
   sportFetchRetryIsCurrent,
 } from './lib/schedulerPolicy.js';
+import { requireNonFootballStart } from './lib/schedulerSourcePolicy.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
 import { parsePickRunOutcome } from './lib/pickRunReliability.js';
 import {
@@ -52,6 +54,10 @@ import {
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from '../src/services/ncaafGamePolicy.js';
+import {
+  nflSlateDateForKickoff,
+  resolveNflKickoff,
+} from '../src/services/nflGamePolicy.js';
 
 const PROJECT_DIR = join(import.meta.dirname, '..');
 const LOG_DIR = join(PROJECT_DIR, 'logs', 'scheduler');
@@ -179,7 +185,7 @@ function extractStartTimeIso(game, sportKey) {
   if (sportKey === 'basketball_nba') return game.datetime;
   if (sportKey === 'icehockey_nhl') return game.start_time_utc;
   if (sportKey === 'baseball_mlb') return game.date;
-  if (sportKey === 'americanfootball_nfl') return game.date;
+  if (sportKey === 'americanfootball_nfl') return resolveNflKickoff(game).iso;
   if (sportKey === 'americanfootball_ncaaf') return resolveNcaafKickoff(game).iso;
   throw new Error(`extractStartTimeIso: unknown sportKey ${sportKey}`);
 }
@@ -200,29 +206,33 @@ function addDaysISO(dateStr, days) {
 async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
   const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
   const dates = [etDateStr, addDaysISO(etDateStr, 1)];
-  const exactNcaafGameIds = sportKey === 'americanfootball_ncaaf'
+  const supportsExactKickoffRetry = sportKey === 'americanfootball_ncaaf'
+    || sportKey === 'americanfootball_nfl';
+  const exactFootballGameIds = supportsExactKickoffRetry
     ? [...new Set(
         (Array.isArray(gameIds) ? gameIds : [])
           .filter((id) => id !== null && id !== undefined && String(id).trim() !== '')
           .map(String),
       )].sort()
     : [];
-  const params = exactNcaafGameIds.length > 0
-    ? { game_ids: exactNcaafGameIds, per_page: 100 }
+  const params = exactFootballGameIds.length > 0
+    ? { game_ids: exactFootballGameIds, per_page: 100 }
     : { dates, per_page: 100 };
   // BDL's NFL games endpoint defaults away from preseason. August would then
   // look like a dark league even while real games are on the board.
-  if (sportKey === 'americanfootball_nfl') params.season_type = [1, 2, 3];
+  if (sportKey === 'americanfootball_nfl' && exactFootballGameIds.length === 0) {
+    params.season_type = [1, 2, 3];
+  }
   let games;
   try {
     games = await ballDontLieService.getGames(
       sportKey,
       params,
-      exactNcaafGameIds.length > 0 ? 0 : 10,
+      exactFootballGameIds.length > 0 ? 0 : 10,
     );
   } catch (e) {
-    const scope = exactNcaafGameIds.length > 0
-      ? `game_ids ${exactNcaafGameIds.join(',')}`
+    const scope = exactFootballGameIds.length > 0
+      ? `game_ids ${exactFootballGameIds.join(',')}`
       : dates.join(',');
     log(`  ❌ ${sportKey}: BDL fetch failed for ${scope}: ${e.message}`);
     return null; // null = transport failed; a result object may still carry exact pending IDs
@@ -231,13 +241,39 @@ async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
 
   const retryGameIds = [];
   let retryAll = false;
-  if (sportKey === 'americanfootball_ncaaf' && exactNcaafGameIds.length > 0) {
+  if (supportsExactKickoffRetry && exactFootballGameIds.length > 0) {
     const returnedIds = new Set(games
       .filter((game) => game?.id !== null && game?.id !== undefined)
       .map((game) => String(game.id)));
-    for (const id of exactNcaafGameIds) {
+    for (const id of exactFootballGameIds) {
       if (!returnedIds.has(id)) retryGameIds.push(id);
     }
+  }
+  if (sportKey === 'americanfootball_nfl') {
+    const targetDateGames = games.filter((game) => {
+      const kickoff = resolveNflKickoff(game);
+      const slateDate = nflSlateDateForKickoff(game);
+      return !kickoff.scheduledDate || slateDate === etDateStr;
+    });
+    const readiness = partitionNflKickoffReadiness(targetDateGames, etDateStr);
+    retryGameIds.push(...readiness.retryGameIds);
+    retryAll ||= readiness.retryAll;
+    for (const { raw, kickoff } of readiness.pending) {
+      const reason = kickoff.scheduledDate ? 'TIME TBD' : 'kickoff date unavailable';
+      log(`  ⏳ ${sportKey} game ${raw?.id}: ${reason} — retrying this exact id without scheduling a deadline`);
+    }
+
+    const seen = new Set();
+    return {
+      games: readiness.confirmed.filter(({ raw }) => {
+        const key = String(raw.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+      retryGameIds: [...new Set(retryGameIds)].sort(),
+      retryAll,
+    };
   }
   if (sportKey === 'americanfootball_ncaaf') {
     // The adjacent UTC-date query can include tomorrow's daytime games. Keep
@@ -291,19 +327,21 @@ async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
   }
 
   const filtered = [];
-  for (const g of games) {
-    const startIso = extractStartTimeIso(g, sportKey);
-    if (!startIso) {
-      log(`  ⚠️ ${sportKey} game ${g.id}: missing start time field — skipping`);
-      continue;
+  try {
+    for (const g of games) {
+      const startIso = extractStartTimeIso(g, sportKey);
+      const start = requireNonFootballStart(g, sportKey, startIso);
+      if (getETDateStr(start) !== etDateStr) continue;
+      filtered.push({ raw: g, startTime: start });
     }
-    const start = new Date(startIso);
-    if (Number.isNaN(start.getTime())) {
-      log(`  ⚠️ ${sportKey} game ${g.id}: unparseable start time "${startIso}" — skipping`);
-      continue;
-    }
-    if (getETDateStr(start) !== etDateStr) continue;
-    filtered.push({ raw: g, startTime: start });
+  } catch (error) {
+    // A decoded provider row is part of the authoritative sport snapshot. If
+    // its required clock is malformed, treating that row as absent creates a
+    // false clean slate and permanently drops its pick windows. Fail only this
+    // sport so buildPlan queues the same isolated retry used for transport
+    // failures; football's explicit date-only/exact-id policy above is intact.
+    log(`  ❌ ${sportKey}: malformed schedule snapshot — isolated sport retry queued (${error.message})`);
+    return null;
   }
   // Dedupe in case a game appears in both UTC date queries (rare but possible)
   const seen = new Set();
@@ -421,8 +459,16 @@ async function writeDailySlateNonFatal(dateStr) {
     const res = await writeDailySlate(dateStr);
     const summary = Object.entries(res.byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
     log(`📋 Daily slate published: ${res.total} game(s)${summary ? ` (${summary})` : ''}`);
+    return { ok: true, result: res };
   } catch (e) {
-    log(`⚠️ Daily slate write failed (non-fatal, picks unaffected): ${e.message}`);
+    const partial = e?.result;
+    if (partial) {
+      const failed = (partial.failures || []).map((f) => `${f.league}: ${f.error}`).join(' | ');
+      log(`⚠️ Daily slate PARTIAL (non-fatal, healthy leagues persisted; failed leagues remain retryable): ${partial.total} game(s); ${failed || e.message}`);
+    } else {
+      log(`⚠️ Daily slate write failed (non-fatal, picks unaffected): ${e.message}`);
+    }
+    return { ok: false, error: e, result: partial || null };
   }
 }
 
@@ -437,8 +483,16 @@ async function writeTomorrowBoardNonFatal(tomorrowDateStr) {
     const { writeTomorrowBoard } = await import('../src/services/tomorrowService.js');
     const r = await writeTomorrowBoard(tomorrowDateStr);
     log(`🗓️ Tomorrow board published: ${r.game_count} game(s), ${r.big_games.length} big game(s), ${r.starters.length} starter(s) (lines ${r.any_lines ? 'posted' : 'open soon'})`);
+    return { ok: true, result: r };
   } catch (e) {
-    log(`⚠️ Tomorrow board write failed (non-fatal): ${e.message}`);
+    const partial = e?.result;
+    if (partial) {
+      const failed = (partial.failures || []).map((f) => `${f.league}: ${f.error}`).join(' | ');
+      log(`⚠️ Tomorrow board PARTIAL (non-fatal, healthy leagues refreshed; same-date last-good rows retained where available): ${failed || e.message}`);
+    } else {
+      log(`⚠️ Tomorrow board write failed (non-fatal): ${e.message}`);
+    }
+    return { ok: false, error: e, result: partial || null };
   }
 }
 

@@ -4,6 +4,11 @@ import {
   ncaafSlateDateForKickoff,
   resolveNcaafKickoff,
 } from '../../src/services/ncaafGamePolicy.js';
+import {
+  NFL_KICKOFF_STATUS,
+  nflSlateDateForKickoff,
+  resolveNflKickoff,
+} from '../../src/services/nflGamePolicy.js';
 
 const DEFAULT_BATCH_WINDOW_MS = 15 * 60 * 1000;
 const SPORT_FETCH_RETRY_MAX_MS = 20 * 60 * 1000;
@@ -171,6 +176,53 @@ export function partitionNcaafKickoffReadiness(games = [], etDateStr) {
     }
 
     const exactStart = kickoff.status === NCAAF_KICKOFF_STATUS.CONFIRMED && kickoff.iso
+      ? new Date(kickoff.iso)
+      : null;
+    if (exactStart && !Number.isNaN(exactStart.getTime())) {
+      confirmed.push({ raw: game, startTime: exactStart });
+      continue;
+    }
+
+    pending.push({ raw: game, kickoff });
+    if (game?.id === null || game?.id === undefined || String(game.id).trim() === '') {
+      retryAll = true;
+    }
+  }
+
+  return {
+    confirmed,
+    pending,
+    outsideDate,
+    retryAll,
+    retryGameIds: [...new Set(
+      pending
+        .map(({ raw }) => raw?.id)
+        .filter((id) => id !== null && id !== undefined && String(id).trim() !== '')
+        .map(String),
+    )].sort(),
+  };
+}
+
+/**
+ * NFL uses the ordinary ET calendar slate, but shares NCAAF's precision law:
+ * only a provider-confirmed instant may become an execution clock. Date-only
+ * and unknown games remain exact-id retry candidates.
+ */
+export function partitionNflKickoffReadiness(games = [], etDateStr) {
+  const confirmed = [];
+  const pending = [];
+  const outsideDate = [];
+  let retryAll = false;
+
+  for (const game of games || []) {
+    const kickoff = resolveNflKickoff(game);
+    const slateDate = nflSlateDateForKickoff(game);
+    if (slateDate && slateDate !== etDateStr) {
+      outsideDate.push(game);
+      continue;
+    }
+
+    const exactStart = kickoff.status === NFL_KICKOFF_STATUS.CONFIRMED && kickoff.iso
       ? new Date(kickoff.iso)
       : null;
     if (exactStart && !Number.isNaN(exactStart.getTime())) {

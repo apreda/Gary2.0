@@ -1,4 +1,5 @@
 import { getCachedOrFetch, initApi, buildQuery, normalizeName, getCurrentNhlSeason, axios, BALLDONTLIE_API_BASE_URL, API_KEY } from './bdlCore.js';
+import { decodeBdlRows } from '../bdlResponse.js';
 
 export const oddsMethods = {
   /**
@@ -11,7 +12,7 @@ export const oddsMethods = {
   async getOddsV2(params = {}, sport = 'nba', ttlMinutes = 1) {
     try {
       // Normalize sport key (e.g. 'basketball_nba' -> 'nba')
-      let sportKey = 'nba';
+      let sportKey = null;
       const s = String(sport).toLowerCase();
       if (s.includes('nfl')) sportKey = 'nfl';
       else if (s.includes('mlb')) sportKey = 'mlb';
@@ -19,6 +20,9 @@ export const oddsMethods = {
       else if (s.includes('ncaaf')) sportKey = 'ncaaf';
       else if (s.includes('ncaab')) sportKey = 'ncaab';
       else if (s.includes('nba')) sportKey = 'nba';
+      if (!sportKey) {
+        throw new Error(`[Ball Don't Lie] getOddsV2: no odds endpoint mapped for sport "${sport}"`);
+      }
 
       const norm = {};
       // Use plain keys 'dates' / 'game_ids'. 
@@ -32,12 +36,13 @@ export const oddsMethods = {
       return await getCachedOrFetch(cacheKey, async () => {
         // Helper to fetch ALL pages if pagination is present
         const fetchAllPages = async (baseUrl, baseParams) => {
-          let allRows = [];
+          const allRows = [];
           let nextCursor = baseParams.cursor || undefined;
           let pageCount = 0;
           const maxPages = 10; // Safety limit
+          const seenCursors = new Set();
 
-          do {
+          for (;;) {
             const currentParams = { ...baseParams };
             if (nextCursor) currentParams.cursor = nextCursor;
             // Ensure we ask for max per page to minimize requests
@@ -46,26 +51,25 @@ export const oddsMethods = {
             const qs = buildQuery(currentParams); 
             const fullUrl = `${baseUrl}${qs}`;
             
-            try {
-              console.log(`[Ball Don't Lie] GET ${fullUrl} (Page ${pageCount + 1})`);
-              const resp = await axios.get(fullUrl, {
-                headers: { Authorization: API_KEY }
-              });
-              
-              const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-              allRows = allRows.concat(rows);
-              
-              // Check for next cursor
-              nextCursor = resp?.data?.meta?.next_cursor;
-              pageCount++;
-            } catch (err) {
-              console.warn(`[Ball Don't Lie] Error fetching page ${pageCount + 1}: ${err.message}`);
-              if (pageCount === 0) throw err; // Throw if first page fails
-              break; // Stop on error for subsequent pages
-            }
-          } while (nextCursor && pageCount < maxPages);
+            console.log(`[Ball Don't Lie] GET ${fullUrl} (Page ${pageCount + 1})`);
+            const resp = await axios.get(fullUrl, {
+              headers: { Authorization: API_KEY }
+            });
 
-          return allRows;
+            allRows.push(...decodeBdlRows(resp?.data, `${sportKey} odds page ${pageCount + 1}`));
+            const cursor = resp?.data?.meta?.next_cursor ?? null;
+            pageCount += 1;
+            if (cursor == null) return allRows;
+            const cursorKey = String(cursor);
+            if (seenCursors.has(cursorKey)) {
+              throw new Error(`${sportKey} odds pagination repeated cursor ${cursorKey}`);
+            }
+            seenCursors.add(cursorKey);
+            if (pageCount >= maxPages) {
+              throw new Error(`${sportKey} odds pagination exceeded ${maxPages} pages`);
+            }
+            nextCursor = cursor;
+          }
         };
 
         if (sportKey === 'nba') {

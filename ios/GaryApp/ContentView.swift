@@ -45,8 +45,24 @@ class PickDetailState: ObservableObject {
 class PicksFocusState: ObservableObject {
     static let shared = PicksFocusState()
     @Published var focusGame: String? = nil
+    @Published var focusLeague: String? = nil
+    @Published var focusGameID: Int? = nil
     /// Deep-link from Home's LIVE FORM tap → jump the Winners board to this sport's shelf.
     @Published var focusSport: String? = nil
+
+    /// Set the matchup last so observers consume the complete typed target in
+    /// one pass. Legacy Hub links can omit league/id; Home always supplies both.
+    func focus(game: String, league: String? = nil, gameID: Int? = nil) {
+        focusLeague = league?.uppercased()
+        focusGameID = gameID
+        focusGame = game
+    }
+
+    func clearGameFocus() {
+        focusGame = nil
+        focusLeague = nil
+        focusGameID = nil
+    }
 }
 
 // MARK: - Main Tab View with Liquid Glass
@@ -281,7 +297,7 @@ struct GaryPage: View {
                         // redesign (founder-approved; the old PropsHubView was
                         // removed in the Jul 4 dead-code cleanup).
                         HubView(isVisible: selectedTab == 2) { game in
-                            PicksFocusState.shared.focusGame = game
+                            PicksFocusState.shared.focus(game: game)
                             selectedTab = 3
                         }
                     }

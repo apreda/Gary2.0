@@ -86,6 +86,7 @@ describe('football proof exact-game hydration', () => {
       games: [...result.gameById.values()],
       picks: [pick],
       liveScores: [...result.scoreByGame.values()],
+      teamStats: [],
       nowMs: Date.parse('2026-08-15T23:30:00.000Z'),
     });
     expect(rows.find((row) => row.meta.factor_code === 'THE_NUMBER')).toMatchObject({
@@ -117,6 +118,7 @@ describe('football proof exact-game hydration', () => {
       games: [...result.gameById.values()],
       picks: [pick],
       liveScores: [],
+      teamStats: [],
       nowMs: Date.parse('2026-08-15T22:00:00.000Z'),
     });
     expect(rows[0]).toMatchObject({ game: 'PHI @ BAL', value: 'BAL +4' });
@@ -142,6 +144,7 @@ describe('football proof exact-game hydration', () => {
       games: [...result.gameById.values()],
       picks: [pick],
       liveScores: [...result.scoreByGame.values()],
+      teamStats: [],
       nowMs: Date.parse('2026-08-16T14:00:00.000Z'),
     });
     expect(rows.find((row) => row.meta.factor_code === 'THE_NUMBER')?.meta.state).toBe('HELD');
@@ -185,6 +188,7 @@ describe('football proof exact-game hydration', () => {
       games: [...result.gameById.values()],
       picks: [pick],
       liveScores: [],
+      teamStats: [],
       nowMs: Date.parse('2026-08-15T23:30:00.000Z'),
     })).toEqual([]);
   });

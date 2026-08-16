@@ -46,16 +46,16 @@ describe('fetchStats never crosses sport families', () => {
 });
 
 describe('getOddsV2 never defaults to another sport’s endpoint', () => {
-  it('bails loudly (no network) for a sport with no mapped odds route', async () => {
-    const warns = [];
-    const orig = console.warn;
-    console.warn = (...a) => { warns.push(a.join(' ')); };
+  it('rejects loudly (no network) for a sport with no mapped odds route', async () => {
+    const errors = [];
+    const orig = console.error;
+    console.error = (...a) => { errors.push(a.join(' ')); };
     try {
-      const rows = await ballDontLieService.getOddsV2({ game_ids: [166] }, 'soccer_world_cup');
-      expect(rows).toEqual([]);
-      expect(warns.some(w => /no odds endpoint mapped/i.test(w))).toBe(true);
+      await expect(ballDontLieService.getOddsV2({ game_ids: [166] }, 'soccer_world_cup'))
+        .rejects.toThrow(/no odds endpoint mapped/i);
+      expect(errors.some(w => /no odds endpoint mapped/i.test(w))).toBe(true);
     } finally {
-      console.warn = orig;
+      console.error = orig;
     }
   });
 });

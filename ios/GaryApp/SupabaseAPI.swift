@@ -42,6 +42,54 @@ actor APICache {
 
 enum SupabaseAPI {
 
+    /// A multi-source read keeps the underlying failure class instead of
+    /// collapsing schema/auth bugs into a generic outage. Only a complete set
+    /// of transient external failures may retain same-date last-good content.
+    struct SourceReadFailure: LocalizedError {
+        let source: String
+        let transientExternal: Bool
+        let underlying: [Error]
+
+        var errorDescription: String? {
+            "\(source) failed (\(transientExternal ? "transient external" : "internal/non-transient"))"
+        }
+    }
+
+    /// Explicit allow-list for emergency last-good behavior. URL/config/decode
+    /// mistakes are deliberately absent; a broad `error is URLError` check also
+    /// includes bad URL, authentication and content-decode failures.
+    static func isTransientExternalFailure(_ error: Error) -> Bool {
+        if let aggregate = error as? SourceReadFailure {
+            return aggregate.transientExternal
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut,
+                 .cannotFindHost,
+                 .cannotConnectToHost,
+                 .networkConnectionLost,
+                 .dnsLookupFailed,
+                 .notConnectedToInternet,
+                 .internationalRoamingOff,
+                 .callIsActive,
+                 .dataNotAllowed,
+                 .secureConnectionFailed,
+                 .cannotLoadFromNetwork,
+                 .resourceUnavailable:
+                return true
+            default:
+                return false
+            }
+        }
+
+        let nsError = error as NSError
+        guard nsError.domain.hasPrefix("SupabaseAPI.") else { return false }
+        return nsError.code == 408
+            || nsError.code == 429
+            || (500...599).contains(nsError.code)
+    }
+
     // MARK: - Configuration
 
     private static var baseURL: URL {
@@ -256,7 +304,7 @@ enum SupabaseAPI {
         var color: Color {
             switch league.uppercased() {
             case "NBA": return Color(hex: "#3B82F6")
-            case "NFL": return Color(hex: "#22C55E")
+            case "NFL": return GaryColors.nflAccent
             case "NHL": return Color(hex: "#00A3E0")
             case "NCAAB": return Color(hex: "#F97316")
             case "NCAAF": return Color(hex: "#DC2626")
@@ -412,16 +460,16 @@ enum SupabaseAPI {
         let url = buildURL(table: table, query: query)
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] \(table) fetch failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[SupabaseAPI] \(table) fetch failed: HTTP \(status)")
+            throw NSError(
+                domain: "SupabaseAPI.fetchDecodablePage.\(table)",
+                code: status,
+                userInfo: [NSLocalizedDescriptionKey: "\(table) returned HTTP \(status)"]
+            )
         }
 
-        do {
-            return try JSONDecoder().decode([T].self, from: data)
-        } catch {
-            print("[SupabaseAPI] \(table) decode error: \(error.localizedDescription)")
-            return []
-        }
+        return try JSONDecoder().decode([T].self, from: data)
     }
 
     private static func fetchAllPages<T: Decodable>(
@@ -478,7 +526,11 @@ enum SupabaseAPI {
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
         // Defense in depth: drop any World Cup-tagged pick when the WC feature is
         // off (Apple 5.2.1) so no WC pick can reach a shelf, list, or card.
-        var out = rows.first.map { parsePicksRow($0.picks).filter { !AppFlags.hidesWorldCupRow($0.league) } } ?? []
+        var out: [GaryPick] = try rows.first.map { row in
+            let decoded = try parsePicksRow(row.picks)
+            try validateStoredGamePicks(decoded, source: "daily_picks")
+            return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) }
+        } ?? []
         #if DEBUG
         // Sim preview of the PARKED All-Star board (production stays empty
         // until App Store approval). Living here means EVERY picks surface —
@@ -541,7 +593,7 @@ enum SupabaseAPI {
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([DailyPicksRow].self, from: data),
               let row = rows.first else { return [] }
-        return parsePicksRow(row.picks)
+        return (try? parsePicksRow(row.picks)) ?? []
     }
     #endif
 
@@ -718,6 +770,9 @@ enum SupabaseAPI {
     struct DailySlateFetch {
         let rows: [DailySlateRow]
         let succeeded: Bool
+        /// Only transport/rate-limit/provider-server failures may retain a
+        /// same-date last-good slate. Auth/config/schema failures must surface.
+        let transientExternalFailure: Bool
     }
 
     private static let dailySlateCacheKey = "gary.dailySlate.lastGood"
@@ -732,8 +787,18 @@ enum SupabaseAPI {
     }
 
     private static func storeDailySlate(_ rows: [DailySlateRow], date: String) {
-        guard !rows.isEmpty, let data = try? JSONEncoder().encode(rows) else { return }
         let defaults = UserDefaults.standard
+        if rows.isEmpty {
+            // A successful explicit empty is authoritative. Remove the same-day
+            // snapshot so a later transient request cannot resurrect canceled
+            // games from an earlier run.
+            if defaults.string(forKey: dailySlateCacheDateKey) == date {
+                defaults.removeObject(forKey: dailySlateCacheKey)
+                defaults.removeObject(forKey: dailySlateCacheDateKey)
+            }
+            return
+        }
+        guard let data = try? JSONEncoder().encode(rows) else { return }
         defaults.set(date, forKey: dailySlateCacheDateKey)
         defaults.set(data, forKey: dailySlateCacheKey)
     }
@@ -763,18 +828,34 @@ enum SupabaseAPI {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                print("[fetchDailySlate] HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
-                return DailySlateFetch(rows: cachedDailySlate(date: date), succeeded: false)
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                print("[fetchDailySlate] HTTP \(code) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
+                let isTransient = code == 429 || (500...599).contains(code)
+                return DailySlateFetch(
+                    rows: isTransient ? cachedDailySlate(date: date) : [],
+                    succeeded: false,
+                    transientExternalFailure: isTransient
+                )
             }
             let rows = try JSONDecoder().decode([DailySlateRow].self, from: data)
+            guard rows.allSatisfy(\.hasValidStoredPayload) else {
+                throw DecodingError.dataCorrupted(
+                    .init(codingPath: [], debugDescription: "daily_slate contains a row without required game identity")
+                )
+            }
             // Defense in depth: no World Cup games on the slate when the WC feature
             // is off — keeps a WC fixture out of every slate list and placeholder lane.
             let visible = rows.filter { !AppFlags.hidesWorldCupRow($0.league) }
             storeDailySlate(visible, date: date)
-            return DailySlateFetch(rows: visible, succeeded: true)
+            return DailySlateFetch(rows: visible, succeeded: true, transientExternalFailure: false)
         } catch {
             print("[fetchDailySlate] error \(date): \(error.localizedDescription)")
-            return DailySlateFetch(rows: cachedDailySlate(date: date), succeeded: false)
+            let isTransient = isTransientExternalFailure(error)
+            return DailySlateFetch(
+                rows: isTransient ? cachedDailySlate(date: date) : [],
+                succeeded: false,
+                transientExternalFailure: isTransient
+            )
         }
     }
 
@@ -803,28 +884,11 @@ enum SupabaseAPI {
         }
     }
 
-    /// Today's look-ahead board (today_board) — same shape as TomorrowBoard, keyed
-    /// on TODAY's EST slate day. Feeds the Home "The Day Ahead" section (the same
-    /// Starters / Form / Run Profile / Weather + MLB/WC table the Tomorrow page uses).
+    /// Today's look-ahead board. The scheduler's canonical writer stores every
+    /// game-date snapshot in `tomorrow_board`, including the row whose date is
+    /// today. Read that primary directly instead of probing the unwritten
+    /// `today_board` table and treating the real source as a fallback.
     static func fetchTodayBoard(date: String) async -> TomorrowBoard? {
-        let url = buildURL(table: "today_board", query: [
-            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,countdown_matchup,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera,wc_lookahead"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "limit", value: "1")
-        ])
-        do {
-            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-            if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-               let row = try JSONDecoder().decode([TomorrowBoard].self, from: data).first {
-                return row
-            }
-        } catch {
-            print("[fetchTodayBoard] error \(date): \(error.localizedDescription)")
-        }
-        // FALLBACK: today_board is unpopulated (nothing writes it) — the scheduler
-        // publishes the day's board to tomorrow_board keyed by GAME DATE, so today's
-        // row lives there. Read that so the Home countdown/board never vanishes on the
-        // 6am rollover instead of skipping the whole hero (todayBoard == nil).
         return await fetchTomorrowBoard(date: date)
     }
 
@@ -1224,7 +1288,9 @@ enum SupabaseAPI {
         let rows = try JSONDecoder().decode([WeeklyNFLPicksRow].self, from: data)
         
         guard let row = rows.first else { return [] }
-        return parsePicksRow(row.picks).filter { pick in
+        let decoded = try parsePicksRow(row.picks)
+        try validateStoredGamePicks(decoded, source: "weekly_nfl_picks")
+        return decoded.filter { pick in
             guard (pick.league ?? "").uppercased() == "NFL",
                   let commence = pick.commence_time else { return false }
             return easternCalendarDate(ofISO8601: commence) == date
@@ -1253,7 +1319,8 @@ enum SupabaseAPI {
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
         var allPicks: [GaryPick] = []
         for row in rows {
-            let picks = parsePicksRow(row.picks)
+            let picks = try parsePicksRow(row.picks)
+            try validateStoredGamePicks(picks, source: "daily_picks future NCAAB")
             // Only include NCAAB picks from future dates
             let ncaabPicks = picks.filter { ($0.league ?? "").uppercased() == "NCAAB" }
             allPicks.append(contentsOf: ncaabPicks)
@@ -1281,18 +1348,21 @@ enum SupabaseAPI {
 
         var dailyPicks: [GaryPick] = []
         var nflPicks: [GaryPick] = []
-        var failures = 0
-        do { dailyPicks = try await dailyTask } catch { failures += 1 }
-        do { nflPicks = try await nflTask } catch { failures += 1 }
+        var sourceErrors: [Error] = []
+        do { dailyPicks = try await dailyTask } catch { sourceErrors.append(error) }
+        do { nflPicks = try await nflTask } catch { sourceErrors.append(error) }
 
         guard !Task.isCancelled else { throw CancellationError() }
 
         // Weekly storage is canonical for NFL. Excluding legacy daily NFL rows
         // prevents one card from appearing twice on historical surfaces.
         let result = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" } + nflPicks
-        guard failures == 0 else {
-            throw NSError(domain: "SupabaseAPI.fetchExactDatePicks", code: -3,
-                          userInfo: [NSLocalizedDescriptionKey: "One or more pick sources failed"])
+        guard sourceErrors.isEmpty else {
+            throw SourceReadFailure(
+                source: "Exact-date picks",
+                transientExternal: sourceErrors.allSatisfy(isTransientExternalFailure),
+                underlying: sourceErrors
+            )
         }
         // A multi-table read is complete or it throws. Callers retain their
         // last-good board instead of mistaking a partial response for an empty league.
@@ -1318,10 +1388,10 @@ enum SupabaseAPI {
         var dailyPicks: [GaryPick] = []
         var nflPicks: [GaryPick] = []
         var ncaabUpcoming: [GaryPick] = []
-        var failures = 0
-        do { dailyPicks = try await dailyTask } catch { failures += 1 }
-        do { nflPicks = try await nflTask } catch { failures += 1 }
-        do { ncaabUpcoming = try await ncaabUpcomingTask } catch { failures += 1 }
+        var sourceErrors: [Error] = []
+        do { dailyPicks = try await dailyTask } catch { sourceErrors.append(error) }
+        do { nflPicks = try await nflTask } catch { sourceErrors.append(error) }
+        do { ncaabUpcoming = try await ncaabUpcomingTask } catch { sourceErrors.append(error) }
 
         // A SwiftUI preload can be cancelled while the user changes tabs. Do
         // not turn that cancellation into a successful empty response and
@@ -1333,9 +1403,12 @@ enum SupabaseAPI {
 
         let result = nonNFLPicks + nflPicks + ncaabUpcoming
 
-        guard failures == 0 else {
-            throw NSError(domain: "SupabaseAPI.fetchAllPicks", code: -3,
-                          userInfo: [NSLocalizedDescriptionKey: "One or more pick sources failed"])
+        guard sourceErrors.isEmpty else {
+            throw SourceReadFailure(
+                source: "Combined picks",
+                transientExternal: sourceErrors.allSatisfy(isTransientExternalFailure),
+                underlying: sourceErrors
+            )
         }
         // A combined board is complete or it throws. League-scoped callers that
         // need partial progress fetch each source independently and preserve it.
@@ -1380,27 +1453,32 @@ enum SupabaseAPI {
 
         var allPicks: [PropPick] = []
 
-        for row in jsonArray {
+        for (rowIndex, row) in jsonArray.enumerated() {
             let rowLeague = row["league"] as? String
+            let picksData = try decodePropPickDictionaries(
+                row["picks"],
+                source: "prop_picks row \(rowIndex)"
+            )
 
-            // Get picks from the row
-            var picksData: [[String: Any]] = []
-            if let picksArray = row["picks"] as? [[String: Any]] {
-                picksData = picksArray
-            } else if let picksString = row["picks"] as? String,
-                      let pData = picksString.data(using: .utf8),
-                      let parsed = try? JSONSerialization.jsonObject(with: pData) as? [[String: Any]] {
-                picksData = parsed
-            }
-
-            // Parse each pick
-            for var pickDict in picksData {
-                if pickDict["league"] == nil && pickDict["sport"] == nil {
+            // One malformed element invalidates the row/request. Publishing a
+            // compacted partial list would make a schema regression look like a
+            // legitimate day with fewer props and then cache that result.
+            for (pickIndex, rawPick) in picksData.enumerated() {
+                var pickDict = rawPick
+                if pickDict["league"] == nil && pickDict["sport"] == nil,
+                   let rowLeague, !rowLeague.isEmpty {
                     pickDict["league"] = rowLeague
                 }
-                if let pick = PropPick.from(dict: pickDict) {
-                    allPicks.append(pick)
+                guard let pick = PropPick.from(dict: pickDict),
+                      pick.hasValidStoredPayload else {
+                    throw DecodingError.dataCorrupted(
+                        .init(
+                            codingPath: [],
+                            debugDescription: "prop_picks row \(rowIndex) element \(pickIndex) lacks required prop identity"
+                        )
+                    )
                 }
+                allPicks.append(pick)
             }
         }
 
@@ -1420,7 +1498,7 @@ enum SupabaseAPI {
     /// Fetch game results with optional date filter (excludes NFL - those come from nfl_results)
     static func fetchGameResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
-            URLQueryItem(name: "select", value: "game_date,league,matchup,pick_text,result,final_score"),
+            URLQueryItem(name: "select", value: "game_id,game_date,league,matchup,pick_text,result,final_score"),
             URLQueryItem(name: "order", value: "game_date.desc")
         ]
         
@@ -1461,8 +1539,18 @@ enum SupabaseAPI {
         async let gameTask = fetchGameResults(since: dateFilter)
         async let nflTask = fetchNFLResults(since: dateFilter)
 
-        let gameResults = (try? await gameTask) ?? []
-        let nflResults = (try? await nflTask) ?? []
+        var gameResults: [GameResult] = []
+        var nflResults: [GameResult] = []
+        var sourceErrors: [Error] = []
+        do { gameResults = try await gameTask } catch { sourceErrors.append(error) }
+        do { nflResults = try await nflTask } catch { sourceErrors.append(error) }
+        guard sourceErrors.isEmpty else {
+            throw SourceReadFailure(
+                source: "Combined game results",
+                transientExternal: sourceErrors.allSatisfy(isTransientExternalFailure),
+                underlying: sourceErrors
+            )
+        }
 
         // Combine and sort by date descending
         let combined = gameResults + nflResults
@@ -1679,26 +1767,68 @@ enum SupabaseAPI {
     
     // MARK: - Parsing Helpers
     
-    static func parsePicksRow(_ picks: PicksValue<GaryPick>?) -> [GaryPick] {
-        guard let picks = picks else { return [] }
+    static func parsePicksRow(_ picks: PicksValue<GaryPick>?) throws -> [GaryPick] {
+        guard let picks = picks else {
+            throw DecodingError.valueNotFound(
+                PicksValue<GaryPick>.self,
+                .init(codingPath: [], debugDescription: "Stored picks row is present but picks is null or missing")
+            )
+        }
         
         if let arr = picks.asArray { return arr }
-        if let str = picks.asString, let data = str.data(using: .utf8) {
-            let json = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
-            return json.compactMap { GaryPick.from(dict: $0) }
-        }
-        return []
-    }
-    
-    private static func parsePropPicksRow(_ picks: PicksValue<PropPick>?) -> [PropPick]? {
-        guard let picks = picks else { return nil }
-
-        if let arr = picks.asArray { return arr }
         if let str = picks.asString, !str.isEmpty, let data = str.data(using: .utf8) {
-            let json = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
-            return json.compactMap { PropPick.from(dict: $0) }
+            return try JSONDecoder().decode([GaryPick].self, from: data)
         }
-        return nil
+        throw DecodingError.dataCorrupted(
+            DecodingError.Context(codingPath: [], debugDescription: "Invalid stringified pick payload")
+        )
+    }
+
+    private static func validateStoredGamePicks(_ picks: [GaryPick], source: String) throws {
+        guard picks.allSatisfy(\.hasValidStoredPayload) else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: [], debugDescription: "\(source) contains a pick without required play/game identity")
+            )
+        }
+    }
+
+    private static func decodePropPickDictionaries(
+        _ raw: Any?,
+        source: String
+    ) throws -> [[String: Any]] {
+        let value: Any
+        if let string = raw as? String {
+            guard !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  let data = string.data(using: .utf8) else {
+                throw DecodingError.dataCorrupted(
+                    .init(codingPath: [], debugDescription: "\(source) has an empty stringified picks payload")
+                )
+            }
+            value = try JSONSerialization.jsonObject(with: data)
+        } else if let raw, !(raw is NSNull) {
+            value = raw
+        } else {
+            throw DecodingError.valueNotFound(
+                [Any].self,
+                .init(codingPath: [], debugDescription: "\(source) is present but picks is null or missing")
+            )
+        }
+
+        guard let elements = value as? [Any] else {
+            throw DecodingError.typeMismatch(
+                [Any].self,
+                .init(codingPath: [], debugDescription: "\(source) picks must be an array")
+            )
+        }
+        return try elements.enumerated().map { index, element in
+            guard let dictionary = element as? [String: Any] else {
+                throw DecodingError.typeMismatch(
+                    [String: Any].self,
+                    .init(codingPath: [], debugDescription: "\(source) element \(index) must be an object")
+                )
+            }
+            return dictionary
+        }
     }
 
 }

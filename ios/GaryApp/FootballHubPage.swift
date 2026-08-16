@@ -1,5 +1,199 @@
 import SwiftUI
 
+/// Fail-closed display contract for football proof rows. The backend category
+/// selects a component, but only its structured payload is allowed to make a
+/// market or live-state claim visible.
+enum FootballProofContract {
+    enum SweatState: String {
+        case watch = "WATCH"
+        case holding = "HOLDING"
+        case flipped = "FLIPPED"
+        case held = "HELD"
+        case missed = "MISSED"
+        case push = "PUSH"
+
+        var isLiveOrFinal: Bool { self != .watch }
+        var isFinal: Bool { self == .held || self == .missed }
+    }
+
+    private static let factors: Set<String> = [
+        "THE_NUMBER", "RUSH_EDGE", "AIR_EDGE", "PRESSURE", "BALL_SECURITY",
+    ]
+    private static let excludedVendors: Set<String> = [
+        "", "unknown", "openingsnapshot", "kalshi", "polymarket",
+    ]
+
+    private static func text(_ value: String?) -> String? {
+        guard let cleaned = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !cleaned.isEmpty else { return nil }
+        return cleaned
+    }
+
+    private static func value(_ value: InsightMetaValue?) -> String? {
+        text(value?.display)
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        guard let value = text(value) else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let parsed = fractional.date(from: value) { return parsed }
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return standard.date(from: value)
+    }
+
+    private static func finite(_ value: Double?) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return value
+    }
+
+    private static func vendorKey(_ value: String?) -> String {
+        (text(value) ?? "").lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// AFTER GARY is a receipt, not editorial copy. Every identity, quote,
+    /// timestamp, source, and movement field must be present and internally
+    /// consistent before either the Hub or an exact-game page may render it.
+    static func isRenderableAfterGary(
+        _ signal: Signal,
+        exactGameID: String? = nil,
+        now: Date = Date()
+    ) -> Bool {
+        guard signal.kind == .afterGary,
+              let meta = signal.afterGary,
+              text(meta.kind)?.lowercased() == "after_gary",
+              meta.version == 1,
+              text(meta.pick_id) != nil,
+              let outerGameID = text(signal.gameId),
+              let sealedGameID = text(meta.game_id),
+              outerGameID == sealedGameID,
+              exactGameID.map({ $0 == outerGameID }) ?? true,
+              text(meta.pick_label) != nil,
+              !excludedVendors.contains(vendorKey(meta.vendor)),
+              text(meta.published_at_source)?.lowercased() == "pick",
+              ["provider_updated_at", "retrieved_at"].contains(text(meta.as_of_source)?.lowercased() ?? ""),
+              let publishedAt = date(meta.published_at),
+              let observedAt = date(meta.as_of),
+              let kickoff = date(meta.kickoff),
+              publishedAt <= observedAt,
+              observedAt < kickoff,
+              publishedAt < kickoff,
+              observedAt <= now.addingTimeInterval(300),
+              ["pregame", "closed"].contains(text(meta.market_state)?.lowercased() ?? ""),
+              let market = text(meta.market_type)?.lowercased(),
+              let side = text(meta.pick_side)?.lowercased(),
+              let published = meta.published,
+              let current = meta.current,
+              let publishedOdds = finite(published.odds), publishedOdds != 0,
+              let currentOdds = finite(current.odds), currentOdds != 0,
+              let movement = meta.movement,
+              let advantage = text(movement.advantage)?.lowercased(),
+              ["same", "gary", "now"].contains(advantage),
+              let unit = text(movement.primary_unit)?.lowercased(),
+              let primaryValue = finite(movement.primary_value), primaryValue >= 0,
+              (advantage == "same" ? primaryValue < 0.001 : primaryValue > 0) else { return false }
+
+        switch market {
+        case "moneyline":
+            guard ["home", "away"].contains(side), unit == "probability_points" else { return false }
+        case "spread":
+            guard ["home", "away"].contains(side),
+                  finite(published.line) != nil, finite(current.line) != nil,
+                  ["points", "probability_points"].contains(unit) else { return false }
+        case "total":
+            guard ["over", "under"].contains(side),
+                  let publishedLine = finite(published.line), publishedLine > 0,
+                  let currentLine = finite(current.line), currentLine > 0,
+                  ["points", "probability_points"].contains(unit) else { return false }
+        default:
+            return false
+        }
+
+        if unit == "points" {
+            return finite(movement.line_delta_for_pick) != nil
+        }
+        return finite(movement.price_delta_pp_for_pick) != nil
+    }
+
+    static func sweatState(_ signal: Signal) -> SweatState? {
+        guard signal.kind == .theSweat,
+              let raw = text(signal.sweat?.state)?.lowercased() else { return nil }
+        switch raw {
+        case "watch": return .watch
+        case "holding": return .holding
+        case "flipped": return .flipped
+        case "held": return .held
+        case "missed": return .missed
+        case "push": return .push
+        default: return nil
+        }
+    }
+
+    static func isRenderableSweat(_ signal: Signal, includeWatch: Bool) -> Bool {
+        guard let meta = signal.sweat,
+              text(meta.kind)?.lowercased() == "the_sweat",
+              text(meta.pick_id) != nil,
+              text(signal.gameId) != nil,
+              let factor = text(meta.factor_code)?.uppercased(), factors.contains(factor),
+              date(meta.as_of) != nil,
+              let state = sweatState(signal),
+              includeWatch || state.isLiveOrFinal else { return false }
+
+        let hasBaseline = value(meta.baseline) != nil || value(meta.baseline_selected) != nil
+        let hasLive = value(meta.live_value) != nil
+            || (value(meta.live_selected) != nil && value(meta.live_opponent) != nil)
+        if state == .watch {
+            guard hasBaseline else { return false }
+        } else {
+            guard hasLive else { return false }
+        }
+
+        if factor == "THE_NUMBER" {
+            guard ["spread", "moneyline", "total"].contains(text(meta.market_type)?.lowercased() ?? "")
+            else { return false }
+        }
+        return true
+    }
+
+    static func isRenderableMarketRange(
+        _ signal: Signal,
+        slateRow: TomorrowBoardRow?,
+        now: Date = Date()
+    ) -> Bool {
+        guard signal.kind == .marketRange,
+              let meta = signal.marketRange,
+              text(meta.kind)?.lowercased() == "market_range",
+              text(meta.source)?.lowercased() == "balldontlie_odds",
+              let signalGameID = text(signal.gameId),
+              let slateRow,
+              slateRow.bdl_game_id.map(String.init) == signalGameID,
+              text(slateRow.kickoff_status)?.lowercased() == "confirmed",
+              let kickoff = date(slateRow.commence_time), kickoff > now,
+              let proofKickoff = date(meta.kickoff),
+              abs(proofKickoff.timeIntervalSince(kickoff)) < 1,
+              let observed = date(meta.as_of), observed < kickoff,
+              observed <= now.addingTimeInterval(300),
+              let market = text(meta.market)?.lowercased(),
+              let metric = text(meta.metric)?.lowercased(),
+              let low = meta.low, let high = meta.high, let range = meta.range,
+              low <= high, range >= 0, abs((high - low) - range) < 0.001,
+              let bookCount = meta.book_count, bookCount >= 3,
+              let vendors = meta.vendors else { return false }
+
+        let vendorKeys = Set(vendors.compactMap(text).map {
+            $0.lowercased().filter { $0.isLetter || $0.isNumber }
+        }.filter { !$0.isEmpty })
+        guard vendorKeys.count == bookCount else { return false }
+
+        switch market {
+        case "total": return metric == "sportsbook_total_range"
+        case "spread": return metric == "sportsbook_home_spread_range"
+        default: return false
+        }
+    }
+}
+
 // MARK: - Football Hub
 //
 // NFL and NCAAF use a football-native front page instead of the generic
@@ -19,14 +213,12 @@ struct FootballHubPage: View {
     }
 
     private var receipts: [Signal] {
-        deduped(signals.filter { $0.kind == .afterGary })
+        deduped(signals.filter { FootballProofContract.isRenderableAfterGary($0) })
     }
 
     private var sweat: [Signal] {
-        deduped(signals.filter { signal in
-            guard signal.kind == .theSweat else { return false }
-            let state = signal.sweat?.state?.lowercased() ?? ""
-            return !["watch", "scheduled", "pregame"].contains(state)
+        deduped(signals.filter {
+            FootballProofContract.isRenderableSweat($0, includeWatch: false)
         })
     }
 
@@ -50,11 +242,9 @@ struct FootballHubPage: View {
     }
 
     private func marketRangeIsPregame(_ signal: Signal) -> Bool {
-        if signal.marketRange?.footballMarketIsClosed == true { return false }
-        guard let gameId = signal.gameId.flatMap(Int.init),
-              let slate = slateRows.first(where: { $0.bdl_game_id == gameId }),
-              let kickoff = footballHubDate(slate.commence_time) else { return true }
-        return Date() < kickoff
+        guard let gameId = signal.gameId.flatMap(Int.init) else { return false }
+        let slate = slateRows.first(where: { $0.bdl_game_id == gameId })
+        return FootballProofContract.isRenderableMarketRange(signal, slateRow: slate)
     }
 
     private var hasIntel: Bool {
@@ -315,27 +505,15 @@ private struct FootballHubReceiptRow: View {
     let onTap: () -> Void
 
     private var selection: String? {
-        if let label = signal.afterGary?.pick_label?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
-            return label.uppercased()
-        }
-        let left = signal.headline.components(separatedBy: "→").first?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let pieces = left.split(separator: " ")
-        guard pieces.count > 1 else { return left.isEmpty ? nil : left.uppercased() }
-        let value = pieces.dropLast().joined(separator: " ").uppercased()
-        return value.isEmpty ? nil : value
+        guard let label = signal.afterGary?.pick_label?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty else { return nil }
+        return label.uppercased()
     }
 
     private var movement: (locked: String, current: String)? {
-        if let locked = primaryQuote(signal.afterGary?.published),
-           let current = primaryQuote(signal.afterGary?.current) {
-            return (locked, current)
-        }
-        let parts = signal.headline.components(separatedBy: "→")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
-        return (parts[0], parts[1])
+        guard let locked = primaryQuote(signal.afterGary?.published),
+              let current = primaryQuote(signal.afterGary?.current) else { return nil }
+        return (locked, current)
     }
 
     private var currentLabel: String {
@@ -343,17 +521,14 @@ private struct FootballHubReceiptRow: View {
     }
 
     private var valueText: String? {
-        if let marketMove = signal.afterGary?.movement {
-            let advantage = (marketMove.advantage ?? "same").lowercased()
-            guard advantage != "same",
-                  let value = marketMove.primary_value,
-                  value > 0 else { return "NO MOVE" }
-            let owner = advantage == "gary" ? "GARY" : "NOW"
-            let unit = (marketMove.primary_unit ?? "").lowercased() == "probability_points" ? "PP" : "PTS"
-            return "\(owner) +\(unsignedNumber(value)) \(unit)"
-        }
-        let fallback = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return fallback.isEmpty ? nil : fallback.uppercased()
+        guard let marketMove = signal.afterGary?.movement else { return nil }
+        let advantage = (marketMove.advantage ?? "same").lowercased()
+        guard advantage != "same",
+              let value = marketMove.primary_value,
+              value > 0 else { return "NO MOVE" }
+        let owner = advantage == "gary" ? "GARY" : "NOW"
+        let unit = (marketMove.primary_unit ?? "").lowercased() == "probability_points" ? "PP" : "PTS"
+        return "\(owner) +\(unsignedNumber(value)) \(unit)"
     }
 
     private var lockedLabel: String {
@@ -427,11 +602,6 @@ private struct FootballHubReceiptRow: View {
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.white.opacity(0.34))
                         FootballHubMarketPoint(label: currentLabel, value: movement.current, color: accent)
-                    } else {
-                        Text(signal.headline)
-                            .font(GaryFonts.data(15, .bold))
-                            .foregroundStyle(GaryColors.warmWhite)
-                            .lineLimit(2)
                     }
 
                     Spacer(minLength: 4)
@@ -593,19 +763,13 @@ private struct FootballHubSweatRow: View {
     let onTap: () -> Void
 
     private var state: String {
-        switch signal.sweat?.state?.lowercased() {
-        case "holding", "live", "live_holding": return "HOLDING"
-        case "flipped", "live_flipped", "failed", "missed", "final_missed", "final_flipped": return "FLIPPED"
-        case "held", "final_held": return "HELD"
-        case "push", "final_push": return "PUSH"
-        default: return "LIVE"
-        }
+        FootballProofContract.sweatState(signal)?.rawValue ?? "—"
     }
 
     private var stateColor: Color {
         switch state {
         case "FLIPPED": return GaryColors.loss
-        case "PUSH", "LIVE": return GaryColors.sweating
+        case "PUSH": return GaryColors.sweating
         default: return accent
         }
     }
@@ -646,8 +810,6 @@ private struct FootballHubSweatRow: View {
                     }
                     if let live = signal.sweat?.live_value?.display, !live.isEmpty {
                         FootballHubProofValue(label: "LIVE", value: live)
-                    } else if signal.sweat?.baseline == nil, !signal.value.isEmpty {
-                        FootballHubProofValue(label: "LIVE", value: signal.value)
                     }
                 }
             }

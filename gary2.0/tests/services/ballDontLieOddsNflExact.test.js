@@ -78,4 +78,26 @@ describe('BDL exact NFL game lookup', () => {
       .rejects.toThrow(/identity mismatch/);
     expect(mocks.getOddsV2).not.toHaveBeenCalled();
   });
+
+  it('keeps an exact-id NFL fixture date-only instead of inventing a 4 PM kickoff', async () => {
+    mocks.getGame.mockResolvedValueOnce({
+      id: 1393560,
+      season: 2026,
+      week: 3,
+      date: '2026-08-22',
+      home_team: { id: 16, full_name: 'Kansas City Chiefs' },
+      visitor_team: { id: 14, full_name: 'Los Angeles Rams' },
+    });
+
+    const rows = await ballDontLieOddsService.getNflGameWithOddsById('1393560');
+
+    expect(rows).toEqual([expect.objectContaining({
+      id: 1393560,
+      commence_time: null,
+      scheduled_date: '2026-08-22',
+      kickoff_status: 'date_only',
+      estimated_time: true,
+    })]);
+    expect(JSON.stringify(rows)).not.toContain('T20:00:00');
+  });
 });

@@ -59,24 +59,37 @@ struct FootballGameIntelView: View {
     }
 
     private var numberSignal: Signal? {
-        edges.first(where: { $0.kind == .afterGary })
+        guard let exactGameID else { return nil }
+        return edges.first(where: {
+            belongsToExactGame($0)
+                && FootballProofContract.isRenderableAfterGary($0, exactGameID: exactGameID)
+        })
+    }
+
+    private var exactGameID: String? {
+        let ids = [primaryPick?.game_id.map(String.init), row?.bdl_game_id.map(String.init)]
+            .compactMap { $0 }
+        guard let first = ids.first, ids.allSatisfy({ $0 == first }) else { return nil }
+        return first
+    }
+
+    private func belongsToExactGame(_ signal: Signal) -> Bool {
+        guard let exactGameID else { return false }
+        return signal.gameId == exactGameID
     }
 
     private var marketRangeSignal: Signal? {
-        let kickoff = primaryPick?.commence_time.flatMap(parseISO8601)
-            ?? row?.commence_time.flatMap(parseISO8601)
         return edges.first(where: {
-            $0.kind == .marketRange &&
-            $0.marketRange?.footballMarketIsClosed != true &&
-            (kickoff.map { Date() < $0 } ?? true) &&
-            $0.marketRange?.low != nil &&
-            $0.marketRange?.high != nil &&
-            $0.marketRange?.book_count != nil
+            belongsToExactGame($0)
+                && FootballProofContract.isRenderableMarketRange($0, slateRow: row)
         })
     }
 
     private var sweatSignals: [Signal] {
-        Array(edges.filter { $0.kind == .theSweat }.prefix(4))
+        Array(edges.filter {
+            belongsToExactGame($0)
+                && FootballProofContract.isRenderableSweat($0, includeWatch: true)
+        }.prefix(4))
     }
 
     var body: some View {
@@ -363,17 +376,7 @@ private struct FootballMarketSection: View {
     private var meta: SwapMeta? { signal.afterGary }
 
     private var selection: String {
-        if let label = meta?.pick_label?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !label.isEmpty {
-            return label.uppercased()
-        }
-        let left = signal.headline.components(separatedBy: " → ").first?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let pieces = left.split(separator: " ")
-        if pieces.count > 1 {
-            return pieces.dropLast().joined(separator: " ").uppercased()
-        }
-        return left.isEmpty ? signal.game.uppercased() : left.uppercased()
+        meta?.pick_label?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? "—"
     }
 
     private func number(_ value: Double) -> String {
@@ -395,10 +398,7 @@ private struct FootballMarketSection: View {
     }
 
     private var valueText: String? {
-        guard let movement = meta?.movement else {
-            let fallback = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
-            return fallback.isEmpty ? nil : fallback.uppercased()
-        }
+        guard let movement = meta?.movement else { return nil }
         let advantage = (movement.advantage ?? "same").lowercased()
         guard advantage != "same", let value = movement.primary_value, value > 0 else { return "NO MOVE" }
         let owner = advantage == "gary" ? "GARY" : "NOW"
@@ -416,11 +416,7 @@ private struct FootballMarketSection: View {
         } else if meta?.market_state?.lowercased() == "pregame" {
             parts.append("SAME BOOK")
         }
-        if parts.isEmpty {
-            let fallback = signal.detail.trimmingCharacters(in: .whitespacesAndNewlines)
-            return fallback.isEmpty ? nil : fallback.uppercased()
-        }
-        return parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     var body: some View {
@@ -449,12 +445,6 @@ private struct FootballMarketSection: View {
                                     price: price(meta?.current), trailing: true,
                                     color: accent)
                     }
-                } else {
-                    Text(signal.headline)
-                        .font(GaryFonts.display(25))
-                        .foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
                 }
 
                 if let valueText {
@@ -783,32 +773,27 @@ private struct FootballSweatSection: View {
     let accent: Color
 
     private var normalizedStates: [String] {
-        signals.map { ($0.sweat?.state ?? "watch").lowercased() }
+        signals.compactMap { FootballProofContract.sweatState($0)?.rawValue.lowercased() }
     }
 
     private var terminal: Bool {
-        let finalStates: Set<String> = [
-            "held", "missed", "failed", "push",
-            "final_held", "final_missed", "final_flipped", "final_push",
-        ]
+        let finalStates: Set<String> = ["held", "missed", "push"]
         return !normalizedStates.isEmpty && normalizedStates.allSatisfy(finalStates.contains)
     }
 
     private var summary: String {
         if terminal {
-            let held = normalizedStates.filter { $0 == "held" || $0 == "final_held" }.count
-            let missed = normalizedStates.filter {
-                $0 == "missed" || $0 == "failed" || $0 == "final_missed" || $0 == "final_flipped"
-            }.count
-            let pushes = normalizedStates.filter { $0 == "push" || $0 == "final_push" }.count
+            let held = normalizedStates.filter { $0 == "held" }.count
+            let missed = normalizedStates.filter { $0 == "missed" }.count
+            let pushes = normalizedStates.filter { $0 == "push" }.count
             var parts: [String] = []
             if held > 0 { parts.append("\(held) HELD") }
             if missed > 0 { parts.append("\(missed) MISSED") }
             if pushes > 0 { parts.append("\(pushes) PUSH") }
             return parts.isEmpty ? "FINAL" : parts.joined(separator: " · ")
         }
-        if normalizedStates.contains(where: { $0.contains("flip") || $0 == "failed" }) { return "FLIPPED" }
-        if normalizedStates.contains(where: { $0.contains("hold") || $0 == "live" }) { return "HOLDING" }
+        if normalizedStates.contains("flipped") { return "FLIPPED" }
+        if normalizedStates.contains("holding") { return "HOLDING" }
         return "WATCH"
     }
 
@@ -840,8 +825,6 @@ private struct FootballSweatRow: View {
     }
 
     private var factor: String {
-        let headline = signal.headline.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !headline.isEmpty { return headline.uppercased() }
         if let raw = signal.sweat?.factor_code?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             switch raw.uppercased() {
             case "THE_NUMBER": return "THE NUMBER"
@@ -937,21 +920,8 @@ private struct FootballSweatRow: View {
         return "\(margin > 0 ? "+" : "")\(body) PTS"
     }
 
-    private var latest: String? {
-        guard baseline == nil, live == nil else { return nil }
-        let value = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
-    }
-
     private var state: String {
-        switch (meta?.state ?? "watch").lowercased() {
-        case "holding", "live", "live_holding": return "HOLDING"
-        case "flipped", "live_flipped": return "FLIPPED"
-        case "missed", "failed", "final_missed", "final_flipped": return "MISSED"
-        case "held", "final_held": return "HELD"
-        case "push", "final_push": return "PUSH"
-        default: return "WATCH"
-        }
+        FootballProofContract.sweatState(signal)?.rawValue ?? "—"
     }
 
     var body: some View {
@@ -983,8 +953,6 @@ private struct FootballSweatRow: View {
                         SweatValue(label: "LIVE", value: live)
                     }
                 }
-            } else if let latest {
-                SweatValue(label: "LATEST", value: latest)
             }
 
             if let ticketMargin {
@@ -1186,10 +1154,15 @@ struct FootballPicksBoard: View {
     private func boardPriority(_ signal: Signal) -> Int? {
         switch signal.kind {
         case .theSweat:
-            let state = signal.sweat?.state?.lowercased() ?? "watch"
-            return ["watch", "scheduled", "pregame"].contains(state) ? nil : 0
-        case .afterGary: return 1
-        case .marketRange: return isCollege ? 2 : nil
+            guard FootballProofContract.isRenderableSweat(signal, includeWatch: false) else { return nil }
+            return 0
+        case .afterGary:
+            guard FootballProofContract.isRenderableAfterGary(signal) else { return nil }
+            return 1
+        // This summary surface has no authoritative slate row to prove an
+        // exact confirmed future kickoff. Market Range remains on the Hub and
+        // game page, where that identity is available.
+        case .marketRange: return nil
         case .injury: return 3
         case .trenches: return 4
         case .quarterback: return 5
@@ -1240,10 +1213,8 @@ private struct FootballPicksBoardRow: View {
     private var label: String {
         switch signal.kind {
         case .theSweat:
-            let state = signal.sweat?.state?.lowercased() ?? ""
-            let finalStates = ["held", "missed", "failed", "push",
-                               "final_held", "final_missed", "final_flipped", "final_push"]
-            return finalStates.contains(state) ? "FINAL RECEIPT" : "LIVE"
+            guard let state = FootballProofContract.sweatState(signal) else { return "PROOF" }
+            return [.held, .missed, .push].contains(state) ? "FINAL RECEIPT" : "LIVE"
         case .afterGary: return "GARY'S NUMBER"
         case .marketRange: return "MARKET RANGE"
         case .injury: return "AVAILABILITY"
@@ -1262,12 +1233,37 @@ private struct FootballPicksBoardRow: View {
     }
 
     private var headline: String {
+        if signal.kind == .afterGary,
+           let label = signal.afterGary?.pick_label,
+           let published = marketQuote(signal.afterGary?.published),
+           let current = marketQuote(signal.afterGary?.current) {
+            return "\(label.uppercased()) \(published) → \(current)"
+        }
         if signal.kind == .marketRange,
            let low = signal.marketRange?.low,
            let high = signal.marketRange?.high {
             return "\(compact(low)) — \(compact(high))"
         }
         return signal.headline
+    }
+
+    private var trailingValue: String? {
+        guard signal.kind == .afterGary, let movement = signal.afterGary?.movement else {
+            let value = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value.uppercased()
+        }
+        let advantage = (movement.advantage ?? "same").lowercased()
+        guard advantage != "same", let value = movement.primary_value, value > 0 else { return "NO MOVE" }
+        let number = compact(value).replacingOccurrences(of: "+", with: "")
+        let unit = movement.primary_unit?.lowercased() == "probability_points" ? "PP" : "PTS"
+        return "\(advantage == "gary" ? "GARY" : "NOW") +\(number) \(unit)"
+    }
+
+    private func marketQuote(_ snapshot: FootballMarketSnapshot?) -> String? {
+        guard let snapshot else { return nil }
+        if let line = snapshot.line { return compact(line) }
+        if let odds = snapshot.odds { return compact(odds) }
+        return nil
     }
 
     private func compact(_ value: Double) -> String {
@@ -1300,8 +1296,8 @@ private struct FootballPicksBoardRow: View {
                     .minimumScaleFactor(0.72)
             }
             Spacer(minLength: 8)
-            if !signal.value.isEmpty {
-                Text(signal.value.uppercased())
+            if let trailingValue {
+                Text(trailingValue)
                     .font(GaryFonts.data(11.5, .bold))
                     .foregroundStyle(accent)
                     .lineLimit(1)

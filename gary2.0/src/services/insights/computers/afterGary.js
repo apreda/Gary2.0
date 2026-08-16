@@ -120,11 +120,19 @@ function teamAbbreviation(game, side) {
 function publishedTimestamp(record) {
   const exact = validIso(record?.pick?.published_at);
   if (exact) return { value: exact, source: 'pick' };
-  const updated = validIso(record?.container?.updated_at);
-  if (updated) return { value: updated, source: 'legacy_container_updated_at' };
-  const created = validIso(record?.container?.created_at);
-  if (created) return { value: created, source: 'legacy_container_created_at' };
   return null;
+}
+
+function requireObjectArray(value, label) {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${label} must be an array`);
+  }
+  for (const [index, item] of value.entries()) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new TypeError(`${label}[${index}] must be an object`);
+    }
+  }
+  return value;
 }
 
 function parseTrailingOdds(text) {
@@ -159,6 +167,11 @@ export function resolvePublishedPickMarket(recordInput, game) {
   const gameId = pick?.bdl_game_id ?? pick?.game_id;
   if (!pickId || gameId == null || String(gameId) !== String(game?.id)) return null;
 
+  const publishedAt = publishedTimestamp(record);
+  if (!publishedAt) {
+    throw new TypeError(`AFTER GARY pick ${pickId} requires an immutable pick.published_at timestamp`);
+  }
+
   const snapshot = pick?.published_market && typeof pick.published_market === 'object'
     ? pick.published_market
     : null;
@@ -185,9 +198,8 @@ export function resolvePublishedPickMarket(recordInput, game) {
     : finite(snapshot?.odds ?? pick?.odds ?? parseTrailingOdds(pick?.pick));
   if ((marketType !== 'moneyline' && line == null) || odds == null) return null;
 
-  const publishedAt = publishedTimestamp(record);
   const kickoff = kickoffFor(record, game);
-  if (!publishedAt || !kickoff) return null;
+  if (!kickoff) return null;
 
   return {
     game,
@@ -320,18 +332,23 @@ export function buildAfterGaryRows({ league, date, games, publishedPicks, curren
   const leagueKey = String(league || '').trim().toLowerCase();
   if (!FOOTBALL[leagueKey]) return [];
   const nowInstant = now instanceof Date ? now : new Date(now);
-  if (Number.isNaN(nowInstant.getTime())) return [];
-  const gameById = new Map((games || []).filter((game) => game?.id != null).map((game) => [String(game.id), game]));
+  if (Number.isNaN(nowInstant.getTime())) {
+    throw new TypeError('AFTER GARY now must be a valid instant');
+  }
+  const gameRows = requireObjectArray(games, 'AFTER GARY games');
+  const pickRows = requireObjectArray(publishedPicks, 'AFTER GARY publishedPicks');
+  const oddsRows = requireObjectArray(currentOdds, 'AFTER GARY currentOdds');
+  const gameById = new Map(gameRows.filter((game) => game?.id != null).map((game) => [String(game.id), game]));
   const rows = [];
 
-  for (const item of Array.isArray(publishedPicks) ? publishedPicks : []) {
+  for (const item of pickRows) {
     const record = item?.pick ? item : { pick: item, container: {} };
     const gameId = record?.pick?.bdl_game_id ?? record?.pick?.game_id;
     const game = gameId == null ? null : gameById.get(String(gameId));
     if (!game) continue;
     const published = resolvePublishedPickMarket(record, game);
     if (!published) continue;
-    const currentRow = latestSameVendorRow(currentOdds, published);
+    const currentRow = latestSameVendorRow(oddsRows, published);
     if (!currentRow) continue;
     const current = currentMarket(currentRow, published);
     if (!current) continue;
@@ -340,11 +357,15 @@ export function buildAfterGaryRows({ league, date, games, publishedPicks, curren
     const providerAsOf = validIso(currentRow?.updated_at ?? currentRow?.last_updated_at ?? currentRow?.last_update);
     const observedAt = providerAsOf ? Date.parse(providerAsOf) : nowInstant.getTime();
     const kickoffAt = Date.parse(published.kickoff);
+    const publishedAt = Date.parse(published.publishedAt);
     // BDL can expose in-game/postgame prices through the same odds shape. Those
     // are a different market and must never be compared with Gary's sealed
     // pregame number. Once play starts, omission preserves the last verified
     // pre-kick receipt already stored by the proof writer.
-    if (!Number.isFinite(kickoffAt) || observedAt >= kickoffAt) continue;
+    if (!Number.isFinite(kickoffAt)
+        || !Number.isFinite(publishedAt)
+        || publishedAt > observedAt
+        || observedAt >= kickoffAt) continue;
     const asOf = providerAsOf || nowInstant.toISOString();
     const marketState = nowInstant.getTime() < kickoffAt ? 'pregame' : 'closed';
     const label = `${teamAbbreviation(game, 'away')} @ ${teamAbbreviation(game, 'home')}`;
@@ -418,6 +439,23 @@ function pickBelongsToLeague(pick, league) {
   return declared === league || sport === FOOTBALL[league]?.sportKey;
 }
 
+function storedPickArray(value, table, rowIndex) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    let parsed;
+    try {
+      parsed = JSON.parse(value);
+    } catch (error) {
+      throw new Error(
+        `Malformed ${table}.picks JSON at row ${rowIndex}: ${error.message}`,
+        { cause: error },
+      );
+    }
+    if (Array.isArray(parsed)) return parsed;
+  }
+  throw new TypeError(`Malformed ${table}.picks at row ${rowIndex}: expected an array`);
+}
+
 /** Read exact stored game picks; read-only, no production mutation. */
 export async function loadPublishedFootballPicks({
   league,
@@ -425,32 +463,37 @@ export async function loadPublishedFootballPicks({
   season,
   slateGameIds,
   httpClient = axios,
+  supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+  key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    || process.env.SUPABASE_ANON_KEY,
 } = {}) {
   const leagueKey = String(league || '').trim().toLowerCase();
   const config = FOOTBALL[leagueKey];
   if (!config) return [];
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-    || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    || process.env.SUPABASE_ANON_KEY;
-  // Unit/library callers can use the pure builder without owning Supabase.
-  if (!supabaseUrl || !key) return [];
 
   const wanted = new Set([...(slateGameIds || [])].map(String));
   if (!wanted.size) return [];
+  if (!supabaseUrl || !key) {
+    throw new Error('Supabase configuration missing for AFTER GARY proof');
+  }
   const params = {
     select: leagueKey === 'nfl'
-      ? 'picks,created_at,updated_at,week_start,season'
-      : 'picks,created_at,updated_at,date',
+      ? 'picks,week_start,season'
+      : 'picks,date',
     limit: 2,
   };
   if (leagueKey === 'nfl') {
     const weekStart = nflWeekStart(date);
-    if (!weekStart || !Number.isInteger(Number(season))) return [];
+    if (!weekStart || !Number.isInteger(Number(season))) {
+      throw new TypeError('Invalid NFL date/season for AFTER GARY proof');
+    }
     params.week_start = `eq.${weekStart}`;
     params.season = `eq.${Number(season)}`;
   } else {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) {
+      throw new TypeError('Invalid NCAAF date for AFTER GARY proof');
+    }
     params.date = `eq.${date}`;
   }
 
@@ -458,13 +501,16 @@ export async function loadPublishedFootballPicks({
     headers: { apikey: key, Authorization: `Bearer ${key}` },
     params,
   });
+  if (!Array.isArray(data)) {
+    throw new TypeError(`Malformed ${config.table} response: expected an array`);
+  }
   const records = [];
-  for (const container of Array.isArray(data) ? data : []) {
-    let picks = container?.picks;
-    if (typeof picks === 'string') {
-      try { picks = JSON.parse(picks); } catch { picks = []; }
-    }
-    for (const pick of Array.isArray(picks) ? picks : []) {
+  for (const [rowIndex, container] of data.entries()) {
+    const picks = storedPickArray(container?.picks, config.table, rowIndex);
+    for (const pick of picks) {
+      if (!pick || typeof pick !== 'object' || Array.isArray(pick)) {
+        throw new TypeError(`Malformed ${config.table}.picks entry at row ${rowIndex}`);
+      }
       const gameId = pick?.bdl_game_id ?? pick?.game_id;
       if (!pickBelongsToLeague(pick, leagueKey)
           || pick?.type === 'prop'
@@ -472,6 +518,11 @@ export async function loadPublishedFootballPicks({
           || !String(pick?.pick_id || '').trim()
           || gameId == null
           || !wanted.has(String(gameId))) continue;
+      if (!validIso(pick?.published_at)) {
+        throw new TypeError(
+          `AFTER GARY pick ${String(pick.pick_id)} requires an immutable pick.published_at timestamp`,
+        );
+      }
       records.push({ pick, container });
     }
   }
@@ -482,13 +533,18 @@ export async function loadPublishedFootballPicks({
 export async function computeAfterGary(ctx) {
   const league = String(ctx?.league || '').trim().toLowerCase();
   const config = FOOTBALL[league];
-  const games = Array.isArray(ctx?.games) ? ctx.games : [];
-  if (!config || !games.length || !ctx?.bdl) return [];
+  if (!config) return [];
+  const games = requireObjectArray(ctx?.games, 'AFTER GARY games');
+  if (!games.length) return [];
   const slateGameIds = new Set(games.map((game) => game?.id).filter((id) => id != null));
+  if (slateGameIds.size !== games.length) {
+    throw new TypeError('AFTER GARY every game requires an exact provider id');
+  }
   const loader = typeof ctx?.afterGaryPickLoader === 'function'
     ? ctx.afterGaryPickLoader
     : loadPublishedFootballPicks;
-  const publishedPicks = Array.isArray(ctx?.afterGaryPicks)
+  const hasInjectedPicks = Object.prototype.hasOwnProperty.call(ctx ?? {}, 'afterGaryPicks');
+  const loadedPicks = hasInjectedPicks
     ? ctx.afterGaryPicks
     : await loader({
       league,
@@ -497,6 +553,7 @@ export async function computeAfterGary(ctx) {
       slateGameIds,
       httpClient: ctx?.afterGaryHttpClient,
     });
+  const publishedPicks = requireObjectArray(loadedPicks, 'AFTER GARY publishedPicks');
   if (!publishedPicks.length) return [];
 
   const slateIdentities = new Set([...slateGameIds].map(String));
@@ -505,13 +562,18 @@ export async function computeAfterGary(ctx) {
     .map((pick) => pick?.bdl_game_id ?? pick?.game_id)
     .filter((id) => id != null && slateIdentities.has(String(id))))];
   if (!exactGameIds.length) return [];
-  const currentOdds = Array.isArray(ctx?.afterGaryOdds)
+  const hasInjectedOdds = Object.prototype.hasOwnProperty.call(ctx ?? {}, 'afterGaryOdds');
+  if (!hasInjectedOdds && typeof ctx?.bdl?.getOddsV2 !== 'function') {
+    throw new Error('BDL odds configuration missing for AFTER GARY proof');
+  }
+  const loadedOdds = hasInjectedOdds
     ? ctx.afterGaryOdds
     : await ctx.bdl.getOddsV2(
       { game_ids: exactGameIds, per_page: 100 },
       config.sportKey,
       1,
     );
+  const currentOdds = requireObjectArray(loadedOdds, 'AFTER GARY currentOdds');
   return buildAfterGaryRows({
     league,
     date: ctx.date,

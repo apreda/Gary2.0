@@ -3,6 +3,7 @@ import {
   americanImpliedProbability,
   buildAfterGaryRows,
   computeAfterGary,
+  loadPublishedFootballPicks,
   normalizeVendor,
   resolvePublishedPickMarket,
 } from '../../../src/services/insights/computers/afterGary.js';
@@ -88,6 +89,8 @@ describe('AFTER GARY market normalization', () => {
     });
     expect(resolvePublishedPickMarket(record(pick({ pick_id: null })), game)).toBeNull();
     expect(resolvePublishedPickMarket(record(pick({ bdl_game_id: 999 })), game)).toBeNull();
+    expect(() => resolvePublishedPickMarket(record(pick({ published_at: null })), game))
+      .toThrow('requires an immutable pick.published_at timestamp');
   });
 });
 
@@ -238,5 +241,61 @@ describe('AFTER GARY rows', () => {
       1,
     );
     expect(rows).toHaveLength(1);
+  });
+
+  it('throws when injected proof payloads are not strict arrays', async () => {
+    await expect(computeAfterGary({
+      league: 'nfl', date: '2026-08-15', games: [game], afterGaryPicks: {},
+    })).rejects.toThrow('AFTER GARY publishedPicks must be an array');
+
+    await expect(computeAfterGary({
+      league: 'nfl', date: '2026-08-15', games: [game],
+      afterGaryPicks: [record()], afterGaryOdds: null,
+    })).rejects.toThrow('AFTER GARY currentOdds must be an array');
+  });
+
+  it('throws on missing proof storage config instead of reporting no receipts', async () => {
+    await expect(loadPublishedFootballPicks({
+      league: 'nfl',
+      date: '2026-08-15',
+      season: 2026,
+      slateGameIds: [game.id],
+      supabaseUrl: '',
+      key: '',
+      httpClient: { get: vi.fn() },
+    })).rejects.toThrow('Supabase configuration missing for AFTER GARY proof');
+  });
+
+  it('keeps a valid empty result distinct from malformed stored picks', async () => {
+    const request = {
+      league: 'nfl',
+      date: '2026-08-15',
+      season: 2026,
+      slateGameIds: [game.id],
+      supabaseUrl: 'https://example.invalid',
+      key: 'test',
+    };
+
+    await expect(loadPublishedFootballPicks({
+      ...request,
+      httpClient: { get: vi.fn().mockResolvedValue({ data: [] }) },
+    })).resolves.toEqual([]);
+
+    await expect(loadPublishedFootballPicks({
+      ...request,
+      httpClient: { get: vi.fn().mockResolvedValue({ data: [{ picks: '{bad-json' }] }) },
+    })).rejects.toThrow('Malformed weekly_nfl_picks.picks JSON');
+
+    await expect(loadPublishedFootballPicks({
+      ...request,
+      httpClient: { get: vi.fn().mockResolvedValue({ data: [{ picks: '{}' }] }) },
+    })).rejects.toThrow('expected an array');
+
+    await expect(loadPublishedFootballPicks({
+      ...request,
+      httpClient: {
+        get: vi.fn().mockResolvedValue({ data: [{ picks: [pick({ published_at: null })] }] }),
+      },
+    })).rejects.toThrow('requires an immutable pick.published_at timestamp');
   });
 });

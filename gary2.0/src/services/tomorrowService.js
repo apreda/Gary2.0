@@ -83,6 +83,7 @@ import {
   GEMINI_PROPS_MODEL,
 } from './agentic/orchestrator/orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from './agentic/orchestrator/sessionManager.js';
+import { sourceFailure } from './sourceFailurePolicy.js';
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -333,16 +334,19 @@ function isRivalry(a, b) {
 
 /* ───────────────────────────── 1. SLATE + LINES ─────────────────────────── */
 
-async function buildSlate(etDateStr) {
+export async function buildSlate(etDateStr) {
   const board = [];
   const byLeague = {};
+  const failures = [];
   for (const sport of SLATE_SPORTS_LIST) {
     try {
       const rows = await buildLeagueRows(sport, etDateStr);
-      if (rows.length) byLeague[sport.league] = rows.length;
+      byLeague[sport.league] = rows.length;
       board.push(...rows);
     } catch (e) {
-      console.warn(`[TomorrowBoard] ${sport.league} slate fetch failed (skipping league): ${e.message}`);
+      const message = e?.message || String(e);
+      failures.push(sourceFailure(sport.league, e));
+      console.warn(`[TomorrowBoard] ${sport.league} slate fetch failed (healthy leagues continue): ${message}`);
     }
   }
   // Non-franchise events (the All-Star Game rides BDL with UNK teams) would
@@ -369,7 +373,48 @@ async function buildSlate(etDateStr) {
       return acc;
     }, {}),
   );
-  return { rows: deduped, byLeague };
+  return { rows: deduped, byLeague, failures };
+}
+
+const PRESERVED_BOARD_ROW = Symbol('preservedTomorrowBoardRow');
+
+/**
+ * Restore only failed leagues from the same-date persisted snapshot. Fresh
+ * rows always belong to healthy leagues, so this cannot overwrite a current
+ * provider result. The hidden source row lets presentation keep every prior
+ * field (arms, rail extras, etc.) rather than rebuilding a thinner fallback.
+ */
+export function mergeFailedTomorrowLeagues(freshRows, failures, existingBoard) {
+  const failed = new Set((failures || [])
+    .filter((failure) => failure?.transient_external === true)
+    .map(({ league }) => String(league || '').toUpperCase()));
+  const merged = [...(Array.isArray(freshRows) ? freshRows : [])];
+  for (const prior of Array.isArray(existingBoard) ? existingBoard : []) {
+    if (!failed.has(String(prior?.league || '').toUpperCase())) continue;
+    const internal = {
+      ...prior,
+      line_vendor: prior?.line_vendor ?? prior?.ml_book ?? null,
+    };
+    Object.defineProperty(internal, PRESERVED_BOARD_ROW, {
+      value: { ...prior },
+      enumerable: false,
+    });
+    merged.push(internal);
+  }
+  return merged;
+}
+
+export class TomorrowBoardSourceError extends Error {
+  constructor(result) {
+    const failed = (result?.failures || []).map(({ league }) => league).join(', ');
+    const outcome = result?.source_health === 'degraded'
+      ? 'healthy leagues were persisted and same-date transient last-good rows were retained where available'
+      : 'snapshot was not overwritten because the failure was not a transient external outage';
+    super(`Tomorrow board source failure for ${failed || 'unknown league'}; ${outcome}`);
+    this.name = 'TomorrowBoardSourceError';
+    this.result = result;
+    this.failures = result?.failures || [];
+  }
 }
 
 /* ──────────────────────── 2. PROBABLE STARTERS (MLB only) ───────────────── */
@@ -1408,6 +1453,7 @@ function buildBigGames(board, { mlb }) {
       standing: s.standing,
       context: s.ctx,
       commence_time: s.row.commence_time || null,
+      bdl_game_id: s.row.bdl_game_id ?? null,
     };
     // MLB only: BOTH probable starters' last names. "Undecided" per side when a
     // probable is unposted (left off entirely for other leagues).
@@ -1846,7 +1892,65 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   }
 
   // 1. SLATE + LINES (single source of truth, in lockstep with the Today slate).
-  const { rows: slateRows, byLeague } = await buildSlate(etDateStr);
+  const slate = await buildSlate(etDateStr);
+  let slateRows = slate.rows;
+  const { byLeague, failures } = slate;
+
+  // Last-good is an emergency bridge for typed external outages only. A
+  // schema/config/identity/internal failure is our code to fix; preserving the
+  // old league would disguise it as current data, so fail before any write.
+  const nonTransientFailures = failures.filter((failure) => failure.transient_external !== true);
+  if (nonTransientFailures.length > 0) {
+    throw new TomorrowBoardSourceError({
+      date: etDateStr,
+      game_count: slateRows.length,
+      byLeague,
+      failures,
+      source_health: 'failed',
+      preserved_leagues: [],
+    });
+  }
+
+  // The table is one row per date, so an upsert replaces every league at once.
+  // If one league failed, load that SAME date's prior board and retain only its
+  // rows. If the preservation read itself fails, refuse the destructive write.
+  let existingBoard = null;
+  let preservedLeagues = [];
+  const readExistingBoard = async () => {
+    if (existingBoard !== null) return existingBoard;
+    const { data } = await axios.get(`${supabaseUrl}/rest/v1/${table}`, {
+      params: { date: `eq.${etDateStr}`, select: 'board' },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+      timeout: 15000,
+    });
+    if (!Array.isArray(data)) {
+      throw new Error('existing board read returned a non-array response');
+    }
+    const prior = data[0]?.board ?? [];
+    if (!Array.isArray(prior)) {
+      throw new Error('existing board row has a non-array board payload');
+    }
+    existingBoard = prior;
+    return existingBoard;
+  };
+
+  if (failures.length > 0) {
+    let prior;
+    try {
+      prior = await readExistingBoard();
+    } catch (error) {
+      throw new Error(
+        `Tomorrow board has failed league source(s) and last-good preservation could not be read; refusing overwrite: ${error.message}`,
+      );
+    }
+    slateRows = mergeFailedTomorrowLeagues(slateRows, failures, prior);
+    preservedLeagues = failures
+      .map(({ league }) => league)
+      .filter((league) => prior.some((row) => row?.league === league));
+    for (const { league } of failures) {
+      byLeague[league] = prior.filter((row) => row?.league === league).length;
+    }
+  }
 
   // MLB join indexes (teams / standings / aces) — each best-effort.
   let teams = [];
@@ -1930,7 +2034,9 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   }
 
   // board[] presentation rows.
-  const board = slateRows.map((r) => toBoardRow(r, marqueeKeys, teamIndex));
+  const board = slateRows.map((r) => (
+    r[PRESERVED_BOARD_ROW] ? { ...r[PRESERVED_BOARD_ROW] } : toBoardRow(r, marqueeKeys, teamIndex)
+  ));
   // SCOUT EXTRAS — per-MLB-game season series (record + venue split + last
   // three meetings) off the season game index. Grounded; omit-when-short.
   try {
@@ -1941,16 +2047,11 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   // Rail ladder extras — needs the PRIOR snapshot so opening lines survive
   // every later refresh of the same date.
   try {
-    let existingBoard = [];
+    let priorBoard = [];
     try {
-      const { data } = await axios.get(`${supabaseUrl}/rest/v1/${table}`, {
-        params: { date: `eq.${etDateStr}`, select: 'board' },
-        headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
-        timeout: 15000,
-      });
-      existingBoard = data?.[0]?.board || [];
+      priorBoard = await readExistingBoard();
     } catch { /* first write of the day */ }
-    await attachRailExtras(board, etDateStr, { existingBoard, idByName, supabaseUrl, adminKey });
+    await attachRailExtras(board, etDateStr, { existingBoard: priorBoard, idByName, supabaseUrl, adminKey });
   } catch (e) {
     console.warn(`[TomorrowBoard] rail extras failed (honest-empty): ${e.message}`);
   }
@@ -2015,15 +2116,16 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   });
 
   const summary = Object.entries(byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
+  const status = failures.length > 0 ? '⚠️ PARTIAL' : '✅';
   console.log(
-    `[TomorrowBoard] ✅ ${etDateStr}: ${board.length} game(s)${summary ? ` (${summary})` : ''}, ` +
+    `[TomorrowBoard] ${status} ${etDateStr}: ${board.length} game(s)${summary ? ` (${summary})` : ''}, ` +
     `${bigGames.length} big game(s), ${starters.length} starter(s), ${returns.length} return(s), ` +
     `${form.length} form, ${run_profile.length} run-profile, ${weather.length} weather, ` +
     `lgERA=${leagueAvg.league_avg_era ?? '—'}/xERA=${leagueAvg.league_avg_xera ?? '—'}, ` +
     `lines=${any_lines ? 'posted' : 'open soon'}, countdown=${countdown_sport || 'none'}`,
   );
 
-  return {
+  const result = {
     date: etDateStr,
     game_count: board.length,
     any_lines,
@@ -2036,7 +2138,12 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     league_avg_era: leagueAvg.league_avg_era,
     league_avg_xera: leagueAvg.league_avg_xera,
     countdown_sport,
+    failures,
+    source_health: failures.length > 0 ? 'degraded' : 'healthy',
+    preserved_leagues: preservedLeagues,
   };
+  if (failures.length > 0) throw new TomorrowBoardSourceError(result);
+  return result;
 }
 
 /* ───────────────────────── supporting builders ──────────────────────────── */

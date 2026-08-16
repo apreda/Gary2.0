@@ -153,4 +153,55 @@ describe('BDL NCAAF slate normalization', () => {
     expect(mocks.getTeams).toHaveBeenCalledWith('americanfootball_ncaaf');
     expect(mocks.axiosGet).not.toHaveBeenCalled();
   });
+
+  it('rejects a decoded NCAAF row without provider identity instead of dropping it', async () => {
+    mocks.getGames.mockResolvedValue([{
+      date: '2026-09-05T20:00:00Z',
+      home_team: fbs(90, 10, 'Home'),
+      visitor_team: fbs(91, 1, 'Away'),
+    }]);
+
+    await expect(ballDontLieOddsService
+      .getGamesWithOddsForSport('americanfootball_ncaaf', '2026-09-05'))
+      .rejects.toThrow(/without a provider game id; refusing a partial slate/);
+    expect(mocks.axiosGet).not.toHaveBeenCalled();
+  });
+
+  it('rejects an accepted FBS row without a provider date instead of dropping it', async () => {
+    mocks.getGames.mockResolvedValue([{
+      id: 10,
+      home_team: fbs(100, 10, 'Home'),
+      visitor_team: fbs(101, 1, 'Away'),
+    }]);
+
+    await expect(ballDontLieOddsService
+      .getGamesWithOddsForSport('americanfootball_ncaaf', '2026-09-05'))
+      .rejects.toThrow(/without a provider scheduled date; refusing a partial slate/);
+    expect(mocks.axiosGet).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed 2xx odds envelope instead of publishing games with false empty markets', async () => {
+    mocks.getGames.mockResolvedValue([game(7, '2026-09-05T20:00:00Z')]);
+    mocks.axiosGet.mockResolvedValueOnce({ data: { message: 'proxy response' } });
+
+    await expect(ballDontLieOddsService
+      .getGamesWithOddsForSport('americanfootball_ncaaf', '2026-09-05'))
+      .rejects.toThrow(/invalid response shape/);
+  });
+
+  it('rejects a later odds page failure instead of retaining a cacheable partial page', async () => {
+    mocks.getGames.mockResolvedValue([game(8, '2026-09-05T20:00:00Z')]);
+    mocks.axiosGet
+      .mockResolvedValueOnce({
+        data: {
+          data: [{ id: 'first', game_id: 8, vendor: 'book-a', moneyline_home_odds: -120 }],
+          meta: { next_cursor: 'page-2' },
+        },
+      })
+      .mockRejectedValueOnce(new Error('odds page two unavailable'));
+
+    await expect(ballDontLieOddsService
+      .getGamesWithOddsForSport('americanfootball_ncaaf', '2026-09-05'))
+      .rejects.toThrow(/odds page two unavailable/);
+  });
 });

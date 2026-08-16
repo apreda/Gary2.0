@@ -13,6 +13,7 @@ const {
 } = await import('../../src/services/dailySlateService.js');
 
 const sport = { key: 'americanfootball_ncaaf', league: 'NCAAF' };
+const nflSport = { key: 'americanfootball_nfl', league: 'NFL' };
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -162,5 +163,50 @@ describe('daily NCAAF slate policy', () => {
 
     await expect(buildLeagueRows(sport, '2026-09-05'))
       .rejects.toThrow(/without a provider game id/);
+  });
+});
+
+describe('daily NFL slate kickoff policy', () => {
+  it('publishes a date-only NFL fixture as TIME TBD with no execution instant', async () => {
+    odds.getUpcomingGames.mockResolvedValue([{
+      id: 800,
+      home_team: 'Buffalo Bills',
+      away_team: 'New York Jets',
+      commence_time: null,
+      scheduled_date: '2026-09-13',
+      kickoff_status: 'date_only',
+      estimated_time: true,
+      spread_home: -3,
+    }]);
+
+    const rows = await buildLeagueRows(nflSport, '2026-09-13');
+
+    expect(rows).toEqual([expect.objectContaining({
+      date: '2026-09-13',
+      league: 'NFL',
+      bdl_game_id: 800,
+      commence_time: null,
+      scheduled_date: '2026-09-13',
+      kickoff_status: 'date_only',
+    })]);
+  });
+
+  it('preserves a confirmed NFL kickoff exactly', async () => {
+    odds.getUpcomingGames.mockResolvedValue([{
+      id: 801,
+      home_team: 'Buffalo Bills',
+      away_team: 'New York Jets',
+      commence_time: '2026-09-13T17:00:00.000Z',
+      scheduled_date: '2026-09-13',
+      kickoff_status: 'confirmed',
+    }]);
+
+    const rows = await buildLeagueRows(nflSport, '2026-09-13');
+    expect(rows).toEqual([expect.objectContaining({
+      bdl_game_id: 801,
+      commence_time: '2026-09-13T17:00:00.000Z',
+      scheduled_date: '2026-09-13',
+      kickoff_status: 'confirmed',
+    })]);
   });
 });

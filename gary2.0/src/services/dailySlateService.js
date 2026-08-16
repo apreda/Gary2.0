@@ -17,6 +17,7 @@
 import axios from 'axios';
 import { oddsService } from './oddsService.js';
 import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
+import { sourceFailure } from './sourceFailurePolicy.js';
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
@@ -61,6 +62,41 @@ export function dedupeDailySlateRows(rows = []) {
   );
 }
 
+export function dailySlateRowIdentity(row) {
+  const league = String(row?.league || '').toUpperCase();
+  if (row?.bdl_game_id != null) return `${league}|game:${row.bdl_game_id}`;
+  return [
+    league,
+    row?.date ?? '',
+    row?.away_team ?? '',
+    row?.home_team ?? '',
+    row?.commence_time ?? '',
+  ].join('|');
+}
+
+/**
+ * Existing rows absent from a successfully fetched league are canceled or
+ * disappeared provider rows. Failed leagues are deliberately excluded: one
+ * sport outage must never delete another sport's last authoritative snapshot.
+ */
+export function staleDailySlateRowIds(existingRows, freshRows, healthyLeagues) {
+  if (!Array.isArray(existingRows)) {
+    throw new Error('daily_slate reconciliation read returned a non-array response');
+  }
+  const healthy = new Set((healthyLeagues || []).map((league) => String(league).toUpperCase()));
+  const fresh = new Set((freshRows || []).map(dailySlateRowIdentity));
+  const stale = [];
+  for (const row of existingRows) {
+    if (!healthy.has(String(row?.league || '').toUpperCase())) continue;
+    if (fresh.has(dailySlateRowIdentity(row))) continue;
+    if (!/^\d+$/.test(String(row?.id ?? ''))) {
+      throw new Error('daily_slate reconciliation row is missing a valid id');
+    }
+    stale.push(String(row.id));
+  }
+  return [...new Set(stale)];
+}
+
 // Active sports for the slate (same set the scheduler plans for).
 const SLATE_SPORTS = [
   { key: 'baseball_mlb', league: 'MLB' },
@@ -103,6 +139,16 @@ export function sanitizeLines(league, { spread, ml_home, ml_away, total }) {
   };
 }
 
+export class DailySlateSourceError extends Error {
+  constructor(result) {
+    const failed = (result?.failures || []).map(({ league }) => league).join(', ');
+    super(`Daily slate source failure for ${failed || 'unknown league'}; healthy leagues were preserved`);
+    this.name = 'DailySlateSourceError';
+    this.result = result;
+    this.failures = result?.failures || [];
+  }
+}
+
 /**
  * Fetch one league's games for the ET date and map them to daily_slate rows.
  * Returns [] when the league has no games.
@@ -117,6 +163,9 @@ export async function buildLeagueRows(sport, etDateStr) {
     nocache: true,
     targetDate: etDateStr,
   });
+  if (!Array.isArray(games)) {
+    throw new Error(`${sport.league} source returned a non-array slate`);
+  }
 
   if (sport.league === 'NCAAF') {
     const ncaafGames = Array.isArray(games) ? games : [];
@@ -138,22 +187,37 @@ export async function buildLeagueRows(sport, etDateStr) {
 
   const rows = [];
   for (const g of Array.isArray(games) ? games : []) {
-    if (!g?.home_team || !g?.away_team) continue;
+    const gameId = g?.bdl_game_id ?? g?.id;
+    if (gameId == null) {
+      throw new Error(`${sport.league} source returned a game without a provider game id`);
+    }
+    if (typeof g?.home_team !== 'string' || !g.home_team.trim()
+      || typeof g?.away_team !== 'string' || !g.away_team.trim()) {
+      throw new Error(`${sport.league} game ${gameId} is missing provider team identity`);
+    }
 
     const isNcaaf = sport.league === 'NCAAF';
-    const kickoffStatus = isNcaaf ? g.kickoff_status : null;
-    if (isNcaaf && !['confirmed', 'date_only'].includes(kickoffStatus)) {
-      throw new Error(`NCAAF game ${g.id ?? '?'} is missing a valid kickoff_status`);
+    const hasExplicitFootballKickoff = isNcaaf || sport.league === 'NFL';
+    const kickoffStatus = hasExplicitFootballKickoff ? g.kickoff_status : null;
+    if (hasExplicitFootballKickoff && !['confirmed', 'date_only'].includes(kickoffStatus)) {
+      throw new Error(`${sport.league} game ${g.id ?? '?'} is missing a valid kickoff_status`);
     }
 
     let onDate = false;
     if (kickoffStatus === 'date_only') {
-      onDate = /^\d{4}-\d{2}-\d{2}$/.test(String(g.scheduled_date || ''))
-        && g.scheduled_date === etDateStr;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(g.scheduled_date || ''))) {
+        throw new Error(`${sport.league} game ${gameId} date-only kickoff is missing scheduled_date`);
+      }
+      onDate = g.scheduled_date === etDateStr;
     } else {
-      if (!g?.commence_time) continue;
+      if (typeof g?.commence_time !== 'string' || !g.commence_time.trim()
+        || /^\d{4}-\d{2}-\d{2}$/.test(g.commence_time.trim())) {
+        throw new Error(`${sport.league} game ${gameId} is missing a confirmed commence_time`);
+      }
       const start = new Date(g.commence_time);
-      if (Number.isNaN(start.getTime())) continue;
+      if (Number.isNaN(start.getTime())) {
+        throw new Error(`${sport.league} game ${gameId} has an unparseable commence_time`);
+      }
       onDate = isNcaaf
         ? ncaafSlateDateForInstant(start) === etDateStr
         : getETDateStr(start) === etDateStr;
@@ -166,13 +230,13 @@ export async function buildLeagueRows(sport, etDateStr) {
       away_team: g.away_team,
       home_team: g.home_team,
       commence_time: kickoffStatus === 'date_only' ? null : g.commence_time,
-      ...(isNcaaf ? {
+      ...(hasExplicitFootballKickoff ? {
         scheduled_date: g.scheduled_date ?? etDateStr,
         kickoff_status: kickoffStatus,
       } : {}),
       // The game's own identity — lets every reader (iOS pages, insight
       // attachment) tell doubleheader games apart without string games.
-      bdl_game_id: g.bdl_game_id ?? g.id ?? null,
+      bdl_game_id: gameId,
       venue: null, // BDL games+odds shape carries no venue
       line_vendor: g.line_vendor ?? null,
       ...sanitizeLines(sport.league, {
@@ -191,9 +255,9 @@ export async function buildLeagueRows(sport, etDateStr) {
  * to today ET) into daily_slate. Idempotent upsert on the unique key — re-runs
  * refresh the line snapshot in place.
  *
- * Per-league fetch failures are caught and logged so one flaky sport never
- * sinks the rest of the slate. Throws only on config errors or if the final
- * upsert itself fails.
+ * Per-league fetch failures do not block healthy-league upserts, but they are
+ * returned as a typed failure after those writes complete. This keeps one
+ * flaky sport isolated without reporting an outage as a legitimate dark day.
  *
  * @returns {Promise<{date: string, total: number, byLeague: Object}>}
  */
@@ -210,22 +274,20 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
 
   const rows = [];
   const byLeague = {};
+  const failures = [];
   for (const sport of SLATE_SPORTS) {
     try {
       const leagueRows = await buildLeagueRows(sport, etDateStr);
+      byLeague[sport.league] = leagueRows.length;
       if (leagueRows.length > 0) {
         rows.push(...leagueRows);
-        byLeague[sport.league] = leagueRows.length;
       }
       console.log(`[DailySlate] ${sport.league}: ${leagueRows.length} game(s) for ${etDateStr}`);
     } catch (e) {
-      console.warn(`[DailySlate] ${sport.league} fetch failed (skipping league): ${e.message}`);
+      const message = e?.message || String(e);
+      failures.push(sourceFailure(sport.league, e));
+      console.warn(`[DailySlate] ${sport.league} fetch failed (healthy leagues continue): ${message}`);
     }
-  }
-
-  if (rows.length === 0) {
-    console.log(`[DailySlate] No games for ${etDateStr} — nothing to write.`);
-    return { date: etDateStr, total: 0, byLeague };
   }
 
   // De-dupe TRUE duplicates on the same identity used by the upsert. Exact
@@ -241,6 +303,25 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
   // only legacy id-less rows use the historical kickoff key.
   const sanitized = JSON.parse(JSON.stringify(dedupedRows));
   const { exactGameRows, legacyRows } = partitionDailySlateRowsByIdentity(sanitized);
+
+  // Read before mutating. This turns each successfully fetched league into an
+  // authoritative replacement, including a valid empty slate, while a failed
+  // league remains outside reconciliation entirely.
+  const healthyLeagues = SLATE_SPORTS
+    .map(({ league }) => league)
+    .filter((league) => !failures.some((failure) => failure.league === league));
+  const existingResponse = await axios({
+    method: 'GET',
+    url: `${supabaseUrl}/rest/v1/${TABLE}`,
+    params: {
+      date: `eq.${etDateStr}`,
+      select: 'id,date,league,away_team,home_team,commence_time,bdl_game_id',
+    },
+    headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+    timeout: 15000,
+  });
+  const staleIds = staleDailySlateRowIds(existingResponse?.data, sanitized, healthyLeagues);
+
   const upsert = async (data, conflictKey) => {
     if (data.length === 0) return;
     await axios({
@@ -259,7 +340,23 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
   await upsert(exactGameRows, EXACT_GAME_CONFLICT_KEY);
   await upsert(legacyRows, CONFLICT_KEY);
 
+  if (staleIds.length > 0) {
+    await axios({
+      method: 'DELETE',
+      url: `${supabaseUrl}/rest/v1/${TABLE}`,
+      params: { id: `in.(${staleIds.join(',')})` },
+      headers: {
+        apikey: adminKey,
+        Authorization: `Bearer ${adminKey}`,
+        Prefer: 'return=minimal',
+      },
+      timeout: 15000,
+    });
+  }
+
   const summary = Object.entries(byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
-  console.log(`[DailySlate] ✅ Upserted ${dedupedRows.length} game(s) for ${etDateStr} (${summary})`);
-  return { date: etDateStr, total: dedupedRows.length, byLeague };
+  console.log(`[DailySlate] ✅ Reconciled ${dedupedRows.length} game(s) for ${etDateStr} (${summary}); removed ${staleIds.length} stale row(s)`);
+  const result = { date: etDateStr, total: dedupedRows.length, byLeague, failures };
+  if (failures.length > 0) throw new DailySlateSourceError(result);
+  return result;
 }
