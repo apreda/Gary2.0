@@ -31,6 +31,10 @@ const {
   hydrateExactFootballGames,
   mergeFootballProofScore,
 } = await import('./scripts/lib/footballProofExactGame.js');
+const {
+  assertAfterGaryPickCoverage,
+  partitionFootballProofPicks,
+} = await import('./scripts/lib/footballProofLegacyPolicy.js');
 
 const SUPPORTED_LEAGUES = new Set(['NFL', 'NCAAF']);
 const SPORT_KEYS = Object.freeze({
@@ -140,27 +144,35 @@ async function run() {
       const rawPicks = await loadStoredFootballPicks({ league: key, date, season });
       const gameIds = new Set(rawPicks.map(exactGameId).filter(Boolean));
       if (!gameIds.size) {
-        summary.leagues[league] = { picks: 0, the_sweat: 0, after_gary: 0 };
+        summary.leagues[league] = {
+          picks: 0,
+          the_sweat: 0,
+          after_gary: 0,
+          after_gary_legacy_skipped: 0,
+        };
         continue;
       }
-      const published = await loadPublishedFootballPicks({
-        league: key,
-        date,
-        season,
-        slateGameIds: gameIds,
-      });
-      const records = published.length
-        ? published
-        : rawPicks.filter((pick) => pick?.pick_id).map((pick) => ({ pick, container: {} }));
-      if (records.length !== rawPicks.length) {
-        throw new Error(`${rawPicks.length - records.length} stored pick(s) lack exact proof identity`);
-      }
+      const {
+        proofRecords,
+        afterGaryGameIds,
+        afterGaryPickIds,
+        legacyAfterGarySkipped,
+      } = partitionFootballProofPicks(rawPicks);
+      const afterGaryRecords = afterGaryGameIds.size
+        ? await loadPublishedFootballPicks({
+          league: key,
+          date,
+          season,
+          slateGameIds: afterGaryGameIds,
+        })
+        : [];
+      assertAfterGaryPickCoverage(afterGaryPickIds, afterGaryRecords);
       const gameById = new Map();
-      for (const record of records) {
+      for (const record of proofRecords) {
         const game = gameFromPick(record.pick);
         if (game) gameById.set(String(game.id), game);
       }
-      const picks = records.map((record) => record.pick);
+      const picks = proofRecords.map((record) => record.pick);
       const [liveRows, settledRows] = await Promise.all([
         loadFootballLiveScores({ league: key, date }),
         loadFootballSettledScores({ league: key, date }),
@@ -172,7 +184,7 @@ async function run() {
         scoreByGame.set(gameId, mergeFootballProofScore(scoreByGame.get(gameId), row));
       }
       await hydrateExactFootballGames({
-        records,
+        records: proofRecords,
         gameById,
         scoreByGame,
         bdl: ballDontLieService,
@@ -190,7 +202,7 @@ async function run() {
         })],
         ['after_gary', () => computeAfterGary({
           ...base,
-          afterGaryPicks: records,
+          afterGaryPicks: afterGaryRecords,
         })],
       ];
       for (const [category, compute] of computers) {
@@ -242,11 +254,17 @@ async function run() {
         games: games.length,
         the_sweat: generated.the_sweat ?? 0,
         after_gary: generated.after_gary ?? 0,
+        after_gary_legacy_skipped: legacyAfterGarySkipped.length,
         sport_key: SPORT_KEYS[league],
       };
     } catch (error) {
       summary.failures.push({ league, category: 'load', message: error.message });
-      summary.leagues[league] = { picks: 0, the_sweat: 0, after_gary: 0 };
+      summary.leagues[league] = {
+        picks: 0,
+        the_sweat: 0,
+        after_gary: 0,
+        after_gary_legacy_skipped: 0,
+      };
     }
   }
 

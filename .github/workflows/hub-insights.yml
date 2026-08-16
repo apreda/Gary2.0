@@ -1,9 +1,9 @@
 name: Hub Insights Runner
 
-# Cloud replacement for the laptop-based insight_connections pipeline.
-# Runs MLB + NBA on the existing schedule. Football has its own staggered
-# football-hub-insights workflow and remains available as an explicit manual
-# lane here; both workflows share one concurrency group.
+# Established cloud backstop for the local insight_connections pipeline.
+# Scheduled runs retain their historical MLB + NBA scope. Football normally
+# runs in the same local daily-insights process and is available here only by
+# explicit manual dispatch; both Actions share one concurrency group.
 # Hub content — streaks, hot/cold, regression, ballpark shifts, etc. —
 # populates 24/7 with no laptop.
 #
@@ -82,8 +82,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # Scheduled runs keep their historical MLB/NBA scope. Manual football
-          # dispatches serialize with the separate football cadence.
+          # dispatches serialize with the manual football backstop.
           HUB_LEAGUES: ${{ github.event_name == 'workflow_dispatch' && inputs.leagues || 'MLB,NBA' }}
         run: |
           case "$HUB_LEAGUES" in

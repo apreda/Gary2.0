@@ -553,7 +553,7 @@ async function buildAndStorePulse({ date, league }) {
     const sanitized = JSON.parse(JSON.stringify(rows));
     await axios({
       method: 'POST',
-      url: PULSE_REST_URL,
+      url: `${PULSE_REST_URL}?on_conflict=date,league,tab`,
       data: sanitized,
       headers: {
         ...restHeaders,

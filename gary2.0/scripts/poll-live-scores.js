@@ -23,7 +23,14 @@ import '../src/loadEnv.js';
 
 import axios from 'axios';
 import { spawn } from 'node:child_process';
-import { existsSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getESTDate } from '../src/utils/dateUtils.js';
@@ -49,8 +56,9 @@ const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/live_scores` : null;
 const DAILY_SLATE_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_slate` : null;
 const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
-const GRADE_LOCK = '/tmp/gary-live-grade.lock';
-const GRADE_LOCK_TTL_MS = 8 * 60 * 1000; // a hung grader can't wedge triggering forever
+const GRADE_QUEUE_DIR = '/tmp/gary-live-grade-queue';
+const LIVE_MAINTENANCE_LOCK = '/tmp/gary-live-maintenance.lock';
+const FOOTBALL_PROOF_INTERVAL_MS = 15 * 60 * 1000;
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -259,8 +267,11 @@ async function fetchPrevFinalIds(date) {
       { headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` }, timeout: 10000 },
     );
     return new Set((data || []).map((r) => `${r.league}:${r.game_id}`));
-  } catch {
-    return null; // unknown prior state -> don't trigger this cycle; the next one retries
+  } catch (error) {
+    // Do not write a final frame when its prior state is unknown. Otherwise the
+    // next poll sees it as already final and the one transition that triggers
+    // grading is lost permanently.
+    throw new Error(`Could not read prior final-game state: ${error?.message || error}`);
   }
 }
 
@@ -292,27 +303,87 @@ async function liveScoreSourceGate(date, supportedLeagues) {
   }
 }
 
-function gradingLocked() {
-  try {
-    return existsSync(GRADE_LOCK) && (Date.now() - statSync(GRADE_LOCK).mtimeMs) < GRADE_LOCK_TTL_MS;
-  } catch { return false; }
+function pendingGradeFiles() {
+  mkdirSync(GRADE_QUEUE_DIR, { recursive: true });
+  for (const name of readdirSync(GRADE_QUEUE_DIR).filter((value) => /^\..+\.tmp$/.test(value))) {
+    const tempPath = join(GRADE_QUEUE_DIR, name);
+    const request = JSON.parse(readFileSync(tempPath, 'utf8'));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(request?.date || ''))
+        || !Array.isArray(request?.leagues)) {
+      throw new Error(`Malformed pending live-grade temp request: ${name}`);
+    }
+    const finalName = `${name.slice(1, -4)}.json`;
+    renameSync(tempPath, join(GRADE_QUEUE_DIR, finalName));
+  }
+  return readdirSync(GRADE_QUEUE_DIR)
+    .filter((name) => name.endsWith('.json') || name.includes('.work-'));
 }
 
-function triggerGrading(date) {
-  if (gradingLocked()) {
-    console.log('[live-grade] a grading run is already in flight — skipping this trigger');
-    return;
-  }
-  try { writeFileSync(GRADE_LOCK, String(Date.now())); } catch { /* best-effort lock */ }
-  console.log(`[live-grade] grading ${date} — picks + props, then the insight board…`);
-  // Picks/props first (game_results, prop_results), then insights. Release the
-  // lock when both finish OR on error so a crash can't wedge future triggers.
-  const cmd =
-    `node scripts/run-all-results.js ${date} && node run-grade-insights.js --date ${date}; rm -f ${GRADE_LOCK}`;
-  const child = spawn('bash', ['-lc', cmd], {
-    cwd: PROJECT_DIR, detached: true, stdio: 'ignore', env: process.env,
+function queueGrading(date, finalizedLeagues = []) {
+  const leagues = [...new Set(finalizedLeagues
+    .map((league) => String(league || '').toUpperCase())
+    .filter(Boolean))];
+  mkdirSync(GRADE_QUEUE_DIR, { recursive: true });
+  const identity = `${date}-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const tempPath = join(GRADE_QUEUE_DIR, `.${identity}.tmp`);
+  const finalPath = join(GRADE_QUEUE_DIR, `${identity}.json`);
+  writeFileSync(tempPath, JSON.stringify({ date, leagues }));
+  renameSync(tempPath, finalPath);
+}
+
+function launchLockedWorker(workerArgs, label) {
+  const child = spawn('/usr/bin/lockf', [
+    '-s',
+    '-t', '0',
+    '-k',
+    LIVE_MAINTENANCE_LOCK,
+    process.execPath,
+    ...workerArgs,
+  ], {
+    cwd: PROJECT_DIR,
+    detached: true,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  child.once('error', (error) => {
+    console.error(`[${label}] could not launch worker: ${error.message}`);
   });
   child.unref();
+}
+
+function launchPendingGrading() {
+  const pending = pendingGradeFiles();
+  if (!pending.length) return false;
+  console.log(`[live-grade] launching ${pending.length} retained grading request(s)`);
+  launchLockedWorker(['scripts/run-live-finalization.js'], 'live-grade');
+  return true;
+}
+
+function proofMarker(date, league) {
+  return `/tmp/gary-football-proof-${date}-${league.toLowerCase()}.success`;
+}
+
+function proofDue(date, league) {
+  try {
+    return (Date.now() - statSync(proofMarker(date, league)).mtimeMs) >= FOOTBALL_PROOF_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+function launchFootballProofIfDue(date, rows) {
+  const leagues = [...new Set(rows
+    .filter((row) => row.date === date && (row.league === 'NFL' || row.league === 'NCAAF'))
+    .map((row) => row.league))]
+    .filter((league) => proofDue(date, league));
+  if (!leagues.length) return false;
+  console.log(`[football-proof] launching ${leagues.join(',')} through the live-score lifecycle…`);
+  launchLockedWorker([
+    'scripts/run-live-football-proof.js',
+    '--date', date,
+    '--league', leagues.join(','),
+  ], 'football-proof');
+  return true;
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -406,6 +477,24 @@ async function run() {
   const live = stamped.filter((r) => r.status === 'live').length;
   const final = stamped.filter((r) => r.status === 'final').length;
 
+  // Persist the grading request BEFORE writing the final score frame. The
+  // database upsert and local launchd queue cannot share one transaction; this
+  // ordering makes the queue the durable side of that boundary. If this
+  // process stops after queueing but before the upsert, the request remains and
+  // is launched only after a later successful score poll. Writing the DB first
+  // would lose the only scheduled -> final edge forever on a crash.
+  const newlyFinal = prevFinalIds
+    ? stamped.filter(
+      (r) => r.status === 'final' && r.date === targetDate
+        && !prevFinalIds.has(`${r.league}:${r.game_id}`),
+    )
+    : [];
+  if (!dryRun && newlyFinal.length > 0) {
+    const labels = newlyFinal.map((r) => `${r.away_abbr ?? '?'}@${r.home_abbr ?? '?'}`).join(', ');
+    console.log(`[live-grade] ${newlyFinal.length} game(s) just went FINAL: ${labels}`);
+    queueGrading(targetDate, newlyFinal.map((row) => row.league));
+  }
+
   if (dryRun) {
     console.log(JSON.stringify(stamped, null, 2));
     console.log(`🧪 DRY RUN — ${stamped.length} game(s): ${live} live, ${final} final.`);
@@ -414,6 +503,7 @@ async function run() {
   }
   if (!stamped.length) {
     assertExpectedSources();
+    launchPendingGrading();
     console.log(`No games for ${targetDate} — nothing to write.`);
     return;
   }
@@ -493,21 +583,16 @@ async function run() {
     });
   } catch (e) { console.warn(`[live_scores] stale-day purge failed: ${e?.message || e}`); }
 
-  // Grade any of TODAY's games that JUST went final — picks/props/insights now,
-  // not at 6:45am. Only today's-date rows: a spillover game stamped to its own
-  // (prior) day isn't this poll's slate to grade — it grades under its own day /
-  // the morning batch, so it can't spuriously re-trigger today's grader each poll.
-  if (prevFinalIds) {
-    const newlyFinal = stamped.filter(
-      (r) => r.status === 'final' && r.date === targetDate
-        && !prevFinalIds.has(`${r.league}:${r.game_id}`),
-    );
-    if (newlyFinal.length > 0) {
-      const labels = newlyFinal.map((r) => `${r.away_abbr ?? '?'}@${r.home_abbr ?? '?'}`).join(', ');
-      console.log(`[live-grade] ${newlyFinal.length} game(s) just went FINAL: ${labels}`);
-      triggerGrading(targetDate);
-    }
-  }
+  // A retained pending request closes both historical one-shot gaps: a busy
+  // maintenance lock and a failed grader. The next two-minute poll keeps
+  // retrying until the established results -> insight sequence succeeds. This
+  // also lets a prior-day request finish after the ET date rolls over.
+  const gradingLaunched = launchPendingGrading();
+
+  // THE SWEAT is live evidence, not a final-only receipt. Refresh it on the same
+  // 15-minute cadence the cloud backstop used, but from this existing local
+  // live-score job so it shares the machine's BDL gate/cache and one owner.
+  if (!gradingLaunched) launchFootballProofIfDue(targetDate, stamped);
 
   // Successful leagues are persisted before surfacing an expected-source
   // failure, so healthy feeds stay fresh while launchd still receives a

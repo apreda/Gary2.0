@@ -123,26 +123,29 @@ describe('near-real-time football workflow wiring', () => {
     expect(runner).toContain('[...ncaafFinalIds].filter((gameId) => referencedNCAAFGameIds.has(gameId))');
   });
 
-  it('keeps the existing full/MLB cadence and serializes both writers', () => {
+  it('keeps the existing full/MLB cadence and serializes the manual football backstop', () => {
     expect(fullWorkflow).toContain("cron: '0 6 * * *'");
     expect(fullWorkflow).toContain("cron: '0 13 * * *'");
     expect(fullWorkflow).toContain('group: results-grading');
     expect(footballWorkflow).toContain('group: results-grading');
     expect(footballWorkflow).toContain('cancel-in-progress: false');
+    expect(footballWorkflow).not.toMatch(/^\s*schedule:/m);
+    expect(footballWorkflow).toMatch(/^on:\n\s+workflow_dispatch:/m);
   });
 
-  it('polls within 15 minutes during football final windows and calls only the narrow mode', () => {
-    expect(footballWorkflow).toContain("cron: '7,22,37,52 0-9,16-23 * 1,2,8-12 *'");
+  it('keeps the emergency workflow limited to the narrow football mode', () => {
     expect(footballWorkflow).toContain('args=(--football-settlements)');
     expect(footballWorkflow).toContain('node scripts/run-all-results.js "${args[@]}"');
     expect(footballWorkflow).toContain("grep -q '^FOOTBALL_SETTLEMENT_OUTCOME='");
   });
 
-  it('grades both ET football slates in the same serialized cloud writer lane', () => {
+  it('can backfill both ET football slates in the same serialized cloud writer lane', () => {
     expect(footballWorkflow).toContain('group: results-grading');
     expect(footballWorkflow).toContain('dates=("$(date +%F)" "$(date -d yesterday +%F)")');
     expect(footballWorkflow).toContain('node run-grade-insights.js --date "${dates[$index]}" --league NFL,NCAAF');
     expect(footballWorkflow).toContain('sleep 61');
+    expect(footballWorkflow).toContain('grade_failed=0');
+    expect(footballWorkflow).toContain('if (( grade_failed != 0 )); then exit 4; fi');
   });
 
   it('uses exact NFL game identity while keeping a migration-order-safe fallback', () => {

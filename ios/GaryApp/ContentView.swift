@@ -104,7 +104,7 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             ZStack(alignment: .topTrailing) {
                 ZStack(alignment: .topTrailing) {
-                    tabPage(0) { HomeView() }
+                    tabPage(0) { HomeView(selectedTab: $selectedTab) }
                     tabPage(1) { PremiumPicksView() }
                     tabPage(2) { GaryPage(selectedTab: $selectedTab) }   // Hub ⟷ Talk to Gary
                     tabPage(3) { PicksCarouselView() }                   // "Picks" — per-game swipe carousel

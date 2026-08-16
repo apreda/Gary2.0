@@ -1,15 +1,10 @@
-name: Football Results — Near Real Time
+name: Football Results — Manual Backstop
 
-# Laptop-independent NFL/NCAAF settlement. The Node runner uses the same exact
-# game-id + final-status gates as the local grader, but this narrow mode touches
-# only football result rows and skips editorial/nightly work.
-#
-# GitHub cron is UTC. The window covers roughly noon–6am ET in daylight time and
-# 11am–5am ET in standard time, including London games and late Hawaii finishes.
-# Runs are offset from the top of the hour to avoid GitHub's busiest cron minute.
+# Manual emergency/backfill lane for NFL/NCAAF settlement. Normal final grading
+# and football proof refresh run through the established local live-score
+# lifecycle. This workflow intentionally has no schedule, so it cannot compete
+# with that primary path for provider quota or duplicate its writes.
 on:
-  schedule:
-    - cron: '7,22,37,52 0-9,16-23 * 1,2,8-12 *'
   workflow_dispatch:
     inputs:
       date:
@@ -24,7 +19,7 @@ env:
   TZ: America/New_York
 
 # Serialize with the full daily grader. Never cancel a process between its
-# result lookup and write; the next scheduled run will wait instead.
+# result lookup and write; the next serialized run waits instead.
 concurrency:
   group: results-grading
   cancel-in-progress: false
@@ -118,11 +113,13 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
         run: |
+          set -u -o pipefail
           if [[ -n "$RESULTS_DATE" ]]; then
             dates=("$RESULTS_DATE")
           else
             dates=("$(date +%F)" "$(date -d yesterday +%F)")
           fi
+          grade_failed=0
           for index in "${!dates[@]}"; do
             if (( index > 0 )); then
               # The settlement pass deliberately reserves two BDL starts/minute
@@ -130,8 +127,11 @@ jobs:
               # ET slate so the live-score function keeps its own quota.
               sleep 61
             fi
-            node run-grade-insights.js --date "${dates[$index]}" --league NFL,NCAAF
+            if ! node run-grade-insights.js --date "${dates[$index]}" --league NFL,NCAAF; then
+              grade_failed=1
+            fi
           done
+          if (( grade_failed != 0 )); then exit 4; fi
 
       - name: Log completion
         if: always()

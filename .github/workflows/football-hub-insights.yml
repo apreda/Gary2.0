@@ -1,16 +1,10 @@
-name: Football Hub Insights Runner
+name: Football Hub Insights — Manual Backstop
 
-# NFL/NCAAF use the same insight_connections contract as the established Hub,
-# but run in their own staggered lane. The shared `hub-insights` concurrency
-# group prevents this job from overlapping the MLB/NBA Hub job in GitHub Actions,
-# while the :17 schedule keeps it away from every existing top-of-hour launch.
-#
-# All times are UTC. During EDT these runs begin at 7:17am, 1:17pm and 7:17pm ET;
-# during EST they begin at 6:17am, 12:17pm and 6:17pm ET.
+# Manual emergency/backfill lane only. Normal NFL/NCAAF Hub refreshes ride the
+# established local daily-insights process alongside MLB/NBA. This workflow has
+# no schedule, so it cannot become a second primary runner or compete for quota.
 
 on:
-  schedule:
-    - cron: '17 11,17,23 * * *'
   workflow_dispatch:
     inputs:
       leagues:
@@ -57,6 +51,7 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           HUB_LEAGUES: ${{ github.event_name == 'workflow_dispatch' && inputs.leagues || 'NFL,NCAAF' }}
         run: |
           case "$HUB_LEAGUES" in

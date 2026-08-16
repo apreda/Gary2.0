@@ -45,6 +45,7 @@ import {
   makeRow, TONES, scoreFromEdge, round, pct3, pickVariant,
 } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
+import { makeLineupReader } from '../lineupSource.js';
 
 // Tunables.
 const MIN_RECENT_PA = 25;          // require a real recent PA sample

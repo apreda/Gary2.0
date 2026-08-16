@@ -1811,7 +1811,8 @@ struct DailyRecapOverlay: View {
         if record.w + record.l == 0 { return (GaryBrand.mark, "No games settled yet.") }
         if pct >= 0.80 { return ("GaryFire", "Gary ran hot last night.") }
         if pct >= 0.70 { return ("GaryCooking", "Gary's cooking.") }
-        if pct >= 0.50 { return ("GaryBeer", "Came out ahead on the night.") }
+        if pct > 0.50 { return ("GaryBeer", "Came out ahead on the night.") }
+        if pct == 0.50 { return ("GaryBeer", "Split the games last night.") }
         if pct >= 0.40 { return ("GaryIceCold", "A cold one on the games.") }
         return ("GaryDoomsday", "Rough night. Gary remembers.")
     }
@@ -1990,7 +1991,10 @@ private func mergeGamePickSnapshot(
 }
 
 struct HomeView: View {
-    @AppStorage("selectedTab") private var selectedTab: Int = 0
+    /// Use the root tab selection directly. A second `@AppStorage` wrapper could
+    /// briefly report Home as selected while the root was already restoring a
+    /// different tab, consuming the first-open recap offscreen.
+    @Binding var selectedTab: Int
     @State private var freePick: GaryPick?
     @State private var freeProp: PropPick?
     @State private var loading = true
@@ -2029,14 +2033,19 @@ struct HomeView: View {
     @State private var lastNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     /// "TODAY" once the rolling recap has crossed into today's graded picks, else "LAST NIGHT".
     @State private var recapLabel: String = "LAST NIGHT"
-    /// GAME picks only — the fresh-day recap pop-up's ledger (props keep
-    /// their own strip in the box scores; user call, Jun 11).
     /// matchup (lowercased) → "3-1". The recap rows don't carry a score, so
     /// the headline card borrows it from the same results the board reads.
     @State private var scoreByMatchup: [String: String] = [:]
+    /// GAME picks only — the rolling Home scorecard. It holds yesterday before
+    /// first pitch, then becomes today's live/settled record.
     @State private var gamesNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     @State private var gamesNightNet: Double? = nil
     @State private var gamesNightBest: Double? = nil
+    /// The once-a-day popup has a separate immutable prior-day receipt. Sharing
+    /// the rolling scorecard state made today's first kickoff rewrite the popup.
+    @State private var dailyRecapRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
+    @State private var dailyRecapNet: Double? = nil
+    @State private var dailyRecapBest: Double? = nil
     @State private var showDailyRecap = false
     @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
@@ -2202,9 +2211,9 @@ struct HomeView: View {
         }
         .overlay {
             if showDailyRecap {
-                DailyRecapOverlay(record: gamesNightRecord,
-                                  net: gamesNightNet,
-                                  bestOdds: gamesNightBest) {
+                DailyRecapOverlay(record: dailyRecapRecord,
+                                  net: dailyRecapNet,
+                                  bestOdds: dailyRecapBest) {
                     // Match the show-trigger + guard (both use todayEST) so this dismiss write
                     // can't corrupt the once-per-day state near the EST day boundary.
                     dailyRecapShownDate = SupabaseAPI.todayEST()
@@ -2428,24 +2437,33 @@ struct HomeView: View {
                     }
                     let cycleDayRows = recentGameResults.filter { $0.game_date == SupabaseAPI.todayEST() }
 
-                    // Fresh-day recap pop-up — GAME picks only, once per day.
+                    // Fresh-day recap pop-up — GAME picks only, once per day. Its
+                    // receipt is always the last completed day, even when the user first
+                    // opens Home after today's slate has started. It must not share the
+                    // rolling scorecard below, which becomes today's record at kickoff.
+                    let dailyRecap = Self.buildLastNight(
+                        games: recentGameResults,
+                        props: [],
+                        includeToday: false
+                    )
+                    dailyRecapRecord = dailyRecap.record
+                    dailyRecapNet = dailyRecap.graded > 0 ? dailyRecap.net : nil
+                    dailyRecapBest = dailyRecap.bestOdds
+                    let todayKey = SupabaseAPI.todayEST()
+                    // It is a first-open ritual, not a pre-first-pitch ritual. The
+                    // includeToday:false ledger above guarantees this can never show a
+                    // live partial from today, so today's first pitch must not suppress it.
+                    presentDailyRecapIfNeeded(graded: dailyRecap.graded, todayKey: todayKey)
+
+                    // The in-page scorecard still rolls to today's live record at
+                    // first pitch. Keeping this state separate is what lets the popup
+                    // remain an honest yesterday receipt throughout the day.
                     let gamesNight = cycleStarted
                         ? Self.buildLastNight(games: cycleDayRows, props: [], includeToday: true)
-                        : Self.buildLastNight(games: recentGameResults, props: [], includeToday: false)
+                        : dailyRecap
                     gamesNightRecord = gamesNight.record
                     gamesNightNet = gamesNight.graded > 0 ? gamesNight.net : nil
                     gamesNightBest = gamesNight.bestOdds
-                    let todayKey = SupabaseAPI.todayEST()
-                    // The recap pop-up is a MORNING ritual — never fires off the
-                    // live cycle's partial numbers (cycleStarted gates it).
-                    if !cycleStarted, gamesNight.graded > 0, dailyRecapShownDate != todayKey {
-                        // Mark shown for today the MOMENT it appears — so it's truly once/day even
-                        // if the user tabs away without dismissing. Re-open later via the chip.
-                        dailyRecapShownDate = todayKey
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                            showDailyRecap = true
-                        }
-                    }
 
                     // Gary's form — last 10 graded game picks, same data + math
                     // as the Billfold (BillfoldCompute), so the record never
@@ -2747,6 +2765,7 @@ struct HomeView: View {
             // Kept-alive tabs do not rerun `.task` when selected. Refresh the
             // small rolling payload immediately when the user comes back Home.
             guard tab == 0, scenePhase == .active else { return }
+            presentDailyRecapIfNeeded()
             Task { await refreshRollingHomeContent() }
         }
         .onReceive(rollingHomeRefreshTimer) { _ in
@@ -2759,6 +2778,21 @@ struct HomeView: View {
             // The betting day changed while Home remained alive. Reload the
             // slate, picks, live rows, and durable grades as one date-keyed set.
             homeNonce &+= 1
+        }
+    }
+
+    /// Home is opacity-kept-alive even while another tab is selected, so its data
+    /// task can finish offscreen. Consume the daily receipt only when Home is
+    /// actually visible, then present the already-loaded receipt on a later tap.
+    private func presentDailyRecapIfNeeded(graded: Int? = nil, todayKey: String? = nil) {
+        let available = graded
+            ?? (dailyRecapRecord.w + dailyRecapRecord.l + dailyRecapRecord.p)
+        let key = todayKey ?? SupabaseAPI.todayEST()
+        guard selectedTab == 0, available > 0, dailyRecapShownDate != key else { return }
+        // Mark shown when it appears so foreground refreshes cannot stack it.
+        dailyRecapShownDate = key
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            showDailyRecap = true
         }
     }
 

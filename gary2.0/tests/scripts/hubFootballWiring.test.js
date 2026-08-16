@@ -38,18 +38,21 @@ describe('football Hub invocation wiring', () => {
     expect(replacement).toContain("params: { id: `in.(${oldIds.join(',')})` }");
   });
 
-  it('keeps scheduled MLB/NBA traffic isolated and exposes serialized football dispatches', () => {
+  it('keeps the established MLB/NBA workflow and exposes serialized football dispatches', () => {
     expect(workflow).toContain("group: hub-insights");
     expect(workflow).toContain("github.event_name == 'workflow_dispatch' && inputs.leagues || 'MLB,NBA'");
     expect(workflow).toContain('- NFL,NCAAF');
     expect(workflow).toContain('node run-insight-connections.js --league "$HUB_LEAGUES"');
+    expect(workflow).toContain('GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}');
   });
 
-  it('automatically runs football on a staggered, serialized cloud cadence', () => {
-    expect(footballWorkflow).toContain("cron: '17 11,17,23 * * *'");
+  it('keeps football cloud execution as a manual emergency/backfill path', () => {
+    expect(footballWorkflow).not.toMatch(/^\s*schedule:/m);
+    expect(footballWorkflow).toMatch(/^on:\n\s+workflow_dispatch:/m);
     expect(footballWorkflow).toContain('group: hub-insights');
     expect(footballWorkflow).toContain("github.event_name == 'workflow_dispatch' && inputs.leagues || 'NFL,NCAAF'");
     expect(footballWorkflow).toContain('node run-insight-connections.js --league "$HUB_LEAGUES"');
+    expect(footballWorkflow).toContain('GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}');
     expect(packageJson.scripts['hub:football']).toBe('node run-insight-connections.js --league NFL,NCAAF');
   });
 });
