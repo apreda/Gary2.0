@@ -22,7 +22,10 @@ import {
 import { exitAfterFlushing } from './lib/processLifecycle.js';
 import { ncaabSeason } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
-import { classifyNcaafFbsGames } from '../src/services/ncaafGamePolicy.js';
+import {
+  classifyNcaafFbsGames,
+  ncaafSlateDateForInstant,
+} from '../src/services/ncaafGamePolicy.js';
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
@@ -453,7 +456,9 @@ const forceRerun = args.includes('--force');
 // the existing weekly behavior.
 const requestedDateFilter = getArgValue('--date');
 const dateFilter = requestedDateFilter || (gameIdFilter
-  ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
+  ? (args.includes('--ncaaf')
+      ? ncaafSlateDateForInstant(new Date())
+      : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()))
   : undefined);
 // --dynamic flag to enable dynamic slate review (organic pick selection based on board quality)
 const useDynamicSlateReview = args.includes('--dynamic');
@@ -668,7 +673,9 @@ async function main() {
 
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
-            const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+            const gameDateEST = config.key === 'americanfootball_ncaaf'
+              ? ncaafSlateDateForInstant(gameTime)
+              : gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
             // Game date matches one of the target dates
             return targetDates.includes(gameDateEST);
           }) || [];
@@ -759,7 +766,9 @@ async function main() {
           console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
         } else {
           // Default: Get TODAY's games in EST timezone
-          const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
+          const todayEST = config.key === 'americanfootball_ncaaf'
+            ? ncaafSlateDateForInstant(now)
+            : now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
 
           const isNCAAB = config.key === 'basketball_ncaab';
           const isNHL = config.key === 'icehockey_nhl';
@@ -767,7 +776,9 @@ async function main() {
 
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
-            const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            const gameDateEST = config.key === 'americanfootball_ncaaf'
+              ? ncaafSlateDateForInstant(gameTime)
+              : gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
             // Game must be today in EST AND hasn't started yet
             return gameDateEST === todayEST && gameTime >= now;

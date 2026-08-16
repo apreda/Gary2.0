@@ -16,6 +16,7 @@ import {
   samePropGame,
 } from './lib/propsRunReliability.js';
 import { stampFootballTdCategory, storePropPicksAtomic } from './lib/propPicksStorage.js';
+import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
 
 // Dynamic imports after env is loaded (so geminiService gets correct proxy URL)
 const { oddsService } = await import('../src/services/oddsService.js');
@@ -107,6 +108,16 @@ export async function runAgenticPropsCli({
   const matchupFilter = args.matchup || null;
   // --game-id: exact BDL game id filter (used by scheduler — no substring collisions)
   const gameIdFilter = args['game-id'] != null ? String(args['game-id']) : null;
+  const requestedSlateDate = leagueLabel === 'NCAAF' && args.date != null
+    ? String(args.date).trim()
+    : null;
+  if (requestedSlateDate != null && !/^\d{4}-\d{2}-\d{2}$/.test(requestedSlateDate)) {
+    throw new Error('NCAAF --date must be a YYYY-MM-DD slate date');
+  }
+  const slateDateFromISO = (iso) => {
+    if (leagueLabel !== 'NCAAF') return estDateFromISO(iso);
+    return requestedSlateDate || ncaafSlateDateForInstant(iso);
+  };
   // CLI override for regularOnly: --regular=1 or --no-td=1
   const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
   // --test flag: store to test_prop_picks table instead of production (for testing)
@@ -132,7 +143,7 @@ export async function runAgenticPropsCli({
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
-  console.log(`📅 Date: ${getESTDate()}`);
+  console.log(`📅 Date: ${requestedSlateDate || getESTDate()}`);
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
   console.log(`🔧 Pipeline: ORCHESTRATOR (multi-pass)`);
@@ -147,7 +158,8 @@ export async function runAgenticPropsCli({
     sportKey,
     nocache,
     gameIdFilter,
-    etDate: getESTDate(),
+    etDate: requestedSlateDate
+      || (leagueLabel === 'NCAAF' ? ncaafSlateDateForInstant(new Date()) : getESTDate()),
   }));
   const now = Date.now();
   
@@ -215,7 +227,7 @@ export async function runAgenticPropsCli({
         });
         // Dedup against the row where these props WILL land — keyed by the
         // game's ET date (not the run's "today"), so the check matches storage.
-        const dateParam = estDateFromISO(filtered[0]?.commence_time);
+        const dateParam = slateDateFromISO(filtered[0]?.commence_time);
         const { data } = await supabase
           .from(testTableName)
           .select('picks')
@@ -607,7 +619,7 @@ export async function runAgenticPropsCli({
         // child even if every football child used the RPC correctly.
         const picksByDate = new Map();
         for (const pick of validPicks.map(stripInternalFields)) {
-          const pickDate = estDateFromISO(pick.commence_time);
+          const pickDate = slateDateFromISO(pick.commence_time);
           if (!picksByDate.has(pickDate)) picksByDate.set(pickDate, []);
           picksByDate.get(pickDate).push(pick);
         }
@@ -649,7 +661,7 @@ export async function runAgenticPropsCli({
       } else {
         // Preserve the isolated test table's existing read/merge/upsert path;
         // production never falls back here.
-        const dateParam = estDateFromISO(validPicks[0]?.commence_time);
+        const dateParam = slateDateFromISO(validPicks[0]?.commence_time);
         const { data: existingData, error: existingError } = await supabase
           .from(testTableName)
           .select('picks')

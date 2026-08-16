@@ -1945,6 +1945,68 @@ struct DailyRecapOverlay: View {
     }
 }
 
+/// A complete, per-source game-pick read. `daily_picks`, `weekly_nfl_picks`,
+/// and the future NCAAB lane fail independently; callers merge only the failed
+/// source's last-good rows, so one desk can never erase another sport.
+private enum GamePickSource: Hashable {
+    case daily, nfl, ncaabFuture
+
+    var failureKey: String {
+        switch self {
+        case .daily: return "DAILY"
+        case .nfl: return "NFL"
+        case .ncaabFuture: return "NCAAB_FUTURE"
+        }
+    }
+}
+
+private struct GamePickSourceSnapshot {
+    let picks: [GaryPick]
+    let failures: Set<GamePickSource>
+}
+
+private func fetchIsolatedGamePickSources(
+    date: String,
+    includeUpcomingNcaab: Bool
+) async -> GamePickSourceSnapshot {
+    async let dailyTask = SupabaseAPI.fetchDailyPicks(date: date)
+    async let nflTask = SupabaseAPI.fetchWeeklyNFLPicks(for: date)
+    async let futureTask: [GaryPick] = includeUpcomingNcaab
+        ? SupabaseAPI.fetchUpcomingNCAABPicks(afterDate: date)
+        : []
+
+    var daily: [GaryPick] = []
+    var nfl: [GaryPick] = []
+    var future: [GaryPick] = []
+    var failures: Set<GamePickSource> = []
+    do { daily = try await dailyTask } catch { failures.insert(.daily) }
+    do { nfl = try await nflTask } catch { failures.insert(.nfl) }
+    if includeUpcomingNcaab {
+        do { future = try await futureTask } catch { failures.insert(.ncaabFuture) }
+    }
+
+    // weekly_nfl_picks is canonical for NFL. The future NCAAB response may
+    // overlap today's daily row, so de-duplicate the complete healthy sources.
+    let combined = daily.filter { ($0.league ?? "").uppercased() != "NFL" } + nfl + future
+    var seen: Set<String> = []
+    let unique = combined.filter { seen.insert($0.id).inserted }
+    return GamePickSourceSnapshot(picks: unique, failures: failures)
+}
+
+private func mergeGamePickSnapshot(
+    _ snapshot: GamePickSourceSnapshot,
+    retaining previous: [GaryPick]
+) -> [GaryPick] {
+    let retained = previous.filter { pick in
+        let league = (pick.league ?? "OTHER").uppercased()
+        return (snapshot.failures.contains(.daily) && league != "NFL")
+            || (snapshot.failures.contains(.nfl) && league == "NFL")
+            || (snapshot.failures.contains(.ncaabFuture) && league == "NCAAB")
+    }
+    var seen: Set<String> = []
+    return (snapshot.picks + retained).filter { seen.insert($0.id).inserted }
+}
+
 struct HomeView: View {
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var freePick: GaryPick?
@@ -2206,12 +2268,17 @@ struct HomeView: View {
                     // (this is the "pull-to-refresh shows no new picks/props" bug). Matches the
                     // Picks/Props tabs, which already pass forceRefresh: true on their .refreshable.
                     let forceFresh = homeNonce > 0
+                    let previousTodayPicks = todayPicks
+                    let previousYesterdayPicks = [yesterdayTopPick].compactMap { $0 }
 
                     // Start all fetches in parallel using async let
                     async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
                     async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
                     async let formFetch = SupabaseAPI.fetchSevenDayFormBySport()
-                    async let picksFetch = SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceFresh)
+                    async let picksFetch = fetchIsolatedGamePickSources(
+                        date: date,
+                        includeUpcomingNcaab: true
+                    )
                     async let propPicksFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceFresh)
                     // Pull the full recent window (not just 30) so the morning recap's
                     // game record counts EVERY graded game pick from the night's slate —
@@ -2224,7 +2291,10 @@ struct HomeView: View {
                     async let wireFetch = SupabaseAPI.fetchWireItems(date: date)
                     // Yesterday's top pick/prop ride the SAME parallel wave —
                     // they were serial awaits on the critical path (perf, Jul 13).
-                    async let yPicksFetch = SupabaseAPI.fetchAllPicks(date: SupabaseAPI.yesterdayEST())
+                    async let yPicksFetch = fetchIsolatedGamePickSources(
+                        date: SupabaseAPI.yesterdayEST(),
+                        includeUpcomingNcaab: false
+                    )
                     async let yPropsFetch = SupabaseAPI.fetchPropPicks(date: SupabaseAPI.yesterdayEST())
                     // Market pulse anchors to TODAY's rolling row — the builder now
                     // writes a zeroed row at the start of the slate and re-upserts it
@@ -2528,25 +2598,33 @@ struct HomeView: View {
                     // 6am-aware yesterday (one real day before the slate day), not a
                     // raw now-minus-1 that would show two-days-ago before 6am ET.
                     do {
-                        if let yPicks = try? await yPicksFetch, !yPicks.isEmpty {
-                            let top = yPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
-                            yesterdayTopPick = top
-                            if let pick = top {
-                                let matchKey = (pick.homeTeam ?? "").lowercased()
-                                let row = recentGameResults.first(where: {
-                                    ($0.matchup ?? "").lowercased().contains(matchKey)
-                                })
-                                yesterdayTopPickResult = row?.result
-                                #if DEBUG
-                                // Screenshot helper (-forceCashedFreePick):
-                                // flips the free-pick card to CASHED locally —
-                                // debug builds only, the record never changes.
-                                if ProcessInfo.processInfo.arguments.contains("-forceCashedFreePick") {
-                                    yesterdayTopPickResult = "won"
-                                }
-                                #endif
-                                yesterdayTopPickScore = row?.final_score
+                        let yesterdaySnapshot = await yPicksFetch
+                        let yPicks = mergeGamePickSnapshot(
+                            yesterdaySnapshot,
+                            retaining: previousYesterdayPicks
+                        )
+                        let top = yPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
+                        yesterdayTopPick = top
+                        if let pick = top {
+                            let matchKey = (pick.homeTeam ?? "").lowercased()
+                            let row = recentGameResults.first(where: {
+                                ($0.matchup ?? "").lowercased().contains(matchKey)
+                            })
+                            yesterdayTopPickResult = row?.result
+                            #if DEBUG
+                            // Screenshot helper (-forceCashedFreePick):
+                            // flips the free-pick card to CASHED locally —
+                            // debug builds only, the record never changes.
+                            if ProcessInfo.processInfo.arguments.contains("-forceCashedFreePick") {
+                                yesterdayTopPickResult = "won"
                             }
+                            #endif
+                            yesterdayTopPickScore = row?.final_score
+                        } else {
+                            // Every yesterday source answered with no pick. That is an
+                            // authoritative empty board, not a reason to keep an older day.
+                            yesterdayTopPickResult = nil
+                            yesterdayTopPickScore = nil
                         }
                         if let yProps = try? await yPropsFetch, !yProps.isEmpty {
                             // HR fun-lane calls never front Home's prop slot.
@@ -2565,21 +2643,23 @@ struct HomeView: View {
 
                     // Get picks data (already fetched in parallel)
                     loading = true
-                    let allPicks = try? await picksFetch
+                    let pickSnapshot = await picksFetch
+                    let allPicks = mergeGamePickSnapshot(
+                        pickSnapshot,
+                        retaining: previousTodayPicks
+                    )
 
                     // `date` is already the 6 a.m.-anchored slate key. Matching
                     // commence dates to that key keeps the finished slate visible
                     // overnight, then cleanly removes it when the key rolls at 6.
-                    let todayOnlyPicks = allPicks.map {
-                        Self.homeVisiblePicks($0, slateDate: date)
-                    }
+                    let todayOnlyPicks = Self.homeVisiblePicks(allPicks, slateDate: date)
 
                     // Select Top Pick: manual override first, then highest confidence
-                    if let picks = todayOnlyPicks, !picks.isEmpty {
-                        if let manualTopPick = picks.first(where: { $0.is_top_pick == true }) {
+                    if !todayOnlyPicks.isEmpty {
+                        if let manualTopPick = todayOnlyPicks.first(where: { $0.is_top_pick == true }) {
                             freePick = manualTopPick
                         } else {
-                            freePick = picks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
+                            freePick = todayOnlyPicks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
                         }
                     } else {
                         freePick = nil
@@ -2612,10 +2692,10 @@ struct HomeView: View {
                             propCount = freshProps.count
                         }
                     }
-                    playsOnBoard = (todayOnlyPicks?.count ?? 0) + propCount
+                    playsOnBoard = todayOnlyPicks.count + propCount
                     // (Parked All-Star preview now lives inside fetchDailyPicks —
                     // DEBUG-only there — so every surface gets it from one source.)
-                    todayPicks = todayOnlyPicks ?? []
+                    todayPicks = todayOnlyPicks
                     // The "what's on today" sheet lists All-Star events like any
                     // game (founder, Jul 13): synthesize a slate row per special
                     // event when the slate table doesn't carry it.
@@ -2666,7 +2746,8 @@ struct HomeView: View {
     /// Refresh the pieces that genuinely change during a slate without rerunning
     /// Home's full multi-section load. This keeps new picks, finished grades and
     /// recap cards moving while avoiding the launch/navigation work that made the
-    /// app feel heavy. Empty responses never erase last-good content.
+    /// app feel heavy. Successful empty pick desks clear only themselves; failed
+    /// desks retain their own last-good rows while healthy sports keep moving.
     @MainActor
     private func refreshRollingHomeContent() async {
         guard !rollingHomeRefreshInFlight, fullHomeRefreshNonce == nil else { return }
@@ -2674,14 +2755,22 @@ struct HomeView: View {
         defer { rollingHomeRefreshInFlight = false }
 
         let date = SupabaseAPI.todayEST()
-        async let picksFetch = try? SupabaseAPI.fetchAllPicks(date: date, forceRefresh: true)
+        let previousPicks = todayPicks
+        async let picksFetch = fetchIsolatedGamePickSources(
+            date: date,
+            includeUpcomingNcaab: true
+        )
         async let propsFetch = try? SupabaseAPI.fetchPropPicks(date: date, forceRefresh: true)
         async let gameResultsFetch = try? SupabaseAPI.fetchRecentGameResults(limit: 200)
         async let propResultsFetch = try? SupabaseAPI.fetchRecentPropResults(limit: 200)
         async let recapsTodayFetch = SupabaseAPI.fetchGameRecaps(date: date)
         async let recapsGradedFetch = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
 
-        let fetchedPicks = await picksFetch ?? []
+        let pickSnapshot = await picksFetch
+        let fetchedPicks = mergeGamePickSnapshot(
+            pickSnapshot,
+            retaining: previousPicks
+        )
         let fetchedProps = await propsFetch ?? []
         let recentGames = await gameResultsFetch ?? []
         let recentProps = await propResultsFetch ?? []
@@ -2691,17 +2780,15 @@ struct HomeView: View {
         // The API is keyed to the 6 a.m. slate date, but keep the same defensive
         // commence-time filter as the full Home load so a misdated row cannot leak.
         let freshPicks = Self.homeVisiblePicks(fetchedPicks, slateDate: date)
-        if !fetchedPicks.isEmpty || todayPicks.isEmpty {
-            todayPicks = freshPicks
-            if let manual = freshPicks.first(where: { $0.is_top_pick == true }) {
-                freePick = manual
-            } else {
-                freePick = freshPicks.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
-            }
-            picksByGameId = Dictionary(
-                freshPicks.compactMap { p in p.game_id.map { (String($0), p) } },
-                uniquingKeysWith: { first, _ in first })
+        todayPicks = freshPicks
+        if let manual = freshPicks.first(where: { $0.is_top_pick == true }) {
+            freePick = manual
+        } else {
+            freePick = freshPicks.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
         }
+        picksByGameId = Dictionary(
+            freshPicks.compactMap { p in p.game_id.map { (String($0), p) } },
+            uniquingKeysWith: { first, _ in first })
 
         let freshProps = Self.homeVisibleProps(fetchedProps, slateDate: date)
         if !fetchedProps.isEmpty || freeProp == nil {
@@ -7130,6 +7217,10 @@ struct PremiumPicksView: View {
     @ObservedObject private var picksFocus = PicksFocusState.shared
 
     @State private var loading = true
+    /// At least one Winners source failed during the latest load. Healthy
+    /// sports still render, while this flag prevents a missing desk from being
+    /// described as an honest empty/coming-soon board.
+    @State private var boardDataFailed = false
     // Per-sport shelves: each sport shows TODAY's pick if it has one, else its last graded result.
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
@@ -7315,6 +7406,10 @@ struct PremiumPicksView: View {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             header
 
+                            if !loading && boardDataFailed {
+                                winnersSourceFailureBanner
+                            }
+
                             if loading {
                                 HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
                                     .padding(.top, 80)
@@ -7489,7 +7584,8 @@ struct PremiumPicksView: View {
         VStack(spacing: 12) {
             Image(systemName: selectedDate == nil ? "lock.badge.clock" : "calendar.badge.exclamationmark")
                 .font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
-            Text(selectedDate != nil ? "No graded picks on this day."
+            Text(boardDataFailed ? "Board data unavailable. Pull to retry."
+                 : selectedDate != nil ? "No graded picks on this day."
                  : todaySlateCounts.isEmpty
                  ? "No games today. Yesterday's card is under the date above."
                  : "Gary's best bets post a few hours before first pitch.")
@@ -7497,6 +7593,19 @@ struct PremiumPicksView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
+    }
+
+    private var winnersSourceFailureBanner: some View {
+        HStack(spacing: 7) {
+            BroadcastBar(height: 9)
+            Text("BOARD DATA UNAVAILABLE · PULL TO RETRY")
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(0.7)
+                .foregroundStyle(GaryColors.gold)
+            Spacer(minLength: 0)
+        }
+        .pageGutter()
+        .padding(.vertical, 8)
+        .background(Color.black.opacity(0.22))
     }
 
     /// TODAY, before Gary's board posts — the members' room speaks ONE sealed
@@ -8581,15 +8690,22 @@ struct PremiumPicksView: View {
     /// Browse a past day — every game + prop pick Gary made that date, all settled
     /// (flip-backs + CASHED/LOST stamps), ordered by sport. No live/slate logic.
     private func loadHistorical(_ date: String) async {
-        await MainActor.run { loading = true; gameShelves = []; propShelves = [] }
-        async let gamesF = SupabaseAPI.fetchExactDatePicks(date: date)
+        await MainActor.run { loading = true }
+        async let gamesF = fetchIsolatedGamePickSources(date: date, includeUpcomingNcaab: false)
         async let propsF = SupabaseAPI.fetchPropPicks(date: date)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: date)
         async let propResF = SupabaseAPI.fetchRecentPropResults(limit: 200)
-        let games = (try? await gamesF) ?? []
-        let props = (try? await propsF) ?? []
-        let results = (try? await resultsF) ?? []
-        let propResults = (try? await propResF) ?? []
+        let gameSnapshot = await gamesF
+        var props: [PropPick] = []
+        var propsFailed = false
+        do { props = try await propsF } catch { propsFailed = true }
+        var results: [GameResult] = []
+        var resultsFailed = false
+        do { results = try await resultsF } catch { resultsFailed = true }
+        var propResults: [PropResult] = []
+        var propResultsFailed = false
+        do { propResults = try await propResF } catch { propResultsFailed = true }
+        let games = gameSnapshot.picks
 
         var rMap: [String: String] = [:]
         var sMap: [String: String] = [:]
@@ -8639,6 +8755,7 @@ struct PremiumPicksView: View {
             propResultsMap = pMap
             gameShelves = gShelves
             propShelves = pShelves
+            boardDataFailed = !gameSnapshot.failures.isEmpty || propsFailed || resultsFailed || propResultsFailed
             loading = false
         }
     }
@@ -8683,8 +8800,15 @@ struct PremiumPicksView: View {
         let today = SupabaseAPI.todayEST()
         let yesterday = SupabaseAPI.yesterdayEST()
 
-        async let todayGameF = SupabaseAPI.fetchAllPicks(date: today)
-        async let yGameF = SupabaseAPI.fetchExactDatePicks(date: yesterday)
+        let previousGameShelves = gameShelves
+        let previousPropShelves = propShelves
+        let previousGameResults = gameResultsMap
+        let previousGameScores = gameScoresMap
+        let previousMatchupScores = matchupScoresMap
+        let previousPropResults = propResultsMap
+
+        async let todayGameF = fetchIsolatedGamePickSources(date: today, includeUpcomingNcaab: true)
+        async let yGameF = fetchIsolatedGamePickSources(date: yesterday, includeUpcomingNcaab: false)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
         async let slateF = SupabaseAPI.fetchDailySlate(date: today)
@@ -8701,10 +8825,25 @@ struct PremiumPicksView: View {
         }()
         async let recordResultsF = SupabaseAPI.fetchAllGameResults(since: recordWindowStart)
 
-        let todayGame = (try? await todayGameF) ?? []
-        let yGame = (try? await yGameF) ?? []
-        let results = (try? await resultsF) ?? []
-        let todayProps = (try? await todayPropsF) ?? []
+        let todaySnapshot = await todayGameF
+        let yesterdaySnapshot = await yGameF
+        let todayGame = mergeGamePickSnapshot(
+            todaySnapshot,
+            retaining: previousGameShelves.filter { !$0.settled }.flatMap(\.picks)
+        )
+        let yGame = mergeGamePickSnapshot(
+            yesterdaySnapshot,
+            retaining: previousGameShelves.filter(\.settled).flatMap(\.picks)
+        )
+        var results: [GameResult] = []
+        var resultsFailed = false
+        do { results = try await resultsF } catch { resultsFailed = true }
+        var todayProps: [PropPick] = []
+        var todayPropsFailed = false
+        do { todayProps = try await todayPropsF } catch {
+            todayPropsFailed = true
+            todayProps = previousPropShelves.filter { !$0.settled }.flatMap(\.props)
+        }
         // Leagues with a GAME on today's slate = in-season. Off-season sports
         // (NBA/NHL once their season ends) have no game today, so we skip their
         // empty placeholder lane instead of showing a misleading "next slate
@@ -8715,9 +8854,9 @@ struct PremiumPicksView: View {
             .mapValues(\.count)
 
         // Yesterday's result map for settled (last-result) shelves.
-        var rMap: [String: String] = [:]
-        var sMap: [String: String] = [:]
-        var mMap: [String: String] = [:]
+        var rMap: [String: String] = resultsFailed ? previousGameResults : [:]
+        var sMap: [String: String] = resultsFailed ? previousGameScores : [:]
+        var mMap: [String: String] = resultsFailed ? previousMatchupScores : [:]
         for r in results.filter({ $0.game_date == yesterday }) {
             guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
             let key = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
@@ -8809,12 +8948,19 @@ struct PremiumPicksView: View {
         // PERF (Jul 13): fetch the pair concurrently — they were serial.
         async let yPropsF = SupabaseAPI.fetchPropPicks(date: yesterday)
         async let recentPropResultsF = SupabaseAPI.fetchRecentPropResults(limit: 100)
-        let yProps = (try? await yPropsF) ?? []
-        let recentPropResults = (try? await recentPropResultsF) ?? []
+        var yProps: [PropPick] = []
+        var yesterdayPropsFailed = false
+        do { yProps = try await yPropsF } catch {
+            yesterdayPropsFailed = true
+            yProps = previousPropShelves.filter(\.settled).flatMap(\.props)
+        }
+        var recentPropResults: [PropResult] = []
+        var propResultsFailed = false
+        do { recentPropResults = try await recentPropResultsF } catch { propResultsFailed = true }
         // Exact prop identity and NOT yesterday-only: on a day-game slate props
         // grade mid-afternoon. Date + player + type + line + matchup keeps a
         // same-player alternate market from borrowing another prop's outcome.
-        var pMap: [String: String] = [:]
+        var pMap: [String: String] = propResultsFailed ? previousPropResults : [:]
         for r in recentPropResults {
             guard let key = winnerPropResultKey(for: r),
                   let result = r.result, !result.isEmpty else { continue }
@@ -8868,6 +9014,12 @@ struct PremiumPicksView: View {
             todaySlateRows = slateRows
             sportRecords = sRec
             entitledSports = entitlements
+            boardDataFailed = !todaySnapshot.failures.isEmpty
+                || !yesterdaySnapshot.failures.isEmpty
+                || todayPropsFailed
+                || yesterdayPropsFailed
+                || resultsFailed
+                || propResultsFailed
             loading = false
         }
     }
@@ -19506,6 +19658,9 @@ final class PropsSlateStore: ObservableObject {
     @Published var yesterdayProps: [PropPick] = []
     @Published var yesterdayResultsMap: [String: String] = [:]
     @Published var sportsWithFreshProps: Set<String> = []
+    /// The latest prop-picks transport failed. This is distinct from a
+    /// successful empty response, so an outage is never presented as "no props."
+    @Published var propPickSourceFailed = false
     @Published var showingYesterdayResults = false
     /// EVERY yesterday prop, UNGATED. yesterdayProps is gated to sports with
     /// nothing today (the Today auto-fallback); the explicit Yesterday dropdown
@@ -19535,6 +19690,9 @@ final class PropsSlateStore: ObservableObject {
     /// True only when today's slate request failed and no same-day last-good
     /// snapshot exists. Distinguishes an outage from a genuine dark league day.
     @Published var slateUnavailable = false
+    /// Failed pick sources from the latest attempt. Daily and NFL are separate
+    /// so an NFL table problem can never blank or relabel the working MLB board.
+    @Published var gamePickSourceFailures: Set<String> = []
 
     /// The EST slate day the TODAY-state (allProps/gamePicks/slate) was loaded for.
     /// If the app sits open past the 6am ET rollover, keep-last-good would otherwise
@@ -19563,6 +19721,7 @@ final class PropsSlateStore: ObservableObject {
         await MainActor.run {
             if !loadedDate.isEmpty {
                 allProps = []; gamePicks = []; slate = []; slateUnavailable = false
+                propPickSourceFailed = false; gamePickSourceFailures = []
                 todayGameResults = [:]; todayPropResults = [:]
                 // Also drop the yesterday-fallback so a PRIOR day's fallback can't
                 // survive the roll before the fresh fetch resolves.
@@ -19703,18 +19862,34 @@ final class PropsSlateStore: ObservableObject {
         }
         if !tPropMap.isEmpty || todayPropResults.isEmpty { todayPropResults = tPropMap }
         fetchFailed = didFail && allProps.isEmpty && yesterdayProps.isEmpty
+        propPickSourceFailed = didFail
         loading = false
         loaded = true
     }
 
     private func loadGamePicks(forceRefresh: Bool) async {
         let date = SupabaseAPI.todayEST()
+        let yesterday = SupabaseAPI.yesterdayEST()
         // The slate is the pre-pick page's critical path. Start it alongside
         // today's picks so an empty/slow picks table cannot postpone the 15 game
         // placeholders users should see all morning.
-        async let todayFetch = SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh)
+        async let todayFetch = fetchIsolatedGamePickSources(
+            date: date,
+            includeUpcomingNcaab: true
+        )
+        async let yesterdayFetch = fetchIsolatedGamePickSources(
+            date: yesterday,
+            includeUpcomingNcaab: false
+        )
         async let slateFetch = SupabaseAPI.fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh)
-        let today = ((try? await todayFetch) ?? []).filter { !(($0.pick ?? "").isEmpty) }
+        let todaySnapshot = await todayFetch
+        let sourceFailures = Set(todaySnapshot.failures.map(\.failureKey))
+        let mergedToday = mergeGamePickSnapshot(
+            todaySnapshot,
+            retaining: gamePicks
+        ).filter { !(($0.pick ?? "").isEmpty) }
+        gamePicks = mergedToday
+        gamePickSourceFailures = sourceFailures
         // Today's full slate — every scheduled game, so the Picks page shows
         // tonight's matchups (with a "pick drops near game time" placeholder +
         // intel) before Gary's picks post.
@@ -19722,18 +19897,19 @@ final class PropsSlateStore: ObservableObject {
         let freshSlate = slateResult.rows
         if !freshSlate.isEmpty || slate.isEmpty { slate = freshSlate }   // keep-last-good
         slateUnavailable = !slateResult.succeeded && slate.isEmpty
-        let freshSports = Set(today.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+        let freshSports = Set(mergedToday.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
 
         var yPicks: [GaryPick] = []
         var yPicksAll: [GaryPick] = []
         var resultsMap: [String: String] = [:]
         var scoreMap: [String: String] = [:]
         var todayMap: [String: String] = [:]
-        let yesterday = SupabaseAPI.yesterdayEST()
-        if let fetched = try? await SupabaseAPI.fetchExactDatePicks(date: yesterday, forceRefresh: forceRefresh) {
-            yPicksAll = fetched.filter { !($0.pick ?? "").isEmpty }   // UNGATED — explicit Yesterday view
-            yPicks = yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }
-        }
+        let yesterdaySnapshot = await yesterdayFetch
+        yPicksAll = mergeGamePickSnapshot(
+            yesterdaySnapshot,
+            retaining: yesterdayGamePicksAll
+        ).filter { !($0.pick ?? "").isEmpty }   // UNGATED — explicit Yesterday view
+        yPicks = yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }
         // Grades for BOTH days — `since: yesterday` covers today too. Today's feed
         // the live "grade as it finishes" stamps on the Today board; yesterday's
         // feed the Yesterday tab + its FINAL scores.
@@ -19756,15 +19932,14 @@ final class PropsSlateStore: ObservableObject {
         }
         scoreMap.merge(ydayScores) { today, _ in today }   // today wins collisions
 
-        // Keep-last-good (mirror loadProps) — a failed/empty refresh keeps the board.
-        if !today.isEmpty || gamePicks.isEmpty { gamePicks = today }
-        if !yPicks.isEmpty || yesterdayGamePicks.isEmpty {
-            yesterdayGamePicks = yPicks
+        // Yesterday follows the same per-source contract as Today: successful
+        // empty desks clear themselves and only failed desks retain last-good.
+        yesterdayGamePicks = yPicks
+        yesterdayGamePicksAll = yPicksAll
+        // Grade payloads remain independently keep-last-good.
+        if !resultsMap.isEmpty || gameResultsMap.isEmpty {
             gameResultsMap = resultsMap
             gameScoreMap = ydayScores   // Yesterday tab stays yesterday-pure (series collisions)
-        }
-        if !yPicksAll.isEmpty || yesterdayGamePicksAll.isEmpty {
-            yesterdayGamePicksAll = yPicksAll
         }
         if !todayMap.isEmpty || todayGameResults.isEmpty { todayGameResults = todayMap }
         // Settled finals (today + yesterday) → shared live cache, so EVERY card can
@@ -20107,7 +20282,7 @@ enum SignalKind {
     case redZone, turnoverEdge, explosivePlay, specialTeams, coaching
     // Football-only product modules: live factor tracking on a game page and
     // the post-publish market receipt in The Hub.
-    case theSweat, afterGary
+    case theSweat, afterGary, marketRange, nextSlate
     // Football season-long fantasy lanes: current role, scoring-area work,
     // opponent, and movement over recent games for both NFL and NCAAF.
     case fantasyUsage, fantasyRedZone, fantasyMatchup, fantasyTrend
@@ -20151,6 +20326,8 @@ enum SignalKind {
         case .coaching: return "person.crop.rectangle.stack.fill"
         case .theSweat: return "waveform.path.ecg"
         case .afterGary: return "arrow.trianglehead.2.clockwise.rotate.90"
+        case .marketRange: return "arrow.left.and.right"
+        case .nextSlate: return "calendar.badge.clock"
         case .fantasyUsage: return "chart.bar.fill"
         case .fantasyRedZone: return "scope"
         case .fantasyMatchup: return "person.2.fill"
@@ -20165,7 +20342,7 @@ enum SignalKind {
         case .starterForm, .firstInning, .runningGame, .parkWeather,
              .trenches, .quarterback, .passRush, .coverage, .paceScript,
              .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .coaching,
-             .theSweat, .afterGary:
+             .theSweat, .afterGary, .marketRange, .nextSlate:
             return .white.opacity(0.6)
         case .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend:
             return GaryColors.nflAccent
@@ -20215,6 +20392,8 @@ enum SignalKind {
         case .coaching: return "COACHING"
         case .theSweat: return "THE SWEAT"
         case .afterGary: return "AFTER GARY"
+        case .marketRange: return "MARKET RANGE"
+        case .nextSlate: return "NEXT SLATE"
         case .fantasyUsage: return "USAGE & ROLE"
         case .fantasyRedZone: return "RED-ZONE ROLE"
         case .fantasyMatchup: return "MATCHUP"
@@ -20276,6 +20455,15 @@ struct Signal: Identifiable {
     /// Football live-factor payload (`the_sweat`). It remains separate from
     /// generic edge detail so the game page can render the state compactly.
     var sweat: SwapMeta? = nil
+    /// Exact same-book publish → latest verified pre-kick football receipt.
+    /// Keeping this separate prevents the UI from parsing display prose back
+    /// into market numbers or comparing Gary's number with a live-game line.
+    var afterGary: SwapMeta? = nil
+    /// Exact sportsbook low/high range for a football game. This remains
+    /// separate from Gary's locked-number receipt and carries no bettor label.
+    var marketRange: SwapMeta? = nil
+    /// The next verified FBS slate on an honest NCAAF dark day.
+    var nextSlate: SwapMeta? = nil
 }
 
 // MARK: - Picks Tab (per-game swipe carousel: Today's Top + game-by-game)
@@ -20802,6 +20990,7 @@ struct PicksCarouselView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @StateObject private var store = PropsSlateStore()
+    @ObservedObject private var liveCache = LiveScoreCache.shared
     /// Newly published picks and durable grades should arrive without a pull or
     /// relaunch. Only the visible Picks tab runs this refresh; live scores retain
     /// their own faster shared cadence.
@@ -20814,6 +21003,8 @@ struct PicksCarouselView: View {
     @StateObject private var focusState = PicksFocusState.shared
     @State private var connections: [Signal] = []
     @State private var connLoaded = false
+    @State private var connectionLoadInFlight = false
+    @State private var connectionErrorLeagues: Set<HubLeagueSel> = []
     @State private var sport = "ALL"
     @State private var page = 0
     @State private var selectedProp: PropPick?
@@ -20939,6 +21130,41 @@ struct PicksCarouselView: View {
         // Props seed the set — every matchup group SPLITS by start-time bucket
         // so a doubleheader's two games never share a page (Jul 22 2026).
         var out: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
+        var providerIndex: [String: Int] = [:]
+        var legacyIndex: [String: Int] = [:]
+
+        func providerIdentity(league: String?, gameId: Int?) -> String? {
+            let scopedLeague = (league ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !scopedLeague.isEmpty, let gameId else { return nil }
+            return "\(scopedLeague)|\(gameId)"
+        }
+
+        func upsertGame(matchup: String, time: String, commence: Date?,
+                        providerKey: String?, props: [PropPick]) {
+            let fallbackKey = Self.gameIdentityKey(matchup, commence)
+            let existingIndex = providerKey.flatMap { providerIndex[$0] }
+                ?? legacyIndex[fallbackKey]
+            if let index = existingIndex {
+                let existing = out[index]
+                let resolvedCommence = existing.commence ?? commence
+                let resolvedTime = existing.commence == nil && commence != nil ? time : existing.time
+                out[index] = (
+                    matchup: existing.matchup,
+                    time: resolvedTime,
+                    commence: resolvedCommence,
+                    dh: false,
+                    props: existing.props + props
+                )
+                if let providerKey { providerIndex[providerKey] = index }
+                return
+            }
+
+            out.append((matchup: matchup, time: time, commence: commence, dh: false, props: props))
+            let index = out.count - 1
+            if let providerKey { providerIndex[providerKey] = index }
+            else { legacyIndex[fallbackKey] = index }
+        }
+
         for g in store.groupByMatchup(dayProps) {
             let buckets = Dictionary(grouping: g.props) { p in
                 Self.timeBucket(parseISO8601(p.commence_time ?? "")) ?? -1
@@ -20946,10 +21172,18 @@ struct PicksCarouselView: View {
             for (_, props) in buckets.sorted(by: { $0.key < $1.key }) {
                 let commence = props.compactMap { parseISO8601($0.commence_time ?? "") }.min()
                 let time = commence.map { Formatters.tabTimeFormatterEST.string(from: $0) + " ET" } ?? g.time
-                out.append((matchup: g.matchup, time: time, commence: commence, dh: false, props: props))
+                let ids = Set(props.compactMap(\.game_id))
+                let gameId = ids.count == 1 ? ids.first : nil
+                let league = props.first?.effectiveLeague
+                upsertGame(
+                    matchup: g.matchup,
+                    time: time,
+                    commence: commence,
+                    providerKey: providerIdentity(league: league, gameId: gameId),
+                    props: props
+                )
             }
         }
-        var seenKeys = Set(out.map { Self.gameIdentityKey($0.matchup, $0.commence) })
         func gameMatchup(_ p: GaryPick) -> String {
             let a = (p.awayTeam ?? "").trimmingCharacters(in: .whitespaces)
             let h = (p.homeTeam ?? "").trimmingCharacters(in: .whitespaces)
@@ -20965,11 +21199,14 @@ struct PicksCarouselView: View {
                 let mu = gameMatchup(p)
                 guard !mu.isEmpty else { continue }
                 let commence = p.commence_time.flatMap(parseISO8601)
-                let key = Self.gameIdentityKey(mu, commence)
-                guard !seenKeys.contains(key) else { continue }
-                seenKeys.insert(key)
                 let time = commence.map { Formatters.tabTimeFormatterEST.string(from: $0) + " ET" } ?? (p.time ?? "")
-                out.append((matchup: mu, time: time, commence: commence, dh: false, props: []))
+                upsertGame(
+                    matchup: mu,
+                    time: time,
+                    commence: commence,
+                    providerKey: providerIdentity(league: lg, gameId: p.game_id),
+                    props: []
+                )
             }
         }
         merge(pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll)
@@ -20985,11 +21222,16 @@ struct PicksCarouselView: View {
                 guard !a.isEmpty, !h.isEmpty else { continue }
                 let mu = "\(a) @ \(h)"
                 let commence = s.commence_time.flatMap(parseISO8601)
-                let key = Self.gameIdentityKey(mu, commence)
-                guard !seenKeys.contains(key) else { continue }
-                seenKeys.insert(key)
-                let time = commence.map { Formatters.tabTimeFormatterEST.string(from: $0) + " ET" } ?? ""
-                out.append((matchup: mu, time: time, commence: commence, dh: false, props: []))
+                let time = s.kickoffTimeLabel
+                    ?? commence.map { Formatters.tabTimeFormatterEST.string(from: $0) + " ET" }
+                    ?? ""
+                upsertGame(
+                    matchup: mu,
+                    time: time,
+                    commence: commence,
+                    providerKey: providerIdentity(league: lg, gameId: s.bdl_game_id),
+                    props: []
+                )
             }
         }
         // Flag doubleheader siblings — pages use this to DEMAND game-scoped
@@ -21088,15 +21330,49 @@ struct PicksCarouselView: View {
     /// The game's BDL id from its slate row (doubleheader-exact edge + live
     /// attachment). nil when the slate hasn't landed or the row predates ids.
     private func bdlGameId(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Int? {
+        let propIds = Set(g.props.compactMap(\.game_id))
+        if propIds.count == 1 { return propIds.first }
+
         let key = Self.gameIdentityKey(g.matchup, g.commence)
         let scopedLeague = g.props.first?.effectiveLeague?.uppercased()
             ?? (sport == "ALL" ? nil : sport.uppercased())
-        return store.slate.first {
+        let dayPicks = pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll
+        if let id = dayPicks.first(where: {
+            let rowLeague = ($0.league ?? "").uppercased()
+            return (scopedLeague == nil || rowLeague == scopedLeague)
+                && Self.gameIdentityKey("\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")",
+                                        $0.commence_time.flatMap(parseISO8601)) == key
+        })?.game_id { return id }
+
+        if let id = store.slate.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
             return (scopedLeague == nil || rowLeague == scopedLeague)
                 && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
                                         $0.commence_time.flatMap(parseISO8601)) == key
-        }?.bdl_game_id
+        })?.bdl_game_id { return id }
+
+        // Exact-id sources can temporarily disagree on kickoff precision (a
+        // confirmed pick beside a retained date-only slate row). A same-league,
+        // single-provider-id matchup is still unambiguous; doubleheaders yield
+        // multiple ids and deliberately fail closed here.
+        let matchupKey = Self.matchupKey(g.matchup)
+        let candidateIds = Set(
+            dayPicks.compactMap { pick -> Int? in
+                let rowLeague = (pick.league ?? "").uppercased()
+                let matchup = "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")"
+                guard (scopedLeague == nil || rowLeague == scopedLeague),
+                      Self.matchupKey(matchup) == matchupKey else { return nil }
+                return pick.game_id
+            }
+            + store.slate.compactMap { row -> Int? in
+                let rowLeague = (row.league ?? "").uppercased()
+                let matchup = "\(row.away_team ?? "") @ \(row.home_team ?? "")"
+                guard (scopedLeague == nil || rowLeague == scopedLeague),
+                      Self.matchupKey(matchup) == matchupKey else { return nil }
+                return row.bdl_game_id
+            }
+        )
+        return candidateIds.count == 1 ? candidateIds.first : nil
     }
 
     /// Carry league identity into a game page even when it is a slate-only
@@ -21137,9 +21413,9 @@ struct PicksCarouselView: View {
     /// fallback only on single-game days — a doubleheader page never borrows
     /// its twin's scoreboard row.
     private func liveScore(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> LiveScore? {
-        if let id = bdlGameId(for: g), let ls = LiveScoreCache.shared.status(forGameId: id) { return ls }
+        if let id = bdlGameId(for: g), let ls = liveCache.status(forGameId: id) { return ls }
         if g.dh { return nil }
-        return LiveScoreCache.shared.status(forMatchup: g.matchup)
+        return liveCache.status(forMatchup: g.matchup)
     }
 
     /// Matchup-bar order: LIVE (0) → upcoming (1) → finished/graded (2). Reads the
@@ -21333,7 +21609,7 @@ struct PicksCarouselView: View {
             // matchup tabs and the cards both read LiveScoreCache.shared now (it owns
             // the dedup + its own adaptive refresh loop), so this page no longer keeps
             // its own snapshot that could disagree with the cards.
-            LiveScoreCache.shared.startIfNeeded()
+            liveCache.startIfNeeded()
         }
         .onChange(of: sport) { _ in page = 0; gamesMemo = []; rebuildMemo(); lockShowcaseIfNeeded() }
         .onChange(of: pickDay) { _ in page = 0; gamesMemo = []; rebuildMemo(); lockShowcaseIfNeeded() }
@@ -21347,7 +21623,7 @@ struct PicksCarouselView: View {
         .onChange(of: scenePhase) { phase in
             // Foreground → silently re-pull picks/props (the spinner is gated by
             // !hasContent, so existing data stays put while fresh rows load underneath).
-            if phase == .active { Task { await store.refresh() } }
+            if phase == .active { Task { await refreshRollingPicks() } }
         }
         .onChange(of: selectedTab) { tab in
             guard tab == 3, scenePhase == .active else { return }
@@ -21373,6 +21649,8 @@ struct PicksCarouselView: View {
         rollingPicksRefreshInFlight = true
         defer { rollingPicksRefreshInFlight = false }
         await store.refresh()
+        await loadConnections()
+        rebuildMemo()
     }
 
     /// A cheap Equatable digest of every input the memoized game set + edge index
@@ -21423,8 +21701,38 @@ struct PicksCarouselView: View {
         } else if !hasContent {
             emptyState
         } else {
-            pager
+            VStack(spacing: 0) {
+                if pickDay == .today && scopedBoardSourceFailed {
+                    sourceFailureBanner
+                }
+                pager
+            }
         }
+    }
+
+    private var scopedBoardSourceFailed: Bool {
+        if store.propPickSourceFailed { return true }
+        switch sport {
+        case "NFL": return store.gamePickSourceFailures.contains("NFL")
+        case "NCAAB":
+            return store.gamePickSourceFailures.contains("DAILY")
+                || store.gamePickSourceFailures.contains("NCAAB_FUTURE")
+        case "ALL": return !store.gamePickSourceFailures.isEmpty
+        default: return store.gamePickSourceFailures.contains("DAILY")
+        }
+    }
+
+    private var sourceFailureBanner: some View {
+        HStack(spacing: 7) {
+            BroadcastBar(height: 9)
+            Text("BOARD DATA UNAVAILABLE · PULL TO RETRY")
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(0.7)
+                .foregroundStyle(GaryColors.gold)
+            Spacer(minLength: 0)
+        }
+        .pageGutter()
+        .padding(.vertical, 8)
+        .background(Color.black.opacity(0.22))
     }
 
     private var pager: some View {
@@ -21436,7 +21744,7 @@ struct PicksCarouselView: View {
                                    edges: sportConnections, scopeLeague: effectiveScope, isToday: pickDay == .today, onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
-                .refreshable { await store.refresh() }
+                .refreshable { await refreshRollingPicks() }
                 .clipped()
                 .tag(0)
                 ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
@@ -21466,7 +21774,7 @@ struct PicksCarouselView: View {
                                       pageLeagueHint: league(for: g))
                             .padding(.bottom, 130)
                     }
-                    .refreshable { await store.refresh() }
+                    .refreshable { await refreshRollingPicks() }
                     .clipped()
                     .id(Self.gameIdentityKey(g.matchup, g.commence))
                     .tag(idx + 1)
@@ -21531,10 +21839,10 @@ struct PicksCarouselView: View {
     private func presentLeagueWords() {
         let opts = sports.map { s -> LeagueOverlayState.Option in
             let n = slateGameCount(s)
-            let live = LiveScoreCache.shared.scores.contains {
+            let live = liveCache.scores.contains {
                 $0.isLive && ($0.league ?? "").uppercased() == s.uppercased()
             }
-            let liveCount = LiveScoreCache.shared.scores.filter {
+            let liveCount = liveCache.scores.filter {
                 $0.isLive && ($0.league ?? "").uppercased() == s.uppercased()
             }.count
             let sup: String? = n > 0
@@ -21690,7 +21998,7 @@ struct PicksCarouselView: View {
         let league = gameLeague(g).uppercased()
 
         if let gameId = bdlGameId(for: g),
-           let live = LiveScoreCache.shared.status(forGameId: gameId),
+           let live = liveCache.status(forGameId: gameId),
            (live.league ?? "").uppercased() == league,
            let away = live.away_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
            let home = live.home_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -21800,6 +22108,9 @@ struct PicksCarouselView: View {
                     .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.7))
                     .pageGutter().padding(.top, 20)
+            } else if scopedBoardSourceFailed {
+                sourceFailureBanner
+                    .padding(.top, 12)
             } else if store.slateUnavailable {
                 HStack(spacing: 8) {
                     BroadcastBar(height: 11)
@@ -21813,18 +22124,27 @@ struct PicksCarouselView: View {
                     .foregroundStyle(GaryColors.sectionSub)
                     .pageGutter().padding(.top, 8)
             } else if rows.isEmpty {
-                // Dark day for this sport — say it straight.
-                HStack(spacing: 8) {
-                    BroadcastBar(height: 11)
-                    Text(sport == "ALL" ? "NO GAMES TODAY" : "NO \(sport) TODAY")
-                        .font(GaryFonts.accent(13)).tracking(0.6)
-                        .foregroundStyle(GaryColors.gold)
+                if scopedFootballConnectionFailed {
+                    HStack(spacing: 8) {
+                        BroadcastBar(height: 11)
+                        Text("BOARD INTEL UNAVAILABLE · PULL TO RETRY")
+                            .font(GaryFonts.accent(13)).tracking(0.6)
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    .pageGutter().padding(.top, 20)
+                } else if let nextSlateSignal {
+                    FootballNextSlatePreview(signal: nextSlateSignal, accent: Sport.ncaaf.accentColor)
+                        .padding(.top, 20)
+                } else {
+                    // Honest fallback when the future provider window is also empty.
+                    HStack(spacing: 8) {
+                        BroadcastBar(height: 11)
+                        Text(sport == "ALL" ? "NO GAMES TODAY" : "NO \(sport) TODAY")
+                            .font(GaryFonts.accent(13)).tracking(0.6)
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    .pageGutter().padding(.top, 20)
                 }
-                .pageGutter().padding(.top, 20)
-                Text("Gary's board returns with the next slate.")
-                    .font(GaryFonts.text(13))
-                    .foregroundStyle(GaryColors.sectionSub)
-                    .pageGutter().padding(.top, 8)
             } else {
                 HStack(spacing: 8) {
                     BroadcastBar(height: 11)
@@ -21918,6 +22238,17 @@ struct PicksCarouselView: View {
         return base.filter { $0.league == lg }
     }
 
+    private var nextSlateSignal: Signal? {
+        guard sport == "NCAAF" else { return nil }
+        return connections.first { $0.league == .ncaaf && $0.kind == .nextSlate }
+    }
+
+    private var scopedFootballConnectionFailed: Bool {
+        guard sport == "NFL" || sport == "NCAAF",
+              let league = HubLeagueSel.from(sport) else { return false }
+        return connectionErrorLeagues.contains(league)
+    }
+
     /// Fantasy-corner lanes never ride the Picks page (founder, Aug 6: "remove
     /// the Cut List from the Picks page just keep it in the fantasy part").
     /// These rows are roster advice, not a read on tonight's bet, and their
@@ -21929,16 +22260,44 @@ struct PicksCarouselView: View {
         .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend,
     ]
 
+    @MainActor
     private func loadConnections() async {
+        guard !connectionLoadInFlight else { return }
+        connectionLoadInFlight = true
+        defer { connectionLoadInFlight = false }
         let date = SupabaseAPI.todayEST()
-        var out: [Signal] = []
-        for lg in AppFlags.insightLeagues {
-            if let conns = try? await SupabaseAPI.fetchInsightConnections(date: date, league: lg) {
-                out.append(contentsOf: conns.compactMap { $0.toSignal() }
-                    .filter { !Self.fantasyOnlyKinds.contains($0.kind) })
+        let fantasyKinds = Self.fantasyOnlyKinds
+        var successful: [HubLeagueSel: [Signal]] = [:]
+        var failures: Set<HubLeagueSel> = []
+        await withTaskGroup(of: (league: HubLeagueSel?, signals: [Signal], failed: Bool).self) { group in
+            for lg in AppFlags.insightLeagues {
+                group.addTask {
+                    let league = HubLeagueSel.from(lg)
+                    do {
+                        let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
+                        let signals = conns.compactMap { $0.toSignal() }
+                            .filter { !fantasyKinds.contains($0.kind) }
+                        return (league, signals, false)
+                    } catch {
+                        print("[Picks] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
+                        return (league, [], true)
+                    }
+                }
+            }
+            for await result in group {
+                guard let league = result.league else { continue }
+                if result.failed { failures.insert(league) }
+                else { successful[league] = result.signals }
             }
         }
-        await MainActor.run { connections = out; connLoaded = true }
+
+        // Successful zero-row responses clear that desk. A failed desk alone
+        // keeps its last-good rows and is retried on foreground, pull, and the
+        // same 90-second cadence as picks/props.
+        let retained = connections.filter { failures.contains($0.league) }
+        connections = retained + successful.values.flatMap { $0 }
+        connectionErrorLeagues = failures
+        connLoaded = true
     }
 }
 
@@ -21968,6 +22327,8 @@ struct PicksTodayPage: View {
             // the shared EdgesSection / locked MLB design is never touched.
             if scopeLeague == "WC" {
                 WCTodaySection(edges: edges)
+            } else if scopeLeague == "NFL" || scopeLeague == "NCAAF" {
+                FootballPicksBoard(league: scopeLeague, signals: edges)
             } else {
                 // The season series belongs to its GAME, not the day's list
                 // (founder, Aug 6: "Head to Head should not be on the Today's
@@ -23931,6 +24292,8 @@ extension SignalKind {
         case "coaching", "coaching_edge": return .coaching
         case "the_sweat", "sweat": return .theSweat
         case "after_gary", "after gary": return .afterGary
+        case "market_range", "market range": return .marketRange
+        case "next_slate", "next slate": return .nextSlate
         // NFL fantasy lanes. These are kept separate from MLB waiver/closer
         // categories because their evidence and labels are sport-specific.
         case "fantasy_usage", "usage", "usage_role", "snap_share", "target_share", "rush_share": return .fantasyUsage
@@ -24003,7 +24366,10 @@ extension Connection {
                 .contains(meta?.kind ?? "") ? meta : nil,
             position: meta?.position,
             gameId: game_id,
-            sweat: kd == .theSweat ? meta : nil
+            sweat: kd == .theSweat ? meta : nil,
+            afterGary: kd == .afterGary ? meta : nil,
+            marketRange: kd == .marketRange ? meta : nil,
+            nextSlate: kd == .nextSlate ? meta : nil
         )
     }
 }

@@ -127,6 +127,32 @@ describe('football season and exact-date slates', () => {
     expect(games.map((game) => game.id)).toEqual([901]);
   });
 
+  it('assigns confirmed NCAAF kickoffs before 6 AM ET to the prior insight slate', async () => {
+    const service = {
+      getGames: vi.fn().mockResolvedValue([
+        {
+          id: 902,
+          date: '2026-08-30T05:30:00.000Z',
+          visitor_team: { id: 10, abbreviation: 'UNC' },
+          home_team: { id: 43, abbreviation: 'TCU' },
+        },
+        {
+          id: 903,
+          date: '2026-08-30T10:00:00.000Z',
+          visitor_team: { id: 10, abbreviation: 'UNC' },
+          home_team: { id: 43, abbreviation: 'TCU' },
+        },
+      ]),
+      getTeams: vi.fn().mockResolvedValue([
+        { id: 10, conference: 1 },
+        { id: 43, conference: 3 },
+      ]),
+    };
+
+    const games = await loadFootballSlate({ bdl: service, league: 'ncaaf', date: '2026-08-29' });
+    expect(games.map((game) => game.id)).toEqual([902]);
+  });
+
   it('does not spend a team-directory request on an honest NCAAF dark day', async () => {
     const service = {
       getGames: vi.fn().mockResolvedValue([]),
@@ -162,8 +188,9 @@ describe('football season and exact-date slates', () => {
         {
           id: 913,
           date: '2026-09-06T18:00:00Z',
-          visitor_team: { id: 13, conference: 1 },
-          home_team: { id: 46, conference: 4 },
+          // A next-ET-day identity gap must not suppress the Sep 5 slate.
+          visitor_team: { id: 13 },
+          home_team: { id: 46 },
         },
       ]),
       getTeams: vi.fn(),
@@ -172,7 +199,6 @@ describe('football season and exact-date slates', () => {
       { id: 10, conference: 1 }, { id: 43, conference: 3 },
       { id: 11, conference: 10 }, { id: 44, conference: 4 },
       { id: 12, conference: 20 }, { id: 45, conference: 4 },
-      { id: 13, conference: 1 }, { id: 46, conference: 4 },
     ]);
 
     const games = await loadFootballSlate({ bdl: service, league: 'NCAAF', date: '2026-09-05' });

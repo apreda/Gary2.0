@@ -19,6 +19,8 @@ const FACTORS = Object.freeze([
     tokens: ['RUSH_YDS_GM', 'RUSHING_YARDS_PER_GAME', 'RUSHING_YPG', 'NCAAF_RUSHING_OFFENSE'],
     liveKeys: ['rushing_yards', 'rush_yards'],
     higherIsBetter: true,
+    baselineUnit: 'YDS/G',
+    liveUnit: 'YDS',
   },
   {
     code: 'AIR_EDGE',
@@ -26,13 +28,19 @@ const FACTORS = Object.freeze([
     tokens: ['PASS_YDS_GM', 'PASSING_YPG', 'PASSING_YARDS_PER_GAME', 'NCAAF_PASSING_OFFENSE'],
     liveKeys: ['passing_yards', 'pass_yards'],
     higherIsBetter: true,
+    baselineUnit: 'YDS/G',
+    liveUnit: 'YDS',
   },
   {
     code: 'PRESSURE',
     label: 'PRESSURE',
-    tokens: ['SACKS', 'PRESSURE_RATE', 'PASS_RUSH'],
+    // Do not treat completion percentage or a prose pass-rush token as a
+    // pressure rate. Only an explicitly stored sacks row is eligible.
+    tokens: ['SACKS'],
     liveKeys: ['sacks', 'defensive_sacks'],
     higherIsBetter: true,
+    baselineUnit: 'SACKS',
+    liveUnit: 'SACKS',
   },
   {
     code: 'BALL_SECURITY',
@@ -40,6 +48,8 @@ const FACTORS = Object.freeze([
     tokens: ['TURNOVER_MARGIN', 'TURNOVER_DIFF', 'NCAAF_TURNOVER_MARGIN'],
     liveKeys: ['turnovers', 'turnovers_lost'],
     higherIsBetter: false,
+    baselineUnit: 'MARGIN',
+    liveUnit: 'TURNOVERS',
   },
 ]);
 
@@ -173,23 +183,30 @@ function numberFactor({ pick, game, score, status, seasonType, asOf }) {
   let held = null;
   let baseline = null;
   let liveValue = null;
+  let coverMargin = null;
+  let selectedScore = null;
+  let opponentScore = null;
+  let totalScore = null;
 
   if (market.type === 'total') {
     baseline = `${market.direction.toUpperCase()} ${market.line}`;
     if (scores) {
       const total = scores.home + scores.away;
       held = total === market.line ? 0 : (market.direction === 'over' ? total > market.line : total < market.line) ? 1 : -1;
+      coverMargin = market.direction === 'over' ? total - market.line : market.line - total;
+      totalScore = total;
       liveValue = `${total} / ${market.line}`;
     }
   } else if (selected) {
     const team = shortTeam(game, selected, pick);
     baseline = market.type === 'moneyline' ? `${team} ML` : `${team} ${signed(market.line)}`;
     if (scores) {
-      const selectedScore = selected === 'home' ? scores.home : scores.away;
-      const otherScore = selected === 'home' ? scores.away : scores.home;
-      const cover = selectedScore - otherScore + (market.line ?? 0);
+      selectedScore = selected === 'home' ? scores.home : scores.away;
+      opponentScore = selected === 'home' ? scores.away : scores.home;
+      const cover = selectedScore - opponentScore + (market.line ?? 0);
       held = cover === 0 ? 0 : cover > 0 ? 1 : -1;
-      liveValue = `${team} ${selectedScore}–${otherScore}`;
+      coverMargin = cover;
+      liveValue = `${team} ${selectedScore}–${opponentScore}`;
     }
   }
 
@@ -203,6 +220,16 @@ function numberFactor({ pick, game, score, status, seasonType, asOf }) {
     label: 'THE NUMBER',
     baseline,
     liveValue,
+    baselineSelected: market.line,
+    baselineOpponent: 0,
+    liveSelected: market.type === 'total' ? totalScore : selectedScore,
+    liveOpponent: market.type === 'total' ? market.line : opponentScore,
+    baselineUnit: market.type === 'moneyline' ? 'MONEYLINE' : 'LINE',
+    liveUnit: market.type === 'total' ? 'TOTAL' : 'SCORE',
+    coverMargin,
+    selectedScore,
+    opponentScore,
+    marketType: market.type,
     state: proofState({ status, held }),
     tone: held == null || held === 0 ? TONES.NEUTRAL : held > 0 ? TONES.EDGE : TONES.CAUTION,
     relevance: 98,
@@ -296,6 +323,12 @@ function evidenceFactor({ definition, pick, game, statsRows, status, seasonType,
     label: definition.label,
     baseline,
     liveValue,
+    baselineSelected,
+    baselineOpponent: baselineOther,
+    liveSelected: selectedLive,
+    liveOpponent: otherLive,
+    baselineUnit: definition.baselineUnit,
+    liveUnit: definition.liveUnit,
     state: proofState({ status, held }),
     tone: held == null || held === 0 ? TONES.NEUTRAL : held > 0 ? TONES.EDGE : TONES.CAUTION,
     relevance: 86,
@@ -364,6 +397,16 @@ export function buildTheSweatRows({ league, date, games = [], picks = [], liveSc
           factor_code: factor.code,
           baseline: factor.baseline,
           live_value: factor.liveValue,
+          baseline_selected: factor.baselineSelected,
+          baseline_opponent: factor.baselineOpponent,
+          live_selected: factor.liveSelected,
+          live_opponent: factor.liveOpponent,
+          baseline_unit: factor.baselineUnit,
+          live_unit: factor.liveUnit,
+          cover_margin: factor.coverMargin,
+          selected_score: factor.selectedScore,
+          opponent_score: factor.opponentScore,
+          market_type: factor.marketType,
           state: factor.state,
           as_of: factor.asOf,
           team: pickedSide(pick, game) ? shortTeam(game, pickedSide(pick, game), pick) : null,

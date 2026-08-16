@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  activeNcaafRecoverySlateDate,
   childExecutionBudget,
   coalesceOverdueTiers,
   gameHasStarted,
@@ -11,19 +12,27 @@ import {
   ncaafClusterConcurrency,
   nextTriggerBatch,
   laneOwnsMlbDriftGuard,
+  newScheduleEntries,
+  pendingNcaafKickoffRefreshEntries,
   partitionDecisionLaneSchedules,
   pendingEntriesForChildBudget,
   pendingEntriesForDecisionLane,
+  partitionNcaafKickoffReadiness,
   partitionStartedEntries,
   reanchorGameSchedule,
   runIndependentDecisionLanes,
   runIndependentScheduleLanes,
   runPerGameDecisionPipeline,
   scheduleEntryKey,
+  schedulerChildArgs,
+  schedulerSlateDateForSport,
+  sportFetchRetryIsCurrent,
   sportFetchRetryDelayMs,
 } from '../../scripts/lib/schedulerPolicy.js';
 
 const schedulerSource = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
+const picksRunnerSource = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
+const propsRunnerSource = readFileSync(new URL('../../scripts/run-agentic-props-cli.js', import.meta.url), 'utf8');
 
 function entry({ sport = 'baseball_mlb', id = 1, start = '2026-08-15T18:00:00Z', lead = 90 } = {}) {
   const startTime = new Date(start);
@@ -37,10 +46,60 @@ function entry({ sport = 'baseball_mlb', id = 1, start = '2026-08-15T18:00:00Z',
 }
 
 describe('scheduler reliability policy', () => {
-  it('never schedules NCAAF decision tiers from a date-only display estimate', () => {
-    expect(schedulerSource).toContain("if (ncaafKickoff?.estimated)");
-    expect(schedulerSource).toContain('retrying NCAAF instead of scheduling from the display estimate');
-    expect(schedulerSource).toMatch(/if \(ncaafKickoff\?\.estimated\) \{[\s\S]*?return null;[\s\S]*?\}/);
+  it('schedules confirmed NCAAF games while isolating date-only games by exact id', () => {
+    const result = partitionNcaafKickoffReadiness([
+      { id: 10, date: '2026-08-29T16:00:00Z' },
+      { id: 11, date: '2026-08-29' },
+      { id: 12 },
+      { id: 13, date: '2026-08-30T16:00:00Z' },
+      { id: 14, date: '2026-08-30T05:30:00Z' }, // 1:30 AM ET, still Aug 29 slate
+      { id: 15, date: '2026-08-30T10:00:00Z' }, // 6:00 AM ET, Aug 30 slate
+    ], '2026-08-29');
+
+    expect(result.confirmed.map(({ raw }) => raw.id)).toEqual([10, 14]);
+    expect(result.confirmed[0].startTime.toISOString()).toBe('2026-08-29T16:00:00.000Z');
+    expect(result.retryGameIds).toEqual(['11', '12']);
+    expect(result.pending.map(({ kickoff }) => kickoff.iso)).toEqual([null, null]);
+    expect(result.outsideDate.map(({ id }) => id)).toEqual([13, 15]);
+    expect(result.retryAll).toBe(false);
+
+    expect(schedulerSource).toContain('confirmed games stay scheduled; unresolved ids retry independently');
+    expect(schedulerSource).toContain('retrying this exact id without scheduling a deadline');
+    expect(schedulerSource).toContain('gameIds: retry.gameIds');
+    expect(schedulerSource).toContain('exactNcaafGameIds.length > 0 ? 0 : 10');
+  });
+
+  it('keeps NCAAF retries on the prior slate through 5:59 ET and rolls at 6:00', () => {
+    const retry = makeSportFetchRetryEntry({
+      sport: { key: 'americanfootball_ncaaf' },
+      dateStr: '2026-09-05',
+      now: new Date('2026-09-06T05:00:00Z'),
+    });
+    expect(schedulerSlateDateForSport('americanfootball_ncaaf', '2026-09-06T09:59:59Z'))
+      .toBe('2026-09-05');
+    expect(sportFetchRetryIsCurrent(retry, '2026-09-06T09:59:59Z')).toBe(true);
+    expect(activeNcaafRecoverySlateDate('2026-09-06T09:59:59Z')).toBe('2026-09-05');
+    const nextSlateRetry = makeSportFetchRetryEntry({
+      sport: { key: 'americanfootball_ncaaf' },
+      dateStr: '2026-09-06',
+      now: new Date('2026-09-06T05:00:00Z'),
+    });
+    expect(sportFetchRetryIsCurrent(nextSlateRetry, '2026-09-06T09:59:59Z')).toBe(true);
+    expect(sportFetchRetryIsCurrent(retry, '2026-09-06T10:00:00Z')).toBe(false);
+    expect(sportFetchRetryIsCurrent(nextSlateRetry, '2026-09-06T10:00:00Z')).toBe(true);
+    expect(activeNcaafRecoverySlateDate('2026-09-06T10:00:00Z')).toBeNull();
+  });
+
+  it('passes a stable slate date only to NCAAF children and fails closed without one', () => {
+    const ncaaf = { ...entry({ sport: 'americanfootball_ncaaf' }), slateDate: '2026-09-05' };
+    expect(schedulerChildArgs(ncaaf, ['--game-id', '1']))
+      .toEqual(['--game-id', '1', '--date', '2026-09-05']);
+    expect(schedulerChildArgs(entry({ sport: 'americanfootball_nfl' }), ['--game-id', '1']))
+      .toEqual(['--game-id', '1']);
+    expect(schedulerChildArgs(entry({ sport: 'baseball_mlb' }), ['--game-id', '1']))
+      .toEqual(['--game-id', '1']);
+    expect(() => schedulerChildArgs(entry({ sport: 'americanfootball_ncaaf' }), []))
+      .toThrow(/requires a canonical slateDate/);
   });
 
   it('keys games by sport and provider game id', () => {
@@ -60,6 +119,26 @@ describe('scheduler reliability policy', () => {
     expect(retry.triggerTime.toISOString()).toBe('2026-08-29T10:04:00.000Z');
     expect(sportFetchRetryDelayMs(8)).toBe(20 * 60_000);
     expect(gameHasStarted(retry, new Date('2026-08-30T00:00:00Z'))).toBe(false);
+  });
+
+  it('normalizes and keys exact NCAAF retry ids independently', () => {
+    const retry = makeSportFetchRetryEntry({
+      sport: { key: 'americanfootball_ncaaf' },
+      dateStr: '2026-08-29',
+      gameIds: [502, '501', 502],
+      now: new Date('2026-08-29T10:00:00Z'),
+    });
+    expect(retry.gameIds).toEqual(['501', '502']);
+    expect(scheduleEntryKey(retry)).toBe('fetch:americanfootball_ncaaf:2026-08-29:501,502');
+  });
+
+  it('fails closed to a full retry when a pending NCAAF game has no exact id', () => {
+    const result = partitionNcaafKickoffReadiness([
+      { date: '2026-08-29' },
+    ], '2026-08-29');
+    expect(result.confirmed).toEqual([]);
+    expect(result.retryGameIds).toEqual([]);
+    expect(result.retryAll).toBe(true);
   });
 
   it('rejects a game at or after its official start', () => {
@@ -372,6 +451,56 @@ describe('scheduler reliability policy', () => {
       '2026-08-15T18:45:00.000Z',
     ]);
     expect(tiers.map((item) => item.triggerTime)).toEqual(originalTriggerRefs);
+  });
+
+  it('does not reinsert recovered game tiers that already existed or fired', () => {
+    const existing = [
+      { ...entry({ sport: 'americanfootball_ncaaf', id: 71, lead: 90 }), tier: 1 },
+      { ...entry({ sport: 'americanfootball_ncaaf', id: 71, lead: 60 }), tier: 2 },
+    ];
+    const candidates = [
+      { ...entry({ sport: 'americanfootball_ncaaf', id: 71, lead: 90 }), tier: 1 },
+      { ...entry({ sport: 'americanfootball_ncaaf', id: 71, lead: 60 }), tier: 2 },
+      { ...entry({ sport: 'americanfootball_ncaaf', id: 72, lead: 90 }), tier: 1 },
+      { ...entry({ sport: 'americanfootball_ncaaf', id: 72, lead: 60 }), tier: 2 },
+    ];
+
+    expect(newScheduleEntries(existing, candidates).map((item) => `${item.gameId}:${item.tier}`))
+      .toEqual(['72:1', '72:2']);
+  });
+
+  it('bounds the NCAAF kickoff refresh to one exact pending entry per game', () => {
+    const now = new Date('2026-08-29T14:00:00Z');
+    const ncaafFirst = { ...entry({ sport: 'americanfootball_ncaaf', id: 81, start: '2026-08-29T18:00:00Z', lead: 90 }), tier: 1 };
+    const ncaafRetry = { ...entry({ sport: 'americanfootball_ncaaf', id: 81, start: '2026-08-29T18:00:00Z', lead: 60 }), tier: 2 };
+    const ncaafSecond = { ...entry({ sport: 'americanfootball_ncaaf', id: 82, start: '2026-08-29T20:00:00Z', lead: 90 }), tier: 1 };
+    const started = { ...entry({ sport: 'americanfootball_ncaaf', id: 83, start: '2026-08-29T13:00:00Z', lead: 15 }), tier: 4 };
+    const nfl = { ...entry({ sport: 'americanfootball_nfl', id: 84, start: '2026-08-29T20:00:00Z', lead: 90 }), tier: 1 };
+    const fetchRetry = makeSportFetchRetryEntry({
+      sport: { key: 'americanfootball_ncaaf' },
+      dateStr: '2026-08-29',
+      gameIds: [85],
+      now,
+    });
+
+    const pending = [ncaafFirst, ncaafRetry, ncaafSecond, started, nfl, fetchRetry];
+    expect(pendingNcaafKickoffRefreshEntries(pending, now).map((item) => item.gameId))
+      .toEqual([81, 82]);
+    expect(pendingNcaafKickoffRefreshEntries(pending, now, 1).map((item) => item.gameId))
+      .toEqual([81]);
+    expect(schedulerSource).toContain('NCAAF_KICKOFF_CHECK_INTERVAL_MS = 10 * 60 * 1000');
+    expect(schedulerSource).toContain("'americanfootball_ncaaf',\n          slateDate,\n          { gameIds }");
+    expect(schedulerSource).toContain('reanchorGameSchedule(livePending, entry, nextStart)');
+  });
+
+  it('keeps the NCAAF slate key through exact pick, prop, and coverage paths', () => {
+    expect(schedulerSource).toContain('schedulerChildArgs(entry, [sport.flag, \'--game-id\'');
+    expect(schedulerSource).toContain("schedulerChildArgs(entry, ['--game-id'");
+    expect(schedulerSource).toContain('? entry.slateDate');
+    expect(schedulerSource).toContain('addActiveNcaafRecovery(schedule)');
+    expect(picksRunnerSource).toContain('ncaafSlateDateForInstant(gameTime)');
+    expect(propsRunnerSource).toContain('const slateDateFromISO = (iso) =>');
+    expect(propsRunnerSource).toContain('requestedSlateDate || ncaafSlateDateForInstant(iso)');
   });
 
   it('recognizes coverage only after the final pending tier is removed', () => {

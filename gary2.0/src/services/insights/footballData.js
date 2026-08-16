@@ -5,7 +5,11 @@
 // season: an empty current-season sample is more honest than presenting stale
 // football as evidence for today's matchup.
 
-import { classifyNcaafFbsGames, resolveNcaafKickoff } from '../ncaafGamePolicy.js';
+import {
+  classifyNcaafFbsGames,
+  ncaafSlateDateForKickoff,
+  resolveNcaafKickoff,
+} from '../ncaafGamePolicy.js';
 
 const FOOTBALL = Object.freeze({
   nfl: Object.freeze({ sportKey: 'americanfootball_nfl' }),
@@ -162,18 +166,22 @@ export async function loadFootballSlate({ bdl, league, date }) {
       if (!Array.isArray(teams) || teams.length === 0) {
         throw new Error('NCAAF insight slate provider team directory is unavailable');
       }
-      const classified = classifyNcaafFbsGames(rows, teams);
+      // The adjacent UTC-date query also contains tomorrow's daytime games.
+      // Exclude rows with a known different ET slate before FBS classification
+      // so an unrelated unresolved Sunday identity cannot suppress Saturday.
+      // Unknown dates remain in scope and fail closed below.
+      const targetDateRows = rows.filter((game) => {
+        const kickoff = resolveNcaafKickoff(game);
+        return !kickoff.scheduledDate || ncaafSlateDateForKickoff(game) === date;
+      });
+      const classified = classifyNcaafFbsGames(targetDateRows, teams);
       if (classified.unresolved.length > 0) {
         throw new Error(
           `NCAAF insight slate has ${classified.unresolved.length} game(s) without provider-grounded FBS identity`,
         );
       }
       rows = classified.accepted.filter((game) => {
-        const kickoff = resolveNcaafKickoff(game);
-        if (!kickoff.iso) return false;
-        return new Date(kickoff.iso).toLocaleDateString('en-CA', {
-          timeZone: 'America/New_York',
-        }) === date;
+        return ncaafSlateDateForKickoff(game) === date;
       });
     }
   }

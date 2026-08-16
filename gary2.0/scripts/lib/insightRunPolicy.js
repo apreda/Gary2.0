@@ -45,6 +45,20 @@ export function shouldUpgradeFootballFantasyEvidence(stored, fresh) {
 }
 
 /**
+ * Snapshot refreshes may reorder the grounded player board as roles change,
+ * but a transient provider miss must never replace verified current-season
+ * evidence with the prior-season fallback.
+ */
+export function shouldPreserveCurrentFootballFantasySnapshot(existingRows, freshRows) {
+  const existing = Array.isArray(existingRows) ? existingRows : [];
+  const fresh = Array.isArray(freshRows) ? freshRows : [];
+  if (!fresh.length || !FOOTBALL_FANTASY_CATEGORIES.has(String(fresh[0]?.category || ''))) return false;
+  const hasCurrent = existing.some((row) => row?.meta?.evidence_scope === 'current_season');
+  const freshIsBaselineOnly = fresh.every((row) => row?.meta?.evidence_scope === 'prior_season_baseline');
+  return hasCurrent && freshIsBaselineOnly;
+}
+
+/**
  * A successful dark day is not an error. A football slate with real games but
  * zero rows across every registered computer is different: failing the cloud
  * job makes the outage visible and preserves any last-good stored rows.
@@ -58,5 +72,6 @@ export function footballHubRunIsEmptyFailure({ league, gameCount, connectionCoun
 export default {
   footballHubRunIsEmptyFailure,
   shouldRepairFootballMarketVendor,
+  shouldPreserveCurrentFootballFantasySnapshot,
   shouldUpgradeFootballFantasyEvidence,
 };

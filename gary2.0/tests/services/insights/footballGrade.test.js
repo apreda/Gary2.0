@@ -36,4 +36,14 @@ describe('football insight grading', () => {
       note: 'Same-book market receipt; context only',
     });
   });
+
+  it('never grades a future NCAAF slate preview', () => {
+    expect(gradeFootballInsightRow({
+      category: 'next_slate',
+      meta: { kind: 'next_slate', grade: 'context' },
+    }, null)).toEqual({
+      result: null,
+      note: 'Future schedule preview; context only',
+    });
+  });
 });

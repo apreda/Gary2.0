@@ -44,4 +44,17 @@ describe('filterSlateGames', () => {
     const rows = [g(40, 'A', 'B', '2026-08-09T23:15:00Z'), g(41, 'C', 'D', '2026-08-10T23:15:00Z')];
     expect(filterSlateGames(rows, [], NOW).map(r => r.id)).toEqual([41]);
   });
+
+  it('uses the 6 AM boundary for NCAAF only', () => {
+    const rows = [
+      g(50, 'Hawaii', 'Stanford', '2026-09-06T05:30:00Z'), // 1:30 AM ET
+      g(51, 'Army', 'Navy', '2026-09-06T10:00:00Z'),       // 6:00 AM ET
+    ];
+    expect(filterSlateGames(rows, ['2026-09-05'], NOW, 'americanfootball_ncaaf').map(r => r.id))
+      .toEqual([50]);
+    expect(filterSlateGames(rows, ['2026-09-06'], NOW, 'americanfootball_ncaaf').map(r => r.id))
+      .toEqual([51]);
+    expect(filterSlateGames(rows, ['2026-09-06'], NOW, 'baseball_mlb').map(r => r.id))
+      .toEqual([50, 51]);
+  });
 });

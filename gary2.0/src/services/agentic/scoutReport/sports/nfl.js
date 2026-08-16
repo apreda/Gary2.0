@@ -1019,9 +1019,15 @@ function formatNflPlayoffHistory(homeTeam, awayTeam, playoffHistory, homeTeamId,
 
 // =========================================================================
 // formatStartingQBs
-// Format starting QBs section for both teams (NFL/NCAAF)
+// Format the NFL starting-QB section for both teams.
 // =========================================================================
 function formatStartingQBs(homeTeam, awayTeam, qbs) {
+  // BDL NCAAF exposes active rosters and production, not a confirmed depth
+  // chart. A passing leader (or the old "See grounded context" sentinel) must
+  // never be promoted to "STARTING QUARTERBACKS THIS WEEK." The college scout
+  // builder no longer calls this formatter; this guard keeps the shared helper
+  // fail-closed if it is accidentally reintroduced later.
+  if (String(qbs?.sport || '').toUpperCase() === 'NCAAF') return '';
   if (!qbs || (!qbs.home && !qbs.away)) {
     return '';
   }

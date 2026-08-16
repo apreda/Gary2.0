@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   footballHubRunIsEmptyFailure,
   shouldRepairFootballMarketVendor,
+  shouldPreserveCurrentFootballFantasySnapshot,
   shouldUpgradeFootballFantasyEvidence,
 } from '../../scripts/lib/insightRunPolicy.js';
 
@@ -26,6 +27,14 @@ describe('football fantasy Hub persistence', () => {
       { category: 'trenches', meta: { evidence_scope: 'prior_season_baseline' } },
       { category: 'trenches', meta: { evidence_scope: 'current_season' } },
     )).toBe(false);
+  });
+
+  it('refreshes grounded player snapshots but never downgrades current evidence to a baseline', () => {
+    const current = [{ category: 'fantasy_usage', meta: { evidence_scope: 'current_season' } }];
+    const baseline = [{ category: 'fantasy_usage', meta: { evidence_scope: 'prior_season_baseline' } }];
+    expect(shouldPreserveCurrentFootballFantasySnapshot(current, baseline)).toBe(true);
+    expect(shouldPreserveCurrentFootballFantasySnapshot(baseline, current)).toBe(false);
+    expect(shouldPreserveCurrentFootballFantasySnapshot([], baseline)).toBe(false);
   });
 
   it('fails a false-green active football slate but accepts a real dark day', () => {

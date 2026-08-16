@@ -361,7 +361,10 @@ async function buildSlate(etDateStr) {
   // collapse here. Rows carry bdl_game_id via dailySlateService.buildLeagueRows.
   const deduped = Object.values(
     named.reduce((acc, r) => {
-      const k = `${r.league}|${r.away_team}|${r.home_team}|${r.commence_time}`;
+      const identity = r.league === 'NCAAF' && r.bdl_game_id != null
+        ? `game:${r.bdl_game_id}`
+        : `time:${r.commence_time}`;
+      const k = `${r.league}|${r.away_team}|${r.home_team}|${identity}`;
       if (!acc[k]) acc[k] = r;
       return acc;
     }, {}),
@@ -1492,6 +1495,8 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
     away_abbr: awayAbbr,
     home_abbr: homeAbbr,
     commence_time: row.commence_time ?? null,
+    scheduled_date: row.scheduled_date ?? null,
+    kickoff_status: row.kickoff_status ?? null,
     // Game identity (Jul 22 2026, doubleheader-safe) — pairs with the
     // starters' game_time so readers join board row ↔ arms BY GAME.
     bdl_game_id: row.bdl_game_id ?? null,
@@ -1909,10 +1914,12 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     }),
   );
 
-  // 5. COUNTDOWN — earliest commence_time across ALL slate rows + its league.
+  // 5. COUNTDOWN — earliest CONFIRMED commence_time across all slate rows.
+  // A date-only NCAAF fixture belongs on the board but can never own a clock.
   let countdown_iso = null;
   let countdown_sport = null;
   for (const r of slateRows) {
+    if (r.kickoff_status === 'date_only') continue;
     if (!r.commence_time) continue;
     const t = new Date(r.commence_time).getTime();
     if (Number.isNaN(t)) continue;

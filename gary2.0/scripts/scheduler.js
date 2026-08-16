@@ -20,6 +20,7 @@ import { spawn, execSync } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import {
+  activeNcaafRecoverySlateDate,
   childExecutionBudget,
   coalesceOverdueTiers,
   decisionLaneKey,
@@ -31,17 +32,26 @@ import {
   ncaafClusterConcurrency,
   nextTriggerBatch,
   laneOwnsMlbDriftGuard,
+  newScheduleEntries,
+  pendingNcaafKickoffRefreshEntries,
   pendingEntriesForChildBudget,
+  partitionNcaafKickoffReadiness,
   partitionStartedEntries,
   reanchorGameSchedule,
   runIndependentDecisionLanes,
   runIndependentScheduleLanes,
   runPerGameDecisionPipeline,
+  schedulerChildArgs,
   scheduleEntryKey,
+  sportFetchRetryIsCurrent,
 } from './lib/schedulerPolicy.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
 import { parsePickRunOutcome } from './lib/pickRunReliability.js';
-import { classifyNcaafFbsGames, resolveNcaafKickoff } from '../src/services/ncaafGamePolicy.js';
+import {
+  classifyNcaafFbsGames,
+  ncaafSlateDateForKickoff,
+  resolveNcaafKickoff,
+} from '../src/services/ncaafGamePolicy.js';
 
 const PROJECT_DIR = join(import.meta.dirname, '..');
 const LOG_DIR = join(PROJECT_DIR, 'logs', 'scheduler');
@@ -187,44 +197,102 @@ function addDaysISO(dateStr, days) {
 // Fetch games whose ET game-day matches `etDateStr`. We query both the ET date
 // and the next UTC date, because late ET games can live under tomorrow's UTC
 // provider date. Then we filter by actual ET start time.
-async function fetchGamesForETDate(sportKey, etDateStr) {
+async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
   const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
   const dates = [etDateStr, addDaysISO(etDateStr, 1)];
-  const params = { dates, per_page: 100 };
+  const exactNcaafGameIds = sportKey === 'americanfootball_ncaaf'
+    ? [...new Set(
+        (Array.isArray(gameIds) ? gameIds : [])
+          .filter((id) => id !== null && id !== undefined && String(id).trim() !== '')
+          .map(String),
+      )].sort()
+    : [];
+  const params = exactNcaafGameIds.length > 0
+    ? { game_ids: exactNcaafGameIds, per_page: 100 }
+    : { dates, per_page: 100 };
   // BDL's NFL games endpoint defaults away from preseason. August would then
   // look like a dark league even while real games are on the board.
   if (sportKey === 'americanfootball_nfl') params.season_type = [1, 2, 3];
   let games;
   try {
-    games = await ballDontLieService.getGames(sportKey, params);
+    games = await ballDontLieService.getGames(
+      sportKey,
+      params,
+      exactNcaafGameIds.length > 0 ? 0 : 10,
+    );
   } catch (e) {
-    log(`  ❌ ${sportKey}: BDL fetch failed for ${dates.join(',')}: ${e.message}`);
-    return null; // null = fetch FAILED (retryable); [] = genuinely no games
+    const scope = exactNcaafGameIds.length > 0
+      ? `game_ids ${exactNcaafGameIds.join(',')}`
+      : dates.join(',');
+    log(`  ❌ ${sportKey}: BDL fetch failed for ${scope}: ${e.message}`);
+    return null; // null = transport failed; a result object may still carry exact pending IDs
   }
-  if (!Array.isArray(games)) return [];
+  if (!Array.isArray(games)) games = [];
 
-  if (sportKey === 'americanfootball_ncaaf' && games.length > 0) {
-    let classified = classifyNcaafFbsGames(games);
+  const retryGameIds = [];
+  let retryAll = false;
+  if (sportKey === 'americanfootball_ncaaf' && exactNcaafGameIds.length > 0) {
+    const returnedIds = new Set(games
+      .filter((game) => game?.id !== null && game?.id !== undefined)
+      .map((game) => String(game.id)));
+    for (const id of exactNcaafGameIds) {
+      if (!returnedIds.has(id)) retryGameIds.push(id);
+    }
+  }
+  if (sportKey === 'americanfootball_ncaaf') {
+    // The adjacent UTC-date query can include tomorrow's daytime games. Keep
+    // those out before FBS classification so one unrelated row cannot block
+    // today's confirmed slate. Unknown dates remain retryable by exact id.
+    const targetDateGames = games.filter((game) => {
+      const kickoff = resolveNcaafKickoff(game);
+      const slateDate = ncaafSlateDateForKickoff(game);
+      return !kickoff.scheduledDate || slateDate === etDateStr;
+    });
+    let classified = classifyNcaafFbsGames(targetDateGames);
     if (classified.unresolved.length > 0) {
-      const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-      classified = classifyNcaafFbsGames(games, teams);
+      try {
+        const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+        classified = classifyNcaafFbsGames(targetDateGames, teams);
+      } catch (error) {
+        // Embedded provider identity can still verify part of the slate. Keep
+        // those games schedulable and retry only the unresolved exact ids.
+        log(`  ⚠️ ${sportKey}: team-directory lookup failed; retaining verified games and retrying unresolved ids (${error.message})`);
+      }
     }
     if (classified.unresolved.length > 0) {
-      log(`  ❌ ${sportKey}: ${classified.unresolved.length} game(s) lack provider-grounded FBS identity — retrying the sport instead of publishing a partial slate`);
-      return null;
+      for (const game of classified.unresolved) {
+        if (game?.id !== null && game?.id !== undefined) retryGameIds.push(String(game.id));
+        else retryAll = true;
+      }
+      log(`  ⏳ ${sportKey}: ${classified.unresolved.length} game(s) lack provider-grounded FBS identity — confirmed games stay scheduled; unresolved ids retry independently`);
     }
     if (classified.rejected.length > 0) {
       log(`  ⏭️ ${sportKey}: excluded ${classified.rejected.length} non-FBS matchup(s)`);
     }
-    games = classified.accepted;
+    const readiness = partitionNcaafKickoffReadiness(classified.accepted, etDateStr);
+    retryGameIds.push(...readiness.retryGameIds);
+    retryAll ||= readiness.retryAll;
+    for (const { raw, kickoff } of readiness.pending) {
+      const reason = kickoff.scheduledDate ? 'TIME TBD' : 'kickoff date unavailable';
+      log(`  ⏳ ${sportKey} game ${raw?.id}: ${reason} — retrying this exact id without scheduling a deadline`);
+    }
+
+    const seen = new Set();
+    return {
+      games: readiness.confirmed.filter(({ raw }) => {
+        const key = String(raw.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+      retryGameIds: [...new Set(retryGameIds)].sort(),
+      retryAll,
+    };
   }
 
   const filtered = [];
   for (const g of games) {
-    const ncaafKickoff = sportKey === 'americanfootball_ncaaf'
-      ? resolveNcaafKickoff(g)
-      : null;
-    const startIso = ncaafKickoff?.iso ?? extractStartTimeIso(g, sportKey);
+    const startIso = extractStartTimeIso(g, sportKey);
     if (!startIso) {
       log(`  ⚠️ ${sportKey} game ${g.id}: missing start time field — skipping`);
       continue;
@@ -235,23 +303,21 @@ async function fetchGamesForETDate(sportKey, etDateStr) {
       continue;
     }
     if (getETDateStr(start) !== etDateStr) continue;
-    // Date-only NCAAF values are safe for a public-slate placeholder but not
-    // for execution. Never build T-90/T-60/T-30/T-15 jobs from the explicit
-    // 3 PM display estimate. `null` routes this sport through the existing
-    // isolated retry queue while healthy sports keep their own schedules.
-    if (ncaafKickoff?.estimated) {
-      log(`  ❌ ${sportKey} game ${g.id}: exact kickoff not posted — retrying NCAAF instead of scheduling from the display estimate`);
-      return null;
-    }
     filtered.push({ raw: g, startTime: start });
   }
   // Dedupe in case a game appears in both UTC date queries (rare but possible)
   const seen = new Set();
-  return filtered.filter(({ raw }) => {
-    if (seen.has(raw.id)) return false;
-    seen.add(raw.id);
+  const dedupedGames = filtered.filter(({ raw }) => {
+    const key = String(raw.id);
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
+  return {
+    games: dedupedGames,
+    retryGameIds: [...new Set(retryGameIds)].sort(),
+    retryAll,
+  };
 }
 
 function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}) {
@@ -262,6 +328,9 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
     const matchup = `${awayTeam} @ ${homeTeam}`;
     const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
     const tierLabels = [];
+    const slateIdentity = sport.key === 'americanfootball_ncaaf'
+      ? { slateDate: etDateStr }
+      : {};
 
     if (sport.fixedTriggerET) {
       const base = instantForETDate(etDateStr, sport.fixedTriggerET.hour, sport.fixedTriggerET.minute);
@@ -272,7 +341,7 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
           if (i === 0) triggerTime = latest;
           else continue;
         }
-        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin: null });
+        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin: null, ...slateIdentity });
         const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
         tierLabels.push(`fixed=${triggerET}`);
       }
@@ -280,7 +349,7 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
       for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
         const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
         const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
-        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin });
+        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin, ...slateIdentity });
         const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
         tierLabels.push(`T${leadMin}=${triggerET}`);
       }
@@ -302,22 +371,32 @@ async function buildPlan(etDateStr) {
   let fetchFailed = false; // true if ANY sport's fetch threw (vs. empty slate)
 
   for (const sport of SPORTS) {
-    const games = await fetchGamesForETDate(sport.key, etDateStr);
-    if (games === null) {
+    const result = await fetchGamesForETDate(sport.key, etDateStr);
+    if (result === null) {
       const retry = makeSportFetchRetryEntry({ sport, dateStr: etDateStr, attempt: 1 });
       schedule.push(retry);
       log(`  ${sport.label}: fetch FAILED — queued an isolated retry in 1m; healthy sports continue`);
       fetchFailed = true;
       continue;
     }
+    const { games, retryGameIds, retryAll } = result;
     if (games.length === 0) {
-      log(`  ${sport.label}: No games`);
-      continue;
+      log(`  ${sport.label}: ${retryAll || retryGameIds.length > 0 ? 'No confirmed kickoff times yet' : 'No games'}`);
+    } else {
+      log(`  ${sport.label}: ${games.length} games`);
+      schedule.push(...scheduleGamesForSport(sport, games, etDateStr));
     }
 
-    log(`  ${sport.label}: ${games.length} games`);
-
-    schedule.push(...scheduleGamesForSport(sport, games, etDateStr));
+    if (retryAll || retryGameIds.length > 0) {
+      schedule.push(makeSportFetchRetryEntry({
+        sport,
+        dateStr: etDateStr,
+        attempt: 1,
+        gameIds: retryAll ? [] : retryGameIds,
+      }));
+      const scope = retryAll ? 'the unresolved slate' : `${retryGameIds.length} exact game id(s)`;
+      log(`  ${sport.label}: ${scope} queued for isolated kickoff/identity retry; confirmed games remain armed`);
+    }
   }
 
   schedule.sort((a, b) => a.triggerTime - b.triggerTime);
@@ -423,6 +502,49 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
     log(`🔁 Empty plan from fetch failures — retry in ${Math.round(backoff / 60000)}m (attempt ${attempt})`);
     await sleepUntilWallClock(new Date(Date.now() + backoff));
   }
+}
+
+/**
+ * A daemon restart between midnight and 6 AM ET must not abandon a late NCAAF
+ * game that still belongs to yesterday's Gary slate. Build today's normal
+ * all-sport plan first, then add only the still-active prior NCAAF slate. No
+ * other league's date contract changes.
+ */
+async function addActiveNcaafRecovery(schedule, now = new Date()) {
+  const slateDate = activeNcaafRecoverySlateDate(now);
+  if (!slateDate) return schedule;
+
+  const sport = SPORTS.find((candidate) => candidate.key === 'americanfootball_ncaaf');
+  if (!sport) return schedule;
+  log(`🏈 NCAAF overnight recovery: checking active ${slateDate} slate before the 6:00 AM ET rollover`);
+
+  const result = await fetchGamesForETDate(sport.key, slateDate);
+  const recovery = [];
+  if (result === null) {
+    recovery.push(makeSportFetchRetryEntry({ sport, dateStr: slateDate, attempt: 1, now }));
+  } else {
+    const upcomingGames = result.games.filter(({ startTime }) => startTime.getTime() > now.getTime());
+    recovery.push(...scheduleGamesForSport(sport, upcomingGames, slateDate));
+    if (result.retryAll || result.retryGameIds.length > 0) {
+      recovery.push(makeSportFetchRetryEntry({
+        sport,
+        dateStr: slateDate,
+        attempt: 1,
+        now,
+        gameIds: result.retryAll ? [] : result.retryGameIds,
+      }));
+    }
+  }
+
+  const fresh = newScheduleEntries(schedule, recovery);
+  if (fresh.length === 0) return schedule;
+  log(`🏈 NCAAF overnight recovery armed ${fresh.length} prior-slate trigger/retry entr${fresh.length === 1 ? 'y' : 'ies'}`);
+  return [...schedule, ...fresh].sort((a, b) => a.triggerTime - b.triggerTime);
+}
+
+async function buildCurrentPlanResilient(dateStr = getTodayETDateStr()) {
+  const schedule = await buildPlanResilient(dateStr);
+  return addActiveNcaafRecovery(schedule);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -630,6 +752,96 @@ function startMlbDriftGuard(schedule) {
   log(`🕐 Drift guard armed: re-checking ${mlbPrimaries.length} MLB start time(s) vs statsapi every ${DRIFT_CHECK_INTERVAL_MS / 60000} min`);
 }
 
+// NCAAF providers can replace a confirmed morning kickoff with a different
+// exact instant later in the day. Re-fetch only exact still-pending ids, at a
+// bounded cadence and batch size, then move only their unfired tiers. A
+// date-only response is never converted into an execution clock.
+const NCAAF_KICKOFF_CHECK_INTERVAL_MS = 10 * 60 * 1000;
+const NCAAF_KICKOFF_MIN_DELTA_MS = 60 * 1000;
+const NCAAF_KICKOFF_MAX_GAMES = 100;
+let activeNcaafKickoffTimer = null;
+
+function startNcaafKickoffGuard(getPendingEntries) {
+  // The existing getter already observes the lane's live queue, including
+  // later exact-id recoveries. Do not reset an active async interval and risk
+  // overlapping the in-flight refresh with a second timer.
+  if (activeNcaafKickoffTimer) return;
+  const initial = pendingNcaafKickoffRefreshEntries(
+    getPendingEntries(),
+    Date.now(),
+    NCAAF_KICKOFF_MAX_GAMES,
+  );
+  if (initial.length === 0) return;
+
+  let checking = false;
+  const fmtET = (date) => date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  activeNcaafKickoffTimer = setInterval(async () => {
+    if (checking) return;
+    checking = true;
+    try {
+      const pending = pendingNcaafKickoffRefreshEntries(
+        getPendingEntries(),
+        Date.now(),
+        NCAAF_KICKOFF_MAX_GAMES,
+      );
+      if (pending.length === 0) return;
+
+      const pendingBySlate = new Map();
+      for (const entry of pending) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(entry.slateDate || ''))) {
+          throw new Error(`NCAAF kickoff refresh entry ${entry.gameId} has no canonical slate date`);
+        }
+        if (!pendingBySlate.has(entry.slateDate)) pendingBySlate.set(entry.slateDate, []);
+        pendingBySlate.get(entry.slateDate).push(entry);
+      }
+
+      for (const [slateDate, slateEntries] of pendingBySlate) {
+        const gameIds = slateEntries.map((entry) => String(entry.gameId));
+        const result = await fetchGamesForETDate(
+          'americanfootball_ncaaf',
+          slateDate,
+          { gameIds },
+        );
+        if (result === null) throw new Error(`exact BDL kickoff refresh failed for ${slateDate}`);
+        const confirmedById = new Map(result.games.map(({ raw, startTime }) => [
+          String(raw.id),
+          startTime,
+        ]));
+
+        for (const entry of slateEntries) {
+          const nextStart = confirmedById.get(String(entry.gameId));
+          if (!nextStart) {
+            if (result.retryGameIds.includes(String(entry.gameId))) {
+              log(`⏳ NCAAF kickoff refresh: ${entry.matchup} is TIME TBD; keeping the last confirmed clock until an exact instant returns (id ${entry.gameId})`);
+            }
+            continue;
+          }
+          const deltaMs = nextStart.getTime() - entry.startTime.getTime();
+          if (Math.abs(deltaMs) < NCAAF_KICKOFF_MIN_DELTA_MS) continue;
+          const previousStart = new Date(entry.startTime);
+          const livePending = getPendingEntries();
+          const changed = reanchorGameSchedule(livePending, entry, nextStart);
+          if (changed === 0) continue;
+          log(`🏈 NCAAF KICKOFF MOVED: ${entry.matchup} — ${fmtET(previousStart)} ET → ${fmtET(nextStart)} ET (${Math.round(deltaMs / 60000)} min)`);
+          log(`🧭 NCAAF RE-ANCHORED: ${entry.matchup} — ${changed} remaining tier(s) now follow exact game id ${entry.gameId}`);
+        }
+      }
+    } catch (error) {
+      log(`⚠️ NCAAF kickoff refresh failed (non-fatal, next tick retries): ${error.message}`);
+    } finally {
+      checking = false;
+    }
+  }, NCAAF_KICKOFF_CHECK_INTERVAL_MS);
+  activeNcaafKickoffTimer.unref?.();
+  log(`🏈 NCAAF kickoff guard armed: re-checking up to ${NCAAF_KICKOFF_MAX_GAMES} exact pending id(s) every ${NCAAF_KICKOFF_CHECK_INTERVAL_MS / 60000} min`);
+}
+
 async function executeSchedule(schedule) {
   if (schedule.length === 0) {
     log('No games scheduled — nothing to run.');
@@ -638,11 +850,15 @@ async function executeSchedule(schedule) {
   await runIndependentScheduleLanes(schedule, async (laneSchedule, laneKey) => {
     await executeDecisionLaneSchedule(laneSchedule, {
       ownsMlbDriftGuard: laneOwnsMlbDriftGuard(laneKey, laneSchedule),
+      ownsNcaafKickoffGuard: laneKey === 'americanfootball_ncaaf',
     });
   });
 }
 
-async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false } = {}) {
+async function executeDecisionLaneSchedule(schedule, {
+  ownsMlbDriftGuard = false,
+  ownsNcaafKickoffGuard = false,
+} = {}) {
   if (schedule.length === 0) {
     log('No games scheduled — nothing to run.');
     return;
@@ -654,6 +870,7 @@ async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false
   // anchored 15-minute batch from current truth. A moved-later game no longer
   // burns all four retries against its stale morning start time.
   let pendingEntries = [...schedule];
+  if (ownsNcaafKickoffGuard) startNcaafKickoffGuard(() => pendingEntries);
   log(`\n📦 Dynamic trigger queue armed for ${schedule.length} entries`);
 
   // Coverage tracking. A game is a confirmed MISS once its FINAL retry tier has
@@ -717,17 +934,23 @@ async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false
     const fetchRetries = batch.filter(isSportFetchRetryEntry);
     batch = batch.filter((entry) => !isSportFetchRetryEntry(entry));
     for (const retry of fetchRetries) {
-      if (getTodayETDateStr() !== retry.dateStr) {
+      if (!sportFetchRetryIsCurrent(retry, Date.now())) {
         log(`⏭️ ${retry.sport.label} fetch retry expired at the ET day boundary (${retry.dateStr})`);
         continue;
       }
-      log(`🔁 ${retry.sport.label} isolated slate retry ${retry.attempt} for ${retry.dateStr}`);
-      const games = await fetchGamesForETDate(retry.sport.key, retry.dateStr);
-      if (games === null) {
+      const exactScope = Array.isArray(retry.gameIds) && retry.gameIds.length > 0
+        ? ` exact id(s) ${retry.gameIds.join(',')}`
+        : ' slate';
+      log(`🔁 ${retry.sport.label} isolated${exactScope} retry ${retry.attempt} for ${retry.dateStr}`);
+      const result = await fetchGamesForETDate(retry.sport.key, retry.dateStr, {
+        gameIds: retry.gameIds,
+      });
+      if (result === null) {
         const nextRetry = makeSportFetchRetryEntry({
           sport: retry.sport,
           dateStr: retry.dateStr,
           attempt: retry.attempt + 1,
+          gameIds: retry.gameIds,
         });
         pendingEntries.push(nextRetry);
         const waitMin = Math.round((nextRetry.triggerTime.getTime() - Date.now()) / 60_000);
@@ -735,15 +958,36 @@ async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false
         continue;
       }
 
+      const { games, retryGameIds, retryAll } = result;
+      if (retryAll || retryGameIds.length > 0) {
+        const nextRetry = makeSportFetchRetryEntry({
+          sport: retry.sport,
+          dateStr: retry.dateStr,
+          attempt: retry.attempt + 1,
+          gameIds: retryAll ? [] : retryGameIds,
+        });
+        pendingEntries.push(nextRetry);
+        const waitMin = Math.round((nextRetry.triggerTime.getTime() - Date.now()) / 60_000);
+        const scope = retryAll ? 'unresolved slate' : `${retryGameIds.length} exact id(s)`;
+        log(`  ⏳ ${retry.sport.label}: ${scope} still pending — next isolated retry in ${waitMin}m`);
+      }
+
       const upcomingGames = games.filter(({ startTime }) => startTime.getTime() > Date.now());
-      const recovered = scheduleGamesForSport(retry.sport, upcomingGames, retry.dateStr);
+      const candidates = scheduleGamesForSport(retry.sport, upcomingGames, retry.dateStr);
+      const recovered = newScheduleEntries(schedule, candidates);
       pendingEntries.push(...recovered);
       schedule.push(...recovered);
       for (const entry of recovered) uniqueGameIds.add(scheduleEntryKey(entry));
       if (ownsMlbDriftGuard && retry.sport.key === 'baseball_mlb' && recovered.length > 0) {
         startMlbDriftGuard(schedule);
       }
+      if (ownsNcaafKickoffGuard && recovered.length > 0) {
+        startNcaafKickoffGuard(() => pendingEntries);
+      }
       log(`  ✅ ${retry.sport.label} recovered: ${upcomingGames.length} upcoming game(s), ${recovered.length} trigger tier(s) inserted`);
+      if (candidates.length > recovered.length) {
+        log(`  ⏭️ ${retry.sport.label}: ${candidates.length - recovered.length} duplicate game tier(s) already existed and were not reinserted`);
+      }
       if (games.length > upcomingGames.length) {
         log(`  ⏭️ ${retry.sport.label}: ${games.length - upcomingGames.length} already-started game(s) were not backfilled`);
       }
@@ -824,7 +1068,7 @@ async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false
         // Exact BDL id only — never a matchup substring (doubleheader-safe).
         const output = await runScript(
           'scripts/run-agentic-picks.js',
-          [sport.flag, '--game-id', String(entry.gameId)],
+          schedulerChildArgs(entry, [sport.flag, '--game-id', String(entry.gameId)]),
           childBudget,
         );
         const outcome = parsePickRunOutcome(output);
@@ -884,7 +1128,7 @@ async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false
         });
         const output = await runScript(
           `scripts/${sport.propsScript}`,
-          ['--game-id', String(entry.gameId)],
+          schedulerChildArgs(entry, ['--game-id', String(entry.gameId)]),
           childBudget,
         );
         const outcome = parsePropRunOutcome(output);
@@ -987,7 +1231,9 @@ async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false
       if (coverageCheckedGames.has(gameKey)) continue;
       coverageCheckedGames.add(gameKey);
       if (typeof gameAlreadyHasPick === 'function') {
-        const etDate = entry.startTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const etDate = entry.sport.key === 'americanfootball_ncaaf'
+          ? entry.slateDate
+          : entry.startTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
         try {
           const res = entry.sport.label === 'NFL' && typeof nflGameAlreadyHasPick === 'function'
             ? await nflGameAlreadyHasPick(entry.homeTeam, entry.awayTeam, entry.startTime, entry.gameId)
@@ -1025,6 +1271,10 @@ async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false
   if (ownsMlbDriftGuard && activeDriftTimer) {
     clearInterval(activeDriftTimer);
     activeDriftTimer = null;
+  }
+  if (ownsNcaafKickoffGuard && activeNcaafKickoffTimer) {
+    clearInterval(activeNcaafKickoffTimer);
+    activeNcaafKickoffTimer = null;
   }
 
   log('\n🏁 All games complete for today.');
@@ -1130,7 +1380,9 @@ async function main() {
 
   if (args.includes('--now')) {
     log('🚀 Running all sports NOW');
-    const { schedule } = await buildPlan(getTodayETDateStr());
+    const schedule = await addActiveNcaafRecovery(
+      (await buildPlan(getTodayETDateStr())).schedule,
+    );
     for (const entry of schedule) entry.triggerTime = new Date();
     await executeSchedule(schedule);
     return;
@@ -1138,7 +1390,8 @@ async function main() {
 
   if (args.includes('--plan')) {
     const dateStr = args.includes('--today') ? getTodayETDateStr() : getTomorrowETDateStr();
-    await buildPlan(dateStr);
+    const { schedule } = await buildPlan(dateStr);
+    if (args.includes('--today')) await addActiveNcaafRecovery(schedule);
     return;
   }
 
@@ -1167,7 +1420,7 @@ async function main() {
   log(`Sports: ${SPORTS.map(s => s.label).join(', ')}`);
 
   // Check today first
-  const todaySchedule = await buildPlanResilient(getTodayETDateStr());
+  const todaySchedule = await buildCurrentPlanResilient(getTodayETDateStr());
   // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
   // even if the 90-min lead window has already passed (picks just trigger immediately).
   const upcoming = todaySchedule.filter(e => isSportFetchRetryEntry(e) || e.startTime > new Date());
@@ -1188,7 +1441,7 @@ async function main() {
     const wakeDate = getTodayETDateStr();
     if (lastPlannedDate !== null && wakeDate !== lastPlannedDate) {
       log(`\n⚡ ${wakeDate} was never planned (execution slept across the day boundary) — building it now`);
-      const recovered = await buildPlanResilient(wakeDate);
+      const recovered = await buildCurrentPlanResilient(wakeDate);
       const stillUpcoming = recovered.filter(e => isSportFetchRetryEntry(e) || e.startTime > new Date());
       if (stillUpcoming.length > 0) {
         log(`⚡ ${stillUpcoming.length} game(s) still upcoming today — running`);
@@ -1201,7 +1454,7 @@ async function main() {
 
     const planDateBefore = getTodayETDateStr();
     await sleepUntilPlanTime();
-    const schedule = await buildPlanResilient(getTodayETDateStr());
+    const schedule = await buildCurrentPlanResilient(getTodayETDateStr());
     await executeSchedule(schedule);
 
     // If execution ran past midnight into a new ET day, immediately build
@@ -1209,7 +1462,7 @@ async function main() {
     let currentDate = getTodayETDateStr();
     while (currentDate !== planDateBefore && currentDate !== getTomorrowETDateStr()) {
       log(`\n⚡ Execution spanned into ${currentDate} — building today's plan immediately`);
-      const todaySchedule = await buildPlanResilient(currentDate);
+      const todaySchedule = await buildCurrentPlanResilient(currentDate);
       // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
   // even if the 90-min lead window has already passed (picks just trigger immediately).
   const upcoming = todaySchedule.filter(e => isSportFetchRetryEntry(e) || e.startTime > new Date());

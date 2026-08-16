@@ -4,6 +4,7 @@
  */
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
+import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
 
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
@@ -300,7 +301,7 @@ const computeWindow = (sport) => {
  *   3. DEDUPE: same feed id, or same matchup at the same start time, prints
  *      once. Real doubleheaders differ by start time and both survive.
  */
-export function filterSlateGames(games, dates, now = Date.now()) {
+export function filterSlateGames(games, dates, now = Date.now(), sport = null) {
   const seenIds = new Set();
   const seenSlots = new Set();
   const out = [];
@@ -309,6 +310,9 @@ export function filterSlateGames(games, dates, now = Date.now()) {
     if (seenIds.has(g.id)) continue;
     seenIds.add(g.id);
     const raw = g.commence_time != null ? String(g.commence_time) : '';
+    const scheduledDate = /^\d{4}-\d{2}-\d{2}$/.test(String(g.scheduled_date || ''))
+      ? String(g.scheduled_date)
+      : null;
     let etDate = null;
     let startMs = null;
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
@@ -316,13 +320,16 @@ export function filterSlateGames(games, dates, now = Date.now()) {
     } else if (raw) {
       const d = new Date(raw);
       if (!Number.isNaN(d.getTime())) {
-        etDate = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        etDate = sport === 'americanfootball_ncaaf'
+          ? ncaafSlateDateForInstant(d)
+          : d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
         startMs = d.getTime();
       }
     }
+    etDate ??= scheduledDate;
     if (etDate && Array.isArray(dates) && dates.length && !dates.includes(etDate)) continue;
     if (startMs != null && now - startMs > 6 * 60 * 60 * 1000) continue;
-    const slot = `${String(g.away_team || '').toLowerCase()}@${String(g.home_team || '').toLowerCase()}|${raw || g.id}`;
+    const slot = `${String(g.away_team || '').toLowerCase()}@${String(g.home_team || '').toLowerCase()}|${raw || scheduledDate || g.id}`;
     if (seenSlots.has(slot)) continue;
     seenSlots.add(slot);
     out.push(g);
@@ -434,7 +441,7 @@ export const oddsService = {
       // Aug 10 — the frozen -10000 Astros@Padres corpse and duplicate
       // matchup rows survived to the raw list; downstream nets caught them,
       // but the ET-date law belongs here).
-      const unique = filterSlateGames(combined, dates);
+      const unique = filterSlateGames(combined, dates, Date.now(), sport);
 
       console.log(`[Odds Service] ${sport}: Found ${unique.length} games for today`)
 

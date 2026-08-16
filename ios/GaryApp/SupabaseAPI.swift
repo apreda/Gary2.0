@@ -469,8 +469,10 @@ enum SupabaseAPI {
 
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchDailyPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[SupabaseAPI] fetchDailyPicks failed: HTTP \(status)")
+            throw NSError(domain: "SupabaseAPI.fetchDailyPicks", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: "Daily picks returned HTTP \(status)"])
         }
 
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
@@ -742,7 +744,7 @@ enum SupabaseAPI {
 
     static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool = false) async -> DailySlateFetch {
         let url = buildURL(table: "daily_slate", query: [
-            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,bdl_game_id,venue,spread,ml_home,ml_away,total"),
+            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,scheduled_date,kickoff_status,bdl_game_id,venue,spread,ml_home,ml_away,total"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "commence_time.asc")
         ])
@@ -1115,9 +1117,9 @@ enum SupabaseAPI {
     }
 
     /// Fetch hub connections for a specific date + league (e.g. "MLB" / "NBA").
-    /// Mirrors `fetchDailyPicks`: anon headers, dual `eq.` filter, 2xx guard
-    /// returning [] (never throws on HTTP/decode failure). Returns [] when
-    /// nothing exists; the hub renders an honest empty state.
+    /// Returns [] only for a successful, genuinely empty league. Transport,
+    /// HTTP, and top-level schema failures throw so callers can preserve the
+    /// last good board and render a retry state instead of a false dark day.
     static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
         let url = buildURL(table: "insight_connections", query: [
             URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,team_id,game_id,meta,result,result_note"),
@@ -1128,8 +1130,13 @@ enum SupabaseAPI {
 
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchInsightConnections failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[SupabaseAPI] fetchInsightConnections failed: HTTP \(status)")
+            throw NSError(
+                domain: "SupabaseAPI.fetchInsightConnections",
+                code: status,
+                userInfo: [NSLocalizedDescriptionKey: "Insight feed returned HTTP \(status)"]
+            )
         }
         do {
             // Flat table, decoded row-by-row: one malformed row (e.g. a future
@@ -1142,14 +1149,22 @@ enum SupabaseAPI {
             // Defense in depth: when the WC feature is off, drop every World Cup
             // row (and short-circuit the `league: "WC"` iteration the Hub/Home make)
             // so no WC edge, tournament lane, or game-intel signal can surface.
-            let conns = rows.compactMap { $0.value }.filter { !AppFlags.hidesWorldCupRow($0.league) }
+            let decoded = rows.compactMap { $0.value }
+            if !rows.isEmpty && decoded.isEmpty {
+                throw NSError(
+                    domain: "SupabaseAPI.fetchInsightConnections",
+                    code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "Every insight row failed to decode"]
+                )
+            }
+            let conns = decoded.filter { !AppFlags.hidesWorldCupRow($0.league) }
             if conns.count != rows.count {
                 print("[SupabaseAPI] fetchInsightConnections(\(league)): dropped \(rows.count - conns.count) undecodable/filtered row(s)")
             }
             return conns
         } catch {
             print("[SupabaseAPI] fetchInsightConnections decode error: \(error.localizedDescription)")
-            return []
+            throw error
         }
     }
 
@@ -1200,8 +1215,10 @@ enum SupabaseAPI {
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchWeeklyNFLPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[SupabaseAPI] fetchWeeklyNFLPicks failed: HTTP \(status)")
+            throw NSError(domain: "SupabaseAPI.fetchWeeklyNFLPicks", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: "NFL picks returned HTTP \(status)"])
         }
 
         let rows = try JSONDecoder().decode([WeeklyNFLPicksRow].self, from: data)
@@ -1228,7 +1245,9 @@ enum SupabaseAPI {
 
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            return []
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw NSError(domain: "SupabaseAPI.fetchUpcomingNCAABPicks", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: "Upcoming NCAAB picks returned HTTP \(status)"])
         }
 
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
@@ -1260,14 +1279,23 @@ enum SupabaseAPI {
         async let dailyTask = fetchDailyPicks(date: date)
         async let nflTask = fetchWeeklyNFLPicks(for: date)
 
-        let dailyPicks = (try? await dailyTask) ?? []
-        let nflPicks = (try? await nflTask) ?? []
+        var dailyPicks: [GaryPick] = []
+        var nflPicks: [GaryPick] = []
+        var failures = 0
+        do { dailyPicks = try await dailyTask } catch { failures += 1 }
+        do { nflPicks = try await nflTask } catch { failures += 1 }
 
         guard !Task.isCancelled else { throw CancellationError() }
 
         // Weekly storage is canonical for NFL. Excluding legacy daily NFL rows
         // prevents one card from appearing twice on historical surfaces.
         let result = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" } + nflPicks
+        guard failures == 0 else {
+            throw NSError(domain: "SupabaseAPI.fetchExactDatePicks", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "One or more pick sources failed"])
+        }
+        // A multi-table read is complete or it throws. Callers retain their
+        // last-good board instead of mistaking a partial response for an empty league.
         await APICache.shared.set(cacheKey, value: result)
         return result
     }
@@ -1287,9 +1315,13 @@ enum SupabaseAPI {
         async let nflTask = fetchWeeklyNFLPicks(for: date)
         async let ncaabUpcomingTask = fetchUpcomingNCAABPicks(afterDate: date)
 
-        let dailyPicks = (try? await dailyTask) ?? []
-        let nflPicks = (try? await nflTask) ?? []
-        let ncaabUpcoming = (try? await ncaabUpcomingTask) ?? []
+        var dailyPicks: [GaryPick] = []
+        var nflPicks: [GaryPick] = []
+        var ncaabUpcoming: [GaryPick] = []
+        var failures = 0
+        do { dailyPicks = try await dailyTask } catch { failures += 1 }
+        do { nflPicks = try await nflTask } catch { failures += 1 }
+        do { ncaabUpcoming = try await ncaabUpcomingTask } catch { failures += 1 }
 
         // A SwiftUI preload can be cancelled while the user changes tabs. Do
         // not turn that cancellation into a successful empty response and
@@ -1301,7 +1333,12 @@ enum SupabaseAPI {
 
         let result = nonNFLPicks + nflPicks + ncaabUpcoming
 
-        // Store in cache
+        guard failures == 0 else {
+            throw NSError(domain: "SupabaseAPI.fetchAllPicks", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "One or more pick sources failed"])
+        }
+        // A combined board is complete or it throws. League-scoped callers that
+        // need partial progress fetch each source independently and preserve it.
         await APICache.shared.set(cacheKey, value: result)
 
         return result
@@ -1328,14 +1365,17 @@ enum SupabaseAPI {
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
 
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchPropPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[SupabaseAPI] fetchPropPicks failed: HTTP \(status)")
+            throw NSError(domain: "SupabaseAPI.fetchPropPicks", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: "Prop picks returned HTTP \(status)"])
         }
 
         // Parse as array of dictionaries
         guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             print("[SupabaseAPI] fetchPropPicks: failed to parse JSON")
-            return []
+            throw NSError(domain: "SupabaseAPI.fetchPropPicks", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "Prop picks payload could not be decoded"])
         }
 
         var allPicks: [PropPick] = []

@@ -1,3 +1,10 @@
+import {
+  NCAAF_KICKOFF_STATUS,
+  ncaafSlateDateForInstant,
+  ncaafSlateDateForKickoff,
+  resolveNcaafKickoff,
+} from '../../src/services/ncaafGamePolicy.js';
+
 const DEFAULT_BATCH_WINDOW_MS = 15 * 60 * 1000;
 const SPORT_FETCH_RETRY_MAX_MS = 20 * 60 * 1000;
 const DEFAULT_CHILD_MAX_RUNTIME_MS = 45 * 60 * 1000;
@@ -9,11 +16,76 @@ function asMillis(value) {
   return new Date(value).getTime();
 }
 
+function etCalendarDate(value) {
+  const clock = asMillis(value);
+  if (!Number.isFinite(clock)) return null;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(clock));
+}
+
+/**
+ * Scheduler date ownership differs only for NCAAF's overnight window. Every
+ * other sport keeps the existing ET calendar-day contract unchanged.
+ */
+export function schedulerSlateDateForSport(sportKey, value = Date.now()) {
+  return sportKey === 'americanfootball_ncaaf'
+    ? ncaafSlateDateForInstant(value)
+    : etCalendarDate(value);
+}
+
+/** A prior NCAAF slate is still active only from midnight through 5:59:59 ET. */
+export function activeNcaafRecoverySlateDate(value = Date.now()) {
+  const calendarDate = etCalendarDate(value);
+  const slateDate = ncaafSlateDateForInstant(value);
+  return calendarDate && slateDate && calendarDate !== slateDate ? slateDate : null;
+}
+
+/** Keep retry entries alive through the owning sport's actual slate boundary. */
+export function sportFetchRetryIsCurrent(entry, now = Date.now()) {
+  if (!isSportFetchRetryEntry(entry)) return false;
+  if (entry?.sport?.key !== 'americanfootball_ncaaf') {
+    return schedulerSlateDateForSport(entry?.sport?.key, now) === entry.dateStr;
+  }
+  // The 5 AM build intentionally arms the upcoming calendar-day college slate
+  // before Gary's display rolls at 6. During that one-hour overlap, both the
+  // still-active prior slate and the already-planned next slate may retry.
+  return new Set([
+    schedulerSlateDateForSport(entry.sport.key, now),
+    etCalendarDate(now),
+  ]).has(entry.dateStr);
+}
+
+/**
+ * Carry the stable NCAAF slate key into exact child processes. Missing slate
+ * identity fails closed instead of letting a post-midnight child write into a
+ * different day's row. Other sports receive their historical arguments.
+ */
+export function schedulerChildArgs(entry, args = []) {
+  const result = [...args];
+  if (entry?.sport?.key !== 'americanfootball_ncaaf') return result;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(entry?.slateDate || ''))) {
+    throw new TypeError('NCAAF scheduler entry requires a canonical slateDate');
+  }
+  return [...result, '--date', entry.slateDate];
+}
+
 export function scheduleEntryKey(entry) {
   if (entry?.kind === 'sport_fetch_retry') {
-    return `fetch:${entry?.sport?.key || 'unknown'}:${entry?.dateStr || 'unknown'}`;
+    const gameIds = Array.isArray(entry?.gameIds) ? entry.gameIds : [];
+    const base = `fetch:${entry?.sport?.key || 'unknown'}:${entry?.dateStr || 'unknown'}`;
+    return gameIds.length > 0 ? `${base}:${gameIds.map(String).sort().join(',')}` : base;
   }
   return `${entry?.sport?.key || entry?.sport?.label || 'unknown'}:${entry?.gameId ?? 'unknown'}`;
+}
+
+export function scheduleTierKey(entry) {
+  if (isSportFetchRetryEntry(entry)) return scheduleEntryKey(entry);
+  const tier = entry?.tier ?? (entry?.leadMin == null ? 'fixed' : `lead-${entry.leadMin}`);
+  return `${scheduleEntryKey(entry)}:tier-${tier}`;
 }
 
 export function sportFetchRetryDelayMs(attempt = 1) {
@@ -21,17 +93,29 @@ export function sportFetchRetryDelayMs(attempt = 1) {
   return Math.min(SPORT_FETCH_RETRY_MAX_MS, 60_000 * (2 ** (normalized - 1)));
 }
 
-export function makeSportFetchRetryEntry({ sport, dateStr, attempt = 1, now = Date.now() }) {
+export function makeSportFetchRetryEntry({
+  sport,
+  dateStr,
+  attempt = 1,
+  now = Date.now(),
+  gameIds = [],
+}) {
   const clock = asMillis(now);
   if (!sport?.key || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || '')) || !Number.isFinite(clock)) {
     throw new TypeError('makeSportFetchRetryEntry requires sport.key, an ET date, and a valid clock');
   }
   const normalizedAttempt = Math.max(1, Math.trunc(Number(attempt)) || 1);
+  const normalizedGameIds = [...new Set(
+    (Array.isArray(gameIds) ? gameIds : [])
+      .filter((id) => id !== null && id !== undefined && String(id).trim() !== '')
+      .map(String),
+  )].sort();
   return {
     kind: 'sport_fetch_retry',
     sport,
     dateStr,
     attempt: normalizedAttempt,
+    ...(normalizedGameIds.length > 0 ? { gameIds: normalizedGameIds } : {}),
     triggerTime: new Date(clock + sportFetchRetryDelayMs(normalizedAttempt)),
   };
 }
@@ -65,6 +149,102 @@ export function partitionStartedEntries(entries, now = Date.now()) {
     (gameHasStarted(entry, now) ? stale : runnable).push(entry);
   }
   return { runnable, stale };
+}
+
+/**
+ * Convert only provider-confirmed NCAAF instants into execution clocks.
+ * Date-only/unknown values remain public-slate data and return as exact-id
+ * retry candidates; they never receive a guessed kickoff.
+ */
+export function partitionNcaafKickoffReadiness(games = [], etDateStr) {
+  const confirmed = [];
+  const pending = [];
+  const outsideDate = [];
+  let retryAll = false;
+
+  for (const game of games || []) {
+    const kickoff = resolveNcaafKickoff(game);
+    const slateDate = ncaafSlateDateForKickoff(game);
+    if (slateDate && slateDate !== etDateStr) {
+      outsideDate.push(game);
+      continue;
+    }
+
+    const exactStart = kickoff.status === NCAAF_KICKOFF_STATUS.CONFIRMED && kickoff.iso
+      ? new Date(kickoff.iso)
+      : null;
+    if (exactStart && !Number.isNaN(exactStart.getTime())) {
+      confirmed.push({ raw: game, startTime: exactStart });
+      continue;
+    }
+
+    pending.push({ raw: game, kickoff });
+    if (game?.id === null || game?.id === undefined || String(game.id).trim() === '') {
+      retryAll = true;
+    }
+  }
+
+  return {
+    confirmed,
+    pending,
+    outsideDate,
+    retryAll,
+    retryGameIds: [...new Set(
+      pending
+        .map(({ raw }) => raw?.id)
+        .filter((id) => id !== null && id !== undefined && String(id).trim() !== '')
+        .map(String),
+    )].sort(),
+  };
+}
+
+/**
+ * Merge recovered game tiers without replaying a game/tier already present in
+ * the day's schedule. `existingEntries` deliberately includes fired entries:
+ * an exact-game retry that returns the same confirmed game must not recreate
+ * earlier tiers after they have already run.
+ */
+export function newScheduleEntries(existingEntries = [], candidateEntries = []) {
+  const seen = new Set((existingEntries || []).map(scheduleTierKey));
+  const fresh = [];
+  for (const entry of candidateEntries || []) {
+    const key = scheduleTierKey(entry);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fresh.push(entry);
+  }
+  return fresh;
+}
+
+/**
+ * Select one still-pending NCAAF tier per exact provider game id for the
+ * periodic kickoff refresh. This stays bounded and excludes fetch retries,
+ * other sports, invalid clocks, and games that have already started.
+ */
+export function pendingNcaafKickoffRefreshEntries(
+  entries = [],
+  now = Date.now(),
+  maxGames = 100,
+) {
+  const clock = asMillis(now);
+  const limit = Math.max(0, Math.trunc(Number(maxGames)) || 0);
+  if (!Number.isFinite(clock) || limit === 0) return [];
+
+  const seen = new Set();
+  const selected = [];
+  for (const entry of entries || []) {
+    if (isSportFetchRetryEntry(entry)) continue;
+    if (entry?.sport?.key !== 'americanfootball_ncaaf') continue;
+    if (entry?.gameId === null || entry?.gameId === undefined) continue;
+    const start = asMillis(entry?.startTime);
+    if (!Number.isFinite(start) || start <= clock) continue;
+    const key = scheduleEntryKey(entry);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    selected.push(entry);
+    if (selected.length >= limit) break;
+  }
+  return selected;
 }
 
 /**

@@ -171,6 +171,7 @@ function mergeCandidates(rushingRows, receivingRows, slateTeamIds) {
       player: row.player,
       player_id: pid,
       team_id: tid,
+      role,
       rush_attempts: 0,
       targets: 0,
     };
@@ -181,17 +182,41 @@ function mergeCandidates(rushingRows, receivingRows, slateTeamIds) {
   for (const row of Array.isArray(rushingRows) ? rushingRows : []) ingest(row, 'rush');
   for (const row of Array.isArray(receivingRows) ? receivingRows : []) ingest(row, 'receive');
 
+  const pools = {
+    RB: [...byPlayer.values()]
+      .filter((row) => row.role === 'RB')
+      .sort((a, b) => (b.rush_attempts + b.targets) - (a.rush_attempts + a.targets)),
+    RECEIVER: [...byPlayer.values()]
+      .filter((row) => row.role === 'RECEIVER')
+      .sort((a, b) => b.targets - a.targets),
+  };
   const teamCounts = new Map();
-  return [...byPlayer.values()]
-    .sort((a, b) => (b.rush_attempts + b.targets) - (a.rush_attempts + a.targets))
-    .filter((row) => {
-      const key = String(row.team_id);
-      const count = teamCounts.get(key) || 0;
-      if (count >= MAX_PER_TEAM) return false;
-      teamCounts.set(key, count + 1);
-      return true;
-    })
-    .slice(0, MAX_CANDIDATES);
+  const chosen = [];
+  const chosenIds = new Set();
+
+  const takeNext = (role) => {
+    const row = pools[role].find((candidate) => {
+      if (chosenIds.has(String(candidate.player_id))) return false;
+      return (teamCounts.get(String(candidate.team_id)) || 0) < MAX_PER_TEAM;
+    });
+    if (!row) return false;
+    chosen.push(row);
+    chosenIds.add(String(row.player_id));
+    const teamKey = String(row.team_id);
+    teamCounts.set(teamKey, (teamCounts.get(teamKey) || 0) + 1);
+    return true;
+  };
+
+  // A football role board cannot be useful when volume sorting lets eight
+  // running backs crowd out every receiver. Alternate the two grounded role
+  // families first, then use whichever pool still has eligible players.
+  while (chosen.length < MAX_CANDIDATES) {
+    const before = chosen.length;
+    takeNext('RB');
+    if (chosen.length < MAX_CANDIDATES) takeNext('RECEIVER');
+    if (chosen.length === before) break;
+  }
+  return chosen;
 }
 
 function usageRow({ candidate, usage, game, team, opponent, season, helpers, baseline = false }) {

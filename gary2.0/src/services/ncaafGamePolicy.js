@@ -7,7 +7,13 @@
  * into an assumed FBS game.
  */
 
-export { resolveNcaafKickoff } from '../../supabase/functions/_shared/ncaafKickoff.js';
+export {
+  NCAAF_KICKOFF_STATUS,
+  NCAAF_SLATE_ROLLOVER_HOUR_ET,
+  ncaafSlateDateForInstant,
+  ncaafSlateDateForKickoff,
+  resolveNcaafKickoff,
+} from '../../supabase/functions/_shared/ncaafKickoff.js';
 
 export const NCAAF_FBS_CONFERENCE_IDS = Object.freeze([
   1,  // ACC

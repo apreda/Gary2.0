@@ -71,13 +71,26 @@ describe('football live-score date handling', () => {
     expect(normalized).toBeNull();
   });
 
-  it('keeps a date-only NCAAF game on its ET slate using the canonical estimate', () => {
+  it('keeps a date-only NCAAF game on its ET slate without inventing a start instant', () => {
     const normalized = normalizeFootballGame(ncaafGame({ date: '2026-09-05' }), {
       league: 'NCAAF', targetDate: '2026-09-05', nowMs: NOW,
     });
-    expect(normalized.startAt).toBe('2026-09-05T19:00:00.000Z');
+    expect(normalized.startAt).toBeNull();
     expect(normalized.row._etDate).toBe('2026-09-05');
     expect(normalized.row.status).toBe('scheduled');
+  });
+
+  it('keeps a confirmed NCAAF overnight game on the prior slate until 6 AM ET', () => {
+    const overnight = normalizeFootballGame(ncaafGame({ date: '2026-09-06T05:30:00.000Z' }), {
+      league: 'NCAAF', targetDate: '2026-09-05', nowMs: NOW,
+    });
+    expect(overnight.row._etDate).toBe('2026-09-05');
+    expect(overnight.startAt).toBe('2026-09-06T05:30:00.000Z');
+
+    const rollover = normalizeFootballGame(ncaafGame({ date: '2026-09-06T10:00:00.000Z' }), {
+      league: 'NCAAF', targetDate: '2026-09-05', nowMs: NOW,
+    });
+    expect(rollover).toBeNull();
   });
 });
 
@@ -129,6 +142,15 @@ describe('football live-score status and detail', () => {
   it('keeps explicit delays scheduled and uses a future start for unknown pregame text', () => {
     expect(normalizeFootballStatus('Delayed', { startAt: '2026-08-15T12:00:00Z', nowMs: NOW })).toBe('scheduled');
     expect(normalizeFootballStatus('TBA', { startAt: '2026-08-16T00:00:00Z', nowMs: NOW })).toBe('scheduled');
+  });
+
+  it('keeps a date-only NCAAF TBA fixture on the slate without inventing a kickoff', () => {
+    const normalized = normalizeFootballGame(ncaafGame({ date: '2026-08-29', status: 'TBA' }), {
+      league: 'NCAAF', targetDate: '2026-08-29', nowMs: NOW,
+    });
+    expect(normalized.startAt).toBeNull();
+    expect(normalized.row.status).toBe('scheduled');
+    expect(normalized.row.detail).toBeNull();
   });
 
   it('fails closed on an unknown status after kickoff', () => {

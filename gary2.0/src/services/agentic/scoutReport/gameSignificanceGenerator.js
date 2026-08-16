@@ -109,32 +109,6 @@ const RIVALRIES = {
     { teams: ['kentucky', 'tennessee'], name: 'SEC Showdown' },
     { teams: ['crimson tide', 'tigers'], name: 'Iron Bowl' },
     { teams: ['alabama', 'auburn'], name: 'Iron Bowl' }
-  ],
-  NCAAF: [
-    { teams: ['wolverines', 'buckeyes'], name: 'The Game' },
-    { teams: ['michigan', 'ohio state'], name: 'The Game' },
-    { teams: ['crimson tide', 'tigers'], name: 'Iron Bowl' },
-    { teams: ['alabama', 'auburn'], name: 'Iron Bowl' },
-    { teams: ['longhorns', 'sooners'], name: 'Red River Rivalry' },
-    { teams: ['texas', 'oklahoma'], name: 'Red River Rivalry' },
-    { teams: ['bulldogs', 'gators'], name: "World's Largest Cocktail Party" },
-    { teams: ['georgia', 'florida'], name: "World's Largest Cocktail Party" },
-    { teams: ['trojans', 'fighting irish'], name: 'Classic Rivalry' },
-    { teams: ['usc', 'notre dame'], name: 'Classic Rivalry' },
-    { teams: ['seminoles', 'gators'], name: 'Florida Rivalry' },
-    { teams: ['florida state', 'florida'], name: 'Florida Rivalry' },
-    { teams: ['black knights', 'midshipmen'], name: 'Army-Navy Game' },
-    { teams: ['army', 'navy'], name: 'Army-Navy Game' },
-    { teams: ['tigers', 'gamecocks'], name: 'Palmetto Bowl' },
-    { teams: ['clemson', 'south carolina'], name: 'Palmetto Bowl' },
-    { teams: ['bruins', 'trojans'], name: 'LA Crosstown' },
-    { teams: ['ucla', 'usc'], name: 'LA Crosstown' },
-    { teams: ['ducks', 'huskies'], name: 'Border War' },
-    { teams: ['oregon', 'washington'], name: 'Border War' },
-    { teams: ['nittany lions', 'buckeyes'], name: 'Big Ten Clash' },
-    { teams: ['penn state', 'ohio state'], name: 'Big Ten Clash' },
-    { teams: ['volunteers', 'crimson tide'], name: 'Third Saturday in October' },
-    { teams: ['tennessee', 'alabama'], name: 'Third Saturday in October' }
   ]
 };
 
@@ -187,6 +161,11 @@ function findDivision(teamName, sport) {
  * Returns the label to use (e.g., "Big Ten Rivals", "Division Rivals")
  */
 function areDivisionalRivals(homeTeam, awayTeam, sport) {
+  // College football conference membership is factual context, not proof of a
+  // rivalry. Use provider-backed homeConference/awayConference later instead
+  // of nickname lists that can confuse schools sharing the same mascot.
+  if (sport === 'NCAAF') return null;
+
   const homeDivision = findDivision(homeTeam, sport);
   const awayDivision = findDivision(awayTeam, sport);
 
@@ -212,6 +191,11 @@ function areDivisionalRivals(homeTeam, awayTeam, sport) {
  * Check for famous rivalry
  */
 function checkRivalry(homeTeam, awayTeam, sport) {
+  // NCAAF rivalry labels require canonical provider team IDs and a sourced
+  // rivalry registry. The legacy substring pairs can false-match common
+  // nicknames (Tigers, Bulldogs, Wildcats), so fail closed for college football.
+  if (sport === 'NCAAF') return null;
+
   const sportRivalries = RIVALRIES[sport] || [];
   const homeLower = homeTeam.toLowerCase();
   const awayLower = awayTeam.toLowerCase();
@@ -383,15 +367,28 @@ export function generateGameSignificance(game, sport, standings = []) {
   }
 
   // Priority 4: Standings-based significance (using live BDL data)
-  const standingsSig = generateFromStandings(homeStanding, awayStanding);
+  const standingsSig = sport === 'NCAAF'
+    ? null
+    : generateFromStandings(homeStanding, awayStanding);
   if (standingsSig) {
     console.log(`[GameSignificance] Standings: ${standingsSig}`);
     return standingsSig;
   }
 
   // Priority 5: Check if either team is ranked (Top 25 for college, Top 10 for pros)
-  const homeRank = homeStanding?.conference_rank || homeStanding?.rank || 99;
-  const awayRank = awayStanding?.conference_rank || awayStanding?.rank || 99;
+  const explicitNcaafRank = (side) => {
+    const candidates = side === 'home'
+      ? [game.home_ap_rank, game.homeApRank, game.home_rank, game.homeRank]
+      : [game.away_ap_rank, game.awayApRank, game.away_rank, game.awayRank];
+    const rank = candidates.map(Number).find(value => Number.isInteger(value) && value >= 1 && value <= 25);
+    return rank ?? 99;
+  };
+  const homeRank = sport === 'NCAAF'
+    ? explicitNcaafRank('home')
+    : homeStanding?.conference_rank || homeStanding?.rank || 99;
+  const awayRank = sport === 'NCAAF'
+    ? explicitNcaafRank('away')
+    : awayStanding?.conference_rank || awayStanding?.rank || 99;
 
   if (sport === 'NCAAB' || sport === 'NCAAF') {
     // College: Top 25 is meaningful
@@ -432,11 +429,10 @@ export function generateGameSignificance(game, sport, standings = []) {
     NFL: 'Regular Season',
     NHL: 'Regular Season',
     NCAAB: 'Conference Play',
-    NCAAF: 'Conference Play'
+    NCAAF: 'College Football'
   };
 
   const fallback = defaultLabels[sport] || 'Regular Season';
   console.log(`[GameSignificance] Default: ${fallback}`);
   return fallback;
 }
-

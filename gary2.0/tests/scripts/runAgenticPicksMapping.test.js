@@ -62,7 +62,8 @@ describe('NCAAF game-runner FBS policy wiring', () => {
   });
 
   it('uses provider ids and canonical conference shapes instead of exact team-name matching', () => {
-    expect(runner).toContain("import { classifyNcaafFbsGames } from '../src/services/ncaafGamePolicy.js'");
+    expect(runner).toContain('classifyNcaafFbsGames,');
+    expect(runner).toContain("from '../src/services/ncaafGamePolicy.js'");
     expect(runner).toContain('const classified = classifyNcaafFbsGames(');
     expect(runner).toContain('games.filter((game) => !isVerifiedNcaafSlateFallback(game))');
     expect(runner).toContain('NCAAF FBS identity unresolved');

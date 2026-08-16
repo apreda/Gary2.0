@@ -5,7 +5,12 @@
 import axios from 'axios';
 import { ballDontLieService, getApiKey, BALLDONTLIE_API_BASE_URL } from './ballDontLieService.js';
 import { waitForBdlRequestSlot } from './bdlRequestGate.js';
-import { classifyNcaafFbsGames, resolveNcaafKickoff } from './ncaafGamePolicy.js';
+import {
+  classifyNcaafFbsGames,
+  NCAAF_KICKOFF_STATUS,
+  ncaafSlateDateForKickoff,
+  resolveNcaafKickoff,
+} from './ncaafGamePolicy.js';
 
 const BDL_NFL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/odds`;
 const BDL_NHL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/odds`;
@@ -103,7 +108,7 @@ function normalizeExactNflGame(game, oddsRows) {
 function normalizeExactNcaafGame(game, oddsRows) {
   if (!game) return null;
   const kickoff = resolveNcaafKickoff(game);
-  if (!kickoff.iso) return null;
+  if (!kickoff.scheduledDate) return null;
 
   return {
     id: game.id,
@@ -115,7 +120,10 @@ function normalizeExactNcaafGame(game, oddsRows) {
     away_team: mapTeamName(game.visitor_team || game.away_team),
     home_team_id: game.home_team?.id ?? game.home_team_id ?? null,
     away_team_id: (game.visitor_team || game.away_team)?.id ?? game.visitor_team_id ?? game.away_team_id ?? null,
-    commence_time: kickoff.iso,
+    // A date-only provider value must stay date-only in every public contract.
+    commence_time: kickoff.status === NCAAF_KICKOFF_STATUS.CONFIRMED ? kickoff.iso : null,
+    scheduled_date: kickoff.scheduledDate,
+    kickoff_status: kickoff.status,
     estimated_time: kickoff.estimated,
     venue: game.venue || null,
     // This stamp is only emitted after the exact provider game passes the
@@ -272,10 +280,18 @@ export const ballDontLieOddsService = {
         seenGameIds.add(gameKey);
         return true;
       });
-      let classified = classifyNcaafFbsGames(uniqueGames);
+      // Querying the UTC spillover date also returns the following ET slate.
+      // Remove known outside-date games before identity classification; an
+      // unresolved row for tomorrow must not take down today's healthy board.
+      // Rows with no provider date stay in scope and fail closed.
+      const targetDateGames = uniqueGames.filter((game) => {
+        const kickoff = resolveNcaafKickoff(game);
+        return !kickoff.scheduledDate || ncaafSlateDateForKickoff(game) === dateStr;
+      });
+      let classified = classifyNcaafFbsGames(targetDateGames);
       if (classified.unresolved.length > 0) {
         const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-        classified = classifyNcaafFbsGames(uniqueGames, teams);
+        classified = classifyNcaafFbsGames(targetDateGames, teams);
       }
       if (classified.unresolved.length > 0) {
         throw new Error(
@@ -288,9 +304,9 @@ export const ballDontLieOddsService = {
       const kickoffByGame = new Map();
       const games = classified.accepted.filter((game) => {
         const kickoff = resolveNcaafKickoff(game);
-        if (!kickoff.iso) return true;
+        if (!kickoff.scheduledDate) return false;
         kickoffByGame.set(String(game.id), kickoff);
-        return new Date(kickoff.iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === dateStr;
+        return ncaafSlateDateForKickoff(game) === dateStr;
       });
       const ids = (games || []).map(g => g.id).filter(id => id != null);
       let oddsRows = [];
@@ -381,12 +397,12 @@ export const ballDontLieOddsService = {
           return { key: v.vendor, title: v.vendor, markets };
         });
         const kickoff = kickoffByGame.get(String(g.id)) || resolveNcaafKickoff(g);
-        if (!kickoff.iso) {
+        if (!kickoff.scheduledDate) {
           console.warn(`[BDL NCAAF] Game ${g.id} has no date/time — skipping`);
           return null;
         }
-        if (kickoff.estimated) {
-          console.log(`[BDL NCAAF] Estimated 3:00 PM ET kickoff for game ${g.id}: ${kickoff.iso}`);
+        if (kickoff.status === NCAAF_KICKOFF_STATUS.DATE_ONLY) {
+          console.log(`[BDL NCAAF] Time TBD for game ${g.id} on ${kickoff.scheduledDate}`);
         }
         return {
           id: g.id,
@@ -395,7 +411,9 @@ export const ballDontLieOddsService = {
           away_team: mapTeamName(g.visitor_team || g.away_team),
           home_team_id: g.home_team?.id ?? null,
           away_team_id: (g.visitor_team || g.away_team)?.id ?? null,
-          commence_time: kickoff.iso,
+          commence_time: kickoff.status === NCAAF_KICKOFF_STATUS.CONFIRMED ? kickoff.iso : null,
+          scheduled_date: kickoff.scheduledDate,
+          kickoff_status: kickoff.status,
           estimated_time: kickoff.estimated,
           ncaaf_fbs_verified: true,
           bookmakers

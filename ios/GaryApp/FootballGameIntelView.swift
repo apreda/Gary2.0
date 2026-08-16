@@ -2,11 +2,11 @@ import SwiftUI
 
 // MARK: - Football game intelligence
 //
-// NFL and NCAAF game pages use the same pick cards as every other sport. This
-// file owns only the evidence that follows those cards. Every row below comes
-// from the pick payload, today's slate row, or insight_connections. A missing
-// fact stays missing; the UI never manufactures a league average or depth-chart
-// claim to fill a panel.
+// The pick and prop cards above this view remain the shared Gary cards. This
+// file owns the football-only evidence below them. Every visible value is an
+// exact stored market, an explicitly whitelisted stat, an injury record, or a
+// live proof value. Missing evidence removes a module instead of inviting a
+// proxy statistic or generated placeholder.
 
 struct FootballGameIntelView: View {
     let league: String
@@ -31,95 +31,88 @@ struct FootballGameIntelView: View {
         let away = primaryPick?.awayTeam ?? split.first ?? row?.away_team ?? "Away"
         let matchupHome: String? = split.count > 1 ? split[1] : nil
         let home = primaryPick?.homeTeam ?? matchupHome ?? row?.home_team ?? "Home"
-        return (FootballEvidence.sideLabel(away, league: normalizedLeague),
-                FootballEvidence.sideLabel(home, league: normalizedLeague))
-    }
-
-    private var trenchStats: [FootballEvidence.Pair] {
-        FootballEvidence.pairs(
-            from: statData,
-            matching: FootballEvidence.trenchTokens,
-            awayLabel: sides.away,
-            homeLabel: sides.home,
-            limit: 5
+        return (
+            FootballEvidence.sideLabel(away, league: normalizedLeague),
+            FootballEvidence.sideLabel(home, league: normalizedLeague)
         )
     }
 
-    private var trenchEdges: [Signal] {
-        edges.filter { [.trenches, .passRush].contains($0.kind) }
-    }
-
-    private var bigNumbers: [FootballEvidence.BigNumber] {
-        FootballEvidence.bigNumbers(
+    private var shapeRows: [FootballEvidence.ShapeRow] {
+        FootballEvidence.shapeRows(
             league: normalizedLeague,
-            row: row,
             stats: statData,
             awayLabel: sides.away,
             homeLabel: sides.home
         )
     }
 
-    private var fieldSignals: [Signal] {
-        edges.filter { [.quarterback, .injury].contains($0.kind) }
+    private var availability: [FootballEvidence.Availability] {
+        FootballEvidence.availability(
+            from: primaryPick,
+            awayLabel: sides.away,
+            homeLabel: sides.home
+        )
     }
 
-    private var edgeSignals: [Signal] {
-        let reserved: Set<SignalKind> = [
-            .h2h, .trenches, .passRush, .quarterback, .injury,
-            .theSweat, .afterGary,
-            .fantasyPickups, .twoStart, .closerWatch, .returnWatch, .cutList,
-            .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend,
-        ]
-        return edges.filter { !reserved.contains($0.kind) }
+    private var saturdayRead: String? {
+        FootballEvidence.saturdayRead(from: primaryPick)
+    }
+
+    private var numberSignal: Signal? {
+        edges.first(where: { $0.kind == .afterGary })
+    }
+
+    private var marketRangeSignal: Signal? {
+        let kickoff = primaryPick?.commence_time.flatMap(parseISO8601)
+            ?? row?.commence_time.flatMap(parseISO8601)
+        return edges.first(where: {
+            $0.kind == .marketRange &&
+            $0.marketRange?.footballMarketIsClosed != true &&
+            (kickoff.map { Date() < $0 } ?? true) &&
+            $0.marketRange?.low != nil &&
+            $0.marketRange?.high != nil &&
+            $0.marketRange?.book_count != nil
+        })
     }
 
     private var sweatSignals: [Signal] {
         Array(edges.filter { $0.kind == .theSweat }.prefix(4))
     }
 
-    private var personnel: [FootballEvidence.Personnel] {
-        FootballEvidence.personnel(from: primaryPick, props: props,
-                                   awayLabel: sides.away, homeLabel: sides.home)
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if !trenchStats.isEmpty || !trenchEdges.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !trenchStats.isEmpty {
-                        FootballComparisonSection(
-                            title: "The Trenches",
-                            rows: trenchStats,
-                            accent: accent
-                        )
-                    } else {
-                        FootballSectionHeading(title: "The Trenches", accent: accent)
-                    }
-
-                    if !trenchEdges.isEmpty {
-                        FootballSignalSection(signals: trenchEdges, accent: accent)
-                    }
+        VStack(alignment: .leading, spacing: 22) {
+            if isCollege {
+                if let saturdayRead {
+                    FootballSaturdayReadSection(read: saturdayRead, accent: accent)
                 }
-            }
 
-            if !bigNumbers.isEmpty {
-                FootballBigNumbersSection(rows: bigNumbers, accent: accent)
-            }
+                if !shapeRows.isEmpty {
+                    FootballGameShapeSection(rows: shapeRows, accent: accent)
+                }
 
-            // The existing season-series ledger remains the one shared H2H
-            // component. Football merely places it in its correct page order.
-            GameH2HSection(edges: edges)
+                if !availability.isEmpty {
+                    FootballAvailabilitySection(rows: availability, accent: accent)
+                }
 
-            if !personnel.isEmpty || !fieldSignals.isEmpty {
-                FootballFieldSection(
-                    personnel: personnel,
-                    signals: fieldSignals,
-                    accent: accent
-                )
-            }
+                if let numberSignal {
+                    FootballMarketSection(title: "Gary's Number", signal: numberSignal, accent: accent)
+                }
 
-            if !edgeSignals.isEmpty {
-                EdgesSection(title: "THE EDGES", edges: edgeSignals)
+                if let marketRangeSignal {
+                    FootballMarketRangeSection(signal: marketRangeSignal, accent: accent)
+                }
+            } else {
+                if let numberSignal {
+                    FootballMarketSection(title: "Gary's Number", signal: numberSignal, accent: accent)
+                }
+
+                if !shapeRows.isEmpty {
+                    FootballGameShapeSection(rows: shapeRows, accent: accent)
+                }
+
+                if !availability.isEmpty {
+                    FootballAvailabilitySection(rows: availability, accent: accent)
+                }
             }
 
             if !sweatSignals.isEmpty {
@@ -129,42 +122,61 @@ struct FootballGameIntelView: View {
     }
 }
 
-// MARK: - Evidence extraction
+// MARK: - Exact evidence extraction
 
 private enum FootballEvidence {
-    struct Pair: Identifiable {
+    struct ShapeRow: Identifiable {
         let id: String
         let label: String
         let away: String
         let home: String
         let awayLabel: String
         let homeLabel: String
+        let scope: String?
     }
 
-    struct BigNumber: Identifiable {
-        let id: String
-        let numeral: String
-        let label: String
-        let detail: String
-    }
-
-    struct Personnel: Identifiable {
+    struct Availability: Identifiable {
         let id: String
         let name: String
         let team: String
-        let role: String
         let status: String?
         let detail: String?
     }
 
-    static let trenchTokens: Set<String> = [
-        "OL_RANKINGS", "DL_RANKINGS", "PRESSURE_RATE", "SACKS",
-        "HAVOC_RATE", "HAVOC_ALLOWED", "RUSHING_YARDS_PER_GAME",
-        "RUSH_YDS_GM", "RUSH_YPG", "RUSHING_YPG", "OPP_RUSHING_YARDS",
-        "YARDS_PER_CARRY", "RB_STATS", "NCAAF_RUSHING_OFFENSE",
+    private struct ShapeMetric {
+        let id: String
+        let label: String
+        let tokens: Set<String>
+    }
+
+    // These are literal field contracts, not semantic aliases. For example,
+    // RUSH_YDS_GM may render as rush yards/game; OL_RANKINGS may not.
+    private static let nflShapeMetrics: [ShapeMetric] = [
+        ShapeMetric(id: "rush", label: "RUSH YARDS / GAME",
+                    tokens: ["RUSH_YDS_GM", "RUSHING_YARDS_PER_GAME", "RUSH_YPG", "RUSHING_YPG"]),
+        ShapeMetric(id: "pass", label: "PASS YARDS / GAME",
+                    tokens: ["PASS_YDS_GM", "PASSING_YPG"]),
+        ShapeMetric(id: "scoring", label: "POINTS / GAME",
+                    tokens: ["POINTS_GM", "POINTS_PER_GAME", "PPG"]),
+        ShapeMetric(id: "scoring-defense", label: "POINTS ALLOWED / GAME",
+                    tokens: ["OPP_PTS_GM", "OPP_POINTS_PER_GAME", "OPP_PPG"]),
+        ShapeMetric(id: "yards-play", label: "YARDS / PLAY",
+                    tokens: ["YARDS_PER_PLAY"]),
+        ShapeMetric(id: "third-down", label: "THIRD DOWN",
+                    tokens: ["THIRD_DOWN_PCT"]),
     ]
 
-    private static func clean(_ raw: String?) -> String? {
+    private static let ncaafShapeMetrics: [ShapeMetric] = [
+        ShapeMetric(id: "record", label: "RECORD", tokens: ["RECORD"]),
+        ShapeMetric(id: "form", label: "LAST 5", tokens: ["L5_FORM"]),
+        ShapeMetric(id: "total", label: "TOTAL YARDS / GAME", tokens: ["TOTAL_YPG"]),
+        ShapeMetric(id: "rush", label: "RUSH YARDS / GAME",
+                    tokens: ["RUSH_YDS_GM", "RUSHING_YARDS_PER_GAME", "RUSH_YPG", "RUSHING_YPG"]),
+        ShapeMetric(id: "pass", label: "PASS YARDS / GAME",
+                    tokens: ["PASS_YDS_GM", "PASSING_YPG"]),
+    ]
+
+    static func clean(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, value.uppercased() != "N/A", value != "—" else { return nil }
@@ -176,265 +188,476 @@ private enum FootballEvidence {
         return short.isEmpty ? raw.uppercased() : short.uppercased()
     }
 
-    static func label(for stat: StatData) -> String {
-        if let name = clean(stat.name) { return name.uppercased() }
-        return (stat.token ?? "MATCHUP")
-            .replacingOccurrences(of: "_", with: " ")
-            .uppercased()
+    /// Read only the property named by the exact token. This deliberately does
+    /// not call StatValues.getValue(for:), whose legacy cross-sport aliases are
+    /// broader than this football product is allowed to be.
+    private static func exactValue(_ values: StatValues?, token: String) -> String? {
+        guard let values else { return nil }
+        let raw: String?
+        switch token {
+        case "RECORD":
+            raw = values.overall
+        case "L5_FORM":
+            raw = values.last5
+        case "POINTS_GM", "POINTS_PER_GAME", "PPG":
+            raw = values.pointsPerGame
+        case "OPP_PTS_GM", "OPP_POINTS_PER_GAME", "OPP_PPG":
+            raw = values.oppPointsPerGame
+        case "RUSH_YDS_GM", "RUSHING_YARDS_PER_GAME", "RUSH_YPG", "RUSHING_YPG":
+            raw = values.rushingYpg ?? values.rushingYardsPerGame
+        case "PASS_YDS_GM", "PASSING_YPG":
+            raw = values.passingYpg
+        case "TOTAL_YPG":
+            raw = values.totalYpg
+        case "YARDS_PER_PLAY":
+            raw = values.yardsPerPlay
+        case "THIRD_DOWN_PCT":
+            raw = values.thirdDownPct
+        default:
+            raw = nil
+        }
+        return clean(raw)
     }
 
-    static func pairs(from stats: [StatData], matching tokens: Set<String>,
-                      awayLabel: String, homeLabel: String, limit: Int) -> [Pair] {
-        var seen = Set<String>()
-        var output: [Pair] = []
-        for (index, stat) in stats.enumerated() {
+    private static func scopeLabel(from name: String?) -> String? {
+        guard let name, name.range(of: "baseline", options: [.caseInsensitive]) != nil else { return nil }
+        if let year = name.range(of: #"\b(?:19|20)\d{2}\b"#, options: [.regularExpression]) {
+            return "\(name[year]) BASELINE"
+        }
+        return "PRIOR BASELINE"
+    }
+
+    static func shapeRows(league: String, stats: [StatData],
+                          awayLabel: String, homeLabel: String) -> [ShapeRow] {
+        let metrics = league == "NCAAF" ? ncaafShapeMetrics : nflShapeMetrics
+        let limit = league == "NCAAF" ? 5 : 4
+        var rows: [ShapeRow] = []
+
+        for metric in metrics {
+            guard let stat = stats.first(where: {
+                metric.tokens.contains(($0.token ?? "").uppercased())
+            }) else { continue }
             let token = (stat.token ?? "").uppercased()
-            let searchable = "\(token) \((stat.name ?? "").uppercased())"
-            guard tokens.contains(token) || tokens.contains(where: { searchable.contains($0) }) else { continue }
-            guard let away = clean(stat.away?.getValue(for: token)),
-                  let home = clean(stat.home?.getValue(for: token)) else { continue }
-            let key = token.isEmpty ? searchable : token
-            guard seen.insert(key).inserted else { continue }
-            output.append(Pair(id: "\(key)-\(index)", label: label(for: stat),
-                               away: away, home: home,
-                               awayLabel: awayLabel, homeLabel: homeLabel))
-            if output.count == limit { break }
+            guard let away = exactValue(stat.away, token: token),
+                  let home = exactValue(stat.home, token: token) else { continue }
+            rows.append(ShapeRow(
+                id: metric.id,
+                label: metric.label,
+                away: away,
+                home: home,
+                awayLabel: awayLabel,
+                homeLabel: homeLabel,
+                scope: scopeLabel(from: stat.name)
+            ))
+            if rows.count == limit { break }
+        }
+        return rows
+    }
+
+    static func commonScope(in rows: [ShapeRow]) -> String? {
+        let scopes = rows.compactMap(\.scope)
+        guard scopes.count == rows.count, let first = scopes.first,
+              scopes.allSatisfy({ $0 == first }) else { return nil }
+        return first
+    }
+
+    private static func injuryPriority(_ status: String?) -> Int {
+        let value = (status ?? "").lowercased()
+        if value.contains("out") || value == "ir" { return 0 }
+        if value.contains("doubt") { return 1 }
+        if value.contains("question") || value.contains("day-to-day") { return 2 }
+        return 3
+    }
+
+    private static func compactDetail(_ raw: String?) -> String? {
+        guard let value = clean(raw) else { return nil }
+        let first = value.components(separatedBy: CharacterSet(charactersIn: ".\n")).first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? value
+        guard !first.isEmpty else { return nil }
+        return first.count <= 96 ? first : String(first.prefix(93)) + "…"
+    }
+
+    static func availability(from pick: GaryPick?, awayLabel: String,
+                             homeLabel: String) -> [Availability] {
+        guard let injuries = pick?.injuries else { return [] }
+
+        func rows(_ source: [PlayerInjury], team: String) -> [Availability] {
+            source.sorted { injuryPriority($0.status) < injuryPriority($1.status) }
+                .compactMap { injury in
+                    guard let name = clean(injury.name) else { return nil }
+                    return Availability(
+                        id: "\(team)-\(name.lowercased())",
+                        name: name,
+                        team: team,
+                        status: clean(injury.status)?.uppercased(),
+                        detail: compactDetail(injury.description)
+                    )
+                }
+        }
+
+        let away = rows(injuries.away ?? [], team: awayLabel)
+        let home = rows(injuries.home ?? [], team: homeLabel)
+        var output: [Availability] = []
+        var seen = Set<String>()
+        var index = 0
+
+        while output.count < 4 && (index < away.count || index < home.count) {
+            for item in [index < away.count ? away[index] : nil,
+                         index < home.count ? home[index] : nil].compactMap({ $0 }) {
+                let key = item.name.lowercased()
+                if seen.insert(key).inserted { output.append(item) }
+                if output.count == 4 { break }
+            }
+            index += 1
         }
         return output
     }
 
-    static func bigNumbers(league: String, row: TomorrowBoardRow?, stats: [StatData],
-                           awayLabel: String, homeLabel: String) -> [BigNumber] {
-        var output: [BigNumber] = []
-        var consumed = Set<String>()
-
-        if let line = lineMovement(row: row, homeLabel: homeLabel) {
-            output.append(line)
-        }
-
-        let categories: [(id: String, label: String, tokens: [String])] = {
-            var list: [(String, String, [String])] = []
-            if league == "NCAAF" {
-                // These rows render only when the payload contains the named
-                // rating. There is no substitute or inferred power number.
-                list.append(("power", "POWER RATING", ["SP_PLUS_RATINGS", "SP_PLUS", "FPI", "FPI_RATING"]))
-            }
-            list.append(contentsOf: [
-                ("efficiency", "EPA / SUCCESS", ["OFFENSIVE_EPA", "DEFENSIVE_EPA", "SUCCESS_RATE", "SUCCESS_RATE_OFFENSE", "SUCCESS_RATE_DEFENSE", "EARLY_DOWN_SUCCESS"]),
-                ("explosive", "EXPLOSIVE RATE", ["EXPLOSIVENESS", "EXPLOSIVE_PLAYS", "EXPLOSIVE_ALLOWED", "YARDS_PER_PLAY"]),
-                ("redzone", "RED-ZONE TD", ["RED_ZONE_OFFENSE", "RED_ZONE_DEFENSE", "RED_ZONE", "NCAAF_RED_ZONE_OFFENSE"]),
-                ("turnovers", "TURNOVER MARGIN", ["TURNOVER_MARGIN", "TURNOVER_DIFF", "NCAAF_TURNOVER_MARGIN"]),
-                ("weather", "WEATHER", ["WIND_SPEED", "TEMPERATURE", "CONDITIONS", "IMPACT"]),
-                ("points", "SCORING BASELINE", ["POINTS_GM", "POINTS_PER_GAME"]),
-                ("points_allowed", "SCORING DEFENSE", ["OPP_PTS_GM", "OPP_POINTS_PER_GAME"]),
-                ("rush", "RUSHING BASELINE", ["RUSH_YDS_GM", "RUSHING_YARDS_PER_GAME", "RUSHING_YPG"]),
-                ("pass", "PASSING BASELINE", ["PASS_YDS_GM", "PASSING_YPG"]),
-                ("total", "TOTAL OFFENSE", ["TOTAL_YDS_GM", "TOTAL_YPG", "NCAAF_TOTAL_OFFENSE"]),
-                ("pass_defense", "PASS DEFENSE", ["OPP_PASS_YDS", "OPP_PASSING_YARDS"]),
-            ])
-            return list
-        }()
-
-        for category in categories where output.count < 5 {
-            guard let pair = firstPair(in: stats, tokens: category.tokens,
-                                       awayLabel: awayLabel, homeLabel: homeLabel,
-                                       consumed: &consumed) else { continue }
-            output.append(BigNumber(
-                id: category.id,
-                numeral: "\(pair.away) · \(pair.home)",
-                label: category.label,
-                detail: "\(pair.awayLabel) \(pair.away) vs \(pair.homeLabel) \(pair.home)"
-            ))
-        }
-        return Array(output.prefix(5))
-    }
-
-    private static func firstPair(in stats: [StatData], tokens: [String],
-                                  awayLabel: String, homeLabel: String,
-                                  consumed: inout Set<String>) -> Pair? {
-        for wanted in tokens {
-            for (index, stat) in stats.enumerated() {
-                let token = (stat.token ?? "").uppercased()
-                let name = (stat.name ?? "").uppercased().replacingOccurrences(of: " ", with: "_")
-                guard token == wanted || name == wanted || token.contains(wanted) || name.contains(wanted) else { continue }
-                guard !consumed.contains(token),
-                      let away = clean(stat.away?.getValue(for: token)),
-                      let home = clean(stat.home?.getValue(for: token)) else { continue }
-                consumed.insert(token)
-                return Pair(id: "\(token)-\(index)", label: label(for: stat),
-                            away: away, home: home,
-                            awayLabel: awayLabel, homeLabel: homeLabel)
+    static func saturdayRead(from pick: GaryPick?) -> String? {
+        guard var read = clean(pick?.game_read) else { return nil }
+        for prefix in ["GARY'S TAKE:", "GARY’S TAKE:", "GARY'S TAKE", "GARY’S TAKE"] {
+            if read.uppercased().hasPrefix(prefix) {
+                read = String(read.dropFirst(prefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                break
             }
         }
-        return nil
-    }
-
-    private static func signed(_ value: Double) -> String {
-        let whole = value.rounded() == value
-        let number = whole ? String(Int(value)) : String(format: "%.1f", value)
-        return value > 0 ? "+\(number)" : number
-    }
-
-    private static func money(_ value: Double) -> String {
-        let whole = value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
-        return value > 0 ? "+\(whole)" : whole
-    }
-
-    private static func lineMovement(row: TomorrowBoardRow?, homeLabel: String) -> BigNumber? {
-        guard let row else { return nil }
-        if let current = row.ml_home, let opening = row.ml_open_home, opening != current {
-            let numeral = money(current)
-            return BigNumber(
-                id: "line",
-                numeral: numeral,
-                label: "THE LINE",
-                detail: "\(homeLabel) opened \(money(opening)); the current price is \(numeral)."
-            )
-        }
-        if let current = row.spread {
-            let numeral = signed(current)
-            return BigNumber(id: "line", numeral: numeral, label: "THE LINE",
-                             detail: "Current \(homeLabel) spread.")
-        }
-        if let current = row.ml_home {
-            let numeral = money(current)
-            return BigNumber(id: "line", numeral: numeral, label: "THE LINE",
-                             detail: "Current \(homeLabel) moneyline.")
-        }
-        return nil
-    }
-
-    static func personnel(from pick: GaryPick?, props: [PropPick],
-                          awayLabel: String, homeLabel: String) -> [Personnel] {
-        var output: [Personnel] = []
-        var seen = Set<String>()
-
-        func injuryPriority(_ status: String?) -> Int {
-            let value = (status ?? "").lowercased()
-            if value.contains("out") || value == "ir" { return 0 }
-            if value.contains("doubt") { return 1 }
-            if value.contains("question") { return 2 }
-            return 3
-        }
-
-        func compactDetail(_ raw: String?) -> String? {
-            guard let value = clean(raw) else { return nil }
-            let first = value.components(separatedBy: CharacterSet(charactersIn: ".\n")).first?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? value
-            guard first.count > 0 else { return nil }
-            return first.count <= 84 ? first : String(first.prefix(81)) + "…"
-        }
-
-        func injuryRows(_ injuries: [PlayerInjury], team: String) -> [Personnel] {
-            injuries.sorted {
-                injuryPriority($0.status) < injuryPriority($1.status)
-            }.compactMap { injury in
-                guard let name = clean(injury.name) else { return nil }
-                let key = "\(team)-\(name.lowercased())"
-                return Personnel(
-                    id: "injury-\(team)-\(key)",
-                    name: name,
-                    team: team,
-                    role: "AVAILABILITY",
-                    status: clean(injury.status)?.uppercased(),
-                    detail: compactDetail(injury.description)
-                )
-            }
-        }
-
-        if let injuries = pick?.injuries {
-            let away = injuryRows(injuries.away ?? [], team: awayLabel)
-            let home = injuryRows(injuries.home ?? [], team: homeLabel)
-            let injuryLimit = 4
-            var index = 0
-            while output.count < injuryLimit && (index < away.count || index < home.count) {
-                for person in [index < away.count ? away[index] : nil,
-                               index < home.count ? home[index] : nil].compactMap({ $0 }) {
-                    let key = person.name.lowercased()
-                    if seen.insert(key).inserted { output.append(person) }
-                    if output.count == injuryLimit { break }
-                }
-                index += 1
-            }
-        }
-
-        // A posted player market is evidence that the player is part of the
-        // active game card. It is not promoted to "confirmed" availability.
-        for prop in props {
-            guard let name = clean(prop.player) else { continue }
-            let key = name.lowercased()
-            guard seen.insert(key).inserted else { continue }
-            let team = clean(prop.team)?.uppercased() ?? "ON THE CARD"
-            let role = [clean(prop.position)?.uppercased(), "SKILL PERSONNEL"]
-                .compactMap { $0 }.joined(separator: " · ")
-            output.append(Personnel(id: "card-\(key)", name: name, team: team,
-                                    role: role, status: nil, detail: nil))
-        }
-
-        return Array(output.prefix(6))
+        return clean(read)
     }
 }
 
-// MARK: - Section views
+// MARK: - Shared football presentation
 
-private struct FootballSectionHeading: View {
+private struct FootballSectionTitle: View {
     let title: String
     let accent: Color
+    var trailing: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Rectangle()
-                .fill(LinearGradient(colors: [accent.opacity(0.9), GaryColors.gold.opacity(0.55), .clear],
-                                     startPoint: .leading, endPoint: .trailing))
-                .frame(height: 1)
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(title.uppercased())
-                    .font(GaryFonts.mono(13.5, bold: true)).tracking(1.5)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer(minLength: 8)
+        HStack(alignment: .firstTextBaseline, spacing: 9) {
+            Capsule()
+                .fill(accent)
+                .frame(width: 3, height: 15)
+            Text(title.uppercased())
+                .font(GaryFonts.mono(13, bold: true))
+                .tracking(1.35)
+                .foregroundStyle(GaryColors.gold)
+            Spacer(minLength: 8)
+            if let trailing, !trailing.isEmpty {
+                Text(trailing.uppercased())
+                    .font(GaryFonts.mono(8.5, bold: true))
+                    .tracking(0.7)
+                    .foregroundStyle(.white.opacity(0.46))
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 16)
     }
 }
 
-private struct FootballComparisonSection: View {
+private struct FootballMarketSection: View {
     let title: String
-    let rows: [FootballEvidence.Pair]
+    let signal: Signal
     let accent: Color
+
+    private var meta: SwapMeta? { signal.afterGary }
+
+    private var selection: String {
+        if let label = meta?.pick_label?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !label.isEmpty {
+            return label.uppercased()
+        }
+        let left = signal.headline.components(separatedBy: " → ").first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let pieces = left.split(separator: " ")
+        if pieces.count > 1 {
+            return pieces.dropLast().joined(separator: " ").uppercased()
+        }
+        return left.isEmpty ? signal.game.uppercased() : left.uppercased()
+    }
+
+    private func number(_ value: Double) -> String {
+        let body = value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
+            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
+        return value > 0 ? "+\(body)" : body
+    }
+
+    private func primary(_ snapshot: FootballMarketSnapshot?) -> String? {
+        if let line = snapshot?.line { return number(line) }
+        if let odds = snapshot?.odds { return number(odds) }
+        return nil
+    }
+
+    private func price(_ snapshot: FootballMarketSnapshot?) -> String? {
+        guard snapshot?.line != nil, let odds = snapshot?.odds else { return nil }
+        return number(odds)
+    }
+
+    private var valueText: String? {
+        guard let movement = meta?.movement else {
+            let fallback = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return fallback.isEmpty ? nil : fallback.uppercased()
+        }
+        let advantage = (movement.advantage ?? "same").lowercased()
+        guard advantage != "same", let value = movement.primary_value, value > 0 else { return "NO MOVE" }
+        let owner = advantage == "gary" ? "GARY" : "NOW"
+        let unit = (movement.primary_unit ?? "").lowercased() == "probability_points" ? "PP" : "PTS"
+        return "\(owner) +\(number(value).replacingOccurrences(of: "+", with: "")) \(unit)"
+    }
+
+    private var receiptLine: String? {
+        var parts: [String] = []
+        if let vendor = meta?.vendor?.trimmingCharacters(in: .whitespacesAndNewlines), !vendor.isEmpty {
+            parts.append(vendor.uppercased())
+        }
+        if meta?.footballMarketIsClosed == true {
+            parts.append("LAST PREGAME")
+        } else if meta?.market_state?.lowercased() == "pregame" {
+            parts.append("SAME BOOK")
+        }
+        if parts.isEmpty {
+            let fallback = signal.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+            return fallback.isEmpty ? nil : fallback.uppercased()
+        }
+        return parts.joined(separator: " · ")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionHeading(title: title, accent: accent)
-            VStack(spacing: 0) {
-                HStack {
-                    Text(rows[0].awayLabel)
-                    Spacer()
-                    Text("MATCHUP")
-                    Spacer()
-                    Text(rows[0].homeLabel)
+            FootballSectionTitle(title: title, accent: accent, trailing: receiptLine)
+
+            VStack(alignment: .leading, spacing: 13) {
+                if !selection.isEmpty {
+                    Text(selection)
+                        .font(GaryFonts.display(24))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                .foregroundStyle(.white.opacity(0.48))
-                .padding(.horizontal, 14).padding(.vertical, 10)
+
+                if let published = primary(meta?.published),
+                   let current = primary(meta?.current) {
+                    HStack(alignment: .center, spacing: 12) {
+                        MarketQuote(label: "PUBLISHED", number: published,
+                                    price: price(meta?.published), trailing: false,
+                                    color: GaryColors.warmWhite)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.34))
+                        MarketQuote(label: meta?.footballMarketIsClosed == true ? "LAST PREGAME" : "CURRENT", number: current,
+                                    price: price(meta?.current), trailing: true,
+                                    color: accent)
+                    }
+                } else {
+                    Text(signal.headline)
+                        .font(GaryFonts.display(25))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                }
+
+                if let valueText {
+                    Text(valueText)
+                        .font(GaryFonts.mono(10, bold: true))
+                        .tracking(0.7)
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(accent.opacity(0.12)))
+                }
+            }
+            .padding(15)
+            .footballPanel(accent: accent)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+private struct MarketQuote: View {
+    let label: String
+    let number: String
+    let price: String?
+    let trailing: Bool
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 3) {
+            Text(label)
+                .font(GaryFonts.mono(8.5, bold: true))
+                .tracking(0.8)
+                .foregroundStyle(.white.opacity(0.42))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(number)
+                    .font(GaryFonts.display(32))
+                    .foregroundStyle(color)
+                if let price {
+                    Text(price)
+                        .font(GaryFonts.data(10.5, .bold))
+                        .foregroundStyle(.white.opacity(0.48))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: trailing ? .trailing : .leading)
+    }
+}
+
+private struct FootballMarketRangeSection: View {
+    let signal: Signal
+    let accent: Color
+
+    private var meta: SwapMeta? { signal.marketRange }
+
+    private func number(_ value: Double, signed: Bool) -> String {
+        let body = value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
+            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
+        return signed && value > 0 ? "+\(body)" : body
+    }
+
+    private var isSpread: Bool { (meta?.market ?? "").lowercased() == "spread" }
+
+    private var marketLabel: String {
+        isSpread ? "HOME SPREAD" : "TOTAL"
+    }
+
+    private var bookLabel: String? {
+        guard let count = meta?.book_count else { return nil }
+        return "\(count) \(count == 1 ? "BOOK" : "BOOKS")"
+    }
+
+    private var rangeLabel: String? {
+        guard let range = meta?.range else { return nil }
+        return "\(number(range, signed: false)) PT RANGE"
+    }
+
+    var body: some View {
+        if let low = meta?.low, let high = meta?.high {
+            VStack(alignment: .leading, spacing: 10) {
+                FootballSectionTitle(title: "Market Range", accent: accent, trailing: bookLabel)
+
+                VStack(spacing: 12) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(marketLabel)
+                            .font(GaryFonts.mono(9, bold: true))
+                            .tracking(0.75)
+                            .foregroundStyle(accent)
+                        Spacer(minLength: 8)
+                        if let rangeLabel {
+                            Text(rangeLabel)
+                                .font(GaryFonts.mono(8.5, bold: true))
+                                .tracking(0.55)
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                    }
+
+                    HStack(alignment: .center, spacing: 11) {
+                        RangeQuote(label: "LOW", value: number(low, signed: isSpread),
+                                   trailing: false)
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.16), accent.opacity(0.8)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 72, height: 3)
+                            .overlay {
+                                HStack {
+                                    Circle().fill(Color.white.opacity(0.65)).frame(width: 7, height: 7)
+                                    Spacer()
+                                    Circle().fill(accent).frame(width: 7, height: 7)
+                                }
+                            }
+                        RangeQuote(label: "HIGH", value: number(high, signed: isSpread),
+                                   trailing: true)
+                    }
+
+                    if let vendors = meta?.vendors, !vendors.isEmpty {
+                        Text(vendors.prefix(4).map { $0.uppercased() }.joined(separator: " · "))
+                            .font(GaryFonts.mono(7.5, bold: true))
+                            .tracking(0.45)
+                            .foregroundStyle(.white.opacity(0.34))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(15)
+                .footballPanel(accent: accent)
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+}
+
+private struct RangeQuote: View {
+    let label: String
+    let value: String
+    let trailing: Bool
+
+    var body: some View {
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 2) {
+            Text(label)
+                .font(GaryFonts.mono(8, bold: true))
+                .tracking(0.7)
+                .foregroundStyle(.white.opacity(0.4))
+            Text(value)
+                .font(GaryFonts.display(29))
+                .foregroundStyle(GaryColors.warmWhite)
+        }
+        .frame(maxWidth: .infinity, alignment: trailing ? .trailing : .leading)
+    }
+}
+
+private struct FootballGameShapeSection: View {
+    let rows: [FootballEvidence.ShapeRow]
+    let accent: Color
+
+    private var scope: String? { FootballEvidence.commonScope(in: rows) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FootballSectionTitle(title: "Game Shape", accent: accent, trailing: scope)
+
+            VStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 10) {
+                    Text(rows[0].awayLabel)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "football.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(accent.opacity(0.72))
+                    Text(rows[0].homeLabel)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .font(GaryFonts.mono(10, bold: true))
+                .tracking(0.75)
+                .foregroundStyle(.white.opacity(0.55))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+
+                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
 
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    HStack(spacing: 8) {
-                        Text(row.away)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(spacing: 7) {
                         Text(row.label)
-                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.5)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 116)
-                        Text(row.home)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .font(GaryFonts.mono(8.5, bold: true))
+                            .tracking(0.75)
+                            .foregroundStyle(GaryColors.gold.opacity(0.8))
+                        HStack(spacing: 10) {
+                            Text(row.away)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            FootballFieldRule(accent: accent)
+                                .frame(width: 86)
+                            Text(row.home)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                        .font(GaryFonts.data(15, .bold))
+                        .foregroundStyle(GaryColors.warmWhite)
                     }
-                    .font(GaryFonts.data(14, .bold))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(index.isMultiple(of: 2) ? Color.white.opacity(0.018) : .clear)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+
                     if index < rows.count - 1 {
                         Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
                     }
@@ -446,36 +669,60 @@ private struct FootballComparisonSection: View {
     }
 }
 
-private struct FootballBigNumbersSection: View {
-    let rows: [FootballEvidence.BigNumber]
+private struct FootballFieldRule: View {
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<7, id: \.self) { index in
+                Rectangle()
+                    .fill(index == 3 ? accent.opacity(0.7) : Color.white.opacity(0.18))
+                    .frame(width: index == 3 ? 2 : 1, height: index == 3 ? 9 : 5)
+                if index < 6 {
+                    Rectangle().fill(Color.white.opacity(0.13)).frame(height: 1)
+                }
+            }
+        }
+        .frame(height: 9)
+    }
+}
+
+private struct FootballAvailabilitySection: View {
+    let rows: [FootballEvidence.Availability]
     let accent: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionHeading(title: "Big Numbers", accent: accent)
+            FootballSectionTitle(title: "Availability", accent: accent)
+
             VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    HStack(alignment: .center, spacing: 14) {
-                        Text(row.numeral)
-                            .font(GaryFonts.display(row.numeral.count > 12 ? 25 : 32))
-                            .foregroundStyle(index == 0 ? accent : GaryColors.warmWhite)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.58)
-                            .frame(width: 124, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(row.label)
-                                .font(GaryFonts.mono(9.5, bold: true)).tracking(0.9)
-                                .foregroundStyle(GaryColors.gold)
-                            Text(row.detail)
-                                .font(GaryFonts.text(12.5, .semibold))
-                                .foregroundStyle(.white.opacity(0.78))
-                                .fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, player in
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                                Text(player.name.uppercased())
+                                    .font(GaryFonts.mono(11, bold: true))
+                                    .tracking(0.45)
+                                    .foregroundStyle(GaryColors.warmWhite)
+                                if let status = player.status {
+                                    Text(status)
+                                        .font(GaryFonts.mono(8, bold: true))
+                                        .tracking(0.55)
+                                        .foregroundStyle(statusColor(status))
+                                }
+                            }
+                            Text(player.team)
+                                .font(GaryFonts.mono(8.5, bold: true))
+                                .tracking(0.65)
+                                .foregroundStyle(accent.opacity(0.82))
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+
                     if index < rows.count - 1 {
-                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
                     }
                 }
             }
@@ -483,90 +730,54 @@ private struct FootballBigNumbersSection: View {
             .padding(.horizontal, 16)
         }
     }
-}
-
-private struct FootballFieldSection: View {
-    let personnel: [FootballEvidence.Personnel]
-    let signals: [Signal]
-    let accent: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FootballSectionHeading(title: "The Field", accent: accent)
-            if !personnel.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(personnel.enumerated()), id: \.element.id) { index, person in
-                        HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack(spacing: 7) {
-                                    Text(person.name.uppercased())
-                                        .font(GaryFonts.mono(11.5, bold: true)).tracking(0.5)
-                                        .foregroundStyle(GaryColors.warmWhite)
-                                    if let status = person.status {
-                                        Text(status)
-                                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.6)
-                                            .foregroundStyle(statusColor(status))
-                                    }
-                                }
-                                Text("\(person.team) · \(person.role)")
-                                    .font(GaryFonts.mono(9, bold: true)).tracking(0.5)
-                                    .foregroundStyle(accent.opacity(0.85))
-                                if let detail = person.detail {
-                                    Text(detail)
-                                        .font(GaryFonts.text(11.5))
-                                        .foregroundStyle(.white.opacity(0.56))
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 14).padding(.vertical, 11)
-                        if index < personnel.count - 1 {
-                            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                        }
-                    }
-                }
-                .footballPanel(accent: accent)
-                .padding(.horizontal, 16)
-            }
-            if !signals.isEmpty {
-                FootballSignalSection(signals: signals, accent: accent)
-            }
-        }
-    }
 
     private func statusColor(_ status: String) -> Color {
-        let normalized = status.lowercased()
-        if normalized.contains("out") || normalized == "ir" || normalized.contains("doubt") {
+        let value = status.lowercased()
+        if value.contains("out") || value == "ir" || value.contains("doubt") {
             return HubPalette.red
         }
-        if normalized.contains("question") || normalized.contains("day") {
+        if value.contains("question") || value.contains("day") {
             return GaryColors.gold
         }
         return .white.opacity(0.58)
     }
 }
 
-private struct FootballSignalSection: View {
-    let signals: [Signal]
+private struct FootballSaturdayReadSection: View {
+    let read: String
     let accent: Color
+    @State private var expanded = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(signals.enumerated()), id: \.element.id) { index, signal in
-                SignalRow(s: signal)
-                if index < signals.count - 1 {
-                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+        VStack(alignment: .leading, spacing: 10) {
+            FootballSectionTitle(title: "Saturday Read", accent: accent)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(read)
+                    .font(GaryFonts.text(13.5, .medium))
+                    .foregroundStyle(.white.opacity(0.86))
+                    .lineSpacing(3)
+                    .lineLimit(expanded ? nil : 5)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if read.count > 240 {
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() } } label: {
+                        Text(expanded ? "CLOSE" : "FULL READ")
+                            .font(GaryFonts.mono(8.5, bold: true))
+                            .tracking(0.8)
+                            .foregroundStyle(accent)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(15)
+            .footballPanel(accent: accent)
+            .padding(.horizontal, 16)
         }
-        .footballPanel(accent: accent)
-        .padding(.horizontal, 16)
     }
 }
 
-/// Gary's thesis against the game as it develops. The row is intentionally a
-/// scoreboard, not an explainer: factor, stored baseline/current value, state.
+// MARK: - Unit-safe live proof
+
 private struct FootballSweatSection: View {
     let signals: [Signal]
     let accent: Color
@@ -576,17 +787,25 @@ private struct FootballSweatSection: View {
     }
 
     private var terminal: Bool {
-        let finalStates: Set<String> = ["held", "missed", "failed", "push", "final_held", "final_missed", "final_flipped", "final_push"]
+        let finalStates: Set<String> = [
+            "held", "missed", "failed", "push",
+            "final_held", "final_missed", "final_flipped", "final_push",
+        ]
         return !normalizedStates.isEmpty && normalizedStates.allSatisfy(finalStates.contains)
     }
 
     private var summary: String {
         if terminal {
             let held = normalizedStates.filter { $0 == "held" || $0 == "final_held" }.count
+            let missed = normalizedStates.filter {
+                $0 == "missed" || $0 == "failed" || $0 == "final_missed" || $0 == "final_flipped"
+            }.count
             let pushes = normalizedStates.filter { $0 == "push" || $0 == "final_push" }.count
-            let decided = signals.count - pushes
-            if decided == 0 { return "PUSH" }
-            return pushes > 0 ? "HELD \(held)/\(decided) · PUSH \(pushes)" : "HELD \(held)/\(decided)"
+            var parts: [String] = []
+            if held > 0 { parts.append("\(held) HELD") }
+            if missed > 0 { parts.append("\(missed) MISSED") }
+            if pushes > 0 { parts.append("\(pushes) PUSH") }
+            return parts.isEmpty ? "FINAL" : parts.joined(separator: " · ")
         }
         if normalizedStates.contains(where: { $0.contains("flip") || $0 == "failed" }) { return "FLIPPED" }
         if normalizedStates.contains(where: { $0.contains("hold") || $0 == "live" }) { return "HOLDING" }
@@ -595,23 +814,7 @@ private struct FootballSweatSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                Rectangle()
-                    .fill(LinearGradient(colors: [accent.opacity(0.9), GaryColors.gold.opacity(0.55), .clear],
-                                         startPoint: .leading, endPoint: .trailing))
-                    .frame(height: 1)
-                HStack(alignment: .firstTextBaseline) {
-                    Text("THE SWEAT")
-                        .font(GaryFonts.mono(13.5, bold: true)).tracking(1.5)
-                        .foregroundStyle(GaryColors.gold)
-                    Spacer(minLength: 8)
-                    Text(summary)
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                        .foregroundStyle(summaryColor)
-                }
-            }
-            .padding(.horizontal, 16)
-
+            FootballSectionTitle(title: "The Sweat", accent: accent, trailing: summary)
             VStack(spacing: 0) {
                 ForEach(Array(signals.enumerated()), id: \.element.id) { index, signal in
                     FootballSweatRow(signal: signal, accent: accent)
@@ -624,45 +827,127 @@ private struct FootballSweatSection: View {
             .padding(.horizontal, 16)
         }
     }
-
-    private var summaryColor: Color {
-        switch summary {
-        case "FLIPPED": return HubPalette.red
-        case "WATCH", "PUSH": return GaryColors.gold
-        default: return accent
-        }
-    }
 }
 
 private struct FootballSweatRow: View {
     let signal: Signal
     let accent: Color
 
+    private var meta: SwapMeta? { signal.sweat }
+
+    private var isTicket: Bool {
+        (meta?.factor_code ?? "").uppercased() == "THE_NUMBER"
+    }
+
     private var factor: String {
         let headline = signal.headline.trimmingCharacters(in: .whitespacesAndNewlines)
         if !headline.isEmpty { return headline.uppercased() }
         if let raw = signal.sweat?.factor_code?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
-            return raw.replacingOccurrences(of: "_", with: " ").uppercased()
+            switch raw.uppercased() {
+            case "THE_NUMBER": return "THE NUMBER"
+            case "RUSH_EDGE": return "GROUND"
+            case "AIR_EDGE": return "AIR"
+            case "BALL_SECURITY": return "BALL SECURITY"
+                default: return raw.replacingOccurrences(of: "_", with: " ").uppercased()
+            }
         }
         return "FACTOR"
     }
 
-    private var movement: String? {
-        let baseline = signal.sweat?.baseline?.display.trimmingCharacters(in: .whitespacesAndNewlines)
-        let live = signal.sweat?.live_value?.display.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let baseline, !baseline.isEmpty, let live, !live.isEmpty {
-            return baseline == live ? live : "\(baseline) → \(live)"
+    private func scalar(_ value: InsightMetaValue?) -> String? {
+        guard let value else { return nil }
+        let text = value.display.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private func scalar(_ value: Double?) -> String? {
+        guard let value else { return nil }
+        if value.rounded() == value { return String(Int(value)) }
+        return String(format: "%.2f", value)
+            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
+    }
+
+    private func signedScalar(_ value: InsightMetaValue?) -> String? {
+        guard let text = scalar(value) else { return nil }
+        if text.hasPrefix("+") || text.hasPrefix("-") { return text }
+        if let number = Double(text), number > 0 { return "+\(text)" }
+        return text
+    }
+
+    private func unit(_ raw: String?) -> String? {
+        let text = raw?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return text?.isEmpty == false ? text : nil
+    }
+
+    private func pair(selected: InsightMetaValue?, opponent: InsightMetaValue?, unit rawUnit: String?) -> String? {
+        guard let selected = scalar(selected) else { return nil }
+        var value = "\((meta?.team ?? "PICK").uppercased()) \(selected)"
+        if let opponent = scalar(opponent) { value += " · OPP \(opponent)" }
+        if let unit = unit(rawUnit) { value += " \(unit)" }
+        return value
+    }
+
+    private var baseline: String? {
+        if isTicket {
+            switch (meta?.market_type ?? "").lowercased() {
+            case "spread":
+                if let line = signedScalar(meta?.baseline_selected) {
+                    return "\((meta?.team ?? "PICK").uppercased()) \(line)"
+                }
+            case "total", "moneyline":
+                // Total direction and ML identity are preserved in the exact
+                // stored baseline; neither is derivable from a numeric line.
+                if let value = scalar(meta?.baseline) { return value }
+            default:
+                break
+            }
+        } else if let value = pair(selected: meta?.baseline_selected,
+                                   opponent: meta?.baseline_opponent,
+                                   unit: meta?.baseline_unit) {
+            return value
         }
-        if let live, !live.isEmpty { return live }
-        if let baseline, !baseline.isEmpty { return baseline }
+        return scalar(meta?.baseline)
+    }
+
+    private var live: String? {
+        if isTicket {
+            if (meta?.market_type ?? "").lowercased() == "total",
+               let total = scalar(meta?.live_selected),
+               let line = scalar(meta?.live_opponent) {
+                return "TOTAL \(total) · LINE \(line)"
+            }
+            if let selected = scalar(meta?.selected_score) ?? scalar(meta?.live_selected),
+               let opponent = scalar(meta?.opponent_score) ?? scalar(meta?.live_opponent) {
+                return "\((meta?.team ?? "PICK").uppercased()) \(selected) · OPP \(opponent)"
+            }
+        } else if let value = pair(selected: meta?.live_selected,
+                                   opponent: meta?.live_opponent,
+                                   unit: meta?.live_unit) {
+            return value
+        }
+        return scalar(meta?.live_value)
+    }
+
+    private var ticketMargin: String? {
+        guard isTicket, let margin = meta?.cover_margin else { return nil }
+        let body = margin.rounded() == margin ? String(Int(margin)) : String(format: "%.2f", margin)
+            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
+        return "\(margin > 0 ? "+" : "")\(body) PTS"
+    }
+
+    private var latest: String? {
+        guard baseline == nil, live == nil else { return nil }
         let value = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value
     }
 
     private var state: String {
-        switch (signal.sweat?.state ?? "watch").lowercased() {
+        switch (meta?.state ?? "watch").lowercased() {
         case "holding", "live", "live_holding": return "HOLDING"
-        case "flipped", "live_flipped", "failed", "missed", "final_missed", "final_flipped": return "FLIPPED"
+        case "flipped", "live_flipped": return "FLIPPED"
+        case "missed", "failed", "final_missed", "final_flipped": return "MISSED"
         case "held", "final_held": return "HELD"
         case "push", "final_push": return "PUSH"
         default: return "WATCH"
@@ -670,45 +955,95 @@ private struct FootballSweatRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(factor)
-                .font(GaryFonts.mono(10.5, bold: true)).tracking(0.55)
-                .foregroundStyle(GaryColors.warmWhite)
-                .lineLimit(2)
-            Spacer(minLength: 6)
-            if let movement {
-                Text(movement)
-                    .font(GaryFonts.data(12, .bold))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(factor)
+                    .font(GaryFonts.mono(10, bold: true))
+                    .tracking(0.55)
+                    .foregroundStyle(GaryColors.warmWhite)
+                Spacer(minLength: 8)
+                Text(state)
+                    .font(GaryFonts.mono(8, bold: true))
+                    .tracking(0.65)
+                    .foregroundStyle(stateColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(stateColor.opacity(0.12)))
             }
-            Text(state)
-                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.65)
-                .foregroundStyle(stateColor)
-                .padding(.horizontal, 7).padding(.vertical, 4)
-                .background(Capsule().fill(stateColor.opacity(0.12)))
+
+            // Baseline and live are separate labeled registers. A spread such
+            // as BAL +4 is never drawn as if it transformed into a 0-0 score,
+            // and a per-game baseline is never arrowed into an in-game total.
+            if baseline != nil || live != nil {
+                HStack(alignment: .top, spacing: 12) {
+                    if let baseline {
+                        SweatValue(label: "PREGAME", value: baseline)
+                    }
+                    if let live {
+                        SweatValue(label: "LIVE", value: live)
+                    }
+                }
+            } else if let latest {
+                SweatValue(label: "LATEST", value: latest)
+            }
+
+            if let ticketMargin {
+                HStack(spacing: 8) {
+                    Text("TICKET MARGIN")
+                        .font(GaryFonts.mono(7.5, bold: true))
+                        .tracking(0.7)
+                        .foregroundStyle(.white.opacity(0.38))
+                    Spacer(minLength: 8)
+                    Text(ticketMargin)
+                        .font(GaryFonts.data(11.5, .bold))
+                        .foregroundStyle(stateColor)
+                }
+                .padding(.top, 1)
+            }
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 
     private var stateColor: Color {
         switch state {
-        case "FLIPPED": return HubPalette.red
+        case "FLIPPED", "MISSED": return HubPalette.red
         case "WATCH", "PUSH": return GaryColors.gold
         default: return accent
         }
     }
 }
 
+private struct SweatValue: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(GaryFonts.mono(7.5, bold: true))
+                .tracking(0.7)
+                .foregroundStyle(.white.opacity(0.38))
+            Text(value)
+                .font(GaryFonts.data(12.5, .bold))
+                .foregroundStyle(.white.opacity(0.78))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct FootballQuietState: View {
     let text: String
+
     var body: some View {
         Text(text)
             .font(GaryFonts.text(12.5))
             .foregroundStyle(.white.opacity(0.55))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 16).padding(.vertical, 8)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 18)
     }
 }
 
@@ -716,19 +1051,269 @@ private extension View {
     func footballPanel(accent: Color) -> some View {
         self
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(hex: "#151311"))
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .fill(Color(hex: "#14120F"))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(LinearGradient(colors: [accent.opacity(0.34), Color.white.opacity(0.08)],
-                                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                                    lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 17, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [accent.opacity(0.28), Color.white.opacity(0.07)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
                     )
             )
     }
 }
 
-// MARK: - NFL fantasy desk
+// MARK: - Grounded NCAAF next slate
+
+struct FootballNextSlatePreview: View {
+    let signal: Signal
+    let accent: Color
+
+    private var meta: SwapMeta? { signal.nextSlate }
+
+    private var dateLabel: String {
+        guard let raw = meta?.scheduled_date else { return "DATE PENDING" }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = TimeZone(secondsFromGMT: 0)
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: raw) else { return raw.uppercased() }
+        let display = DateFormatter()
+        display.locale = Locale(identifier: "en_US_POSIX")
+        // scheduled_date is a calendar date, not an instant. Keep UTC for both
+        // parse/display so midnight cannot shift to the previous ET day.
+        display.timeZone = TimeZone(secondsFromGMT: 0)
+        display.dateFormat = "EEE · MMM d"
+        return display.string(from: date).uppercased()
+    }
+
+    private var kickoffLabel: String {
+        if let raw = meta?.first_confirmed_kickoff,
+           let date = parseISO8601(raw) {
+            let display = DateFormatter()
+            display.locale = Locale(identifier: "en_US_POSIX")
+            display.timeZone = TimeZone(identifier: "America/New_York")
+            display.dateFormat = "h:mm a"
+            return "FIRST KICK \(display.string(from: date).uppercased()) ET"
+        }
+        return "KICKOFF TIMES TBD"
+    }
+
+    private var countLabel: String {
+        let count = meta?.game_count ?? 0
+        return "\(count) \(count == 1 ? "GAME" : "GAMES")"
+    }
+
+    private var precisionLabel: String? {
+        guard let total = meta?.game_count,
+              let tbd = meta?.time_tbd_count,
+              tbd > 0, tbd < total else { return nil }
+        return "\(tbd) TIME TBD"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("NEXT NCAAF SLATE")
+                    .font(GaryFonts.mono(9, bold: true))
+                    .tracking(1)
+                    .foregroundStyle(accent)
+                Spacer(minLength: 8)
+                Text(countLabel)
+                    .font(GaryFonts.data(10.5, .bold))
+                    .foregroundStyle(.white.opacity(0.48))
+            }
+            Text(dateLabel)
+                .font(GaryFonts.display(29))
+                .foregroundStyle(GaryColors.warmWhite)
+            HStack(spacing: 8) {
+                Text(kickoffLabel)
+                    .font(GaryFonts.mono(9, bold: true))
+                    .tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.68))
+                if let precisionLabel {
+                    Text("· \(precisionLabel)")
+                        .font(GaryFonts.mono(8.5, bold: true))
+                        .foregroundStyle(GaryColors.gold.opacity(0.8))
+                }
+            }
+        }
+        .padding(15)
+        .footballPanel(accent: accent)
+        .padding(.horizontal, 16)
+    }
+}
+
+// MARK: - Football Picks slate board
+
+/// The Picks overview is intentionally not the Hub feed or the baseball edge
+/// carousel. It gives each football game one scan-first state, preferring live
+/// proof, Gary's immutable number, then the strongest verified matchup read.
+/// Full evidence remains on the game page and in The Hub.
+struct FootballPicksBoard: View {
+    let league: String
+    let signals: [Signal]
+
+    private var isCollege: Bool { league.uppercased() == "NCAAF" }
+    private var accent: Color { isCollege ? Sport.ncaaf.accentColor : Sport.nfl.accentColor }
+
+    private var rows: [Signal] {
+        let candidates = signals.enumerated()
+            .filter { boardPriority($0.element) != nil }
+            .sorted { lhs, rhs in
+                let left = boardPriority(lhs.element) ?? Int.max
+                let right = boardPriority(rhs.element) ?? Int.max
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }
+
+        var seen = Set<String>()
+        var output: [Signal] = []
+        for candidate in candidates {
+            let signal = candidate.element
+            let gameKey = signal.gameId ?? normalized(signal.game)
+            guard !gameKey.isEmpty, seen.insert(gameKey).inserted else { continue }
+            output.append(signal)
+            if output.count == 6 { break }
+        }
+        return output
+    }
+
+    private func boardPriority(_ signal: Signal) -> Int? {
+        switch signal.kind {
+        case .theSweat:
+            let state = signal.sweat?.state?.lowercased() ?? "watch"
+            return ["watch", "scheduled", "pregame"].contains(state) ? nil : 0
+        case .afterGary: return 1
+        case .marketRange: return isCollege ? 2 : nil
+        case .injury: return 3
+        case .trenches: return 4
+        case .quarterback: return 5
+        case .passRush: return 6
+        case .paceScript: return 7
+        case .redZone: return 8
+        case .turnoverEdge: return 9
+        case .explosivePlay: return 10
+        case .coverage: return 11
+        case .specialTeams: return 12
+        case .situational, .coaching: return 13
+        default: return nil
+        }
+    }
+
+    private func normalized(_ value: String) -> String {
+        value.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    var body: some View {
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                FootballSectionTitle(
+                    title: isCollege ? "Saturday Board" : "Slate Read",
+                    accent: accent,
+                    trailing: "\(rows.count) GAMES"
+                )
+
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
+                        FootballPicksBoardRow(signal: signal, accent: accent)
+                        if index < rows.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                        }
+                    }
+                }
+                .footballPanel(accent: accent)
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+}
+
+private struct FootballPicksBoardRow: View {
+    let signal: Signal
+    let accent: Color
+
+    private var label: String {
+        switch signal.kind {
+        case .theSweat:
+            let state = signal.sweat?.state?.lowercased() ?? ""
+            let finalStates = ["held", "missed", "failed", "push",
+                               "final_held", "final_missed", "final_flipped", "final_push"]
+            return finalStates.contains(state) ? "FINAL RECEIPT" : "LIVE"
+        case .afterGary: return "GARY'S NUMBER"
+        case .marketRange: return "MARKET RANGE"
+        case .injury: return "AVAILABILITY"
+        case .trenches: return "GROUND GAME"
+        case .quarterback: return "QB WATCH"
+        case .passRush: return "PASS RUSH"
+        case .paceScript: return "GAME TOTAL"
+        case .redZone: return "RED ZONE"
+        case .turnoverEdge: return "BALL SECURITY"
+        case .explosivePlay: return "EXPLOSIVES"
+        case .coverage: return "COVERAGE"
+        case .specialTeams: return "SPECIAL TEAMS"
+        case .coaching: return "COACHING"
+        default: return "MATCHUP"
+        }
+    }
+
+    private var headline: String {
+        if signal.kind == .marketRange,
+           let low = signal.marketRange?.low,
+           let high = signal.marketRange?.high {
+            return "\(compact(low)) — \(compact(high))"
+        }
+        return signal.headline
+    }
+
+    private func compact(_ value: Double) -> String {
+        let body = value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
+            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
+        return value > 0 ? "+\(body)" : body
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 7) {
+                    Text(label)
+                        .font(GaryFonts.mono(8, bold: true))
+                        .tracking(0.7)
+                        .foregroundStyle(accent)
+                    if !signal.game.isEmpty {
+                        Text(signal.game.uppercased())
+                            .font(GaryFonts.mono(8, bold: true))
+                            .tracking(0.45)
+                            .foregroundStyle(.white.opacity(0.38))
+                            .lineLimit(1)
+                    }
+                }
+                Text(headline)
+                    .font(GaryFonts.text(13.5, .semibold))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            Spacer(minLength: 8)
+            if !signal.value.isEmpty {
+                Text(signal.value.uppercased())
+                    .font(GaryFonts.data(11.5, .bold))
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+}
+
+// MARK: - Football fantasy desks
 
 struct FootballFantasyPage: View {
     let league: HubLeagueSel
@@ -740,9 +1325,6 @@ struct FootballFantasyPage: View {
         league == .ncaaf ? Sport.ncaaf.accentColor : Sport.nfl.accentColor
     }
     private var isNFL: Bool { league == .nfl }
-    private var emptyCopy: String {
-        isNFL ? "No NFL fantasy reads yet." : "No NCAAF fantasy reads yet."
-    }
 
     private struct Lane: Identifiable {
         let id: String
@@ -750,53 +1332,73 @@ struct FootballFantasyPage: View {
         let kinds: Set<SignalKind>
     }
 
+    fileprivate struct PositionCount: Identifiable {
+        let position: String
+        let count: Int
+        var id: String { position }
+    }
+
     private var lanes: [Lane] {
-        [
-            Lane(id: "usage", title: "Usage & Role",
-                 kinds: [.fantasyUsage, .fantasyPickups]),
-            Lane(id: "redzone", title: "Red Zone",
-                 kinds: [.fantasyRedZone]),
-            Lane(id: "matchup", title: "Matchup",
-                 kinds: [.fantasyMatchup]),
-            Lane(id: "trend", title: "Recent Trend",
-                 kinds: [.fantasyTrend]),
+        if isNFL {
+            return [
+                Lane(id: "role", title: "Role Watch", kinds: [.fantasyUsage]),
+                Lane(id: "scoring", title: "Scoring Spots", kinds: [.fantasyRedZone, .fantasyMatchup]),
+                Lane(id: "momentum", title: "Momentum", kinds: [.fantasyTrend]),
+            ]
+        }
+        return [
+            Lane(id: "volume", title: "Volume Leaders", kinds: [.fantasyUsage]),
+            Lane(id: "scoring", title: "Scoring Spots", kinds: [.fantasyRedZone, .fantasyMatchup]),
         ]
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 5) {
-                (Text("FANTASY ").foregroundColor(GaryColors.warmWhite)
-                    + Text("FOOTBALL").foregroundColor(accent))
-                    .font(GaryFonts.display(26)).tracking(0.5)
-            }
-            .padding(.horizontal, 18)
+    private var visibleKinds: Set<SignalKind> {
+        lanes.reduce(into: Set<SignalKind>()) { $0.formUnion($1.kinds) }
+    }
 
+    private var visibleSignals: [Signal] {
+        signals.filter { visibleKinds.contains($0.kind) }
+    }
+
+    private var nextSlate: Signal? {
+        isNFL ? nil : signals.first { $0.kind == .nextSlate }
+    }
+
+    private var positionCounts: [PositionCount] {
+        var players: [String: Set<String>] = [:]
+        for signal in visibleSignals {
+            guard let raw = signal.position?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { continue }
+            let position = raw.uppercased()
+            players[position, default: []].insert(FootballFantasyEvidence.playerTitle(for: signal).lowercased())
+        }
+        let order = ["QB", "RB", "WR", "TE", "K"]
+        return players.map { PositionCount(position: $0.key, count: $0.value.count) }
+            .sorted {
+                let left = order.firstIndex(of: $0.position) ?? Int.max
+                let right = order.firstIndex(of: $1.position) ?? Int.max
+                return left == right ? $0.position < $1.position : left < right
+            }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
             if !loaded {
                 HStack { Spacer(); ProgressView().tint(accent); Spacer() }
                     .padding(.vertical, 36)
-            } else if signals.isEmpty {
-                FootballQuietState(text: emptyCopy)
+            } else if visibleSignals.isEmpty, let nextSlate {
+                FootballNextSlatePreview(signal: nextSlate, accent: accent)
+            } else if visibleSignals.isEmpty {
+                FootballQuietState(text: isNFL ? "No NFL fantasy reads yet." : "No college player reads yet.")
             } else {
+                if !isNFL, !positionCounts.isEmpty {
+                    FootballPositionSummary(counts: positionCounts, accent: accent)
+                }
+
                 ForEach(lanes) { lane in
-                    let rows = signals.filter { lane.kinds.contains($0.kind) }
+                    let rows = visibleSignals.filter { lane.kinds.contains($0.kind) }
                     if !rows.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            FootballSectionHeading(title: lane.title, accent: accent)
-                            VStack(spacing: 0) {
-                                ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
-                                    Button { onTap(signal) } label: {
-                                        FootballFantasyRow(signal: signal, accent: accent)
-                                    }
-                                    .buttonStyle(.plain)
-                                    if index < rows.count - 1 {
-                                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                                    }
-                                }
-                            }
-                            .footballPanel(accent: accent)
-                            .padding(.horizontal, 16)
-                        }
+                        FootballFantasyLane(title: lane.title, rows: rows,
+                                            accent: accent, onTap: onTap)
                     }
                 }
             }
@@ -804,14 +1406,60 @@ struct FootballFantasyPage: View {
     }
 }
 
-private struct FootballFantasyRow: View {
-    let signal: Signal
+private struct FootballPositionSummary: View {
+    let counts: [FootballFantasyPage.PositionCount]
     let accent: Color
 
-    /// The lane title and right-side metric already explain the read. Keep the
-    /// list row to the player's name; the complete evidence remains one tap
-    /// away in the existing signal detail sheet.
-    private var playerTitle: String {
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], spacing: 8) {
+            ForEach(counts) { item in
+                HStack(spacing: 7) {
+                    Text(item.position)
+                        .font(GaryFonts.mono(9, bold: true))
+                        .tracking(0.6)
+                        .foregroundStyle(accent)
+                    Spacer(minLength: 0)
+                    Text(String(item.count))
+                        .font(GaryFonts.data(12, .bold))
+                        .foregroundStyle(GaryColors.warmWhite)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(Color.white.opacity(0.045)))
+            }
+        }
+        .padding(.horizontal, 18)
+    }
+}
+
+private struct FootballFantasyLane: View {
+    let title: String
+    let rows: [Signal]
+    let accent: Color
+    let onTap: (Signal) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FootballSectionTitle(title: title, accent: accent)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
+                    Button { onTap(signal) } label: {
+                        FootballFantasyRow(signal: signal, accent: accent)
+                    }
+                    .buttonStyle(.plain)
+                    if index < rows.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    }
+                }
+            }
+            .footballPanel(accent: accent)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+private enum FootballFantasyEvidence {
+    static func playerTitle(for signal: Signal) -> String {
         let headline = signal.headline.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !headline.isEmpty else { return "PLAYER" }
 
@@ -836,9 +1484,7 @@ private struct FootballFantasyRow: View {
         return headline
     }
 
-    /// Preseason football rows can be backed by a roster-verified prior-season
-    /// sample. Keep that provenance visible without restoring the long copy.
-    private var baselineLabel: String? {
+    static func baselineLabel(for signal: Signal) -> String? {
         let headline = signal.headline.trimmingCharacters(in: .whitespacesAndNewlines)
         guard headline.range(of: "baseline", options: [.caseInsensitive]) != nil else { return nil }
         if let year = headline.range(of: #"\b(?:19|20)\d{2}\b"#, options: [.regularExpression]) {
@@ -846,10 +1492,15 @@ private struct FootballFantasyRow: View {
         }
         return "PRIOR BASELINE"
     }
+}
+
+private struct FootballFantasyRow: View {
+    let signal: Signal
+    let accent: Color
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(playerTitle)
+            Text(FootballFantasyEvidence.playerTitle(for: signal))
                 .font(GaryFonts.text(14.5, .semibold))
                 .foregroundStyle(GaryColors.warmWhite)
                 .lineLimit(1)
@@ -865,8 +1516,8 @@ private struct FootballFantasyRow: View {
                         .font(GaryFonts.data(15, .bold))
                         .foregroundStyle(accent)
                         .lineLimit(1)
-                    if let baselineLabel {
-                        Text(baselineLabel)
+                    if let baseline = FootballFantasyEvidence.baselineLabel(for: signal) {
+                        Text(baseline)
                             .font(GaryFonts.data(8.5, .bold))
                             .tracking(0.55)
                             .foregroundStyle(.white.opacity(0.44))
@@ -878,7 +1529,8 @@ private struct FootballFantasyRow: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.white.opacity(0.28))
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
         .contentShape(Rectangle())
     }
 }

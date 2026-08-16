@@ -1,4 +1,8 @@
-import { resolveNcaafKickoff } from './ncaafKickoff.js';
+import {
+  NCAAF_KICKOFF_STATUS,
+  ncaafSlateDateForKickoff,
+  resolveNcaafKickoff,
+} from './ncaafKickoff.js';
 
 const ET_TIME_ZONE = 'America/New_York';
 
@@ -63,7 +67,7 @@ export function normalizeFootballStatus(raw, { startAt = null, nowMs = Date.now(
       || token.startsWith('final ')) return 'final';
   if (['in', 'live', 'in progress', 'inprogress', 'ongoing', 'halftime', 'half time'].includes(token)
       || /^(q[1-4]|ot\d*|\d+(st|nd|rd|th) (quarter|qtr))\b/.test(token)) return 'live';
-  if (['pre', 'scheduled', 'not started', 'pregame', 'pre game', 'tbd',
+  if (['pre', 'scheduled', 'not started', 'pregame', 'pre game', 'tbd', 'tba',
     'postponed', 'delayed', 'suspended', 'cancelled', 'canceled'].includes(token)) return 'scheduled';
 
   const startMs = Date.parse(String(startAt || ''));
@@ -139,14 +143,21 @@ export function normalizeFootballGame(game, { league, targetDate, nowMs = Date.n
     throw new Error(`${normalizedLeague} game is missing an id`);
   }
 
-  const startAt = normalizedLeague === 'NCAAF'
-    ? resolveNcaafKickoff(game).iso
-    : typeof game.date === 'string' ? game.date : null;
-  const etDate = footballEtDate(startAt);
+  const ncaafKickoff = normalizedLeague === 'NCAAF'
+    ? resolveNcaafKickoff(game)
+    : null;
+  const startAt = ncaafKickoff?.iso
+    ?? (normalizedLeague === 'NFL' && typeof game.date === 'string' ? game.date : null);
+  const etDate = normalizedLeague === 'NCAAF'
+    ? ncaafSlateDateForKickoff(game)
+    : footballEtDate(startAt);
   if (!etDate) throw new Error(`${normalizedLeague} game ${game.id} has an invalid date`);
   if (etDate !== targetDate) return null;
 
-  const status = normalizeFootballStatus(game.status, { startAt, nowMs });
+  const status = ncaafKickoff?.status === NCAAF_KICKOFF_STATUS.DATE_ONLY
+    && !String(game.status ?? '').trim()
+    ? 'scheduled'
+    : normalizeFootballStatus(game.status, { startAt, nowMs });
   const awayTeam = game.visitor_team ?? game.away_team ?? null;
   const homeTeam = game.home_team ?? null;
 

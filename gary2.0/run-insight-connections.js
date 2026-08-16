@@ -34,6 +34,7 @@ const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.j
 const {
   footballHubRunIsEmptyFailure,
   shouldRepairFootballMarketVendor,
+  shouldPreserveCurrentFootballFantasySnapshot,
   shouldUpgradeFootballFantasyEvidence,
 } = await import('./scripts/lib/insightRunPolicy.js');
 const { replaceFootballProofRows } = await import('./scripts/lib/footballProofStorage.js');
@@ -69,8 +70,13 @@ const VOLATILE_CATEGORIES = new Set([
   'streaking',
   'streak',
   'pace_script',
+  'market_range',
+  'next_slate',
   'the_sweat',
   'after_gary',
+  'fantasy_usage',
+  'fantasy_matchup',
+  'fantasy_trend',
 ]);
 
 // Per-player breakdown packs (the iOS Hub "full breakdown" view). Built for MLB
@@ -316,9 +322,13 @@ async function replaceVolatileRows(date, league, rows) {
         date: `eq.${date}`,
         league: `eq.${league}`,
         category: `eq.${category}`,
-        select: 'id',
+        select: 'id,category,meta',
       },
     });
+    if (shouldPreserveCurrentFootballFantasySnapshot(existing, fresh)) {
+      console.log(`   ⏸️  ${category}: preserving verified current-season snapshot over prior-season fallback`);
+      continue;
+    }
     // Insert first: a failed write leaves the prior snapshot intact. Once the
     // replacement is durable, remove only the exact ids observed above.
     await insertRows(fresh);

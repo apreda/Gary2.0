@@ -16,6 +16,7 @@
 
 import axios from 'axios';
 import { oddsService } from './oddsService.js';
+import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
@@ -29,6 +30,36 @@ const TABLE = 'daily_slate';
 // commence_time joined the unique key, so one row per GAME — a same-matchup
 // doubleheader is two rows, never a collapse to the earliest kickoff.
 const CONFLICT_KEY = 'date,league,away_team,home_team,commence_time';
+// Provider-id rows use one exact identity across every sport. This is required
+// for NCAAF date-only rows and also means an MLB/NFL kickoff correction updates
+// the existing game instead of colliding with the exact-game unique index.
+// Legacy id-less rows retain the historical kickoff-based conflict key.
+const EXACT_GAME_CONFLICT_KEY = 'league,bdl_game_id';
+
+export function partitionDailySlateRowsByIdentity(rows = []) {
+  const safe = Array.isArray(rows) ? rows : [];
+  return {
+    exactGameRows: safe.filter((row) => row?.bdl_game_id != null),
+    legacyRows: safe.filter((row) => row?.bdl_game_id == null),
+  };
+}
+
+export function dedupeDailySlateRows(rows = []) {
+  const safe = Array.isArray(rows) ? rows : [];
+  return Object.values(
+    safe.reduce((acc, row) => {
+      const identity = row?.bdl_game_id != null
+        ? `game:${row.bdl_game_id}`
+        : `time:${row?.commence_time}`;
+      const key = `${row?.date}|${row?.league}|${row?.away_team}|${row?.home_team}|${identity}`;
+      // Provider feeds can repeat an exact game after correcting its kickoff;
+      // the later normalized snapshot wins. Legacy id-less rows retain the
+      // historical first-row behavior because their identity is less certain.
+      if (row?.bdl_game_id != null || !acc[key]) acc[key] = row;
+      return acc;
+    }, {}),
+  );
+}
 
 // Active sports for the slate (same set the scheduler plans for).
 const SLATE_SPORTS = [
@@ -88,25 +119,45 @@ export async function buildLeagueRows(sport, etDateStr) {
   });
 
   if (sport.league === 'NCAAF') {
-    const unverified = (Array.isArray(games) ? games : [])
+    const ncaafGames = Array.isArray(games) ? games : [];
+    const unverified = ncaafGames
       .filter((game) => game?.ncaaf_fbs_verified !== true);
     if (unverified.length > 0) {
       throw new Error(
         `NCAAF source returned ${unverified.length} game(s) without provider-verified FBS identity`,
       );
     }
+    const missingGameIdentity = ncaafGames
+      .filter((game) => game?.bdl_game_id == null && game?.id == null);
+    if (missingGameIdentity.length > 0) {
+      throw new Error(
+        `NCAAF source returned ${missingGameIdentity.length} game(s) without a provider game id`,
+      );
+    }
   }
 
   const rows = [];
   for (const g of Array.isArray(games) ? games : []) {
-    if (!g?.home_team || !g?.away_team || !g?.commence_time) continue;
-    const start = new Date(g.commence_time);
-    if (Number.isNaN(start.getTime())) continue;
-    // Keep estimated-time games (date-only timestamps) on their nominal date —
-    // converting T00:00:00Z to ET would shift them to the previous day.
-    const onDate = g.estimated_time
-      ? String(g.commence_time).slice(0, 10) === etDateStr
-      : getETDateStr(start) === etDateStr;
+    if (!g?.home_team || !g?.away_team) continue;
+
+    const isNcaaf = sport.league === 'NCAAF';
+    const kickoffStatus = isNcaaf ? g.kickoff_status : null;
+    if (isNcaaf && !['confirmed', 'date_only'].includes(kickoffStatus)) {
+      throw new Error(`NCAAF game ${g.id ?? '?'} is missing a valid kickoff_status`);
+    }
+
+    let onDate = false;
+    if (kickoffStatus === 'date_only') {
+      onDate = /^\d{4}-\d{2}-\d{2}$/.test(String(g.scheduled_date || ''))
+        && g.scheduled_date === etDateStr;
+    } else {
+      if (!g?.commence_time) continue;
+      const start = new Date(g.commence_time);
+      if (Number.isNaN(start.getTime())) continue;
+      onDate = isNcaaf
+        ? ncaafSlateDateForInstant(start) === etDateStr
+        : getETDateStr(start) === etDateStr;
+    }
     if (!onDate) continue;
 
     rows.push({
@@ -114,7 +165,11 @@ export async function buildLeagueRows(sport, etDateStr) {
       league: sport.league,
       away_team: g.away_team,
       home_team: g.home_team,
-      commence_time: g.commence_time,
+      commence_time: kickoffStatus === 'date_only' ? null : g.commence_time,
+      ...(isNcaaf ? {
+        scheduled_date: g.scheduled_date ?? etDateStr,
+        kickoff_status: kickoffStatus,
+      } : {}),
       // The game's own identity — lets every reader (iOS pages, insight
       // attachment) tell doubleheader games apart without string games.
       bdl_game_id: g.bdl_game_id ?? g.id ?? null,
@@ -173,36 +228,36 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
     return { date: etDateStr, total: 0, byLeague };
   }
 
-  // De-dupe TRUE duplicates on the (now doubleheader-safe) conflict key before
-  // the upsert — commence_time is in the key since Jul 22 2026, so a real
-  // doubleheader is two legitimate rows and both survive. Only an odds feed
-  // emitting the same game twice collapses here (PostgREST merge-duplicates
-  // 500s when one batch hits the same key twice — the 2026-06-24 outage).
-  const dedupedRows = Object.values(
-    rows.reduce((acc, r) => {
-      const k = `${r.date}|${r.league}|${r.away_team}|${r.home_team}|${r.commence_time}`;
-      if (!acc[k]) acc[k] = r;
-      return acc;
-    }, {}),
-  );
+  // De-dupe TRUE duplicates on the same identity used by the upsert. Exact
+  // provider IDs preserve real doubleheaders while collapsing duplicate feed
+  // rows even if one copy carries a corrected start time. Legacy id-less rows
+  // retain the historical matchup+kickoff identity.
+  const dedupedRows = dedupeDailySlateRows(rows);
   if (dedupedRows.length < rows.length) {
     console.log(`[DailySlate] De-duped ${rows.length - dedupedRows.length} exact-duplicate row(s) on the conflict key`);
   }
 
-  // Idempotent upsert (PostgREST merge-duplicates on the unique key).
+  // Idempotent upsert. Every provider-identified game uses exact identity;
+  // only legacy id-less rows use the historical kickoff key.
   const sanitized = JSON.parse(JSON.stringify(dedupedRows));
-  await axios({
-    method: 'POST',
-    url: `${supabaseUrl}/rest/v1/${TABLE}`,
-    data: sanitized,
-    params: { on_conflict: CONFLICT_KEY },
-    headers: {
-      apikey: adminKey,
-      Authorization: `Bearer ${adminKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
-    },
-  });
+  const { exactGameRows, legacyRows } = partitionDailySlateRowsByIdentity(sanitized);
+  const upsert = async (data, conflictKey) => {
+    if (data.length === 0) return;
+    await axios({
+      method: 'POST',
+      url: `${supabaseUrl}/rest/v1/${TABLE}`,
+      data,
+      params: { on_conflict: conflictKey },
+      headers: {
+        apikey: adminKey,
+        Authorization: `Bearer ${adminKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+    });
+  };
+  await upsert(exactGameRows, EXACT_GAME_CONFLICT_KEY);
+  await upsert(legacyRows, CONFLICT_KEY);
 
   const summary = Object.entries(byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
   console.log(`[DailySlate] ✅ Upserted ${dedupedRows.length} game(s) for ${etDateStr} (${summary})`);

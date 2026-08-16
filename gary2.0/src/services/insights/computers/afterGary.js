@@ -338,8 +338,15 @@ export function buildAfterGaryRows({ league, date, games, publishedPicks, curren
 
     const movement = movementFor(published, current);
     const providerAsOf = validIso(currentRow?.updated_at ?? currentRow?.last_updated_at ?? currentRow?.last_update);
+    const observedAt = providerAsOf ? Date.parse(providerAsOf) : nowInstant.getTime();
+    const kickoffAt = Date.parse(published.kickoff);
+    // BDL can expose in-game/postgame prices through the same odds shape. Those
+    // are a different market and must never be compared with Gary's sealed
+    // pregame number. Once play starts, omission preserves the last verified
+    // pre-kick receipt already stored by the proof writer.
+    if (!Number.isFinite(kickoffAt) || observedAt >= kickoffAt) continue;
     const asOf = providerAsOf || nowInstant.toISOString();
-    const marketState = nowInstant.getTime() < Date.parse(published.kickoff) ? 'pregame' : 'closed';
+    const marketState = nowInstant.getTime() < kickoffAt ? 'pregame' : 'closed';
     const label = `${teamAbbreviation(game, 'away')} @ ${teamAbbreviation(game, 'home')}`;
     const magnitude = movement.primary_value || 0;
 
@@ -364,6 +371,7 @@ export function buildAfterGaryRows({ league, date, games, publishedPicks, curren
         market_type: published.marketType,
         pick_side: published.pickSide,
         pick_team: published.pickTeam,
+        pick_label: published.pickLabel,
         published_at: published.publishedAt,
         published_at_source: published.publishedAtSource,
         kickoff: published.kickoff,

@@ -395,11 +395,18 @@ struct HubView: View {
     @State private var breakdownSignal: Signal? = nil
     @State private var teamCardSignal: Signal? = nil
 
-    /// Routing law (founder, Jul 26): a player-backed signal ALWAYS opens the
-    /// player card; a team-backed one opens the team card; the small signal
-    /// pop-up survives only when neither identity exists.
+    /// Player-backed MLB signals open their populated player card; football
+    /// fantasy signals open their own grounded evidence. Team-backed rows use
+    /// the team card, with the compact signal overlay as the safe fallback.
     private func openSignal(_ s: Signal) {
-        if s.playerId != nil { breakdownSignal = s }
+        // Football fantasy lanes are already the grounded product: their
+        // headline/detail/meta describe the verified role or scoring context.
+        // The legacy player-card pipeline is MLB-only, so routing an NFL/NCAAF
+        // row there creates a permanent "building" screen that can never fill.
+        if (sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind) {
+            selectedSignal = s
+        }
+        else if s.playerId != nil { breakdownSignal = s }
         else if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
         else { selectedSignal = s }
     }
@@ -472,7 +479,10 @@ struct HubView: View {
     @State private var didLoad = false
     @State private var loadedAt: Date? = nil
     @State private var loadedDate: String = ""
-    @State private var fetchErrored = false
+    /// Current-day insight transport/schema failures, tracked per desk. A
+    /// healthy MLB response must never make a broken NFL/NCAAF feed look like
+    /// an honest empty board.
+    @State private var fetchErrorLeagues: Set<HubLeagueSel> = []
     /// Yesterday's graded tally.
     @State private var hitRate: (hit: Int, graded: Int)? = nil
     /// Whether the graded surface really is yesterday (vs the walk-back day).
@@ -608,25 +618,28 @@ struct HubView: View {
         // Force past the 30-min pulse cache on refresh/rollover, not first paint.
         async let pulseF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
 
-        var collected: [Signal] = []
-        var anyError = false
-        await withTaskGroup(of: (sigs: [Signal], errored: Bool).self) { group in
+        var successful: [HubLeagueSel: [Signal]] = [:]
+        var failedLeagues: Set<HubLeagueSel> = []
+        await withTaskGroup(of: (league: HubLeagueSel?, sigs: [Signal], errored: Bool).self) { group in
             for lg in AppFlags.insightLeagues {
                 group.addTask {
+                    let league = HubLeagueSel.from(lg)
                     do {
                         let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
-                        return (conns.compactMap { $0.toSignal() }, false)
+                        return (league, conns.compactMap { $0.toSignal() }, false)
                     } catch {
                         print("[HubView] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
-                        return ([], true)
+                        return (league, [], true)
                     }
                 }
             }
             for await r in group {
-                collected.append(contentsOf: r.sigs)
-                if r.errored { anyError = true }
+                guard let league = r.league else { continue }
+                if r.errored { failedLeagues.insert(league) }
+                else { successful[league] = r.sigs }
             }
         }
+        var collected = successful.values.flatMap { $0 }
         collected = Self.dedupe(collected)
         #if DEBUG
         // Sim-QA breadcrumb (GaryTour's file channel, reversed): lane counts
@@ -669,11 +682,15 @@ struct HubView: View {
         let intel = await intelF
 
         await MainActor.run {
+            // Successful desks replace their prior rows, including a genuine
+            // empty day. Failed desks alone retain their last-good snapshot.
+            let retained = fetched.filter { failedLeagues.contains($0.league) }
+            let resolved = Self.dedupe(collected + retained)
             intelCards = intel
             didLoad = true
             loadedAt = Date()
             loadedDate = date
-            fetchErrored = anyError && collected.isEmpty
+            fetchErrorLeagues = failedLeagues
             hitRate = rate
             gradedIsYesterday = (gradedDate == gradedDate0)
             if gradedIsYesterday { gradedDayShort = "" } else {
@@ -686,17 +703,13 @@ struct HubView: View {
             ydaySignals = yday
             todayBoard = tb
             pulseRows = pulse
-            // Keep last-good data only when the fetch ERRORED; a successful
-            // zero-row day must clear the board (6am rollover honesty).
-            if !collected.isEmpty || !anyError {
-                fetched = collected
-                itemsIndex = Self.buildItemsIndex(collected)
-            }
+            fetched = resolved
+            itemsIndex = Self.buildItemsIndex(resolved)
             // Land on the highest-priority league with edges tonight, without
             // stomping a user-picked league that still has rows.
             if shouldChooseInitialLeague,
-               !collected.contains(where: { $0.league == sel }),
-               let top = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
+               !resolved.contains(where: { $0.league == sel }),
+               let top = availableLeagues.first(where: { lg in resolved.contains { $0.league == lg } }) {
                 sel = top
             }
             consumeFocus()
@@ -707,7 +720,7 @@ struct HubView: View {
         guard didLoad else { return }
         let expired = loadedAt.map { Date().timeIntervalSince($0) > 1800 } ?? true
         let emptyBoard = fetched.isEmpty && ydaySignals.isEmpty
-        if loadedDate != SupabaseAPI.todayEST() || expired || fetchErrored || emptyBoard {
+        if loadedDate != SupabaseAPI.todayEST() || expired || !fetchErrorLeagues.isEmpty || emptyBoard {
             await load()
         }
     }
@@ -715,7 +728,7 @@ struct HubView: View {
     /// Deep-linked lane → its section anchor on the new page. A missing anchor
     /// no-ops harmlessly; the request stays pending until the page can render.
     private func consumeFocus() {
-        guard focus.focusLane != nil, didLoad, !fetchErrored else { return }
+        guard focus.focusLane != nil, didLoad, !fetchErrorLeagues.contains(sel) else { return }
         guard let lane = focus.focusLane else { return }
         focus.focusLane = nil
         searchText = ""
@@ -732,18 +745,20 @@ struct HubView: View {
         case .starterForm, .teamRecord,
              .bullpenFatigue, .ballpark:             anchor = sel == .wc ? "matchups" : "arms"
         case .situational:                           anchor = (sel == .nfl || sel == .ncaaf) ? "edges" : (sel == .wc ? "matchups" : "arms")
-        case .injury:                                anchor = (sel == .nfl || sel == .ncaaf) ? "field" : "matchups"
+        case .injury:                                anchor = (sel == .nfl || sel == .ncaaf) ? "edges" : "matchups"
         case .h2h, .firstInning,
              .runningGame, .parkWeather:             anchor = "matchups"
         case .tournament, .advancement:              anchor = "cup"
         case .xgRegression, .xgRecap:                anchor = "numbers"
-        case .trenches, .passRush:                   anchor = "trenches"
-        case .quarterback:                           anchor = "field"
+        case .trenches, .passRush:                   anchor = "edges"
+        case .quarterback:                           anchor = "edges"
         case .coverage, .paceScript, .redZone,
              .turnoverEdge, .explosivePlay,
              .specialTeams, .coaching:               anchor = "edges"
         case .afterGary:                              anchor = "afterGary"
-        case .theSweat:                               anchor = "edges"
+        case .marketRange:                            anchor = "edges"
+        case .nextSlate:                              anchor = "nextSlate"
+        case .theSweat:                               anchor = "theSweat"
         case .fantasyUsage, .fantasyRedZone,
              .fantasyMatchup, .fantasyTrend:          anchor = "fantasy"
         }
@@ -1194,12 +1209,18 @@ struct HubView: View {
     }
 
     private var hubScopeContent: AnyView {
+        if didLoad, fetchErrorLeagues.contains(sel), leagueSignals.isEmpty {
+            return AnyView(hubError)
+        }
         if hubScope == "fantasy" {
             if sel == .nfl || sel == .ncaaf {
                 return AnyView(
                     FootballFantasyPage(
                         league: sel,
-                        signals: leagueSignals.filter { Self.fantasyKinds.contains($0.kind) },
+                        signals: leagueSignals.filter {
+                            Self.fantasyKinds.contains($0.kind)
+                                || (sel == .ncaaf && $0.kind == .nextSlate)
+                        },
                         loaded: didLoad
                     ) { s in openSignal(s) }
                 )
@@ -1240,9 +1261,21 @@ struct HubView: View {
         if searchOpen && !searchText.isEmpty {
             return AnyView(searchResultsView)
         }
-        if fetchErrored && leagueSignals.isEmpty && ydaySignals.isEmpty
+        if fetchErrorLeagues.contains(sel) && leagueSignals.isEmpty && ydaySignals.isEmpty
             && nightRows.isEmpty && streakRows.isEmpty {
             return AnyView(hubError)
+        }
+        if sel == .nfl || sel == .ncaaf {
+            return AnyView(
+                FootballHubPage(
+                    league: sel,
+                    slateRows: slateRows,
+                    signals: leagueSignals,
+                    loaded: didLoad,
+                    onGame: { row in gameSheet = HubGameSel(row: row) },
+                    onSignal: { signal in openSignal(signal) }
+                )
+            )
         }
         return AnyView(hubLoadedContent)
     }
@@ -1479,6 +1512,34 @@ struct HubView: View {
 
     /// Jump-bar entries — only sections that exist right now, in page order.
     private var jumpItems: [(anchor: String, label: String)] {
+        if (sel == .nfl || sel == .ncaaf), hubScope == "hub" {
+            var football: [(String, String)] = []
+            if !slateRows.isEmpty { football.append(("slate", "Windows")) }
+            if sel == .ncaaf,
+               slateRows.isEmpty,
+               leagueSignals.contains(where: { $0.kind == .nextSlate }) {
+                football.append(("nextSlate", "Next Slate"))
+            }
+            if leagueSignals.contains(where: { $0.kind == .afterGary }) {
+                football.append(("afterGary", "Gary's Number"))
+            }
+            let boardKinds: Set<SignalKind> = [
+                .trenches, .passRush, .quarterback, .injury, .coverage,
+                .paceScript, .redZone, .turnoverEdge, .explosivePlay,
+                .specialTeams, .situational, .coaching,
+            ]
+            if leagueSignals.contains(where: { boardKinds.contains($0.kind) }) {
+                football.append(("edges", "Game Board"))
+            }
+            let hasLiveSweat = leagueSignals.contains { signal in
+                guard signal.kind == .theSweat else { return false }
+                let state = signal.sweat?.state?.lowercased() ?? ""
+                return !["watch", "scheduled", "pregame"].contains(state)
+            }
+            if hasLiveSweat { football.append(("theSweat", "Live")) }
+            return football
+        }
+
         var out: [(String, String)] = []
         if !leagueSignals.isEmpty {
             let selection = frontPageSelection

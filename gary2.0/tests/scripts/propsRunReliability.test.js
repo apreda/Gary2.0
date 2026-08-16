@@ -85,7 +85,8 @@ describe('props game discovery scope', () => {
   it('wires the exact-game discovery policy into the shared props runner', () => {
     const cli = src('scripts/run-agentic-props-cli.js');
     expect(cli).toContain('getUpcomingGames(sportKey, propGameDiscoveryOptions({');
-    expect(cli).toContain('sportKey,\n    nocache,\n    gameIdFilter,\n    etDate: getESTDate(),');
+    expect(cli).toContain('sportKey,\n    nocache,\n    gameIdFilter,\n    etDate: requestedSlateDate');
+    expect(cli).toContain("leagueLabel === 'NCAAF' ? ncaafSlateDateForInstant(new Date()) : getESTDate()");
   });
 });
 

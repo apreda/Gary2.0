@@ -297,13 +297,7 @@ async function fetchNCAAFGames(date) {
   ).values()];
   const exactEtSlate = unique.filter((game) => {
     const kickoff = resolveNcaafKickoff(game);
-    if (!kickoff.iso) return false;
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/New_York',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date(kickoff.iso)) === date;
+    return kickoff.scheduledDate === date;
   });
   cache.games.set(key, exactEtSlate);
   return exactEtSlate;

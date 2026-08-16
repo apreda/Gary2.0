@@ -4,9 +4,10 @@
 //
 // generateInsightConnections({ date, league }) loads today's slate ONCE,
 // then fans out to a set of independent per-connection "computer" functions.
-// Each computer is responsible for its own data fetching, is fully defensive
-// (returns [] and never throws when data is missing), and returns rows that
-// already match the insight_connections table contract.
+// Each computer is responsible for its own data fetching and returns rows that
+// already match the insight_connections table contract. Ordinary lane failures
+// are isolated; source-integrity failures in NCAAF dark-day discovery propagate
+// so a provider outage cannot masquerade as an honest empty future schedule.
 //
 // The orchestrator's only jobs:
 //   1. Resolve the slate (so every computer scores against the SAME games).
@@ -61,8 +62,10 @@ import { computeNbaOwned } from './computers/nbaOwned.js';
 // unsupported football concepts remain absent instead of being synthesized.
 import { computeFootballTeamEdges } from './computers/footballTeamEdges.js';
 import { computeFootballMarketEdges } from './computers/footballMarketEdges.js';
+import { computeFootballMarketRange } from './computers/footballMarketRange.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
+import { computeNcaafNextSlate } from './computers/ncaafNextSlate.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -106,6 +109,7 @@ const NBA_COMPUTERS = [
 const FOOTBALL_COMPUTERS = [
   computeFootballTeamEdges,
   computeFootballMarketEdges,
+  computeFootballMarketRange,
 ];
 
 const NFL_COMPUTERS = [
@@ -155,8 +159,9 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr, leagueKey), gameCount: 0, connections: [] };
   }
 
-  // 1. Resolve today's slate ONCE. Every computer scores ONLY against games
-  //    on this slate; an empty slate short-circuits everything.
+  // 1. Resolve today's slate ONCE. Every game-level computer scores ONLY
+  //    against games on this slate. An empty NCAAF slate runs the dedicated
+  //    verified next-slate context computer; other empty slates short-circuit.
   //    MLB: "getMlbGamesForDate(dateStr) — single positional arg (YYYY-MM-DD)."
   //    NBA: getNbaGamesForDate(dateStr) — same contract.
   let games = [];
@@ -185,6 +190,41 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   }
 
   if (!Array.isArray(games) || games.length === 0) {
+    if (leagueKey === 'ncaaf') {
+      const season = seasonForDate(dateStr, leagueKey);
+      let raw;
+      try {
+        raw = await computeNcaafNextSlate({
+          date: dateStr,
+          season,
+          league: leagueKey,
+          games: [],
+          slateGameIds: new Set(),
+          bdl: ballDontLieService,
+          helpers: { gameLabel },
+        });
+      } catch (err) {
+        throw new Error(`[insights] Failed to discover next NCAAF slate: ${err?.message || err}`);
+      }
+      const connections = postProcess(raw, {
+        slateGameIds: new Set(),
+        minRelevance,
+        maxRows,
+        maxPerCategory,
+      });
+      console.log(
+        `[insights] No NCAAF games found for ${dateStr}; ` +
+          `${connections.length ? 'published the next verified slate.' : 'no verified slate found in the discovery window.'}`,
+      );
+      return {
+        date: dateStr,
+        league: leagueKey,
+        season,
+        gameCount: 0,
+        connections,
+        failures: [],
+      };
+    }
     console.log(`[insights] No ${leagueKey.toUpperCase()} games found for ${dateStr} — nothing to compute.`);
     return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr, leagueKey), gameCount: 0, connections: [] };
   }

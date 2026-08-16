@@ -41,17 +41,24 @@ beforeEach(() => {
 });
 
 describe('BDL NCAAF slate normalization', () => {
-  it('queries both provider dates before filtering, estimates 3 PM ET, and keeps only FBS', async () => {
+  it('queries both provider dates, preserves TIME TBD, and keeps only FBS', async () => {
     mocks.getGames.mockResolvedValue([
       game(1, '2026-09-05'),
       game(2, '2026-09-06T01:30:00Z'), // Sep 5 ET
-      game(3, '2026-09-06T18:00:00Z'), // Sep 6 ET
+      game(5, '2026-09-06T05:30:00Z'), // 1:30 AM ET Sep 6, still Sep 5 slate
+      game(6, '2026-09-06T10:00:00Z'), // 6:00 AM ET Sep 6, next slate
+      {
+        ...game(3, '2026-09-06T18:00:00Z'), // Sep 6 ET
+        home_team: { id: 30, full_name: 'Unresolved Tomorrow Home' },
+        visitor_team: { id: 31, full_name: 'Unresolved Tomorrow Away' },
+      },
       game(4, '2026-09-05T20:00:00Z', 20), // FCS opponent
     ]);
     mocks.getTeams.mockResolvedValue([
       fbs(10, 10, 'Home 1'), fbs(11, 1, 'Away 1'),
       fbs(20, 10, 'Home 2'), fbs(21, 1, 'Away 2'),
-      fbs(30, 10, 'Home 3'), fbs(31, 1, 'Away 3'),
+      fbs(50, 10, 'Home 5'), fbs(51, 1, 'Away 5'),
+      fbs(60, 10, 'Home 6'), fbs(61, 1, 'Away 6'),
       fbs(40, 10, 'Home 4'), fbs(41, 20, 'Away 4'),
     ]);
 
@@ -63,13 +70,25 @@ describe('BDL NCAAF slate normalization', () => {
       { dates: ['2026-09-05', '2026-09-06'], per_page: 100 },
       10,
     );
-    expect(rows.map((row) => row.id)).toEqual([1, 2]);
+    expect(rows.map((row) => row.id)).toEqual([1, 2, 5]);
     expect(rows[0]).toMatchObject({
-      commence_time: '2026-09-05T19:00:00.000Z',
+      commence_time: null,
+      scheduled_date: '2026-09-05',
+      kickoff_status: 'date_only',
       estimated_time: true,
       ncaaf_fbs_verified: true,
     });
-    expect(rows[1].commence_time).toBe('2026-09-06T01:30:00.000Z');
+    expect(rows[1]).toMatchObject({
+      commence_time: '2026-09-06T01:30:00.000Z',
+      scheduled_date: '2026-09-05',
+      kickoff_status: 'confirmed',
+      estimated_time: false,
+    });
+    expect(rows[2]).toMatchObject({
+      commence_time: '2026-09-06T05:30:00.000Z',
+      scheduled_date: '2026-09-06',
+      kickoff_status: 'confirmed',
+    });
   });
 
   it('batches every FBS game id and follows odds cursors without truncating late-slate markets', async () => {

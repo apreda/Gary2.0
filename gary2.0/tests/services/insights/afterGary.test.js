@@ -119,6 +119,7 @@ describe('AFTER GARY rows', () => {
         season_type: 1,
         market_type: 'spread',
         pick_side: 'away',
+        pick_label: 'BAL',
         market_state: 'pregame',
         vendor: 'BetMGM',
         published: { line: 4, odds: -110 },
@@ -148,6 +149,25 @@ describe('AFTER GARY rows', () => {
       now: '2026-08-15T22:50:00.000Z',
     });
     expect(rows).toEqual([]);
+  });
+
+  it('never compares Gary\'s pregame number with an in-game or postgame price', () => {
+    expect(buildAfterGaryRows({
+      league: 'nfl',
+      games: [game],
+      publishedPicks: [record()],
+      currentOdds: [odds({ updated_at: '2026-08-15T23:01:00.000Z', spread_away_value: -16.5 })],
+      now: '2026-08-15T23:05:00.000Z',
+    })).toEqual([]);
+
+    const noProviderClock = odds({ updated_at: null });
+    expect(buildAfterGaryRows({
+      league: 'nfl',
+      games: [game],
+      publishedPicks: [record()],
+      currentOdds: [noProviderClock],
+      now: '2026-08-15T23:05:00.000Z',
+    })).toEqual([]);
   });
 
   it('normalizes total movement for the selected over/under direction', () => {

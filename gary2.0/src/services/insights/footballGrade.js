@@ -26,6 +26,12 @@ export function gradeFootballInsightRow(row, game) {
   if (row?.category === 'the_sweat' || row?.meta?.kind === 'the_sweat') {
     return { result: null, note: 'Pick proof receipt; context only' };
   }
+  if (row?.category === 'market_range' || row?.meta?.kind === 'market_range') {
+    return { result: null, note: 'Sportsbook range; context only' };
+  }
+  if (row?.category === 'next_slate' || row?.meta?.kind === 'next_slate') {
+    return { result: null, note: 'Future schedule preview; context only' };
+  }
 
   const final = scores(game);
   if (!final) return { skip: true, reason: 'final score unavailable' };

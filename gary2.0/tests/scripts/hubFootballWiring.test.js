@@ -24,6 +24,9 @@ describe('football Hub invocation wiring', () => {
 
   it('refreshes the sportsbook market lane as a complete snapshot', () => {
     expect(runner).toMatch(/VOLATILE_CATEGORIES = new Set\(\[[\s\S]*?'pace_script'/);
+    expect(runner).toMatch(/VOLATILE_CATEGORIES = new Set\(\[[\s\S]*?'market_range'/);
+    expect(runner).toMatch(/VOLATILE_CATEGORIES = new Set\(\[[\s\S]*?'next_slate'/);
+    expect(runner).toMatch(/VOLATILE_CATEGORIES = new Set\(\[[\s\S]*?'fantasy_usage'/);
     const replacement = runner.slice(
       runner.indexOf('async function replaceVolatileRows'),
       runner.indexOf('/** Stored rows for (date, league)'),

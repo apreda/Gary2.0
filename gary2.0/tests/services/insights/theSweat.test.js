@@ -97,8 +97,27 @@ describe('THE SWEAT football proof', () => {
 
     const byCode = new Map(rows.map((row) => [row.meta.factor_code, row]));
     expect(byCode.get('THE_NUMBER').meta.state).toBe('HOLDING');
+    expect(byCode.get('THE_NUMBER').meta).toMatchObject({
+      baseline_selected: 4,
+      live_selected: 7,
+      live_opponent: 10,
+      baseline_unit: 'LINE',
+      live_unit: 'SCORE',
+      cover_margin: 1,
+      selected_score: 7,
+      opponent_score: 10,
+      market_type: 'spread',
+    });
     expect(byCode.get('RUSH_EDGE').value).toBe('58 · 31');
     expect(byCode.get('RUSH_EDGE').meta.state).toBe('HOLDING');
+    expect(byCode.get('RUSH_EDGE').meta).toMatchObject({
+      baseline_selected: '156.6',
+      baseline_opponent: '116.9',
+      live_selected: 58,
+      live_opponent: 31,
+      baseline_unit: 'YDS/G',
+      live_unit: 'YDS',
+    });
     expect(byCode.get('AIR_EDGE').meta.state).toBe('FLIPPED');
     expect(rows.every((row) => row.meta.pick_id === pick.pick_id)).toBe(true);
   });

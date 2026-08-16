@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyNcaafFbsGames,
+  ncaafSlateDateForInstant,
+  ncaafSlateDateForKickoff,
   ncaafTeamConferenceId,
   resolveNcaafKickoff,
 } from '../../src/services/ncaafGamePolicy.js';
@@ -111,13 +113,17 @@ describe('NCAAF provider identity policy', () => {
 });
 
 describe('NCAAF date-only kickoff policy', () => {
-  it('estimates exactly 3 PM ET in daylight and standard time', () => {
+  it('keeps a provider calendar date date-only without manufacturing an instant', () => {
     expect(resolveNcaafKickoff('2026-09-05')).toEqual({
-      iso: '2026-09-05T19:00:00.000Z',
+      iso: null,
+      scheduledDate: '2026-09-05',
+      status: 'date_only',
       estimated: true,
     });
     expect(resolveNcaafKickoff('2026-11-14')).toEqual({
-      iso: '2026-11-14T20:00:00.000Z',
+      iso: null,
+      scheduledDate: '2026-11-14',
+      status: 'date_only',
       estimated: true,
     });
   });
@@ -125,8 +131,30 @@ describe('NCAAF date-only kickoff policy', () => {
   it('preserves a posted instant and rejects malformed values', () => {
     expect(resolveNcaafKickoff('2026-09-06T00:30:00Z')).toEqual({
       iso: '2026-09-06T00:30:00.000Z',
+      scheduledDate: '2026-09-05',
+      status: 'confirmed',
       estimated: false,
     });
-    expect(resolveNcaafKickoff('TBD').iso).toBeNull();
+    expect(resolveNcaafKickoff('TBD')).toEqual({
+      iso: null,
+      scheduledDate: null,
+      status: 'unknown',
+      estimated: false,
+    });
+  });
+
+  it('uses a 6:00 AM ET slate boundary only for confirmed kickoff instants', () => {
+    expect(ncaafSlateDateForInstant('2026-09-06T09:59:59Z')).toBe('2026-09-05');
+    expect(ncaafSlateDateForInstant('2026-09-06T10:00:00Z')).toBe('2026-09-06');
+    expect(ncaafSlateDateForKickoff('2026-09-06T05:30:00Z')).toBe('2026-09-05');
+    expect(ncaafSlateDateForKickoff('2026-09-06')).toBe('2026-09-06');
+  });
+
+  it('does not let date-only or invalid values masquerade as exact instants', () => {
+    expect(ncaafSlateDateForInstant(null)).toBeNull();
+    expect(ncaafSlateDateForInstant('')).toBeNull();
+    expect(ncaafSlateDateForInstant('2026-09-06')).toBeNull();
+    expect(ncaafSlateDateForInstant('TBD')).toBeNull();
+    expect(ncaafSlateDateForKickoff('TBD')).toBeNull();
   });
 });

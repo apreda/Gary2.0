@@ -30,9 +30,8 @@ import {
   formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
-// Import QB helpers from NFL builder (shared between NFL and NCAAF)
-import { fetchStartingQBs, formatStartingQBs } from './nfl.js';
 import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js';
+import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // CFP SEEDING & BOWL GAME CONSTANTS
@@ -99,56 +98,26 @@ const tier3Bowls = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════
-// NCAAF CONFERENCE TIER CONSTANTS
+// NCAAF CONFERENCE IDENTITY
 // ═══════════════════════════════════════════════════════════════════
 
-/**
- * NCAAF Conference Tier Mapping
- * Uses BDL conference IDs (from /ncaaf/v1/conferences)
- * Tiers reflect typical talent/resources, NOT current performance
- */
+// Uses only factual BDL conference identity. Conference membership is not a
+// talent grade, so the scout never turns it into an editorial tier.
+const NCAAF_CONFERENCE_NAMES_BY_ID = Object.freeze({
+  1: 'ACC',
+  2: 'American',
+  3: 'Big 12',
+  4: 'Big Ten',
+  5: 'CUSA',
+  6: 'FBS Indep.',
+  7: 'MAC',
+  8: 'Mountain West',
+  9: 'Pac-12',
+  10: 'SEC',
+  11: 'Sun Belt',
+});
 
-// BDL Conference ID to Tier Mapping
-const CONFERENCE_ID_TIERS = {
-  // Tier 1: Elite Power 4
-  10: { tier: 1, name: 'SEC', label: 'Elite Power 4' },
-  4: { tier: 1, name: 'Big Ten', label: 'Elite Power 4' },
-  // Tier 2: Power 4
-  1: { tier: 2, name: 'ACC', label: 'Power 4' },
-  3: { tier: 2, name: 'Big 12', label: 'Power 4' },
-  9: { tier: 2, name: 'Pac-12', label: 'Power 4' },
-  6: { tier: 2, name: 'FBS Indep.', label: 'FBS Independent' },
-  // Tier 3: Upper G5
-  2: { tier: 3, name: 'American', label: 'Upper G5' },
-  8: { tier: 3, name: 'Mountain West', label: 'Upper G5' },
-  // Tier 4: Lower G5
-  5: { tier: 4, name: 'CUSA', label: 'Lower G5' },
-  7: { tier: 4, name: 'MAC', label: 'Lower G5' },
-  11: { tier: 4, name: 'Sun Belt', label: 'Lower G5' },
-};
-
-// Fallback by name
-const NCAAF_CONFERENCE_TIERS = {
-  'SEC': { tier: 1, label: 'Elite Power 4' },
-  'Big Ten': { tier: 1, label: 'Elite Power 4' },
-  'Big 12': { tier: 2, label: 'Power 4' },
-  'ACC': { tier: 2, label: 'Power 4' },
-  'American': { tier: 3, label: 'Upper G5' },
-  'Mountain West': { tier: 3, label: 'Upper G5' },
-  'CUSA': { tier: 4, label: 'Lower G5' },
-  'MAC': { tier: 4, label: 'Lower G5' },
-  'Sun Belt': { tier: 4, label: 'Lower G5' },
-  'FBS Indep.': { tier: 2, label: 'FBS Independent' },
-};
-
-const TEAM_TIER_OVERRIDES = {
-  'Notre Dame Fighting Irish': { tier: 1, label: 'Elite Independent', conference: 'FBS Indep.' },
-  'Notre Dame': { tier: 1, label: 'Elite Independent', conference: 'FBS Indep.' },
-  'Army Black Knights': { tier: 3, label: 'Upper Independent', conference: 'FBS Indep.' },
-  'Navy Midshipmen': { tier: 3, label: 'Upper Independent', conference: 'FBS Indep.' },
-  'UConn Huskies': { tier: 4, label: 'Lower Independent', conference: 'FBS Indep.' },
-  'UMass Minutemen': { tier: 4, label: 'Lower Independent', conference: 'FBS Indep.' },
-};
+const NCAAF_CONFERENCE_NAMES = new Set(Object.values(NCAAF_CONFERENCE_NAMES_BY_ID));
 
 // ═══════════════════════════════════════════════════════════════════
 // CFP HELPER FUNCTIONS
@@ -868,73 +837,82 @@ ${awaySection}
 `;
 }
 
+function normalizedProviderTeamName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function exactProviderTeam(teams, requestedName) {
+  const target = normalizedProviderTeamName(requestedName);
+  if (!target) return null;
+  return (Array.isArray(teams) ? teams : []).find((team) => {
+    const names = [team?.full_name, team?.display_name, team?.name]
+      .map(normalizedProviderTeamName)
+      .filter(Boolean);
+    return names.includes(target);
+  }) || null;
+}
+
+function providerConferenceName(team) {
+  const conferenceId = ncaafTeamConferenceId(team);
+  if (conferenceId != null && NCAAF_CONFERENCE_NAMES_BY_ID[conferenceId]) {
+    return NCAAF_CONFERENCE_NAMES_BY_ID[conferenceId];
+  }
+
+  const raw = typeof team?.conference === 'string'
+    ? team.conference.trim()
+    : typeof team?.conference?.name === 'string'
+      ? team.conference.name.trim()
+      : typeof team?.division === 'string'
+        ? team.division.trim()
+        : '';
+  return NCAAF_CONFERENCE_NAMES.has(raw) ? raw : null;
+}
+
+export function buildNcaafConferenceContext(homeTeam, awayTeam, teams) {
+  const home = exactProviderTeam(teams, homeTeam);
+  const away = exactProviderTeam(teams, awayTeam);
+  const homeConference = providerConferenceName(home);
+  const awayConference = providerConferenceName(away);
+  if (!home || !away || !homeConference || !awayConference) return null;
+
+  return {
+    homeTeam,
+    awayTeam,
+    homeConference,
+    awayConference,
+    matchupType: homeConference === awayConference ? 'SAME-CONFERENCE' : 'CROSS-CONFERENCE',
+  };
+}
+
 /**
- * Format conference tier section for NCAAF games
+ * Format provider-grounded conference identity for NCAAF games.
  */
-async function formatConferenceTierSection(homeTeam, awayTeam, sport) {
+async function formatConferenceContextSection(homeTeam, awayTeam, sport) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (!bdlSport || bdlSport !== 'americanfootball_ncaaf') return '';
 
     const teams = await ballDontLieService.getTeams(bdlSport);
-    const homeTeamData = findTeam(teams, homeTeam);
-    const awayTeamData = findTeam(teams, awayTeam);
+    const context = buildNcaafConferenceContext(homeTeam, awayTeam, teams);
+    if (!context) return '';
 
-    const getTeamTier = (team, teamName) => {
-      // Check team overrides first (for independents like Notre Dame)
-      if (TEAM_TIER_OVERRIDES[teamName]) return TEAM_TIER_OVERRIDES[teamName];
-      if (team && TEAM_TIER_OVERRIDES[team.full_name]) return TEAM_TIER_OVERRIDES[team.full_name];
-
-      // Try conference ID first (most reliable from BDL)
-      const confId = parseInt(team?.conference, 10);
-      if (!isNaN(confId) && CONFERENCE_ID_TIERS[confId]) {
-        const tierInfo = CONFERENCE_ID_TIERS[confId];
-        return { tier: tierInfo.tier, label: tierInfo.label, conference: tierInfo.name };
-      }
-
-      // Fallback to conference name matching
-      const confName = team?.conference || team?.division || '';
-      if (NCAAF_CONFERENCE_TIERS[confName]) {
-        return { ...NCAAF_CONFERENCE_TIERS[confName], conference: confName };
-      }
-
-      return { tier: 3, label: 'Unknown', conference: confName || 'Unknown' };
-    };
-
-    const homeTier = getTeamTier(homeTeamData, homeTeam);
-    const awayTier = getTeamTier(awayTeamData, awayTeam);
-    const tierGap = Math.abs(homeTier.tier - awayTier.tier);
-
-    const homeConf = homeTier.conference || homeTeamData?.conference || 'Unknown';
-    const awayConf = awayTier.conference || awayTeamData?.conference || 'Unknown';
-
-    console.log(`[Scout Report] NCAAF Tiers: ${homeTeam} (${homeConf}, Tier ${homeTier.tier}) vs ${awayTeam} (${awayConf}, Tier ${awayTier.tier})`);
-
-    let gapAnalysis = '';
-    if (tierGap === 0) {
-      gapAnalysis = 'Same tier';
-    } else if (tierGap === 1) {
-      gapAnalysis = 'One tier gap';
-    } else if (tierGap === 2) {
-      gapAnalysis = 'Two tier gap';
-    } else {
-      gapAnalysis = 'Three+ tier gap';
-    }
+    console.log(`[Scout Report] NCAAF conferences: ${homeTeam} (${context.homeConference}) vs ${awayTeam} (${context.awayConference})`);
 
     return `
-CONFERENCE TIER CONTEXT (NCAAF)
+NCAAF CONFERENCE CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[HOME] ${homeTeam}: ${homeConf} (Tier ${homeTier.tier} - ${homeTier.label})
-[AWAY] ${awayTeam}: ${awayConf} (Tier ${awayTier.tier} - ${awayTier.label})
-
-TIER GAP: ${tierGap} level${tierGap !== 1 ? 's' : ''}
-   ${gapAnalysis}
+[HOME] ${homeTeam}: ${context.homeConference}
+[AWAY] ${awayTeam}: ${context.awayConference}
+MATCHUP: ${context.matchupType}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 `;
   } catch (error) {
-    console.warn('[Scout Report] Error fetching conference tiers:', error.message);
+    console.warn('[Scout Report] Error fetching NCAAF conference context:', error.message);
     return '';
   }
 }
@@ -1013,17 +991,13 @@ export async function buildNcaafScoutReport(game, options = {}) {
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
 
-  // For NCAAF, fetch starting QBs (pass injuries to filter out IR/Out players)
-  let startingQBs = null;
-  startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries, ncaafSeasonYear);
-
   // For NCAAF, fetch key players (roster + stats) to prevent hallucinations
   let ncaafKeyPlayers = null;
   ncaafKeyPlayers = await fetchNcaafKeyPlayers(homeTeam, awayTeam, sportKey, ncaafSeasonYear);
 
-  // For NCAAF, fetch conference tier context
-  let conferenceTierSection = '';
-  conferenceTierSection = await formatConferenceTierSection(homeTeam, awayTeam, sportKey);
+  // Provider-grounded conference identity only; no subjective conference tiers.
+  let conferenceContextSection = '';
+  conferenceContextSection = await formatConferenceContextSection(homeTeam, awayTeam, sportKey);
 
   // For NCAAF, fetch bowl game context if applicable (December-January games are likely bowls)
   let bowlGameContext = '';
@@ -1210,9 +1184,9 @@ REST & SCHEDULE SITUATION
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}
+${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}
 
-${conferenceTierSection}
+${conferenceContextSection}
 
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1249,4 +1223,4 @@ ${formatOdds(game, sportKey)}
 }
 
 // Export helper functions that may be needed by other modules
-export { getCfpSeedingFromBracket, parseCfpSeeding, detectCfpRound, determineBowlTier, fetchBowlGameContext, fetchCfpJourneyContext, fetchNcaafKeyPlayers, formatNcaafKeyPlayers, formatConferenceTierSection };
+export { getCfpSeedingFromBracket, parseCfpSeeding, detectCfpRound, determineBowlTier, fetchBowlGameContext, fetchCfpJourneyContext, fetchNcaafKeyPlayers, formatNcaafKeyPlayers, formatConferenceContextSection };

@@ -151,8 +151,52 @@ final class SwapMeta: Decodable {
     let factor_code: String?
     let baseline: InsightMetaValue?
     let live_value: InsightMetaValue?
+    let baseline_selected: InsightMetaValue?
+    let baseline_opponent: InsightMetaValue?
+    let live_selected: InsightMetaValue?
+    let live_opponent: InsightMetaValue?
+    let baseline_unit: String?
+    let live_unit: String?
+    let cover_margin: Double?
+    let selected_score: Double?
+    let opponent_score: Double?
+    let market_type: String?
     let state: String?
     let as_of: String?
+    // Football market receipt (`after_gary`). The backend compares Gary's
+    // immutable publish snapshot with the latest verified pre-kick quote from
+    // the same book. Keep the selection/snapshots structured so the UI never
+    // has to reverse-parse a headline or call a live line a closing line.
+    let vendor: String?
+    let pick_side: String?
+    let pick_team: String?
+    let pick_label: String?
+    let published_at: String?
+    let kickoff: String?
+    let market_state: String?
+    let published: FootballMarketSnapshot?
+    let current: FootballMarketSnapshot?
+    let movement: FootballMarketMovement?
+    // Exact multi-book football market range (`market_range`). This is a
+    // sportsbook disagreement receipt, never a proxy for public or sharp bets.
+    let source: String?
+    let metric: String?
+    let market: String?
+    let low: Double?
+    let high: Double?
+    let range: Double?
+    let book_count: Int?
+    let vendors: [String]?
+    // Grounded NCAAF dark-day preview (`next_slate`). Kickoff is optional by
+    // contract: a provider date without a time must remain TIME TBD.
+    let date: String?
+    let scheduled_date: String?
+    let game_count: Int?
+    let confirmed_count: Int?
+    let time_tbd_count: Int?
+    let first_confirmed_kickoff: String?
+    let discovery_window_days: Int?
+    let team_policy: String?
     let team: String?
     let position: String?
     let out_name: String?
@@ -237,6 +281,38 @@ final class SwapMeta: Decodable {
     /// Tonight's 1st-inning O/U 0.5 price, snapshotted at write time — the
     /// NRFI Watch card's money line (N10, founder pick Aug 6).
     let price: NrfiPrice?
+
+    /// A saved pre-kick receipt becomes historical the instant its game starts,
+    /// even if its last stored snapshot still says `pregame`. The proof writer
+    /// preserves that last valid quote when books move in-game; the UI must not
+    /// relabel the safe snapshot as a live "NOW" market.
+    var footballMarketIsClosed: Bool {
+        if market_state?.lowercased() == "closed" { return true }
+        guard let kickoff, !kickoff.isEmpty else { return false }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        guard let start = fractional.date(from: kickoff) ?? plain.date(from: kickoff) else { return false }
+        return Date() >= start
+    }
+}
+
+/// One exact sportsbook quote inside an AFTER GARY receipt.
+struct FootballMarketSnapshot: Decodable {
+    let line: Double?
+    let odds: Double?
+    let implied_probability: Double?
+}
+
+/// Directional value of Gary's locked number from the picked side's point of
+/// view. `primary_value` is points for spreads/totals and percentage points
+/// for price-only movement; the backend supplies `primary_unit` explicitly.
+struct FootballMarketMovement: Decodable {
+    let advantage: String?
+    let primary_unit: String?
+    let primary_value: Double?
+    let line_delta_for_pick: Double?
+    let price_delta_pp_for_pick: Double?
 }
 
 /// The 1st-inning market snapshot on an nrfi row.
@@ -445,6 +521,10 @@ struct DailySlateRow: Codable {
     let away_team: String?
     let home_team: String?
     let commence_time: String?
+    /// NCAAF provider calendar date. When kickoff_status is `date_only`,
+    /// commence_time is intentionally nil and the UI must render TIME TBD.
+    var scheduled_date: String? = nil
+    var kickoff_status: String? = nil  // confirmed | date_only (NCAAF); nil legacy/other sports
     /// BallDontLie game id — the game's identity (Jul 22 2026): lets readers
     /// tell doubleheader games apart and join edges/live scores per game.
     let bdl_game_id: Int?
@@ -453,6 +533,14 @@ struct DailySlateRow: Codable {
     let ml_home: Double?
     let ml_away: Double?
     let total: Double?
+
+    var hasConfirmedKickoff: Bool {
+        kickoff_status != "date_only" && commence_time?.isEmpty == false
+    }
+
+    var kickoffTimeLabel: String? {
+        kickoff_status == "date_only" ? "TIME TBD" : nil
+    }
 }
 
 // MARK: - Game Recap (the night's stories, betting perspective — game_recaps)
@@ -1895,6 +1983,10 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     let away_abbr: String?           // precomputed short codes (NYY @ BOS)
     let home_abbr: String?
     let commence_time: String?
+    /// Explicit NCAAF kickoff contract. Date-only games carry scheduled_date,
+    /// nil commence_time, and render TIME TBD rather than an invented hour.
+    let scheduled_date: String?
+    let kickoff_status: String?       // confirmed | date_only
     /// BallDontLie game id (Jul 22 2026, doubleheader identity) — nil on
     /// rows written before the change.
     let bdl_game_id: Int?
@@ -1921,6 +2013,14 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     /// starters, generated at board-publish time. nil = the section stays out
     /// until both probables are posted and the completed board refresh lands.
     let arms_take: String?
+
+    var hasConfirmedKickoff: Bool {
+        kickoff_status != "date_only" && commence_time?.isEmpty == false
+    }
+
+    var kickoffTimeLabel: String? {
+        kickoff_status == "date_only" ? "TIME TBD" : nil
+    }
 }
 
 // SEASON SERIES — this season's finished meetings between tonight's clubs.
