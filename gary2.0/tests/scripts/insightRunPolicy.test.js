@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   footballHubRunIsEmptyFailure,
+  shouldRepairFootballMarketVendor,
   shouldUpgradeFootballFantasyEvidence,
 } from '../../scripts/lib/insightRunPolicy.js';
 
@@ -32,5 +33,28 @@ describe('football fantasy Hub persistence', () => {
     expect(footballHubRunIsEmptyFailure({ league: 'NCAAF', gameCount: 0, connectionCount: 0 })).toBe(false);
     expect(footballHubRunIsEmptyFailure({ league: 'MLB', gameCount: 12, connectionCount: 0 })).toBe(false);
     expect(footballHubRunIsEmptyFailure({ league: 'NFL', gameCount: 3, connectionCount: 1 })).toBe(false);
+  });
+});
+
+describe('football market vendor repair', () => {
+  it.each(['kalshi', 'polymarket', 'OpeningSnapshot'])(
+    'allows a one-way repair from %s to a canonical sportsbook',
+    (vendor) => {
+      expect(shouldRepairFootballMarketVendor(
+        { category: 'pace_script', meta: { vendor } },
+        { category: 'pace_script', meta: { vendor: 'fanduel' } },
+      )).toBe(true);
+    },
+  );
+
+  it('never reverses the repair or opens a different category to churn', () => {
+    expect(shouldRepairFootballMarketVendor(
+      { category: 'pace_script', meta: { vendor: 'fanduel' } },
+      { category: 'pace_script', meta: { vendor: 'kalshi' } },
+    )).toBe(false);
+    expect(shouldRepairFootballMarketVendor(
+      { category: 'trenches', meta: { vendor: 'kalshi' } },
+      { category: 'trenches', meta: { vendor: 'fanduel' } },
+    )).toBe(false);
   });
 });

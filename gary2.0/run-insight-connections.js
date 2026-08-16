@@ -33,6 +33,7 @@ const { ballDontLieService } = await import('./src/services/ballDontLieService.j
 const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
 const {
   footballHubRunIsEmptyFailure,
+  shouldRepairFootballMarketVendor,
   shouldUpgradeFootballFantasyEvidence,
 } = await import('./scripts/lib/insightRunPolicy.js');
 const { replaceFootballProofRows } = await import('./scripts/lib/footballProofStorage.js');
@@ -745,16 +746,18 @@ async function run() {
             || (Array.isArray(r.meta?.meetings) && r.meta.meetings.length
               && !Array.isArray(s.meta?.meetings));
           const needsFantasyEvidenceUpgrade = shouldUpgradeFootballFantasyEvidence(s, r);
-          if (!needsVoice && !needsId && !needsEnrich && !needsFantasyEvidenceUpgrade) continue;
+          const needsMarketVendorRepair = shouldRepairFootballMarketVendor(s, r);
+          if (!needsVoice && !needsId && !needsEnrich && !needsFantasyEvidenceUpgrade && !needsMarketVendorRepair) continue;
           const patch = {};
-          if (needsVoice || needsEnrich || needsFantasyEvidenceUpgrade) {
+          if (needsVoice || needsEnrich || needsFantasyEvidenceUpgrade || needsMarketVendorRepair) {
             patch.detail = r.detail;
             patch.meta = { ...(s.meta || {}), ...(r.meta || {}) };
           }
-          if (needsFantasyEvidenceUpgrade) {
+          if (needsFantasyEvidenceUpgrade || needsMarketVendorRepair) {
             // This is the one content transition that may change already-shown
-            // football fantasy copy: the prior-season label and figures must
-            // leave together when verified current-season evidence arrives.
+            // copy: prior-season fantasy figures leave together when current
+            // evidence arrives, and a legacy prediction-market card is replaced
+            // atomically by its canonical sportsbook snapshot.
             patch.headline = r.headline;
             patch.value = r.value;
             patch.tone = r.tone;
