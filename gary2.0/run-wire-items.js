@@ -724,8 +724,13 @@ async function run() {
       `${dryRun ? 'computed' : 'processed'} for ${targetDate}.`
   );
 
-  // Non-zero exit only if EVERY league failed (one bad league shouldn't kill the run).
-  if (failures > 0 && failures === leagues.length) process.exit(1);
+  // Every league is attempted independently above, so successful league writes
+  // remain intact. Still surface any owned league failure to the scheduler once
+  // the full pass is complete; a false-green partial run is not a successful run.
+  if (failures > 0) {
+    console.error(`\n❌ Wire completed with ${failures} failed league(s); successful league updates were preserved.`);
+    process.exit(1);
+  }
 }
 
 run()

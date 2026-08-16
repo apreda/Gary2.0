@@ -8,7 +8,7 @@
 // on the next run (UPDATE), an ungraded one inserts, and an already-correct one
 // is a no-op.
 //
-// Right after a game grades, it ALSO generates + writes the betting RECAP
+// Right after a game grades, it ALSO queues generation of the betting RECAP
 // (game_recaps) that feeds Home's headline carousel — so the headline lands the
 // moment the game settles instead of waiting for the next local
 // run-all-results.js pass. The recap is a faithful port of that script's
@@ -42,7 +42,17 @@ import {
   normalizedResultSport,
   storedExactGameId,
 } from "./resultIdentity.ts";
+import {
+  queueSequentialBackgroundTasks,
+  type SequentialBackgroundTask,
+} from "./recapBackground.ts";
 import { settleUserBetsForDates } from "./userbets.ts";
+
+// Supabase exposes this runtime global in deployed Edge Functions. Describe
+// only the API used here so local Deno checks do not pull unrelated SDK types.
+const EdgeRuntime = (globalThis as typeof globalThis & {
+  EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
+}).EdgeRuntime;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -53,6 +63,7 @@ const BDL_BASE = "https://api.balldontlie.io";
 // orchestratorConfig.js) — cheap Flash, one call per graded game.
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const RECAP_GEMINI_TIMEOUT_MS = 12_000;
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
 function estDate(offset = 0): string {
@@ -381,6 +392,7 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
     try {
       const r = await fetch(url, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        signal: AbortSignal.timeout(RECAP_GEMINI_TIMEOUT_MS),
       });
       if (!r.ok) throw new Error(`Gemini ${r.status}: ${(await r.text()).slice(0, 300)}`);
       json = await r.json();
@@ -633,11 +645,13 @@ Deno.serve(async (req) => {
   const dateParam = new URL(req.url).searchParams.get("date");
   const dates = /^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "") ? [dateParam!] : [estDate(0), estDate(-1)];
   const stats = { insert: 0, update: 0, noop: 0, fail: 0, skipped: 0, invalidIdentity: 0,
-    recap: 0, recap_regenerated: 0, recap_exists: 0, recap_fail: 0 };
+    recap: 0, recap_regenerated: 0, recap_exists: 0, recap_fail: 0, recap_queued: 0 };
   // Per-run evidence caches shared across recaps (BDL box score + prop_results).
   const statsCache = new Map<string, any[]>();
   const propsCache = new Map<string, any[]>();
   const menuCache = new Map<string, string>();
+  const recapTasks: SequentialBackgroundTask[] = [];
+  const backgroundRecaps = { recap: 0, regenerated: 0, exists: 0, fail: 0 };
   // Your Book: every pick graded this run, so user tail/fades settle after the loop.
   const gradedForUserBets: Array<{ game_date: string; pick_text: string; result: string }> = [];
 
@@ -764,28 +778,26 @@ Deno.serve(async (req) => {
       stats[outcome]++;
       if (outcome !== "fail") gradedForUserBets.push({ game_date: date, pick_text: pick.pick, result });
 
-      // GROUNDED betting recap (game_recaps) — fired the moment the grade lands
-      // so Home's headline carousel renders without waiting for the next local
-      // run-all-results.js pass. Fires on insert/update AND on noop (an
-      // already-graded game whose first recap attempt failed transiently): its
-      // own game_recaps dedup makes that a cheap no-op once a recap exists, so
-      // the cloud self-heals a dropped recap on the next grade run without the
-      // laptop. Skip only outright grade-write failures. Never fatal to grading —
-      // a recap throw can't stall the grader. The LOCAL recap path stays intact
-      // as a backfill safety net.
+      // GROUNDED betting recap (game_recaps) — queue it only after the grade is
+      // durably written. The queue is registered with EdgeRuntime.waitUntil
+      // after synchronous user-bet settlement, so a slow model response cannot
+      // hold pg_net's 30-second response open. Tasks stay sequential and share
+      // these request caches. Insert/update/noop all remain eligible, preserving
+      // the established missing/stale recap self-heal and local backfill lane.
       if (outcome === "insert" || outcome === "update" || outcome === "noop") {
-        try {
-          const r = await writeRecap({
-            pick, league, gameDate: date, result, hScore, vScore, mlbGameId, statsCache, propsCache, menuCache,
-          });
-          if (r === "recap") stats.recap++;
-          else if (r === "regenerated") stats.recap_regenerated++;
-          else if (r === "exists") stats.recap_exists++;
-          else if (r === "fail") stats.recap_fail++;
-        } catch (e) {
-          stats.recap_fail++;
-          console.warn(`  [Recap] non-fatal failure for ${league} "${pick.pick}": ${(e as Error).message}`);
-        }
+        const recapArgs = {
+          pick, league, gameDate: date, result, hScore, vScore, mlbGameId, statsCache, propsCache, menuCache,
+        };
+        recapTasks.push({
+          label: `${league} "${pick.pick}"`,
+          run: async () => {
+            const r = await writeRecap(recapArgs);
+            if (r === "recap") backgroundRecaps.recap++;
+            else if (r === "regenerated") backgroundRecaps.regenerated++;
+            else if (r === "exists") backgroundRecaps.exists++;
+            else if (r === "fail") backgroundRecaps.fail++;
+          },
+        });
       }
     }
   }
@@ -798,6 +810,22 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.warn(`[UserBets] settle sweep failed: ${(e as Error).message}`);
   }
+
+  // Supabase keeps the isolate alive for this promise after the HTTP response
+  // is returned. Registration happens after all settlement work above, and the
+  // pure queue runner isolates failures so one recap cannot strand later ones.
+  stats.recap_queued = queueSequentialBackgroundTasks(
+    recapTasks,
+    (recapWork) => EdgeRuntime.waitUntil(recapWork.then(() => {
+      console.log(`[Recap] background complete queued=${recapTasks.length}` +
+        ` created=${backgroundRecaps.recap} regenerated=${backgroundRecaps.regenerated}` +
+        ` existing=${backgroundRecaps.exists} failed=${backgroundRecaps.fail}`);
+    })),
+    (task, error) => {
+      backgroundRecaps.fail++;
+      console.warn(`  [Recap] non-fatal background failure for ${task.label}: ${(error as Error).message}`);
+    },
+  );
 
   return new Response(JSON.stringify({ ok: true, dates, ...stats, user_bets: userBets }),
     { headers: { "Content-Type": "application/json" } });

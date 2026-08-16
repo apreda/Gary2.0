@@ -507,27 +507,30 @@ async function run() {
 
   if (rows.length === 0) {
     console.log(`\n${dryRun ? '🧪 DRY RUN complete' : '✅ Done'} — no rows computed for ${targetDate}.`);
-    if (failures > 0 && failures === leagues.length) process.exit(1);
-    return;
-  }
-
-  if (dryRun) {
+  } else if (dryRun) {
     console.log(`\n🧪 Would upsert ${rows.length} row(s):`);
     console.log(JSON.stringify(rows, null, 2));
     console.log(`\n🧪 DRY RUN complete — ${rows.length} row(s) computed for ${targetDate}.`);
-    return;
+  } else {
+    // Persist every successfully built league before reporting a partial failure.
+    // A failed league never discards or blocks the authoritative rows that did
+    // complete during this pass.
+    const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: 'date,league' });
+    if (error) {
+      console.error(`   ❌ Upsert failed: ${error.message}${error.code ? ' [code=' + error.code + ']' : ''}`);
+      process.exit(1);
+    }
+
+    console.log(`\n✅ Done — upserted ${rows.length} market_pulse row(s) for ${targetDate}.`);
   }
 
-  const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: 'date,league' });
-  if (error) {
-    console.error(`   ❌ Upsert failed: ${error.message}${error.code ? ' [code=' + error.code + ']' : ''}`);
+  // All leagues were attempted and every successful row was handled above.
+  // Report any owned league failure only after that work is complete. Empty but
+  // authoritative leagues use the normal no-row path and do not increment this.
+  if (failures > 0) {
+    console.error(`\n❌ Market Pulse completed with ${failures} failed league(s); successful league updates were preserved.`);
     process.exit(1);
   }
-
-  console.log(`\n✅ Done — upserted ${rows.length} market_pulse row(s) for ${targetDate}.`);
-
-  // Non-zero exit only if EVERY league failed.
-  if (failures > 0 && failures === leagues.length) process.exit(1);
 }
 
 run()
