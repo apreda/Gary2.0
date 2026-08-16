@@ -65,7 +65,13 @@ const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 // These facts can be invalidated by the most recently completed game. Unlike
 // editorial reads, they must refresh in place across the day rather than obey
 // the first-write-wins copy freeze.
-const VOLATILE_CATEGORIES = new Set(['streaking', 'streak', 'the_sweat', 'after_gary']);
+const VOLATILE_CATEGORIES = new Set([
+  'streaking',
+  'streak',
+  'pace_script',
+  'the_sweat',
+  'after_gary',
+]);
 
 // Per-player breakdown packs (the iOS Hub "full breakdown" view). Built for MLB
 // (hitter/pitcher) after the day's insight_connections insert succeeds; failures

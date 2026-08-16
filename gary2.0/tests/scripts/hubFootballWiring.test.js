@@ -22,6 +22,19 @@ describe('football Hub invocation wiring', () => {
     expect(runner).toContain('player_id: connection.player_id != null ? String(connection.player_id) : null');
   });
 
+  it('refreshes the sportsbook market lane as a complete snapshot', () => {
+    expect(runner).toMatch(/VOLATILE_CATEGORIES = new Set\(\[[\s\S]*?'pace_script'/);
+    const replacement = runner.slice(
+      runner.indexOf('async function replaceVolatileRows'),
+      runner.indexOf('/** Stored rows for (date, league)'),
+    );
+    expect(replacement).toContain("category: `eq.${category}`");
+    expect(replacement.indexOf('await insertRows(fresh)')).toBeLessThan(
+      replacement.indexOf("method: 'DELETE'"),
+    );
+    expect(replacement).toContain("params: { id: `in.(${oldIds.join(',')})` }");
+  });
+
   it('keeps scheduled MLB/NBA traffic isolated and exposes serialized football dispatches', () => {
     expect(workflow).toContain("group: hub-insights");
     expect(workflow).toContain("github.event_name == 'workflow_dispatch' && inputs.leagues || 'MLB,NBA'");

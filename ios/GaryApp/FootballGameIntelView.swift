@@ -808,34 +808,77 @@ private struct FootballFantasyRow: View {
     let signal: Signal
     let accent: Color
 
+    /// The lane title and right-side metric already explain the read. Keep the
+    /// list row to the player's name; the complete evidence remains one tap
+    /// away in the existing signal detail sheet.
+    private var playerTitle: String {
+        let headline = signal.headline.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !headline.isEmpty else { return "PLAYER" }
+
+        if let colon = headline.firstIndex(of: ":") {
+            let before = String(headline[..<colon]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let after = String(headline[headline.index(after: colon)...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if before.lowercased().hasSuffix("baseline"),
+               let logged = after.range(of: " logged ", options: [.caseInsensitive]) {
+                return String(after[..<logged.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if !before.isEmpty { return before }
+        }
+
+        for marker in ["'s ", " is at ", " has ", " logged "] {
+            if let range = headline.range(of: marker, options: [.caseInsensitive]) {
+                let name = String(headline[..<range.lowerBound])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { return name }
+            }
+        }
+        return headline
+    }
+
+    /// Preseason football rows can be backed by a roster-verified prior-season
+    /// sample. Keep that provenance visible without restoring the long copy.
+    private var baselineLabel: String? {
+        let headline = signal.headline.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard headline.range(of: "baseline", options: [.caseInsensitive]) != nil else { return nil }
+        if let year = headline.range(of: #"\b(?:19|20)\d{2}\b"#, options: [.regularExpression]) {
+            return "\(headline[year]) BASELINE"
+        }
+        return "PRIOR BASELINE"
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(signal.headline)
-                    .font(GaryFonts.text(14.5, .semibold))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !signal.detail.isEmpty {
-                    Text(signal.detail)
-                        .font(GaryFonts.text(12))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        HStack(alignment: .center, spacing: 10) {
+            Text(playerTitle)
+                .font(GaryFonts.text(14.5, .semibold))
+                .foregroundStyle(GaryColors.warmWhite)
+                .lineLimit(1)
+            if let position = signal.position, !position.isEmpty {
+                Text(position.uppercased())
+                    .font(GaryFonts.data(9.5, .bold))
+                    .foregroundStyle(accent.opacity(0.8))
             }
             Spacer(minLength: 8)
             if !signal.value.isEmpty {
-                Text(signal.value)
-                    .font(GaryFonts.data(15, .bold))
-                    .foregroundStyle(accent)
-                    .lineLimit(1)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(signal.value)
+                        .font(GaryFonts.data(15, .bold))
+                        .foregroundStyle(accent)
+                        .lineLimit(1)
+                    if let baselineLabel {
+                        Text(baselineLabel)
+                            .font(GaryFonts.data(8.5, .bold))
+                            .tracking(0.55)
+                            .foregroundStyle(.white.opacity(0.44))
+                            .lineLimit(1)
+                    }
+                }
             }
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.white.opacity(0.28))
-                .padding(.top, 3)
         }
-        .padding(.horizontal, 14).padding(.vertical, 12)
+        .padding(.horizontal, 14).padding(.vertical, 11)
         .contentShape(Rectangle())
     }
 }

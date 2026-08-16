@@ -98,6 +98,20 @@ describe('Football Fantasy density', () => {
       footballIntel.indexOf('private struct FootballFantasyRow'),
     );
     expect(rowBody).not.toContain('Text(signal.kind.chip)');
+    expect(rowBody).not.toContain('Text(signal.headline)');
+    expect(rowBody).not.toContain('Text(signal.detail)');
+    expect(rowBody).toContain('Text(playerTitle)');
+    expect(rowBody).toContain('Text(position.uppercased())');
+  });
+
+  it('keeps roster-verified prior-season provenance visible in dense NFL and NCAAF rows', () => {
+    expect(footballIntel).toContain('before.lowercased().hasSuffix("baseline")');
+    expect(footballIntel).toContain('after.range(of: " logged ", options: [.caseInsensitive])');
+    expect(footballIntel).toContain('headline.range(of: #"\\b(?:19|20)\\d{2}\\b"#, options: [.regularExpression])');
+    expect(footballIntel).toContain('return "\\(headline[year]) BASELINE"');
+    expect(footballIntel).toContain('return "PRIOR BASELINE"');
+    expect(footballIntel).toContain('if let baselineLabel');
+    expect(footballIntel).toContain('Text(baselineLabel)');
   });
 });
 
